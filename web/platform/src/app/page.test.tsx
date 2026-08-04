@@ -1,34 +1,19 @@
 import { renderToStaticMarkup } from "react-dom/server";
-import { afterEach, describe, expect, it, vi } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 
-vi.mock("next/server", () => ({
-  connection: vi.fn(),
+vi.mock("next/navigation", () => ({
+  useRouter: () => ({ push: vi.fn() }),
 }));
-
-vi.mock("next/headers", () => ({
-  headers: vi.fn(),
-}));
-
-import { connection } from "next/server";
-import { headers } from "next/headers";
 
 import HomePage, { metadata } from "./page";
 
 describe("HomePage", () => {
-  afterEach(() => {
-    vi.clearAllMocks();
-  });
+  it("server-renders the cacheable public shell without a request nonce", () => {
+    const markup = renderToStaticMarkup(<HomePage />);
 
-  it("waits for the request so Next can attach the per-request CSP nonce", async () => {
-    vi.mocked(connection).mockResolvedValue(undefined);
-    vi.mocked(headers).mockResolvedValue(new Headers({ "x-nonce": "homepage-nonce" }) as never);
-
-    const markup = renderToStaticMarkup(await HomePage());
-
-    expect(connection).toHaveBeenCalledOnce();
     expect(markup).toContain("Простой старт в мир нейросетей");
     expect(markup).toContain('type="application/ld+json"');
-    expect(markup).toContain('nonce="homepage-nonce"');
+    expect(markup).not.toContain("nonce=");
   });
 
   it("publishes complete indexable metadata for the public homepage", () => {

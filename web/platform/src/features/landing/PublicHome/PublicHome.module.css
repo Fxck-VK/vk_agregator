@@ -345,25 +345,8 @@
   text-decoration: none;
 }
 
-.promptBanner,
-.social {
-  border: 0.0625rem solid var(--color-border);
-  border-radius: 1.75rem;
-  padding: clamp(2rem, 6vw, 4rem);
-  background:
-    radial-gradient(circle at 85% 25%, rgb(33 135 255 / 30%), transparent 35%),
-    var(--color-surface);
-}
-
 .promptBanner {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: var(--space-6);
-}
-
-.promptBanner p {
-  max-inline-size: 40rem;
+  margin-block: clamp(3.5rem, 8vw, 7rem);
 }
 
 .faqList {
@@ -393,33 +376,10 @@
 
 .social {
   margin-block: clamp(3.5rem, 8vw, 7rem);
-  text-align: center;
 }
 
 .footer {
-  display: grid;
-  grid-template-columns: 1.4fr repeat(3, 1fr);
-  gap: var(--space-7);
-  border-block-start: 0.0625rem solid var(--color-border);
-  padding-block: clamp(3rem, 7vw, 5rem);
-}
-
-.footer h2 {
-  margin: 0 0 var(--space-3);
-  font-size: 0.9rem;
-  letter-spacing: 0.08em;
-  text-transform: uppercase;
-}
-
-.footer section a {
   display: block;
-  margin-block: var(--space-2);
-  color: var(--color-text-muted);
-  text-decoration: none;
-}
-
-.footerBrand strong {
-  font-size: 1.5rem;
 }
 
 @media (max-width: 55rem) {

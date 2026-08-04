@@ -1,0 +1,7 @@
+.card { position: relative; display: grid; min-block-size: 15rem; align-content: start; border: .0625rem solid var(--color-border); border-radius: var(--radius-lg); padding: var(--space-6); background: var(--color-surface); text-decoration: none; transition: transform var(--motion-fast), border-color var(--motion-fast); }
+.card:hover { border-color: var(--color-accent); transform: translateY(-.2rem); }
+.icon { display: grid; inline-size: 3rem; block-size: 3rem; place-items: center; border-radius: var(--radius-md); background: var(--color-accent); color: white; font-weight: 850; }
+.price { position: absolute; inset: var(--space-5) var(--space-5) auto auto; color: var(--color-accent); font-weight: 800; }
+.card h3 { margin: var(--space-5) 0 var(--space-2); font-size: 1.5rem; }
+.card p { margin: 0; color: var(--color-text-muted); }
+.open { margin-block-start: auto; padding-block-start: var(--space-5); font-weight: 750; }

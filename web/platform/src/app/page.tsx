@@ -1,6 +1,4 @@
 import type { Metadata } from "next";
-import { headers } from "next/headers";
-import { connection } from "next/server";
 
 import { PublicHome } from "@/features/landing/PublicHome/PublicHome";
 import { PublicShell } from "@/features/landing/PublicShell/PublicShell";
@@ -45,10 +43,7 @@ export const metadata: Metadata = {
   },
 };
 
-export default async function HomePage() {
-  await connection();
-  const nonce = (await headers()).get("x-nonce") ?? undefined;
-
+export default function HomePage() {
   return (
     <>
       <PublicShell>
@@ -56,7 +51,6 @@ export default async function HomePage() {
       </PublicShell>
       <script
         dangerouslySetInnerHTML={{ __html: serializeJsonLd(createLandingJsonLd()) }}
-        nonce={nonce}
         type="application/ld+json"
       />
     </>

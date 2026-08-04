@@ -1,0 +1,6 @@
+.social { border: .0625rem solid var(--color-border); border-radius: 1.75rem; padding: clamp(2rem, 6vw, 4rem); background: radial-gradient(circle at 15% 75%, rgb(33 135 255 / 28%), transparent 35%), var(--color-surface); text-align: center; }
+.social > p { margin: 0 0 var(--space-3); color: var(--color-accent); font-size: .8125rem; font-weight: 850; letter-spacing: .1em; text-transform: uppercase; }
+.social h2 { margin: 0; font-size: clamp(2rem, 5vw, 4rem); line-height: 1.05; letter-spacing: -.04em; }
+.social > span { display: block; margin-block-start: var(--space-4); color: var(--color-text-muted); }
+.links { display: flex; justify-content: center; gap: var(--space-3); margin-block-start: var(--space-5); }
+.links a { border: .0625rem solid var(--color-border); border-radius: 999px; padding: var(--space-3) var(--space-5); text-decoration: none; }

@@ -1,22 +1,18 @@
 import { renderToStaticMarkup } from "react-dom/server";
-import { beforeEach, describe, expect, it, vi } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 
-vi.mock("next/headers", () => ({
-  headers: vi.fn(),
+vi.mock("next/script", () => ({
+  default: ({ src, strategy }: { src: string; strategy: string }) => (
+    <meta data-script-src={src} data-strategy={strategy} />
+  ),
 }));
-
-import { headers } from "next/headers";
 
 import RootLayout, { metadata } from "./layout";
 
 describe("RootLayout", () => {
-  beforeEach(() => {
-    vi.mocked(headers).mockResolvedValue(new Headers({ "x-nonce": "test-theme-nonce" }) as never);
-  });
-
-  it("sets Russian as the document language", async () => {
+  it("sets Russian as the document language", () => {
     const markup = renderToStaticMarkup(
-      await RootLayout({
+      RootLayout({
         children: <main>Тест</main>,
       }),
     );
@@ -33,18 +29,19 @@ describe("RootLayout", () => {
     });
   });
 
-  it("bootstraps the persisted theme in the head before page content with the request CSP nonce", async () => {
+  it("loads the cacheable theme bootstrap before page content without request-bound data", () => {
     const markup = renderToStaticMarkup(
-      await RootLayout({
+      RootLayout({
         children: <main>Theme content</main>,
       }),
     );
     const document = new DOMParser().parseFromString(markup, "text/html");
-    const bootstrapScript = document.querySelector("head script");
+    const bootstrapScript = document.querySelector("head meta[data-script-src]");
 
     expect(document.documentElement.getAttribute("data-theme")).toBe("system");
-    expect(bootstrapScript?.textContent).toContain("neirohub.theme");
-    expect(bootstrapScript?.getAttribute("nonce")).toBe("test-theme-nonce");
-    expect(markup.indexOf("<script")).toBeLessThan(markup.indexOf("<body"));
+    expect(bootstrapScript?.getAttribute("data-script-src")).toBe("/theme-bootstrap.js");
+    expect(bootstrapScript?.getAttribute("data-strategy")).toBe("beforeInteractive");
+    expect(bootstrapScript?.getAttribute("nonce")).toBeNull();
+    expect(markup.indexOf("data-script-src")).toBeLessThan(markup.indexOf("<body"));
   });
 });

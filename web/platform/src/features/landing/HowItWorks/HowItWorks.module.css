@@ -1,0 +1,13 @@
+.layout { display: grid; grid-template-columns: 1fr 1fr; gap: clamp(2rem, 6vw, 6rem); align-items: center; }
+.eyebrow { margin: 0 0 var(--space-3); color: var(--color-accent); font-size: .8125rem; font-weight: 850; letter-spacing: .1em; text-transform: uppercase; }
+.layout h2 { margin: 0; font-size: clamp(2rem, 5vw, 4rem); line-height: 1.05; letter-spacing: -.04em; }
+.steps { display: grid; gap: var(--space-5); margin: var(--space-7) 0 0; padding: 0; list-style: none; }
+.steps li { display: grid; grid-template-columns: 2.75rem 1fr; gap: var(--space-4); }
+.steps li > span { display: grid; inline-size: 2.75rem; block-size: 2.75rem; place-items: center; border-radius: 50%; background: var(--color-accent); color: white; font-weight: 850; }
+.steps h3 { margin: 0 0 var(--space-1); }
+.steps p { margin: 0; color: var(--color-text-muted); }
+.poster { position: relative; min-block-size: 34rem; overflow: hidden; border: .0625rem solid var(--color-border); border-radius: 1.75rem; background: var(--color-surface); }
+.poster::after { position: absolute; inset: 40% 0 0; background: linear-gradient(transparent, rgb(0 0 0 / 80%)); content: ""; }
+.poster img { object-fit: cover; }
+.poster span { position: absolute; z-index: 1; inset: auto var(--space-6) var(--space-6); color: white; font-size: 1.25rem; font-weight: 800; }
+@media (max-width: 55rem) { .layout { grid-template-columns: 1fr; } .poster { min-block-size: 26rem; } }

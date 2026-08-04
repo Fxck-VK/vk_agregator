@@ -1,5 +1,9 @@
 import { renderToStaticMarkup } from "react-dom/server";
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
+
+vi.mock("next/navigation", () => ({
+  useRouter: () => ({ push: vi.fn() }),
+}));
 
 import { PublicHome, publicHomeBlockOrder } from "./PublicHome";
 
@@ -17,7 +21,7 @@ describe("PublicHome", () => {
   it("server-renders critical models, FAQ and footer content", () => {
     const markup = renderToStaticMarkup(<PublicHome />);
 
-    expect(markup).toContain("Более 90 нейросетей");
+    expect(markup).toContain("Каталог нейросетей");
     expect(markup).toContain("Что такое NeiroHub?");
     expect(markup).toContain("Генерация изображений");
   });

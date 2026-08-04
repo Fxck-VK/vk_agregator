@@ -1,0 +1,9 @@
+.footer { display: grid; grid-template-columns: 1.4fr repeat(3, 1fr); gap: var(--space-7); border-block-start: .0625rem solid var(--color-border); padding-block: clamp(3rem, 7vw, 5rem) var(--space-7); }
+.brand strong { font-size: 1.5rem; }
+.brand p { max-inline-size: 19rem; color: var(--color-text-muted); }
+.footer h2 { margin: 0 0 var(--space-3); font-size: .9rem; letter-spacing: .08em; text-transform: uppercase; }
+.footer nav a { display: block; margin-block: var(--space-2); color: var(--color-text-muted); text-decoration: none; }
+.footer nav a:hover { color: var(--color-text); }
+.bottom { display: flex; grid-column: 1 / -1; justify-content: space-between; gap: var(--space-4); border-block-start: .0625rem solid var(--color-border); padding-block-start: var(--space-5); color: var(--color-text-muted); font-size: .875rem; }
+@media (max-width: 55rem) { .footer { grid-template-columns: repeat(2, 1fr); } }
+@media (max-width: 34rem) { .footer { grid-template-columns: 1fr; } .bottom { align-items: flex-start; flex-direction: column; } }

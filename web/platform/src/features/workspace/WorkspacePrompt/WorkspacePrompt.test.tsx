@@ -13,6 +13,7 @@ vi.mock("@/lib/web-api/browser", () => ({
 import { usePathname, useRouter } from "next/navigation";
 
 import { SidebarConversations } from "@/features/conversations/SidebarConversations/SidebarConversations";
+import { guestDraftStorageKey, saveGuestDraft } from "@/features/landing/HeroComposer/guest-draft";
 import { readPendingConversationPrompt } from "@/features/conversations/pending-conversation-prompt";
 import { WorkspaceConversationListProvider } from "@/features/conversations/WorkspaceConversationList/WorkspaceConversationList";
 import { ru } from "@/i18n/ru";
@@ -84,6 +85,15 @@ describe("WorkspacePrompt", () => {
       ru.conversations.composerPlaceholder,
     );
     expect(screen.queryByText(ru.workspace.promptSupport)).not.toBeInTheDocument();
+  });
+
+  it("consumes a public chat draft into the dedicated new-chat composer", () => {
+    saveGuestDraft("Draft from public home", "chat", window.sessionStorage);
+
+    renderNewChatPrompt();
+
+    expect(screen.getByLabelText(ru.conversations.composerPlaceholder)).toHaveValue("Draft from public home");
+    expect(window.sessionStorage.getItem(guestDraftStorageKey)).toBeNull();
   });
 
   it("shows the first prompt in the sidebar before the create response returns", async () => {

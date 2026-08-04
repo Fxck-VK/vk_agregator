@@ -14,14 +14,23 @@ function createNonce(): string {
   return btoa(String.fromCharCode(...bytes));
 }
 
-function createContentSecurityPolicy(nonce: string): string {
+function createContentSecurityPolicy(nonce?: string): string {
+  const isDevelopment = process.env.NODE_ENV === "development";
+  const scriptSources = nonce
+    ? `script-src 'self' 'nonce-${nonce}' 'strict-dynamic'`
+    // The cached public page cannot carry a per-request nonce. Keep this exception scoped to `/`.
+    : "script-src 'self' 'unsafe-inline'";
+  const styleSources = nonce
+    ? `style-src 'self' 'nonce-${nonce}'`
+    : "style-src 'self' 'unsafe-inline'";
+
   return [
     "default-src 'self'",
-    `script-src 'self' 'nonce-${nonce}' 'strict-dynamic'`,
-    `style-src 'self' 'nonce-${nonce}'`,
+    `${scriptSources}${isDevelopment ? " 'unsafe-eval'" : ""}`,
+    styleSources,
     "img-src 'self' data: blob:",
     "font-src 'self'",
-    "connect-src 'self'",
+    `connect-src 'self'${isDevelopment ? " ws: wss:" : ""}`,
     "media-src 'self' blob:",
     "object-src 'none'",
     "base-uri 'none'",
@@ -33,13 +42,19 @@ function createContentSecurityPolicy(nonce: string): string {
 }
 
 export function proxy(request: NextRequest): NextResponse {
-  const nonce = createNonce();
+  const isPublicHomepage = request.nextUrl.pathname === "/";
+  const nonce = isPublicHomepage ? undefined : createNonce();
   const contentSecurityPolicy = createContentSecurityPolicy(nonce);
   const requestHeaders = new Headers(request.headers);
-  requestHeaders.set("x-nonce", nonce);
-  requestHeaders.set("Content-Security-Policy", contentSecurityPolicy);
+  if (nonce) {
+    requestHeaders.set("x-nonce", nonce);
+    requestHeaders.set("Content-Security-Policy", contentSecurityPolicy);
+  }
 
-  const returnPath = safeReturnPath(request.nextUrl.pathname);
+  const requestedNext = request.nextUrl.pathname === "/login"
+    ? safeReturnPath(request.nextUrl.searchParams.get("next") ?? "")
+    : null;
+  const returnPath = requestedNext ?? safeReturnPath(request.nextUrl.pathname);
   const response = NextResponse.next({ request: { headers: requestHeaders } });
   response.headers.set("Content-Security-Policy", contentSecurityPolicy);
 

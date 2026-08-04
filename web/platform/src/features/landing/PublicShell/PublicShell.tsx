@@ -4,6 +4,7 @@ import { ru } from "@/i18n/ru";
 
 import { PublicHeader } from "../PublicHeader/PublicHeader";
 import { PublicSidebar } from "../PublicSidebar/PublicSidebar";
+import { LandingToolSelectionProvider } from "../LandingToolSelection/LandingToolSelection";
 import styles from "./PublicShell.module.css";
 
 type PublicShellProps = {
@@ -18,10 +19,12 @@ export function PublicShell({ children }: PublicShellProps) {
       </a>
       <PublicSidebar />
       <div className={styles.workspace}>
-        <PublicHeader />
-        <main className={styles.main} id="public-main">
-          {children}
-        </main>
+        <LandingToolSelectionProvider>
+          <PublicHeader />
+          <main className={styles.main} id="public-main">
+            {children}
+          </main>
+        </LandingToolSelectionProvider>
       </div>
     </div>
   );

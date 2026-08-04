@@ -1,0 +1,6 @@
+.banner { display: flex; align-items: center; justify-content: space-between; gap: var(--space-6); border: .0625rem solid var(--color-border); border-radius: 1.75rem; padding: clamp(2rem, 6vw, 4rem); background: radial-gradient(circle at 85% 25%, rgb(33 135 255 / 30%), transparent 35%), var(--color-surface); }
+.banner p { margin: 0 0 var(--space-3); color: var(--color-accent); font-size: .8125rem; font-weight: 850; letter-spacing: .1em; text-transform: uppercase; }
+.banner h2 { margin: 0; font-size: clamp(2rem, 5vw, 4rem); line-height: 1.05; letter-spacing: -.04em; }
+.banner span { display: block; max-inline-size: 42rem; margin-block-start: var(--space-4); color: var(--color-text-muted); }
+.banner a { display: inline-flex; min-block-size: 3rem; flex: 0 0 auto; align-items: center; border-radius: 999px; padding-inline: var(--space-5); background: var(--color-accent); color: white; font-weight: 750; text-decoration: none; }
+@media (max-width: 44rem) { .banner { align-items: flex-start; flex-direction: column; } }

@@ -13,7 +13,8 @@
     "lint": "eslint . --max-warnings=0",
     "typecheck": "tsc --noEmit",
     "test": "vitest run",
-    "test:packaging": "node scripts/assert-packaging.mjs"
+    "test:packaging": "node scripts/assert-packaging.mjs",
+    "test:public-home": "node scripts/assert-public-home.mjs"
   },
   "dependencies": {
     "next": "^16.2.12",

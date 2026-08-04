@@ -7,6 +7,7 @@ export type LandingTool = {
   id: string;
   kind: LandingToolKind;
   name: string;
+  priceStarsByQuality?: Readonly<Record<string, number>>;
 };
 
 export type LandingNewsItem = {

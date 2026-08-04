@@ -29,7 +29,7 @@ export function SessionRefresh() {
         // The login route provides the neutral recovery path for all refresh failures.
       }
 
-      router.replace("/login");
+      router.replace("/login?refresh_failed=1");
     };
 
     void refreshSession();
