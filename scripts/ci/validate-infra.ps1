@@ -328,19 +328,14 @@ function Assert-ReverseProxyConfig {
         "form-action 'self'",
         "frame-src 'none'",
         "frame-ancestors 'none'",
-        "upgrade-insecure-requests",
-        'const isPublicHomepage = request.nextUrl.pathname === "/";',
-        "const nonce = isPublicHomepage ? undefined : createNonce();",
-        ': "script-src ''self'' ''unsafe-inline''"',
-        ': "style-src ''self'' ''unsafe-inline''"',
-        '${scriptSources}${isDevelopment ? " ''unsafe-eval''" : ""}'
+        "upgrade-insecure-requests"
     )) {
         if (-not $platformProxy.Contains($snippet)) {
             throw "platform nonce proxy is missing required snippet: $snippet"
         }
     }
-    if ([regex]::Matches($platformProxy, "'unsafe-inline'").Count -ne 2) {
-        throw "platform proxy must scope unsafe-inline to the public homepage script/style policy only"
+    if ($platformProxy -match "unsafe-inline|unsafe-eval") {
+        throw "platform nonce proxy must not allow unsafe inline/eval execution"
     }
     if ($platformProxy.Contains('response.headers.set("x-nonce", nonce)')) {
         throw "platform nonce proxy must keep the nonce in request headers and CSP, not expose a redundant response header"
@@ -355,17 +350,13 @@ function Assert-ReverseProxyConfig {
     }
     $platformHomePage = Get-Content -LiteralPath $platformHomePagePath -Raw
     foreach ($snippet in @(
-        "export default function HomePage()",
-        "<PublicShell>",
-        "<PublicHome />",
-        'type="application/ld+json"'
+        'import { connection } from "next/server";',
+        "export default async function HomePage()",
+        "await connection();"
     )) {
         if (-not $platformHomePage.Contains($snippet)) {
-            throw "platform root page is missing the static public-home contract: $snippet"
+            throw "platform root page must use request-bound rendering for nonce CSP: $snippet"
         }
-    }
-    if ($platformHomePage -match 'next/server|\bconnection\s*\(|\bheaders\s*\(|\bcookies\s*\(') {
-        throw "platform root page must remain request-independent for CDN caching"
     }
 
     Write-Host "reverse proxy config OK"
