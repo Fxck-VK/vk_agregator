@@ -40,6 +40,7 @@ Read only the document that matches the current task:
 | Account identity, multi-UI login, VK/TG/Web/Mobile ownership model | `docs/ACCOUNT_IDENTITY_CONTRACT.md`; current account-only rollout audit: `docs/ACCOUNT_ID_ONLY_AUDIT.md` |
 | Standalone NeiroHub web platform, browser UX, SEO, performance, web sessions | approved design: `docs/superpowers/specs/2026-07-31-web-session-live-workspace-design.md`; implementation plan: `docs/superpowers/plans/2026-07-31-web-session-live-workspace.md`; local platform setup: `web/platform/README.md` |
 | Fast private workspace navigation, fixed-route prefetch, account-tab cache, DEV timing | approved design: `docs/superpowers/specs/2026-08-03-fast-workspace-navigation-design.md`; implementation plan: `docs/superpowers/plans/2026-08-03-fast-workspace-navigation.md` |
+| NeiroHub system, light and dark appearance switching | approved design: `docs/superpowers/specs/2026-08-04-neirohub-theme-switching-design.md`; implementation plan: `docs/superpowers/plans/2026-08-04-neirohub-theme-switching.md` |
 | Retention, cleanup, analytics aggregates | `docs/DATA_RETENTION_POLICY.md` |
 | Load testing, k6, capacity report | `docs/LOAD_TESTING.md` |
 | Operator/admin UI and safety | `docs/OPERATOR_UI.md` |
