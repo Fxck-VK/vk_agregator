@@ -43,6 +43,20 @@ export function WorkspaceHome({ section = "home" }: WorkspaceHomeProps) {
     );
   }
 
+  if (section === "chats") {
+    return (
+      <section
+        aria-labelledby="new-chat-title"
+        className={`${styles.content} ${styles.startScreen} ${styles.newChatScreen}`}
+      >
+        <div className={styles.welcome}>
+          <h1 id="new-chat-title">{ru.workspace.startTitle}</h1>
+        </div>
+        <WorkspacePrompt variant="newChat" />
+      </section>
+    );
+  }
+
   return (
     <section aria-labelledby="workspace-title" className={styles.content}>
       <p className={styles.eyebrow}>{ru.workspace.eyebrow}</p>

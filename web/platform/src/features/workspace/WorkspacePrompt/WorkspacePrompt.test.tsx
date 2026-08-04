@@ -41,6 +41,14 @@ function renderWorkspacePrompt() {
   );
 }
 
+function renderNewChatPrompt() {
+  return render(
+    <WorkspaceConversationListProvider accountId={workspaceAccountId} initialConversations={[]}>
+      <WorkspacePrompt variant="newChat" />
+    </WorkspaceConversationListProvider>,
+  );
+}
+
 function renderWorkspacePromptWithSidebar() {
   return render(
     <WorkspaceConversationListProvider accountId={workspaceAccountId} initialConversations={[]}>
@@ -66,6 +74,16 @@ describe("WorkspacePrompt", () => {
     vi.clearAllMocks();
     vi.unstubAllGlobals();
     window.sessionStorage.clear();
+  });
+
+  it("uses the shared NeiroHub question prompt on the dedicated new-chat screen", () => {
+    renderNewChatPrompt();
+
+    expect(screen.getByLabelText(ru.conversations.composerPlaceholder)).toHaveAttribute(
+      "placeholder",
+      ru.conversations.composerPlaceholder,
+    );
+    expect(screen.queryByText(ru.workspace.promptSupport)).not.toBeInTheDocument();
   });
 
   it("shows the first prompt in the sidebar before the create response returns", async () => {

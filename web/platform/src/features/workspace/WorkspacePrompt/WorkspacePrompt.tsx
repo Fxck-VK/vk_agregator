@@ -21,7 +21,11 @@ type RetryIntent = {
   conversationId?: string;
 };
 
-export function WorkspacePrompt() {
+type WorkspacePromptProps = {
+  variant?: "workspace" | "newChat";
+};
+
+export function WorkspacePrompt({ variant = "workspace" }: WorkspacePromptProps) {
   const router = useRouter();
   const {
     discardPendingConversation,
@@ -33,6 +37,9 @@ export function WorkspacePrompt() {
   const [hasError, setHasError] = useState(false);
   const retryIntentRef = useRef<RetryIntent | null>(null);
   const canSubmit = prompt.trim() !== "" && !isPending;
+  const isNewChat = variant === "newChat";
+  const promptLabel = isNewChat ? ru.conversations.composerPlaceholder : ru.workspace.promptLabel;
+  const promptPlaceholder = isNewChat ? ru.conversations.composerPlaceholder : ru.workspace.promptPlaceholder;
 
   const changePrompt = (event: ChangeEvent<HTMLTextAreaElement>) => {
     const nextPrompt = event.target.value;
@@ -130,16 +137,16 @@ export function WorkspacePrompt() {
   };
 
   return (
-    <form className={styles.form} onSubmit={submitForm}>
+    <form className={`${styles.form} ${isNewChat ? styles.newChatForm : ""}`} onSubmit={submitForm}>
       <label className={styles.promptField}>
-        <span>{ru.workspace.promptLabel}</span>
+        <span>{promptLabel}</span>
         <ChatTextInput
           appearance="plain"
           disabled={isPending}
           onChange={changePrompt}
           onSend={() => void submit()}
-          placeholder={ru.workspace.promptPlaceholder}
-          rows={5}
+          placeholder={promptPlaceholder}
+          rows={isNewChat ? 4 : 5}
           size="expanded"
           value={prompt}
         />
@@ -148,7 +155,7 @@ export function WorkspacePrompt() {
         <Button disabled={!canSubmit} type="submit">
           {isPending ? ru.workspace.promptPending : ru.workspace.promptSubmit}
         </Button>
-        <p>{ru.workspace.promptSupport}</p>
+        {isNewChat ? null : <p>{ru.workspace.promptSupport}</p>}
       </div>
       {hasError ? (
         <p className={styles.error} role="alert">

@@ -34,4 +34,19 @@ describe("WorkspaceHome", () => {
     expect(markup).toContain("%2Finspiration%2Fpaper-crane-cloud.png");
     expect(markup).not.toContain(ru.workspace.sections.inspiration.description);
   });
+
+  it("renders the normal-chat entry instead of the old chats placeholder", () => {
+    const markup = renderToStaticMarkup(
+      <WorkspaceConversationListProvider accountId="new-chat-test-account" initialConversations={[]}>
+        <WorkspaceHome section="chats" />
+      </WorkspaceConversationListProvider>,
+    );
+
+    expect(markup).toContain(ru.workspace.startTitle);
+    expect(markup).toContain(ru.conversations.composerPlaceholder);
+    expect(markup).not.toContain(ru.workspace.sections.chats.title);
+    expect(markup).not.toContain(ru.workspace.sections.chats.description);
+    expect(markup).not.toContain('href="/app/image"');
+    expect(markup).not.toContain('href="/app/models"');
+  });
 });
