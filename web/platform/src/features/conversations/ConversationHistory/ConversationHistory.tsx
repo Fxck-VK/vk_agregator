@@ -9,6 +9,7 @@ import {
   type ConversationHistoryData,
 } from "@/features/conversations/conversation-history-contract";
 import { ConversationComposer } from "@/features/conversations/ConversationComposer/ConversationComposer";
+import { ConversationMessageActions } from "@/features/conversations/ConversationMessageActions/ConversationMessageActions";
 import { ConversationTitleSync } from "@/features/conversations/ConversationTitleSync/ConversationTitleSync";
 import {
   clearPendingConversationPrompt,
@@ -39,6 +40,11 @@ type PollRequest = {
 
 type PendingTurn = PollRequest & {
   prompt: string;
+};
+
+type ComposerDraftRequest = {
+  id: number;
+  text: string;
 };
 
 const conversationRefreshIntervalMs = 2_000;
@@ -86,8 +92,18 @@ function ConversationHistoryReady({
   const [pendingTurn, setPendingTurn] = useState<PendingTurn | null>(null);
   const [forceScrollRequest, setForceScrollRequest] = useState(0);
   const [workspaceScrollRegion, setWorkspaceScrollRegion] = useState<HTMLElement | null>(null);
+  const [composerDraftRequest, setComposerDraftRequest] = useState<ComposerDraftRequest | null>(null);
   const [titleSyncFallback, setTitleSyncFallback] = useState(() => readPendingConversationTitleSync(history.conversationId));
   const refreshSequenceRef = useRef(initialRefreshRequest?.id ?? 0);
+  const composerDraftRequestSequenceRef = useRef(0);
+
+  const recreateMessage = useCallback((messageText: string) => {
+    composerDraftRequestSequenceRef.current += 1;
+    setComposerDraftRequest({
+      id: composerDraftRequestSequenceRef.current,
+      text: messageText,
+    });
+  }, []);
 
   const completeTitleSync = useCallback(() => {
     clearPendingConversationTitleSync(history.conversationId);
@@ -359,10 +375,17 @@ function ConversationHistoryReady({
                     {message.role === "user" ? ru.conversations.userRole : ru.conversations.assistantRole}
                   </span>
                   <p>{message.text}</p>
+                  {message.role === "user" ? (
+                    <ConversationMessageActions messageText={message.text} onRecreate={recreateMessage} />
+                  ) : null}
                 </li>
               ))}
               {pendingTurn !== null ? (
-                <PendingTurnItems pendingTurn={pendingTurn} showIndicator={pendingTurnIsActive} />
+                <PendingTurnItems
+                  onRecreate={recreateMessage}
+                  pendingTurn={pendingTurn}
+                  showIndicator={pendingTurnIsActive}
+                />
               ) : null}
               {pendingTurn === null && activeRefreshID !== null ? (
                 <li className={styles.assistantMessage} data-chat-pending="assistant">
@@ -378,6 +401,8 @@ function ConversationHistoryReady({
         contentVersion={contentVersion}
         disabled={activeRefreshID !== null}
         forceScrollRequest={forceScrollRequest}
+        initialDraft={composerDraftRequest?.text}
+        key={`composer:${composerDraftRequest?.id ?? 0}`}
         onAccepted={beginRefresh}
         scrollContainer={workspaceScrollRegion}
       />
@@ -386,9 +411,11 @@ function ConversationHistoryReady({
 }
 
 function PendingTurnItems({
+  onRecreate,
   pendingTurn,
   showIndicator,
 }: Readonly<{
+  onRecreate: (messageText: string) => void;
   pendingTurn: PendingTurn;
   showIndicator: boolean;
 }>) {
@@ -397,6 +424,7 @@ function PendingTurnItems({
       <li className={styles.userMessage} data-chat-pending="user">
         <span className={styles.role}>{ru.conversations.userRole}</span>
         <p>{pendingTurn.prompt}</p>
+        <ConversationMessageActions messageText={pendingTurn.prompt} onRecreate={onRecreate} />
       </li>
       {showIndicator ? (
         <li className={styles.assistantMessage} data-chat-pending="assistant">

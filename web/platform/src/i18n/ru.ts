@@ -149,6 +149,8 @@ export const ru = {
     composerPending: "Отправляем…",
     composerAwaitingResponse: "NeiroHub печатает",
     composerFailure: "Не удалось отправить сообщение. Попробуйте ещё раз — текст сохранён.",
+    copyMessage: "Копировать сообщение",
+    recreateMessage: "Пересоздать сообщение",
     userRole: "Вы",
     assistantRole: "NeiroHub",
   },

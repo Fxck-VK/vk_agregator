@@ -1,0 +1,37 @@
+.actions {
+  display: flex;
+  align-items: center;
+  gap: 0.125rem;
+  margin-block-start: var(--space-2);
+}
+
+.action {
+  display: grid;
+  place-items: center;
+  inline-size: 1.75rem;
+  block-size: 1.75rem;
+  padding: 0;
+  border: 0;
+  border-radius: var(--radius-sm);
+  background: transparent;
+  color: currentColor;
+  cursor: pointer;
+  opacity: 0.72;
+  transition: background-color 120ms ease, opacity 120ms ease;
+}
+
+.action:hover,
+.action:focus-visible {
+  background: color-mix(in srgb, currentColor 12%, transparent);
+  opacity: 1;
+}
+
+.action:focus-visible {
+  outline: 0.125rem solid currentColor;
+  outline-offset: 0.0625rem;
+}
+
+.action svg {
+  inline-size: 1.25rem;
+  block-size: 1.25rem;
+}

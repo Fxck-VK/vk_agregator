@@ -59,6 +59,42 @@ describe("ConversationHistory", () => {
     vi.unstubAllGlobals();
   });
 
+  it("copies the exact user message and does not show message actions for assistant replies", async () => {
+    const writeText = vi.fn().mockResolvedValue(undefined);
+    vi.stubGlobal("navigator", { clipboard: { writeText } });
+    render(<ConversationHistory history={initialHistory as never} />);
+
+    const messageItems = within(screen.getByRole("list")).getAllByRole("listitem");
+    fireEvent.click(
+      within(messageItems[0]).getByRole("button", { name: "Копировать сообщение" }),
+    );
+
+    await vi.waitFor(() => expect(writeText).toHaveBeenCalledWith("message 102"));
+    expect(
+      within(messageItems[1]).queryByRole("button", { name: "Копировать сообщение" }),
+    ).toBeNull();
+    expect(
+      within(messageItems[1]).queryByRole("button", { name: "Пересоздать сообщение" }),
+    ).toBeNull();
+  });
+
+  it("moves a user message into the draft without focusing the composer or sending it", () => {
+    render(<ConversationHistory history={initialHistory as never} />);
+
+    const textarea = screen.getByLabelText(ru.conversations.composerLabel);
+    fireEvent.change(textarea, { target: { value: "Черновик, который будет заменён" } });
+    const userMessage = within(screen.getByRole("list")).getAllByRole("listitem")[0];
+    const recreateButton = within(userMessage).getByRole("button", {
+      name: "Пересоздать сообщение",
+    });
+    recreateButton.focus();
+    fireEvent.click(recreateButton);
+
+    expect(screen.getByLabelText(ru.conversations.composerLabel)).toHaveValue("message 102");
+    expect(document.activeElement).toBe(recreateButton);
+    expect(webBrowserMutation).not.toHaveBeenCalled();
+  });
+
   it("smoothly scrolls the workspace after an accepted Enter send", async () => {
     const { region, scrollTo } = addWorkspaceScrollRegion();
     vi.mocked(webBrowserMutation).mockResolvedValueOnce(Response.json(queuedJob, { status: 201 }));

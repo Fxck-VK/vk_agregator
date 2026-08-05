@@ -16,6 +16,7 @@ type ConversationComposerProps = {
   contentVersion: string;
   disabled?: boolean;
   forceScrollRequest: number;
+  initialDraft?: string;
   onAccepted: (prompt: string) => void;
   scrollContainer: HTMLElement | null;
 };
@@ -32,10 +33,11 @@ export function ConversationComposer({
   contentVersion,
   disabled = false,
   forceScrollRequest,
+  initialDraft = "",
   onAccepted,
   scrollContainer,
 }: ConversationComposerProps) {
-  const [draft, setDraft] = useState("");
+  const [draft, setDraft] = useState(initialDraft);
   const [isPending, setIsPending] = useState(false);
   const [feedback, setFeedback] = useState<ComposerFeedback>(null);
   const retryIntentRef = useRef<RetryIntent | null>(null);

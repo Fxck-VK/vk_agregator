@@ -4,7 +4,7 @@
 
 **Goal:** Добавить копирование и перенос текста пользовательского сообщения в черновик без фокуса, прокрутки и автоматической отправки.
 
-**Architecture:** Отдельный `ConversationMessageActions` рендерит иконки действий. `ConversationHistory` передаёт одноразовый типизированный запрос на замену черновика в контролируемый внутренним состоянием `ConversationComposer`.
+**Architecture:** Отдельный `ConversationMessageActions` рендерит иконки действий. `ConversationHistory` передаёт текст как `initialDraft` и меняет `key` композера для одноразовой инициализации его локального состояния без синхронного `setState` в эффекте.
 
 **Tech Stack:** TypeScript, React 19, CSS Modules, Vitest, Testing Library.
 
@@ -24,13 +24,13 @@
 
 **Interfaces:**
 - Consumes: существующий `ConversationHistory` и `ConversationComposer`.
-- Produces: тестовый контракт для `draftRequest: { id: number; text: string } | null` и кнопок с локализованными accessible names.
+- Produces: тестовый контракт для `initialDraft`, монотонного `key` и кнопок с локализованными accessible names.
 
-- [ ] **Step 1: Write the failing tests**
+- [x] **Step 1: Write the failing tests**
 
 Добавить проверки точного текста в Clipboard API, замены существующего черновика и сохранения фокуса на кнопке «Пересоздать».
 
-- [ ] **Step 2: Run tests to verify they fail**
+- [x] **Step 2: Run tests to verify they fail**
 
 Run: `npm test -- src/features/conversations/ConversationHistory/ConversationHistory.test.tsx src/features/conversations/ConversationComposer/ConversationComposer.test.tsx`
 
@@ -50,19 +50,18 @@ Expected: FAIL, потому что кнопок и `draftRequest` ещё нет
 - Consumes: `messageText: string`, `onRecreate: (text: string) => void`.
 - Produces: `ConversationMessageActions` и `ComposerDraftRequest`.
 
-- [ ] **Step 1: Write minimal implementation**
+- [x] **Step 1: Write minimal implementation**
 
 Добавить иконки, Clipboard API и запрос на замену черновика; не использовать `focus()`, `scrollIntoView()` или отправку формы.
 
-- [ ] **Step 2: Run focused tests**
+- [x] **Step 2: Run focused tests**
 
 Run: `npm test -- src/features/conversations/ConversationHistory/ConversationHistory.test.tsx src/features/conversations/ConversationComposer/ConversationComposer.test.tsx`
 
 Expected: PASS.
 
-- [ ] **Step 3: Run platform validation**
+- [x] **Step 3: Run platform validation**
 
 Run: `npm run lint && npm run typecheck && npm test`
 
 Expected: все команды завершаются без ошибок и предупреждений.
-
