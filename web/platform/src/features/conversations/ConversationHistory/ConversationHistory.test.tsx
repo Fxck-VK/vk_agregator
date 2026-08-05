@@ -111,6 +111,31 @@ describe("ConversationHistory", () => {
     expect(copyButton.querySelector('[data-icon="copy"]')).not.toBeNull();
   });
 
+  it("uses the NeiroHub tooltip contract for every message action", () => {
+    render(<ConversationHistory history={initialHistory as never} />);
+
+    const messageItems = within(screen.getByRole("list")).getAllByRole("listitem");
+    const userMessage = within(messageItems[0]);
+    const assistantMessage = within(messageItems[1]);
+    const actions = [
+      userMessage.getByRole("button", { name: ru.conversations.copyMessage }),
+      userMessage.getByRole("button", { name: ru.conversations.recreateMessage }),
+      assistantMessage.getByRole("button", { name: ru.conversations.likeMessage }),
+      assistantMessage.getByRole("button", { name: ru.conversations.dislikeMessage }),
+    ];
+    const labels = [
+      ru.conversations.copyMessage,
+      ru.conversations.recreateMessage,
+      ru.conversations.likeMessage,
+      ru.conversations.dislikeMessage,
+    ];
+
+    actions.forEach((button, index) => {
+      expect(button).toHaveAttribute("data-tooltip", labels[index]);
+      expect(button).not.toHaveAttribute("title");
+    });
+  });
+
   it("keeps like and dislike mutually exclusive and clears a repeated rating", () => {
     render(<ConversationHistory history={initialHistory as never} />);
 

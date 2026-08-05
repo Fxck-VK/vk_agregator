@@ -6,6 +6,7 @@
 }
 
 .action {
+  position: relative;
   display: grid;
   place-items: center;
   inline-size: 1.75rem;
@@ -41,13 +42,9 @@
   block-size: 1.25rem;
 }
 
-.copyAction {
-  position: relative;
-}
-
-.copyAction::after {
+.action[data-tooltip]::after {
   position: absolute;
-  inset-block-end: calc(100% + var(--space-2));
+  inset-block-start: calc(100% + var(--space-2));
   inset-inline-start: 50%;
   z-index: 10;
   padding: var(--space-1) var(--space-2);
@@ -62,14 +59,14 @@
   line-height: 1.25;
   opacity: 0;
   pointer-events: none;
-  transform: translate(-50%, 0.25rem);
+  transform: translate(-50%, -0.25rem);
   transition: opacity var(--motion-fast), transform var(--motion-fast), visibility var(--motion-fast);
   visibility: hidden;
   white-space: nowrap;
 }
 
-.copyAction:hover::after,
-.copyAction:focus-visible::after {
+.action[data-tooltip]:hover::after,
+.action[data-tooltip]:focus-visible::after {
   opacity: 1;
   transform: translate(-50%, 0);
   visibility: visible;

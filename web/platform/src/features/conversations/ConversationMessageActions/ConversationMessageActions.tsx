@@ -56,7 +56,7 @@ export function ConversationMessageActions(props: Readonly<ConversationMessageAc
     <div className={styles.actions}>
       <button
         aria-label={copyLabel}
-        className={`${styles.action} ${styles.copyAction}`}
+        className={styles.action}
         data-tooltip={copyLabel}
         onClick={() => void copyMessage()}
         type="button"
@@ -67,8 +67,8 @@ export function ConversationMessageActions(props: Readonly<ConversationMessageAc
         <button
           aria-label={ru.conversations.recreateMessage}
           className={styles.action}
+          data-tooltip={ru.conversations.recreateMessage}
           onClick={() => props.onRecreate(messageText)}
-          title={ru.conversations.recreateMessage}
           type="button"
         >
           <RecreateIcon />
@@ -79,8 +79,8 @@ export function ConversationMessageActions(props: Readonly<ConversationMessageAc
             aria-label={ru.conversations.likeMessage}
             aria-pressed={rating === "like"}
             className={styles.action}
+            data-tooltip={ru.conversations.likeMessage}
             onClick={() => setRating((current) => current === "like" ? null : "like")}
-            title={ru.conversations.likeMessage}
             type="button"
           >
             <LikeIcon />
@@ -89,8 +89,8 @@ export function ConversationMessageActions(props: Readonly<ConversationMessageAc
             aria-label={ru.conversations.dislikeMessage}
             aria-pressed={rating === "dislike"}
             className={styles.action}
+            data-tooltip={ru.conversations.dislikeMessage}
             onClick={() => setRating((current) => current === "dislike" ? null : "dislike")}
-            title={ru.conversations.dislikeMessage}
             type="button"
           >
             <DislikeIcon />
