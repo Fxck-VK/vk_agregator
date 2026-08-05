@@ -165,6 +165,19 @@ keywords = [
 id = "generic-api-key"
 
   [[rules.allowlists]]
+  description = "UUID request identifiers in exact historical web platform tests"
+  condition = "AND"
+  regexTarget = "secret"
+  paths = [
+    '''(?i)(^|/)web/platform/src/features/workspace/WorkspacePrompt/WorkspacePrompt\.test\.tsx$''',
+    '''(?i)(^|/)web/platform/src/features/conversations/NewConversationButton/NewConversationButton\.test\.tsx$''',
+    '''(?i)(^|/)web/platform/src/lib/web-api/proxy\.test\.ts$''',
+  ]
+  regexes = [
+    '''(?i)^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$''',
+  ]
+
+  [[rules.allowlists]]
   description = "Exact admin idempotency fixtures"
   condition = "AND"
   regexTarget = "secret"
