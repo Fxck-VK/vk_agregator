@@ -109,6 +109,7 @@ jobs:
           ENV_PROVIDERS_COMMON: ${{ secrets.ENV_PROVIDERS_COMMON }}
           ENV_SECRETS_DEV: ${{ secrets.ENV_SECRETS_DEV }}
           ENV_PAYMENTS_DEV: ${{ secrets.ENV_PAYMENTS_DEV }}
+          DEV_WEB_BASIC_AUTH_HTPASSWD: ${{ secrets.DEV_WEB_BASIC_AUTH_HTPASSWD }}
         run: |
           set -euo pipefail
 
@@ -124,7 +125,8 @@ jobs:
             ENV_COMMON \
             ENV_PROVIDERS_COMMON \
             ENV_SECRETS_DEV \
-            ENV_PAYMENTS_DEV
+            ENV_PAYMENTS_DEV \
+            DEV_WEB_BASIC_AUTH_HTPASSWD
           do
             if [[ -z "${!name:-}" ]]; then
               missing+=("${name}")
@@ -332,6 +334,7 @@ jobs:
           ENV_PROVIDERS_COMMON: ${{ secrets.ENV_PROVIDERS_COMMON }}
           ENV_SECRETS_DEV: ${{ secrets.ENV_SECRETS_DEV }}
           ENV_PAYMENTS_DEV: ${{ secrets.ENV_PAYMENTS_DEV }}
+          DEV_WEB_BASIC_AUTH_HTPASSWD: ${{ secrets.DEV_WEB_BASIC_AUTH_HTPASSWD }}
           DEPLOY_IMAGE_TAG: ${{ steps.release.outputs.image_tag }}
         run: |
           set -euo pipefail
@@ -339,10 +342,13 @@ jobs:
 
           raw_env="$(mktemp)"
           rendered_env="$(mktemp)"
-          trap 'rm -f "${raw_env}" "${rendered_env}"' EXIT
+          raw_auth_env="$(mktemp)"
+          rendered_auth_env="$(mktemp)"
+          trap 'rm -f "${raw_env}" "${rendered_env}" "${raw_auth_env}" "${rendered_auth_env}"' EXIT
 
           bash scripts/deploy/assemble-env-parts.sh \
             --target dev \
+            --web-origin https://dev-web.neiirohub.ru \
             --output "${raw_env}"
 
           bash scripts/deploy/prepare-dev-env.sh \
@@ -354,13 +360,36 @@ jobs:
 
           bash scripts/deploy/check-dev-env.sh --env-file "${rendered_env}"
 
+          umask 077
+          printf 'DEV_WEB_BASIC_AUTH_HTPASSWD=%s\n' "${DEV_WEB_BASIC_AUTH_HTPASSWD}" > "${raw_auth_env}"
+          bash scripts/deploy/prepare-dev-web-auth.sh \
+            --input "${raw_auth_env}" \
+            --output "${rendered_auth_env}"
+
+          {
+            printf 'deploy_path=%q\n' "${DEV_DEPLOY_PATH}"
+            cat <<'REMOTE'
+          set -euo pipefail
+          cd "${deploy_path}"
+          umask 077
+          : > .dev-web-auth.next
+          chmod 600 .dev-web-auth.next
+          REMOTE
+          } | ssh "${ssh_opts[@]}" "${DEV_DEPLOY_USER}@${DEV_DEPLOY_HOST}" bash -s
+
           scp "${ssh_opts[@]}" "${rendered_env}" "${DEV_DEPLOY_USER}@${DEV_DEPLOY_HOST}:${DEV_DEPLOY_PATH}/.env.next"
+          scp -p "${ssh_opts[@]}" "${rendered_auth_env}" "${DEV_DEPLOY_USER}@${DEV_DEPLOY_HOST}:${DEV_DEPLOY_PATH}/.dev-web-auth.next"
           {
             printf 'deploy_path=%q\n' "${DEV_DEPLOY_PATH}"
             cat <<'REMOTE'
           set -euo pipefail
           cd "${deploy_path}"
           install -m 600 .env.next .env
+          if [[ "$(stat -c '%a' .dev-web-auth.next)" != "600" ]]; then
+            echo "DEV web auth staging file must be mode 600" >&2
+            exit 1
+          fi
+          mv -f .dev-web-auth.next .dev-web-auth.env
           rm -f .env.next
           REMOTE
           } | ssh "${ssh_opts[@]}" "${DEV_DEPLOY_USER}@${DEV_DEPLOY_HOST}" bash -s
@@ -382,7 +411,7 @@ jobs:
             cat <<'REMOTE'
           set -euo pipefail
           cd "${deploy_path}"
-          bash scripts/deploy/deploy-dev.sh --branch dev-deploy --env-file .env --skip-pull --with-cloudflare --skip-public-smoke --image-tag "${deploy_image_tag}" --timeout-seconds 240
+          bash scripts/deploy/deploy-dev.sh --branch dev-deploy --env-file .env --web-auth-env-file .dev-web-auth.env --skip-pull --with-cloudflare --skip-public-smoke --relay-only-workers-upgraded --image-tag "${deploy_image_tag}" --timeout-seconds 240
           REMOTE
           } | ssh "${ssh_opts[@]}" "${DEV_DEPLOY_USER}@${DEV_DEPLOY_HOST}" bash -s
 
@@ -426,6 +455,9 @@ jobs:
           if [[ -f docker-compose.data.yml ]]; then
             compose+=(-f docker-compose.data.yml)
           fi
+          if [[ -f docker-compose.dev-web.yml && -f .dev-web-auth.env ]]; then
+            compose+=(--env-file .dev-web-auth.env -f docker-compose.dev-web.yml)
+          fi
           compose+=(--profile cloudflare --profile provider-balance)
 
           echo "==> DEV diagnostic docker compose ps"
@@ -434,7 +466,7 @@ jobs:
           echo "==> DEV diagnostic migrate logs"
           "${compose[@]}" logs --no-color --tail=200 migrate || true
 
-          for service in api worker maintenance-worker provider-webhook provider-balance-bot miniapp reverse-proxy; do
+          for service in api worker maintenance-worker provider-webhook provider-balance-bot miniapp platform reverse-proxy; do
             echo "==> DEV diagnostic ${service} logs"
             "${compose[@]}" logs --no-color --tail=80 "${service}" || true
           done
@@ -499,11 +531,13 @@ jobs:
           bash scripts/deploy/deploy-dev.sh \
             --branch dev-deploy \
             --env-file .env \
+            --web-auth-env-file .dev-web-auth.env \
             --project-name vk-ai-aggregator-dev \
             --skip-pull \
             --with-cloudflare \
             --skip-migrate \
             --skip-public-smoke \
+            --relay-only-workers-upgraded \
             --image-tag "${previous_image_tag}" \
             --timeout-seconds 240
 

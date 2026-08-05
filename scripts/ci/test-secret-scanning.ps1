@@ -169,6 +169,65 @@ finally {
     }
 }
 
+$idempotencyCanaryRoot = Join-Path ([IO.Path]::GetTempPath()) ("vk-aggregator-idempotency-canary-" + [guid]::NewGuid().ToString("N"))
+$idempotencyCanaryPath = Join-Path $idempotencyCanaryRoot "web\platform\src\features\workspace\WorkspacePrompt\WorkspacePrompt.test.tsx"
+$idempotencyCanaryReport = Join-Path $idempotencyCanaryRoot "idempotency-canary-report.json"
+New-Item -ItemType Directory -Path (Split-Path -Parent $idempotencyCanaryPath) -Force | Out-Null
+
+try {
+    $idempotencyUuid = "9f4a6c2e" + "-7b81-4d35-a9c6-" + "2e8f1b7d5a30"
+    Set-Content -LiteralPath $idempotencyCanaryPath `
+        -Value ('const headers = { "X-Idempotency-Key": "' + $idempotencyUuid + '" };') `
+        -Encoding ascii
+
+    $idempotencyResult = Invoke-Quiet -Executable $GitleaksPath -WorkingDirectory $idempotencyCanaryRoot -Arguments @(
+        "dir",
+        "--config", $configPath,
+        "--redact",
+        "--no-banner",
+        "--no-color",
+        "."
+    )
+    if ($idempotencyResult.ExitCode -ne 0) {
+        throw "UUID request identifiers in the exact historical web test paths must not be classified as API keys."
+    }
+
+    $genericApiCanary = "9f4a6c2e" + "7b814d35" + "a9c62e8f" + "1b7d5a30"
+    Set-Content -LiteralPath $idempotencyCanaryPath `
+        -Value ('const apiKey = "' + $genericApiCanary + '";') `
+        -Encoding ascii
+
+    $genericResult = Invoke-Quiet -Executable $GitleaksPath -WorkingDirectory $idempotencyCanaryRoot -Arguments @(
+        "dir",
+        "--config", $configPath,
+        "--redact",
+        "--no-banner",
+        "--no-color",
+        "--report-format", "json",
+        "--report-path", $idempotencyCanaryReport,
+        "."
+    )
+    if ($genericResult.ExitCode -ne 1) {
+        throw "The exact historical test-path allowlist must continue detecting non-UUID generic API keys."
+    }
+
+    $genericFindings = @(Get-Content -Raw $idempotencyCanaryReport | ConvertFrom-Json)
+    if ($genericFindings.Count -ne 1 -or $genericFindings[0].RuleID -ne "generic-api-key") {
+        throw "The idempotency allowlist canary returned an unexpected finding classification."
+    }
+
+    Write-Output "Exact historical test-path UUID identifiers remained clean; a non-UUID generic API key was still detected."
+}
+finally {
+    if (Test-Path $idempotencyCanaryRoot) {
+        $resolvedIdempotencyCanaryRoot = [IO.Path]::GetFullPath($idempotencyCanaryRoot)
+        $systemTemp = [IO.Path]::GetFullPath([IO.Path]::GetTempPath())
+        if ($resolvedIdempotencyCanaryRoot.StartsWith($systemTemp, [StringComparison]::OrdinalIgnoreCase)) {
+            Remove-Item -LiteralPath $resolvedIdempotencyCanaryRoot -Recurse -Force
+        }
+    }
+}
+
 $tempRoot = Join-Path ([IO.Path]::GetTempPath()) ("vk-aggregator-secret-canary-" + [guid]::NewGuid().ToString("N"))
 $canaryConfig = Join-Path $tempRoot ".gitleaks.toml"
 $canaryReport = Join-Path $tempRoot "canary-report.json"
