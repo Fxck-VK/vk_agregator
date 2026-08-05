@@ -26,6 +26,11 @@
   opacity: 1;
 }
 
+.action[aria-pressed="true"] {
+  color: var(--color-accent);
+  opacity: 1;
+}
+
 .action:focus-visible {
   outline: 0.125rem solid currentColor;
   outline-offset: 0.0625rem;

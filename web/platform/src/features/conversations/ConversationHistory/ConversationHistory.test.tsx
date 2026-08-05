@@ -59,23 +59,47 @@ describe("ConversationHistory", () => {
     vi.unstubAllGlobals();
   });
 
-  it("copies the exact user message and does not show message actions for assistant replies", async () => {
+  it("copies the exact text for user and assistant messages while keeping role-specific actions", async () => {
     const writeText = vi.fn().mockResolvedValue(undefined);
     vi.stubGlobal("navigator", { clipboard: { writeText } });
     render(<ConversationHistory history={initialHistory as never} />);
 
     const messageItems = within(screen.getByRole("list")).getAllByRole("listitem");
-    fireEvent.click(
-      within(messageItems[0]).getByRole("button", { name: "Копировать сообщение" }),
-    );
+    const userMessage = within(messageItems[0]);
+    const assistantMessage = within(messageItems[1]);
+
+    fireEvent.click(userMessage.getByRole("button", { name: "Копировать сообщение" }));
 
     await vi.waitFor(() => expect(writeText).toHaveBeenCalledWith("message 102"));
-    expect(
-      within(messageItems[1]).queryByRole("button", { name: "Копировать сообщение" }),
-    ).toBeNull();
-    expect(
-      within(messageItems[1]).queryByRole("button", { name: "Пересоздать сообщение" }),
-    ).toBeNull();
+    fireEvent.click(assistantMessage.getByRole("button", { name: "Копировать сообщение" }));
+    await vi.waitFor(() => expect(writeText).toHaveBeenLastCalledWith("message 103"));
+
+    expect(userMessage.queryByRole("button", { name: "Лайк" })).toBeNull();
+    expect(userMessage.queryByRole("button", { name: "Дизлайк" })).toBeNull();
+    expect(assistantMessage.queryByRole("button", { name: "Пересоздать сообщение" })).toBeNull();
+  });
+
+  it("keeps like and dislike mutually exclusive and clears a repeated rating", () => {
+    render(<ConversationHistory history={initialHistory as never} />);
+
+    const assistantMessage = within(within(screen.getByRole("list")).getAllByRole("listitem")[1]);
+    const likeButton = assistantMessage.getByRole("button", { name: "Лайк" });
+    const dislikeButton = assistantMessage.getByRole("button", { name: "Дизлайк" });
+
+    expect(likeButton).toHaveAttribute("aria-pressed", "false");
+    expect(dislikeButton).toHaveAttribute("aria-pressed", "false");
+
+    fireEvent.click(likeButton);
+    expect(likeButton).toHaveAttribute("aria-pressed", "true");
+    expect(dislikeButton).toHaveAttribute("aria-pressed", "false");
+
+    fireEvent.click(dislikeButton);
+    expect(likeButton).toHaveAttribute("aria-pressed", "false");
+    expect(dislikeButton).toHaveAttribute("aria-pressed", "true");
+
+    fireEvent.click(dislikeButton);
+    expect(likeButton).toHaveAttribute("aria-pressed", "false");
+    expect(dislikeButton).toHaveAttribute("aria-pressed", "false");
   });
 
   it("moves a user message into the draft without focusing the composer or sending it", () => {

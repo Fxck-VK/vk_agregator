@@ -376,8 +376,10 @@ function ConversationHistoryReady({
                   </span>
                   <p>{message.text}</p>
                   {message.role === "user" ? (
-                    <ConversationMessageActions messageText={message.text} onRecreate={recreateMessage} />
-                  ) : null}
+                    <ConversationMessageActions kind="user" messageText={message.text} onRecreate={recreateMessage} />
+                  ) : (
+                    <ConversationMessageActions kind="assistant" messageText={message.text} />
+                  )}
                 </li>
               ))}
               {pendingTurn !== null ? (
@@ -424,7 +426,7 @@ function PendingTurnItems({
       <li className={styles.userMessage} data-chat-pending="user">
         <span className={styles.role}>{ru.conversations.userRole}</span>
         <p>{pendingTurn.prompt}</p>
-        <ConversationMessageActions messageText={pendingTurn.prompt} onRecreate={onRecreate} />
+        <ConversationMessageActions kind="user" messageText={pendingTurn.prompt} onRecreate={onRecreate} />
       </li>
       {showIndicator ? (
         <li className={styles.assistantMessage} data-chat-pending="assistant">

@@ -151,6 +151,8 @@ export const ru = {
     composerFailure: "Не удалось отправить сообщение. Попробуйте ещё раз — текст сохранён.",
     copyMessage: "Копировать сообщение",
     recreateMessage: "Пересоздать сообщение",
+    likeMessage: "Лайк",
+    dislikeMessage: "Дизлайк",
     userRole: "Вы",
     assistantRole: "NeiroHub",
   },
