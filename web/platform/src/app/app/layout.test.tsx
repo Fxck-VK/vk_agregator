@@ -9,6 +9,7 @@ vi.mock("next/navigation", () => ({
   }),
   usePathname: vi.fn(),
   useRouter: vi.fn(),
+  useSearchParams: vi.fn(() => new URLSearchParams()),
 }));
 
 vi.mock("@/features/session/session-data", () => ({

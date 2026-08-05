@@ -9,6 +9,10 @@ vi.mock("next/navigation", () => ({
   useRouter: vi.fn(() => ({ push: vi.fn(), refresh: vi.fn(), replace: vi.fn() })),
 }));
 
+vi.mock("@/features/models/WorkspaceModelSelector/WorkspaceModelSelector", () => ({
+  WorkspaceModelSelector: () => <button type="button">Model selector</button>,
+}));
+
 import { ru } from "@/i18n/ru";
 import { useWorkspaceAccountSnapshot } from "@/features/account/WorkspaceAccount/WorkspaceAccount";
 import { useWorkspaceConversationList } from "@/features/conversations/WorkspaceConversationList/WorkspaceConversationList";
@@ -220,7 +224,13 @@ describe("WorkspaceFrame", () => {
     );
 
     const header = screen.getByTestId("workspace-header");
-    expect(header).toHaveTextContent(expectedTitle);
+    expect(header).toHaveAccessibleName(expectedTitle);
+    if (pathname === "/app/inspiration") {
+      expect(header).toHaveTextContent(expectedTitle);
+      expect(screen.queryByRole("button", { name: "Model selector" })).toBeNull();
+    } else {
+      expect(screen.getByRole("button", { name: "Model selector" })).toBeInTheDocument();
+    }
     expect(header).toHaveTextContent("42 ★");
     expect(screen.queryByRole("button", { name: "Выбрать тариф" })).toBeNull();
   });

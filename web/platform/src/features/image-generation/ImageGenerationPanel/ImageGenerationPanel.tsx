@@ -9,6 +9,7 @@ import { ImageGenerationEditor } from "@/features/image-generation/ImageGenerati
 import { ImageGenerationResult } from "@/features/image-generation/ImageGenerationResult/ImageGenerationResult";
 import { ImageJobTracker } from "@/features/image-generation/ImageJobTracker/ImageJobTracker";
 import { loadImageModelCatalog } from "@/features/models/image-model-catalog-cache";
+import { useWorkspaceModelSelection } from "@/features/models/WorkspaceModelSelection/WorkspaceModelSelection";
 import { ru } from "@/i18n/ru";
 import {
   parseImageJobActivation,
@@ -37,6 +38,8 @@ type ImageGenerationPanelProps = {
 
 export function ImageGenerationPanel({ onJobChange }: Readonly<ImageGenerationPanelProps>) {
   const searchParams = useSearchParams();
+  const workspaceModelSelection = useWorkspaceModelSelection();
+  const setWorkspaceModelId = workspaceModelSelection?.setSelectedModelId;
   const requestedModelID = searchParams.get("model");
   const requestedImageQuality = searchParams.get("quality");
   const requestedPrompt = searchParams.get("prompt") ?? "";
@@ -80,6 +83,7 @@ export function ImageGenerationPanel({ onJobChange }: Readonly<ImageGenerationPa
         }
         setModels(catalog.items);
         setModelID(initialModel.id);
+        setWorkspaceModelId?.(initialModel.id);
         setImageQuality(
           requestedImageQuality !== null && initialModel.quality_options.includes(requestedImageQuality)
             ? requestedImageQuality
@@ -99,7 +103,7 @@ export function ImageGenerationPanel({ onJobChange }: Readonly<ImageGenerationPa
     return () => {
       active = false;
     };
-  }, [catalogLoadAttempt, requestedImageQuality, requestedModelID, requestedPrompt]);
+  }, [catalogLoadAttempt, requestedImageQuality, requestedModelID, requestedPrompt, setWorkspaceModelId]);
 
   const retryModelCatalog = () => {
     setError(null);
@@ -120,10 +124,11 @@ export function ImageGenerationPanel({ onJobChange }: Readonly<ImageGenerationPa
       return;
     }
     setModelID(nextModel.id);
+    setWorkspaceModelId?.(nextModel.id);
     setImageQuality(nextModel.default_quality);
     setPrepareIntent(null);
     setError(null);
-  }, [models]);
+  }, [models, setWorkspaceModelId]);
 
   const changeImageQuality = useCallback((nextQuality: string) => {
     setImageQuality(nextQuality);

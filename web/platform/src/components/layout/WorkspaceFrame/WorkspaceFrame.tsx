@@ -9,6 +9,7 @@ import { WorkspaceHeader } from "@/components/layout/WorkspaceHeader/WorkspaceHe
 import { SidebarConversations } from "@/features/conversations/SidebarConversations/SidebarConversations";
 import { WorkspaceConversationListProvider } from "@/features/conversations/WorkspaceConversationList/WorkspaceConversationList";
 import { WorkspaceAccountProvider } from "@/features/account/WorkspaceAccount/WorkspaceAccount";
+import { WorkspaceModelSelectionProvider } from "@/features/models/WorkspaceModelSelection/WorkspaceModelSelection";
 import { WorkspaceDataCacheProvider } from "@/features/workspace/WorkspaceDataCache/WorkspaceDataCache";
 import { WorkspaceNavigationMetrics } from "@/features/workspace/WorkspaceNavigationMetrics/WorkspaceNavigationMetrics";
 import type { AccountProfile, ConversationItem } from "@/lib/web-api/contracts";
@@ -59,21 +60,23 @@ export function WorkspaceFrame({ account, accountId, balance = null, children, c
     <WorkspaceAccountProvider snapshot={{ balance, profile }}>
       <WorkspaceConversationListProvider accountId={accountId} initialConversations={conversations} key={accountId}>
         <WorkspaceDataCacheProvider>
-          <AppShell
-            header={<WorkspaceHeader balance={balance} />}
-            isDesktopSidebarCollapsed={isDesktopSidebarCollapsed}
-            sidebar={
-              <Sidebar
-                account={account}
-                conversations={<SidebarConversations />}
-                isDesktopCollapsed={isDesktopSidebarCollapsed}
-                onDesktopToggle={toggleDesktopSidebar}
-              />
-            }
-          >
-            <WorkspaceNavigationMetrics />
-            {children}
-          </AppShell>
+          <WorkspaceModelSelectionProvider key={accountId}>
+            <AppShell
+              header={<WorkspaceHeader balance={balance} />}
+              isDesktopSidebarCollapsed={isDesktopSidebarCollapsed}
+              sidebar={
+                <Sidebar
+                  account={account}
+                  conversations={<SidebarConversations />}
+                  isDesktopCollapsed={isDesktopSidebarCollapsed}
+                  onDesktopToggle={toggleDesktopSidebar}
+                />
+              }
+            >
+              <WorkspaceNavigationMetrics />
+              {children}
+            </AppShell>
+          </WorkspaceModelSelectionProvider>
         </WorkspaceDataCacheProvider>
       </WorkspaceConversationListProvider>
     </WorkspaceAccountProvider>

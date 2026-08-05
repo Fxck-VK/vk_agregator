@@ -20,6 +20,10 @@ import type { ImageModelList } from "@/lib/web-api/contracts";
 import { useSearchParams } from "next/navigation";
 
 import { loadImageModelCatalog } from "@/features/models/image-model-catalog-cache";
+import {
+  useWorkspaceModelSelection,
+  WorkspaceModelSelectionProvider,
+} from "@/features/models/WorkspaceModelSelection/WorkspaceModelSelection";
 
 import { ImageGenerationPanel } from "./ImageGenerationPanel";
 
@@ -82,6 +86,12 @@ function getGenerateButton() {
   return screen.getByRole("button", { name: new RegExp(`^${ru.imageGeneration.generate}`) });
 }
 
+function WorkspaceModelSelectionProbe() {
+  const selection = useWorkspaceModelSelection();
+
+  return <output>{selection?.selectedModelId ?? "none"}</output>;
+}
+
 describe("ImageGenerationPanel", () => {
   beforeEach(() => {
 	vi.resetAllMocks();
@@ -131,6 +141,23 @@ describe("ImageGenerationPanel", () => {
     fireEvent.change(screen.getByRole("textbox", { name: ru.imageGeneration.promptLabel }), { target: { value: "new prompt" } });
     expect(screen.getByText(`${ru.imageGeneration.priceLabel}: 60 \u2605`)).toBeInTheDocument();
     expect(webBrowserMutation).not.toHaveBeenCalled();
+  });
+
+  it("publishes editor model changes to the persistent workspace selection", async () => {
+    vi.mocked(loadImageModelCatalog).mockResolvedValueOnce(multipleModelsResponse);
+    render(
+      <WorkspaceModelSelectionProvider>
+        <ImageGenerationPanel />
+        <WorkspaceModelSelectionProbe />
+      </WorkspaceModelSelectionProvider>,
+    );
+    await screen.findByRole("combobox", { name: ru.imageGeneration.modelLabel });
+
+    fireEvent.change(screen.getByRole("combobox", { name: ru.imageGeneration.modelLabel }), {
+      target: { value: "nano-banana-2" },
+    });
+
+    expect(screen.getByText("nano-banana-2", { selector: "output" })).toBeInTheDocument();
   });
 
   it("selects a known requested model when the direct editor loads", async () => {
