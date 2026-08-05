@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 
 import { ru } from "@/i18n/ru";
 
@@ -24,26 +24,44 @@ type MessageRating = "like" | "dislike" | null;
 
 export function ConversationMessageActions(props: Readonly<ConversationMessageActionsProps>) {
   const { kind, messageText } = props;
+  const [copied, setCopied] = useState(false);
   const [rating, setRating] = useState<MessageRating>(null);
+  const copyResetTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  useEffect(() => () => {
+    if (copyResetTimerRef.current !== null) {
+      clearTimeout(copyResetTimerRef.current);
+    }
+  }, []);
 
   const copyMessage = async () => {
     try {
       await navigator.clipboard.writeText(messageText);
+      setCopied(true);
+      if (copyResetTimerRef.current !== null) {
+        clearTimeout(copyResetTimerRef.current);
+      }
+      copyResetTimerRef.current = setTimeout(() => {
+        setCopied(false);
+        copyResetTimerRef.current = null;
+      }, 2_000);
     } catch {
       // The message remains visible so it can still be selected manually.
     }
   };
 
+  const copyLabel = copied ? ru.conversations.copiedMessage : ru.conversations.copyMessage;
+
   return (
     <div className={styles.actions}>
       <button
-        aria-label={ru.conversations.copyMessage}
-        className={styles.action}
+        aria-label={copyLabel}
+        className={`${styles.action} ${styles.copyAction}`}
+        data-tooltip={copyLabel}
         onClick={() => void copyMessage()}
-        title={ru.conversations.copyMessage}
         type="button"
       >
-        <CopyIcon />
+        {copied ? <CheckIcon /> : <CopyIcon />}
       </button>
       {kind === "user" ? (
         <button
@@ -85,9 +103,17 @@ export function ConversationMessageActions(props: Readonly<ConversationMessageAc
 
 function CopyIcon() {
   return (
-    <svg aria-hidden="true" fill="none" viewBox="0 0 24 24">
+    <svg aria-hidden="true" data-icon="copy" fill="none" viewBox="0 0 24 24">
       <rect height="13" rx="2.5" stroke="currentColor" strokeWidth="1.8" width="11" x="8" y="8" />
       <path d="M16 8V6.5A2.5 2.5 0 0 0 13.5 4h-7A2.5 2.5 0 0 0 4 6.5v7A2.5 2.5 0 0 0 6.5 16H8" stroke="currentColor" strokeLinecap="round" strokeWidth="1.8" />
+    </svg>
+  );
+}
+
+function CheckIcon() {
+  return (
+    <svg aria-hidden="true" data-icon="check" fill="none" viewBox="0 0 24 24">
+      <path d="m5 12.5 4.25 4.25L19 7" stroke="currentColor" strokeLinecap="round" strokeLinejoin="round" strokeWidth="1.9" />
     </svg>
   );
 }

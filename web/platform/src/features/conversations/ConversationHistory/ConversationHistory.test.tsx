@@ -79,6 +79,38 @@ describe("ConversationHistory", () => {
     expect(assistantMessage.queryByRole("button", { name: "Пересоздать сообщение" })).toBeNull();
   });
 
+  it("shows NeiroHub copy feedback and restores the copy action after two seconds", async () => {
+    vi.useFakeTimers();
+    const writeText = vi.fn().mockResolvedValue(undefined);
+    vi.stubGlobal("navigator", { clipboard: { writeText } });
+    render(<ConversationHistory history={initialHistory as never} />);
+
+    const userMessage = within(within(screen.getByRole("list")).getAllByRole("listitem")[0]);
+    const copyButton = userMessage.getByRole("button", { name: ru.conversations.copyMessage });
+
+    expect(copyButton).not.toHaveAttribute("title");
+    expect(copyButton).toHaveAttribute("data-tooltip", ru.conversations.copyMessage);
+    expect(copyButton.querySelector('[data-icon="copy"]')).not.toBeNull();
+
+    await act(async () => {
+      fireEvent.click(copyButton);
+      await Promise.resolve();
+    });
+
+    expect(writeText).toHaveBeenCalledWith("message 102");
+    expect(copyButton).toHaveAccessibleName("Скопировано");
+    expect(copyButton).toHaveAttribute("data-tooltip", "Скопировано");
+    expect(copyButton.querySelector('[data-icon="check"]')).not.toBeNull();
+
+    act(() => {
+      vi.advanceTimersByTime(2_000);
+    });
+
+    expect(copyButton).toHaveAccessibleName(ru.conversations.copyMessage);
+    expect(copyButton).toHaveAttribute("data-tooltip", ru.conversations.copyMessage);
+    expect(copyButton.querySelector('[data-icon="copy"]')).not.toBeNull();
+  });
+
   it("keeps like and dislike mutually exclusive and clears a repeated rating", () => {
     render(<ConversationHistory history={initialHistory as never} />);
 

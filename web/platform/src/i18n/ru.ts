@@ -150,6 +150,7 @@ export const ru = {
     composerAwaitingResponse: "NeiroHub печатает",
     composerFailure: "Не удалось отправить сообщение. Попробуйте ещё раз — текст сохранён.",
     copyMessage: "Копировать сообщение",
+    copiedMessage: "Скопировано",
     recreateMessage: "Пересоздать сообщение",
     likeMessage: "Лайк",
     dislikeMessage: "Дизлайк",
