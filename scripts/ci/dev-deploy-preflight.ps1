@@ -33,6 +33,35 @@ function Get-GitOutput {
     return ($output | Out-String).Trim()
 }
 
+function Install-NpmDependenciesIfNeeded {
+    param([Parameter(Mandatory = $true)][string]$PackagePath)
+
+    $lockfilePath = Join-Path $repoRoot "$PackagePath/package-lock.json"
+    $eslintExecutable = if ($IsWindows) {
+        Join-Path $repoRoot "$PackagePath/node_modules/.bin/eslint.cmd"
+    } else {
+        Join-Path $repoRoot "$PackagePath/node_modules/.bin/eslint"
+    }
+    $lockHash = (Get-FileHash -LiteralPath $lockfilePath -Algorithm SHA256).Hash.ToLowerInvariant()
+    $dependencyCacheDirectory = Join-Path $gitDirectory "dev-deploy-npm"
+    $packageCacheName = $PackagePath.Replace("/", "-").Replace("\\", "-")
+    $dependencyMarker = Join-Path $dependencyCacheDirectory "$packageCacheName-$lockHash.ok"
+
+    if ((Test-Path -LiteralPath $dependencyMarker -PathType Leaf) -and
+        (Test-Path -LiteralPath $eslintExecutable -PathType Leaf)) {
+        Write-Host "npm dependencies already match $PackagePath/package-lock.json"
+        return
+    }
+
+    Invoke-Native -Command $npmCommand -Arguments @("--prefix", $PackagePath, "ci")
+    New-Item -ItemType Directory -Path $dependencyCacheDirectory -Force | Out-Null
+    [System.IO.File]::WriteAllText(
+        $dependencyMarker,
+        "lock_sha256=$lockHash`ncompleted_at=$([DateTime]::UtcNow.ToString('O'))`n",
+        [System.Text.UTF8Encoding]::new($false)
+    )
+}
+
 $branch = Get-GitOutput -Arguments @("rev-parse", "--abbrev-ref", "HEAD")
 $upstream = ""
 try {
@@ -64,6 +93,7 @@ $runStage = {
             Invoke-Native -Command "go" -Arguments @("test", "./...")
             Invoke-Native -Command "go" -Arguments @("vet", "./...")
             foreach ($packagePath in @("web/miniapp", "web/admin", "web/platform")) {
+                Install-NpmDependenciesIfNeeded -PackagePath $packagePath
                 Invoke-Native -Command $npmCommand -Arguments @("--prefix", $packagePath, "run", "lint")
                 Invoke-Native -Command $npmCommand -Arguments @("--prefix", $packagePath, "run", "typecheck")
                 Invoke-Native -Command $npmCommand -Arguments @("--prefix", $packagePath, "run", "test")

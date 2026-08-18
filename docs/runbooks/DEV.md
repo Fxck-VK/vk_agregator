@@ -102,6 +102,11 @@ Bash and Docker. Trivy runs from the immutable image digest recorded in the scri
 reuses a private cache under the worktree Git directory. It never installs or
 runs an unpinned `latest` scanner.
 
+Frontend dependencies are installed with `npm ci` only when a package lockfile
+changes or that package's local executable set is missing. The successful
+lockfile hash is cached under private Git metadata; dependency installation
+failures never create a marker.
+
 New commits on `dev-deploy` cancel obsolete CI and Docker Images runs for that
 branch. `main` runs are not cancelled. Signed release publication still emits
 all eight exact-SHA images; per-service BuildKit cache scopes make unchanged
