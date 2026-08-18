@@ -75,3 +75,18 @@ export function clearPendingConversationTitleSync(conversationID: string) {
     // A disabled browser storage must not affect the visible workspace.
   }
 }
+
+export function clearPendingConversationTitleSyncs() {
+  const sessionStorage = getSessionStorage();
+  if (sessionStorage === null) {
+    return;
+  }
+
+  try {
+    const ownedKeys = Array.from({ length: sessionStorage.length }, (_, index) => sessionStorage.key(index))
+      .filter((key): key is string => key?.startsWith(pendingConversationTitleSyncPrefix) === true);
+    ownedKeys.forEach((key) => sessionStorage.removeItem(key));
+  } catch {
+    // Logout must continue when browser storage is unavailable.
+  }
+}

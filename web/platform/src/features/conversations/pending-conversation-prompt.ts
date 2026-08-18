@@ -53,3 +53,18 @@ export function clearPendingConversationPrompt(conversationID: string) {
     // A browser storage failure must not interrupt the first chat request.
   }
 }
+
+export function clearPendingConversationPrompts() {
+  const sessionStorage = getSessionStorage();
+  if (sessionStorage === null) {
+    return;
+  }
+
+  try {
+    const ownedKeys = Array.from({ length: sessionStorage.length }, (_, index) => sessionStorage.key(index))
+      .filter((key): key is string => key?.startsWith(pendingConversationPromptPrefix) === true);
+    ownedKeys.forEach((key) => sessionStorage.removeItem(key));
+  } catch {
+    // Logout must continue when browser storage is unavailable.
+  }
+}
