@@ -77,4 +77,38 @@ describe("ConversationComposer", () => {
     fireEvent.keyDown(screen.getByLabelText(ru.conversations.composerLabel), { key: "Enter" });
     expect(onSubmit).not.toHaveBeenCalled();
   });
+
+  it("passes the active reply state to the circular scroll control", () => {
+    const scrollContainer = document.createElement("main");
+    Object.defineProperties(scrollContainer, {
+      clientHeight: { configurable: true, value: 400 },
+      scrollHeight: { configurable: true, value: 1600 },
+      scrollTo: { configurable: true, value: vi.fn() },
+      scrollTop: { configurable: true, writable: true, value: 100 },
+    });
+
+    const rendered = render(
+      <ConversationComposer
+        {...chatScrollProps}
+        isAwaitingResponse
+        onSubmit={vi.fn()}
+        scrollContainer={scrollContainer}
+      />,
+    );
+
+    expect(screen.getByRole("status", { name: ru.conversations.composerAwaitingResponse })).toBeVisible();
+    expect(screen.queryByRole("button", { name: ru.conversations.scrollToLatest })).toBeNull();
+
+    rendered.rerender(
+      <ConversationComposer
+        {...chatScrollProps}
+        isAwaitingResponse={false}
+        onSubmit={vi.fn()}
+        scrollContainer={scrollContainer}
+      />,
+    );
+
+    expect(screen.queryByRole("status", { name: ru.conversations.composerAwaitingResponse })).toBeNull();
+    expect(screen.getByRole("button", { name: ru.conversations.scrollToLatest })).toBeVisible();
+  });
 });

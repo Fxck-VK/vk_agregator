@@ -467,6 +467,48 @@ describe("ConversationHistory", () => {
     expect(screen.queryByRole("status", { name: ru.conversations.composerAwaitingResponse })).toBeNull();
   });
 
+  it("shows typing dots in the circular dock control until the assistant reply completes", async () => {
+    const workspaceScroll = addWorkspaceScrollRegion();
+    let resolveRefresh: (response: Response) => void = () => {};
+    vi.mocked(webBrowserMutation).mockResolvedValueOnce(Response.json(queuedJob, { status: 201 }));
+    vi.mocked(webBrowserFetch).mockReturnValueOnce(
+      new Promise<Response>((resolve) => {
+        resolveRefresh = resolve;
+      }),
+    );
+    render(<ConversationHistory history={initialHistory as never} />);
+
+    const textarea = screen.getByLabelText(ru.conversations.composerLabel);
+    fireEvent.change(textarea, { target: { value: "Покажи индикатор" } });
+    fireEvent.keyDown(textarea, { key: "Enter" });
+
+    await vi.waitFor(() => {
+      expect(screen.getAllByRole("status", { name: ru.conversations.composerAwaitingResponse })).toHaveLength(2);
+    });
+    expect(screen.queryByRole("button", { name: ru.conversations.scrollToLatest })).toBeNull();
+
+    resolveRefresh(
+      Response.json({
+        items: [
+          {
+            id: "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa",
+            seq: 104,
+            role: "assistant",
+            text: "Готовый ответ",
+            created_at: "2026-08-01T12:00:05Z",
+          },
+        ],
+      }),
+    );
+
+    await screen.findByText("Готовый ответ");
+    workspaceScroll.region.scrollTop = 100;
+    fireEvent.scroll(workspaceScroll.region);
+
+    expect(screen.queryByRole("status", { name: ru.conversations.composerAwaitingResponse })).toBeNull();
+    expect(screen.getByRole("button", { name: ru.conversations.scrollToLatest })).toBeVisible();
+  });
+
   it("renders a sent turn immediately and retries an in-place failure with the same idempotency key", async () => {
     const idempotencyKey = "55555555-5555-4555-8555-555555555555";
     let rejectMutation: (reason?: unknown) => void = () => {};

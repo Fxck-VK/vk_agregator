@@ -34,6 +34,33 @@ describe("ChatScrollToBottom", () => {
     expect(scrollTo).toHaveBeenCalledWith({ behavior: "smooth", top: 1200 });
   });
 
+  it("replaces the arrow with typing dots while a reply is pending and restores it afterwards", () => {
+    const region = createScrollRegion({ scrollTop: 100 });
+    const { rerender } = render(
+      <ChatScrollToBottom
+        contentVersion="1"
+        forceScrollRequest={0}
+        isAwaitingResponse
+        scrollContainer={region.element}
+      />,
+    );
+
+    expect(screen.queryByRole("button", { name: ru.conversations.scrollToLatest })).toBeNull();
+    expect(screen.getByRole("status", { name: ru.conversations.composerAwaitingResponse })).toBeVisible();
+
+    rerender(
+      <ChatScrollToBottom
+        contentVersion="2"
+        forceScrollRequest={0}
+        isAwaitingResponse={false}
+        scrollContainer={region.element}
+      />,
+    );
+
+    expect(screen.queryByRole("status", { name: ru.conversations.composerAwaitingResponse })).toBeNull();
+    expect(screen.getByRole("button", { name: ru.conversations.scrollToLatest })).toBeVisible();
+  });
+
   it("follows new content only while it was already at the bottom", () => {
     const region = createScrollRegion({ scrollTop: 1200 });
     const { rerender } = render(

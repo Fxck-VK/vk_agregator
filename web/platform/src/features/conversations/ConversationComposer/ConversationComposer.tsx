@@ -14,6 +14,7 @@ type ConversationComposerProps = {
   disabled?: boolean;
   forceScrollRequest: number;
   initialDraft?: string;
+  isAwaitingResponse?: boolean;
   onSubmit: (prompt: string) => void;
   scrollContainer: HTMLElement | null;
 };
@@ -23,6 +24,7 @@ export function ConversationComposer({
   disabled = false,
   forceScrollRequest,
   initialDraft = "",
+  isAwaitingResponse = false,
   onSubmit,
   scrollContainer,
 }: ConversationComposerProps) {
@@ -54,6 +56,7 @@ export function ConversationComposer({
       <ChatScrollToBottom
         contentVersion={contentVersion}
         forceScrollRequest={forceScrollRequest}
+        isAwaitingResponse={isAwaitingResponse}
         scrollContainer={scrollContainer}
       />
       <div className={styles.composer}>

@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useRef, useState } from "react";
 
+import { AssistantTypingIndicator } from "@/components/chat/AssistantTypingIndicator/AssistantTypingIndicator";
 import { ru } from "@/i18n/ru";
 
 import styles from "./ChatScrollToBottom.module.css";
@@ -9,6 +10,7 @@ import styles from "./ChatScrollToBottom.module.css";
 type ChatScrollToBottomProps = {
   contentVersion: string;
   forceScrollRequest: number;
+  isAwaitingResponse?: boolean;
   scrollContainer: HTMLElement | null;
 };
 
@@ -22,6 +24,7 @@ const SCROLL_SETTLE_DELAY_MS = 150;
 export function ChatScrollToBottom({
   contentVersion,
   forceScrollRequest,
+  isAwaitingResponse = false,
   scrollContainer,
 }: ChatScrollToBottomProps) {
   const [atBottom, setAtBottom] = useState(() => !scrollContainer || isAtBottom(scrollContainer));
@@ -132,7 +135,19 @@ export function ChatScrollToBottom({
     [],
   );
 
-  if (atBottom || !scrollContainer) {
+  if (!scrollContainer) {
+    return null;
+  }
+
+  if (isAwaitingResponse) {
+    return (
+      <div className={`${styles.button} ${styles.status}`}>
+        <AssistantTypingIndicator label={ru.conversations.composerAwaitingResponse} />
+      </div>
+    );
+  }
+
+  if (atBottom) {
     return null;
   }
 

@@ -377,6 +377,7 @@ function ConversationHistoryReady({
   }, [history.conversationId, pollRequest]);
 
   const pendingTurnIsActive = pendingTurn?.id === activeRefreshID && pendingTurn.status !== "failed";
+  const isAwaitingResponse = pendingTurnIsActive || (pendingTurn === null && activeRefreshID !== null);
   const hasVisibleMessages = messages.length > 0 || pendingTurn !== null || activeRefreshID !== null;
   const contentVersion = `${messages.at(-1)?.id ?? ""}:${pendingTurn?.id ?? ""}:${pendingTurn?.status ?? ""}:${activeRefreshID ?? ""}`;
 
@@ -463,6 +464,7 @@ function ConversationHistoryReady({
         disabled={pendingTurn !== null || activeRefreshID !== null}
         forceScrollRequest={forceScrollRequest}
         initialDraft={composerDraftRequest?.text}
+        isAwaitingResponse={isAwaitingResponse}
         key={`composer:${composerDraftRequest?.id ?? 0}`}
         onSubmit={beginMessageSubmission}
         scrollContainer={workspaceScrollRegion}
