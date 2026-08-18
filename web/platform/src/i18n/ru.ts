@@ -362,6 +362,9 @@ export const ru = {
     openModels: "Посмотреть нейросети",
     unavailable: "Рабочее пространство временно недоступно. Попробуйте ещё раз.",
     refreshPending: "Восстанавливаем сессию…",
+    sessionProgressLabel: "Восстановление сессии",
+    sessionRetryableError: "Не удалось восстановить соединение.",
+    sessionRetry: "Повторить",
     chatPlaceholder: "Чат готовится к работе.",
     sections: {
       home: {
