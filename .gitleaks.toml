@@ -210,11 +210,13 @@ id = "generic-api-key"
   ]
 
   [[rules.allowlists]]
-  description = "Exact non-secret idempotency UUID fixtures in workspace prompt tests"
+  description = "Exact non-secret idempotency UUID fixtures in workspace prompt and bootstrap tests"
   condition = "AND"
   regexTarget = "secret"
   paths = [
     '''(?i)(^|/)web/platform/src/features/workspace/WorkspacePrompt/WorkspacePrompt\.test\.tsx$''',
+    '''(?i)(^|/)web/platform/src/features/conversations/pending-conversation-bootstrap\.test\.ts$''',
+    '''(?i)(^|/)web/platform/src/features/conversations/PendingConversationBootstrap/PendingConversationBootstrap\.test\.tsx$''',
   ]
   regexes = [
     '''^(?:c7c979f5-24e5-4f88-924b-a592d6e5a906|e7c979f5-24e5-4f88-924b-a592d6e5a906)$''',
