@@ -45,3 +45,74 @@ updates:
       admin-dependencies:
         patterns:
           - "*"
+
+  - package-ecosystem: "npm"
+    directory: "/web/platform"
+    schedule:
+      interval: "weekly"
+    groups:
+      platform-dependencies:
+        patterns:
+          - "*"
+
+  # Version updates are tested in the DEV contour before intentional promotion.
+  # Security updates remain default-branch PRs managed by GitHub.
+  - package-ecosystem: "github-actions"
+    directory: "/"
+    target-branch: "dev-deploy"
+    schedule:
+      interval: "weekly"
+    groups:
+      dev-github-actions:
+        patterns:
+          - "*"
+
+  - package-ecosystem: "docker"
+    directory: "/"
+    target-branch: "dev-deploy"
+    schedule:
+      interval: "weekly"
+    groups:
+      dev-production-images:
+        patterns:
+          - "*"
+
+  - package-ecosystem: "gomod"
+    directory: "/"
+    target-branch: "dev-deploy"
+    schedule:
+      interval: "weekly"
+    groups:
+      dev-go-dependencies:
+        patterns:
+          - "*"
+
+  - package-ecosystem: "npm"
+    directory: "/web/miniapp"
+    target-branch: "dev-deploy"
+    schedule:
+      interval: "weekly"
+    groups:
+      dev-miniapp-dependencies:
+        patterns:
+          - "*"
+
+  - package-ecosystem: "npm"
+    directory: "/web/admin"
+    target-branch: "dev-deploy"
+    schedule:
+      interval: "weekly"
+    groups:
+      dev-admin-dependencies:
+        patterns:
+          - "*"
+
+  - package-ecosystem: "npm"
+    directory: "/web/platform"
+    target-branch: "dev-deploy"
+    schedule:
+      interval: "weekly"
+    groups:
+      dev-platform-dependencies:
+        patterns:
+          - "*"
