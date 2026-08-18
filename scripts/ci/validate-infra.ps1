@@ -344,9 +344,9 @@ function Assert-ReverseProxyConfig {
         throw "platform nonce proxy must preserve the browser-visible return-path cookie"
     }
 
-    $platformHomePagePath = Join-Path $repoRoot "web\platform\src\app\page.tsx"
+    $platformHomePagePath = Join-Path $repoRoot "web\platform\src\app\(public)\page.tsx"
     if (-not (Test-Path -LiteralPath $platformHomePagePath)) {
-        throw "platform root page is missing: web/platform/src/app/page.tsx"
+        throw "platform root page is missing: web/platform/src/app/(public)/page.tsx"
     }
     $platformHomePage = Get-Content -LiteralPath $platformHomePagePath -Raw
     foreach ($snippet in @(
