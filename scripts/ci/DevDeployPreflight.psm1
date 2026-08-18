@@ -21,6 +21,11 @@ function Invoke-DevDeployPreflight {
     if ($StageNames.Count -eq 0) {
         throw "At least one preflight stage is required."
     }
+    foreach ($stageName in $StageNames) {
+        if ($stageName -notmatch '^[A-Za-z0-9._-]+$') {
+            throw "Stage name contains unsupported characters: $stageName"
+        }
+    }
 
     New-Item -ItemType Directory -Path $GitDirectory -Force | Out-Null
     $resolvedGitDirectory = (Resolve-Path -LiteralPath $GitDirectory).Path
@@ -57,9 +62,20 @@ function Invoke-DevDeployPreflight {
 
         $completedStages = [System.Collections.Generic.List[string]]::new()
         foreach ($stage in $StageNames) {
+            $stageCachePath = Join-Path $resolvedGitDirectory "dev-deploy-preflight-$PolicyVersion-$CommitSha-$stage.ok"
+            if (-not $Force -and (Test-Path -LiteralPath $stageCachePath -PathType Leaf)) {
+                Write-Host "==> DEV preflight: $stage (cached for exact commit)"
+                continue
+            }
+
             Write-Host "==> DEV preflight: $stage"
             & $RunStage $stage | Out-Host
             $completedStages.Add($stage)
+
+            $stageTempPath = "$stageCachePath.$PID.tmp"
+            $stageCacheContent = "commit=$CommitSha`npolicy=$PolicyVersion`nstage=$stage`ncompleted_at=$([DateTime]::UtcNow.ToString('O'))`n"
+            [System.IO.File]::WriteAllText($stageTempPath, $stageCacheContent, [System.Text.UTF8Encoding]::new($false))
+            Move-Item -LiteralPath $stageTempPath -Destination $stageCachePath -Force
         }
 
         $tempCachePath = "$cachePath.$PID.tmp"

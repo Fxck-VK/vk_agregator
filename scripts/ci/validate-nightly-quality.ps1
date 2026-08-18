@@ -230,6 +230,7 @@ Assert-Contains (Get-Content -LiteralPath $preflightScriptPath -Raw) '"status", 
 Assert-Contains (Get-Content -LiteralPath $preflightScriptPath -Raw) 'scripts/ci/test-wait-for-github-workflow.sh' 'DEV preflight workflow monitor regression test'
 Assert-Contains (Get-Content -LiteralPath $preflightScriptPath -Raw) 'Install-NpmDependenciesIfNeeded -PackagePath $packagePath' 'DEV preflight lockfile-scoped npm bootstrap'
 Assert-Contains (Get-Content -LiteralPath $preflightScriptPath -Raw) '"--prefix", $PackagePath, "ci"' 'DEV preflight reproducible npm install'
+Assert-Contains (Get-Content -LiteralPath $preflightModulePath -Raw) '$CommitSha-$stage.ok' 'DEV preflight exact-commit stage cache'
 Assert-Contains $validateInfra 'Resolve-NextAppRoutePage -AppRoot $platformAppRoot -Route "/"' 'Semantic platform root route validation'
 Assert-NotMatch $validateInfra 'web\\platform\\src\\app\\\(public\)\\page\.tsx' 'Physical platform root route validation'
 

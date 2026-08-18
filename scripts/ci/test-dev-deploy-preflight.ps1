@@ -83,6 +83,20 @@ try {
         throw "failed preflight must not write a cache marker"
     }
 
+    $retryStages = [System.Collections.Generic.List[string]]::new()
+    $retryResult = Invoke-DevDeployPreflight `
+        -GitDirectory $tempRoot `
+        -CommitSha $failedSha `
+        -PolicyVersion "v1" `
+        -StageNames $stages `
+        -RunStage { param($stage) $retryStages.Add($stage) | Out-Null } `
+        -LockTimeoutSeconds 1
+    Assert-Equal $false $retryResult.Cached "partial retry cache state"
+    Assert-Equal "audit,govulncheck,infrastructure,trivy" ($retryStages -join ",") "partial retry resumes after successful stage"
+    if (-not (Test-Path -LiteralPath $retryResult.CachePath -PathType Leaf)) {
+        throw "successful partial retry must write the complete cache marker"
+    }
+
     $lockPath = Join-Path $tempRoot "dev-deploy-preflight.lock"
     $heldLock = [System.IO.File]::Open($lockPath, [System.IO.FileMode]::OpenOrCreate, [System.IO.FileAccess]::ReadWrite, [System.IO.FileShare]::None)
     try {

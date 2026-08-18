@@ -93,9 +93,10 @@ pwsh -NoProfile -File scripts/ci/dev-deploy-preflight.ps1
 It runs source tests, npm audits, `govulncheck`, infrastructure policy and the
 pinned Trivy filesystem scan in that order. Only one full preflight may run in
 a worktree at a time. A successful result is cached under private Git metadata
-for the exact commit and policy version, so retrying the same push is fast.
-Failures are not cached. Use `-Force` only when intentionally repeating all
-checks for the same commit.
+for the exact commit, policy version, and completed stage. If a late stage
+fails, retrying the same commit resumes from that stage instead of repeating
+earlier successful checks. Failures are not cached. Use `-Force` only when
+intentionally repeating every check for the same commit.
 
 The command requires a completely clean worktree, Go, Node.js/npm, PowerShell,
 Bash and Docker. Trivy runs from the immutable image digest recorded in the script and
