@@ -354,6 +354,7 @@ func (h *Handler) Routes() http.Handler {
 	mux.HandleFunc("GET /web/v1/image-artifacts/{artifactID}", h.requirePrincipal(h.getImageArtifact))
 	mux.HandleFunc("POST /web/v1/conversations", h.requireUnsafePrincipal(h.createConversation))
 	mux.HandleFunc("POST /web/v1/conversations/{conversationID}/messages", h.requireUnsafePrincipal(h.createConversationMessage))
+	mux.HandleFunc("PUT /web/v1/conversations/{conversationID}/messages/{messageID}/rating", h.requireUnsafePrincipal(h.rateConversationMessage))
 	mux.HandleFunc("PATCH /web/v1/conversations/{conversationID}", h.requireUnsafePrincipal(h.renameConversation))
 	mux.HandleFunc("DELETE /web/v1/conversations/{conversationID}", h.requireUnsafePrincipal(h.archiveConversation))
 	mux.HandleFunc("POST /web/v1/image-jobs/prepare", h.requireUnsafePrincipal(h.prepareImageJob))
@@ -1167,6 +1168,63 @@ func (h *Handler) archiveConversation(w http.ResponseWriter, r *http.Request) {
 	w.WriteHeader(http.StatusNoContent)
 }
 
+func (h *Handler) rateConversationMessage(w http.ResponseWriter, r *http.Request) {
+	w.Header().Set("Cache-Control", "no-store")
+	principal, ok := PrincipalFromContext(r.Context())
+	if !ok {
+		writeError(w, http.StatusUnauthorized, "unauthorized")
+		return
+	}
+	conversationID, err := uuid.Parse(strings.TrimSpace(r.PathValue("conversationID")))
+	if err != nil || conversationID == uuid.Nil {
+		writeError(w, http.StatusBadRequest, "invalid conversation id")
+		return
+	}
+	messageID, err := uuid.Parse(strings.TrimSpace(r.PathValue("messageID")))
+	if err != nil || messageID == uuid.Nil {
+		writeError(w, http.StatusBadRequest, "invalid message id")
+		return
+	}
+	var req struct {
+		Rating json.RawMessage `json:"rating"`
+	}
+	if !decodeJSON(w, r, &req) {
+		return
+	}
+	if len(req.Rating) == 0 {
+		writeError(w, http.StatusBadRequest, "invalid message rating")
+		return
+	}
+	rating := domain.ConversationMessageRatingNone
+	if string(req.Rating) != "null" {
+		if err := json.Unmarshal(req.Rating, &rating); err != nil || rating == domain.ConversationMessageRatingNone || !rating.Valid() {
+			writeError(w, http.StatusBadRequest, "invalid message rating")
+			return
+		}
+	}
+	if h.deps.Conversations == nil {
+		writeError(w, http.StatusServiceUnavailable, "conversations unavailable")
+		return
+	}
+	message, err := h.deps.Conversations.SetMessageRatingForAccount(
+		r.Context(),
+		principal.AccountID,
+		conversationID,
+		messageID,
+		domain.ConversationSourceWeb,
+		rating,
+	)
+	if errors.Is(err, domain.ErrNotFound) {
+		writeError(w, http.StatusNotFound, "message not found")
+		return
+	}
+	if err != nil || message == nil {
+		writeError(w, http.StatusServiceUnavailable, "conversations unavailable")
+		return
+	}
+	writeJSON(w, http.StatusOK, newSafeConversationMessageRating(message.Rating))
+}
+
 func (h *Handler) listConversationMessages(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Cache-Control", "no-store")
 	principal, ok := PrincipalFromContext(r.Context())
@@ -1737,11 +1795,16 @@ type safeConversationMessageList struct {
 }
 
 type safeConversationMessage struct {
-	ID        uuid.UUID                      `json:"id"`
-	Seq       int64                          `json:"seq"`
-	Role      domain.ConversationMessageRole `json:"role"`
-	Text      string                         `json:"text"`
-	CreatedAt time.Time                      `json:"created_at"`
+	ID        uuid.UUID                         `json:"id"`
+	Seq       int64                             `json:"seq"`
+	Role      domain.ConversationMessageRole    `json:"role"`
+	Text      string                            `json:"text"`
+	Rating    *domain.ConversationMessageRating `json:"rating"`
+	CreatedAt time.Time                         `json:"created_at"`
+}
+
+type safeConversationMessageRating struct {
+	Rating *domain.ConversationMessageRating `json:"rating"`
 }
 
 type safeWebChatJob struct {
@@ -1847,8 +1910,21 @@ func newSafeConversationMessage(message domain.ConversationMessage) (safeConvers
 		Seq:       message.Seq,
 		Role:      message.Role,
 		Text:      message.Text,
+		Rating:    safeConversationMessageRatingValue(message.Rating),
 		CreatedAt: message.CreatedAt,
 	}, true
+}
+
+func newSafeConversationMessageRating(rating domain.ConversationMessageRating) safeConversationMessageRating {
+	return safeConversationMessageRating{Rating: safeConversationMessageRatingValue(rating)}
+}
+
+func safeConversationMessageRatingValue(rating domain.ConversationMessageRating) *domain.ConversationMessageRating {
+	if rating == domain.ConversationMessageRatingNone {
+		return nil
+	}
+	value := rating
+	return &value
 }
 
 func newSafeImageModel(model imagegeneration.PublicModel, resolver imagegeneration.Resolver) (safeImageModel, bool) {

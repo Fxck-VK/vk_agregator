@@ -111,16 +111,36 @@ const (
 	ConversationRoleAssistant ConversationMessageRole = "assistant"
 )
 
+// ConversationMessageRating is an account holder's durable evaluation of an
+// assistant message. The empty value means that no evaluation is stored.
+type ConversationMessageRating string
+
+const (
+	ConversationMessageRatingNone    ConversationMessageRating = ""
+	ConversationMessageRatingLike    ConversationMessageRating = "like"
+	ConversationMessageRatingDislike ConversationMessageRating = "dislike"
+)
+
+// ErrInvalidConversationMessageRating rejects values outside the public
+// like/dislike/clear contract.
+var ErrInvalidConversationMessageRating = errors.New("domain: invalid conversation message rating")
+
+// Valid reports whether the value can be persisted.
+func (r ConversationMessageRating) Valid() bool {
+	return r == ConversationMessageRatingNone || r == ConversationMessageRatingLike || r == ConversationMessageRatingDislike
+}
+
 // ConversationMessage is one persisted user/assistant turn in a conversation.
 type ConversationMessage struct {
-	ID             uuid.UUID               `json:"id"`
-	ConversationID uuid.UUID               `json:"conversation_id"`
-	JobID          uuid.UUID               `json:"job_id"`
-	Seq            int64                   `json:"seq"`
-	Role           ConversationMessageRole `json:"role"`
-	Text           string                  `json:"text"`
-	TokenCount     int                     `json:"token_count"`
-	CreatedAt      time.Time               `json:"created_at"`
+	ID             uuid.UUID                 `json:"id"`
+	ConversationID uuid.UUID                 `json:"conversation_id"`
+	JobID          uuid.UUID                 `json:"job_id"`
+	Seq            int64                     `json:"seq"`
+	Role           ConversationMessageRole   `json:"role"`
+	Text           string                    `json:"text"`
+	Rating         ConversationMessageRating `json:"rating,omitempty"`
+	TokenCount     int                       `json:"token_count"`
+	CreatedAt      time.Time                 `json:"created_at"`
 }
 
 // ConversationSummary is the compact memory of older turns up to

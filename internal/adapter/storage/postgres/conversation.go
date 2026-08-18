@@ -24,7 +24,7 @@ func NewConversationRepository(db Querier) *ConversationRepository {
 var _ domain.ConversationRepository = (*ConversationRepository)(nil)
 
 const conversationColumns = `id, user_id, account_id, source, vk_peer_id, external_thread_id, status, title, title_origin, created_at, updated_at`
-const conversationMessageColumns = `id, conversation_id, job_id, seq, role, text, token_count, created_at`
+const conversationMessageColumns = `id, conversation_id, job_id, seq, role, text, COALESCE(rating, '') AS rating, token_count, created_at`
 const conversationSummaryColumns = `id, conversation_id, text, token_count, summarized_until_seq, created_at, updated_at`
 
 func (r *ConversationRepository) GetActiveByUserPeer(ctx context.Context, userID uuid.UUID, vkPeerID int64) (*domain.Conversation, error) {
@@ -359,6 +359,38 @@ func (r *ConversationRepository) ListMessagesAfter(ctx context.Context, conversa
 	return scanConversationMessages(rows)
 }
 
+func (r *ConversationRepository) SetMessageRatingForAccount(
+	ctx context.Context,
+	accountID, conversationID, messageID uuid.UUID,
+	source domain.ConversationSource,
+	rating domain.ConversationMessageRating,
+) (*domain.ConversationMessage, error) {
+	if !rating.Valid() {
+		return nil, domain.ErrInvalidConversationMessageRating
+	}
+	const q = `
+		UPDATE conversation_messages AS message
+		SET rating = NULLIF($5, '')
+		FROM conversations AS conversation
+		WHERE message.id = $3
+		  AND message.conversation_id = $2
+		  AND message.role = 'assistant'
+		  AND message.deleted_at IS NULL
+		  AND message.redacted_at IS NULL
+		  AND conversation.id = message.conversation_id
+		  AND conversation.account_id = $1
+		  AND conversation.source = $4
+		  AND conversation.status = 'active'
+		RETURNING message.id, message.conversation_id, message.job_id, message.seq,
+		          message.role, message.text, COALESCE(message.rating, ''),
+		          message.token_count, message.created_at`
+	var message domain.ConversationMessage
+	if err := mapError(scanConversationMessage(r.db.QueryRow(ctx, q, accountID, conversationID, messageID, source, rating), &message)); err != nil {
+		return nil, err
+	}
+	return &message, nil
+}
+
 func (r *ConversationRepository) LatestSummary(ctx context.Context, conversationID uuid.UUID) (*domain.ConversationSummary, error) {
 	const q = `SELECT ` + conversationSummaryColumns + `
 		FROM conversation_summaries
@@ -421,7 +453,7 @@ func scanConversations(rows rowScannerRows) ([]*domain.Conversation, error) {
 }
 
 func scanConversationMessage(row rowScanner, m *domain.ConversationMessage) error {
-	return row.Scan(&m.ID, &m.ConversationID, &m.JobID, &m.Seq, &m.Role, &m.Text, &m.TokenCount, &m.CreatedAt)
+	return row.Scan(&m.ID, &m.ConversationID, &m.JobID, &m.Seq, &m.Role, &m.Text, &m.Rating, &m.TokenCount, &m.CreatedAt)
 }
 
 func scanConversationMessages(rows rowScannerRows) ([]*domain.ConversationMessage, error) {

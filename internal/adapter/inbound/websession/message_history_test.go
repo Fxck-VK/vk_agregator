@@ -246,10 +246,11 @@ func seedConversationMessage(t *testing.T, conversations *memory.ConversationRep
 }
 
 type safeConversationMessageDTO struct {
-	ID   uuid.UUID
-	Seq  int64
-	Role string
-	Text string
+	ID     uuid.UUID
+	Seq    int64
+	Role   string
+	Text   string
+	Rating domain.ConversationMessageRating
 }
 
 func assertSafeConversationMessageList(t *testing.T, body []byte) []safeConversationMessageDTO {
@@ -305,8 +306,8 @@ func safeConversationMessageFields(t *testing.T, fields map[string]json.RawMessa
 			t.Fatalf("response exposes forbidden field %q: %v", field, fields)
 		}
 	}
-	if len(fields) != 5 || fields["id"] == nil || fields["seq"] == nil || fields["role"] == nil || fields["text"] == nil || fields["created_at"] == nil {
-		t.Fatalf("response fields = %v, want id, seq, role, text, created_at", fields)
+	if len(fields) != 6 || fields["id"] == nil || fields["seq"] == nil || fields["role"] == nil || fields["text"] == nil || fields["rating"] == nil || fields["created_at"] == nil {
+		t.Fatalf("response fields = %v, want id, seq, role, text, rating, created_at", fields)
 	}
 	var dto safeConversationMessageDTO
 	var idRaw string
@@ -326,6 +327,11 @@ func safeConversationMessageFields(t *testing.T, fields map[string]json.RawMessa
 	}
 	if err := json.Unmarshal(fields["text"], &dto.Text); err != nil {
 		t.Fatalf("decode text: %v", err)
+	}
+	if string(fields["rating"]) != "null" {
+		if err := json.Unmarshal(fields["rating"], &dto.Rating); err != nil || !dto.Rating.Valid() || dto.Rating == domain.ConversationMessageRatingNone {
+			t.Fatalf("rating = %s, want null, like or dislike: %v", fields["rating"], err)
+		}
 	}
 	var createdAt string
 	if err := json.Unmarshal(fields["created_at"], &createdAt); err != nil {

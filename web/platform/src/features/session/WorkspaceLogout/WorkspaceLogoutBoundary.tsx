@@ -13,6 +13,7 @@ import {
 } from "react";
 
 import { clearPendingConversationPrompts } from "@/features/conversations/pending-conversation-prompt";
+import { clearPendingConversationBootstraps } from "@/features/conversations/pending-conversation-bootstrap";
 import { clearPendingConversationTitleSyncs } from "@/features/conversations/pending-conversation-title-sync";
 import { ru } from "@/i18n/ru";
 
@@ -49,6 +50,7 @@ function isWorkspaceLogoutMessage(value: unknown): value is WorkspaceLogoutMessa
 
 function clearPrivateBrowserState() {
   clearPendingConversationPrompts();
+  clearPendingConversationBootstraps();
   clearPendingConversationTitleSyncs();
 }
 
@@ -197,4 +199,3 @@ export function useWorkspaceLogout(): WorkspaceLogoutController {
   }
   return controller;
 }
-

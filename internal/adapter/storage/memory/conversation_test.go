@@ -274,6 +274,81 @@ func TestConversationRepoFindsUserMessagesForTitleWork(t *testing.T) {
 	}
 }
 
+func TestConversationRepoRatesOnlyOwnedActiveWebAssistantMessages(t *testing.T) {
+	ctx := context.Background()
+	repo := NewConversationRepo()
+	accountID := uuid.New()
+	conversation := &domain.Conversation{
+		AccountID:        accountID,
+		Source:           domain.ConversationSourceWeb,
+		ExternalThreadID: "rated-thread",
+	}
+	if err := repo.CreateConversation(ctx, conversation); err != nil {
+		t.Fatalf("create conversation: %v", err)
+	}
+	assistant, err := repo.UpsertMessage(ctx, &domain.ConversationMessage{
+		ConversationID: conversation.ID,
+		JobID:          uuid.New(),
+		Role:           domain.ConversationRoleAssistant,
+		Text:           "Answer",
+	})
+	if err != nil {
+		t.Fatalf("insert assistant: %v", err)
+	}
+	user, err := repo.UpsertMessage(ctx, &domain.ConversationMessage{
+		ConversationID: conversation.ID,
+		JobID:          uuid.New(),
+		Role:           domain.ConversationRoleUser,
+		Text:           "Question",
+	})
+	if err != nil {
+		t.Fatalf("insert user: %v", err)
+	}
+
+	rated, err := repo.SetMessageRatingForAccount(
+		ctx,
+		accountID,
+		conversation.ID,
+		assistant.ID,
+		domain.ConversationSourceWeb,
+		domain.ConversationMessageRatingLike,
+	)
+	if err != nil || rated.Rating != domain.ConversationMessageRatingLike {
+		t.Fatalf("rate assistant = %#v, %v", rated, err)
+	}
+	messages, err := repo.ListMessagesAfter(ctx, conversation.ID, 0, 10)
+	if err != nil || len(messages) != 2 || messages[0].Rating != domain.ConversationMessageRatingLike {
+		t.Fatalf("persisted rating messages = %#v, %v", messages, err)
+	}
+	cleared, err := repo.SetMessageRatingForAccount(
+		ctx,
+		accountID,
+		conversation.ID,
+		assistant.ID,
+		domain.ConversationSourceWeb,
+		domain.ConversationMessageRatingNone,
+	)
+	if err != nil || cleared.Rating != domain.ConversationMessageRatingNone {
+		t.Fatalf("clear assistant rating = %#v, %v", cleared, err)
+	}
+
+	for name, testCase := range map[string]struct {
+		accountID uuid.UUID
+		messageID uuid.UUID
+		source    domain.ConversationSource
+	}{
+		"foreign account": {uuid.New(), assistant.ID, domain.ConversationSourceWeb},
+		"user message":    {accountID, user.ID, domain.ConversationSourceWeb},
+		"wrong source":    {accountID, assistant.ID, domain.ConversationSourceMiniApp},
+	} {
+		t.Run(name, func(t *testing.T) {
+			if _, err := repo.SetMessageRatingForAccount(ctx, testCase.accountID, conversation.ID, testCase.messageID, testCase.source, domain.ConversationMessageRatingDislike); !errors.Is(err, domain.ErrNotFound) {
+				t.Fatalf("rating error = %v, want %v", err, domain.ErrNotFound)
+			}
+		})
+	}
+}
+
 func TestConversationRepoRejectsUnownedWebConversation(t *testing.T) {
 	repo := NewConversationRepo()
 	err := repo.CreateConversation(context.Background(), &domain.Conversation{

@@ -431,7 +431,13 @@ function ConversationHistoryReady({
                   {message.role === "user" ? (
                     <ConversationMessageActions kind="user" messageText={message.text} onRecreate={recreateMessage} />
                   ) : (
-                    <ConversationMessageActions kind="assistant" messageText={message.text} />
+                    <ConversationMessageActions
+                      conversationId={history.conversationId}
+                      initialRating={message.rating}
+                      kind="assistant"
+                      messageId={message.id}
+                      messageText={message.text}
+                    />
                   )}
                 </li>
               ))}

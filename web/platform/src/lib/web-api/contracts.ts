@@ -53,6 +53,7 @@ export const conversationMessageSchema = z
     seq: z.number().int().positive(),
     role: z.enum(["user", "assistant"]),
     text: z.string(),
+    rating: z.enum(["like", "dislike"]).nullable().optional().default(null),
     created_at: z.string().datetime({ offset: true }),
   })
   .strict();
@@ -66,6 +67,15 @@ export const conversationMessageListSchema = z
 
 export type ConversationMessage = z.infer<typeof conversationMessageSchema>;
 export type ConversationMessageList = z.infer<typeof conversationMessageListSchema>;
+export type ConversationMessageRating = ConversationMessage["rating"];
+
+export const conversationMessageRatingResponseSchema = z
+  .object({
+    rating: z.enum(["like", "dislike"]).nullable(),
+  })
+  .strict();
+
+export type ConversationMessageRatingResponse = z.infer<typeof conversationMessageRatingResponseSchema>;
 
 export const imageModelSchema = z
   .object({
@@ -226,6 +236,10 @@ export function parseConversationItem(payload: unknown): ConversationItem {
 
 export function parseConversationMessageList(payload: unknown): ConversationMessageList {
   return conversationMessageListSchema.parse(payload);
+}
+
+export function parseConversationMessageRatingResponse(payload: unknown): ConversationMessageRatingResponse {
+  return conversationMessageRatingResponseSchema.parse(payload);
 }
 
 export function parseWebChatJob(payload: unknown): WebChatJob {

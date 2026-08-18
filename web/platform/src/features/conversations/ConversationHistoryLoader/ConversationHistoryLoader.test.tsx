@@ -27,6 +27,7 @@ const cachedHistory = {
       seq: 1,
       role: "user" as const,
       text: "cached private message",
+      rating: null,
       created_at: "2026-08-01T12:00:00Z",
     },
   ],

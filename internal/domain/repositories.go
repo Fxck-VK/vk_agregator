@@ -370,6 +370,9 @@ type ConversationRepository interface {
 	ListRecentMessagesBefore(ctx context.Context, conversationID uuid.UUID, beforeSeq, minSeq int64, limit int) ([]*ConversationMessage, error)
 	// ListMessagesAfter returns messages newer than afterSeq, oldest first.
 	ListMessagesAfter(ctx context.Context, conversationID uuid.UUID, afterSeq int64, limit int) ([]*ConversationMessage, error)
+	// SetMessageRatingForAccount changes or clears the rating of one assistant
+	// message in an active conversation owned by the exact canonical account.
+	SetMessageRatingForAccount(ctx context.Context, accountID, conversationID, messageID uuid.UUID, source ConversationSource, rating ConversationMessageRating) (*ConversationMessage, error)
 	// LatestSummary returns the most recent summary for a conversation.
 	LatestSummary(ctx context.Context, conversationID uuid.UUID) (*ConversationSummary, error)
 	// UpsertSummary creates or replaces the latest summary state for a

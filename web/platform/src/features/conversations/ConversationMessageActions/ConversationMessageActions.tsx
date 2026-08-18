@@ -3,6 +3,11 @@
 import { useEffect, useRef, useState } from "react";
 
 import { ru } from "@/i18n/ru";
+import { webBrowserMutation } from "@/lib/web-api/browser";
+import {
+  parseConversationMessageRatingResponse,
+  type ConversationMessageRating,
+} from "@/lib/web-api/contracts";
 
 import styles from "./ConversationMessageActions.module.css";
 
@@ -17,22 +22,49 @@ type ConversationMessageActionsProps = SharedActionsProps & (
     }
   | {
       kind: "assistant";
+      conversationId: string;
+      initialRating: ConversationMessageRating;
+      messageId: string;
     }
 );
 
-type MessageRating = "like" | "dislike" | null;
+type RatingMutation = {
+  rating: ConversationMessageRating;
+  sequence: number;
+};
 
 export function ConversationMessageActions(props: Readonly<ConversationMessageActionsProps>) {
   const { kind, messageText } = props;
   const [copied, setCopied] = useState(false);
-  const [rating, setRating] = useState<MessageRating>(null);
+  const initialRating = kind === "assistant" ? props.initialRating : null;
+  const [rating, setRating] = useState<ConversationMessageRating>(initialRating);
   const copyResetTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const confirmedRatingRef = useRef<ConversationMessageRating>(initialRating);
+  const desiredRatingRef = useRef<ConversationMessageRating>(initialRating);
+  const ratingQueueRef = useRef<RatingMutation[]>([]);
+  const ratingSequenceRef = useRef(0);
+  const ratingPendingCountRef = useRef(0);
+  const ratingProcessingRef = useRef(false);
+  const mountedRef = useRef(true);
 
-  useEffect(() => () => {
-    if (copyResetTimerRef.current !== null) {
-      clearTimeout(copyResetTimerRef.current);
-    }
+  useEffect(() => {
+    mountedRef.current = true;
+    return () => {
+      mountedRef.current = false;
+      if (copyResetTimerRef.current !== null) {
+        clearTimeout(copyResetTimerRef.current);
+      }
+    };
   }, []);
+
+  useEffect(() => {
+    if (kind !== "assistant" || ratingPendingCountRef.current > 0) {
+      return;
+    }
+    confirmedRatingRef.current = initialRating;
+    desiredRatingRef.current = initialRating;
+    setRating(initialRating);
+  }, [initialRating, kind]);
 
   const copyMessage = async () => {
     try {
@@ -51,6 +83,60 @@ export function ConversationMessageActions(props: Readonly<ConversationMessageAc
   };
 
   const copyLabel = copied ? ru.conversations.copiedMessage : ru.conversations.copyMessage;
+
+  const processRatingQueue = async () => {
+    if (kind !== "assistant" || ratingProcessingRef.current) {
+      return;
+    }
+    const mutation = ratingQueueRef.current.shift();
+    if (mutation === undefined) {
+      return;
+    }
+
+    ratingProcessingRef.current = true;
+    try {
+      const response = await webBrowserMutation(
+        `/web/v1/conversations/${props.conversationId}/messages/${props.messageId}/rating`,
+        {
+          method: "PUT",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ rating: mutation.rating }),
+        },
+      );
+      if (response.status !== 200) {
+        throw new Error("Unable to save message rating.");
+      }
+      const saved = parseConversationMessageRatingResponse(await response.json()).rating;
+      confirmedRatingRef.current = saved;
+      if (mountedRef.current && mutation.sequence === ratingSequenceRef.current) {
+        desiredRatingRef.current = saved;
+        setRating(saved);
+      }
+    } catch {
+      if (mountedRef.current && mutation.sequence === ratingSequenceRef.current) {
+        desiredRatingRef.current = confirmedRatingRef.current;
+        setRating(confirmedRatingRef.current);
+      }
+    } finally {
+      ratingPendingCountRef.current = Math.max(0, ratingPendingCountRef.current - 1);
+      ratingProcessingRef.current = false;
+      void processRatingQueue();
+    }
+  };
+
+  const changeRating = (selectedRating: Exclude<ConversationMessageRating, null>) => {
+    if (kind !== "assistant") {
+      return;
+    }
+    const nextRating = desiredRatingRef.current === selectedRating ? null : selectedRating;
+    desiredRatingRef.current = nextRating;
+    setRating(nextRating);
+    const sequence = ratingSequenceRef.current + 1;
+    ratingSequenceRef.current = sequence;
+    ratingPendingCountRef.current += 1;
+    ratingQueueRef.current.push({ rating: nextRating, sequence });
+    void processRatingQueue();
+  };
 
   return (
     <div className={styles.actions}>
@@ -80,7 +166,7 @@ export function ConversationMessageActions(props: Readonly<ConversationMessageAc
             aria-pressed={rating === "like"}
             className={styles.action}
             data-tooltip={ru.conversations.likeMessage}
-            onClick={() => setRating((current) => current === "like" ? null : "like")}
+            onClick={() => changeRating("like")}
             type="button"
           >
             <LikeIcon />
@@ -90,7 +176,7 @@ export function ConversationMessageActions(props: Readonly<ConversationMessageAc
             aria-pressed={rating === "dislike"}
             className={styles.action}
             data-tooltip={ru.conversations.dislikeMessage}
-            onClick={() => setRating((current) => current === "dislike" ? null : "dislike")}
+            onClick={() => changeRating("dislike")}
             type="button"
           >
             <DislikeIcon />

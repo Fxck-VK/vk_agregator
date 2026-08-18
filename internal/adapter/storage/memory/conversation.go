@@ -482,6 +482,30 @@ func (r *ConversationRepo) ListMessagesAfter(_ context.Context, conversationID u
 	return copyConversationMessages(matched), nil
 }
 
+func (r *ConversationRepo) SetMessageRatingForAccount(
+	_ context.Context,
+	accountID, conversationID, messageID uuid.UUID,
+	source domain.ConversationSource,
+	rating domain.ConversationMessageRating,
+) (*domain.ConversationMessage, error) {
+	if !rating.Valid() {
+		return nil, domain.ErrInvalidConversationMessageRating
+	}
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	conversation, ok := r.byID[conversationID]
+	if !ok || conversation.AccountID != accountID || conversation.Source != source || conversation.Status != domain.ConversationActive {
+		return nil, domain.ErrNotFound
+	}
+	message, ok := r.messagesByID[messageID]
+	if !ok || message.ConversationID != conversationID || message.Role != domain.ConversationRoleAssistant {
+		return nil, domain.ErrNotFound
+	}
+	message.Rating = rating
+	r.messagesByID[messageID] = message
+	return &message, nil
+}
+
 func (r *ConversationRepo) LatestSummary(_ context.Context, conversationID uuid.UUID) (*domain.ConversationSummary, error) {
 	r.mu.Lock()
 	defer r.mu.Unlock()
