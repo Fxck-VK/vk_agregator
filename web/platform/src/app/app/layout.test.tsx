@@ -80,15 +80,20 @@ describe("WorkspaceLayout", () => {
     expect(loadWorkspaceSession).toHaveBeenCalledTimes(1);
   });
 
-  it("renders only the neutral pending state while a browser refresh is required", async () => {
+  it("renders only the neutral workspace shell while a browser refresh is required", async () => {
     vi.mocked(loadWorkspaceSession).mockResolvedValue({ kind: "refresh_required" } as never);
 
     const markup = renderToStaticMarkup(await WorkspaceLayout({ children: <p>private child</p> }));
 
-    expect(markup).toContain(ru.workspace.refreshPending);
+    expect(markup).toContain('data-testid="session-restoration-shell"');
+    expect(markup).toContain('data-testid="session-restoration-sidebar"');
+    expect(markup).toContain('data-testid="session-restoration-header"');
+    expect(markup).toContain('aria-busy="true"');
+    expect(markup).not.toContain("Восстанавливаем сессию");
     expect(markup).not.toContain("private child");
     expect(markup).not.toContain("member@example.com");
     expect(markup).not.toContain(authenticatedSession.conversations[0].title);
+    expect(markup).not.toContain("104★");
     expect(loadWorkspaceSession).toHaveBeenCalledTimes(1);
   });
 

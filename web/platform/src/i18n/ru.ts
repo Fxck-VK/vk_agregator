@@ -361,7 +361,6 @@ export const ru = {
     openChats: "Открыть чаты",
     openModels: "Посмотреть нейросети",
     unavailable: "Рабочее пространство временно недоступно. Попробуйте ещё раз.",
-    refreshPending: "Восстанавливаем сессию…",
     sessionProgressLabel: "Восстановление сессии",
     sessionRetryableError: "Не удалось восстановить соединение.",
     sessionRetry: "Повторить",
