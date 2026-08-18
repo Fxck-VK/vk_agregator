@@ -9,7 +9,7 @@ import {
 } from "./pending-conversation-bootstrap";
 
 const pendingID = "c7c979f5-24e5-4f88-924b-a592d6e5a906";
-const messageKey = "e7c979f5-24e5-4f88-924b-a592d6e5a906";
+const messageIdempotencyId = "e7c979f5-24e5-4f88-924b-a592d6e5a906";
 const canonicalID = "d7c979f5-24e5-4f88-924b-a592d6e5a906";
 
 describe("pending conversation bootstrap", () => {
@@ -18,13 +18,13 @@ describe("pending conversation bootstrap", () => {
   it("normalizes and retains the retry-safe creation intent", () => {
     savePendingConversationBootstrap({
       conversationKey: pendingID,
-      messageKey,
+      messageKey: messageIdempotencyId,
       prompt: "  Build the launch plan  ",
     });
 
     expect(readPendingConversationBootstrap(pendingID)).toEqual({
       conversationKey: pendingID,
-      messageKey,
+      messageKey: messageIdempotencyId,
       prompt: "Build the launch plan",
     });
 
@@ -33,7 +33,7 @@ describe("pending conversation bootstrap", () => {
     expect(readPendingConversationBootstrap(pendingID)).toEqual({
       conversationKey: pendingID,
       conversationId: canonicalID,
-      messageKey,
+      messageKey: messageIdempotencyId,
       prompt: "Build the launch plan",
     });
   });
@@ -41,7 +41,7 @@ describe("pending conversation bootstrap", () => {
   it("rejects malformed or mismatched browser data", () => {
     window.sessionStorage.setItem(
       `neirohub.pending-conversation-bootstrap:${pendingID}`,
-      JSON.stringify({ conversationKey: canonicalID, messageKey, prompt: "mismatch" }),
+      JSON.stringify({ conversationKey: canonicalID, messageKey: messageIdempotencyId, prompt: "mismatch" }),
     );
 
     expect(readPendingConversationBootstrap(pendingID)).toBeNull();
@@ -49,7 +49,11 @@ describe("pending conversation bootstrap", () => {
   });
 
   it("clears one or every private bootstrap without touching unrelated data", () => {
-    savePendingConversationBootstrap({ conversationKey: pendingID, messageKey, prompt: "First" });
+    savePendingConversationBootstrap({
+      conversationKey: pendingID,
+      messageKey: messageIdempotencyId,
+      prompt: "First",
+    });
     savePendingConversationBootstrap({ conversationKey: canonicalID, messageKey: pendingID, prompt: "Second" });
     window.sessionStorage.setItem("unrelated.preference", "keep");
 

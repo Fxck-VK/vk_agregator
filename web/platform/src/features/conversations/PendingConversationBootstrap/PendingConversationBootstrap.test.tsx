@@ -15,8 +15,8 @@ import { webBrowserMutation } from "@/lib/web-api/browser";
 import { PendingConversationBootstrap } from "./PendingConversationBootstrap";
 
 const replace = vi.fn();
-const conversationKey = "c7c979f5-24e5-4f88-924b-a592d6e5a906";
-const messageKey = "e7c979f5-24e5-4f88-924b-a592d6e5a906";
+const conversationIdempotencyId = "c7c979f5-24e5-4f88-924b-a592d6e5a906";
+const messageIdempotencyId = "e7c979f5-24e5-4f88-924b-a592d6e5a906";
 const serverConversationId = "d7c979f5-24e5-4f88-924b-a592d6e5a906";
 const accountId = "0ce06a6a-16d8-4b16-b9df-5e63175a4a0c";
 const conversation = {
@@ -28,13 +28,17 @@ const conversation = {
 const job = { job_id: "a2a006fc-4457-4bb5-bc4d-4f553d51766b", status: "queued" };
 
 function seedIntent() {
-  savePendingConversationBootstrap({ conversationKey, messageKey, prompt: "Первый вопрос" });
+  savePendingConversationBootstrap({
+    conversationKey: conversationIdempotencyId,
+    messageKey: messageIdempotencyId,
+    prompt: "Первый вопрос",
+  });
 }
 
 function renderPending() {
   return render(
     <WorkspaceConversationListProvider accountId={accountId} initialConversations={[]}>
-      <PendingConversationBootstrap conversationKey={conversationKey} />
+      <PendingConversationBootstrap conversationKey={conversationIdempotencyId} />
       <SidebarConversations />
     </WorkspaceConversationListProvider>,
   );
@@ -42,7 +46,7 @@ function renderPending() {
 
 describe("PendingConversationBootstrap", () => {
   beforeEach(() => {
-    vi.mocked(usePathname).mockReturnValue(`/app/chat/${conversationKey}`);
+    vi.mocked(usePathname).mockReturnValue(`/app/chat/${conversationIdempotencyId}`);
     vi.mocked(useRouter).mockReturnValue({ replace } as never);
     seedIntent();
   });
@@ -72,11 +76,11 @@ describe("PendingConversationBootstrap", () => {
     await vi.waitFor(() => expect(replace).toHaveBeenCalledWith(`/app/chat/${serverConversationId}?refresh=1`));
     expect(webBrowserMutation).toHaveBeenNthCalledWith(1, "/web/v1/conversations", {
       method: "POST",
-      headers: { "X-Idempotency-Key": conversationKey },
+      headers: { "X-Idempotency-Key": conversationIdempotencyId },
     });
     expect(webBrowserMutation).toHaveBeenNthCalledWith(2, `/web/v1/conversations/${serverConversationId}/messages`, {
       method: "POST",
-      headers: { "Content-Type": "application/json", "X-Idempotency-Key": messageKey },
+      headers: { "Content-Type": "application/json", "X-Idempotency-Key": messageIdempotencyId },
       body: JSON.stringify({ prompt: "Первый вопрос" }),
     });
   });
@@ -95,8 +99,8 @@ describe("PendingConversationBootstrap", () => {
     const createCalls = vi.mocked(webBrowserMutation).mock.calls.filter(([path]) => path === "/web/v1/conversations");
     expect(createCalls).toHaveLength(2);
     expect(createCalls.map(([, init]) => new Headers(init.headers).get("X-Idempotency-Key"))).toEqual([
-      conversationKey,
-      conversationKey,
+      conversationIdempotencyId,
+      conversationIdempotencyId,
     ]);
   });
 
@@ -115,8 +119,8 @@ describe("PendingConversationBootstrap", () => {
     const messageCalls = vi.mocked(webBrowserMutation).mock.calls.filter(([path]) => path.includes("/messages"));
     expect(messageCalls).toHaveLength(2);
     expect(messageCalls.map(([, init]) => new Headers(init.headers).get("X-Idempotency-Key"))).toEqual([
-      messageKey,
-      messageKey,
+      messageIdempotencyId,
+      messageIdempotencyId,
     ]);
   });
 });
