@@ -61,12 +61,19 @@ describe("WorkspaceLayout", () => {
     vi.clearAllMocks();
   });
 
-  it("redirects an unauthenticated session after loading it exactly once", async () => {
+  it("renders the existing landing in a guest shell without private route data", async () => {
     vi.mocked(loadWorkspaceSession).mockResolvedValue({ kind: "unauthenticated" });
 
-    await expect(WorkspaceLayout({ children: <p>private child</p> })).rejects.toThrow(redirectError);
+    const markup = renderToStaticMarkup(await WorkspaceLayout({ children: <p>private child</p> }));
+
+    expect(markup).toContain("Простой старт в мир");
+    expect(markup.match(/href="\/login"/g)).toHaveLength(2);
+    expect(markup).not.toContain("private child");
+    expect(markup).not.toContain("member@example.com");
+    expect(markup).not.toContain(authenticatedSession.conversations[0].title);
+    expect(markup).not.toContain("104 ★");
     expect(loadWorkspaceSession).toHaveBeenCalledTimes(1);
-    expect(redirect).toHaveBeenCalledWith("/login");
+    expect(redirect).not.toHaveBeenCalled();
   });
 
   it("renders only the neutral private unavailable state when session loading is unavailable", async () => {

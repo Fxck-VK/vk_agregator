@@ -1,11 +1,11 @@
 import type { Metadata } from "next";
-import { redirect } from "next/navigation";
 import type { ReactNode } from "react";
 
-import { WorkspaceFrame } from "@/components/layout/WorkspaceFrame/WorkspaceFrame";
+import { GuestWorkspaceFrame, WorkspaceFrame } from "@/components/layout/WorkspaceFrame/WorkspaceFrame";
 import { AccountControl } from "@/features/account/AccountControl/AccountControl";
 import { SessionRefresh } from "@/features/session/SessionRefresh/SessionRefresh";
 import { loadWorkspaceSession } from "@/features/session/session-data";
+import { WorkspaceHome } from "@/features/workspace/WorkspaceHome/WorkspaceHome";
 import { ru } from "@/i18n/ru";
 
 import styles from "./layout.module.css";
@@ -25,7 +25,11 @@ export default async function WorkspaceLayout({ children }: Readonly<{ children:
   const session = await loadWorkspaceSession();
 
   if (session.kind === "unauthenticated") {
-    redirect("/login");
+    return (
+      <GuestWorkspaceFrame>
+        <WorkspaceHome access="guest" />
+      </GuestWorkspaceFrame>
+    );
   }
 
   if (session.kind === "refresh_required") {

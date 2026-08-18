@@ -1,6 +1,7 @@
 "use client";
 
 import { usePathname } from "next/navigation";
+import type { ReactNode } from "react";
 
 import { WorkspaceModelSelector } from "@/features/models/WorkspaceModelSelector/WorkspaceModelSelector";
 import { ru } from "@/i18n/ru";
@@ -9,6 +10,7 @@ import styles from "./WorkspaceHeader.module.css";
 
 type WorkspaceHeaderProps = {
   balance: number | null;
+  trailingAction?: ReactNode;
 };
 
 function getWorkspaceHeaderTitle(pathname: string | null) {
@@ -30,7 +32,7 @@ function getWorkspaceHeaderTitle(pathname: string | null) {
   }
 }
 
-export function WorkspaceHeader({ balance }: WorkspaceHeaderProps) {
+export function WorkspaceHeader({ balance, trailingAction }: WorkspaceHeaderProps) {
   const pathname = usePathname();
   const title = getWorkspaceHeaderTitle(pathname);
   const isInspiration = pathname === "/app/inspiration" || (pathname?.startsWith("/app/inspiration/") ?? false);
@@ -41,14 +43,16 @@ export function WorkspaceHeader({ balance }: WorkspaceHeaderProps) {
       <div className={styles.leading}>
         {isInspiration ? <p className={styles.title}>{ru.navigation.inspiration}</p> : <WorkspaceModelSelector />}
       </div>
-      <span
-        aria-busy={isBalanceLoading || undefined}
-        aria-label={isBalanceLoading ? ru.workspace.balanceLoading : `${balance} ★`}
-        className={styles.balance}
-        data-testid="workspace-balance"
-      >
-        {isBalanceLoading ? <span aria-hidden="true">…</span> : <>{balance} <span aria-hidden="true">★</span></>}
-      </span>
+      {trailingAction ?? (
+        <span
+          aria-busy={isBalanceLoading || undefined}
+          aria-label={isBalanceLoading ? ru.workspace.balanceLoading : `${balance} ★`}
+          className={styles.balance}
+          data-testid="workspace-balance"
+        >
+          {isBalanceLoading ? <span aria-hidden="true">…</span> : <>{balance} <span aria-hidden="true">★</span></>}
+        </span>
+      )}
     </header>
   );
 }

@@ -1,0 +1,35 @@
+.action {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-block-size: 2.75rem;
+  border-radius: 999px;
+  background: var(--color-accent);
+  color: #fff;
+  font-weight: 700;
+  text-decoration: none;
+  transition: background-color var(--motion-fast), transform var(--motion-fast);
+}
+
+.action:hover {
+  background: var(--color-accent-strong);
+}
+
+.action:active {
+  transform: translateY(0.0625rem);
+}
+
+.action:focus-visible {
+  outline: 0.1875rem solid color-mix(in srgb, var(--color-accent) 40%, transparent);
+  outline-offset: 0.125rem;
+}
+
+.header {
+  min-inline-size: 6.5rem;
+  padding-inline: var(--space-4);
+}
+
+.sidebar {
+  inline-size: 100%;
+  padding-inline: var(--space-4);
+}

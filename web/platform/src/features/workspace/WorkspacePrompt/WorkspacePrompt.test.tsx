@@ -104,6 +104,18 @@ describe("WorkspacePrompt", () => {
     expect(screen.queryByText(ru.workspace.promptSupport)).not.toBeInTheDocument();
   });
 
+  it("routes a guest prompt to login without creating private workspace data", () => {
+    render(<WorkspacePrompt access="guest" variant="hero" />);
+
+    fireEvent.change(screen.getByLabelText("Задайте вопрос NeiroHub"), {
+      target: { value: "Помоги составить план" },
+    });
+    fireEvent.click(screen.getByRole("button", { name: ru.workspace.promptSubmit }));
+
+    expect(push).toHaveBeenCalledWith("/login");
+    expect(webBrowserMutation).not.toHaveBeenCalled();
+  });
+
   it("shows the first prompt in the sidebar before the create response returns", async () => {
     vi.mocked(webBrowserMutation).mockReturnValueOnce(new Promise<Response>(() => {}));
     renderWorkspacePromptWithSidebar();

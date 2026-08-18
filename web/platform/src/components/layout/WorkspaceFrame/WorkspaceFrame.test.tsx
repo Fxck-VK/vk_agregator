@@ -19,7 +19,7 @@ import { useWorkspaceConversationList } from "@/features/conversations/Workspace
 import { useWorkspaceDataCache, type WorkspaceDataCache } from "@/features/workspace/WorkspaceDataCache/WorkspaceDataCache";
 import type { AccountProfile, ConversationItem } from "@/lib/web-api/contracts";
 
-import { WorkspaceFrame } from "./WorkspaceFrame";
+import { GuestWorkspaceFrame, WorkspaceFrame } from "./WorkspaceFrame";
 
 const storageKey = "neirohub.desktop-sidebar-collapsed";
 const workspaceProfile: AccountProfile = {
@@ -244,5 +244,22 @@ describe("WorkspaceFrame", () => {
     expect(screen.getByTestId("workspace-balance")).toHaveAttribute("aria-busy", "true");
     expect(screen.getByTestId("workspace-balance")).toHaveAttribute("aria-label", "Загружаем баланс…");
     expect(screen.getByTestId("workspace-balance")).not.toHaveTextContent("0");
+  });
+
+  it("composes a guest shell with two login actions and no private workspace data", () => {
+    mockWideViewport();
+
+    render(
+      <GuestWorkspaceFrame>
+        <p>Guest landing</p>
+      </GuestWorkspaceFrame>,
+    );
+
+    const loginActions = screen.getAllByRole("link", { name: ru.login.submitLabel });
+    expect(loginActions).toHaveLength(2);
+    loginActions.forEach((link) => expect(link).toHaveAttribute("href", "/login"));
+    expect(screen.getByText("Guest landing")).toBeInTheDocument();
+    expect(screen.queryByTestId("workspace-balance")).not.toBeInTheDocument();
+    expect(screen.queryByRole("heading", { name: ru.conversations.recentHeading })).not.toBeInTheDocument();
   });
 });

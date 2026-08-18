@@ -7,7 +7,7 @@ import { ChatTextInput } from "@/components/chat/ChatTextInput/ChatTextInput";
 import { Button } from "@/components/ui/Button/Button";
 import { savePendingConversationPrompt } from "@/features/conversations/pending-conversation-prompt";
 import { fallbackConversationTitle, savePendingConversationTitleSync } from "@/features/conversations/pending-conversation-title-sync";
-import { useWorkspaceConversationList } from "@/features/conversations/WorkspaceConversationList/WorkspaceConversationList";
+import { useOptionalWorkspaceConversationList } from "@/features/conversations/WorkspaceConversationList/WorkspaceConversationList";
 import { ru } from "@/i18n/ru";
 import { webBrowserMutation } from "@/lib/web-api/browser";
 import { isSafeWebChatAcceptedResponse, parseConversationItem, parseWebChatJob } from "@/lib/web-api/contracts";
@@ -22,16 +22,13 @@ type RetryIntent = {
 };
 
 type WorkspacePromptProps = {
+  access?: "authenticated" | "guest";
   variant?: "workspace" | "newChat" | "hero";
 };
 
-export function WorkspacePrompt({ variant = "workspace" }: WorkspacePromptProps) {
+export function WorkspacePrompt({ access = "authenticated", variant = "workspace" }: WorkspacePromptProps) {
   const router = useRouter();
-  const {
-    discardPendingConversation,
-    resolvePendingConversation,
-    upsertConversation,
-  } = useWorkspaceConversationList();
+  const conversationList = useOptionalWorkspaceConversationList();
   const [prompt, setPrompt] = useState("");
   const [isPending, setIsPending] = useState(false);
   const [hasError, setHasError] = useState(false);
@@ -66,6 +63,15 @@ export function WorkspacePrompt({ variant = "workspace" }: WorkspacePromptProps)
       return;
     }
 
+    if (access === "guest") {
+      router.push("/login");
+      return;
+    }
+
+    if (conversationList === undefined) {
+      throw new Error("Authenticated WorkspacePrompt requires WorkspaceConversationListProvider.");
+    }
+
     setHasError(false);
     setIsPending(true);
     let intent: RetryIntent | null = null;
@@ -83,7 +89,7 @@ export function WorkspacePrompt({ variant = "workspace" }: WorkspacePromptProps)
       if (intent.conversationId === undefined) {
         const fallbackTitle = fallbackConversationTitle(intent.prompt);
         const createdAt = new Date().toISOString();
-        upsertConversation({
+        conversationList.upsertConversation({
           id: intent.conversationKey,
           title: fallbackTitle,
           created_at: createdAt,
@@ -101,7 +107,7 @@ export function WorkspacePrompt({ variant = "workspace" }: WorkspacePromptProps)
         intent.conversationId = conversation.id;
         const hasServerTitle = conversation.title.trim() !== "";
         const visibleConversation = hasServerTitle || fallbackTitle === "" ? conversation : { ...conversation, title: fallbackTitle };
-        resolvePendingConversation(intent.conversationKey, visibleConversation);
+        conversationList.resolvePendingConversation(intent.conversationKey, visibleConversation);
         if (!hasServerTitle && fallbackTitle !== "") {
           savePendingConversationTitleSync(conversation.id, fallbackTitle);
         }
@@ -132,7 +138,7 @@ export function WorkspacePrompt({ variant = "workspace" }: WorkspacePromptProps)
       router.push(`/app/chat/${conversationID}?refresh=1`);
     } catch {
       if (intent !== null && intent.conversationId === undefined) {
-        discardPendingConversation(intent.conversationKey);
+        conversationList.discardPendingConversation(intent.conversationKey);
       }
       setHasError(true);
     } finally {

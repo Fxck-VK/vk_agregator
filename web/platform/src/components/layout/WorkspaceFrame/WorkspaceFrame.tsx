@@ -9,6 +9,7 @@ import { WorkspaceHeader } from "@/components/layout/WorkspaceHeader/WorkspaceHe
 import { SidebarConversations } from "@/features/conversations/SidebarConversations/SidebarConversations";
 import { WorkspaceConversationListProvider } from "@/features/conversations/WorkspaceConversationList/WorkspaceConversationList";
 import { WorkspaceAccountProvider } from "@/features/account/WorkspaceAccount/WorkspaceAccount";
+import { WorkspaceLoginAction } from "@/features/auth/WorkspaceLoginAction/WorkspaceLoginAction";
 import { WorkspaceModelSelectionProvider } from "@/features/models/WorkspaceModelSelection/WorkspaceModelSelection";
 import { WorkspaceDataCacheProvider } from "@/features/workspace/WorkspaceDataCache/WorkspaceDataCache";
 import { WorkspaceNavigationMetrics } from "@/features/workspace/WorkspaceNavigationMetrics/WorkspaceNavigationMetrics";
@@ -36,7 +37,15 @@ type WorkspaceFrameProps = {
   profile: AccountProfile;
 };
 
-export function WorkspaceFrame({ account, accountId, balance = null, children, conversations, profile }: WorkspaceFrameProps) {
+type WorkspaceChromeProps = {
+  account?: ReactNode;
+  balance?: number | null;
+  children: ReactNode;
+  conversations?: ReactNode;
+  trailingAction?: ReactNode;
+};
+
+function WorkspaceChrome({ account, balance = null, children, conversations, trailingAction }: WorkspaceChromeProps) {
   const restoredDesktopSidebarCollapsed = useSyncExternalStore(
     subscribeToDesktopSidebarPreference,
     getDesktopSidebarPreference,
@@ -57,28 +66,55 @@ export function WorkspaceFrame({ account, accountId, balance = null, children, c
   };
 
   return (
+    <AppShell
+      header={<WorkspaceHeader balance={balance} trailingAction={trailingAction} />}
+      isDesktopSidebarCollapsed={isDesktopSidebarCollapsed}
+      sidebar={
+        <Sidebar
+          account={account}
+          conversations={conversations}
+          isDesktopCollapsed={isDesktopSidebarCollapsed}
+          onDesktopToggle={toggleDesktopSidebar}
+        />
+      }
+    >
+      <WorkspaceNavigationMetrics />
+      {children}
+    </AppShell>
+  );
+}
+
+export function WorkspaceFrame({ account, accountId, balance = null, children, conversations, profile }: WorkspaceFrameProps) {
+  return (
     <WorkspaceAccountProvider snapshot={{ balance, profile }}>
       <WorkspaceConversationListProvider accountId={accountId} initialConversations={conversations} key={accountId}>
         <WorkspaceDataCacheProvider>
           <WorkspaceModelSelectionProvider key={accountId}>
-            <AppShell
-              header={<WorkspaceHeader balance={balance} />}
-              isDesktopSidebarCollapsed={isDesktopSidebarCollapsed}
-              sidebar={
-                <Sidebar
-                  account={account}
-                  conversations={<SidebarConversations />}
-                  isDesktopCollapsed={isDesktopSidebarCollapsed}
-                  onDesktopToggle={toggleDesktopSidebar}
-                />
-              }
+            <WorkspaceChrome
+              account={account}
+              balance={balance}
+              conversations={<SidebarConversations />}
             >
-              <WorkspaceNavigationMetrics />
               {children}
-            </AppShell>
+            </WorkspaceChrome>
           </WorkspaceModelSelectionProvider>
         </WorkspaceDataCacheProvider>
       </WorkspaceConversationListProvider>
     </WorkspaceAccountProvider>
+  );
+}
+
+export function GuestWorkspaceFrame({ children }: Readonly<{ children: ReactNode }>) {
+  return (
+    <WorkspaceDataCacheProvider>
+      <WorkspaceModelSelectionProvider>
+        <WorkspaceChrome
+          account={<WorkspaceLoginAction placement="sidebar" />}
+          trailingAction={<WorkspaceLoginAction placement="header" />}
+        >
+          {children}
+        </WorkspaceChrome>
+      </WorkspaceModelSelectionProvider>
+    </WorkspaceDataCacheProvider>
   );
 }

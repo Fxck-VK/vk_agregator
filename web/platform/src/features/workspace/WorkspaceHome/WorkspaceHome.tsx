@@ -9,10 +9,11 @@ import styles from "./WorkspaceHome.module.css";
 type WorkspaceSection = keyof typeof ru.workspace.sections;
 
 type WorkspaceHomeProps = {
+  access?: "authenticated" | "guest";
   section?: WorkspaceSection;
 };
 
-export function WorkspaceHome({ section = "home" }: WorkspaceHomeProps) {
+export function WorkspaceHome({ access = "authenticated", section = "home" }: WorkspaceHomeProps) {
   const content = ru.workspace.sections[section];
 
   if (section === "inspiration") {
@@ -20,7 +21,7 @@ export function WorkspaceHome({ section = "home" }: WorkspaceHomeProps) {
   }
 
   if (section === "home") {
-    return <WorkspaceLanding />;
+    return <WorkspaceLanding access={access} />;
   }
 
   if (section === "chats") {
@@ -32,7 +33,7 @@ export function WorkspaceHome({ section = "home" }: WorkspaceHomeProps) {
         <div className={styles.welcome}>
           <h1 id="new-chat-title">{ru.workspace.startTitle}</h1>
         </div>
-        <WorkspacePrompt variant="newChat" />
+        <WorkspacePrompt access={access} variant="newChat" />
       </section>
     );
   }

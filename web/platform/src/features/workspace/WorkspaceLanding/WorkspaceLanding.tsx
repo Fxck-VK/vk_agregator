@@ -6,7 +6,11 @@ import { WorkspacePrompt } from "../WorkspacePrompt/WorkspacePrompt";
 import { capabilityLinks, frequentlyAskedQuestions, primaryTools } from "./workspace-home-content";
 import styles from "./WorkspaceLanding.module.css";
 
-export function WorkspaceLanding() {
+type WorkspaceLandingProps = {
+  access?: "authenticated" | "guest";
+};
+
+export function WorkspaceLanding({ access = "authenticated" }: WorkspaceLandingProps) {
   return (
     <div className={styles.page}>
       <div className={styles.main}>
@@ -18,7 +22,7 @@ export function WorkspaceLanding() {
             <p>Диалоги, генерация изображений и полезные AI-инструменты в одном рабочем пространстве.</p>
           </div>
 
-          <WorkspacePrompt variant="hero" />
+          <WorkspacePrompt access={access} variant="hero" />
 
           <nav aria-label="Основные возможности" className={styles.toolRail}>
             {primaryTools.map((tool) => (

@@ -47,4 +47,13 @@ describe("WorkspaceHeader", () => {
 
     expect(screen.getByRole("button", { name: "Nano Banana 2" })).toBeInTheDocument();
   });
+
+  it("shows an explicit guest action instead of a balance", () => {
+    render(
+      <WorkspaceHeader balance={null} trailingAction={<a href="/login">Войти</a>} />,
+    );
+
+    expect(screen.getByRole("link", { name: "Войти" })).toHaveAttribute("href", "/login");
+    expect(screen.queryByTestId("workspace-balance")).not.toBeInTheDocument();
+  });
 });
