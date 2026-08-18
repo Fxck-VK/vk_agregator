@@ -1,0 +1,60 @@
+.card {
+  display: grid;
+  grid-template-rows: auto 1fr auto;
+  gap: var(--space-4);
+  min-block-size: 17rem;
+  border: 0.0625rem solid var(--color-border);
+  border-radius: var(--radius-xl);
+  padding: clamp(var(--space-5), 4vw, var(--space-7));
+  background: var(--color-surface);
+  transition: border-color var(--motion-fast), translate var(--motion-fast);
+}
+
+.card:hover {
+  translate: 0 -0.2rem;
+  border-color: var(--color-accent);
+}
+
+.icon {
+  display: grid;
+  inline-size: 3.5rem;
+  block-size: 3.5rem;
+  place-items: center;
+  border-radius: var(--radius-lg);
+  background: var(--color-accent);
+  color: #fff;
+  font-size: 1.25rem;
+}
+
+.copy h3,
+.copy p,
+.eyebrow {
+  margin: 0;
+}
+
+.copy {
+  display: grid;
+  align-content: start;
+  gap: var(--space-2);
+}
+
+.copy h3 {
+  font-size: 1.25rem;
+}
+
+.copy p {
+  color: var(--color-text-muted);
+}
+
+.eyebrow {
+  color: var(--color-accent);
+  font-size: var(--font-size-label);
+  font-weight: 800;
+}
+
+.action {
+  justify-self: start;
+  color: var(--color-accent);
+  font-weight: 700;
+  text-decoration: none;
+}

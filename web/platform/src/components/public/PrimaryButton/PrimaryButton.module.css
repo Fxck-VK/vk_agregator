@@ -1,0 +1,27 @@
+.link {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-block-size: 2.75rem;
+  border-radius: var(--radius-pill);
+  padding: var(--space-2) var(--space-5);
+  background: var(--color-accent);
+  color: #fff;
+  font-weight: 700;
+  text-decoration: none;
+  transition: background-color var(--motion-fast), translate var(--motion-fast);
+}
+
+.link:hover {
+  translate: 0 -0.1rem;
+  background: var(--color-accent-strong);
+}
+
+.link:active {
+  translate: 0 0.0625rem;
+}
+
+.link[aria-disabled="true"] {
+  pointer-events: none;
+  opacity: var(--opacity-disabled);
+}

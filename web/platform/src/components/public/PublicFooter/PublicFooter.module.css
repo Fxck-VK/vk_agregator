@@ -1,0 +1,59 @@
+.footer {
+  border-block-start: 0.0625rem solid var(--color-border);
+  background: var(--color-surface);
+}
+
+.inner {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: var(--space-8);
+  padding-block: clamp(var(--space-8), 6vw, 4rem);
+}
+
+.identity {
+  display: flex;
+  align-items: flex-start;
+  gap: var(--space-3);
+}
+
+.brandMark {
+  display: grid;
+  inline-size: 2.75rem;
+  block-size: 2.75rem;
+  place-items: center;
+  border-radius: 50%;
+  background: var(--color-accent);
+  color: #fff;
+  font-size: 0.75rem;
+  font-weight: 800;
+}
+
+.identity strong {
+  font-size: 1.25rem;
+}
+
+.identity p {
+  margin: var(--space-1) 0 0;
+  color: var(--color-text-muted);
+}
+
+.links {
+  display: grid;
+  gap: var(--space-2);
+}
+
+.links a {
+  color: var(--color-text-muted);
+  text-decoration: none;
+}
+
+.links a:hover {
+  color: var(--color-accent);
+}
+
+@media (width < 36rem) {
+  .inner {
+    flex-direction: column;
+  }
+}

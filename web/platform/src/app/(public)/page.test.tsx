@@ -21,5 +21,7 @@ describe("HomePage", () => {
 
     expect(connection).toHaveBeenCalledOnce();
     expect(markup).toContain("NeiroHub");
+    expect(markup).toContain('href="/app"');
+    expect(markup).toContain("data-size=\"narrow\"");
   });
 });

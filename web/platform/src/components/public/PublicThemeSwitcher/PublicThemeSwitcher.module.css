@@ -1,0 +1,30 @@
+.root {
+  display: grid;
+  grid-template-columns: repeat(3, 2.25rem);
+  gap: var(--space-1);
+  padding: var(--space-1);
+  border: 0.0625rem solid var(--color-border);
+  border-radius: var(--radius-pill);
+  background: var(--color-surface-raised);
+}
+
+.option {
+  display: grid;
+  min-block-size: 2.25rem;
+  place-items: center;
+  border: 0;
+  border-radius: var(--radius-pill);
+  background: transparent;
+  color: var(--color-text-muted);
+  transition: background-color var(--motion-fast), color var(--motion-fast);
+}
+
+.option:hover:not([data-selected="true"]) {
+  background: var(--color-border);
+  color: var(--color-text);
+}
+
+.option[data-selected="true"] {
+  background: var(--color-background);
+  color: var(--color-text);
+}

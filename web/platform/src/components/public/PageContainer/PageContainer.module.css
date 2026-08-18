@@ -1,0 +1,19 @@
+.container {
+  inline-size: min(100%, var(--container-content));
+  margin-inline: auto;
+  padding-inline: clamp(var(--space-4), 4.5vw, 3.5rem);
+}
+
+.container[data-size="narrow"] {
+  inline-size: min(100%, var(--container-narrow));
+}
+
+.container[data-size="wide"] {
+  inline-size: min(100%, var(--container-wide));
+}
+
+@media (width < 48rem) {
+  .container {
+    padding-inline: var(--space-4);
+  }
+}

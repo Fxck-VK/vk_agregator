@@ -1,0 +1,35 @@
+.root {
+  display: grid;
+  justify-items: center;
+  gap: var(--space-3);
+  padding: clamp(var(--space-8), 8vw, 5rem) var(--space-5);
+  border: 0.0625rem solid var(--color-border);
+  border-radius: var(--radius-xl);
+  background: var(--color-surface);
+  text-align: center;
+}
+
+.icon {
+  display: grid;
+  inline-size: 3.5rem;
+  block-size: 3.5rem;
+  place-items: center;
+  border-radius: 50%;
+  background: var(--color-information-surface);
+  color: var(--color-information);
+  font-size: 1.5rem;
+}
+
+.root h2,
+.root p {
+  margin: 0;
+}
+
+.root p {
+  max-inline-size: 34rem;
+  color: var(--color-text-muted);
+}
+
+.action {
+  margin-block-start: var(--space-2);
+}
