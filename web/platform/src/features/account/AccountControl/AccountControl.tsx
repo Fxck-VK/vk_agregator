@@ -28,7 +28,8 @@ export function AccountControl({ profile }: AccountControlProps) {
     try {
       const response = await webBrowserMutation("/web/v1/auth/logout", { method: "POST" });
       if (response.status === 204) {
-        router.replace("/login");
+        router.replace("/app");
+        router.refresh();
       } else {
         setHasError(true);
       }
