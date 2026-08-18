@@ -55,6 +55,8 @@ export const ru = {
     logoutLabel: "Выйти",
     logoutPending: "Выходим…",
     logoutFailure: "Не удалось выйти. Попробуйте ещё раз.",
+    logoutServerFailure: "Не удалось завершить сессию на сервере.",
+    logoutRetryLabel: "Повторить выход",
   },
   profile: {
     title: "Профиль",

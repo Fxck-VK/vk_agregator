@@ -4,6 +4,7 @@ import type { ReactNode } from "react";
 import { GuestWorkspaceFrame, WorkspaceFrame } from "@/components/layout/WorkspaceFrame/WorkspaceFrame";
 import { AccountControl } from "@/features/account/AccountControl/AccountControl";
 import { SessionRefresh } from "@/features/session/SessionRefresh/SessionRefresh";
+import { WorkspaceLogoutBoundary } from "@/features/session/WorkspaceLogout/WorkspaceLogoutBoundary";
 import { loadWorkspaceSession } from "@/features/session/session-data";
 import { WorkspaceHome } from "@/features/workspace/WorkspaceHome/WorkspaceHome";
 import { ru } from "@/i18n/ru";
@@ -47,14 +48,22 @@ export default async function WorkspaceLayout({ children }: Readonly<{ children:
   }
 
   return (
-    <WorkspaceFrame
-      account={<AccountControl profile={session.profile} />}
-      accountId={session.profile.account_id}
-      balance={session.balance}
-      conversations={session.conversations}
-      profile={session.profile}
+    <WorkspaceLogoutBoundary
+      guest={(
+        <GuestWorkspaceFrame>
+          <WorkspaceHome access="guest" />
+        </GuestWorkspaceFrame>
+      )}
     >
-      {children}
-    </WorkspaceFrame>
+      <WorkspaceFrame
+        account={<AccountControl profile={session.profile} />}
+        accountId={session.profile.account_id}
+        balance={session.balance}
+        conversations={session.conversations}
+        profile={session.profile}
+      >
+        {children}
+      </WorkspaceFrame>
+    </WorkspaceLogoutBoundary>
   );
 }
