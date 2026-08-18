@@ -26,6 +26,10 @@ import { webBrowserMutation } from "@/lib/web-api/browser";
 import type { ConversationItem } from "@/lib/web-api/contracts";
 
 import { ConversationRow } from "./ConversationRow";
+import {
+  useWorkspaceConversationList,
+  WorkspaceConversationListProvider,
+} from "../WorkspaceConversationList/WorkspaceConversationList";
 
 const conversation: ConversationItem = {
   id: "d7c979f5-24e5-4f88-924b-a592d6e5a906",
@@ -43,6 +47,22 @@ function actionsLabel(item: ConversationItem = conversation) {
 
 function renderRow(isActive = false, item: ConversationItem = conversation) {
   return render(<ConversationRow conversation={item} isActive={isActive} />);
+}
+
+function ContextConversationRow() {
+  const conversationList = useWorkspaceConversationList();
+  const currentConversation = conversationList.conversations.find((item) => item.id === conversation.id);
+
+  if (currentConversation === undefined) return null;
+  return <ConversationRow conversation={currentConversation} isActive={false} />;
+}
+
+function renderContextRow() {
+  return render(
+    <WorkspaceConversationListProvider accountId="account-1" initialConversations={[conversation]}>
+      <ContextConversationRow />
+    </WorkspaceConversationListProvider>,
+  );
 }
 
 describe("ConversationRow", () => {
@@ -107,6 +127,42 @@ describe("ConversationRow", () => {
     );
     await vi.waitFor(() => expect(refresh).toHaveBeenCalledTimes(1));
     expect(screen.queryByRole("textbox", { name: ru.conversations.renameInputLabel })).not.toBeInTheDocument();
+  });
+
+  it("shows a renamed chat before the PATCH request settles", async () => {
+    let settleRequest: (response: Response) => void = () => {};
+    vi.mocked(webBrowserMutation).mockReturnValue(new Promise<Response>((resolve) => { settleRequest = resolve; }));
+    renderContextRow();
+
+    fireEvent.click(screen.getByRole("button", { name: actionsLabel() }));
+    fireEvent.click(screen.getByRole("button", { name: ru.conversations.renameLabel }));
+    const titleInput = screen.getByRole("textbox", { name: ru.conversations.renameInputLabel });
+    fireEvent.change(titleInput, { target: { value: "Оптимистичное название" } });
+    fireEvent.keyDown(titleInput, { key: "Enter" });
+
+    expect(screen.getByRole("link", { name: "Оптимистичное название" })).toBeVisible();
+
+    settleRequest(Response.json({ ...conversation, title: "Оптимистичное название" }, { status: 200 }));
+    await vi.waitFor(() => expect(screen.queryByRole("textbox", { name: ru.conversations.renameInputLabel })).not.toBeInTheDocument());
+  });
+
+  it("rolls a failed rename back and offers retry without losing the proposed title", async () => {
+    let settleRequest: (response: Response) => void = () => {};
+    vi.mocked(webBrowserMutation).mockReturnValue(new Promise<Response>((resolve) => { settleRequest = resolve; }));
+    renderContextRow();
+
+    fireEvent.click(screen.getByRole("button", { name: actionsLabel() }));
+    fireEvent.click(screen.getByRole("button", { name: ru.conversations.renameLabel }));
+    const titleInput = screen.getByRole("textbox", { name: ru.conversations.renameInputLabel });
+    fireEvent.change(titleInput, { target: { value: "Не потерять это название" } });
+    fireEvent.keyDown(titleInput, { key: "Enter" });
+
+    expect(screen.getByRole("link", { name: "Не потерять это название" })).toBeVisible();
+    settleRequest(new Response(null, { status: 500 }));
+
+    expect(await screen.findByRole("link", { name: conversation.title })).toBeVisible();
+    expect(titleInput).toHaveValue("Не потерять это название");
+    expect(screen.getByRole("button", { name: "Повторить" })).toBeEnabled();
   });
 
   it("restores action-toggle focus before refreshing after a successful rename", async () => {
@@ -194,6 +250,22 @@ describe("ConversationRow", () => {
     expect(replace).not.toHaveBeenCalled();
   });
 
+  it("hides a deleted chat before the DELETE request settles and restores it on failure", async () => {
+    let settleRequest: (response: Response) => void = () => {};
+    vi.mocked(webBrowserMutation).mockReturnValue(new Promise<Response>((resolve) => { settleRequest = resolve; }));
+    renderRow();
+
+    fireEvent.click(screen.getByRole("button", { name: actionsLabel() }));
+    fireEvent.click(screen.getByRole("button", { name: ru.conversations.archiveLabel }));
+    fireEvent.click(screen.getByRole("button", { name: ru.conversations.archiveConfirmLabel }));
+
+    expect(screen.queryByRole("link", { name: conversation.title })).not.toBeInTheDocument();
+    settleRequest(new Response(null, { status: 500 }));
+
+    expect(await screen.findByRole("link", { name: conversation.title })).toBeVisible();
+    expect(screen.getByRole("alert")).toHaveTextContent(ru.conversations.archiveFailure);
+  });
+
   it("redirects to the workspace after deleting the active chat", async () => {
     vi.mocked(webBrowserMutation).mockResolvedValue(new Response(null, { status: 204 }));
     renderRow(true);
@@ -231,7 +303,7 @@ describe("ConversationRow", () => {
     fireEvent.click(archiveConfirm);
 
     await screen.findByRole("alert");
-    await vi.waitFor(() => expect(archiveConfirm).toHaveFocus());
+    await vi.waitFor(() => expect(screen.getByRole("button", { name: ru.conversations.archiveConfirmLabel })).toHaveFocus());
   });
 
   it("describes archive confirmation to its confirm control", () => {

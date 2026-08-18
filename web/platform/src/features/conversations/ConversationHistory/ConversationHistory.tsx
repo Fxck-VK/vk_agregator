@@ -23,8 +23,14 @@ import {
 } from "@/features/conversations/pending-conversation-title-sync";
 import { useOptionalWorkspaceConversationList } from "@/features/conversations/WorkspaceConversationList/WorkspaceConversationList";
 import { ru } from "@/i18n/ru";
-import { parseConversationMessageList, type ConversationItem, type ConversationMessage } from "@/lib/web-api/contracts";
-import { webBrowserFetch } from "@/lib/web-api/browser";
+import {
+  isSafeWebChatAcceptedResponse,
+  parseConversationMessageList,
+  parseWebChatJob,
+  type ConversationItem,
+  type ConversationMessage,
+} from "@/lib/web-api/contracts";
+import { webBrowserFetch, webBrowserMutation } from "@/lib/web-api/browser";
 
 import styles from "./ConversationHistory.module.css";
 
@@ -39,7 +45,9 @@ type PollRequest = {
 };
 
 type PendingTurn = PollRequest & {
+  idempotencyKey: string | null;
   prompt: string;
+  status: "sending" | "accepted" | "failed";
 };
 
 type ComposerDraftRequest = {
@@ -159,7 +167,44 @@ function ConversationHistoryReady({
     }
   };
 
-  const beginRefresh = (prompt: string) => {
+  const submitPendingTurn = async (turn: PendingTurn) => {
+    if (turn.idempotencyKey === null) return;
+
+    setRefreshDelayed(false);
+    setPendingTurn({ ...turn, status: "sending" });
+    setActiveRefreshID(turn.id);
+    setForceScrollRequest((currentRequest) => currentRequest + 1);
+
+    try {
+      const response = await webBrowserMutation(`/web/v1/conversations/${history.conversationId}/messages`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          "X-Idempotency-Key": turn.idempotencyKey,
+        },
+        body: JSON.stringify({ prompt: turn.prompt }),
+      });
+      if (response.status !== 200 && response.status !== 201) {
+        throw new Error("Unable to complete the request.");
+      }
+      const job = parseWebChatJob(await response.json());
+      if (!isSafeWebChatAcceptedResponse(response.status, job)) {
+        throw new Error("Unable to complete the request.");
+      }
+
+      setPendingTurn((currentTurn) => currentTurn?.id === turn.id
+        ? { ...currentTurn, status: "accepted" }
+        : currentTurn);
+      setPollRequest({ id: turn.id, baselineSeq: turn.baselineSeq });
+    } catch {
+      setActiveRefreshID((currentID) => currentID === turn.id ? null : currentID);
+      setPendingTurn((currentTurn) => currentTurn?.id === turn.id
+        ? { ...currentTurn, status: "failed" }
+        : currentTurn);
+    }
+  };
+
+  const beginMessageSubmission = (prompt: string) => {
     const baselineSeq = messages.at(-1)?.seq ?? 0;
     if (baselineSeq === 0 && titleSyncFallback === null) {
       const fallbackTitle = fallbackConversationTitle(prompt);
@@ -174,11 +219,17 @@ function ConversationHistoryReady({
       id: refreshSequenceRef.current,
       baselineSeq,
     };
-    setRefreshDelayed(false);
-    setPendingTurn({ ...request, prompt });
-    setActiveRefreshID(request.id);
-    setPollRequest(request);
-    setForceScrollRequest((currentRequest) => currentRequest + 1);
+    void submitPendingTurn({
+      ...request,
+      idempotencyKey: crypto.randomUUID(),
+      prompt,
+      status: "sending",
+    });
+  };
+
+  const retryPendingTurn = () => {
+    if (pendingTurn?.status !== "failed" || pendingTurn.idempotencyKey === null) return;
+    void submitPendingTurn(pendingTurn);
   };
 
   useEffect(() => {
@@ -209,7 +260,9 @@ function ConversationHistoryReady({
         setPendingTurn({
           id: activeRefreshID,
           baselineSeq: initialRefreshBaselineSeq,
+          idempotencyKey: null,
           prompt,
+          status: "accepted",
         });
       }
     });
@@ -276,6 +329,9 @@ function ConversationHistoryReady({
         if (newerMessages.length > 0) {
           afterSeq = newerMessages.at(-1)?.seq ?? afterSeq;
           setMessages((currentMessages) => appendNewerMessages(currentMessages, newerMessages, requestCursor));
+          assistantObserved = newerMessages.some(
+            (message) => message.role === "assistant" && message.seq > pollRequest.baselineSeq,
+          );
           setPendingTurn((currentTurn) => {
             if (currentTurn?.id !== pollRequest.id) {
               return currentTurn;
@@ -288,11 +344,8 @@ function ConversationHistoryReady({
                 && message.text.trim() === currentTurn.prompt
               ),
             );
-            return persistedPrompt ? null : currentTurn;
+            return persistedPrompt || assistantObserved ? null : currentTurn;
           });
-          assistantObserved = newerMessages.some(
-            (message) => message.role === "assistant" && message.seq > pollRequest.baselineSeq,
-          );
         }
         if (assistantObserved) {
           setRefreshDelayed(false);
@@ -323,9 +376,9 @@ function ConversationHistoryReady({
     return () => stop(false);
   }, [history.conversationId, pollRequest]);
 
-  const pendingTurnIsActive = pendingTurn?.id === activeRefreshID;
+  const pendingTurnIsActive = pendingTurn?.id === activeRefreshID && pendingTurn.status !== "failed";
   const hasVisibleMessages = messages.length > 0 || pendingTurn !== null || activeRefreshID !== null;
-  const contentVersion = `${messages.at(-1)?.id ?? ""}:${pendingTurn?.id ?? ""}:${activeRefreshID ?? ""}`;
+  const contentVersion = `${messages.at(-1)?.id ?? ""}:${pendingTurn?.id ?? ""}:${pendingTurn?.status ?? ""}:${activeRefreshID ?? ""}`;
 
   return (
     <section aria-labelledby="conversation-history-title" className={styles.content}>
@@ -385,6 +438,7 @@ function ConversationHistoryReady({
               {pendingTurn !== null ? (
                 <PendingTurnItems
                   onRecreate={recreateMessage}
+                  onRetry={retryPendingTurn}
                   pendingTurn={pendingTurn}
                   showIndicator={pendingTurnIsActive}
                 />
@@ -399,13 +453,12 @@ function ConversationHistoryReady({
         )}
       </div>
       <ConversationComposer
-        conversationId={history.conversationId}
         contentVersion={contentVersion}
-        disabled={activeRefreshID !== null}
+        disabled={pendingTurn !== null || activeRefreshID !== null}
         forceScrollRequest={forceScrollRequest}
         initialDraft={composerDraftRequest?.text}
         key={`composer:${composerDraftRequest?.id ?? 0}`}
-        onAccepted={beginRefresh}
+        onSubmit={beginMessageSubmission}
         scrollContainer={workspaceScrollRegion}
       />
     </section>
@@ -414,10 +467,12 @@ function ConversationHistoryReady({
 
 function PendingTurnItems({
   onRecreate,
+  onRetry,
   pendingTurn,
   showIndicator,
 }: Readonly<{
   onRecreate: (messageText: string) => void;
+  onRetry: () => void;
   pendingTurn: PendingTurn;
   showIndicator: boolean;
 }>) {
@@ -427,6 +482,12 @@ function PendingTurnItems({
         <span className={styles.role}>{ru.conversations.userRole}</span>
         <p>{pendingTurn.prompt}</p>
         <ConversationMessageActions kind="user" messageText={pendingTurn.prompt} onRecreate={onRecreate} />
+        {pendingTurn.status === "failed" ? (
+          <div className={styles.pendingTurnFailure}>
+            <span role="alert">{ru.conversations.messageNotSent}</span>
+            <Button onClick={onRetry}>{ru.conversations.messageRetryLabel}</Button>
+          </div>
+        ) : null}
       </li>
       {showIndicator ? (
         <li className={styles.assistantMessage} data-chat-pending="assistant">

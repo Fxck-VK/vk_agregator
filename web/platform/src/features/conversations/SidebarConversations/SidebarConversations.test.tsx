@@ -129,18 +129,22 @@ describe("SidebarConversations", () => {
     fireEvent.click(firstActions);
     fireEvent.click(screen.getByRole("button", { name: ru.conversations.archiveLabel }));
     fireEvent.click(screen.getByRole("button", { name: ru.conversations.archiveConfirmLabel }));
-    await vi.waitFor(() => expect(screen.getByRole("button", { name: ru.conversations.archivePending })).toBeDisabled());
+    expect(screen.queryByRole("link", { name: conversations[0].title })).not.toBeInTheDocument();
     fireEvent.click(secondActions);
     secondActions.focus();
 
     settleArchive(new Response(null, { status: 500 }));
 
-    await vi.waitFor(() => expect(firstActions).toBeEnabled());
+    await screen.findByRole("link", { name: conversations[0].title });
+    const restoredFirstActions = screen.getByRole("button", {
+      name: `${ru.conversations.actionsLabel}: ${conversations[0].title}`,
+    });
+    expect(restoredFirstActions).toBeEnabled();
     expect(await screen.findByRole("alert")).toHaveTextContent(ru.conversations.archiveFailure);
     expect(secondActions).toHaveAttribute("aria-expanded", "true");
     expect(secondActions).toHaveFocus();
 
-    fireEvent.click(firstActions);
+    fireEvent.click(restoredFirstActions);
 
     expect(secondActions).toHaveAttribute("aria-expanded", "false");
     expect(screen.getByText(ru.conversations.archiveConfirmation)).toBeVisible();

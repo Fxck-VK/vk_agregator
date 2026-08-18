@@ -467,6 +467,39 @@ describe("ConversationHistory", () => {
     expect(screen.queryByRole("status", { name: ru.conversations.composerAwaitingResponse })).toBeNull();
   });
 
+  it("renders a sent turn immediately and retries an in-place failure with the same idempotency key", async () => {
+    const idempotencyKey = "55555555-5555-4555-8555-555555555555";
+    let rejectMutation: (reason?: unknown) => void = () => {};
+    vi.stubGlobal("crypto", { randomUUID: vi.fn().mockReturnValue(idempotencyKey) });
+    vi.mocked(webBrowserMutation)
+      .mockReturnValueOnce(new Promise<Response>((_resolve, reject) => { rejectMutation = reject; }))
+      .mockResolvedValueOnce(Response.json(queuedJob, { status: 201 }));
+    vi.mocked(webBrowserFetch).mockReturnValueOnce(new Promise<Response>(() => {}));
+    render(<ConversationHistory history={initialHistory as never} />);
+
+    const textarea = screen.getByLabelText(ru.conversations.composerLabel);
+    fireEvent.change(textarea, { target: { value: "Оптимистичный вопрос" } });
+    fireEvent.keyDown(textarea, { key: "Enter" });
+
+    expect(textarea).toHaveValue("");
+    expect(screen.getByText("Оптимистичный вопрос")).toBeVisible();
+    expect(screen.getByRole("status", { name: ru.conversations.composerAwaitingResponse })).toBeVisible();
+
+    rejectMutation(new Error("network detail"));
+
+    expect(await screen.findByText("Не отправлено")).toBeVisible();
+    expect(screen.queryByRole("status", { name: ru.conversations.composerAwaitingResponse })).toBeNull();
+    fireEvent.click(screen.getByRole("button", { name: "Повторить" }));
+
+    await vi.waitFor(() => expect(webBrowserMutation).toHaveBeenCalledTimes(2));
+    expect(screen.getByRole("status", { name: ru.conversations.composerAwaitingResponse })).toBeVisible();
+    expect(vi.mocked(webBrowserMutation).mock.calls.map(([, init]) => new Headers(init.headers).get("X-Idempotency-Key"))).toEqual([
+      idempotencyKey,
+      idempotencyKey,
+    ]);
+    expect(crypto.randomUUID).toHaveBeenCalledTimes(1);
+  });
+
   it("shows the first pending prompt in the stream after the workspace opens its new chat", async () => {
     vi.mocked(webBrowserFetch).mockReturnValueOnce(new Promise<Response>(() => {}));
     savePendingConversationPrompt(conversationId, "First workspace prompt");

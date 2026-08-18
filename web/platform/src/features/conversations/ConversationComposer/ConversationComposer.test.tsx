@@ -1,22 +1,10 @@
 import { cleanup, fireEvent, render, screen } from "@testing-library/react";
-import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-
-vi.mock("@/lib/web-api/browser", () => ({
-  webBrowserMutation: vi.fn(),
-}));
+import { afterEach, describe, expect, it, vi } from "vitest";
 
 import { ru } from "@/i18n/ru";
-import { webBrowserMutation } from "@/lib/web-api/browser";
 
 import { ConversationComposer } from "./ConversationComposer";
 
-const conversationId = "d7c979f5-24e5-4f88-924b-a592d6e5a906";
-const firstKey = "11111111-1111-4111-8111-111111111111";
-const secondKey = "22222222-2222-4222-8222-222222222222";
-const queuedJob = {
-  job_id: "a2a006fc-4457-4bb5-bc4d-4f553d51766b",
-  status: "queued",
-};
 const chatScrollProps = {
   contentVersion: "",
   forceScrollRequest: 0,
@@ -24,20 +12,13 @@ const chatScrollProps = {
 };
 
 describe("ConversationComposer", () => {
-  beforeEach(() => {
-    vi.stubGlobal("crypto", {
-      randomUUID: vi.fn().mockReturnValueOnce(firstKey).mockReturnValueOnce(secondKey),
-    });
-  });
-
   afterEach(() => {
     cleanup();
-    vi.resetAllMocks();
-    vi.unstubAllGlobals();
+    vi.clearAllMocks();
   });
 
   it("uses the exact NeiroHub question placeholder", () => {
-    render(<ConversationComposer {...chatScrollProps} conversationId={conversationId} onAccepted={vi.fn()} />);
+    render(<ConversationComposer {...chatScrollProps} onSubmit={vi.fn()} />);
 
     expect(screen.getByLabelText(ru.conversations.composerLabel)).toHaveAttribute(
       "placeholder",
@@ -45,23 +26,35 @@ describe("ConversationComposer", () => {
     );
   });
 
-  it("submits a non-empty draft when Enter is pressed", async () => {
-    vi.mocked(webBrowserMutation).mockResolvedValueOnce(Response.json(queuedJob, { status: 201 }));
-    const onAccepted = vi.fn();
-    render(<ConversationComposer {...chatScrollProps} conversationId={conversationId} onAccepted={onAccepted} />);
+  it("clears and submits a normalized draft immediately when Enter is pressed", () => {
+    const onSubmit = vi.fn();
+    render(<ConversationComposer {...chatScrollProps} onSubmit={onSubmit} />);
 
     const textarea = screen.getByLabelText(ru.conversations.composerLabel);
-    fireEvent.change(textarea, { target: { value: "Вопрос с клавиатуры" } });
+    fireEvent.change(textarea, { target: { value: "  Вопрос с клавиатуры  " } });
     const event = new KeyboardEvent("keydown", { bubbles: true, cancelable: true, key: "Enter" });
     fireEvent(textarea, event);
 
-    await vi.waitFor(() => expect(webBrowserMutation).toHaveBeenCalledTimes(1));
-    await vi.waitFor(() => expect(onAccepted).toHaveBeenCalledTimes(1));
     expect(event.defaultPrevented).toBe(true);
+    expect(onSubmit).toHaveBeenCalledWith("Вопрос с клавиатуры");
+    expect(textarea).toHaveValue("");
+  });
+
+  it("clears and submits from the button without waiting for a promise", () => {
+    const onSubmit = vi.fn();
+    render(<ConversationComposer {...chatScrollProps} onSubmit={onSubmit} />);
+
+    const textarea = screen.getByLabelText(ru.conversations.composerLabel);
+    fireEvent.change(textarea, { target: { value: "Продолжи диалог" } });
+    fireEvent.click(screen.getByRole("button", { name: ru.conversations.composerSubmit }));
+
+    expect(onSubmit).toHaveBeenCalledWith("Продолжи диалог");
+    expect(textarea).toHaveValue("");
   });
 
   it("leaves Shift+Enter to the textarea without submitting", () => {
-    render(<ConversationComposer {...chatScrollProps} conversationId={conversationId} onAccepted={vi.fn()} />);
+    const onSubmit = vi.fn();
+    render(<ConversationComposer {...chatScrollProps} onSubmit={onSubmit} />);
 
     const textarea = screen.getByLabelText(ru.conversations.composerLabel);
     fireEvent.change(textarea, { target: { value: "Первая строка" } });
@@ -69,100 +62,19 @@ describe("ConversationComposer", () => {
     fireEvent(textarea, event);
 
     expect(event.defaultPrevented).toBe(false);
-    expect(webBrowserMutation).not.toHaveBeenCalled();
+    expect(onSubmit).not.toHaveBeenCalled();
+    expect(textarea).toHaveValue("Первая строка");
   });
 
-  it.each([
-    { httpStatus: 201, jobStatus: "queued" },
-    { httpStatus: 200, jobStatus: "provider_processing" },
-    { httpStatus: 200, jobStatus: "succeeded" },
-  ])("posts text to its conversation and accepts a safe $httpStatus $jobStatus response", async ({ httpStatus, jobStatus }) => {
-    const onAccepted = vi.fn();
-    vi.mocked(webBrowserMutation).mockResolvedValueOnce(
-      Response.json({ ...queuedJob, status: jobStatus }, { status: httpStatus }),
-    );
-    render(<ConversationComposer {...chatScrollProps} conversationId={conversationId} onAccepted={onAccepted} />);
-
-    fireEvent.change(screen.getByLabelText(ru.conversations.composerLabel), {
-      target: { value: "  Продолжи диалог  " },
-    });
-    fireEvent.click(screen.getByRole("button", { name: ru.conversations.composerSubmit }));
-
-    await vi.waitFor(() => expect(onAccepted).toHaveBeenCalledWith("Продолжи диалог"));
-    expect(webBrowserMutation).toHaveBeenCalledWith(`/web/v1/conversations/${conversationId}/messages`, {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        "X-Idempotency-Key": firstKey,
-      },
-      body: JSON.stringify({ prompt: "Продолжи диалог" }),
-    });
-    expect(screen.getByLabelText(ru.conversations.composerLabel)).toHaveValue("");
-    expect(screen.queryByText("Сообщение принято. Ответ появится в этом чате.")).toBeNull();
-  });
-
-  it("retains a failed draft and reuses its idempotency key for an exact normalized retry", async () => {
-    vi.mocked(webBrowserMutation)
-      .mockRejectedValueOnce(new Error("private backend detail"))
-      .mockResolvedValueOnce(Response.json(queuedJob, { status: 201 }));
-    const onAccepted = vi.fn();
-    render(<ConversationComposer {...chatScrollProps} conversationId={conversationId} onAccepted={onAccepted} />);
-
-    const textarea = screen.getByLabelText(ru.conversations.composerLabel);
-    fireEvent.change(textarea, { target: { value: "  Сохрани черновик  " } });
-    fireEvent.click(screen.getByRole("button", { name: ru.conversations.composerSubmit }));
-
-    expect(await screen.findByRole("alert")).toHaveTextContent(ru.conversations.composerFailure);
-    expect(screen.queryByText("private backend detail")).toBeNull();
-    expect(textarea).toHaveValue("  Сохрани черновик  ");
+  it("does not submit blank or disabled input", () => {
+    const onSubmit = vi.fn();
+    const rendered = render(<ConversationComposer {...chatScrollProps} onSubmit={onSubmit} />);
 
     fireEvent.click(screen.getByRole("button", { name: ru.conversations.composerSubmit }));
+    expect(onSubmit).not.toHaveBeenCalled();
 
-    await vi.waitFor(() => expect(onAccepted).toHaveBeenCalledTimes(1));
-    expect(webBrowserMutation).toHaveBeenCalledTimes(2);
-    expect(vi.mocked(webBrowserMutation).mock.calls.map(([, init]) => new Headers(init.headers).get("X-Idempotency-Key"))).toEqual([
-      firstKey,
-      firstKey,
-    ]);
-    expect(crypto.randomUUID).toHaveBeenCalledTimes(1);
-  });
-
-  it("invalidates a failed retry key when the normalized draft changes", async () => {
-    vi.mocked(webBrowserMutation)
-      .mockRejectedValueOnce(new Error("lost response"))
-      .mockResolvedValueOnce(Response.json(queuedJob, { status: 201 }));
-    render(<ConversationComposer {...chatScrollProps} conversationId={conversationId} onAccepted={vi.fn()} />);
-
-    const textarea = screen.getByLabelText(ru.conversations.composerLabel);
-    fireEvent.change(textarea, { target: { value: "Первый текст" } });
-    fireEvent.click(screen.getByRole("button", { name: ru.conversations.composerSubmit }));
-    await screen.findByRole("alert");
-
-    fireEvent.change(textarea, { target: { value: "Другой текст" } });
-    fireEvent.click(screen.getByRole("button", { name: ru.conversations.composerSubmit }));
-
-    await vi.waitFor(() => expect(webBrowserMutation).toHaveBeenCalledTimes(2));
-    expect(vi.mocked(webBrowserMutation).mock.calls.map(([, init]) => new Headers(init.headers).get("X-Idempotency-Key"))).toEqual([
-      firstKey,
-      secondKey,
-    ]);
-  });
-
-  it.each([
-    ["failed status", new Response(null, { status: 503 })],
-    ["malformed payload", Response.json({ job_id: "not-a-uuid", status: "queued" }, { status: 201 })],
-    ["unsafe created status", Response.json({ ...queuedJob, status: "succeeded" }, { status: 201 })],
-    ["unsafe replay status", Response.json({ ...queuedJob, status: "failed_terminal" }, { status: 200 })],
-  ])("keeps the draft and reports a safe error for a %s", async (_caseName, response) => {
-    const onAccepted = vi.fn();
-    vi.mocked(webBrowserMutation).mockResolvedValueOnce(response);
-    render(<ConversationComposer {...chatScrollProps} conversationId={conversationId} onAccepted={onAccepted} />);
-
-    fireEvent.change(screen.getByLabelText(ru.conversations.composerLabel), { target: { value: "Важный текст" } });
-    fireEvent.click(screen.getByRole("button", { name: ru.conversations.composerSubmit }));
-
-    expect(await screen.findByRole("alert")).toHaveTextContent(ru.conversations.composerFailure);
-    expect(screen.getByLabelText(ru.conversations.composerLabel)).toHaveValue("Важный текст");
-    expect(onAccepted).not.toHaveBeenCalled();
+    rendered.rerender(<ConversationComposer {...chatScrollProps} disabled initialDraft="Не отправлять" onSubmit={onSubmit} />);
+    fireEvent.keyDown(screen.getByLabelText(ru.conversations.composerLabel), { key: "Enter" });
+    expect(onSubmit).not.toHaveBeenCalled();
   });
 });

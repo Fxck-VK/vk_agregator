@@ -24,7 +24,7 @@ export function SidebarConversations({ conversations }: SidebarConversationsProp
   const [archivedConversationIds, setArchivedConversationIds] = useState<Set<string>>(() => new Set());
   const [openConversationId, setOpenConversationId] = useState<string | null>(null);
   const [openConversationSession, setOpenConversationSession] = useState(0);
-  const focusAfterArchiveRef = useRef<string | "new-chat" | null>(null);
+  const optimisticallyArchivedConversationIdsRef = useRef<Set<string>>(new Set());
   const sidebarActivityRef = useRef({ isActive: sidebarIsActive, ownerConversationId: openConversationId, session: sidebarSession });
 
   const visibleConversations = (workspaceConversationList?.conversations ?? conversations ?? []).filter((conversation) => !archivedConversationIds.has(conversation.id));
@@ -34,20 +34,12 @@ export function SidebarConversations({ conversations }: SidebarConversationsProp
     sidebarActivityRef.current = { isActive: sidebarIsActive, ownerConversationId: activeConversationId, session: sidebarSession };
   }, [activeConversationId, sidebarIsActive, sidebarSession]);
 
-  useLayoutEffect(() => {
-    const focusTarget = focusAfterArchiveRef.current;
-    if (focusTarget === null) return;
-
-    const target = focusTarget === "new-chat"
-      ? document.getElementById("sidebar-new-chat")
-      : document.getElementById(`sidebar-conversation-${focusTarget}`) ?? document.getElementById("sidebar-new-chat");
-    if (target instanceof HTMLElement) target.focus();
-    focusAfterArchiveRef.current = null;
-  }, [visibleConversations]);
-
-  const archiveConversation = ({ conversationId, isActive, sidebarIsActive: archiveSidebarIsActive, sidebarSession: archiveSession, wasPanelOwner }: { conversationId: string; isActive: boolean; sidebarIsActive: boolean; sidebarSession?: number; wasPanelOwner: boolean }) => {
-    const archiveIndex = visibleConversations.findIndex((conversation) => conversation.id === conversationId);
-    const remainingConversations = visibleConversations.filter((conversation) => conversation.id !== conversationId);
+  const beginArchiveConversation = ({ conversationId, isActive, sidebarIsActive: archiveSidebarIsActive, sidebarSession: archiveSession, wasPanelOwner }: { conversationId: string; isActive: boolean; sidebarIsActive: boolean; sidebarSession?: number; wasPanelOwner: boolean }) => {
+    const availableConversations = visibleConversations.filter(
+      (conversation) => !optimisticallyArchivedConversationIdsRef.current.has(conversation.id),
+    );
+    const archiveIndex = availableConversations.findIndex((conversation) => conversation.id === conversationId);
+    const remainingConversations = availableConversations.filter((conversation) => conversation.id !== conversationId);
     const isCurrentActiveSession = archiveSidebarIsActive
       && sidebarActivityRef.current.isActive
       && archiveSession === sidebarActivityRef.current.session;
@@ -56,8 +48,23 @@ export function SidebarConversations({ conversations }: SidebarConversationsProp
       ?.closest("article");
     const containsFocusedElement = conversationRow?.contains(document.activeElement) ?? false;
     if (!isActive && isCurrentActiveSession && (wasPanelOwner || containsFocusedElement)) {
-      focusAfterArchiveRef.current = remainingConversations[archiveIndex]?.id ?? remainingConversations.at(-1)?.id ?? "new-chat";
+      const focusTarget = remainingConversations[archiveIndex]?.id ?? remainingConversations.at(-1)?.id ?? "new-chat";
+      queueMicrotask(() => {
+        const sidebarActivity = sidebarActivityRef.current;
+        if (!sidebarActivity.isActive || sidebarActivity.session !== archiveSession) return;
+        if (document.activeElement instanceof HTMLElement && document.activeElement !== document.body) return;
+        const target = focusTarget === "new-chat"
+          ? document.getElementById("sidebar-new-chat")
+          : document.getElementById(`sidebar-conversation-${focusTarget}`) ?? document.getElementById("sidebar-new-chat");
+        if (target instanceof HTMLElement) target.focus();
+      });
     }
+    optimisticallyArchivedConversationIdsRef.current.add(conversationId);
+    setOpenConversationId((openId) => openId === conversationId ? null : openId);
+  };
+
+  const archiveConversation = ({ conversationId }: { conversationId: string }) => {
+    optimisticallyArchivedConversationIdsRef.current.delete(conversationId);
     setArchivedConversationIds((ids) => new Set(ids).add(conversationId));
     setOpenConversationId((openId) => openId === conversationId ? null : openId);
   };
@@ -79,6 +86,8 @@ export function SidebarConversations({ conversations }: SidebarConversationsProp
                   conversation={conversation}
                   isActive={isActive}
                   onArchived={archiveConversation}
+                  onArchiveFailed={(conversationId) => optimisticallyArchivedConversationIdsRef.current.delete(conversationId)}
+                  onArchiveStarted={beginArchiveConversation}
                   onPanelClosed={(conversationId) => setOpenConversationId((openId) => openId === conversationId ? null : openId)}
                   onPanelOpened={(conversationId) => {
                     setOpenConversationId(conversationId);

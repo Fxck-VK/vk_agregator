@@ -94,6 +94,19 @@
   opacity: 0.8;
 }
 
+.pendingTurnFailure {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-3);
+  margin-block-start: var(--space-3);
+  font-size: 0.875rem;
+}
+
+.pendingTurnFailure > span {
+  font-weight: 600;
+}
+
 .empty {
   color: var(--color-text-muted);
 }

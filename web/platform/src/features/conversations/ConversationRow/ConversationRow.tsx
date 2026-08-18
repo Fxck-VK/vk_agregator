@@ -4,10 +4,13 @@ import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import { type JSX, useCallback, useEffect, useLayoutEffect, useRef, useState } from "react";
 
-import type { WorkspaceConversationItem } from "@/features/conversations/WorkspaceConversationList/WorkspaceConversationList";
+import {
+  type WorkspaceConversationItem,
+  useOptionalWorkspaceConversationList,
+} from "@/features/conversations/WorkspaceConversationList/WorkspaceConversationList";
 import { ru } from "@/i18n/ru";
 import { webBrowserMutation } from "@/lib/web-api/browser";
-import { parseConversationList } from "@/lib/web-api/contracts";
+import { parseConversationItem } from "@/lib/web-api/contracts";
 
 import styles from "./ConversationRow.module.css";
 
@@ -16,6 +19,8 @@ type ConversationRowProps = {
   conversation: WorkspaceConversationItem;
   isActive: boolean;
   onArchived?: (archive: { conversationId: string; isActive: boolean; sidebarIsActive: boolean; sidebarSession?: number; wasPanelOwner: boolean }) => void;
+  onArchiveFailed?: (conversationId: string) => void;
+  onArchiveStarted?: (archive: { conversationId: string; isActive: boolean; sidebarIsActive: boolean; sidebarSession?: number; wasPanelOwner: boolean }) => void;
   onPanelClosed?: (conversationId: string) => void;
   onPanelOpened?: (conversationId: string) => void;
   onPendingPanelChange?: (conversationId: string, isPending: boolean, session: number) => void;
@@ -32,6 +37,8 @@ export function ConversationRow({
   conversation,
   isActive,
   onArchived,
+  onArchiveFailed,
+  onArchiveStarted,
   onPanelClosed,
   onPanelOpened,
   onPendingPanelChange,
@@ -39,14 +46,16 @@ export function ConversationRow({
   ownsCurrentPanel,
   sidebarIsActive = true,
   sidebarSession,
-}: ConversationRowProps): JSX.Element {
+}: ConversationRowProps): JSX.Element | null {
   const router = useRouter();
   const pathname = usePathname();
+  const conversationList = useOptionalWorkspaceConversationList();
   const title = conversation.title.trim() || ru.conversations.unnamed;
   const conversationPath = `/web/v1/conversations/${conversation.id}` as const;
   const [panel, setPanel] = useState<RowPanel>(null);
   const [nextTitle, setNextTitle] = useState(title);
   const [isPending, setIsPending] = useState(false);
+  const [isOptimisticallyArchived, setIsOptimisticallyArchived] = useState(false);
   const [hasError, setHasError] = useState(false);
   const [panelSession, setPanelSession] = useState(sidebarSession);
   const actionToggleRef = useRef<HTMLButtonElement>(null);
@@ -210,6 +219,7 @@ export function ConversationRow({
     shouldFocusRestoredPanelRef.current = false;
     setHasError(false);
     setIsPending(false);
+    setIsOptimisticallyArchived(false);
     setPanel(null);
     if (refreshAfterPathnameChange) router.refresh();
   }, [pathname, router]);
@@ -236,9 +246,11 @@ export function ConversationRow({
     if (isPending) return;
     const requestGeneration = requestGenerationRef.current + 1;
     const mutationSidebarSession = panelSession;
+    const previousConversation = conversation;
     requestGenerationRef.current = requestGeneration;
     setHasError(false);
     setIsPending(true);
+    conversationList?.updateConversationTitle(conversation.id, nextTitle);
     try {
       const response = await webBrowserMutation(conversationPath, {
         method: "PATCH",
@@ -250,16 +262,18 @@ export function ConversationRow({
 
       const payload = await response.json();
       if (!mountedRef.current) return;
-      parseConversationList({ items: [payload] });
+      const canonicalConversation = parseConversationItem(payload);
       if (requestGeneration !== requestGenerationRef.current) {
         router.refresh();
         return;
       }
+      conversationList?.replaceConversation(canonicalConversation);
       refreshAfterFocusRef.current = requestGeneration;
       focusAfterPendingRef.current = { kind: "success", requestGeneration, sidebarSession: mutationSidebarSession };
       setPanel(null);
     } catch {
       if (!mountedRef.current || requestGeneration !== requestGenerationRef.current) return;
+      conversationList?.replaceConversation(previousConversation);
       if (isCurrentSidebarSession(mutationSidebarSession) && isCurrentPanelOwner(mutationSidebarSession)) {
         onPanelOpened?.(conversation.id);
         focusAfterPendingRef.current = { kind: "rename", requestGeneration, sidebarSession: mutationSidebarSession };
@@ -277,6 +291,14 @@ export function ConversationRow({
     requestGenerationRef.current = requestGeneration;
     setHasError(false);
     setIsPending(true);
+    onArchiveStarted?.({
+      conversationId: conversation.id,
+      isActive,
+      sidebarIsActive: isCurrentSidebarSession(mutationSidebarSession),
+      sidebarSession: mutationSidebarSession,
+      wasPanelOwner: isCurrentPanelOwner(mutationSidebarSession),
+    });
+    setIsOptimisticallyArchived(true);
     try {
       const response = await webBrowserMutation(conversationPath, { method: "DELETE" });
       if (!mountedRef.current) return;
@@ -301,6 +323,8 @@ export function ConversationRow({
       } else router.refresh();
     } catch {
       if (!mountedRef.current || requestGeneration !== requestGenerationRef.current) return;
+      onArchiveFailed?.(conversation.id);
+      setIsOptimisticallyArchived(false);
       if (isCurrentSidebarSession(mutationSidebarSession) && isCurrentPanelOwner(mutationSidebarSession)) {
         onPanelOpened?.(conversation.id);
         focusAfterPendingRef.current = { kind: "archive", requestGeneration, sidebarSession: mutationSidebarSession };
@@ -310,6 +334,8 @@ export function ConversationRow({
       if (mountedRef.current && requestGeneration === requestGenerationRef.current) setIsPending(false);
     }
   };
+
+  if (isOptimisticallyArchived) return null;
 
   return (
     <article className={styles.row} ref={rowRef}>
@@ -376,7 +402,7 @@ export function ConversationRow({
                   />
                 </label>
                 <div className={styles.formActions}>
-                  <button disabled={isPending} type="submit">{isPending ? ru.conversations.renamePending : ru.conversations.renameSubmitLabel}</button>
+                  <button disabled={isPending} type="submit">{isPending ? ru.conversations.renamePending : hasError ? ru.conversations.renameRetryLabel : ru.conversations.renameSubmitLabel}</button>
                   <button disabled={isPending} onClick={() => closePanel(true)} type="button">{ru.conversations.cancelLabel}</button>
                 </div>
               </form>

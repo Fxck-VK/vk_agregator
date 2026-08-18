@@ -582,7 +582,7 @@ describe("Sidebar", () => {
     fireEvent.click(firstActions);
     fireEvent.click(screen.getByRole("button", { name: ru.conversations.archiveLabel }));
     fireEvent.click(screen.getByRole("button", { name: ru.conversations.archiveConfirmLabel }));
-    await vi.waitFor(() => expect(screen.getByRole("button", { name: ru.conversations.archivePending })).toBeDisabled());
+    expect(screen.queryByRole("link", { name: "Recent chat 1" })).not.toBeInTheDocument();
     fireEvent.click(secondActions);
     secondActions.focus();
 
@@ -668,13 +668,13 @@ describe("Sidebar", () => {
     fireEvent.click(firstActions);
     fireEvent.click(screen.getByRole("button", { name: ru.conversations.archiveLabel }));
     fireEvent.click(screen.getByRole("button", { name: ru.conversations.archiveConfirmLabel }));
-    await vi.waitFor(() => expect(screen.getByRole("button", { name: ru.conversations.archivePending })).toBeDisabled());
+    expect(screen.queryByRole("link", { name: "Recent chat 1" })).not.toBeInTheDocument();
     fireEvent.click(secondActions);
     secondActions.focus();
 
     settleRequest(new Response(null, { status: 500 }));
 
-    await vi.waitFor(() => expect(screen.queryByRole("button", { name: ru.conversations.archivePending })).not.toBeInTheDocument());
+    await screen.findByRole("link", { name: "Recent chat 1" });
     expect(secondActions).toHaveAttribute("aria-expanded", "true");
     expect(document.activeElement).toBe(secondActions);
   });
@@ -735,7 +735,7 @@ describe("Sidebar", () => {
     fireEvent.click(screen.getByRole("button", { name: `${ru.conversations.actionsLabel}: Recent chat 1` }));
     fireEvent.click(screen.getByRole("button", { name: ru.conversations.archiveLabel }));
     fireEvent.click(screen.getByRole("button", { name: ru.conversations.archiveConfirmLabel }));
-    await vi.waitFor(() => expect(screen.getByRole("button", { name: ru.conversations.archivePending })).toBeDisabled());
+    expect(screen.queryByRole("link", { name: "Recent chat 1" })).not.toBeInTheDocument();
 
     fireEvent.click(trigger);
     const focusBeforeSettlement = document.activeElement;
