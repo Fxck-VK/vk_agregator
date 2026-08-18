@@ -27,7 +27,7 @@ Read only the document that matches the current task:
 | Account-first backend core independence, VK adapter separation, neutral sessions and delivery | docs/superpowers/specs/2026-07-30-account-first-backend-core-design.md; implementation plan: docs/superpowers/plans/2026-07-30-channel-neutral-result-delivery.md |
 | Production deploy, domains, Cloudflare, VPS runtime | `docs/runbooks/DEPLOYMENT.md` |
 | Local DEV contour and DEV GitHub deploy | `docs/runbooks/DEV.md` |
-| DEV deploy fast feedback, preflight serialization, workflow polling and build caches | approved design: `docs/superpowers/specs/2026-08-18-dev-deploy-fast-feedback-design.md` |
+| DEV deploy fast feedback, preflight serialization, workflow polling and build caches | approved design: `docs/superpowers/specs/2026-08-18-dev-deploy-fast-feedback-design.md`; implementation plan: `docs/superpowers/plans/2026-08-18-dev-deploy-fast-feedback.md` |
 | YooKassa, payment intents, refunds, billing smoke | `docs/runbooks/BILLING.md` |
 | k6, loadtest contour, capacity reports | `docs/runbooks/LOAD_TESTING.md` |
 | Incidents, broken deploys, provider/payment/queue triage | `docs/runbooks/INCIDENTS.md` |
