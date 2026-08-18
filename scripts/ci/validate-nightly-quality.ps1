@@ -78,6 +78,74 @@ function Assert-ExactInventory {
     }
 }
 
+function Get-DependabotScalar {
+    param(
+        [Parameter(Mandatory = $true)][string]$Block,
+        [Parameter(Mandatory = $true)][string]$Key
+    )
+
+    $pattern = '(?m)^(?:  - |    )' + [regex]::Escape($Key) + ':\s*["'']?([^"''\r\n#]+)["'']?\s*(?:#.*)?$'
+    $match = [regex]::Match($Block, $pattern)
+    if (-not $match.Success) {
+        return $null
+    }
+
+    return $match.Groups[1].Value.Trim()
+}
+
+function Assert-DependabotUpdateInventory {
+    param([Parameter(Mandatory = $true)][string]$Content)
+
+    $blocks = @(
+        [regex]::Matches($Content, '(?ms)^  - package-ecosystem:.*?(?=^  - package-ecosystem:|\z)') |
+            ForEach-Object { $_.Value }
+    )
+    $actual = @(
+        foreach ($block in $blocks) {
+            $targetBranch = Get-DependabotScalar -Block $block -Key 'target-branch'
+            [PSCustomObject]@{
+                Ecosystem = Get-DependabotScalar -Block $block -Key 'package-ecosystem'
+                Directory = Get-DependabotScalar -Block $block -Key 'directory'
+                TargetBranch = if ($null -eq $targetBranch) { '' } else { $targetBranch }
+            }
+        }
+    )
+
+    $expected = @(
+        foreach ($targetBranch in @('', 'dev-deploy')) {
+            foreach ($entry in @(
+                @('github-actions', '/'),
+                @('docker', '/'),
+                @('gomod', '/'),
+                @('npm', '/web/miniapp'),
+                @('npm', '/web/admin'),
+                @('npm', '/web/platform')
+            )) {
+                [PSCustomObject]@{
+                    Ecosystem = $entry[0]
+                    Directory = $entry[1]
+                    TargetBranch = $targetBranch
+                }
+            }
+        }
+    )
+
+    $actualKeys = @($actual | ForEach-Object { "$($_.Ecosystem)|$($_.Directory)|$($_.TargetBranch)" })
+    $expectedKeys = @($expected | ForEach-Object { "$($_.Ecosystem)|$($_.Directory)|$($_.TargetBranch)" })
+    $missing = @($expectedKeys | Where-Object { $actualKeys -notcontains $_ })
+    $unexpected = @($actualKeys | Where-Object { $expectedKeys -notcontains $_ })
+    $duplicates = @(
+        $actualKeys |
+            Group-Object |
+            Where-Object { $_.Count -ne 1 } |
+            ForEach-Object { "$($_.Name) x$($_.Count)" }
+    )
+
+    if ($actualKeys.Count -ne $expectedKeys.Count -or $missing.Count -gt 0 -or $unexpected.Count -gt 0 -or $duplicates.Count -gt 0) {
+        throw "Dependabot updates must contain the exact default/DEV inventory; missing=[$($missing -join ', ')], unexpected=[$($unexpected -join ', ')], duplicates=[$($duplicates -join ', ')]"
+    }
+}
+
 foreach ($path in @($nightlyPath, $ciPath, $dockerImagesPath)) {
     if (-not (Test-Path -LiteralPath $path)) {
         throw "required workflow is missing: $path"
@@ -253,9 +321,7 @@ Assert-Contains $dependabot 'package-ecosystem: "github-actions"' 'Dependabot Gi
 Assert-Contains $dependabot 'package-ecosystem: "docker"' 'Dependabot Docker updates'
 Assert-Contains $dependabot 'package-ecosystem: "gomod"' 'Dependabot Go updates'
 Assert-Contains $dependabot 'package-ecosystem: "npm"' 'Dependabot npm updates'
-if ([regex]::Matches($dependabot, 'package-ecosystem:\s*"npm"').Count -ne 2) {
-    throw 'Dependabot must audit both Mini App and Admin npm lockfiles.'
-}
+Assert-DependabotUpdateInventory -Content $dependabot
 Assert-Contains $codeowners '.github/workflows/' 'CODEOWNERS workflow protection'
 Assert-Contains $codeowners 'scripts/deploy/**' 'CODEOWNERS deploy script protection'
 Assert-Contains $codeowners 'scripts/ci/install-*.sh' 'CODEOWNERS scanner installer protection'
