@@ -108,6 +108,10 @@ changes or that package's local executable set is missing. The successful
 lockfile hash is cached under private Git metadata; dependency installation
 failures never create a marker.
 
+The Trivy filesystem scan skips installed `node_modules` trees and scans npm
+dependencies from their validated lockfiles instead. IaC and source
+misconfiguration scanning remain enabled.
+
 New commits on `dev-deploy` cancel obsolete CI and Docker Images runs for that
 branch. `main` runs are not cancelled. Signed release publication still emits
 all eight exact-SHA images; per-service BuildKit cache scopes make unchanged

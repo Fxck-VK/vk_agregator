@@ -231,6 +231,7 @@ Assert-Contains (Get-Content -LiteralPath $preflightScriptPath -Raw) 'scripts/ci
 Assert-Contains (Get-Content -LiteralPath $preflightScriptPath -Raw) 'Install-NpmDependenciesIfNeeded -PackagePath $packagePath' 'DEV preflight lockfile-scoped npm bootstrap'
 Assert-Contains (Get-Content -LiteralPath $preflightScriptPath -Raw) '"--prefix", $PackagePath, "ci"' 'DEV preflight reproducible npm install'
 Assert-Contains (Get-Content -LiteralPath $preflightModulePath -Raw) '$CommitSha-$stage.ok' 'DEV preflight exact-commit stage cache'
+Assert-Contains (Get-Content -LiteralPath $preflightScriptPath -Raw) '"--skip-dirs", "**/node_modules"' 'DEV preflight efficient lockfile-first Trivy scan'
 Assert-Contains $validateInfra 'Resolve-NextAppRoutePage -AppRoot $platformAppRoot -Route "/"' 'Semantic platform root route validation'
 Assert-NotMatch $validateInfra 'web\\platform\\src\\app\\\(public\)\\page\.tsx' 'Physical platform root route validation'
 
