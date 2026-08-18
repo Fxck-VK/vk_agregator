@@ -20,6 +20,13 @@ $releaseVerifierTestPath = Join-Path $repoRoot "scripts\deploy\test-verify-relea
 $cosignInstallerPath = Join-Path $repoRoot "scripts\ci\install-cosign.sh"
 $trivyInstallerPath = Join-Path $repoRoot "scripts\ci\install-trivy.sh"
 $npmLockValidatorPath = Join-Path $repoRoot "scripts\ci\validate-npm-lockfiles.mjs"
+$workflowWaiterPath = Join-Path $repoRoot "scripts\ci\wait-for-github-workflow.sh"
+$workflowWaiterTestPath = Join-Path $repoRoot "scripts\ci\test-wait-for-github-workflow.sh"
+$nextRouteModulePath = Join-Path $repoRoot "scripts\ci\NextRouteDiscovery.psm1"
+$nextRouteTestPath = Join-Path $repoRoot "scripts\ci\test-next-route-discovery.ps1"
+$preflightModulePath = Join-Path $repoRoot "scripts\ci\DevDeployPreflight.psm1"
+$preflightScriptPath = Join-Path $repoRoot "scripts\ci\dev-deploy-preflight.ps1"
+$preflightTestPath = Join-Path $repoRoot "scripts\ci\test-dev-deploy-preflight.ps1"
 
 $expectedDockerfiles = @(
     "Dockerfile.api",
@@ -85,7 +92,7 @@ foreach ($path in @($nightlyPath, $ciPath, $dockerImagesPath)) {
     }
 }
 
-foreach ($path in @($deployProdPath, $deployDevPath, $deployProdScriptPath, $deployDevScriptPath, $rollbackProdScriptPath, $composePullRetryPath, $dependabotPath, $codeownersPath, $releaseVerifierTestPath, $cosignInstallerPath, $trivyInstallerPath, $npmLockValidatorPath)) {
+foreach ($path in @($deployProdPath, $deployDevPath, $deployProdScriptPath, $deployDevScriptPath, $rollbackProdScriptPath, $composePullRetryPath, $dependabotPath, $codeownersPath, $releaseVerifierTestPath, $cosignInstallerPath, $trivyInstallerPath, $npmLockValidatorPath, $workflowWaiterPath, $workflowWaiterTestPath, $nextRouteModulePath, $nextRouteTestPath, $preflightModulePath, $preflightScriptPath, $preflightTestPath)) {
     if (-not (Test-Path -LiteralPath $path -PathType Leaf)) {
         throw "required supply-chain policy file is missing: $path"
     }
@@ -104,6 +111,8 @@ $dependabot = Get-Content -LiteralPath $dependabotPath -Raw
 $codeowners = Get-Content -LiteralPath $codeownersPath -Raw
 $cosignInstaller = Get-Content -LiteralPath $cosignInstallerPath -Raw
 $trivyInstaller = Get-Content -LiteralPath $trivyInstallerPath -Raw
+$workflowWaiter = Get-Content -LiteralPath $workflowWaiterPath -Raw
+$validateInfra = Get-Content -LiteralPath (Join-Path $repoRoot "scripts\ci\validate-infra.ps1") -Raw
 
 $workflowFiles = Get-ChildItem -LiteralPath (Join-Path $repoRoot ".github\workflows") -Filter "*.yml" -File
 foreach ($workflowFile in $workflowFiles) {
@@ -165,8 +174,10 @@ Assert-Contains $dockerImages 'pull-request-build:' 'Docker Images'
 Assert-Contains $dockerImages 'quality-gate:' 'Docker Images same-SHA quality gate'
 Assert-Contains $dockerImages 'publish:' 'Docker Images'
 Assert-Contains $dockerImages 'actions: read' 'Docker Images same-SHA quality gate permissions'
-Assert-Contains $dockerImages 'head_sha=${GITHUB_SHA}' 'Docker Images same-SHA quality gate'
-Assert-Contains $dockerImages 'conclusion == "success"' 'Docker Images same-SHA quality gate'
+Assert-Contains $dockerImages 'bash scripts/ci/wait-for-github-workflow.sh' 'Docker Images same-SHA quality gate'
+Assert-NotMatch $dockerImages 'for attempt in \$\(seq 1 60\)' 'Docker Images inline GitHub API polling'
+Assert-Contains $workflowWaiter 'head_sha=${sha}' 'GitHub workflow monitor exact-SHA query'
+Assert-Contains $workflowWaiter '"${conclusion}" == "success"' 'GitHub workflow monitor success gate'
 Assert-Contains $dockerImages 'needs: [validate_source, quality-gate]' 'Docker Images publish dependencies'
 Assert-Contains $dockerImages "github.ref == 'refs/heads/main' || github.ref == 'refs/heads/dev-deploy'" 'Docker Images release publication gate'
 Assert-Contains $dockerImages 'packages: write' 'Docker Images publish permissions'
@@ -192,6 +203,33 @@ Assert-NotMatch $dockerImages '(?i)type=raw,value=latest' 'Docker Images tags'
 Assert-NotMatch $dockerImages '(?m)^\s*type=ref,event=branch\s*$' 'Docker Images mutable branch tags'
 Assert-NotMatch $dockerImages '(?m)^\s*type=sha,prefix=sha-,format=short\s*$' 'Docker Images short SHA tags'
 Assert-Contains $dockerImages 'type=sha,prefix=sha-,format=long' 'Docker Images immutable full-SHA tag'
+if ([regex]::Matches($dockerImages, 'cache-from:\s*type=gha,scope=\$\{\{ matrix\.service \}\}').Count -ne 2) {
+    throw 'Docker Images must use a per-service GHA cache scope in PR and publish builds.'
+}
+if ([regex]::Matches($dockerImages, 'cache-to:\s*type=gha,scope=\$\{\{ matrix\.service \}\},mode=max').Count -ne 2) {
+    throw 'Docker Images must export complete per-service GHA caches in PR and publish builds.'
+}
+
+$devConcurrency = 'cancel-in-progress: ${{ github.ref == ''refs/heads/dev-deploy'' }}'
+foreach ($workflow in @($ci, $dockerImages)) {
+    Assert-Contains $workflow 'group: ${{ github.workflow }}-${{ github.ref }}' 'DEV workflow concurrency group'
+    Assert-Contains $workflow $devConcurrency 'DEV-only obsolete-run cancellation'
+}
+Assert-Contains $deployDev 'group: dev-deploy' 'DEV deploy concurrency group'
+Assert-Contains $deployDev 'cancel-in-progress: true' 'DEV deploy obsolete-run cancellation'
+Assert-Contains $deployProd 'cancel-in-progress: false' 'Production workflow concurrency'
+
+Assert-Contains $workflowWaiter '--retry 4' 'GitHub workflow monitor transport retry'
+Assert-Contains $workflowWaiter '--retry-all-errors' 'GitHub workflow monitor transport retry'
+Assert-Contains $workflowWaiter '--retry-max-time 30' 'GitHub workflow monitor bounded retry'
+Assert-Contains $workflowWaiter 'delay_seconds=$((delay_seconds * 2))' 'GitHub workflow monitor exponential backoff'
+Assert-Contains $ci 'bash scripts/ci/test-wait-for-github-workflow.sh' 'GitHub workflow monitor regression test'
+Assert-Contains $ci './scripts/ci/test-next-route-discovery.ps1' 'Next.js route discovery regression test'
+Assert-Contains $ci './scripts/ci/test-dev-deploy-preflight.ps1' 'DEV preflight regression test'
+Assert-Contains (Get-Content -LiteralPath $preflightScriptPath -Raw) '"status", "--porcelain", "--untracked-files=all"' 'DEV preflight clean commit check'
+Assert-Contains (Get-Content -LiteralPath $preflightScriptPath -Raw) 'scripts/ci/test-wait-for-github-workflow.sh' 'DEV preflight workflow monitor regression test'
+Assert-Contains $validateInfra 'Resolve-NextAppRoutePage -AppRoot $platformAppRoot -Route "/"' 'Semantic platform root route validation'
+Assert-NotMatch $validateInfra 'web\\platform\\src\\app\\\(public\)\\page\.tsx' 'Physical platform root route validation'
 
 Assert-Contains $cosignInstaller 'readonly COSIGN_VERSION="3.0.2"' 'Pinned Cosign installer'
 Assert-Contains $cosignInstaller 'readonly COSIGN_LINUX_AMD64_SHA256="46dbdcb5467a3dfec2526923d0b3365e40c8d9dc00ec23d5aca3437449e8cbfd"' 'Pinned Cosign installer'
@@ -255,8 +293,11 @@ Assert-Contains $dependabot 'package-ecosystem: "github-actions"' 'Dependabot Gi
 Assert-Contains $dependabot 'package-ecosystem: "docker"' 'Dependabot Docker updates'
 Assert-Contains $dependabot 'package-ecosystem: "gomod"' 'Dependabot Go updates'
 Assert-Contains $dependabot 'package-ecosystem: "npm"' 'Dependabot npm updates'
-if ([regex]::Matches($dependabot, 'package-ecosystem:\s*"npm"').Count -ne 3) {
-    throw 'Dependabot must audit Mini App, Admin, and Platform npm lockfiles.'
+if ([regex]::Matches($dependabot, 'package-ecosystem:\s*"npm"').Count -ne 6) {
+    throw 'Dependabot must audit Mini App, Admin, and Platform npm lockfiles on the default and DEV target branches.'
+}
+if ([regex]::Matches($dependabot, 'target-branch:\s*"dev-deploy"').Count -ne 6) {
+    throw 'Dependabot must target DEV version updates for Actions, Docker, Go, Mini App, Admin, and Platform.'
 }
 Assert-Contains $codeowners '.github/workflows/' 'CODEOWNERS workflow protection'
 Assert-Contains $codeowners 'scripts/deploy/**' 'CODEOWNERS deploy script protection'

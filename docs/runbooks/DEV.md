@@ -81,6 +81,32 @@ DEV smoke.
 DEV deploy does not read production env secrets. Run DEV/PROD parity as a
 separate operator check when changing env structure.
 
+### Commit-scoped preflight before push
+
+After committing a `dev-deploy` change and before pushing it, run the complete
+serialized validation entry point from the repository root:
+
+```powershell
+pwsh -NoProfile -File scripts/ci/dev-deploy-preflight.ps1
+```
+
+It runs source tests, npm audits, `govulncheck`, infrastructure policy and the
+pinned Trivy filesystem scan in that order. Only one full preflight may run in
+a worktree at a time. A successful result is cached under private Git metadata
+for the exact commit and policy version, so retrying the same push is fast.
+Failures are not cached. Use `-Force` only when intentionally repeating all
+checks for the same commit.
+
+The command requires a completely clean worktree, Go, Node.js/npm, PowerShell,
+Bash and Docker. Trivy runs from the immutable image digest recorded in the script and
+reuses a private cache under the worktree Git directory. It never installs or
+runs an unpinned `latest` scanner.
+
+New commits on `dev-deploy` cancel obsolete CI and Docker Images runs for that
+branch. `main` runs are not cancelled. Signed release publication still emits
+all eight exact-SHA images; per-service BuildKit cache scopes make unchanged
+builds cheap without relabelling old provenance.
+
 ## DEV Safety Rules
 
 - Do not use production VK community tokens in DEV.

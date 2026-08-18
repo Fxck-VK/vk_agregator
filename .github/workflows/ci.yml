@@ -21,6 +21,10 @@ on:
 permissions:
   contents: read
 
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: ${{ github.ref == 'refs/heads/dev-deploy' }}
+
 jobs:
   backend:
     name: Backend
@@ -237,6 +241,18 @@ jobs:
       - name: Validate documentation
         shell: pwsh
         run: ./scripts/ci/validate-docs.ps1
+
+      - name: Test Next.js route discovery
+        shell: pwsh
+        run: ./scripts/ci/test-next-route-discovery.ps1
+
+      - name: Test DEV preflight orchestration
+        shell: pwsh
+        run: ./scripts/ci/test-dev-deploy-preflight.ps1
+
+      - name: Test GitHub workflow monitor
+        shell: bash
+        run: bash scripts/ci/test-wait-for-github-workflow.sh
 
       - name: Validate infrastructure
         shell: pwsh

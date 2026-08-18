@@ -97,7 +97,7 @@ signature, and release verifier remain unchanged.
 Keep the current default-branch update entries and add equivalent weekly
 version-update entries with `target-branch: dev-deploy` for GitHub Actions,
 Docker, Go modules, and all three npm applications. Use distinct group names
-and labels so DEV update PRs are recognizable.
+so DEV update PRs are recognizable without changing repository label policy.
 
 The default-branch file is changed through a separate reviewed PR. No
 application or production workflow file is changed in that PR.

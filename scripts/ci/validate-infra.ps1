@@ -7,6 +7,7 @@ $ErrorActionPreference = "Stop"
 Set-StrictMode -Version Latest
 
 $repoRoot = Resolve-Path (Join-Path $PSScriptRoot "..\..")
+Import-Module (Join-Path $PSScriptRoot "NextRouteDiscovery.psm1") -Force
 Set-Location $repoRoot
 
 function Invoke-Step {
@@ -344,10 +345,8 @@ function Assert-ReverseProxyConfig {
         throw "platform nonce proxy must preserve the browser-visible return-path cookie"
     }
 
-    $platformHomePagePath = Join-Path $repoRoot "web\platform\src\app\(public)\page.tsx"
-    if (-not (Test-Path -LiteralPath $platformHomePagePath)) {
-        throw "platform root page is missing: web/platform/src/app/(public)/page.tsx"
-    }
+    $platformAppRoot = Join-Path $repoRoot "web\platform\src\app"
+    $platformHomePagePath = Resolve-NextAppRoutePage -AppRoot $platformAppRoot -Route "/"
     $platformHomePage = Get-Content -LiteralPath $platformHomePagePath -Raw
     foreach ($snippet in @(
         'import { connection } from "next/server";',
