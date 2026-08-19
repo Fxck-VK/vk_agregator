@@ -15,7 +15,6 @@ describe("ChatComposer", () => {
         disabled={false}
         label="Задайте вопрос NeiroHub"
         mediaLabel="Загрузить медиа"
-        mediaUnavailableLabel="Загрузка пока недоступна"
         onChange={vi.fn()}
         onSend={vi.fn()}
         placeholder="Напишите вопрос"
@@ -26,7 +25,7 @@ describe("ChatComposer", () => {
     );
 
     expect(screen.getByLabelText("Задайте вопрос NeiroHub")).toHaveAttribute("placeholder", "Напишите вопрос");
-    expect(screen.getByRole("button", { name: "Загрузить медиа" })).toBeDisabled();
+    expect(screen.getByRole("button", { name: "Загрузить медиа" })).toBeEnabled();
     expect(screen.getByRole("button", { name: "Отправить" })).toBeDisabled();
   });
 
@@ -38,7 +37,6 @@ describe("ChatComposer", () => {
         disabled={false}
         label="Новый чат"
         mediaLabel="Загрузить медиа"
-        mediaUnavailableLabel="Загрузка пока недоступна"
         onChange={vi.fn()}
         onSend={onSend}
         placeholder="Напишите вопрос"
@@ -60,7 +58,6 @@ describe("ChatComposer", () => {
         disabled={false}
         label="Диалог"
         mediaLabel="Загрузить медиа"
-        mediaUnavailableLabel="Загрузка пока недоступна"
         note="Стоимость зависит от выбранной нейросети"
         onChange={vi.fn()}
         onSend={vi.fn()}

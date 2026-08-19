@@ -85,7 +85,12 @@ export function WorkspacePrompt({ access = "authenticated", variant = "workspace
         disabled={false}
         label={promptLabel}
         mediaLabel={ru.conversations.composerMediaUpload}
-        mediaUnavailableLabel={ru.conversations.composerMediaUploadUnavailable}
+        mediaMenuLabels={{
+          chooseGenerated: ru.conversations.composerMediaChooseGenerated,
+          chooseUploaded: ru.conversations.composerMediaChooseUploaded,
+          menu: ru.conversations.composerMediaMenu,
+          uploadFile: ru.conversations.composerMediaUploadFile,
+        }}
         note={isNewChat || isHero ? undefined : ru.workspace.promptSupport}
         onChange={changePrompt}
         onSend={submit}
@@ -93,6 +98,8 @@ export function WorkspacePrompt({ access = "authenticated", variant = "workspace
         submitLabel={ru.workspace.promptSubmit}
         value={prompt}
         variant={variant}
+        generatedMediaHref={access === "guest" ? "/login" : "/app/files?category=images"}
+        uploadedMediaHref={access === "guest" ? "/login" : "/app/files?category=uploads"}
       />
     </form>
   );

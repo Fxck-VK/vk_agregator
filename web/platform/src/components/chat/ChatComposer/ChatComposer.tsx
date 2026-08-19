@@ -1,5 +1,6 @@
 import type { ChangeEventHandler } from "react";
 
+import { ChatMediaMenu, type ChatMediaMenuLabels } from "@/components/chat/ChatMediaMenu/ChatMediaMenu";
 import { ChatTextInput } from "@/components/chat/ChatTextInput/ChatTextInput";
 
 import styles from "./ChatComposer.module.css";
@@ -9,14 +10,19 @@ export type ChatComposerVariant = "conversation" | "hero" | "newChat" | "workspa
 type ChatComposerProps = {
   canSubmit: boolean;
   disabled: boolean;
+  generatedMediaHref?: string;
   label: string;
   mediaLabel: string;
-  mediaUnavailableLabel: string;
+  mediaMenuLabels?: Omit<ChatMediaMenuLabels, "trigger">;
   note?: string;
+  onChooseGeneratedMedia?: () => void;
+  onChooseUploadedMedia?: () => void;
   onChange: ChangeEventHandler<HTMLTextAreaElement>;
+  onFilesSelected?: (files: File[]) => void;
   onSend: () => void;
   placeholder: string;
   submitLabel: string;
+  uploadedMediaHref?: string;
   value: string;
   variant: ChatComposerVariant;
 };
@@ -26,14 +32,19 @@ const expandedVariants = new Set<ChatComposerVariant>(["hero", "workspace"]);
 export function ChatComposer({
   canSubmit,
   disabled,
+  generatedMediaHref,
   label,
   mediaLabel,
-  mediaUnavailableLabel,
+  mediaMenuLabels,
   note,
+  onChooseGeneratedMedia,
+  onChooseUploadedMedia,
   onChange,
+  onFilesSelected,
   onSend,
   placeholder,
   submitLabel,
+  uploadedMediaHref,
   value,
   variant,
 }: ChatComposerProps) {
@@ -56,20 +67,21 @@ export function ChatComposer({
           />
         </label>
         <div className={styles.controls}>
-          <button
-            aria-label={mediaLabel}
-            className={styles.media}
-            disabled
-            title={mediaUnavailableLabel}
-            type="button"
-          >
-            <svg aria-hidden="true" focusable="false" viewBox="0 0 24 24">
-              <path d="M4 7.5A2.5 2.5 0 0 1 6.5 5H10l1.5-2h5L18 5h.5A2.5 2.5 0 0 1 21 7.5v10a2.5 2.5 0 0 1-2.5 2.5h-12A2.5 2.5 0 0 1 4 17.5z" fill="none" stroke="currentColor" strokeLinecap="round" strokeLinejoin="round" strokeWidth="1.7" />
-              <path d="m8 15 2.5-2.5 2 2L15 12l3 3" fill="none" stroke="currentColor" strokeLinecap="round" strokeLinejoin="round" strokeWidth="1.7" />
-              <path d="M8 3v4M6 5h4" fill="none" stroke="currentColor" strokeLinecap="round" strokeWidth="1.7" />
-            </svg>
-            <span>{mediaLabel}</span>
-          </button>
+          <ChatMediaMenu
+            disabled={disabled}
+            generatedHref={generatedMediaHref}
+            labels={{
+              chooseGenerated: mediaMenuLabels?.chooseGenerated ?? "Выбрать из сгенерированных",
+              chooseUploaded: mediaMenuLabels?.chooseUploaded ?? "Выбрать из загруженных",
+              menu: mediaMenuLabels?.menu ?? mediaLabel,
+              trigger: mediaLabel,
+              uploadFile: mediaMenuLabels?.uploadFile ?? "Загрузить файл",
+            }}
+            onChooseGenerated={onChooseGeneratedMedia}
+            onChooseUploaded={onChooseUploadedMedia}
+            onFilesSelected={onFilesSelected}
+            uploadedHref={uploadedMediaHref}
+          />
           <button
             aria-label={submitLabel}
             className={styles.submit}

@@ -43,16 +43,18 @@ function WorkspaceDataCacheSeed({
 
 function renderFilesWorkspace({
   cachePage,
+  initialCategory,
   onCache,
   retryReplacement,
   strictMode = false,
 }: {
   cachePage?: ImageJobList;
+  initialCategory?: "all" | "images" | "reports" | "presentations" | "video" | "uploads";
   onCache?: (cache: WorkspaceDataCache) => void;
   retryReplacement?: { job: ImageJob; originalJobID: string };
   strictMode?: boolean;
 } = {}) {
-  const workspace = <FilesWorkspace />;
+  const workspace = <FilesWorkspace initialCategory={initialCategory} />;
 
   return render(
     <WorkspaceDataCacheProvider>
@@ -147,6 +149,16 @@ describe("FilesWorkspace", () => {
     cleanup();
     vi.restoreAllMocks();
     vi.resetAllMocks();
+  });
+
+  it("opens the file category requested by the route", () => {
+    vi.mocked(webBrowserFetch).mockResolvedValue(
+      Response.json({ items: [], has_more: false, next_cursor: null }),
+    );
+
+    renderFilesWorkspace({ initialCategory: "uploads" });
+
+    expect(screen.getByRole("tab", { name: ru.files.categories.uploads })).toHaveAttribute("aria-selected", "true");
   });
 
   it("loads a bounded generated-image page and previews artifacts only through the platform path", async () => {

@@ -280,7 +280,11 @@ function futureCategoryDescription(category: Exclude<FileCategory, "all" | "imag
   }
 }
 
-export function FilesWorkspace() {
+type FilesWorkspaceProps = {
+  initialCategory?: FileCategory;
+};
+
+export function FilesWorkspace({ initialCategory = "all" }: Readonly<FilesWorkspaceProps>) {
   const cache = useWorkspaceDataCache();
   const [cachedFirstPage] = useState(() => cache.getImageFilesFirstPage());
   const [cachedRetryReplacements] = useState(() => cache.getImageFileRetryReplacements());
@@ -293,7 +297,7 @@ export function FilesWorkspace() {
   const [isLoading, setIsLoading] = useState(false);
   const [isLoadingMore, setIsLoadingMore] = useState(false);
   const [loadFailed, setLoadFailed] = useState(false);
-  const [fileCategory, setFileCategory] = useState<FileCategory>("all");
+  const [fileCategory, setFileCategory] = useState<FileCategory>(initialCategory);
   const [query, setQuery] = useState("");
   const [statusFilter, setStatusFilter] = useState<FileStatusFilter>("all");
   const [resultsByJobID, setResultsByJobID] = useState<Record<string, ImageJobResult>>({});

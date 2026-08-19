@@ -57,7 +57,7 @@ describe("WorkspacePrompt", () => {
       "placeholder",
       ru.conversations.composerPlaceholder,
     );
-    expect(screen.getByRole("button", { name: ru.conversations.composerMediaUpload })).toBeDisabled();
+    expect(screen.getByRole("button", { name: ru.conversations.composerMediaUpload })).toBeEnabled();
     expect(screen.getByRole("button", { name: ru.workspace.promptSubmit }).querySelector("svg")).not.toBeNull();
   });
 

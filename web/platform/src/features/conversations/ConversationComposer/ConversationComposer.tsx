@@ -63,7 +63,12 @@ export function ConversationComposer({
         disabled={disabled}
         label={ru.conversations.composerLabel}
         mediaLabel={ru.conversations.composerMediaUpload}
-        mediaUnavailableLabel={ru.conversations.composerMediaUploadUnavailable}
+        mediaMenuLabels={{
+          chooseGenerated: ru.conversations.composerMediaChooseGenerated,
+          chooseUploaded: ru.conversations.composerMediaChooseUploaded,
+          menu: ru.conversations.composerMediaMenu,
+          uploadFile: ru.conversations.composerMediaUploadFile,
+        }}
         note={ru.conversations.composerDisclaimer}
         onChange={changeDraft}
         onSend={submit}
