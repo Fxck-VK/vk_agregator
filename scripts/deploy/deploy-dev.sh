@@ -474,6 +474,9 @@ fi
 runtime_up_args+=("${runtime_services[@]}")
 run_step run_compose "${runtime_up_args[@]}"
 run_step run_compose up -d --no-build --force-recreate reverse-proxy
+if [[ "${with_cloudflare}" == "true" ]]; then
+  run_step run_compose up -d --no-build --force-recreate --no-deps cloudflared
+fi
 
 if [[ "${no_health_check}" != "true" ]]; then
   reverse_proxy_port="$(get_env_value REVERSE_PROXY_HTTP_PORT 8088)"

@@ -71,8 +71,27 @@ assert_deploy_proxy_recreate() {
   fi
 }
 
+assert_deploy_cloudflared_recreate() {
+  local runtime_up_line
+  local tunnel_recreate_line
+
+  runtime_up_line="$(grep -nF 'run_step run_compose "${runtime_up_args[@]}"' "${deploy_script}" | cut -d: -f1)"
+  tunnel_recreate_line="$(grep -nF 'run_step run_compose up -d --no-build --force-recreate --no-deps cloudflared' "${deploy_script}" | cut -d: -f1 || true)"
+
+  if [[ -z "${tunnel_recreate_line}" || "${tunnel_recreate_line}" == *$'\n'* ]]; then
+    printf 'deploy-dev.sh must force-recreate cloudflared through run_compose after runtime startup\n' >&2
+    exit 1
+  fi
+
+  if [[ -z "${runtime_up_line}" || "${runtime_up_line}" == *$'\n'* || "${tunnel_recreate_line}" -le "${runtime_up_line}" ]]; then
+    printf 'cloudflared force-recreate must follow the main runtime up\n' >&2
+    exit 1
+  fi
+}
+
 assert_deploy_auth_scope
 assert_deploy_proxy_recreate
+assert_deploy_cloudflared_recreate
 
 valid_input="${tmpdir}/valid.raw.env"
 valid_output="${tmpdir}/valid.rendered.env"
