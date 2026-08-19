@@ -655,7 +655,10 @@ function Assert-DevDeploySmokeScript {
     foreach ($snippet in @(
         "https://dev-web.neiirohub.ru",
         "DEV web gateway required",
-        '"401"'
+        '"401"',
+        "--stabilization-seconds",
+        'sleep "${stabilization_seconds}"',
+        "docker logs --tail 200"
     )) {
         if (-not $content.Contains($snippet)) {
             throw "DEV deploy smoke script is missing required snippet: $snippet"

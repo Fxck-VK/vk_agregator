@@ -7,6 +7,7 @@ app_base_url=""
 payment_webhook_url=""
 dev_web_base_url=""
 timeout_seconds="${TIMEOUT_SECONDS:-10}"
+stabilization_seconds="${STABILIZATION_SECONDS:-60}"
 skip_local_health="false"
 
 usage() {
@@ -20,6 +21,7 @@ Options:
   --payment-webhook-url URL          DEV YooKassa webhook URL. Default: PUBLIC_PAYMENT_WEBHOOK_URL or https://dev.neiirohub.ru/billing/webhooks/yookassa
   --dev-web-base-url URL              DEV web gateway URL. Default: https://dev-web.neiirohub.ru
   --timeout-seconds SECONDS          HTTP timeout. Default: 10
+  --stabilization-seconds SECONDS    Recheck the public tunnel after this delay. Default: 60
   --skip-local-health                Skip local API/worker/provider-webhook/Mini App/reverse-proxy health checks
   -h, --help                         Show help.
 USAGE
@@ -33,11 +35,17 @@ while [[ $# -gt 0 ]]; do
     --payment-webhook-url) payment_webhook_url="${2:?missing value for --payment-webhook-url}"; shift 2 ;;
     --dev-web-base-url) dev_web_base_url="${2:?missing value for --dev-web-base-url}"; shift 2 ;;
     --timeout-seconds) timeout_seconds="${2:?missing value for --timeout-seconds}"; shift 2 ;;
+    --stabilization-seconds) stabilization_seconds="${2:?missing value for --stabilization-seconds}"; shift 2 ;;
     --skip-local-health) skip_local_health="true"; shift ;;
     -h|--help) usage; exit 0 ;;
     *) echo "unknown argument: $1" >&2; usage >&2; exit 2 ;;
   esac
 done
+
+if [[ ! "${stabilization_seconds}" =~ ^[0-9]+$ ]]; then
+  echo "stabilization seconds must be a non-negative integer: ${stabilization_seconds}" >&2
+  exit 2
+fi
 
 script_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 repo_root="$(cd "${script_dir}/../.." && pwd)"
@@ -136,9 +144,29 @@ fi
 echo "Running safe DEV smoke checks"
 bash scripts/deploy/smoke-prod.sh "${args[@]}"
 
-dev_web_status="$(curl -sS -o /dev/null -w '%{http_code}' --max-time "${timeout_seconds}" "${dev_web_base_url}/" 2>/dev/null || true)"
-if [[ "${dev_web_status}" != "401" ]]; then
-  echo "[FAIL] DEV web gateway required expected 401, got ${dev_web_status:-000}" >&2
-  exit 1
+dump_cloudflared_diagnostics() {
+  local container="vk-ai-aggregator-dev-cloudflared-1"
+  echo "==> cloudflared container status" >&2
+  docker ps -a --filter "name=^/${container}$" --format 'table {{.Names}}\t{{.Status}}\t{{.Image}}' >&2 || true
+  echo "==> cloudflared logs" >&2
+  docker logs --tail 200 "${container}" >&2 || true
+}
+
+check_dev_web_gateway() {
+  local phase="$1"
+  local dev_web_status
+  dev_web_status="$(curl -sS -o /dev/null -w '%{http_code}' --max-time "${timeout_seconds}" "${dev_web_base_url}/" 2>/dev/null || true)"
+  if [[ "${dev_web_status}" != "401" ]]; then
+    echo "[FAIL] DEV web gateway required (${phase}) expected 401, got ${dev_web_status:-000}" >&2
+    dump_cloudflared_diagnostics
+    return 1
+  fi
+  echo "[OK] DEV web gateway required (${phase}) -> 401"
+}
+
+check_dev_web_gateway "initial"
+if (( stabilization_seconds > 0 )); then
+  echo "Waiting ${stabilization_seconds}s to verify that the Cloudflare tunnel remains connected"
+  sleep "${stabilization_seconds}"
+  check_dev_web_gateway "after stabilization"
 fi
-echo "[OK] DEV web gateway required -> 401"
