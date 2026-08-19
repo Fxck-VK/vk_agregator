@@ -4,6 +4,10 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { type MouseEvent as ReactMouseEvent, type ReactNode, useCallback, useEffect, useLayoutEffect, useRef, useState } from "react";
 
+import { EditIcon } from "@/components/icons/EditIcon";
+import { FileIcon } from "@/components/icons/FileIcon";
+import { GridIcon } from "@/components/icons/GridIcon";
+import { ImageIcon } from "@/components/icons/ImageIcon";
 import { Button } from "@/components/ui/Button/Button";
 import { SidebarConversationsActivityProvider } from "@/features/conversations/SidebarConversations/SidebarConversationsActivity";
 import { ru } from "@/i18n/ru";
@@ -13,12 +17,18 @@ import styles from "./Sidebar.module.css";
 const desktopViewportQuery = "(min-width: 48rem)";
 
 export const workspaceNavigationItems = [
-  { href: "/app", label: ru.navigation.workspace, prefetch: true },
-  { href: "/app/chats", label: ru.navigation.chats, prefetch: true },
-  { href: "/app/files", label: ru.navigation.files, prefetch: true },
-  { href: "/app/models", label: ru.navigation.models, prefetch: true },
-  { href: "/app/inspiration", label: ru.navigation.inspiration, prefetch: true },
+  { href: "/app/chats", icon: "edit", label: ru.navigation.chats, prefetch: true },
+  { href: "/app/files", icon: "file", label: ru.navigation.files, prefetch: true },
+  { href: "/app/models", icon: "grid", label: ru.navigation.models, prefetch: true },
+  { href: "/app/inspiration", icon: "image", label: ru.navigation.inspiration, prefetch: true },
 ] as const;
+
+const workspaceNavigationIcons = {
+  edit: EditIcon,
+  file: FileIcon,
+  grid: GridIcon,
+  image: ImageIcon,
+} as const;
 
 type SidebarProps = {
   account?: ReactNode;
@@ -282,28 +292,40 @@ export function Sidebar({ account, conversations, isDesktopCollapsed = false, on
         ref={panelRef}
         role={isNarrowViewport && isOpen ? "dialog" : undefined}
       >
-        <div className={styles.brand}>
+        <Link
+          aria-current={pathname === "/app" ? "page" : undefined}
+          className={styles.brand}
+          href="/app"
+          onClick={() => closeNavigation(true)}
+          prefetch
+          ref={firstLinkRef}
+        >
           <span aria-hidden="true" className={styles.brandMark}>
             {ru.brand.monogram}
           </span>
           <span>{ru.brand.name}</span>
-        </div>
+        </Link>
         <div className={styles.scrollArea}>
           <nav aria-label={ru.navigation.label} id={navigationId}>
             <ul className={styles.navigationList}>
-              {workspaceNavigationItems.map((item, index) => (
-                <li key={item.href}>
-                  <Link
-                    href={item.href}
-                    id={item.href === "/app/chats" ? "sidebar-new-chat" : undefined}
-                    onClick={() => closeNavigation(true)}
-                    prefetch={item.prefetch}
-                    ref={index === 0 ? firstLinkRef : undefined}
-                  >
-                    {item.label}
-                  </Link>
-                </li>
-              ))}
+              {workspaceNavigationItems.map((item) => {
+                const Icon = workspaceNavigationIcons[item.icon];
+
+                return (
+                  <li key={item.href}>
+                    <Link
+                      aria-current={pathname === item.href ? "page" : undefined}
+                      href={item.href}
+                      id={item.href === "/app/chats" ? "sidebar-new-chat" : undefined}
+                      onClick={() => closeNavigation(true)}
+                      prefetch={item.prefetch}
+                    >
+                      <Icon className={styles.navigationIcon} />
+                      <span>{item.label}</span>
+                    </Link>
+                  </li>
+                );
+              })}
             </ul>
           </nav>
           {conversations ? (

@@ -42,9 +42,22 @@
   display: flex;
   align-items: center;
   gap: var(--space-2);
+  inline-size: fit-content;
   margin-block-end: var(--space-8);
+  border-radius: var(--radius-sm);
+  color: var(--color-text);
   font-size: 1.125rem;
   font-weight: 700;
+  text-decoration: none;
+  transition: color var(--motion-fast), opacity var(--motion-fast);
+}
+
+.brand:hover {
+  color: var(--color-accent);
+}
+
+.brand:active {
+  opacity: 0.8;
 }
 
 .brandMark {
@@ -69,7 +82,9 @@
 }
 
 .navigationList a {
-  display: block;
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
   border-radius: var(--radius-sm);
   padding: var(--space-3);
   color: var(--color-text-muted);
@@ -80,6 +95,17 @@
 .navigationList a:hover {
   background: var(--color-surface-raised);
   color: var(--color-text);
+}
+
+.navigationList a[aria-current="page"] {
+  background: var(--color-surface-raised);
+  color: var(--color-text);
+}
+
+.navigationIcon {
+  flex: 0 0 auto;
+  inline-size: 1.5rem;
+  block-size: 1.5rem;
 }
 
 .scrollArea {

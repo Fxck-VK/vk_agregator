@@ -1,4 +1,4 @@
-import { act, cleanup, fireEvent, render, screen } from "@testing-library/react";
+import { act, cleanup, fireEvent, render, screen, within } from "@testing-library/react";
 import Link from "next/link";
 import { renderToStaticMarkup } from "react-dom/server";
 import type { ReactNode } from "react";
@@ -97,7 +97,7 @@ function renderNarrowSidebar({
 function openNavigation(trigger: HTMLElement) {
   fireEvent.click(trigger);
 
-  return screen.getByRole("link", { name: ru.navigation.workspace });
+  return screen.getByRole("link", { name: ru.brand.name });
 }
 
 describe("Sidebar", () => {
@@ -107,13 +107,35 @@ describe("Sidebar", () => {
     vi.unstubAllGlobals();
   });
 
-  it("defines exactly the five fixed workspace routes as full prefetch targets", () => {
+  it("defines exactly the four fixed workspace routes with the requested icon order", () => {
     expect(workspaceNavigationItems).toEqual([
-      { href: "/app", label: ru.navigation.workspace, prefetch: true },
-      { href: "/app/chats", label: ru.navigation.chats, prefetch: true },
-      { href: "/app/files", label: ru.navigation.files, prefetch: true },
-      { href: "/app/models", label: ru.navigation.models, prefetch: true },
-      { href: "/app/inspiration", label: ru.navigation.inspiration, prefetch: true },
+      { href: "/app/chats", icon: "edit", label: ru.navigation.chats, prefetch: true },
+      { href: "/app/files", icon: "file", label: ru.navigation.files, prefetch: true },
+      { href: "/app/models", icon: "grid", label: ru.navigation.models, prefetch: true },
+      { href: "/app/inspiration", icon: "image", label: ru.navigation.inspiration, prefetch: true },
+    ]);
+  });
+
+  it("uses the NeiroHub brand as the workspace-home link and renders navigation icons in order", () => {
+    mockWideViewport();
+    render(<Sidebar />);
+
+    expect(screen.getByRole("link", { name: ru.brand.name })).toHaveAttribute("href", "/app");
+    expect(screen.queryByRole("link", { name: ru.navigation.workspace })).not.toBeInTheDocument();
+
+    const navigation = screen.getByRole("navigation", { name: ru.navigation.label });
+    const links = within(navigation).getAllByRole("link");
+    expect(links.map((link) => link.textContent)).toEqual([
+      ru.navigation.chats,
+      ru.navigation.files,
+      ru.navigation.models,
+      ru.navigation.inspiration,
+    ]);
+    expect(links.map((link) => link.querySelector("svg")?.getAttribute("data-icon"))).toEqual([
+      "edit",
+      "file",
+      "grid",
+      "image",
     ]);
   });
 
@@ -135,7 +157,7 @@ describe("Sidebar", () => {
     expect(panel).toHaveAttribute("data-open", "false");
     expect(panel).toHaveAttribute("aria-hidden", "true");
     expect(panel).toHaveAttribute("inert");
-    expect(screen.queryByRole("link", { name: ru.navigation.workspace })).not.toBeInTheDocument();
+    expect(screen.queryByRole("link", { name: ru.brand.name })).not.toBeInTheDocument();
     expect(screen.queryByRole("button", { name: "Выйти" })).not.toBeInTheDocument();
     expect(screen.queryByText(ru.accountPreview.title)).not.toBeInTheDocument();
   });
@@ -177,7 +199,7 @@ describe("Sidebar", () => {
     fireEvent.keyDown(window, { key: "Escape" });
 
     expect(trigger).toHaveFocus();
-    expect(screen.queryByRole("link", { name: ru.navigation.workspace })).not.toBeInTheDocument();
+    expect(screen.queryByRole("link", { name: ru.brand.name })).not.toBeInTheDocument();
   });
 
   it("closes the narrow drawer after a recent chat selection without restoring trigger focus", () => {
@@ -309,7 +331,7 @@ describe("Sidebar", () => {
   it("closes a non-pending row panel on desktop when Escape starts outside its action container", () => {
     mockWideViewport();
     render(<Sidebar conversations={<SidebarConversations conversations={recentConversations} />} />);
-    const workspace = screen.getByRole("link", { name: ru.navigation.workspace });
+    const workspace = screen.getByRole("link", { name: ru.brand.name });
     const actions = screen.getByRole("button", { name: `${ru.conversations.actionsLabel}: Recent chat 1` });
     fireEvent.click(actions);
     workspace.focus();
@@ -381,7 +403,7 @@ describe("Sidebar", () => {
     if (closeMethod === "trigger") fireEvent.click(trigger);
     else if (closeMethod === "backdrop") fireEvent.click(screen.getByRole("button", { name: ru.navigation.closeMenuLabel }));
     else {
-      const workspace = screen.getByRole("link", { name: ru.navigation.workspace });
+      const workspace = screen.getByRole("link", { name: ru.brand.name });
       workspace.addEventListener("click", (event) => event.preventDefault(), { once: true });
       fireEvent.click(workspace);
     }
@@ -889,6 +911,6 @@ describe("Sidebar", () => {
 
     expect(panel).toHaveAttribute("aria-hidden", "true");
     expect(trigger).toHaveFocus();
-    expect(screen.queryByRole("link", { name: ru.navigation.workspace })).not.toBeInTheDocument();
+    expect(screen.queryByRole("link", { name: ru.brand.name })).not.toBeInTheDocument();
   });
 });
