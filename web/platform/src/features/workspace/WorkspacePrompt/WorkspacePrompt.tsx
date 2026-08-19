@@ -85,6 +85,7 @@ export function WorkspacePrompt({ access = "authenticated", variant = "workspace
         disabled={false}
         label={promptLabel}
         mediaLabel={ru.conversations.composerMediaUpload}
+        mediaLibraryEnabled={access === "authenticated"}
         mediaMenuLabels={{
           chooseGenerated: ru.conversations.composerMediaChooseGenerated,
           chooseUploaded: ru.conversations.composerMediaChooseUploaded,

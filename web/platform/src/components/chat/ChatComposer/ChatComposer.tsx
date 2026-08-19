@@ -1,5 +1,15 @@
-import type { ChangeEventHandler } from "react";
+"use client";
 
+/* eslint-disable @next/next/no-img-element */
+
+import { useState, type ChangeEventHandler } from "react";
+
+import {
+  attachmentFromFile,
+  ChatFilePicker,
+  type ChatFileSource,
+  type ChatMediaAttachment,
+} from "@/components/chat/ChatFilePicker/ChatFilePicker";
 import { ChatMediaMenu, type ChatMediaMenuLabels } from "@/components/chat/ChatMediaMenu/ChatMediaMenu";
 import { ChatTextInput } from "@/components/chat/ChatTextInput/ChatTextInput";
 
@@ -13,6 +23,7 @@ type ChatComposerProps = {
   generatedMediaHref?: string;
   label: string;
   mediaLabel: string;
+  mediaLibraryEnabled?: boolean;
   mediaMenuLabels?: Omit<ChatMediaMenuLabels, "trigger">;
   note?: string;
   onChooseGeneratedMedia?: () => void;
@@ -35,6 +46,7 @@ export function ChatComposer({
   generatedMediaHref,
   label,
   mediaLabel,
+  mediaLibraryEnabled = true,
   mediaMenuLabels,
   note,
   onChooseGeneratedMedia,
@@ -49,6 +61,23 @@ export function ChatComposer({
   variant,
 }: ChatComposerProps) {
   const isExpanded = expandedVariants.has(variant);
+  const [attachment, setAttachment] = useState<ChatMediaAttachment | null>(null);
+  const [pickerSource, setPickerSource] = useState<Exclude<ChatFileSource, "all"> | null>(null);
+  const selectNativeFile = (files: File[]) => {
+    const [file] = files;
+    if (file !== undefined) {
+      setAttachment(attachmentFromFile(file));
+    }
+    onFilesSelected?.(files);
+  };
+  const openUploadedPicker = () => {
+    setPickerSource("uploaded");
+    onChooseUploadedMedia?.();
+  };
+  const openGeneratedPicker = () => {
+    setPickerSource("generated");
+    onChooseGeneratedMedia?.();
+  };
 
   return (
     <>
@@ -66,6 +95,23 @@ export function ChatComposer({
             value={value}
           />
         </label>
+        {attachment === null ? null : (
+          <div className={styles.attachment}>
+            {attachment.previewUrl === undefined ? (
+              <span aria-hidden="true" className={styles.fileIcon}>+</span>
+            ) : (
+              <img alt="" src={attachment.previewUrl} />
+            )}
+            <span title={attachment.name}>{attachment.name}</span>
+            <button
+              aria-label={`Убрать ${attachment.name}`}
+              onClick={() => setAttachment(null)}
+              type="button"
+            >
+              ×
+            </button>
+          </div>
+        )}
         <div className={styles.controls}>
           <ChatMediaMenu
             disabled={disabled}
@@ -77,9 +123,9 @@ export function ChatComposer({
               trigger: mediaLabel,
               uploadFile: mediaMenuLabels?.uploadFile ?? "Загрузить файл",
             }}
-            onChooseGenerated={onChooseGeneratedMedia}
-            onChooseUploaded={onChooseUploadedMedia}
-            onFilesSelected={onFilesSelected}
+            onChooseGenerated={mediaLibraryEnabled ? openGeneratedPicker : onChooseGeneratedMedia}
+            onChooseUploaded={mediaLibraryEnabled ? openUploadedPicker : onChooseUploadedMedia}
+            onFilesSelected={selectNativeFile}
             uploadedHref={uploadedMediaHref}
           />
           <button
@@ -96,6 +142,16 @@ export function ChatComposer({
         </div>
       </div>
       {note === undefined ? null : <p className={styles.note}>{note}</p>}
+      {pickerSource === null ? null : (
+        <ChatFilePicker
+          initialSource={pickerSource}
+          onClose={() => setPickerSource(null)}
+          onSelect={(selectedAttachment) => {
+            setAttachment(selectedAttachment);
+            setPickerSource(null);
+          }}
+        />
+      )}
     </>
   );
 }

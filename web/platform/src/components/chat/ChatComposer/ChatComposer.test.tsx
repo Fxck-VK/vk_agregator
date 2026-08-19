@@ -70,4 +70,31 @@ describe("ChatComposer", () => {
 
     expect(screen.getByText("Стоимость зависит от выбранной нейросети")).toBeVisible();
   });
+
+  it("shows a selected local file in the composer and lets the user remove it", () => {
+    const { container } = render(
+      <ChatComposer
+        canSubmit
+        disabled={false}
+        label="Диалог"
+        mediaLabel="Загрузить медиа"
+        onChange={vi.fn()}
+        onSend={vi.fn()}
+        placeholder="Напишите вопрос"
+        submitLabel="Отправить"
+        value="Вопрос"
+        variant="conversation"
+      />,
+    );
+    const file = new File(["image"], "reference.png", { type: "image/png" });
+
+    fireEvent.click(screen.getByRole("button", { name: "Загрузить медиа" }));
+    fireEvent.click(screen.getByRole("menuitem", { name: "Загрузить файл" }));
+    const input = container.querySelector('input[type="file"]');
+    fireEvent.change(input as HTMLInputElement, { target: { files: [file] } });
+
+    expect(screen.getByText("reference.png")).toBeVisible();
+    fireEvent.click(screen.getByRole("button", { name: "Убрать reference.png" }));
+    expect(screen.queryByText("reference.png")).not.toBeInTheDocument();
+  });
 });

@@ -12,12 +12,18 @@ export const imageFilesPageLimit = 12;
 export const maxConcurrentImageFilePreviews = 2;
 
 type ImageFilePreviewQueueOptions = {
+  fetchResult?: (job: ImageJob) => Promise<ImageJobResult>;
   onFailure: (job: ImageJob) => void;
   onStart: (job: ImageJob) => void;
   onSuccess: (job: ImageJob, result: ImageJobResult) => void;
 };
 
-export function createImageFilePreviewQueue({ onFailure, onStart, onSuccess }: ImageFilePreviewQueueOptions) {
+export function createImageFilePreviewQueue({
+  fetchResult = fetchImageFileResult,
+  onFailure,
+  onStart,
+  onSuccess,
+}: ImageFilePreviewQueueOptions) {
   const scheduledJobIDs = new Set<string>();
   const queuedJobs: ImageJob[] = [];
   let activeRequests = 0;
@@ -36,7 +42,7 @@ export function createImageFilePreviewQueue({ onFailure, onStart, onSuccess }: I
 
       activeRequests += 1;
       onStart(job);
-      void fetchImageFileResult(job)
+      void fetchResult(job)
         .then((result) => {
           if (!disposed) {
             onSuccess(job, result);

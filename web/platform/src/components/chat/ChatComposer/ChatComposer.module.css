@@ -52,6 +52,55 @@
   gap: var(--space-3);
 }
 
+.attachment {
+  display: grid;
+  grid-template-columns: 2.5rem minmax(0, 1fr) 2rem;
+  align-items: center;
+  gap: var(--space-2);
+  inline-size: min(100%, 24rem);
+  padding: var(--space-2);
+  border: 0.0625rem solid var(--color-border);
+  border-radius: var(--radius-md);
+  background: var(--color-surface-raised);
+}
+
+.attachment img,
+.fileIcon {
+  display: grid;
+  place-items: center;
+  inline-size: 2.5rem;
+  block-size: 2.5rem;
+  border-radius: var(--radius-sm);
+  object-fit: cover;
+  background: var(--color-surface);
+}
+
+.attachment > span:not(.fileIcon) {
+  overflow: hidden;
+  font-size: 0.875rem;
+  font-weight: 700;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.attachment button {
+  display: inline-grid;
+  place-items: center;
+  inline-size: 2rem;
+  block-size: 2rem;
+  padding: 0;
+  border: 0;
+  border-radius: 50%;
+  color: var(--color-text-muted);
+  background: transparent;
+  font-size: 1.5rem;
+}
+
+.attachment button:hover {
+  color: var(--color-text);
+  background: var(--color-surface);
+}
+
 .submit {
   font: inherit;
 }

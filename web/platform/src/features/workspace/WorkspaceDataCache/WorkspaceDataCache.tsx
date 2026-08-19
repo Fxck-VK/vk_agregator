@@ -29,3 +29,7 @@ export function useWorkspaceDataCache(): WorkspaceDataCache {
 
   return cache;
 }
+
+export function useOptionalWorkspaceDataCache(): WorkspaceDataCache | undefined {
+  return useContext(WorkspaceDataCacheContext);
+}
