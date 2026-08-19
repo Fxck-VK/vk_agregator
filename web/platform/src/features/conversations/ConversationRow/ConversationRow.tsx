@@ -4,6 +4,7 @@ import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import { type JSX, useCallback, useEffect, useLayoutEffect, useRef, useState } from "react";
 
+import { MoreIcon } from "@/components/icons/MoreIcon";
 import {
   type WorkspaceConversationItem,
   useOptionalWorkspaceConversationList,
@@ -62,6 +63,7 @@ export function ConversationRow({
   const [panelSession, setPanelSession] = useState(sidebarSession);
   const actionToggleRef = useRef<HTMLButtonElement>(null);
   const archiveConfirmRef = useRef<HTMLButtonElement>(null);
+  const inlineRenameFormRef = useRef<HTMLFormElement>(null);
   const isPendingRef = useRef(false);
   const panelIsVisibleRef = useRef(false);
   const shouldFocusRestoredPanelRef = useRef(false);
@@ -79,7 +81,10 @@ export function ConversationRow({
     && panelSession === sidebarSession
     && (isPending || activeConversationId === undefined || activeConversationId === conversation.id);
 
-  const isCurrentSidebarSession = (session: number | undefined) => sidebarIsActiveRef.current && sidebarSessionRef.current === session;
+  const isCurrentSidebarSession = useCallback(
+    (session: number | undefined) => sidebarIsActiveRef.current && sidebarSessionRef.current === session,
+    [],
+  );
   const isCurrentPanelOwner = useCallback(
     (session: number | undefined) => ownsCurrentPanel?.(conversation.id, session) ?? (activeConversationId === undefined || activeConversationId === conversation.id),
     [activeConversationId, conversation.id, ownsCurrentPanel],
@@ -141,8 +146,11 @@ export function ConversationRow({
     shouldFocusRestoredPanelRef.current = true;
   };
 
-  useEffect(() => {
-    if (panel === "rename") renameInputRef.current?.focus();
+  useLayoutEffect(() => {
+    if (panel === "rename") {
+      renameInputRef.current?.focus();
+      renameInputRef.current?.select();
+    }
     if (panel === "archive") archiveConfirmRef.current?.focus();
     if (panel === null && restoreActionFocusRef.current) {
       restoreActionFocusRef.current = false;
@@ -228,22 +236,24 @@ export function ConversationRow({
       refreshAfterFocusRef.current = null;
       if (mountedRef.current && refreshGeneration === requestGenerationRef.current) router.refresh();
     }
-  }, [isCurrentPanelOwner, isPending, router]);
+  }, [isCurrentPanelOwner, isCurrentSidebarSession, isPending, router]);
 
-  const renameConversation = async () => {
+  const renameConversation = useCallback(async () => {
     if (isPending) return;
+    const submittedTitle = nextTitle.trim() || title;
     const requestGeneration = requestGenerationRef.current + 1;
     const mutationSidebarSession = panelSession;
     const previousConversation = conversation;
     requestGenerationRef.current = requestGeneration;
     setHasError(false);
     setIsPending(true);
-    conversationList?.updateConversationTitle(conversation.id, nextTitle);
+    setNextTitle(submittedTitle);
+    conversationList?.updateConversationTitle(conversation.id, submittedTitle);
     try {
       const response = await webBrowserMutation(conversationPath, {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ title: nextTitle }),
+        body: JSON.stringify({ title: submittedTitle }),
       });
       if (!mountedRef.current) return;
       if (response.status !== 200) throw new Error("Unable to complete the request.");
@@ -270,7 +280,33 @@ export function ConversationRow({
     } finally {
       if (mountedRef.current && requestGeneration === requestGenerationRef.current) setIsPending(false);
     }
-  };
+  }, [
+    conversation,
+    conversationList,
+    conversationPath,
+    isCurrentPanelOwner,
+    isCurrentSidebarSession,
+    isPending,
+    nextTitle,
+    onPanelOpened,
+    panelSession,
+    router,
+    title,
+  ]);
+
+  useEffect(() => {
+    if (!panelIsVisible || panel !== "rename" || isPending) return;
+
+    const saveOnOutsidePointerDown = (event: PointerEvent) => {
+      const target = event.target;
+      if (!(target instanceof Node) || inlineRenameFormRef.current?.contains(target)) return;
+      if (target instanceof Element && target.closest('[data-conversation-rename-control="true"]')) return;
+      void renameConversation();
+    };
+
+    document.addEventListener("pointerdown", saveOnOutsidePointerDown, true);
+    return () => document.removeEventListener("pointerdown", saveOnOutsidePointerDown, true);
+  }, [isPending, panel, panelIsVisible, renameConversation]);
 
   const archiveConversation = async () => {
     if (isPending) return;
@@ -325,9 +361,40 @@ export function ConversationRow({
 
   if (isOptimisticallyArchived) return null;
 
+  const isInlineRenaming = panelIsVisible && panel === "rename" && !isPending;
+
   return (
     <article className={styles.row}>
-      {conversation.isPending ? (
+      {isInlineRenaming ? (
+        <form
+          className={styles.inlineRenameForm}
+          onSubmit={(event) => { event.preventDefault(); void renameConversation(); }}
+          ref={inlineRenameFormRef}
+        >
+          <label className={styles.inlineRenameLabel}>
+            <span className={styles.visuallyHidden}>{ru.conversations.renameInputLabel}</span>
+            <input
+              aria-label={ru.conversations.renameInputLabel}
+              className={styles.inlineRenameInput}
+              maxLength={120}
+              onChange={(event) => setNextTitle(event.target.value)}
+              onKeyDown={(event) => {
+                if (event.key === "Enter") {
+                  event.preventDefault();
+                  void renameConversation();
+                }
+                if (event.key === "Escape") {
+                  event.preventDefault();
+                  event.stopPropagation();
+                  closePanel(true);
+                }
+              }}
+              ref={renameInputRef}
+              value={nextTitle}
+            />
+          </label>
+        </form>
+      ) : conversation.isPending ? (
         <span aria-busy="true" className={styles.link}>
           {title}
         </span>
@@ -348,71 +415,54 @@ export function ConversationRow({
         }}
       >
         <button
+          aria-hidden={isInlineRenaming || undefined}
           aria-expanded={panelIsVisible}
           aria-label={`${ru.conversations.actionsLabel}: ${title}`}
-          className={styles.actionToggle}
-          disabled={isPending}
+          className={`${styles.actionToggle} ${isInlineRenaming ? styles.actionToggleRenaming : ""}`}
+          disabled={isPending || isInlineRenaming}
           onClick={() => {
             if (panelIsVisible && panel === "actions") closePanel(true);
             else if (hasHiddenFailure) restoreFailedPanel();
             else openPanel("actions");
           }}
           ref={actionToggleRef}
+          tabIndex={isInlineRenaming ? -1 : undefined}
           type="button"
         >
-          <span aria-hidden="true">...</span>
+          <MoreIcon />
         </button>
-        {panelIsVisible && (panel === "actions" || panel === "rename") ? (
+        {panelIsVisible && panel === "actions" ? (
           <FloatingConversationPanel
             anchorRef={actionToggleRef}
-            ariaLabel={panel === "actions" ? `${ru.conversations.actionsLabel}: ${title}` : undefined}
+            ariaLabel={`${ru.conversations.actionsLabel}: ${title}`}
             className={styles.floatingPanel}
             dismissible={!isPending}
             onDismiss={dismissPanel}
             placementKey={panel}
-            role={panel === "actions" ? "menu" : undefined}
+            role="menu"
           >
-            {panel === "actions" ? (
-              <div className={styles.menu}>
-                <button disabled={isPending} onClick={() => openPanel("rename")} type="button">
-                  <svg aria-hidden="true" viewBox="0 0 24 24"><path d="m4 20 4.3-1 10-10a2.1 2.1 0 0 0-3-3l-10 10L4 20Zm10-12 3 3" /></svg>
-                  {ru.conversations.renameLabel}
-                </button>
-                <button className={styles.deleteMenuItem} disabled={isPending} onClick={() => openPanel("archive")} type="button">
-                  <svg aria-hidden="true" viewBox="0 0 24 24"><path d="M4 7h16m-10 4v6m4-6v6M9 4h6l1 3H8l1-3Zm-3 3 1 13h10l1-13" /></svg>
-                  {ru.conversations.archiveLabel}
-                </button>
-              </div>
-            ) : null}
-            {panel === "rename" ? (
-              <form className={styles.renameForm} onSubmit={(event) => { event.preventDefault(); void renameConversation(); }}>
-                <label>
-                  <span className={styles.visuallyHidden}>{ru.conversations.renameInputLabel}</span>
-                  <input
-                    aria-label={ru.conversations.renameInputLabel}
-                    disabled={isPending}
-                    onChange={(event) => setNextTitle(event.target.value)}
-                    onKeyDown={(event) => {
-                      if (event.key === "Enter") {
-                        event.preventDefault();
-                        void renameConversation();
-                      }
-                    }}
-                    ref={renameInputRef}
-                    value={nextTitle}
-                  />
-                </label>
-                <div className={styles.formActions}>
-                  <button disabled={isPending} type="submit">{isPending ? ru.conversations.renamePending : hasError ? ru.conversations.renameRetryLabel : ru.conversations.renameSubmitLabel}</button>
-                  <button disabled={isPending} onClick={() => closePanel(true)} type="button">{ru.conversations.cancelLabel}</button>
-                </div>
-              </form>
-            ) : null}
-            {hasError ? <p className={styles.error} role="alert">{ru.conversations.renameFailure}</p> : null}
+            <div className={styles.menu}>
+              <button disabled={isPending} onClick={() => openPanel("rename")} type="button">
+                <svg aria-hidden="true" viewBox="0 0 24 24"><path d="m4 20 4.3-1 10-10a2.1 2.1 0 0 0-3-3l-10 10L4 20Zm10-12 3 3" /></svg>
+                {ru.conversations.renameLabel}
+              </button>
+              <button className={styles.deleteMenuItem} disabled={isPending} onClick={() => openPanel("archive")} type="button">
+                <svg aria-hidden="true" viewBox="0 0 24 24"><path d="M4 7h16m-10 4v6m4-6v6M9 4h6l1 3H8l1-3Zm-3 3 1 13h10l1-13" /></svg>
+                {ru.conversations.archiveLabel}
+              </button>
+            </div>
           </FloatingConversationPanel>
         ) : null}
       </div>
       )}
+      {panelIsVisible && panel === "rename" && hasError ? (
+        <div className={styles.inlineRenameFeedback} data-conversation-rename-control="true">
+          <p className={styles.error} role="alert">{ru.conversations.renameFailure}</p>
+          <button className={styles.inlineRetryButton} disabled={isPending} onClick={() => void renameConversation()} type="button">
+            {ru.conversations.renameRetryLabel}
+          </button>
+        </div>
+      ) : null}
       {panelIsVisible && panel === "archive" ? (
         <ConversationDeleteDialog
           confirmRef={archiveConfirmRef}

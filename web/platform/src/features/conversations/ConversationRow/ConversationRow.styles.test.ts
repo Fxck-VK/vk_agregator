@@ -13,13 +13,22 @@ describe("ConversationRow styles", () => {
     expect(stylesheet).toMatch(/\.floatingPanel\s*\{[^}]*z-index:\s*140;/s);
     expect(stylesheet).toMatch(/\.dialogBackdrop\s*\{[^}]*position:\s*fixed;/s);
     expect(stylesheet).toMatch(/\.dialogBackdrop\s*\{[^}]*z-index:\s*160;/s);
-    expect(stylesheet).toMatch(/\.menu,\s*\.renameForm\s*\{\s*display:\s*grid;/s);
+    expect(stylesheet).toMatch(/\.menu\s*\{\s*display:\s*grid;/s);
   });
 
-  it("gives the rename control an explicit readable dark surface", () => {
-    expect(stylesheet).toMatch(/\.renameForm input\s*\{[^}]*background:\s*var\(--color-surface-raised\);/s);
-    expect(stylesheet).toMatch(/\.renameForm input\s*\{[^}]*color:\s*var\(--color-text\);/s);
-    expect(stylesheet).toMatch(/\.renameForm input\s*\{[^}]*caret-color:\s*var\(--color-text\);/s);
-    expect(stylesheet).toMatch(/\.formActions\s*\{[^}]*align-items:\s*stretch;/s);
+  it("keeps inline rename aligned with the title without moving the action column", () => {
+    expect(stylesheet).toMatch(/\.inlineRenameInput\s*\{[^}]*padding:\s*var\(--space-2\) var\(--space-3\);/s);
+    expect(stylesheet).toMatch(/\.inlineRenameInput\s*\{[^}]*background:\s*transparent;/s);
+    expect(stylesheet).toMatch(/\.inlineRenameInput\s*\{[^}]*color:\s*var\(--color-text\);/s);
+    expect(stylesheet).toMatch(/\.inlineRenameInput\s*\{[^}]*font:\s*inherit;/s);
+    expect(stylesheet).toMatch(/\.actionToggleRenaming\s*\{[^}]*visibility:\s*hidden;/s);
+  });
+
+  it("centers the vector ellipsis inside the conversation actions trigger", () => {
+    expect(stylesheet).toMatch(/\.actionToggle\s*\{[^}]*display:\s*inline-flex;/s);
+    expect(stylesheet).toMatch(/\.actionToggle\s*\{[^}]*align-items:\s*center;/s);
+    expect(stylesheet).toMatch(/\.actionToggle\s*\{[^}]*justify-content:\s*center;/s);
+    expect(stylesheet).toMatch(/\.actionToggle svg\s*\{[^}]*inline-size:\s*1\.25rem;/s);
+    expect(stylesheet).toMatch(/\.actionToggle svg\s*\{[^}]*block-size:\s*1\.25rem;/s);
   });
 });

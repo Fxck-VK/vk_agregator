@@ -100,6 +100,17 @@ function openNavigation(trigger: HTMLElement) {
   return screen.getByRole("link", { name: ru.brand.name });
 }
 
+function submitVisibleRename() {
+  const input = screen.getByRole("textbox", { name: ru.conversations.renameInputLabel });
+  fireEvent.keyDown(input, { key: "Enter" });
+  return input;
+}
+
+async function expectPendingConversation(title: string) {
+  const actionsLabel = `${ru.conversations.actionsLabel}: ${title}`;
+  await vi.waitFor(() => expect(screen.getByRole("button", { name: actionsLabel })).toBeDisabled());
+}
+
 describe("Sidebar", () => {
   afterEach(() => {
     cleanup();
@@ -445,8 +456,8 @@ describe("Sidebar", () => {
 
     fireEvent.click(screen.getByRole("button", { name: `${ru.conversations.actionsLabel}: Recent chat 1` }));
     fireEvent.click(screen.getByRole("button", { name: ru.conversations.renameLabel }));
-    fireEvent.click(screen.getByRole("button", { name: ru.conversations.renameSubmitLabel }));
-    await vi.waitFor(() => expect(screen.getByRole("button", { name: ru.conversations.renamePending })).toBeDisabled());
+    submitVisibleRename();
+    await expectPendingConversation("Recent chat 1");
 
     fireEvent.click(trigger);
     fireEvent.click(trigger);
@@ -477,9 +488,8 @@ describe("Sidebar", () => {
     openNavigation(trigger);
     fireEvent.click(screen.getByRole("button", { name: `${ru.conversations.actionsLabel}: Recent chat 1` }));
     fireEvent.click(screen.getByRole("button", { name: ru.conversations.renameLabel }));
-    const titleInput = screen.getByRole("textbox", { name: ru.conversations.renameInputLabel });
-    fireEvent.click(screen.getByRole("button", { name: ru.conversations.renameSubmitLabel }));
-    await vi.waitFor(() => expect(screen.getByRole("button", { name: ru.conversations.renamePending })).toBeDisabled());
+    const titleInput = submitVisibleRename();
+    await expectPendingConversation("Recent chat 1");
 
     fireEvent.keyDown(titleInput, { key: "Escape" });
     expect(panel).toHaveAttribute("data-open", "true");
@@ -497,8 +507,8 @@ describe("Sidebar", () => {
     const workspace = openNavigation(trigger);
     fireEvent.click(screen.getByRole("button", { name: `${ru.conversations.actionsLabel}: Recent chat 1` }));
     fireEvent.click(screen.getByRole("button", { name: ru.conversations.renameLabel }));
-    fireEvent.click(screen.getByRole("button", { name: ru.conversations.renameSubmitLabel }));
-    await vi.waitFor(() => expect(screen.getByRole("button", { name: ru.conversations.renamePending })).toBeDisabled());
+    submitVisibleRename();
+    await expectPendingConversation("Recent chat 1");
 
     workspace.focus();
     fireEvent.keyDown(workspace, { key: "Escape" });
@@ -522,14 +532,16 @@ describe("Sidebar", () => {
     const [firstActions, secondActions] = screen.getAllByRole("button", { name: new RegExp(ru.conversations.actionsLabel) });
     fireEvent.click(firstActions);
     fireEvent.click(screen.getByRole("button", { name: ru.conversations.renameLabel }));
-    fireEvent.click(screen.getByRole("button", { name: ru.conversations.renameSubmitLabel }));
-    await vi.waitFor(() => expect(screen.getByRole("button", { name: ru.conversations.renamePending })).toBeDisabled());
+    submitVisibleRename();
+    await expectPendingConversation("Recent chat 1");
     fireEvent.click(secondActions);
     fireEvent.click(screen.getByRole("button", { name: ru.conversations.renameLabel }));
-    fireEvent.click(screen.getByRole("button", { name: ru.conversations.renameSubmitLabel }));
+    submitVisibleRename();
+    await expectPendingConversation("Recent chat 2");
 
     settleB(Response.json(recentConversations[1], { status: 200 }));
-    await vi.waitFor(() => expect(screen.getAllByRole("button", { name: ru.conversations.renamePending })).toHaveLength(1));
+    await vi.waitFor(() => expect(firstActions).toBeDisabled());
+    await vi.waitFor(() => expect(secondActions).toBeEnabled());
     workspace.focus();
     fireEvent.keyDown(workspace, { key: "Escape" });
     expect(panel).toHaveAttribute("data-open", "true");
@@ -551,8 +563,8 @@ describe("Sidebar", () => {
     const secondActions = screen.getByRole("button", { name: `${ru.conversations.actionsLabel}: Recent chat 2` });
     fireEvent.click(firstActions);
     fireEvent.click(screen.getByRole("button", { name: ru.conversations.renameLabel }));
-    fireEvent.click(screen.getByRole("button", { name: ru.conversations.renameSubmitLabel }));
-    await vi.waitFor(() => expect(screen.getByRole("button", { name: ru.conversations.renamePending })).toBeDisabled());
+    submitVisibleRename();
+    await expectPendingConversation("Recent chat 1");
     fireEvent.click(secondActions);
     secondActions.focus();
 
@@ -577,14 +589,14 @@ describe("Sidebar", () => {
     const secondActions = screen.getByRole("button", { name: `${ru.conversations.actionsLabel}: Recent chat 2` });
     fireEvent.click(firstActions);
     fireEvent.click(screen.getByRole("button", { name: ru.conversations.renameLabel }));
-    fireEvent.click(screen.getByRole("button", { name: ru.conversations.renameSubmitLabel }));
-    await vi.waitFor(() => expect(screen.getByRole("button", { name: ru.conversations.renamePending })).toBeDisabled());
+    submitVisibleRename();
+    await expectPendingConversation("Recent chat 1");
     fireEvent.click(secondActions);
     secondActions.focus();
 
     settleRequest(new Response(null, { status: 500 }));
 
-    await vi.waitFor(() => expect(screen.queryByRole("button", { name: ru.conversations.renamePending })).not.toBeInTheDocument());
+    await vi.waitFor(() => expect(firstActions).toBeEnabled());
     expect(secondActions).toHaveAttribute("aria-expanded", "true");
     expect(document.activeElement).toBe(secondActions);
   });
@@ -730,8 +742,8 @@ describe("Sidebar", () => {
     openNavigation(trigger);
     fireEvent.click(screen.getByRole("button", { name: `${ru.conversations.actionsLabel}: Recent chat 1` }));
     fireEvent.click(screen.getByRole("button", { name: ru.conversations.renameLabel }));
-    fireEvent.click(screen.getByRole("button", { name: ru.conversations.renameSubmitLabel }));
-    await vi.waitFor(() => expect(screen.getByRole("button", { name: ru.conversations.renamePending })).toBeDisabled());
+    submitVisibleRename();
+    await expectPendingConversation("Recent chat 1");
 
     fireEvent.click(trigger);
     fireEvent.click(trigger);

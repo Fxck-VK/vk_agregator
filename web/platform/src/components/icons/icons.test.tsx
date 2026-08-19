@@ -28,18 +28,18 @@ describe("shared icons", () => {
   });
 
   it.each([
-    ["edit", EditIcon, "M 414 622"],
-    ["file", FileIcon, "M 419 340"],
-    ["grid", GridIcon, "M 661 676"],
-    ["image", ImageIcon, "M 932 392"],
-  ] as const)("renders the %s navigation icon using the approved theme-aware artwork", (name, Icon, pathPrefix) => {
+    ["edit", EditIcon, "M 414 622", "300 277 675 675"],
+    ["file", FileIcon, "M 419 340", "300 300 654 654"],
+    ["grid", GridIcon, "M 661 676", "336 336 581 581"],
+    ["image", ImageIcon, "M 932 392", "276 272 701 701"],
+  ] as const)("renders the %s navigation icon using tightly fitted approved artwork", (name, Icon, pathPrefix, viewBox) => {
     render(<Icon data-testid={`${name}-icon`} />);
 
     const icon = screen.getByTestId(`${name}-icon`);
     expect(icon).toHaveAttribute("aria-hidden", "true");
     expect(icon).toHaveAttribute("data-icon", name);
     expect(icon).toHaveAttribute("fill", "none");
-    expect(icon).toHaveAttribute("viewBox", "0 0 1254 1254");
+    expect(icon).toHaveAttribute("viewBox", viewBox);
 
     const paths = icon.querySelectorAll("path");
     expect(paths).toHaveLength(1);

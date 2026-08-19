@@ -90,6 +90,14 @@ describe("ConversationRow", () => {
     expect(screen.getByRole("link", { name: conversation.title })).toHaveAttribute("data-prefetch", "false");
   });
 
+  it("uses a centered vector ellipsis instead of baseline text for the actions trigger", () => {
+    renderRow();
+
+    const actions = screen.getByRole("button", { name: actionsLabel() });
+    expect(actions.querySelector('svg[data-icon="more"]')).toBeInTheDocument();
+    expect(actions).not.toHaveTextContent("...");
+  });
+
   it("renders the labelled actions menu in an overlay and closes it on outside click or Escape", () => {
     const rendered = renderRow();
 
@@ -131,6 +139,37 @@ describe("ConversationRow", () => {
     expect(screen.queryByRole("textbox", { name: ru.conversations.renameInputLabel })).not.toBeInTheDocument();
   });
 
+  it("renames inside the conversation row and selects the current title", () => {
+    const rendered = renderRow();
+
+    fireEvent.click(screen.getByRole("button", { name: actionsLabel() }));
+    fireEvent.click(screen.getByRole("button", { name: ru.conversations.renameLabel }));
+
+    const titleInput = screen.getByRole("textbox", { name: ru.conversations.renameInputLabel }) as HTMLInputElement;
+    expect(rendered.container).toContainElement(titleInput);
+    expect(titleInput).toHaveFocus();
+    expect(titleInput.selectionStart).toBe(0);
+    expect(titleInput.selectionEnd).toBe(conversation.title.length);
+  });
+
+  it("saves an inline rename when the user clicks outside the row", async () => {
+    vi.mocked(webBrowserMutation).mockResolvedValue(Response.json({ ...conversation, title: "Название по клику" }, { status: 200 }));
+    renderRow();
+
+    fireEvent.click(screen.getByRole("button", { name: actionsLabel() }));
+    fireEvent.click(screen.getByRole("button", { name: ru.conversations.renameLabel }));
+    fireEvent.change(screen.getByRole("textbox", { name: ru.conversations.renameInputLabel }), {
+      target: { value: "Название по клику" },
+    });
+    fireEvent.pointerDown(document.body);
+
+    await vi.waitFor(() => expect(webBrowserMutation).toHaveBeenCalledWith("/web/v1/conversations/d7c979f5-24e5-4f88-924b-a592d6e5a906", {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ title: "Название по клику" }),
+    }));
+  });
+
   it("shows a renamed chat before the PATCH request settles", async () => {
     let settleRequest: (response: Response) => void = () => {};
     vi.mocked(webBrowserMutation).mockReturnValue(new Promise<Response>((resolve) => { settleRequest = resolve; }));
@@ -162,9 +201,11 @@ describe("ConversationRow", () => {
     expect(screen.getByRole("link", { name: "Не потерять это название" })).toBeVisible();
     settleRequest(new Response(null, { status: 500 }));
 
-    expect(await screen.findByRole("link", { name: conversation.title })).toBeVisible();
-    expect(titleInput).toHaveValue("Не потерять это название");
+    const retryInput = await screen.findByRole("textbox", { name: ru.conversations.renameInputLabel });
+    expect(retryInput).toHaveValue("Не потерять это название");
     expect(screen.getByRole("button", { name: "Повторить" })).toBeEnabled();
+    fireEvent.keyDown(retryInput, { key: "Escape" });
+    expect(screen.getByRole("link", { name: conversation.title })).toBeVisible();
   });
 
   it("restores action-toggle focus before refreshing after a successful rename", async () => {
@@ -206,12 +247,10 @@ describe("ConversationRow", () => {
     fireEvent.click(screen.getByRole("button", { name: actionsLabel() }));
     fireEvent.click(screen.getByRole("button", { name: ru.conversations.renameLabel }));
     const titleInput = screen.getByRole("textbox", { name: ru.conversations.renameInputLabel });
-    const submit = screen.getByRole("button", { name: ru.conversations.renameSubmitLabel });
-    submit.focus();
-    fireEvent.click(submit);
+    fireEvent.keyDown(titleInput, { key: "Enter" });
 
     await screen.findByRole("alert");
-    await vi.waitFor(() => expect(titleInput).toHaveFocus());
+    await vi.waitFor(() => expect(screen.getByRole("textbox", { name: ru.conversations.renameInputLabel })).toHaveFocus());
   });
 
   it.each([
@@ -490,10 +529,10 @@ describe("ConversationRow", () => {
     const actionButtons = screen.getAllByRole("button", { name: new RegExp(ru.conversations.actionsLabel) });
     fireEvent.click(actionButtons[0]);
     fireEvent.click(screen.getByRole("button", { name: ru.conversations.renameLabel }));
-    fireEvent.click(screen.getByRole("button", { name: ru.conversations.renameSubmitLabel }));
+    fireEvent.keyDown(screen.getByRole("textbox", { name: ru.conversations.renameInputLabel }), { key: "Enter" });
 
     await vi.waitFor(() => expect(actionButtons[0]).toBeDisabled());
-    expect(screen.getByRole("button", { name: ru.conversations.renamePending })).toBeDisabled();
+    expect(screen.queryByRole("textbox", { name: ru.conversations.renameInputLabel })).not.toBeInTheDocument();
     expect(actionButtons[1]).toBeEnabled();
 
     settleRequest(new Response(null, { status: 500 }));
@@ -523,7 +562,7 @@ describe("ConversationRow", () => {
     fireEvent.click(screen.getByRole("button", { name: ru.conversations.renameLabel }));
     transitions.length = 0;
 
-    fireEvent.click(screen.getByRole("button", { name: ru.conversations.renameSubmitLabel }));
+    fireEvent.keyDown(screen.getByRole("textbox", { name: ru.conversations.renameInputLabel }), { key: "Enter" });
 
     expect(onPendingPanelChange).toHaveBeenCalledWith(conversation.id, true, 1);
     expect(onVisiblePanelChange).toHaveBeenCalledWith(conversation.id, null, 1);

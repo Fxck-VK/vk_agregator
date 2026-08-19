@@ -29,7 +29,7 @@
 .link:focus-visible,
 .actions button:focus-visible,
 .floatingPanel button:focus-visible,
-.renameForm input:focus-visible,
+.inlineRenameInput:focus-visible,
 .deleteDialog button:focus-visible {
   outline: 0.125rem solid var(--color-focus);
   outline-offset: 0.125rem;
@@ -38,8 +38,7 @@
 .actions { display: contents; }
 
 .actionToggle,
-.menu button,
-.formActions button {
+.menu button {
   border: 0;
   border-radius: var(--radius-sm);
   background: transparent;
@@ -47,11 +46,25 @@
   cursor: pointer;
 }
 
-.actionToggle { min-inline-size: 2.25rem; min-block-size: 2.25rem; padding: var(--space-1); }
+.actionToggle {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-inline-size: 2.25rem;
+  min-block-size: 2.25rem;
+  padding: var(--space-1);
+}
+
+.actionToggle svg {
+  inline-size: 1.25rem;
+  block-size: 1.25rem;
+}
+
+.actionToggleRenaming { visibility: hidden; }
 
 .actionToggle:hover,
 .menu button:hover,
-.formActions button:hover { background: var(--color-surface-raised); }
+.inlineRetryButton:hover { background: var(--color-surface-raised); }
 
 .floatingPanel {
   position: fixed;
@@ -66,11 +79,9 @@
   box-shadow: var(--shadow-overlay);
 }
 
-.menu,
-.renameForm { display: grid; gap: var(--space-1); }
+.menu { display: grid; gap: var(--space-1); }
 
-.menu button,
-.formActions button {
+.menu button {
   min-block-size: 2.75rem;
   padding-inline: var(--space-2);
   text-align: start;
@@ -96,21 +107,46 @@
 
 .menu .deleteMenuItem { color: var(--color-danger); }
 
-.renameForm input {
-  box-sizing: border-box;
-  inline-size: 100%;
-  min-block-size: 2.25rem;
-  border: 0.0625rem solid var(--color-text-muted);
-  border-radius: var(--radius-sm);
-  padding-inline: var(--space-2);
-  background: var(--color-surface-raised);
-  color: var(--color-text);
-  caret-color: var(--color-text);
-  appearance: none;
-  transition: border-color 150ms ease, background 150ms ease;
+.inlineRenameForm,
+.inlineRenameLabel {
+  display: block;
+  min-inline-size: 0;
 }
 
-.formActions { display: flex; flex-wrap: wrap; align-items: stretch; gap: var(--space-1); }
+.inlineRenameInput {
+  box-sizing: border-box;
+  inline-size: 100%;
+  min-block-size: 2.5rem;
+  border: 0;
+  border-radius: var(--radius-sm);
+  padding: var(--space-2) var(--space-3);
+  background: transparent;
+  color: var(--color-text);
+  caret-color: var(--color-text);
+  font: inherit;
+  appearance: none;
+}
+
+.inlineRenameInput:focus-visible { outline-offset: -0.125rem; }
+
+.inlineRenameFeedback {
+  grid-column: 1 / -1;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-2);
+  padding-inline: var(--space-3);
+}
+
+.inlineRetryButton {
+  flex: 0 0 auto;
+  border: 0;
+  border-radius: var(--radius-sm);
+  padding: var(--space-1) var(--space-2);
+  background: transparent;
+  color: var(--color-text);
+  cursor: pointer;
+}
 .error { margin: 0; font-size: 0.8125rem; }
 .error { color: var(--color-text-muted); }
 
