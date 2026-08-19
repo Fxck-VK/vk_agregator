@@ -63,6 +63,7 @@ describe("SidebarConversations", () => {
   it("renders safe conversation titles as local chat links and uses the unnamed fallback", () => {
     render(<SidebarConversations conversations={conversations} />);
 
+    expect(ru.conversations.recentHeading).toBe("Чаты");
     expect(screen.getByRole("heading", { name: ru.conversations.recentHeading })).toBeInTheDocument();
     expect(screen.getByRole("link", { name: "Подготовить макет" })).toHaveAttribute(
       "href",

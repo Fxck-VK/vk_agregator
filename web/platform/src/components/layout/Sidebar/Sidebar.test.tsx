@@ -801,7 +801,7 @@ describe("Sidebar", () => {
     expect(trigger).not.toHaveFocus();
   });
 
-  it("keeps twenty recent chat links reachable above a focusable account control", () => {
+  it("keeps only the chat list scrollable between fixed navigation and account controls", () => {
     mockWideViewport();
     render(
       <Sidebar
@@ -813,14 +813,17 @@ describe("Sidebar", () => {
     const recentLinks = screen.getAllByRole("link", { name: /Recent chat/ });
     const finalRecentLink = screen.getByRole("link", { name: "Recent chat 20" });
     const logoutControl = screen.getByRole("button", { name: ru.account.logoutLabel });
-    const scrollArea = screen.getByRole("heading", { name: ru.conversations.recentHeading }).closest("section")?.parentElement?.parentElement;
+    const conversationSection = screen.getByRole("heading", { name: ru.conversations.recentHeading }).closest("section");
+    const conversationsSlot = conversationSection?.parentElement;
+    const contentArea = conversationsSlot?.parentElement;
 
     expect(recentLinks).toHaveLength(20);
     expect(finalRecentLink).toHaveAttribute("href", "/app/chat/d7c979f5-24e5-4f88-924b-a592d6e5a019");
     expect(logoutControl).toBeInTheDocument();
     logoutControl.focus();
     expect(logoutControl).toHaveFocus();
-    expect(scrollArea).toHaveClass(sidebarStyles.scrollArea);
+    expect(contentArea).toHaveClass(sidebarStyles.scrollArea);
+    expect(conversationsSlot).toHaveClass(sidebarStyles.conversationsSlot);
   });
 
   it("calls the desktop sidebar toggle from its dedicated control", () => {
