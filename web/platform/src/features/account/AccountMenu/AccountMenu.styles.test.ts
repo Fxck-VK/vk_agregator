@@ -19,6 +19,15 @@ describe("AccountMenu styles", () => {
     expect(menuRule).toContain("overscroll-behavior: contain");
   });
 
+  it("uses the same translucent overlay surface as conversation action panels", () => {
+    expect(menuRule).toContain("background: color-mix(in srgb, var(--color-surface-raised) 98%, transparent)");
+    expect(menuRule).toContain("box-shadow: var(--shadow-overlay)");
+    expect(menuRule).toContain("backdrop-filter: blur(1rem)");
+    expect(stylesheet).toMatch(
+      /\.themeSection\s*\{[^}]*border-block:\s*0\.0625rem solid color-mix\(in srgb, var\(--color-border\) 60%, transparent\);/s,
+    );
+  });
+
   it("keeps the rectangular account trigger transparent until interaction", () => {
     expect(triggerRule).toContain("grid-template-columns: 2.5rem minmax(0, 1fr) 1.5rem");
     expect(triggerRule).toContain("background: transparent");

@@ -4,6 +4,14 @@
   grid-template-columns: minmax(0, 1fr) auto;
   align-items: center;
   gap: var(--space-1);
+  border-radius: var(--radius-sm);
+}
+
+.row:hover,
+.row:focus-within,
+.row[data-active="true"],
+.row[data-panel-open="true"] {
+  background: var(--color-surface-raised);
 }
 
 .link {
@@ -20,7 +28,6 @@
 
 .link:hover,
 .link[aria-current="page"] {
-  background: var(--color-surface-raised);
   color: var(--color-text);
 }
 
@@ -62,7 +69,6 @@
 
 .actionToggleRenaming { visibility: hidden; }
 
-.actionToggle:hover,
 .menu button:hover,
 .inlineRetryButton:hover { background: var(--color-surface-raised); }
 
@@ -242,7 +248,9 @@
 
 @media (hover: hover) and (pointer: fine) {
   .actionToggle { opacity: 0; }
-  .row:hover .actionToggle, .actions:focus-within .actionToggle { opacity: 1; }
+  .row:hover .actionToggle,
+  .row[data-panel-open="true"] .actionToggle,
+  .actions:focus-within .actionToggle { opacity: 1; }
 }
 
 @media (width < 30rem) {

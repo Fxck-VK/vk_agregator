@@ -75,8 +75,9 @@
   overscroll-behavior: contain;
   border: 0.0625rem solid var(--color-border);
   border-radius: var(--radius-lg);
-  background: var(--color-background);
-  box-shadow: 0 1rem 2rem rgb(0 0 0 / 24%);
+  background: color-mix(in srgb, var(--color-surface-raised) 98%, transparent);
+  box-shadow: var(--shadow-overlay);
+  backdrop-filter: blur(1rem);
 }
 
 .menuList,
@@ -124,7 +125,7 @@
 
 .themeSection {
   padding: var(--space-3) var(--space-2);
-  border-block: 0.0625rem solid var(--color-border);
+  border-block: 0.0625rem solid color-mix(in srgb, var(--color-border) 60%, transparent);
 }
 
 .themeSwitcher {

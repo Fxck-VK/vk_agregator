@@ -31,4 +31,17 @@ describe("ConversationRow styles", () => {
     expect(stylesheet).toMatch(/\.actionToggle svg\s*\{[^}]*inline-size:\s*1\.25rem;/s);
     expect(stylesheet).toMatch(/\.actionToggle svg\s*\{[^}]*block-size:\s*1\.25rem;/s);
   });
+
+  it("uses one shared highlight for the title and ellipsis", () => {
+    expect(stylesheet).toMatch(/\.row\s*\{[^}]*border-radius:\s*var\(--radius-sm\);/s);
+    expect(stylesheet).toMatch(/\.row:hover,[\s\S]*\.row\[data-active="true"\],[\s\S]*\.row\[data-panel-open="true"\]\s*\{[^}]*background:\s*var\(--color-surface-raised\);/s);
+    expect(stylesheet).not.toMatch(/\.link:hover,[\s\S]*\.link\[aria-current="page"\]\s*\{[^}]*background:/s);
+    expect(stylesheet).not.toMatch(/\.actionToggle:hover\s*\{[^}]*background:/s);
+  });
+
+  it("reveals the ellipsis on hover or while its menu is open, but not only because the chat is active", () => {
+    expect(stylesheet).toMatch(/@media \(hover: hover\) and \(pointer: fine\)[\s\S]*\.actionToggle\s*\{\s*opacity:\s*0;/s);
+    expect(stylesheet).toMatch(/\.row:hover \.actionToggle,[\s\S]*\.row\[data-panel-open="true"\] \.actionToggle,[\s\S]*\.actions:focus-within \.actionToggle\s*\{\s*opacity:\s*1;/s);
+    expect(stylesheet).not.toMatch(/\.row\[data-active="true"\] \.actionToggle\s*\{[^}]*opacity:\s*1;/s);
+  });
 });

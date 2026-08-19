@@ -364,7 +364,11 @@ export function ConversationRow({
   const isInlineRenaming = panelIsVisible && panel === "rename" && !isPending;
 
   return (
-    <article className={styles.row}>
+    <article
+      className={styles.row}
+      data-active={isActive || undefined}
+      data-panel-open={panelIsVisible || undefined}
+    >
       {isInlineRenaming ? (
         <form
           className={styles.inlineRenameForm}

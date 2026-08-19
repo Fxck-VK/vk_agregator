@@ -82,6 +82,18 @@ describe("ConversationRow", () => {
     renderRow(true);
 
     expect(screen.getByRole("link", { name: conversation.title })).toHaveAttribute("aria-current", "page");
+    expect(screen.getByRole("article")).toHaveAttribute("data-active", "true");
+  });
+
+  it("keeps the whole conversation row highlighted while its actions menu is open", () => {
+    renderRow();
+
+    const row = screen.getByRole("article");
+    expect(row).not.toHaveAttribute("data-panel-open");
+
+    fireEvent.click(screen.getByRole("button", { name: actionsLabel() }));
+
+    expect(row).toHaveAttribute("data-panel-open", "true");
   });
 
   it("does not prefetch the conversation-specific route", () => {
