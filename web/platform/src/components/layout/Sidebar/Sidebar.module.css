@@ -34,7 +34,6 @@
   block-size: 100dvh;
   inline-size: var(--sidebar-width);
   padding: var(--space-4);
-  border-inline-end: 0.0625rem solid var(--color-border);
   background: var(--color-surface);
   overflow: hidden;
 }

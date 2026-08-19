@@ -9,7 +9,6 @@
   gap: var(--space-4);
   min-block-size: 4.5rem;
   padding: var(--space-3) clamp(var(--space-4), 4vw, var(--space-6));
-  border-block-end: 0.0625rem solid var(--color-border);
   background: var(--color-background);
 }
 
