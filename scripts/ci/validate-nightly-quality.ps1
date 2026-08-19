@@ -113,14 +113,18 @@ function Assert-DependabotUpdateInventory {
 
     $expected = @(
         foreach ($targetBranch in @('', 'dev-deploy')) {
-            foreach ($entry in @(
+            $entries = @(
                 @('github-actions', '/'),
                 @('docker', '/'),
                 @('gomod', '/'),
                 @('npm', '/web/miniapp'),
-                @('npm', '/web/admin'),
-                @('npm', '/web/platform')
-            )) {
+                @('npm', '/web/admin')
+            )
+            if ($targetBranch -eq 'dev-deploy') {
+                $entries += ,@('npm', '/web/platform')
+            }
+
+            foreach ($entry in $entries) {
                 [PSCustomObject]@{
                     Ecosystem = $entry[0]
                     Directory = $entry[1]

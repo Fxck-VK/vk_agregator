@@ -171,6 +171,8 @@ id = "generic-api-key"
   paths = [
     '''(?i)(^|/)web/platform/src/features/workspace/WorkspacePrompt/WorkspacePrompt\.test\.tsx$''',
     '''(?i)(^|/)web/platform/src/features/conversations/NewConversationButton/NewConversationButton\.test\.tsx$''',
+    '''(?i)(^|/)web/platform/src/features/conversations/pending-conversation-bootstrap\.test\.ts$''',
+    '''(?i)(^|/)web/platform/src/features/conversations/PendingConversationBootstrap/PendingConversationBootstrap\.test\.tsx$''',
     '''(?i)(^|/)web/platform/src/lib/web-api/proxy\.test\.ts$''',
   ]
   regexes = [

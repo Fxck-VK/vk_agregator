@@ -46,15 +46,6 @@ updates:
         patterns:
           - "*"
 
-  - package-ecosystem: "npm"
-    directory: "/web/platform"
-    schedule:
-      interval: "weekly"
-    groups:
-      platform-dependencies:
-        patterns:
-          - "*"
-
   # Version updates are tested in the DEV contour before intentional promotion.
   # Security updates remain default-branch PRs managed by GitHub.
   - package-ecosystem: "github-actions"
