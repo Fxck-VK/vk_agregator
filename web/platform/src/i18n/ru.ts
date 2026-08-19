@@ -125,6 +125,8 @@ export const ru = {
     renamePending: "Сохраняем…",
     renameFailure: "Не удалось переименовать чат. Попробуйте ещё раз.",
     archiveLabel: "Удалить чат",
+    archiveDialogTitle: "Удалить чат?",
+    archiveDialogLead: "Это удалит чат",
     archiveConfirmation: "Чат будет удалён из списка и с активного экрана.",
     archiveConfirmLabel: "Удалить",
     archivePending: "Удаляем…",

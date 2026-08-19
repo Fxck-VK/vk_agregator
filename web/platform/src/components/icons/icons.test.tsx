@@ -28,16 +28,22 @@ describe("shared icons", () => {
   });
 
   it.each([
-    ["edit", EditIcon],
-    ["file", FileIcon],
-    ["grid", GridIcon],
-    ["image", ImageIcon],
-  ] as const)("renders the %s navigation icon as a decorative, theme-aware SVG", (name, Icon) => {
+    ["edit", EditIcon, "M 414 622"],
+    ["file", FileIcon, "M 419 340"],
+    ["grid", GridIcon, "M 661 676"],
+    ["image", ImageIcon, "M 932 392"],
+  ] as const)("renders the %s navigation icon using the approved theme-aware artwork", (name, Icon, pathPrefix) => {
     render(<Icon data-testid={`${name}-icon`} />);
 
     const icon = screen.getByTestId(`${name}-icon`);
     expect(icon).toHaveAttribute("aria-hidden", "true");
     expect(icon).toHaveAttribute("data-icon", name);
     expect(icon).toHaveAttribute("fill", "none");
+    expect(icon).toHaveAttribute("viewBox", "0 0 1254 1254");
+
+    const paths = icon.querySelectorAll("path");
+    expect(paths).toHaveLength(1);
+    expect(paths[0]).toHaveAttribute("fill", "currentColor");
+    expect(paths[0]?.getAttribute("d")).toMatch(new RegExp(`^${pathPrefix}`));
   });
 });

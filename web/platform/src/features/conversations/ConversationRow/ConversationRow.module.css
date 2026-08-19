@@ -28,7 +28,9 @@
 
 .link:focus-visible,
 .actions button:focus-visible,
-.renameForm input:focus-visible {
+.floatingPanel button:focus-visible,
+.renameForm input:focus-visible,
+.deleteDialog button:focus-visible {
   outline: 0.125rem solid var(--color-focus);
   outline-offset: 0.125rem;
 }
@@ -51,25 +53,48 @@
 .menu button:hover,
 .formActions button:hover { background: var(--color-surface-raised); }
 
-.panel {
-  position: absolute;
-  z-index: 1;
-  inset-block-start: calc(100% + var(--space-1));
-  inset-inline-end: 0;
+.floatingPanel {
+  position: fixed;
+  z-index: 140;
   display: grid;
   gap: var(--space-1);
-  inline-size: min(15rem, 100%);
+  inline-size: min(15rem, calc(100vw - 1.5rem));
   padding: var(--space-2);
-  border-radius: var(--radius-sm);
-  background: var(--color-surface-raised);
+  border: 0.0625rem solid var(--color-border);
+  border-radius: var(--radius-lg);
+  background: color-mix(in srgb, var(--color-surface-raised) 98%, transparent);
+  box-shadow: var(--shadow-overlay);
 }
 
 .menu,
-.renameForm,
-.confirmation { display: grid; gap: var(--space-1); }
+.renameForm { display: grid; gap: var(--space-1); }
 
 .menu button,
-.formActions button { min-block-size: 2.75rem; padding-inline: var(--space-2); text-align: start; }
+.formActions button {
+  min-block-size: 2.75rem;
+  padding-inline: var(--space-2);
+  text-align: start;
+}
+
+.menu button {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  inline-size: 100%;
+}
+
+.menu svg {
+  flex: 0 0 auto;
+  inline-size: 1.25rem;
+  block-size: 1.25rem;
+  fill: none;
+  stroke: currentColor;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+  stroke-width: 1.7;
+}
+
+.menu .deleteMenuItem { color: var(--color-danger); }
 
 .renameForm input {
   box-sizing: border-box;
@@ -86,8 +111,89 @@
 }
 
 .formActions { display: flex; flex-wrap: wrap; align-items: stretch; gap: var(--space-1); }
-.confirmation p, .error { margin: 0; font-size: 0.8125rem; }
+.error { margin: 0; font-size: 0.8125rem; }
 .error { color: var(--color-text-muted); }
+
+.dialogBackdrop {
+  position: fixed;
+  z-index: 160;
+  inset: 0;
+  display: grid;
+  place-items: center;
+  padding: var(--space-4);
+  background: rgb(0 0 0 / 0.66);
+  backdrop-filter: blur(0.2rem);
+}
+
+.deleteDialog {
+  inline-size: min(35rem, 100%);
+  padding: clamp(var(--space-5), 4vw, var(--space-7));
+  border: 0.0625rem solid var(--color-border);
+  border-radius: var(--radius-xl);
+  background: var(--color-surface-raised);
+  box-shadow: var(--shadow-overlay);
+}
+
+.deleteDialog h2 {
+  margin: 0 0 var(--space-5);
+  font-size: 1.35rem;
+  line-height: 1.2;
+}
+
+.deleteDialog p {
+  margin: 0;
+  line-height: 1.5;
+}
+
+.deleteDialog .dialogDescription {
+  margin-block-start: var(--space-2);
+  color: var(--color-text-muted);
+}
+
+.dialogError {
+  margin-block-start: var(--space-3) !important;
+  color: var(--color-danger);
+  font-size: 0.875rem;
+}
+
+.dialogActions {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: var(--space-3);
+  margin-block-start: var(--space-6);
+}
+
+.dialogActions button {
+  min-block-size: 2.75rem;
+  padding: 0.65rem 1.1rem;
+  border: 0.0625rem solid var(--color-border);
+  border-radius: var(--radius-pill);
+  font: inherit;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.dialogCancel {
+  color: var(--color-text);
+  background: transparent;
+}
+
+.dialogCancel:hover { background: var(--color-surface); }
+
+.dialogDelete {
+  border-color: transparent !important;
+  color: #fff;
+  background: #f02849;
+}
+
+.dialogDelete:hover { background: #d91f3f; }
+
+.dialogActions button:disabled,
+.floatingPanel button:disabled {
+  cursor: default;
+  opacity: var(--opacity-disabled);
+}
 
 .visuallyHidden {
   position: absolute;
@@ -101,4 +207,12 @@
 @media (hover: hover) and (pointer: fine) {
   .actionToggle { opacity: 0; }
   .row:hover .actionToggle, .actions:focus-within .actionToggle { opacity: 1; }
+}
+
+@media (width < 30rem) {
+  .dialogActions button { flex: 1 1 8rem; text-align: center; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .dialogBackdrop { backdrop-filter: none; }
 }

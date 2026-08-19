@@ -12,6 +12,8 @@ import { ru } from "@/i18n/ru";
 import { webBrowserMutation } from "@/lib/web-api/browser";
 import { parseConversationItem } from "@/lib/web-api/contracts";
 
+import { ConversationDeleteDialog } from "./ConversationDeleteDialog";
+import { FloatingConversationPanel } from "./FloatingConversationPanel";
 import styles from "./ConversationRow.module.css";
 
 type ConversationRowProps = {
@@ -66,7 +68,6 @@ export function ConversationRow({
   const renameInputRef = useRef<HTMLInputElement>(null);
   const focusAfterPendingRef = useRef<{ kind: "rename" | "archive" | "success"; requestGeneration: number; sidebarSession?: number } | null>(null);
   const restoreActionFocusRef = useRef(false);
-  const rowRef = useRef<HTMLElement>(null);
   const mountedRef = useRef(true);
   const pathnameRef = useRef(pathname);
   const requestGenerationRef = useRef(0);
@@ -108,6 +109,8 @@ export function ConversationRow({
     setPanel(null);
     onPanelClosed?.(conversation.id);
   }, [conversation.id, onPanelClosed]);
+
+  const dismissPanel = useCallback(() => closePanel(true), [closePanel]);
 
   const openPanel = (nextPanel: Exclude<RowPanel, null>) => {
     if (isPending) return;
@@ -177,21 +180,6 @@ export function ConversationRow({
     onVisiblePanelChange?.(conversation.id, closeVisiblePanel, panelSession);
     return () => onVisiblePanelChange?.(conversation.id, null, panelSession);
   }, [closeVisiblePanel, conversation.id, isPending, onVisiblePanelChange, panelIsVisible, panelSession]);
-
-  useEffect(() => {
-    if (!panelIsVisible || isPending) return;
-
-    const closeOnOutsidePointer = (event: PointerEvent) => {
-      if (event.target instanceof Node && !rowRef.current?.contains(event.target)) {
-        restoreActionFocusRef.current = false;
-        setHasError(false);
-        setPanel(null);
-        onPanelClosed?.(conversation.id);
-      }
-    };
-    document.addEventListener("pointerdown", closeOnOutsidePointer);
-    return () => document.removeEventListener("pointerdown", closeOnOutsidePointer);
-  }, [conversation.id, isPending, onPanelClosed, panelIsVisible]);
 
   useLayoutEffect(() => {
     mountedRef.current = true;
@@ -338,7 +326,7 @@ export function ConversationRow({
   if (isOptimisticallyArchived) return null;
 
   return (
-    <article className={styles.row} ref={rowRef}>
+    <article className={styles.row}>
       {conversation.isPending ? (
         <span aria-busy="true" className={styles.link}>
           {title}
@@ -374,13 +362,26 @@ export function ConversationRow({
         >
           <span aria-hidden="true">...</span>
         </button>
-        {panelIsVisible ? (
-          <div className={styles.panel}>
+        {panelIsVisible && (panel === "actions" || panel === "rename") ? (
+          <FloatingConversationPanel
+            anchorRef={actionToggleRef}
+            ariaLabel={panel === "actions" ? `${ru.conversations.actionsLabel}: ${title}` : undefined}
+            className={styles.floatingPanel}
+            dismissible={!isPending}
+            onDismiss={dismissPanel}
+            placementKey={panel}
+            role={panel === "actions" ? "menu" : undefined}
+          >
             {panel === "actions" ? (
               <div className={styles.menu}>
-                <button disabled={isPending} onClick={() => openPanel("rename")} type="button">{ru.conversations.renameLabel}</button>
-                <button disabled={isPending} onClick={() => openPanel("archive")} type="button">{ru.conversations.archiveLabel}</button>
-                <button disabled={isPending} onClick={() => closePanel(true)} type="button">{ru.conversations.cancelLabel}</button>
+                <button disabled={isPending} onClick={() => openPanel("rename")} type="button">
+                  <svg aria-hidden="true" viewBox="0 0 24 24"><path d="m4 20 4.3-1 10-10a2.1 2.1 0 0 0-3-3l-10 10L4 20Zm10-12 3 3" /></svg>
+                  {ru.conversations.renameLabel}
+                </button>
+                <button className={styles.deleteMenuItem} disabled={isPending} onClick={() => openPanel("archive")} type="button">
+                  <svg aria-hidden="true" viewBox="0 0 24 24"><path d="M4 7h16m-10 4v6m4-6v6M9 4h6l1 3H8l1-3Zm-3 3 1 13h10l1-13" /></svg>
+                  {ru.conversations.archiveLabel}
+                </button>
               </div>
             ) : null}
             {panel === "rename" ? (
@@ -407,20 +408,21 @@ export function ConversationRow({
                 </div>
               </form>
             ) : null}
-            {panel === "archive" ? (
-              <div className={styles.confirmation}>
-                <p id={`archive-confirmation-${conversation.id}`}>{ru.conversations.archiveConfirmation}</p>
-                <div className={styles.formActions}>
-                  <button aria-describedby={`archive-confirmation-${conversation.id}`} disabled={isPending} onClick={() => void archiveConversation()} ref={archiveConfirmRef} type="button">{isPending ? ru.conversations.archivePending : ru.conversations.archiveConfirmLabel}</button>
-                  <button disabled={isPending} onClick={() => closePanel(true)} type="button">{ru.conversations.cancelLabel}</button>
-                </div>
-              </div>
-            ) : null}
-            {hasError ? <p className={styles.error} role="alert">{panel === "archive" ? ru.conversations.archiveFailure : ru.conversations.renameFailure}</p> : null}
-          </div>
+            {hasError ? <p className={styles.error} role="alert">{ru.conversations.renameFailure}</p> : null}
+          </FloatingConversationPanel>
         ) : null}
       </div>
       )}
+      {panelIsVisible && panel === "archive" ? (
+        <ConversationDeleteDialog
+          confirmRef={archiveConfirmRef}
+          conversationTitle={title}
+          errorMessage={hasError ? ru.conversations.archiveFailure : undefined}
+          isPending={isPending}
+          onCancel={dismissPanel}
+          onConfirm={() => void archiveConversation()}
+        />
+      ) : null}
       {hasHiddenFailure ? <p className={styles.error} role="alert">{panel === "archive" ? ru.conversations.archiveFailure : ru.conversations.renameFailure}</p> : null}
     </article>
   );

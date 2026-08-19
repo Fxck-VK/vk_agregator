@@ -8,10 +8,12 @@ const stylesheet = readFileSync(
 );
 
 describe("ConversationRow styles", () => {
-  it("positions action panels above the title row instead of consuming its grid column", () => {
-    expect(stylesheet).toMatch(/\.panel\s*\{[^}]*position:\s*absolute;/s);
-    expect(stylesheet).toMatch(/\.panel\s*\{[^}]*inset-inline-end:/s);
-    expect(stylesheet).toMatch(/\.menu,\s*\.renameForm,\s*\.confirmation\s*\{\s*display:\s*grid;/s);
+  it("keeps action panels and delete confirmation above the sidebar layout", () => {
+    expect(stylesheet).toMatch(/\.floatingPanel\s*\{[^}]*position:\s*fixed;/s);
+    expect(stylesheet).toMatch(/\.floatingPanel\s*\{[^}]*z-index:\s*140;/s);
+    expect(stylesheet).toMatch(/\.dialogBackdrop\s*\{[^}]*position:\s*fixed;/s);
+    expect(stylesheet).toMatch(/\.dialogBackdrop\s*\{[^}]*z-index:\s*160;/s);
+    expect(stylesheet).toMatch(/\.menu,\s*\.renameForm\s*\{\s*display:\s*grid;/s);
   });
 
   it("gives the rename control an explicit readable dark surface", () => {

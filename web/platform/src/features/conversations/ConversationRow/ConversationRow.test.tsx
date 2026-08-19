@@ -1,4 +1,4 @@
-import { cleanup, fireEvent, render, screen } from "@testing-library/react";
+import { cleanup, fireEvent, render, screen, within } from "@testing-library/react";
 import type { ReactNode } from "react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
@@ -90,13 +90,15 @@ describe("ConversationRow", () => {
     expect(screen.getByRole("link", { name: conversation.title })).toHaveAttribute("data-prefetch", "false");
   });
 
-  it("opens the labelled actions menu and closes it on cancel or Escape", () => {
-    renderRow();
+  it("renders the labelled actions menu in an overlay and closes it on outside click or Escape", () => {
+    const rendered = renderRow();
 
     fireEvent.click(screen.getByRole("button", { name: actionsLabel() }));
+    const menu = screen.getByRole("menu");
     expect(screen.getByRole("button", { name: ru.conversations.renameLabel })).toBeVisible();
+    expect(rendered.container).not.toContainElement(menu);
 
-    fireEvent.click(screen.getByRole("button", { name: ru.conversations.cancelLabel }));
+    fireEvent.pointerDown(document.body);
     expect(screen.queryByRole("button", { name: ru.conversations.renameLabel })).not.toBeInTheDocument();
 
     fireEvent.click(screen.getByRole("button", { name: actionsLabel() }));
@@ -236,6 +238,9 @@ describe("ConversationRow", () => {
 
     fireEvent.click(screen.getByRole("button", { name: actionsLabel() }));
     fireEvent.click(screen.getByRole("button", { name: ru.conversations.archiveLabel }));
+    const dialog = screen.getByRole("dialog", { name: ru.conversations.archiveDialogTitle });
+    expect(dialog).toBeVisible();
+    expect(within(dialog).getByText(conversation.title, { exact: false })).toBeVisible();
     expect(screen.getByText(ru.conversations.archiveConfirmation)).toBeVisible();
     expect(webBrowserMutation).not.toHaveBeenCalled();
 
@@ -248,6 +253,29 @@ describe("ConversationRow", () => {
     );
     expect(refresh).toHaveBeenCalledTimes(1);
     expect(replace).not.toHaveBeenCalled();
+  });
+
+  it("closes delete confirmation from cancel, backdrop, or Escape without deleting", () => {
+    renderRow();
+
+    const openDialog = () => {
+      fireEvent.click(screen.getByRole("button", { name: actionsLabel() }));
+      fireEvent.click(screen.getByRole("button", { name: ru.conversations.archiveLabel }));
+      return screen.getByRole("dialog", { name: ru.conversations.archiveDialogTitle });
+    };
+
+    openDialog();
+    fireEvent.click(screen.getByRole("button", { name: ru.conversations.cancelLabel }));
+    expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
+
+    const backdropDialog = openDialog();
+    fireEvent.mouseDown(backdropDialog.parentElement!);
+    expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
+
+    const escapeDialog = openDialog();
+    fireEvent.keyDown(escapeDialog, { key: "Escape" });
+    expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
+    expect(webBrowserMutation).not.toHaveBeenCalled();
   });
 
   it("hides a deleted chat before the DELETE request settles and restores it on failure", async () => {
@@ -312,10 +340,8 @@ describe("ConversationRow", () => {
     fireEvent.click(screen.getByRole("button", { name: ru.conversations.archiveLabel }));
 
     const confirmation = screen.getByText(ru.conversations.archiveConfirmation);
-    expect(screen.getByRole("button", { name: ru.conversations.archiveConfirmLabel })).toHaveAttribute(
-      "aria-describedby",
-      confirmation.id,
-    );
+    expect(screen.getByRole("button", { name: ru.conversations.archiveConfirmLabel }).getAttribute("aria-describedby"))
+      .toContain(confirmation.id);
   });
 
   it("reconciles a successful deferred rename after navigation changes without restoring stale focus", async () => {

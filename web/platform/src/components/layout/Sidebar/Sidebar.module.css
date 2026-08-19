@@ -126,7 +126,6 @@
 .accountSlot {
   margin-block-start: auto;
   padding-block-start: var(--space-4);
-  border-block-start: 0.0625rem solid var(--color-border);
 }
 
 .backdrop {

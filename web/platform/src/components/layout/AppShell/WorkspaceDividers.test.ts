@@ -23,6 +23,12 @@ describe("workspace dividers", () => {
     expect(getClassBlock(stylesheet, "panel")).not.toContain("border-inline-end");
   });
 
+  it("does not draw a divider between chats and the account control", () => {
+    const stylesheet = readStylesheet("src/components/layout/Sidebar/Sidebar.module.css");
+
+    expect(getClassBlock(stylesheet, "accountSlot")).not.toContain("border-block-start");
+  });
+
   it("does not draw a divider under the sticky workspace header", () => {
     const stylesheet = readStylesheet(
       "src/components/layout/WorkspaceHeader/WorkspaceHeader.module.css",
