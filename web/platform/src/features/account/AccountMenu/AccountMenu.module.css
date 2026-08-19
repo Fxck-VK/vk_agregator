@@ -4,7 +4,7 @@
 
 .trigger {
   display: grid;
-  grid-template-columns: minmax(0, 1fr) 1.5rem;
+  grid-template-columns: 2.5rem minmax(0, 1fr) 1.5rem;
   align-items: center;
   gap: var(--space-3);
   inline-size: 100%;
@@ -12,15 +12,29 @@
   padding: var(--space-2);
   border: 0;
   border-radius: var(--radius-lg);
-  background: var(--color-surface-raised);
+  background: transparent;
   color: var(--color-text);
   text-align: start;
   transition: background-color var(--motion-fast);
 }
 
 .trigger:hover,
+.trigger:focus-visible,
 .trigger[data-open="true"] {
-  background: var(--color-border);
+  background: var(--color-surface-raised);
+}
+
+.avatar {
+  display: grid;
+  inline-size: 2.5rem;
+  block-size: 2.5rem;
+  place-items: center;
+  border-radius: 50%;
+  background: var(--color-accent);
+  color: var(--color-text);
+  font-size: 0.75rem;
+  font-weight: 800;
+  letter-spacing: 0.04em;
 }
 
 .identity {

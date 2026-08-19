@@ -156,6 +156,9 @@ export function AccountMenu({ identityLabel, isLogoutPending, logoutFailure, onL
         ref={triggerRef}
         type="button"
       >
+        <span aria-hidden="true" className={styles.avatar} data-account-avatar="true">
+          NH
+        </span>
         <span className={styles.identity} title={identityLabel}>
           {identityLabel}
         </span>
