@@ -435,6 +435,40 @@ jobs:
           REMOTE
           } | ssh "${ssh_opts[@]}" "${DEV_DEPLOY_USER}@${DEV_DEPLOY_HOST}" bash -s
 
+      - name: Observe DEV Cloudflare tunnel after stabilization
+        if: ${{ always() && steps.dev_deploy.outcome == 'success' }}
+        shell: bash
+        env:
+          DEV_DEPLOY_HOST: ${{ secrets.DEV_DEPLOY_HOST }}
+          DEV_DEPLOY_USER: ${{ secrets.DEV_DEPLOY_USER }}
+          DEV_DEPLOY_PATH: ${{ secrets.DEV_DEPLOY_PATH }}
+        run: |
+          set -euo pipefail
+          ssh_opts=(-i "${HOME}/.ssh/deploy_key" -o StrictHostKeyChecking=yes -o UserKnownHostsFile="${HOME}/.ssh/known_hosts" -o GlobalKnownHostsFile=/dev/null)
+
+          ssh "${ssh_opts[@]}" "${DEV_DEPLOY_USER}@${DEV_DEPLOY_HOST}" 'bash -s' -- "${DEV_DEPLOY_PATH}" <<'REMOTE'
+          set +e
+          deploy_path="$1"
+          cd "${deploy_path}" || exit 0
+          sleep 75
+
+          compose=(docker compose --project-name vk-ai-aggregator-dev --env-file .env -f docker-compose.prod.yml)
+          if [[ -f docker-compose.data.yml ]]; then
+            compose+=(-f docker-compose.data.yml)
+          fi
+          if [[ -f docker-compose.dev-web.yml && -f .dev-web-auth.env ]]; then
+            compose+=(--env-file .dev-web-auth.env -f docker-compose.dev-web.yml)
+          fi
+          compose+=(--profile cloudflare --profile provider-balance)
+
+          echo "==> DEV cloudflared status after stabilization"
+          "${compose[@]}" ps cloudflared || true
+          echo "==> DEV cloudflared logs after stabilization"
+          "${compose[@]}" logs --no-color --tail=200 cloudflared || true
+          echo "==> DEV public status after stabilization"
+          curl --silent --show-error --output /dev/null --write-out 'HTTP %{http_code}\n' --max-time 20 https://dev-web.neiirohub.ru/ || true
+          REMOTE
+
       - name: Collect DEV diagnostics after failed deploy or smoke
         if: ${{ failure() && (steps.dev_deploy.outcome == 'failure' || steps.dev_smoke.outcome == 'failure') }}
         shell: bash
@@ -466,7 +500,7 @@ jobs:
           echo "==> DEV diagnostic migrate logs"
           "${compose[@]}" logs --no-color --tail=200 migrate || true
 
-          for service in api worker maintenance-worker provider-webhook provider-balance-bot miniapp platform reverse-proxy; do
+          for service in api worker maintenance-worker provider-webhook provider-balance-bot miniapp platform reverse-proxy cloudflared; do
             echo "==> DEV diagnostic ${service} logs"
             "${compose[@]}" logs --no-color --tail=80 "${service}" || true
           done
