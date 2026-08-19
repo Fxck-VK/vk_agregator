@@ -938,14 +938,15 @@ function Assert-CloudflaredComposeConfig {
     $content = Get-Content -LiteralPath $path -Raw
     $requiredSnippets = @(
         "cloudflared:",
-        'image: ${CLOUDFLARED_IMAGE:-cloudflare/cloudflared:2024.12.2@sha256:cb38f3f30910a7d51545118a179b8516eb7066eac61855d62ce6ed733c54ce70}',
+        'image: ${CLOUDFLARED_IMAGE:-cloudflare/cloudflared:2026.5.2@sha256:12ff5c6992a9863db4da270746af7c244bcaee49353039af8104268a18d6c4f0}',
         "profiles:",
         "- cloudflare",
         "TUNNEL_TOKEN:",
         "CLOUDFLARED_TUNNEL_TOKEN",
         "network_mode: host",
         "--metrics",
-        '127.0.0.1:${CLOUDFLARED_METRICS_PORT:-2000}'
+        '127.0.0.1:${CLOUDFLARED_METRICS_PORT:-2000}',
+        'test: ["CMD", "cloudflared", "tunnel", "--metrics", "127.0.0.1:${CLOUDFLARED_METRICS_PORT:-2000}", "ready"]'
     )
 
     foreach ($snippet in $requiredSnippets) {
