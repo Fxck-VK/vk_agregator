@@ -2,7 +2,7 @@ import type { ChangeEventHandler, KeyboardEvent } from "react";
 
 import styles from "./ChatTextInput.module.css";
 
-type ChatTextInputAppearance = "inset" | "plain";
+type ChatTextInputAppearance = "composer" | "inset" | "plain";
 type ChatTextInputSize = "compact" | "expanded";
 
 type ChatTextInputProps = {

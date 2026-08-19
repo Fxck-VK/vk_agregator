@@ -26,6 +26,17 @@ describe("ConversationComposer", () => {
     );
   });
 
+  it("renders one compact composer surface with embedded controls and a note below", () => {
+    render(<ConversationComposer {...chatScrollProps} onSubmit={vi.fn()} />);
+
+    const mediaButton = screen.getByRole("button", { name: "Загрузить медиа" });
+    const submitButton = screen.getByRole("button", { name: ru.conversations.composerSubmit });
+
+    expect(mediaButton).toBeDisabled();
+    expect(submitButton.querySelector("svg")).not.toBeNull();
+    expect(screen.getByText("Стоимость зависит от выбранной нейросети. Нейросеть может ошибаться")).toBeVisible();
+  });
+
   it("clears and submits a normalized draft immediately when Enter is pressed", () => {
     const onSubmit = vi.fn();
     render(<ConversationComposer {...chatScrollProps} onSubmit={onSubmit} />);
