@@ -108,7 +108,7 @@ describe("ConversationComposer", () => {
     );
 
     expect(screen.getByRole("status", { name: ru.conversations.composerAwaitingResponse })).toBeVisible();
-    expect(screen.queryByRole("button", { name: ru.conversations.scrollToLatest })).toBeNull();
+    expect(screen.getByRole("button", { name: ru.conversations.scrollToLatest })).toBeVisible();
 
     rendered.rerender(
       <ConversationComposer

@@ -34,7 +34,7 @@ describe("ChatScrollToBottom", () => {
     expect(scrollTo).toHaveBeenCalledWith({ behavior: "smooth", top: 1200 });
   });
 
-  it("replaces the arrow with typing dots while a reply is pending and restores it afterwards", () => {
+  it("keeps the typing dots clickable for scrolling while a reply is pending and restores the arrow afterwards", () => {
     const region = createScrollRegion({ scrollTop: 100 });
     const { rerender } = render(
       <ChatScrollToBottom
@@ -45,8 +45,10 @@ describe("ChatScrollToBottom", () => {
       />,
     );
 
-    expect(screen.queryByRole("button", { name: ru.conversations.scrollToLatest })).toBeNull();
+    const pendingButton = screen.getByRole("button", { name: ru.conversations.scrollToLatest });
     expect(screen.getByRole("status", { name: ru.conversations.composerAwaitingResponse })).toBeVisible();
+    fireEvent.click(pendingButton);
+    expect(region.scrollTo).toHaveBeenCalledWith({ behavior: "smooth", top: 1200 });
 
     rerender(
       <ChatScrollToBottom

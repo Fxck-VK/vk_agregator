@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useLayoutEffect, useRef, useState } from "react";
 
 import { AssistantTypingIndicator } from "@/components/chat/AssistantTypingIndicator/AssistantTypingIndicator";
+import { AssistantMessageContent } from "@/components/chat/AssistantMessageContent/AssistantMessageContent";
 import { Button } from "@/components/ui/Button/Button";
 import {
   conversationHistoryPageLimit,
@@ -424,7 +425,11 @@ function ConversationHistoryReady({
                   className={message.role === "user" ? styles.userMessage : styles.assistantMessage}
                   key={message.id}
                 >
-                  <p>{message.text}</p>
+                  {message.role === "user" ? (
+                    <p>{message.text}</p>
+                  ) : (
+                    <AssistantMessageContent markdown={message.text} />
+                  )}
                   {message.role === "user" ? (
                     <ConversationMessageActions kind="user" messageText={message.text} onRecreate={recreateMessage} />
                   ) : (

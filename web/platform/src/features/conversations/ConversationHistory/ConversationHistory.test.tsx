@@ -70,6 +70,27 @@ describe("ConversationHistory", () => {
     expect(within(messageItems[1]).getByText("message 103")).toBeVisible();
   });
 
+  it("renders Markdown structure only for assistant messages", () => {
+    const markdownHistory = {
+      ...initialHistory,
+      messages: [
+        { ...initialHistory.messages[0], text: "**Текст пользователя**" },
+        {
+          ...initialHistory.messages[1],
+          text: "## Ответ\n\n1. **Первый пункт**\n2. Второй пункт",
+        },
+      ],
+    };
+
+    render(<ConversationHistory history={markdownHistory as never} />);
+
+    const [userMessage, assistantMessage] = Array.from(screen.getAllByRole("list")[0].children);
+    expect(within(userMessage as HTMLElement).getByText("**Текст пользователя**")).toBeVisible();
+    expect(within(userMessage as HTMLElement).queryByText("Текст пользователя")).toBeNull();
+    expect(within(assistantMessage as HTMLElement).getByRole("heading", { level: 2, name: "Ответ" })).toBeVisible();
+    expect(within(assistantMessage as HTMLElement).getAllByRole("listitem")).toHaveLength(2);
+  });
+
   it("copies the exact text for user and assistant messages while keeping role-specific actions", async () => {
     const writeText = vi.fn().mockResolvedValue(undefined);
     vi.stubGlobal("navigator", { clipboard: { writeText } });
@@ -496,7 +517,7 @@ describe("ConversationHistory", () => {
     await vi.waitFor(() => {
       expect(screen.getAllByRole("status", { name: ru.conversations.composerAwaitingResponse })).toHaveLength(2);
     });
-    expect(screen.queryByRole("button", { name: ru.conversations.scrollToLatest })).toBeNull();
+    expect(screen.getByRole("button", { name: ru.conversations.scrollToLatest })).toBeVisible();
 
     resolveRefresh(
       Response.json({

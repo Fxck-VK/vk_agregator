@@ -139,22 +139,27 @@ export function ChatScrollToBottom({
     return null;
   }
 
+  const handleScrollToLatest = () => {
+    followLatestRef.current = true;
+    scrollToLatest(scrollContainer.scrollHeight - scrollContainer.clientHeight);
+  };
+
   if (isAwaitingResponse) {
     return (
-      <div className={`${styles.button} ${styles.status}`}>
+      <button
+        aria-label={ru.conversations.scrollToLatest}
+        className={styles.button}
+        onClick={handleScrollToLatest}
+        type="button"
+      >
         <AssistantTypingIndicator label={ru.conversations.composerAwaitingResponse} />
-      </div>
+      </button>
     );
   }
 
   if (atBottom) {
     return null;
   }
-
-  const handleScrollToLatest = () => {
-    followLatestRef.current = true;
-    scrollToLatest(scrollContainer.scrollHeight - scrollContainer.clientHeight);
-  };
 
   return (
     <button

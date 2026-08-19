@@ -19,7 +19,7 @@
 .eyebrow,
 .empty,
 .messages,
-.messages p {
+.userMessage > p {
   margin: 0;
 }
 
