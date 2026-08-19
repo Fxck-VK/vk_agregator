@@ -141,9 +141,6 @@ if [[ "${skip_local_health}" == "true" ]]; then
   args+=(--skip-local-health)
 fi
 
-echo "Running safe DEV smoke checks"
-bash scripts/deploy/smoke-prod.sh "${args[@]}"
-
 dump_cloudflared_diagnostics() {
   local container="vk-ai-aggregator-dev-cloudflared-1"
   echo "==> cloudflared container status" >&2
@@ -151,6 +148,12 @@ dump_cloudflared_diagnostics() {
   echo "==> cloudflared logs" >&2
   docker logs --tail 200 "${container}" >&2 || true
 }
+
+echo "Running safe DEV smoke checks"
+if ! bash scripts/deploy/smoke-prod.sh "${args[@]}"; then
+  dump_cloudflared_diagnostics
+  exit 1
+fi
 
 check_dev_web_gateway() {
   local phase="$1"
