@@ -425,9 +425,9 @@ function ConversationHistoryReady({
                   className={message.role === "user" ? styles.userMessage : styles.assistantMessage}
                   key={message.id}
                 >
-                  <span className={styles.role}>
-                    {message.role === "user" ? ru.conversations.userRole : ru.conversations.assistantRole}
-                  </span>
+                  {message.role === "user" ? (
+                    <span className={styles.role}>{ru.conversations.userRole}</span>
+                  ) : null}
                   <p>{message.text}</p>
                   {message.role === "user" ? (
                     <ConversationMessageActions kind="user" messageText={message.text} onRecreate={recreateMessage} />

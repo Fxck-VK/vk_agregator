@@ -62,7 +62,6 @@
 }
 
 .userMessage,
-.assistantMessage,
 .empty {
   border: 0.0625rem solid var(--color-border);
   border-radius: var(--radius-lg);
@@ -70,12 +69,22 @@
 }
 
 .userMessage {
-  margin-inline-start: min(12%, 6rem);
+  justify-self: end;
+  inline-size: fit-content;
+  max-inline-size: min(80%, 48rem);
   background: var(--color-accent);
   color: var(--color-text);
+  overflow-wrap: anywhere;
 }
 
-.assistantMessage,
+.assistantMessage {
+  inline-size: 100%;
+  border: 0;
+  padding: 0;
+  background: transparent;
+  overflow-wrap: anywhere;
+}
+
 .empty {
   margin-inline-end: min(12%, 6rem);
   background: var(--color-surface);

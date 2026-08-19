@@ -13,12 +13,20 @@ const appShellStylesheet = readFileSync(
 );
 
 describe("WorkspaceHeader styles", () => {
-  it("stays sticky inside the workspace without covering the sidebar overlay", () => {
+  it("floats interactive controls over workspace content without drawing a header strip", () => {
     const headerZIndex = Number(headerStylesheet.match(/\.header\s*\{[^}]*z-index:\s*(\d+);/s)?.[1]);
     const sidebarZIndex = Number(appShellStylesheet.match(/\.sidebar\s*\{[^}]*z-index:\s*(\d+);/s)?.[1]);
 
     expect(headerStylesheet).toMatch(/\.header\s*\{[^}]*position:\s*sticky;/s);
     expect(headerStylesheet).toMatch(/\.header\s*\{[^}]*inset-block-start:\s*0;/s);
+    expect(headerStylesheet).toMatch(/\.header\s*\{[^}]*block-size:\s*0;/s);
+    expect(headerStylesheet).toMatch(/\.header\s*\{[^}]*min-block-size:\s*0;/s);
+    expect(headerStylesheet).toMatch(/\.header\s*\{[^}]*padding:\s*0;/s);
+    expect(headerStylesheet).toMatch(/\.header\s*\{[^}]*background:\s*transparent;/s);
+    expect(headerStylesheet).toMatch(/\.header\s*\{[^}]*pointer-events:\s*none;/s);
+    expect(headerStylesheet).toMatch(
+      /\.leading,\s*\.trailing\s*\{[^}]*position:\s*absolute;[^}]*pointer-events:\s*auto;/s,
+    );
     expect(headerZIndex).toBeLessThan(sidebarZIndex);
   });
 });

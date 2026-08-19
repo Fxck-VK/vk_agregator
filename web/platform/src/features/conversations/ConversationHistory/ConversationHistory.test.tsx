@@ -59,6 +59,16 @@ describe("ConversationHistory", () => {
     vi.unstubAllGlobals();
   });
 
+  it("renders assistant replies without a product role label", () => {
+    render(<ConversationHistory history={initialHistory as never} />);
+
+    const messageItems = within(screen.getByRole("list")).getAllByRole("listitem");
+
+    expect(within(messageItems[0]).getByText(ru.conversations.userRole)).toBeVisible();
+    expect(within(messageItems[1]).queryByText(ru.conversations.assistantRole)).toBeNull();
+    expect(within(messageItems[1]).getByText("message 103")).toBeVisible();
+  });
+
   it("copies the exact text for user and assistant messages while keeping role-specific actions", async () => {
     const writeText = vi.fn().mockResolvedValue(undefined);
     vi.stubGlobal("navigator", { clipboard: { writeText } });

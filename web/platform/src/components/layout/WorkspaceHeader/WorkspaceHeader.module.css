@@ -3,17 +3,30 @@
   position: sticky;
   z-index: 10;
   inset-block-start: 0;
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: var(--space-4);
-  min-block-size: 4.5rem;
-  padding: var(--space-3) clamp(var(--space-4), 4vw, var(--space-6));
-  background: var(--color-background);
+  block-size: 0;
+  min-block-size: 0;
+  padding: 0;
+  overflow: visible;
+  background: transparent;
+  pointer-events: none;
+}
+
+.leading,
+.trailing {
+  position: absolute;
+  inset-block-start: var(--space-3);
+  pointer-events: auto;
 }
 
 .leading {
+  inset-inline-start: clamp(var(--space-4), 4vw, var(--space-6));
   min-inline-size: 0;
+}
+
+.trailing {
+  inset-inline-end: clamp(var(--space-4), 4vw, var(--space-6));
+  display: flex;
+  align-items: center;
 }
 
 .title {
@@ -45,8 +58,11 @@
 }
 
 @media (width < 48rem) {
-  .header {
-    min-block-size: 4rem;
-    padding-inline-start: 4.75rem;
+  .leading {
+    inset-inline-start: 4.75rem;
+  }
+
+  .trailing {
+    inset-inline-end: var(--space-3);
   }
 }

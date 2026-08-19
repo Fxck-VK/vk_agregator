@@ -43,16 +43,18 @@ export function WorkspaceHeader({ balance, trailingAction }: WorkspaceHeaderProp
       <div className={styles.leading}>
         {isInspiration ? <p className={styles.title}>{ru.navigation.inspiration}</p> : <WorkspaceModelSelector />}
       </div>
-      {trailingAction ?? (
-        <span
-          aria-busy={isBalanceLoading || undefined}
-          aria-label={isBalanceLoading ? ru.workspace.balanceLoading : `${balance} ★`}
-          className={styles.balance}
-          data-testid="workspace-balance"
-        >
-          {isBalanceLoading ? <span aria-hidden="true">…</span> : <>{balance} <span aria-hidden="true">★</span></>}
-        </span>
-      )}
+      <div className={styles.trailing}>
+        {trailingAction ?? (
+          <span
+            aria-busy={isBalanceLoading || undefined}
+            aria-label={isBalanceLoading ? ru.workspace.balanceLoading : `${balance} ★`}
+            className={styles.balance}
+            data-testid="workspace-balance"
+          >
+            {isBalanceLoading ? <span aria-hidden="true">…</span> : <>{balance} <span aria-hidden="true">★</span></>}
+          </span>
+        )}
+      </div>
     </header>
   );
 }
