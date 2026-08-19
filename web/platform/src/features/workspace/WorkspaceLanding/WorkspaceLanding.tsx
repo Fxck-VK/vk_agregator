@@ -1,6 +1,8 @@
 import Image from "next/image";
 import Link from "next/link";
 
+import { assetPaths } from "@/assets/asset-paths";
+
 import { WorkspacePrompt } from "../WorkspacePrompt/WorkspacePrompt";
 
 import { capabilityLinks, frequentlyAskedQuestions, primaryTools } from "./workspace-home-content";
@@ -120,7 +122,7 @@ export function WorkspaceLanding({ access = "authenticated" }: WorkspaceLandingP
                 className={styles.capabilityImage}
                 fill
                 sizes="(max-width: 48rem) 100vw, 45vw"
-                src="/inspiration/paper-crane-cloud.png"
+                src={assetPaths.images.inspiration.paperCraneCloud}
               />
               <span className={styles.capabilityOverlay}>
                 <strong>Создавайте изображения</strong>
@@ -175,7 +177,7 @@ export function WorkspaceLanding({ access = "authenticated" }: WorkspaceLandingP
               alt="Пример изображения из библиотеки промптов"
               className={styles.promptImage}
               height={720}
-              src="/inspiration/paper-crane-cloud.png"
+              src={assetPaths.images.inspiration.paperCraneCloud}
               width={540}
             />
             <span>

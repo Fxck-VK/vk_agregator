@@ -12,7 +12,9 @@
     "start": "node .next/standalone/server.js",
     "lint": "eslint . --max-warnings=0",
     "typecheck": "tsc --noEmit",
-    "test": "vitest run",
+    "test": "vitest run && npm run test:assets",
+    "test:assets": "node --test scripts/validate-assets.test.mjs",
+    "validate:assets": "node scripts/validate-assets.mjs",
     "test:packaging": "node scripts/assert-packaging.mjs"
   },
   "dependencies": {

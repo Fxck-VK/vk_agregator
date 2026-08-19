@@ -4,11 +4,12 @@ import Image from "next/image";
 import Link from "next/link";
 import { useEffect, useMemo, useRef, useState } from "react";
 
+import { assetPaths } from "@/assets/asset-paths";
 import { ru } from "@/i18n/ru";
 
 import styles from "./InspirationGallery.module.css";
 
-const imagePath = "/inspiration/paper-crane-cloud.png";
+const imagePath = assetPaths.images.inspiration.paperCraneCloud;
 const downloadName = "neirohub-paper-crane-cloud.png";
 const modelId = "gpt-image-2";
 const quality = "1K";

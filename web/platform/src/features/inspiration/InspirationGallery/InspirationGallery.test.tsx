@@ -54,7 +54,7 @@ describe("InspirationGallery", () => {
     fireEvent.click(screen.getByRole("button", { name: ru.inspiration.openExample }));
 
     const download = screen.getByRole("link", { name: ru.inspiration.download });
-    expect(download).toHaveAttribute("href", "/inspiration/paper-crane-cloud.png");
+    expect(download).toHaveAttribute("href", "/assets/images/inspiration/paper-crane-cloud.png");
     expect(download).toHaveAttribute("download", "neirohub-paper-crane-cloud.png");
 
     const recreate = screen.getByRole("link", { name: ru.inspiration.recreate });

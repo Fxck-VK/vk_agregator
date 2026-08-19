@@ -42,7 +42,7 @@ describe("WorkspaceHome", () => {
 
     expect(markup).toContain(ru.inspiration.title);
     expect(markup).toContain(ru.inspiration.openExample);
-    expect(markup).toContain("%2Finspiration%2Fpaper-crane-cloud.png");
+    expect(markup).toContain("%2Fassets%2Fimages%2Finspiration%2Fpaper-crane-cloud.png");
     expect(markup).not.toContain(ru.workspace.sections.inspiration.description);
   });
 
