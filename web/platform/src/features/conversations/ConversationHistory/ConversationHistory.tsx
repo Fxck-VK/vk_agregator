@@ -382,7 +382,7 @@ function ConversationHistoryReady({
   const contentVersion = `${messages.at(-1)?.id ?? ""}:${pendingTurn?.id ?? ""}:${pendingTurn?.status ?? ""}:${activeRefreshID ?? ""}`;
 
   return (
-    <section aria-labelledby="conversation-history-title" className={styles.content}>
+    <section aria-label={ru.conversations.historyTitle} className={styles.content}>
       {titleSyncFallback !== null ? (
         <ConversationTitleSync
           conversationId={history.conversationId}
@@ -394,7 +394,6 @@ function ConversationHistoryReady({
       <div className={styles.history}>
         <header className={styles.header}>
           <p className={styles.eyebrow}>{ru.conversations.historyEyebrow}</p>
-          <h1 id="conversation-history-title">{ru.conversations.historyTitle}</h1>
         </header>
         {refreshDelayed ? (
           <p className={styles.refreshStatus} role="status">
@@ -425,9 +424,6 @@ function ConversationHistoryReady({
                   className={message.role === "user" ? styles.userMessage : styles.assistantMessage}
                   key={message.id}
                 >
-                  {message.role === "user" ? (
-                    <span className={styles.role}>{ru.conversations.userRole}</span>
-                  ) : null}
                   <p>{message.text}</p>
                   {message.role === "user" ? (
                     <ConversationMessageActions kind="user" messageText={message.text} onRecreate={recreateMessage} />
@@ -487,7 +483,6 @@ function PendingTurnItems({
   return (
     <>
       <li className={styles.userMessage} data-chat-pending="user">
-        <span className={styles.role}>{ru.conversations.userRole}</span>
         <p>{pendingTurn.prompt}</p>
         <ConversationMessageActions kind="user" messageText={pendingTurn.prompt} onRecreate={onRecreate} />
         {pendingTurn.status === "failed" ? (

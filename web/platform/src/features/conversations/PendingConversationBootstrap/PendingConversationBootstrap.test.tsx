@@ -61,7 +61,9 @@ describe("PendingConversationBootstrap", () => {
     vi.mocked(webBrowserMutation).mockReturnValueOnce(new Promise<Response>(() => {}));
     renderPending();
 
+    expect(screen.queryByRole("heading", { name: ru.conversations.historyTitle })).toBeNull();
     expect(screen.getAllByText("Первый вопрос")[0]).toBeVisible();
+    expect(screen.queryByText(ru.conversations.userRole)).toBeNull();
     expect(screen.getByRole("status", { name: ru.conversations.composerAwaitingResponse })).toBeVisible();
     await vi.waitFor(() => expect(webBrowserMutation).toHaveBeenCalledTimes(1));
     expect(replace).not.toHaveBeenCalled();

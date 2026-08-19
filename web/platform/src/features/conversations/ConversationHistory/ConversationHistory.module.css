@@ -17,7 +17,6 @@
 }
 
 .eyebrow,
-.header h1,
 .empty,
 .messages,
 .messages p {
@@ -31,11 +30,6 @@
   font-weight: 700;
   letter-spacing: 0.08em;
   text-transform: uppercase;
-}
-
-.header h1 {
-  font-size: clamp(2rem, 5vw, 3.5rem);
-  line-height: 1.08;
 }
 
 .messages {
@@ -88,19 +82,6 @@
 .empty {
   margin-inline-end: min(12%, 6rem);
   background: var(--color-surface);
-}
-
-.role {
-  display: block;
-  margin-block-end: var(--space-2);
-  color: var(--color-text-muted);
-  font-size: 0.8125rem;
-  font-weight: 700;
-}
-
-.userMessage .role {
-  color: inherit;
-  opacity: 0.8;
 }
 
 .pendingTurnFailure {

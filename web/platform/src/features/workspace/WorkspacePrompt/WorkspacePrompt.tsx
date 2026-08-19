@@ -3,8 +3,7 @@
 import { useRef, useState, type ChangeEvent, type FormEvent } from "react";
 import { useRouter } from "next/navigation";
 
-import { ChatTextInput } from "@/components/chat/ChatTextInput/ChatTextInput";
-import { Button } from "@/components/ui/Button/Button";
+import { ChatComposer } from "@/components/chat/ChatComposer/ChatComposer";
 import { savePendingConversationBootstrap } from "@/features/conversations/pending-conversation-bootstrap";
 import { fallbackConversationTitle } from "@/features/conversations/pending-conversation-title-sync";
 import { useOptionalWorkspaceConversationList } from "@/features/conversations/WorkspaceConversationList/WorkspaceConversationList";
@@ -80,29 +79,21 @@ export function WorkspacePrompt({ access = "authenticated", variant = "workspace
   };
 
   return (
-    <form
-      className={`${styles.form} ${isNewChat ? styles.newChatForm : ""} ${isHero ? styles.heroForm : ""}`}
-      onSubmit={submitForm}
-    >
-      <label className={styles.promptField}>
-        <span>{promptLabel}</span>
-        <ChatTextInput
-          appearance="plain"
-          disabled={false}
-          onChange={changePrompt}
-          onSend={submit}
-          placeholder={promptPlaceholder}
-          rows={isNewChat || isHero ? 4 : 5}
-          size="expanded"
-          value={prompt}
-        />
-      </label>
-      <div className={styles.actions}>
-        <Button disabled={!canSubmit} type="submit">
-          {ru.workspace.promptSubmit}
-        </Button>
-        {isNewChat || isHero ? null : <p>{ru.workspace.promptSupport}</p>}
-      </div>
+    <form className={styles.form} onSubmit={submitForm}>
+      <ChatComposer
+        canSubmit={canSubmit}
+        disabled={false}
+        label={promptLabel}
+        mediaLabel={ru.conversations.composerMediaUpload}
+        mediaUnavailableLabel={ru.conversations.composerMediaUploadUnavailable}
+        note={isNewChat || isHero ? undefined : ru.workspace.promptSupport}
+        onChange={changePrompt}
+        onSend={submit}
+        placeholder={promptPlaceholder}
+        submitLabel={ru.workspace.promptSubmit}
+        value={prompt}
+        variant={variant}
+      />
     </form>
   );
 }

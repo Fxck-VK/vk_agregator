@@ -1,0 +1,139 @@
+.surface {
+  display: grid;
+  gap: var(--space-2);
+  inline-size: 100%;
+  padding: var(--space-3) var(--space-4);
+  border: 0.0625rem solid var(--color-border);
+  border-radius: 1.5rem;
+  background: var(--color-surface);
+}
+
+.surface:focus-within {
+  border-color: color-mix(in srgb, var(--color-accent) 70%, var(--color-border));
+  box-shadow: 0 0 0 0.1875rem color-mix(in srgb, var(--color-accent) 20%, transparent);
+}
+
+.conversation,
+.newChat {
+  inline-size: min(100%, 58rem);
+  margin-inline: auto;
+}
+
+.hero {
+  padding: clamp(var(--space-4), 3vw, var(--space-6));
+  border-color: color-mix(in srgb, var(--color-border) 75%, var(--color-text-muted));
+  background: color-mix(in srgb, var(--color-surface) 92%, var(--color-accent));
+  box-shadow: 0 1.75rem 5rem rgb(0 0 0 / 0.18);
+}
+
+.workspace {
+  padding: clamp(var(--space-5), 4vw, var(--space-7));
+  box-shadow: 0 1.25rem 3.5rem rgb(19 29 50 / 0.08);
+}
+
+.field {
+  display: block;
+}
+
+.field > span {
+  position: absolute;
+  inline-size: 1px;
+  block-size: 1px;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0 0 0 0);
+  white-space: nowrap;
+}
+
+.controls {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-3);
+}
+
+.media,
+.submit {
+  font: inherit;
+}
+
+.media {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-2);
+  min-block-size: 3rem;
+  padding: 0.625rem 1rem;
+  border: 0.0625rem solid var(--color-border);
+  border-radius: 999px;
+  color: var(--color-text);
+  background: transparent;
+  font-weight: 700;
+}
+
+.media:disabled {
+  opacity: 1;
+  cursor: not-allowed;
+}
+
+.media svg {
+  inline-size: 1.5rem;
+  block-size: 1.5rem;
+}
+
+.submit {
+  display: inline-grid;
+  place-items: center;
+  inline-size: 3.25rem;
+  block-size: 3.25rem;
+  padding: 0;
+  border: 0.0625rem solid var(--color-accent);
+  border-radius: 50%;
+  color: white;
+  background: var(--color-accent);
+}
+
+.submit:disabled {
+  border-color: var(--color-border);
+  color: var(--color-text-muted);
+  background: var(--color-surface-raised);
+}
+
+.submit:not(:disabled):hover {
+  filter: brightness(1.08);
+}
+
+.media:focus-visible,
+.submit:focus-visible {
+  outline: 0.1875rem solid color-mix(in srgb, var(--color-accent) 45%, transparent);
+  outline-offset: 0.125rem;
+}
+
+.submit svg {
+  inline-size: 1.5rem;
+  block-size: 1.5rem;
+}
+
+.note {
+  inline-size: min(100%, 58rem);
+  margin: var(--space-2) auto 0;
+  color: var(--color-text-muted);
+  font-size: 0.875rem;
+  text-align: center;
+}
+
+@media (width < 40rem) {
+  .surface {
+    padding-inline: var(--space-3);
+    border-radius: var(--radius-lg);
+  }
+
+  .media {
+    min-block-size: 2.75rem;
+    padding-inline: var(--space-3);
+  }
+
+  .submit {
+    inline-size: 3rem;
+    block-size: 3rem;
+  }
+}

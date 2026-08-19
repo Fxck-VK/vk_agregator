@@ -3,7 +3,7 @@ import { resolve } from "node:path";
 import { describe, expect, it } from "vitest";
 
 const composerStylesheet = readFileSync(
-  resolve(process.cwd(), "src/features/conversations/ConversationComposer/ConversationComposer.module.css"),
+  resolve(process.cwd(), "src/components/chat/ChatComposer/ChatComposer.module.css"),
   "utf8",
 );
 const inputStylesheet = readFileSync(
@@ -11,10 +11,10 @@ const inputStylesheet = readFileSync(
   "utf8",
 );
 
-describe("ConversationComposer compact layout", () => {
+describe("shared ChatComposer layout", () => {
   it("uses one rounded composer surface with embedded controls", () => {
     expect(composerStylesheet).toMatch(
-      /\.composer\s*\{[^}]*border:\s*0\.0625rem solid var\(--color-border\);[^}]*border-radius:\s*1\.5rem;/s,
+      /\.surface\s*\{[^}]*border:\s*0\.0625rem solid var\(--color-border\);[^}]*border-radius:\s*1\.5rem;/s,
     );
     expect(composerStylesheet).toMatch(/\.controls\s*\{[^}]*display:\s*flex;/s);
   });

@@ -38,6 +38,10 @@
   background: transparent;
 }
 
+.composer.expanded {
+  block-size: 6rem;
+}
+
 .composer:focus-visible {
   outline: 0;
 }

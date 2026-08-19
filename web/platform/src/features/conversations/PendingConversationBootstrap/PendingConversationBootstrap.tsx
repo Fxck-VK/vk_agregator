@@ -128,15 +128,13 @@ export function PendingConversationBootstrap({ conversationKey }: PendingConvers
   }
 
   return (
-    <section aria-labelledby="pending-conversation-title" className={styles.content}>
+    <section aria-label={ru.conversations.historyTitle} className={styles.content}>
       <div className={styles.history}>
         <header className={styles.header}>
           <p className={styles.eyebrow}>{ru.conversations.historyEyebrow}</p>
-          <h1 id="pending-conversation-title">{ru.conversations.historyTitle}</h1>
         </header>
         <ol className={styles.messages}>
           <li className={styles.userMessage} data-chat-pending="user">
-            <span className={styles.role}>{ru.conversations.userRole}</span>
             <p>{intent.prompt}</p>
             {status === "failed" ? (
               <div className={styles.pendingTurnFailure}>

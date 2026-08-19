@@ -59,12 +59,13 @@ describe("ConversationHistory", () => {
     vi.unstubAllGlobals();
   });
 
-  it("renders assistant replies without a product role label", () => {
+  it("renders conversation messages without visible role labels", () => {
     render(<ConversationHistory history={initialHistory as never} />);
 
+    expect(screen.queryByRole("heading", { name: ru.conversations.historyTitle })).toBeNull();
     const messageItems = within(screen.getByRole("list")).getAllByRole("listitem");
 
-    expect(within(messageItems[0]).getByText(ru.conversations.userRole)).toBeVisible();
+    expect(within(messageItems[0]).queryByText(ru.conversations.userRole)).toBeNull();
     expect(within(messageItems[1]).queryByText(ru.conversations.assistantRole)).toBeNull();
     expect(within(messageItems[1]).getByText("message 103")).toBeVisible();
   });
