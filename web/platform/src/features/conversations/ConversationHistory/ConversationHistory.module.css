@@ -106,3 +106,18 @@
   margin-inline: auto;
   padding: clamp(3rem, 7vw, 6rem) clamp(var(--space-4), 6vw, 5rem);
 }
+
+.stateSurface {
+  display: grid;
+  justify-items: start;
+  gap: var(--space-3);
+  border: 0.0625rem solid var(--color-border);
+  border-radius: var(--radius-lg);
+  padding: var(--space-4);
+  background: var(--color-surface);
+  color: var(--color-text-muted);
+}
+
+.stateSurface > p {
+  margin: 0;
+}

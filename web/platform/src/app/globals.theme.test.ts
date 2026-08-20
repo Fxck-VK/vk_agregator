@@ -57,4 +57,13 @@ describe("global theme tokens", () => {
       expect(palette).toContain("--color-information-surface:");
     }
   });
+
+  it("smoothly transitions theme-driven page colors while preserving reduced-motion support", () => {
+    expect(stylesheet).toMatch(/html\s*\{[^}]*transition:\s*background-color var\(--motion-normal\);/s);
+    expect(stylesheet).toMatch(
+      /body\s*\{[^}]*transition:[^}]*background-color var\(--motion-normal\),[^}]*color var\(--motion-normal\);/s,
+    );
+    expect(stylesheet).toContain("@media (prefers-reduced-motion: reduce)");
+    expect(stylesheet).toContain("transition-duration: 0.01ms !important");
+  });
 });

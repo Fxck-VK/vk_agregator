@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { type ReactNode, useEffect, useRef, useState } from "react";
 
+import { LogoutIcon } from "@/components/icons/LogoutIcon";
 import { MegaphoneIcon } from "@/components/icons/MegaphoneIcon";
 import { MonitorIcon } from "@/components/icons/MonitorIcon";
 import { MoonIcon } from "@/components/icons/MoonIcon";
@@ -90,7 +91,12 @@ export function AccountMenu({ identityLabel, isLogoutPending, logoutFailure, onL
           </div>
 
           <div className={styles.themeSection}>
-            <div aria-label={ru.account.themeLabel} className={styles.themeSwitcher} role="group">
+            <div
+              aria-label={ru.account.themeLabel}
+              className={styles.themeSwitcher}
+              data-theme-preference={themePreference}
+              role="group"
+            >
               <button
                 aria-label={ru.account.systemThemeLabel}
                 aria-pressed={themePreference === "system"}
@@ -123,9 +129,7 @@ export function AccountMenu({ identityLabel, isLogoutPending, logoutFailure, onL
 
           <div className={styles.logoutSection}>
             <button className={styles.logoutAction} disabled={isLogoutPending} onClick={onLogout} type="button">
-              <AccountIcon>
-                <path d="M13 4h5v16h-5v-2h3V6h-3V4ZM5 12l5-5v3h4v4h-4v3l-5-5Z" fill="currentColor" />
-              </AccountIcon>
+              <LogoutIcon />
               <span>{isLogoutPending ? ru.account.logoutPending : ru.account.logoutLabel}</span>
             </button>
             {logoutFailure ? (

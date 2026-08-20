@@ -42,4 +42,16 @@ describe("AccountMenu styles", () => {
     expect(stylesheet).toMatch(/\.avatar\s*\{[^}]*border-radius:\s*50%;/s);
     expect(triggerRule).toContain("border-radius: var(--radius-lg)");
   });
+
+  it("slides one shared selected-theme surface between the three stationary icons", () => {
+    expect(stylesheet).toMatch(/\.themeSwitcher\s*\{[^}]*position:\s*relative;/s);
+    expect(stylesheet).toMatch(/\.themeSwitcher::before\s*\{[^}]*transition:\s*transform var\(--motion-normal\),/s);
+    expect(stylesheet).toMatch(
+      /\.themeSwitcher\[data-theme-preference="light"\]::before\s*\{[^}]*transform:\s*translateX\(calc\(100% \+ var\(--space-1\)\)\);/s,
+    );
+    expect(stylesheet).toMatch(
+      /\.themeSwitcher\[data-theme-preference="dark"\]::before\s*\{[^}]*transform:\s*translateX\(calc\(200% \+ \(2 \* var\(--space-1\)\)\)\);/s,
+    );
+    expect(stylesheet).toMatch(/\.themeOption\s*\{[^}]*position:\s*relative;[^}]*z-index:\s*1;/s);
+  });
 });

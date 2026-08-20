@@ -91,10 +91,12 @@ describe("AccountControl", () => {
     const systemTheme = screen.getByRole("button", { name: ru.account.systemThemeLabel });
     const lightTheme = screen.getByRole("button", { name: ru.account.lightThemeLabel });
     const darkTheme = screen.getByRole("button", { name: ru.account.darkThemeLabel });
+    const themeSwitcher = screen.getByRole("group", { name: ru.account.themeLabel });
 
     expect(systemTheme).toBeEnabled();
     expect(lightTheme).toBeEnabled();
     expect(darkTheme).toBeEnabled();
+    expect(themeSwitcher).toHaveAttribute("data-theme-preference", "system");
 
     fireEvent.click(lightTheme);
 
@@ -103,6 +105,11 @@ describe("AccountControl", () => {
     expect(darkTheme).toHaveAttribute("aria-pressed", "false");
     expect(document.documentElement).toHaveAttribute("data-theme", "light");
     expect(localStorage.getItem("neirohub.theme")).toBe("light");
+    expect(themeSwitcher).toHaveAttribute("data-theme-preference", "light");
+
+    fireEvent.click(darkTheme);
+
+    expect(themeSwitcher).toHaveAttribute("data-theme-preference", "dark");
     expect(screen.getByRole("region", { name: ru.account.menuLabel })).toBeInTheDocument();
   });
 
@@ -123,7 +130,10 @@ describe("AccountControl", () => {
     render(<AccountControl profile={profile} />);
 
     fireEvent.click(screen.getByRole("button", { name: "Открыть меню аккаунта" }));
-    fireEvent.click(screen.getByRole("button", { name: ru.account.logoutLabel }));
+    const logoutAction = screen.getByRole("button", { name: ru.account.logoutLabel });
+
+    expect(logoutAction.querySelector('[data-icon="logout"]')).toBeInTheDocument();
+    fireEvent.click(logoutAction);
 
     expect(logout).toHaveBeenCalledOnce();
   });

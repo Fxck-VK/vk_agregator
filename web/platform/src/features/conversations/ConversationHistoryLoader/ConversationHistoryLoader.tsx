@@ -9,12 +9,15 @@ import {
   conversationHistoryPageLimit,
   type ConversationHistoryData,
 } from "@/features/conversations/conversation-history-contract";
+import { SessionProgressBar } from "@/features/session/SessionProgressBar/SessionProgressBar";
 import { useWorkspaceDataCache } from "@/features/workspace/WorkspaceDataCache/WorkspaceDataCache";
 import { recordWorkspaceDataLoad } from "@/features/workspace/WorkspaceNavigationMetrics/workspace-navigation-metrics";
+import { ru } from "@/i18n/ru";
 import { parseConversationMessageList } from "@/lib/web-api/contracts";
 import { webBrowserFetch } from "@/lib/web-api/browser";
 
 const conversationIDSchema = z.string().uuid();
+const progressDelayMs = 150;
 
 type LoaderState = {
   history: ConversationHistoryData;
@@ -49,8 +52,24 @@ function ConversationHistoryLoaderContent({
     () => cache.getConversationHistory(conversationId) ?? { kind: "loading" },
   );
   const [state, setState] = useState<LoaderState>(() => ({ history: initialHistory, readyRevision: 0 }));
+  const [requestRevision, setRequestRevision] = useState(0);
+  const [isProgressVisible, setIsProgressVisible] = useState(false);
   const hasRecordedCacheLoad = useRef(false);
   const hasCachedReadyHistory = initialHistory.kind === "ready";
+  const isColdLoading = !hasCachedReadyHistory && state.history.kind === "loading";
+
+  useEffect(() => {
+    if (!isColdLoading) {
+      return;
+    }
+
+    const progressTimer = window.setTimeout(() => setIsProgressVisible(true), progressDelayMs);
+
+    return () => {
+      window.clearTimeout(progressTimer);
+      setIsProgressVisible(false);
+    };
+  }, [isColdLoading, requestRevision]);
 
   useEffect(() => {
     if (initialHistory.kind !== "ready" || hasRecordedCacheLoad.current) {
@@ -131,13 +150,25 @@ function ConversationHistoryLoaderContent({
     void load();
 
     return () => request.abort();
-  }, [cache, conversationId, hasCachedReadyHistory]);
+  }, [cache, conversationId, hasCachedReadyHistory, requestRevision]);
+
+  const retryHistoryLoad = () => {
+    setState((current) => ({ ...current, history: { kind: "loading" } }));
+    setRequestRevision((current) => current + 1);
+  };
 
   return (
-    <ConversationHistory
-      key={`${conversationId}:${state.readyRevision}`}
-      history={state.history}
-      initialRefresh={initialRefresh}
-    />
+    <>
+      <SessionProgressBar
+        label={ru.conversations.historyProgressLabel}
+        visible={isColdLoading && isProgressVisible}
+      />
+      <ConversationHistory
+        key={`${conversationId}:${state.readyRevision}`}
+        history={state.history}
+        initialRefresh={initialRefresh}
+        onRetry={retryHistoryLoad}
+      />
+    </>
   );
 }

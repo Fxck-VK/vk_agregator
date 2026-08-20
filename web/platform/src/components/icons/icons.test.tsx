@@ -9,6 +9,7 @@ import { EditIcon } from "./EditIcon";
 import { FileIcon } from "./FileIcon";
 import { GridIcon } from "./GridIcon";
 import { ImageIcon } from "./ImageIcon";
+import { LogoutIcon } from "./LogoutIcon";
 import { MegaphoneIcon } from "./MegaphoneIcon";
 import { MonitorIcon } from "./MonitorIcon";
 import { MoonIcon } from "./MoonIcon";
@@ -56,6 +57,7 @@ describe("shared icons", () => {
   });
 
   it.each([
+    ["logout", LogoutIcon, assetPaths.icons.accountMenu.logout],
     ["profile", ProfileIcon, assetPaths.icons.accountMenu.profile],
     ["support", SupportIcon, assetPaths.icons.accountMenu.support],
     ["megaphone", MegaphoneIcon, assetPaths.icons.accountMenu.megaphone],

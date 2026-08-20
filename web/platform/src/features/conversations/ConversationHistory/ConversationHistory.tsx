@@ -38,6 +38,7 @@ import styles from "./ConversationHistory.module.css";
 type ConversationHistoryProps = {
   history: ConversationHistoryData;
   initialRefresh?: boolean;
+  onRetry?: () => void;
 };
 
 type PollRequest = {
@@ -60,9 +61,9 @@ const conversationRefreshIntervalMs = 2_000;
 const conversationRefreshDeadlineMs = 30_000;
 const conversationRefreshMaxAttempts = 15;
 
-export function ConversationHistory({ history, initialRefresh = false }: ConversationHistoryProps) {
+export function ConversationHistory({ history, initialRefresh = false, onRetry }: ConversationHistoryProps) {
   if (history.kind === "loading") {
-    return <ConversationHistoryState message={ru.conversations.historyLoadEarlierPending} />;
+    return null;
   }
 
   if (history.kind === "not_found") {
@@ -70,7 +71,13 @@ export function ConversationHistory({ history, initialRefresh = false }: Convers
   }
 
   if (history.kind === "unavailable") {
-    return <ConversationHistoryState message={ru.conversations.historyLoadFailure} />;
+    return (
+      <ConversationHistoryState
+        actionLabel={onRetry ? ru.conversations.messageRetryLabel : undefined}
+        message={ru.conversations.historyLoadFailure}
+        onAction={onRetry}
+      />
+    );
   }
 
   return <ConversationHistoryReady key={history.conversationId} history={history} initialRefresh={initialRefresh} />;
@@ -527,12 +534,21 @@ function appendNewerMessages(
   return [...currentMessages, ...appendedMessages];
 }
 
-function ConversationHistoryState({ message }: Readonly<{ message: string }>) {
+function ConversationHistoryState({
+  actionLabel,
+  message,
+  onAction,
+}: Readonly<{
+  actionLabel?: string;
+  message: string;
+  onAction?: () => void;
+}>) {
   return (
     <section aria-label={ru.conversations.historyTitle} className={`${styles.content} ${styles.state}`}>
-      <p className={styles.empty} role="status">
-        {message}
-      </p>
+      <div className={styles.stateSurface} role="status">
+        <p>{message}</p>
+        {actionLabel && onAction ? <Button onClick={onAction}>{actionLabel}</Button> : null}
+      </div>
     </section>
   );
 }

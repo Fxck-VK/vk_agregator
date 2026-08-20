@@ -1,4 +1,4 @@
-import { act, cleanup, render, screen } from "@testing-library/react";
+import { act, cleanup, fireEvent, render, screen } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
 vi.mock("@/lib/web-api/browser", () => ({
@@ -70,8 +70,25 @@ function renderLoader({
 describe("ConversationHistoryLoader", () => {
   afterEach(() => {
     cleanup();
-    vi.clearAllMocks();
+    vi.useRealTimers();
+    vi.resetAllMocks();
     vi.unstubAllGlobals();
+  });
+
+  it("keeps a cold load visually empty and shows only a delayed top progress line", () => {
+    vi.useFakeTimers();
+    vi.mocked(webBrowserFetch).mockReturnValueOnce(new Promise<Response>(() => {}));
+
+    renderLoader();
+
+    expect(screen.queryByText(ru.conversations.historyLoadEarlierPending)).not.toBeInTheDocument();
+    expect(screen.queryByRole("progressbar")).not.toBeInTheDocument();
+
+    act(() => vi.advanceTimersByTime(149));
+    expect(screen.queryByRole("progressbar")).not.toBeInTheDocument();
+
+    act(() => vi.advanceTimersByTime(1));
+    expect(screen.getByRole("progressbar", { name: "Загрузка сообщений" })).toBeInTheDocument();
   });
 
   it("renders a cached message while revalidation is pending", () => {
@@ -145,12 +162,30 @@ describe("ConversationHistoryLoader", () => {
     expect(screen.queryByText(ru.conversations.historyLoadFailure)).not.toBeInTheDocument();
   });
 
-  it("shows an unavailable state on a cold revalidation failure", async () => {
-    vi.mocked(webBrowserFetch).mockResolvedValueOnce(new Response(null, { status: 503 }));
+  it("offers an inline retry after a cold revalidation failure", async () => {
+    vi.mocked(webBrowserFetch)
+      .mockResolvedValueOnce(new Response(null, { status: 503 }))
+      .mockResolvedValueOnce(
+        Response.json({
+          items: [
+            {
+              id: "33333333-3333-4333-8333-333333333333",
+              seq: 3,
+              role: "assistant",
+              text: "message after history retry",
+              created_at: "2026-08-01T12:00:02Z",
+            },
+          ],
+        }),
+      );
 
     renderLoader();
 
     expect(await screen.findByText(ru.conversations.historyLoadFailure)).toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: ru.conversations.messageRetryLabel }));
+
+    expect(await screen.findByText("message after history retry")).toBeInTheDocument();
+    expect(webBrowserFetch).toHaveBeenCalledTimes(2);
   });
 
   it("evicts cached history when the server returns not found", async () => {
