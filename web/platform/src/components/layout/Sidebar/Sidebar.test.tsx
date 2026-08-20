@@ -131,7 +131,13 @@ describe("Sidebar", () => {
     mockWideViewport();
     render(<Sidebar />);
 
-    expect(screen.getByRole("link", { name: ru.brand.name })).toHaveAttribute("href", "/app");
+    const brandLink = screen.getByRole("link", { name: ru.brand.name });
+    expect(brandLink).toHaveAttribute("href", "/app");
+    expect(within(brandLink).getByTestId("neirohub-brand-chip")).toHaveAttribute(
+      "src",
+      expect.stringContaining("neirohub-chip.png"),
+    );
+    expect(within(brandLink).queryByText(ru.brand.monogram)).not.toBeInTheDocument();
     expect(screen.queryByRole("link", { name: ru.navigation.workspace })).not.toBeInTheDocument();
 
     const navigation = screen.getByRole("navigation", { name: ru.navigation.label });
@@ -899,6 +905,11 @@ describe("Sidebar", () => {
     const conversationLink = screen.getByRole("link", { name: "Recent chat 1" });
 
     expect(expandControl).toHaveAttribute("aria-expanded", "false");
+    expect(within(expandControl).getByTestId("neirohub-brand-chip")).toHaveAttribute(
+      "src",
+      expect.stringContaining("neirohub-chip.png"),
+    );
+    expect(within(expandControl).queryByText(ru.brand.monogram)).not.toBeInTheDocument();
     expect(panel).toHaveAttribute("data-desktop-collapsed", "true");
     expect(panel).not.toHaveAttribute("aria-hidden");
     expect(panel).not.toHaveAttribute("inert");

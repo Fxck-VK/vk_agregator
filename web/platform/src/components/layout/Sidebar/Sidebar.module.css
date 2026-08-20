@@ -59,17 +59,11 @@
   opacity: 0.8;
 }
 
-.brandMark {
-  display: grid;
-  inline-size: 2rem;
-  block-size: 2rem;
-  place-items: center;
-  border-radius: 50%;
-  background: var(--color-accent);
-  color: var(--color-text);
-  font-size: 0.6875rem;
-  font-weight: 800;
-  letter-spacing: 0.04em;
+.brandChip {
+  display: block;
+  inline-size: 2.25rem;
+  block-size: 2.25rem;
+  object-fit: contain;
 }
 
 .collapsedBrandControl {
@@ -79,7 +73,7 @@
   background: transparent;
 }
 
-.collapsedBrandControl .brandMark,
+.collapsedBrandControl .brandChip,
 .collapsedBrandControl .expandMark {
   position: absolute;
   transition: opacity var(--motion-fast), transform var(--motion-fast);
@@ -95,8 +89,8 @@
   background: var(--color-surface-raised);
 }
 
-.collapsedBrandControl:hover .brandMark,
-.collapsedBrandControl:focus-visible .brandMark {
+.collapsedBrandControl:hover .brandChip,
+.collapsedBrandControl:focus-visible .brandChip {
   opacity: 0;
 }
 

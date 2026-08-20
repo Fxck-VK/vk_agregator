@@ -1,5 +1,6 @@
 "use client";
 
+import Image from "next/image";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import {
@@ -24,6 +25,21 @@ import { ru } from "@/i18n/ru";
 import styles from "./Sidebar.module.css";
 
 const desktopViewportQuery = "(min-width: 48rem)";
+const brandChipPath = "/assets/brand/marks/neirohub-chip.png";
+
+function BrandChip() {
+  return (
+    <Image
+      alt=""
+      aria-hidden="true"
+      className={styles.brandChip}
+      data-testid="neirohub-brand-chip"
+      height={40}
+      src={brandChipPath}
+      width={40}
+    />
+  );
+}
 
 export const workspaceNavigationItems = [
   { href: "/app/chats", icon: "edit", label: ru.navigation.chats, prefetch: true },
@@ -326,7 +342,7 @@ export function Sidebar({ account, conversations, isDesktopCollapsed = false, on
               data-sidebar-tooltip={ru.navigation.expandSidebarLabel}
               onClick={toggleDesktopSidebar}
             >
-              <span aria-hidden="true" className={styles.brandMark}>{ru.brand.monogram}</span>
+              <BrandChip />
               <svg aria-hidden="true" className={styles.expandMark} viewBox="0 0 24 24">
                 <path d="M4 5h16v14H4V5Zm5 0v14m4-10 4 3-4 3" fill="none" stroke="currentColor" strokeLinecap="round" strokeLinejoin="round" strokeWidth="1.8" />
               </svg>
@@ -340,7 +356,7 @@ export function Sidebar({ account, conversations, isDesktopCollapsed = false, on
               prefetch
               ref={firstLinkRef}
             >
-              <span aria-hidden="true" className={styles.brandMark}>{ru.brand.monogram}</span>
+              <BrandChip />
               <span>{ru.brand.name}</span>
             </Link>
           )}

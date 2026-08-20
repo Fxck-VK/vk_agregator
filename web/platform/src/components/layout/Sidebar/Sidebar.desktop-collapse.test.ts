@@ -44,7 +44,7 @@ describe("Sidebar desktop collapse stylesheet", () => {
       /\.railTooltip \{[\s\S]*?position: fixed;[\s\S]*?inset-inline-start: calc\(var\(--sidebar-collapsed-rail-width\) \+ var\(--space-2\)\);/,
     );
     expect(stylesheet).toMatch(
-      /\.collapsedBrandControl:hover \.brandMark[\s\S]*?opacity: 0;/,
+      /\.collapsedBrandControl:hover \.brandChip[\s\S]*?opacity: 0;/,
     );
   });
 });
