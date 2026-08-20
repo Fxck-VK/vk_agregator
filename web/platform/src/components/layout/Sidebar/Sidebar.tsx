@@ -2,7 +2,16 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { type MouseEvent as ReactMouseEvent, type ReactNode, useCallback, useEffect, useLayoutEffect, useRef, useState } from "react";
+import {
+  type FocusEvent as ReactFocusEvent,
+  type MouseEvent as ReactMouseEvent,
+  type ReactNode,
+  useCallback,
+  useEffect,
+  useLayoutEffect,
+  useRef,
+  useState,
+} from "react";
 
 import { EditIcon } from "@/components/icons/EditIcon";
 import { FileIcon } from "@/components/icons/FileIcon";
@@ -41,6 +50,7 @@ export function Sidebar({ account, conversations, isDesktopCollapsed = false, on
   const pathname = usePathname();
   const [isNarrowViewport, setIsNarrowViewport] = useState<boolean | null>(null);
   const [isOpen, setIsOpen] = useState(false);
+  const [railTooltip, setRailTooltip] = useState<{ label: string; top: number } | null>(null);
   const [conversationPanelSession, setConversationPanelSession] = useState(0);
   const firstLinkRef = useRef<HTMLAnchorElement>(null);
   const hasObservedPathnameRef = useRef(false);
@@ -53,8 +63,10 @@ export function Sidebar({ account, conversations, isDesktopCollapsed = false, on
   const triggerRef = useRef<HTMLButtonElement>(null);
   const wasPanelOpenRef = useRef(false);
   const navigationId = "workspace-navigation";
-  const panelIsOpen = (isNarrowViewport === false && !isDesktopCollapsed) || isOpen;
-  const panelIsInactive = isNarrowViewport === true ? !isOpen : isDesktopCollapsed;
+  const desktopRailIsCollapsed = isDesktopCollapsed && isNarrowViewport === false;
+  const panelIsVisible = isNarrowViewport === false || isOpen;
+  const conversationControlsAreActive = (isNarrowViewport === false && !isDesktopCollapsed) || isOpen;
+  const panelIsInactive = isNarrowViewport === true && !isOpen;
 
   const closeNavigation = (restoreFocus = false) => {
     restoreFocusRef.current = restoreFocus;
@@ -62,14 +74,14 @@ export function Sidebar({ account, conversations, isDesktopCollapsed = false, on
   };
 
   useLayoutEffect(() => {
-    if (wasPanelOpenRef.current && !panelIsOpen) {
+    if (wasPanelOpenRef.current && !conversationControlsAreActive) {
       setConversationPanelSession((session) => session + 1);
       pendingConversationPanelIdsRef.current.clear();
       visibleConversationPanelRef.current = null;
     }
-    wasPanelOpenRef.current = panelIsOpen;
-    sidebarActivityRef.current = { isActive: panelIsOpen, session: conversationPanelSession };
-  }, [conversationPanelSession, panelIsOpen]);
+    wasPanelOpenRef.current = conversationControlsAreActive;
+    sidebarActivityRef.current = { isActive: conversationControlsAreActive, session: conversationPanelSession };
+  }, [conversationControlsAreActive, conversationPanelSession]);
 
   const updatePendingConversationPanel = (conversationId: string, isPending: boolean, session: number) => {
     const sidebarActivity = sidebarActivityRef.current;
@@ -106,6 +118,7 @@ export function Sidebar({ account, conversations, isDesktopCollapsed = false, on
     const mediaQuery = window.matchMedia(desktopViewportQuery);
     const updateViewport = () => {
       setIsNarrowViewport(!mediaQuery.matches);
+      setRailTooltip(null);
       if (mediaQuery.matches) {
         setIsOpen(false);
       }
@@ -134,7 +147,7 @@ export function Sidebar({ account, conversations, isDesktopCollapsed = false, on
   }, [isNarrowViewport, isOpen, pathname]);
 
   useEffect(() => {
-    if (!panelIsOpen) return undefined;
+    if (!conversationControlsAreActive) return undefined;
 
     const closeConversationOnEscape = (event: KeyboardEvent) => {
       if (event.key === "Escape" && consumeConversationEscape()) event.preventDefault();
@@ -142,7 +155,7 @@ export function Sidebar({ account, conversations, isDesktopCollapsed = false, on
     window.addEventListener("keydown", closeConversationOnEscape);
 
     return () => window.removeEventListener("keydown", closeConversationOnEscape);
-  }, [consumeConversationEscape, panelIsOpen]);
+  }, [consumeConversationEscape, conversationControlsAreActive]);
 
   useEffect(() => {
     if (!isNarrowViewport) {
@@ -221,7 +234,28 @@ export function Sidebar({ account, conversations, isDesktopCollapsed = false, on
   };
 
   const toggleDesktopSidebar = () => {
+    setRailTooltip(null);
     onDesktopToggle?.();
+  };
+
+  const getTooltipTarget = (target: EventTarget | null) =>
+    target instanceof Element ? target.closest<HTMLElement>("[data-sidebar-tooltip]") : null;
+
+  const showRailTooltip = (target: EventTarget | null) => {
+    if (!isDesktopCollapsed || isNarrowViewport !== false) return;
+    const tooltipTarget = getTooltipTarget(target);
+    if (!tooltipTarget || !panelRef.current?.contains(tooltipTarget)) return;
+    const label = tooltipTarget.dataset.sidebarTooltip?.trim();
+    if (!label) return;
+    const bounds = tooltipTarget.getBoundingClientRect();
+    setRailTooltip({ label, top: bounds.top + bounds.height / 2 });
+  };
+
+  const hideRailTooltip = (currentTarget: EventTarget | null, nextTarget: EventTarget | null) => {
+    const currentTooltipTarget = getTooltipTarget(currentTarget);
+    const nextTooltipTarget = getTooltipTarget(nextTarget);
+    if (currentTooltipTarget && currentTooltipTarget === nextTooltipTarget) return;
+    setRailTooltip(null);
   };
 
   const closeAfterConversationSelection = (event: ReactMouseEvent<HTMLDivElement>) => {
@@ -247,20 +281,6 @@ export function Sidebar({ account, conversations, isDesktopCollapsed = false, on
 
   return (
     <>
-      {onDesktopToggle ? (
-        <Button
-          aria-controls="sidebar-panel"
-          aria-expanded={!isDesktopCollapsed}
-          aria-label={isDesktopCollapsed ? ru.navigation.expandSidebarLabel : ru.navigation.collapseSidebarLabel}
-          className={styles.desktopTrigger}
-          data-desktop-collapsed={isDesktopCollapsed}
-          onClick={toggleDesktopSidebar}
-        >
-          <svg aria-hidden="true" viewBox="0 0 24 24">
-            <path d="m14 6-6 6 6 6" fill="none" stroke="currentColor" strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" />
-          </svg>
-        </Button>
-      ) : null}
       <Button
         aria-controls={navigationId}
         aria-expanded={isOpen}
@@ -285,26 +305,59 @@ export function Sidebar({ account, conversations, isDesktopCollapsed = false, on
         aria-modal={isNarrowViewport && isOpen ? true : undefined}
         className={styles.panel}
         data-desktop-collapsed={isDesktopCollapsed}
-        data-open={panelIsOpen}
+        data-open={panelIsVisible}
         data-testid="sidebar-panel"
         id="sidebar-panel"
         inert={panelIsInactive || undefined}
+        onBlurCapture={(event: ReactFocusEvent<HTMLDivElement>) => hideRailTooltip(event.target, event.relatedTarget)}
+        onFocusCapture={(event: ReactFocusEvent<HTMLDivElement>) => showRailTooltip(event.target)}
+        onMouseOut={(event: ReactMouseEvent<HTMLDivElement>) => hideRailTooltip(event.target, event.relatedTarget)}
+        onMouseOver={(event: ReactMouseEvent<HTMLDivElement>) => showRailTooltip(event.target)}
         ref={panelRef}
         role={isNarrowViewport && isOpen ? "dialog" : undefined}
       >
-        <Link
-          aria-current={pathname === "/app" ? "page" : undefined}
-          className={styles.brand}
-          href="/app"
-          onClick={() => closeNavigation(true)}
-          prefetch
-          ref={firstLinkRef}
-        >
-          <span aria-hidden="true" className={styles.brandMark}>
-            {ru.brand.monogram}
-          </span>
-          <span>{ru.brand.name}</span>
-        </Link>
+        <div className={styles.brandRow}>
+          {desktopRailIsCollapsed && onDesktopToggle ? (
+            <Button
+              aria-controls="sidebar-panel"
+              aria-expanded="false"
+              aria-label={ru.navigation.expandSidebarLabel}
+              className={`${styles.desktopTrigger} ${styles.collapsedBrandControl}`}
+              data-sidebar-tooltip={ru.navigation.expandSidebarLabel}
+              onClick={toggleDesktopSidebar}
+            >
+              <span aria-hidden="true" className={styles.brandMark}>{ru.brand.monogram}</span>
+              <svg aria-hidden="true" className={styles.expandMark} viewBox="0 0 24 24">
+                <path d="M4 5h16v14H4V5Zm5 0v14m4-10 4 3-4 3" fill="none" stroke="currentColor" strokeLinecap="round" strokeLinejoin="round" strokeWidth="1.8" />
+              </svg>
+            </Button>
+          ) : (
+            <Link
+              aria-current={pathname === "/app" ? "page" : undefined}
+              className={styles.brand}
+              href="/app"
+              onClick={() => closeNavigation(true)}
+              prefetch
+              ref={firstLinkRef}
+            >
+              <span aria-hidden="true" className={styles.brandMark}>{ru.brand.monogram}</span>
+              <span>{ru.brand.name}</span>
+            </Link>
+          )}
+          {!desktopRailIsCollapsed && onDesktopToggle ? (
+            <Button
+              aria-controls="sidebar-panel"
+              aria-expanded="true"
+              aria-label={ru.navigation.collapseSidebarLabel}
+              className={styles.desktopTrigger}
+              onClick={toggleDesktopSidebar}
+            >
+              <svg aria-hidden="true" viewBox="0 0 24 24">
+                <path d="m14 6-6 6 6 6" fill="none" stroke="currentColor" strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" />
+              </svg>
+            </Button>
+          ) : null}
+        </div>
         <div className={styles.scrollArea}>
           <nav aria-label={ru.navigation.label} id={navigationId}>
             <ul className={styles.navigationList}>
@@ -315,6 +368,7 @@ export function Sidebar({ account, conversations, isDesktopCollapsed = false, on
                   <li key={item.href}>
                     <Link
                       aria-current={pathname === item.href ? "page" : undefined}
+                      data-sidebar-tooltip={item.label}
                       href={item.href}
                       id={item.href === "/app/chats" ? "sidebar-new-chat" : undefined}
                       onClick={() => closeNavigation(true)}
@@ -331,7 +385,7 @@ export function Sidebar({ account, conversations, isDesktopCollapsed = false, on
           {conversations ? (
             <div className={styles.conversationsSlot} onClickCapture={closeAfterConversationSelection}>
               <SidebarConversationsActivityProvider
-                isActive={panelIsOpen}
+                isActive={conversationControlsAreActive}
                 onPendingPanelChange={updatePendingConversationPanel}
                 onVisiblePanelChange={updateVisibleConversationPanel}
                 session={conversationPanelSession}
@@ -343,6 +397,11 @@ export function Sidebar({ account, conversations, isDesktopCollapsed = false, on
         </div>
         {account ? <div className={styles.accountSlot}>{account}</div> : null}
       </div>
+      {railTooltip ? (
+        <div className={styles.railTooltip} role="tooltip" style={{ top: railTooltip.top }}>
+          {railTooltip.label}
+        </div>
+      ) : null}
     </>
   );
 }

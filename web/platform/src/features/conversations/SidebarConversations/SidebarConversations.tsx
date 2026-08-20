@@ -70,12 +70,12 @@ export function SidebarConversations({ conversations }: SidebarConversationsProp
   };
 
   return (
-    <section aria-labelledby="recent-conversations-title" className={styles.conversations}>
-      <h2 id="recent-conversations-title">{ru.conversations.recentHeading}</h2>
+    <section aria-labelledby="recent-conversations-title" className={styles.conversations} data-sidebar-conversations="true">
+      <h2 data-sidebar-conversations-title="true" id="recent-conversations-title">{ru.conversations.recentHeading}</h2>
       {visibleConversations.length === 0 ? (
         <p className={styles.empty}>{ru.conversations.empty}</p>
       ) : (
-        <ul className={styles.list}>
+        <ul className={styles.list} data-sidebar-conversation-list="true">
           {visibleConversations.map((conversation) => {
             const isActive = pathname === "/app/chat/" + conversation.id;
 

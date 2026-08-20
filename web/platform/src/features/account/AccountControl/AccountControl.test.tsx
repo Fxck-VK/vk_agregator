@@ -39,6 +39,8 @@ describe("AccountControl", () => {
     const trigger = screen.getByRole("button", { name: "Открыть меню аккаунта" });
 
     expect(trigger).toHaveAttribute("aria-expanded", "false");
+    expect(trigger).toHaveAttribute("data-sidebar-account-trigger", "true");
+    expect(trigger).toHaveAttribute("data-sidebar-tooltip", ru.account.profileLabel);
     expect(screen.getByText("member@example.com")).toBeInTheDocument();
     expect(screen.queryByText("ME")).not.toBeInTheDocument();
     expect(screen.queryByText(profile.account_id)).not.toBeInTheDocument();
@@ -54,9 +56,16 @@ describe("AccountControl", () => {
     expect(trigger).toHaveAttribute("aria-expanded", "true");
     const menu = screen.getByRole("region", { name: "Меню аккаунта" });
     expect(menu).toHaveFocus();
-    expect(screen.getByRole("link", { name: "Профиль" })).toHaveAttribute("href", "/app/profile");
-    expect(screen.getByRole("button", { name: "Поддержка" })).toBeDisabled();
-    expect(screen.getByRole("button", { name: "Что нового?" })).toBeDisabled();
+    const profileAction = screen.getByRole("link", { name: "Профиль" });
+    const supportAction = screen.getByRole("button", { name: "Поддержка" });
+    const updatesAction = screen.getByRole("button", { name: "Что нового?" });
+
+    expect(profileAction).toHaveAttribute("href", "/app/profile");
+    expect(profileAction.querySelector('[data-icon="profile"]')).toBeInTheDocument();
+    expect(supportAction).toBeDisabled();
+    expect(supportAction.querySelector('[data-icon="support"]')).toBeInTheDocument();
+    expect(updatesAction).toBeDisabled();
+    expect(updatesAction.querySelector('[data-icon="megaphone"]')).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "Системная тема" })).toHaveAttribute("aria-pressed", "true");
     expect(screen.getByRole("button", { name: "Светлая тема" })).toHaveAttribute("aria-pressed", "false");
     expect(screen.getByRole("button", { name: "Тёмная тема" })).toHaveAttribute("aria-pressed", "false");
@@ -97,18 +106,17 @@ describe("AccountControl", () => {
     expect(screen.getByRole("region", { name: ru.account.menuLabel })).toBeInTheDocument();
   });
 
-  it("renders a filled moon glyph for the dark theme option", () => {
+  it("renders the approved shared artwork for every theme option", () => {
     render(<AccountControl profile={profile} />);
     fireEvent.click(screen.getByRole("button", { name: ru.account.openMenuLabel }));
 
+    const systemTheme = screen.getByRole("button", { name: ru.account.systemThemeLabel });
+    const lightTheme = screen.getByRole("button", { name: ru.account.lightThemeLabel });
     const darkTheme = screen.getByRole("button", { name: ru.account.darkThemeLabel });
-    const moonPath = darkTheme.querySelector("path");
 
-    expect(moonPath).toHaveAttribute("fill", "currentColor");
-    expect(moonPath).toHaveAttribute(
-      "d",
-      "M9.528 1.718a.75.75 0 0 1 1.162.81 8.25 8.25 0 0 0 10.78 10.78.75.75 0 0 1 .81 1.163A9.75 9.75 0 1 1 9.528 1.718Z",
-    );
+    expect(systemTheme.querySelector('[data-icon="monitor"]')).toBeInTheDocument();
+    expect(lightTheme.querySelector('[data-icon="sun"]')).toBeInTheDocument();
+    expect(darkTheme.querySelector('[data-icon="moon"]')).toBeInTheDocument();
   });
 
   it("delegates logout to the workspace session boundary", () => {

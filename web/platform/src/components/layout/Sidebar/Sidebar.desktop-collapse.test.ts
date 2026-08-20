@@ -13,13 +13,13 @@ const appShellStylesheet = readFileSync(
 );
 
 describe("Sidebar desktop collapse stylesheet", () => {
-  it("uses exact complementary narrow and wide breakpoints for the desktop collapse state", () => {
+  it("uses complementary breakpoints without hiding the collapsed desktop rail", () => {
     expect(stylesheet).not.toContain("max-width: 47.99rem");
     expect(appShellStylesheet).not.toContain("max-width: 47.99rem");
     expect(stylesheet).toMatch(
       /@media \(width < 48rem\) \{[\s\S]*?\.desktopTrigger \{[\s\S]*?display: none;/,
     );
-    expect(stylesheet).toMatch(
+    expect(stylesheet).not.toMatch(
       /@media \(min-width: 48rem\) \{[\s\S]*?\.panel\[data-desktop-collapsed="true"\] \{[\s\S]*?transform: translateX\(-105%\);/,
     );
     expect(appShellStylesheet).toMatch(
@@ -28,20 +28,23 @@ describe("Sidebar desktop collapse stylesheet", () => {
     expect(appShellStylesheet).toMatch(
       /@media \(min-width: 48rem\) \{[\s\S]*?\.shell\[data-desktop-sidebar-collapsed="true"\] \.workspace \{[\s\S]*?margin-inline-start: var\(--sidebar-collapsed-rail-width\);/,
     );
-    expect(stylesheet).toMatch(
-      /\.desktopTrigger\[data-desktop-collapsed="true"\] svg \{[\s\S]*?transform: rotate\(180deg\);/,
-    );
   });
 
-  it("reserves a collapsed desktop rail for the fixed sidebar trigger", () => {
+  it("reserves a full icon rail with square active controls and hover tooltips", () => {
     expect(stylesheet).toMatch(
-      /\.desktopTrigger \{[\s\S]*?inline-size: 2\.25rem;/,
+      /\.panel\[data-desktop-collapsed="true"\] \{[\s\S]*?inline-size: var\(--sidebar-collapsed-rail-width\);/,
     );
     expect(stylesheet).toMatch(
-      /\.desktopTrigger\[data-desktop-collapsed="true"\] \{[\s\S]*?inset-inline-start: var\(--space-3\);/,
+      /\.panel\[data-desktop-collapsed="true"\] \.navigationList a\[aria-current="page"\] \{[\s\S]*?border-radius: var\(--radius-sm\);/,
     );
     expect(appShellStylesheet).toMatch(
-      /\.shell \{[\s\S]*?--sidebar-collapsed-rail-width: calc\(var\(--space-3\) \+ 2\.25rem\);/,
+      /\.shell \{[\s\S]*?--sidebar-collapsed-rail-width: 5\.5rem;/,
+    );
+    expect(stylesheet).toMatch(
+      /\.railTooltip \{[\s\S]*?position: fixed;[\s\S]*?inset-inline-start: calc\(var\(--sidebar-collapsed-rail-width\) \+ var\(--space-2\)\);/,
+    );
+    expect(stylesheet).toMatch(
+      /\.collapsedBrandControl:hover \.brandMark[\s\S]*?opacity: 0;/,
     );
   });
 });

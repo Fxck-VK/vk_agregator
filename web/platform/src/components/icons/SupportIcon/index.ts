@@ -1,0 +1,1 @@
+export { SupportIcon } from "./SupportIcon";

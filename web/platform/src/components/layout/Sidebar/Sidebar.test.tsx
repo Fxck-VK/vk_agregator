@@ -880,16 +880,40 @@ describe("Sidebar", () => {
     expect(matchMedia).toHaveBeenCalledWith("(min-width: 48rem)");
   });
 
-  it("makes a collapsed desktop panel inaccessible while keeping its restore control available", () => {
+  it("keeps the collapsed desktop rail accessible with labelled icon controls", () => {
     mockWideViewport();
     const onDesktopToggle = vi.fn();
 
-    render(<Sidebar isDesktopCollapsed onDesktopToggle={onDesktopToggle} />);
+    render(
+      <Sidebar
+        account={<button data-sidebar-account-trigger="true" data-sidebar-tooltip="Profile" type="button">Profile</button>}
+        conversations={<SidebarConversations conversations={recentConversations.slice(0, 2)} />}
+        isDesktopCollapsed
+        onDesktopToggle={onDesktopToggle}
+      />,
+    );
 
-    expect(screen.getByRole("button", { name: ru.navigation.expandSidebarLabel })).toHaveAttribute("aria-expanded", "false");
-    expect(screen.getByTestId("sidebar-panel")).toHaveAttribute("data-desktop-collapsed", "true");
-    expect(screen.getByTestId("sidebar-panel")).toHaveAttribute("aria-hidden", "true");
-    expect(screen.getByTestId("sidebar-panel")).toHaveAttribute("inert");
+    const expandControl = screen.getByRole("button", { name: ru.navigation.expandSidebarLabel });
+    const panel = screen.getByTestId("sidebar-panel");
+    const chatsLink = screen.getByRole("link", { name: ru.navigation.chats });
+    const conversationLink = screen.getByRole("link", { name: "Recent chat 1" });
+
+    expect(expandControl).toHaveAttribute("aria-expanded", "false");
+    expect(panel).toHaveAttribute("data-desktop-collapsed", "true");
+    expect(panel).not.toHaveAttribute("aria-hidden");
+    expect(panel).not.toHaveAttribute("inert");
+    expect(chatsLink).toHaveAttribute("data-sidebar-tooltip", ru.navigation.chats);
+    expect(conversationLink).toHaveAttribute("data-sidebar-tooltip", "Recent chat 1");
+    expect(conversationLink.querySelector('[data-sidebar-conversation-icon="true"]')).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Profile" })).toHaveAttribute("data-sidebar-tooltip", "Profile");
+
+    fireEvent.mouseOver(conversationLink);
+    expect(screen.getByRole("tooltip")).toHaveTextContent("Recent chat 1");
+    fireEvent.mouseOut(conversationLink);
+    expect(screen.queryByRole("tooltip")).not.toBeInTheDocument();
+
+    fireEvent.click(expandControl);
+    expect(onDesktopToggle).toHaveBeenCalledTimes(1);
   });
 
   it("keeps the final recent chat and account control in the narrow drawer focus trap", () => {

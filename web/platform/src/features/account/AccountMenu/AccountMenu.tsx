@@ -3,6 +3,12 @@
 import Link from "next/link";
 import { type ReactNode, useEffect, useRef, useState } from "react";
 
+import { MegaphoneIcon } from "@/components/icons/MegaphoneIcon";
+import { MonitorIcon } from "@/components/icons/MonitorIcon";
+import { MoonIcon } from "@/components/icons/MoonIcon";
+import { ProfileIcon } from "@/components/icons/ProfileIcon";
+import { SunIcon } from "@/components/icons/SunIcon";
+import { SupportIcon } from "@/components/icons/SupportIcon";
 import {
   applyThemePreference,
   readThemePreference,
@@ -70,21 +76,15 @@ export function AccountMenu({ identityLabel, isLogoutPending, logoutFailure, onL
         >
           <div className={styles.menuList}>
             <Link className={styles.menuAction} href="/app/profile" onClick={closeMenu}>
-              <AccountIcon>
-                <path d="M12 12a4 4 0 1 0 0-8 4 4 0 0 0 0 8Zm-7 8a7 7 0 0 1 14 0" fill="currentColor" />
-              </AccountIcon>
+              <ProfileIcon />
               <span>{ru.account.profileLabel}</span>
             </Link>
             <button aria-disabled="true" className={styles.menuAction} disabled type="button">
-              <AccountIcon>
-                <path d="M12 3a9 9 0 1 0 0 18 9 9 0 0 0 0-18Zm0 3.3 2 2 2.8-.4-.4 2.8 2 2-2 2 .4 2.8-2.8-.4-2 2-2-2-2.8.4.4-2.8-2-2 2-2-.4-2.8 2.8.4 2-2Z" fill="currentColor" />
-              </AccountIcon>
+              <SupportIcon />
               <span>{ru.account.supportLabel}</span>
             </button>
             <button aria-disabled="true" className={styles.menuAction} disabled type="button">
-              <AccountIcon>
-                <path d="m4 10 11-4v12L4 14v-4Zm12.5-.6 2.4 2.6-2.4 2.6v-5.2ZM7 15l1.1 4H5.7l-1.1-3.2L7 15Z" fill="currentColor" />
-              </AccountIcon>
+              <MegaphoneIcon />
               <span>{ru.account.updatesLabel}</span>
             </button>
           </div>
@@ -98,9 +98,7 @@ export function AccountMenu({ identityLabel, isLogoutPending, logoutFailure, onL
                 onClick={() => selectTheme("system")}
                 type="button"
               >
-                <AccountIcon>
-                  <path d="M5 5h14v10H5V5Zm2 2v6h10V7H7Zm3 10h4v2h-4v-2Z" fill="currentColor" />
-                </AccountIcon>
+                <MonitorIcon />
               </button>
               <button
                 aria-label={ru.account.lightThemeLabel}
@@ -109,9 +107,7 @@ export function AccountMenu({ identityLabel, isLogoutPending, logoutFailure, onL
                 onClick={() => selectTheme("light")}
                 type="button"
               >
-                <AccountIcon>
-                  <path d="M12 7a5 5 0 1 0 0 10 5 5 0 0 0 0-10Zm0-4h1v3h-1V3Zm0 15h1v3h-1v-3ZM3 11h3v1H3v-1Zm15 0h3v1h-3v-1ZM5.6 4.9l2.1 2.1-.7.7L4.9 5.6l.7-.7Zm11.4 11.4 2.1 2.1-.7.7-2.1-2.1.7-.7Zm1.4-11.4.7.7L17 7.7l-.7-.7 2.1-2.1ZM7.7 16.3l.7.7-2.1 2.1-.7-.7 2.1-2.1Z" fill="currentColor" />
-                </AccountIcon>
+                <SunIcon />
               </button>
               <button
                 aria-label={ru.account.darkThemeLabel}
@@ -120,12 +116,7 @@ export function AccountMenu({ identityLabel, isLogoutPending, logoutFailure, onL
                 onClick={() => selectTheme("dark")}
                 type="button"
               >
-                <AccountIcon>
-                  <path
-                    d="M9.528 1.718a.75.75 0 0 1 1.162.81 8.25 8.25 0 0 0 10.78 10.78.75.75 0 0 1 .81 1.163A9.75 9.75 0 1 1 9.528 1.718Z"
-                    fill="currentColor"
-                  />
-                </AccountIcon>
+                <MoonIcon />
               </button>
             </div>
           </div>
@@ -151,6 +142,8 @@ export function AccountMenu({ identityLabel, isLogoutPending, logoutFailure, onL
         aria-expanded={isOpen}
         aria-label={isOpen ? ru.account.closeMenuLabel : ru.account.openMenuLabel}
         className={styles.trigger}
+        data-sidebar-account-trigger="true"
+        data-sidebar-tooltip={ru.account.profileLabel}
         data-open={isOpen}
         onClick={() => setIsOpen((open) => !open)}
         ref={triggerRef}
@@ -159,10 +152,10 @@ export function AccountMenu({ identityLabel, isLogoutPending, logoutFailure, onL
         <span aria-hidden="true" className={styles.avatar} data-account-avatar="true">
           NH
         </span>
-        <span className={styles.identity} title={identityLabel}>
+        <span className={styles.identity} data-sidebar-account-identity="true" title={identityLabel}>
           {identityLabel}
         </span>
-        <span aria-hidden="true" className={styles.chevron}>
+        <span aria-hidden="true" className={styles.chevron} data-sidebar-account-chevron="true">
           <AccountIcon>
             <path d="m7 10 5 5 5-5" fill="none" stroke="currentColor" strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" />
           </AccountIcon>

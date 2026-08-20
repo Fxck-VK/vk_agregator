@@ -35,6 +35,16 @@ type ConversationRowProps = {
 
 type RowPanel = "actions" | "rename" | "archive" | null;
 
+function ConversationRailIcon() {
+  return (
+    <span aria-hidden="true" className={styles.railIcon} data-sidebar-conversation-icon="true">
+      <svg viewBox="0 0 24 24">
+        <path d="m12 4 1.6 4.4L18 10l-4.4 1.6L12 16l-1.6-4.4L6 10l4.4-1.6L12 4Z" />
+      </svg>
+    </span>
+  );
+}
+
 export function ConversationRow({
   activeConversationId,
   conversation,
@@ -368,6 +378,7 @@ export function ConversationRow({
       className={styles.row}
       data-active={isActive || undefined}
       data-panel-open={panelIsVisible || undefined}
+      data-sidebar-conversation-row="true"
     >
       {isInlineRenaming ? (
         <form
@@ -399,17 +410,33 @@ export function ConversationRow({
           </label>
         </form>
       ) : conversation.isPending ? (
-        <span aria-busy="true" className={styles.link}>
-          {title}
+        <span
+          aria-busy="true"
+          className={styles.link}
+          data-sidebar-conversation-link="true"
+          data-sidebar-tooltip={title}
+        >
+          <ConversationRailIcon />
+          <span data-sidebar-conversation-title="true">{title}</span>
         </span>
       ) : (
-        <Link aria-current={isActive ? "page" : undefined} className={styles.link} href={`/app/chat/${conversation.id}`} id={`sidebar-conversation-${conversation.id}`} prefetch={false}>
-          {title}
+        <Link
+          aria-current={isActive ? "page" : undefined}
+          className={styles.link}
+          data-sidebar-conversation-link="true"
+          data-sidebar-tooltip={title}
+          href={`/app/chat/${conversation.id}`}
+          id={`sidebar-conversation-${conversation.id}`}
+          prefetch={false}
+        >
+          <ConversationRailIcon />
+          <span data-sidebar-conversation-title="true">{title}</span>
         </Link>
       )}
       {conversation.isPending ? null : (
         <div
         className={styles.actions}
+        data-sidebar-conversation-actions="true"
         onClick={(event) => event.stopPropagation()}
         onKeyDown={(event) => {
           if (event.key === "Escape" && panelIsVisible) {

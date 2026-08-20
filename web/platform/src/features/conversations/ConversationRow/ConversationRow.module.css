@@ -33,6 +33,22 @@
 
 .link[aria-current="page"] { font-weight: 600; }
 
+.railIcon {
+  display: none;
+  inline-size: 2rem;
+  block-size: 2rem;
+  place-items: center;
+  border-radius: 50%;
+  background: var(--color-accent);
+  color: #fff;
+}
+
+.railIcon svg {
+  inline-size: 1.15rem;
+  block-size: 1.15rem;
+  fill: currentColor;
+}
+
 .link:focus-visible,
 .actions button:focus-visible,
 .floatingPanel button:focus-visible,

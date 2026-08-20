@@ -1,12 +1,20 @@
 import { render, screen } from "@testing-library/react";
 import { describe, expect, it } from "vitest";
 
+import { assetPaths } from "@/assets/asset-paths";
+
 import { CheckIcon } from "./CheckIcon";
 import { CopyIcon } from "./CopyIcon";
 import { EditIcon } from "./EditIcon";
 import { FileIcon } from "./FileIcon";
 import { GridIcon } from "./GridIcon";
 import { ImageIcon } from "./ImageIcon";
+import { MegaphoneIcon } from "./MegaphoneIcon";
+import { MonitorIcon } from "./MonitorIcon";
+import { MoonIcon } from "./MoonIcon";
+import { ProfileIcon } from "./ProfileIcon";
+import { SunIcon } from "./SunIcon";
+import { SupportIcon } from "./SupportIcon";
 
 describe("shared icons", () => {
   it("renders the copy icon as a decorative, theme-aware SVG", () => {
@@ -45,5 +53,31 @@ describe("shared icons", () => {
     expect(paths).toHaveLength(1);
     expect(paths[0]).toHaveAttribute("fill", "currentColor");
     expect(paths[0]?.getAttribute("d")).toMatch(new RegExp(`^${pathPrefix}`));
+  });
+
+  it.each([
+    ["profile", ProfileIcon, assetPaths.icons.accountMenu.profile],
+    ["support", SupportIcon, assetPaths.icons.accountMenu.support],
+    ["megaphone", MegaphoneIcon, assetPaths.icons.accountMenu.megaphone],
+  ] as const)("renders the approved %s account-menu artwork through the shared asset icon", (name, Icon, source) => {
+    render(<Icon data-testid={`${name}-icon`} />);
+
+    const icon = screen.getByTestId(`${name}-icon`);
+    expect(icon).toHaveAttribute("aria-hidden", "true");
+    expect(icon).toHaveAttribute("data-icon", name);
+    expect(icon.style.getPropertyValue("--asset-icon-source")).toBe(`url("${source}")`);
+  });
+
+  it.each([
+    ["monitor", MonitorIcon, assetPaths.icons.theme.monitor],
+    ["sun", SunIcon, assetPaths.icons.theme.sun],
+    ["moon", MoonIcon, assetPaths.icons.theme.moon],
+  ] as const)("renders the approved %s theme artwork through the shared asset icon", (name, Icon, source) => {
+    render(<Icon data-testid={`${name}-icon`} />);
+
+    const icon = screen.getByTestId(`${name}-icon`);
+    expect(icon).toHaveAttribute("aria-hidden", "true");
+    expect(icon).toHaveAttribute("data-icon", name);
+    expect(icon.style.getPropertyValue("--asset-icon-source")).toBe(`url("${source}")`);
   });
 });

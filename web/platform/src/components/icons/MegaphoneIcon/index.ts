@@ -1,0 +1,1 @@
+export { MegaphoneIcon } from "./MegaphoneIcon";
