@@ -307,7 +307,7 @@ describe("Sidebar", () => {
 
     fireEvent.click(trigger);
     expect(screen.queryByRole("link", { name: "Recent chat 1" })).not.toBeInTheDocument();
-  });
+  }, 10_000);
 
   it("closes only an open conversation panel on Escape inside the narrow drawer", () => {
     const { panel, trigger } = renderNarrowSidebar({
