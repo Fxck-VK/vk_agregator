@@ -1,0 +1,90 @@
+.panel {
+  position: absolute;
+  z-index: 4;
+  inset-inline-start: calc(100% + var(--space-2));
+  inset-block-end: calc(100% + var(--space-2));
+  display: grid;
+  grid-template-rows: auto minmax(0, 1fr);
+  inline-size: min(27rem, calc(100vw - 22rem));
+  min-block-size: 24rem;
+  max-block-size: min(36rem, calc(100dvh - 6rem));
+  overflow: hidden;
+  border: 0.0625rem solid var(--color-border);
+  border-radius: var(--radius-lg);
+  background: color-mix(in srgb, var(--color-background) 96%, transparent);
+  box-shadow: var(--shadow-overlay);
+  color: var(--color-text);
+  backdrop-filter: blur(1rem);
+}
+
+.heading {
+  margin: 0;
+  padding: var(--space-4) var(--space-4) var(--space-2);
+  font-size: 1.5rem;
+  line-height: 1.2;
+}
+
+.feed {
+  min-block-size: 0;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  padding: var(--space-2) var(--space-4) var(--space-4);
+  scrollbar-width: thin;
+  scrollbar-color: color-mix(in srgb, var(--color-text-muted) 45%, transparent) transparent;
+}
+
+.updateCard {
+  display: grid;
+  justify-items: start;
+  gap: var(--space-2);
+}
+
+.updateTitle {
+  margin: 0;
+  font-size: 1rem;
+  line-height: 1.35;
+}
+
+.updateDescription {
+  margin: 0;
+  color: var(--color-text-muted);
+  line-height: 1.45;
+}
+
+.updateAction {
+  min-block-size: 2.75rem;
+  margin-block-start: var(--space-2);
+  padding-inline: var(--space-4);
+  border: 0;
+  border-radius: 999px;
+  background: var(--color-accent);
+  color: var(--color-text-on-accent, #fff);
+  font: inherit;
+  font-weight: 700;
+}
+
+.updateAction:disabled {
+  cursor: default;
+  opacity: 1;
+}
+
+@media (min-width: 48rem) {
+  :global([data-desktop-collapsed="true"]) .panel {
+    position: fixed;
+    inset-inline-start: calc(var(--sidebar-collapsed-rail-width) + 20rem);
+    inset-block-end: var(--space-3);
+    inline-size: min(27rem, calc(100vw - var(--sidebar-collapsed-rail-width) - 22rem));
+  }
+}
+
+@media (max-width: 47.999rem) {
+  .panel {
+    position: fixed;
+    z-index: 10;
+    inset-inline: var(--space-3);
+    inset-block: auto var(--space-3);
+    inline-size: auto;
+    min-block-size: min(24rem, calc(100dvh - 6rem));
+    max-block-size: calc(100dvh - 6rem);
+  }
+}

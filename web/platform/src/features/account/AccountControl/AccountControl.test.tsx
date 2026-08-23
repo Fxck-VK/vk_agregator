@@ -57,19 +57,61 @@ describe("AccountControl", () => {
     const menu = screen.getByRole("region", { name: "Меню аккаунта" });
     expect(menu).toHaveFocus();
     const profileAction = screen.getByRole("link", { name: "Профиль" });
-    const supportAction = screen.getByRole("button", { name: "Поддержка" });
+    const supportAction = screen.getByRole("link", { name: "Поддержка" });
     const updatesAction = screen.getByRole("button", { name: "Что нового?" });
 
     expect(profileAction).toHaveAttribute("href", "/app/profile");
     expect(profileAction.querySelector('[data-icon="profile"]')).toBeInTheDocument();
-    expect(supportAction).toBeDisabled();
+    expect(supportAction).toHaveAttribute("href", "https://vk.me/neirohub_help");
+    expect(supportAction).toHaveAttribute("target", "_blank");
+    expect(supportAction).toHaveAttribute("rel", "noopener noreferrer");
     expect(supportAction.querySelector('[data-icon="support"]')).toBeInTheDocument();
-    expect(updatesAction).toBeDisabled();
+    expect(updatesAction).toBeEnabled();
+    expect(updatesAction).toHaveAttribute("aria-expanded", "false");
     expect(updatesAction.querySelector('[data-icon="megaphone"]')).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "Системная тема" })).toHaveAttribute("aria-pressed", "true");
     expect(screen.getByRole("button", { name: "Светлая тема" })).toHaveAttribute("aria-pressed", "false");
     expect(screen.getByRole("button", { name: "Тёмная тема" })).toHaveAttribute("aria-pressed", "false");
-    expect(container.querySelectorAll("a")).toHaveLength(1);
+    expect(container.querySelectorAll("a")).toHaveLength(2);
+  });
+
+  it("toggles the updates panel and closes it without closing the account menu", () => {
+    render(
+      <div>
+        <AccountControl profile={profile} />
+        <button type="button">Вне панели</button>
+      </div>,
+    );
+    fireEvent.click(screen.getByRole("button", { name: ru.account.openMenuLabel }));
+
+    const updatesAction = screen.getByRole("button", { name: ru.account.updatesLabel });
+
+    fireEvent.click(updatesAction);
+
+    expect(updatesAction).toHaveAttribute("aria-expanded", "true");
+    expect(screen.getByRole("region", { name: ru.account.updatesPanelLabel })).toBeInTheDocument();
+    expect(screen.getByRole("heading", { name: ru.account.updatesPanelTitle })).toBeInTheDocument();
+    expect(screen.getByText(ru.account.updatesIdeaTitle)).toBeInTheDocument();
+    expect(screen.getByText(ru.account.updatesIdeaDescription)).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: ru.account.updatesIdeaAction })).toBeDisabled();
+
+    fireEvent.click(updatesAction);
+
+    expect(updatesAction).toHaveAttribute("aria-expanded", "false");
+    expect(screen.queryByRole("region", { name: ru.account.updatesPanelLabel })).not.toBeInTheDocument();
+    expect(screen.getByRole("region", { name: ru.account.menuLabel })).toBeInTheDocument();
+
+    fireEvent.click(updatesAction);
+    fireEvent.keyDown(document, { key: "Escape" });
+
+    expect(screen.queryByRole("region", { name: ru.account.updatesPanelLabel })).not.toBeInTheDocument();
+    expect(screen.getByRole("region", { name: ru.account.menuLabel })).toBeInTheDocument();
+
+    fireEvent.click(updatesAction);
+    fireEvent.pointerDown(screen.getByRole("button", { name: "Вне панели" }));
+
+    expect(screen.queryByRole("region", { name: ru.account.updatesPanelLabel })).not.toBeInTheDocument();
+    expect(screen.getByRole("region", { name: ru.account.menuLabel })).toBeInTheDocument();
   });
 
   it("uses a generic unavailable label when no verified safe label exists", () => {

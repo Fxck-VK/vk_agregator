@@ -10,6 +10,7 @@ import { MoonIcon } from "@/components/icons/MoonIcon";
 import { ProfileIcon } from "@/components/icons/ProfileIcon";
 import { SunIcon } from "@/components/icons/SunIcon";
 import { SupportIcon } from "@/components/icons/SupportIcon";
+import { AccountUpdatesPanel } from "@/features/account/AccountUpdatesPanel/AccountUpdatesPanel";
 import {
   applyThemePreference,
   readThemePreference,
@@ -27,6 +28,7 @@ type AccountMenuProps = {
 };
 
 const menuId = "account-menu";
+const updatesPanelId = "account-updates-panel";
 
 function AccountIcon({ children }: { children: ReactNode }) {
   return (
@@ -38,17 +40,39 @@ function AccountIcon({ children }: { children: ReactNode }) {
 
 export function AccountMenu({ identityLabel, isLogoutPending, logoutFailure, onLogout }: AccountMenuProps) {
   const [isOpen, setIsOpen] = useState(false);
+  const [isUpdatesOpen, setIsUpdatesOpen] = useState(false);
   const [themePreference, setThemePreference] = useState<ThemePreference>(() =>
     typeof window === "undefined" ? "system" : readThemePreference(),
   );
   const menuRef = useRef<HTMLElement>(null);
+  const rootRef = useRef<HTMLDivElement>(null);
   const triggerRef = useRef<HTMLButtonElement>(null);
 
   useEffect(() => {
     if (isOpen) menuRef.current?.focus();
   }, [isOpen]);
 
+  useEffect(() => {
+    if (!isUpdatesOpen) return;
+
+    const closeOnOutsidePointer = (event: PointerEvent) => {
+      if (!rootRef.current?.contains(event.target as Node)) setIsUpdatesOpen(false);
+    };
+    const closeOnEscape = (event: KeyboardEvent) => {
+      if (event.key === "Escape") setIsUpdatesOpen(false);
+    };
+
+    document.addEventListener("pointerdown", closeOnOutsidePointer);
+    document.addEventListener("keydown", closeOnEscape);
+
+    return () => {
+      document.removeEventListener("pointerdown", closeOnOutsidePointer);
+      document.removeEventListener("keydown", closeOnEscape);
+    };
+  }, [isUpdatesOpen]);
+
   const closeMenu = () => {
+    setIsUpdatesOpen(false);
     setIsOpen(false);
     triggerRef.current?.focus();
   };
@@ -58,8 +82,13 @@ export function AccountMenu({ identityLabel, isLogoutPending, logoutFailure, onL
     setThemePreference(preference);
   };
 
+  const toggleMenu = () => {
+    if (isOpen) setIsUpdatesOpen(false);
+    setIsOpen((open) => !open);
+  };
+
   return (
-    <div className={styles.root}>
+    <div className={styles.root} ref={rootRef}>
       {isOpen ? (
         <section
           aria-label={ru.account.menuLabel}
@@ -68,7 +97,8 @@ export function AccountMenu({ identityLabel, isLogoutPending, logoutFailure, onL
           onKeyDown={(event) => {
             if (event.key === "Escape") {
               event.preventDefault();
-              closeMenu();
+              if (isUpdatesOpen) setIsUpdatesOpen(false);
+              else closeMenu();
             }
           }}
           ref={menuRef}
@@ -80,11 +110,23 @@ export function AccountMenu({ identityLabel, isLogoutPending, logoutFailure, onL
               <ProfileIcon />
               <span>{ru.account.profileLabel}</span>
             </Link>
-            <button aria-disabled="true" className={styles.menuAction} disabled type="button">
+            <a
+              className={styles.menuAction}
+              href="https://vk.me/neirohub_help"
+              onClick={closeMenu}
+              rel="noopener noreferrer"
+              target="_blank"
+            >
               <SupportIcon />
               <span>{ru.account.supportLabel}</span>
-            </button>
-            <button aria-disabled="true" className={styles.menuAction} disabled type="button">
+            </a>
+            <button
+              aria-controls={updatesPanelId}
+              aria-expanded={isUpdatesOpen}
+              className={styles.menuAction}
+              onClick={() => setIsUpdatesOpen((open) => !open)}
+              type="button"
+            >
               <MegaphoneIcon />
               <span>{ru.account.updatesLabel}</span>
             </button>
@@ -141,6 +183,8 @@ export function AccountMenu({ identityLabel, isLogoutPending, logoutFailure, onL
         </section>
       ) : null}
 
+      {isOpen && isUpdatesOpen ? <AccountUpdatesPanel id={updatesPanelId} /> : null}
+
       <button
         aria-controls={menuId}
         aria-expanded={isOpen}
@@ -149,7 +193,7 @@ export function AccountMenu({ identityLabel, isLogoutPending, logoutFailure, onL
         data-sidebar-account-trigger="true"
         data-sidebar-tooltip={ru.account.profileLabel}
         data-open={isOpen}
-        onClick={() => setIsOpen((open) => !open)}
+        onClick={toggleMenu}
         ref={triggerRef}
         type="button"
       >

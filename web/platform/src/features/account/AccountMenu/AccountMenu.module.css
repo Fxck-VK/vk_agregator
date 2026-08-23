@@ -105,20 +105,22 @@
   text-align: start;
   text-decoration: none;
   font-weight: 700;
+  transition:
+    background-color var(--motion-fast),
+    color var(--motion-fast);
 }
 
-.menuAction:hover:not(:disabled) {
-  background: var(--color-surface-raised);
+.menuAction:hover,
+.menuAction:focus-visible,
+.logoutAction:hover:not(:disabled),
+.logoutAction:focus-visible {
+  background: color-mix(in srgb, var(--color-text) 8%, transparent);
 }
 
 .menuAction:disabled,
 .themeOption:disabled {
   cursor: default;
   opacity: 1;
-}
-
-.logoutAction:hover:not(:disabled) {
-  background: var(--color-surface-raised);
 }
 
 .logoutAction:disabled {

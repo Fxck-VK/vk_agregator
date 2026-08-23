@@ -1,4 +1,5 @@
 import assert from "node:assert/strict";
+import { readFileSync } from "node:fs";
 import test from "node:test";
 
 import { inspectAssetEntries } from "./validate-assets.mjs";
@@ -32,4 +33,12 @@ test("rejects invalid names, extensions, duplicates and unsafe SVG", () => {
   assert.ok(errors.some((error) => error.includes("unsupported extension")));
   assert.ok(errors.some((error) => error.includes("duplicate normalized path")));
   assert.ok(errors.some((error) => error.includes("unsafe SVG")));
+});
+
+test("keeps the upload-media icon transparent and uses the approved artwork", () => {
+  const icon = readFileSync(new URL("../public/assets/icons/ui/upload-media.svg", import.meta.url), "utf8");
+
+  assert.doesNotMatch(icon, /<rect\b/);
+  assert.match(icon, /stroke-width="6\.5"/);
+  assert.match(icon, /M111 35V65/);
 });

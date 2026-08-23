@@ -48,6 +48,12 @@ export const ru = {
     profileLabel: "Профиль",
     supportLabel: "Поддержка",
     updatesLabel: "Что нового?",
+    updatesPanelLabel: "Обновления",
+    updatesPanelTitle: "Обновления",
+    updatesIdeaTitle: "Предложи идею и заработай звёзды",
+    updatesIdeaDescription:
+      "Мы готовим новый раздел ИИ-помощников. Расскажи, какой помощник нужен именно тебе.",
+    updatesIdeaAction: "Предложить",
     themeLabel: "Тема интерфейса",
     systemThemeLabel: "Системная тема",
     lightThemeLabel: "Светлая тема",

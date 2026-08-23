@@ -43,6 +43,16 @@ describe("AccountMenu styles", () => {
     expect(triggerRule).toContain("border-radius: var(--radius-lg)");
   });
 
+  it("highlights every account-menu row on hover without shifting its layout", () => {
+    expect(stylesheet).toMatch(
+      /\.menuAction,\s*\.logoutAction\s*\{[^}]*transition:\s*background-color var\(--motion-fast\),/s,
+    );
+    expect(stylesheet).toMatch(
+      /\.menuAction:hover,\s*\.menuAction:focus-visible,\s*\.logoutAction:hover:not\(:disabled\),\s*\.logoutAction:focus-visible\s*\{[^}]*background:\s*color-mix\(in srgb, var\(--color-text\) 8%, transparent\);/s,
+    );
+    expect(stylesheet).not.toContain(".menuAction:hover:not(:disabled)");
+  });
+
   it("slides one shared selected-theme surface between the three stationary icons", () => {
     expect(stylesheet).toMatch(/\.themeSwitcher\s*\{[^}]*position:\s*relative;/s);
     expect(stylesheet).toMatch(/\.themeSwitcher::before\s*\{[^}]*transition:\s*transform var\(--motion-normal\),/s);
