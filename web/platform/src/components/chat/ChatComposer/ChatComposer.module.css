@@ -56,6 +56,13 @@
   gap: var(--space-3);
 }
 
+.trailingControls {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: var(--space-3);
+}
+
 .attachment {
   display: grid;
   grid-template-columns: 2.5rem minmax(0, 1fr) 2rem;
@@ -158,5 +165,10 @@
   .submit {
     inline-size: 3rem;
     block-size: 3rem;
+  }
+
+  .controls,
+  .trailingControls {
+    flex-wrap: wrap;
   }
 }

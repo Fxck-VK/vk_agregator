@@ -2,7 +2,7 @@
 
 /* eslint-disable @next/next/no-img-element */
 
-import { useState, type ChangeEventHandler } from "react";
+import { useState, type ChangeEventHandler, type ReactNode } from "react";
 
 import {
   attachmentFromFile,
@@ -18,6 +18,7 @@ import styles from "./ChatComposer.module.css";
 export type ChatComposerVariant = "conversation" | "hero" | "newChat" | "workspace";
 
 type ChatComposerProps = {
+  additionalControls?: ReactNode;
   canSubmit: boolean;
   disabled: boolean;
   generatedMediaHref?: string;
@@ -41,6 +42,7 @@ type ChatComposerProps = {
 const expandedVariants = new Set<ChatComposerVariant>(["hero", "workspace"]);
 
 export function ChatComposer({
+  additionalControls,
   canSubmit,
   disabled,
   generatedMediaHref,
@@ -128,17 +130,20 @@ export function ChatComposer({
             onFilesSelected={selectNativeFile}
             uploadedHref={uploadedMediaHref}
           />
-          <button
-            aria-label={submitLabel}
-            className={styles.submit}
-            disabled={!canSubmit || disabled}
-            title={submitLabel}
-            type="submit"
-          >
-            <svg aria-hidden="true" focusable="false" viewBox="0 0 24 24">
-              <path d="M12 19V5m0 0-6 6m6-6 6 6" fill="none" stroke="currentColor" strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" />
-            </svg>
-          </button>
+          <div className={styles.trailingControls}>
+            {additionalControls}
+            <button
+              aria-label={submitLabel}
+              className={styles.submit}
+              disabled={!canSubmit || disabled}
+              title={submitLabel}
+              type="submit"
+            >
+              <svg aria-hidden="true" focusable="false" viewBox="0 0 24 24">
+                <path d="M12 19V5m0 0-6 6m6-6 6 6" fill="none" stroke="currentColor" strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" />
+              </svg>
+            </button>
+          </div>
         </div>
       </div>
       {note === undefined ? null : <p className={styles.note}>{note}</p>}

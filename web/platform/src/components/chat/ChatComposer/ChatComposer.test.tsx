@@ -71,6 +71,28 @@ describe("ChatComposer", () => {
     expect(screen.getByText("Стоимость зависит от выбранной нейросети")).toBeVisible();
   });
 
+  it("renders optional domain controls alongside the shared media and submit actions", () => {
+    render(
+      <ChatComposer
+        additionalControls={<button type="button">1K</button>}
+        canSubmit
+        disabled={false}
+        label="Генерация изображения"
+        mediaLabel="Загрузить медиа"
+        onChange={vi.fn()}
+        onSend={vi.fn()}
+        placeholder="Опишите изображение"
+        submitLabel="Сгенерировать"
+        value="Город после дождя"
+        variant="conversation"
+      />,
+    );
+
+    expect(screen.getByRole("button", { name: "Загрузить медиа" })).toBeEnabled();
+    expect(screen.getByRole("button", { name: "1K" })).toBeEnabled();
+    expect(screen.getByRole("button", { name: "Сгенерировать" })).toBeEnabled();
+  });
+
   it("shows a selected local file in the composer and lets the user remove it", () => {
     const { container } = render(
       <ChatComposer
