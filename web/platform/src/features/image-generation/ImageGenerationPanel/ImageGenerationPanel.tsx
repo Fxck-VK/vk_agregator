@@ -1,11 +1,11 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useSearchParams } from "next/navigation";
 
 import { Button } from "@/components/ui/Button/Button";
+import { ImageGenerationComposer } from "@/features/image-generation/ImageGenerationComposer/ImageGenerationComposer";
 import { ImageGenerationConfirmation } from "@/features/image-generation/ImageGenerationConfirmation/ImageGenerationConfirmation";
-import { ImageGenerationEditor } from "@/features/image-generation/ImageGenerationEditor/ImageGenerationEditor";
 import { ImageGenerationResult } from "@/features/image-generation/ImageGenerationResult/ImageGenerationResult";
 import { ImageJobTracker } from "@/features/image-generation/ImageJobTracker/ImageJobTracker";
 import { loadImageModelCatalog } from "@/features/models/image-model-catalog-cache";
@@ -32,6 +32,11 @@ type PrepareIntent = {
   idempotencyKey: string;
 };
 
+type QualitySelection = {
+  modelID: string;
+  value: string;
+};
+
 type ImageGenerationPanelProps = {
   onJobChange?: (job: ImageJob) => void;
 };
@@ -40,14 +45,18 @@ export function ImageGenerationPanel({ onJobChange }: Readonly<ImageGenerationPa
   const searchParams = useSearchParams();
   const workspaceModelSelection = useWorkspaceModelSelection();
   const setWorkspaceModelId = workspaceModelSelection?.setSelectedModelId;
-  const requestedModelID = searchParams.get("model");
-  const requestedImageQuality = searchParams.get("quality");
-  const requestedPrompt = searchParams.get("prompt") ?? "";
+  const selectedWorkspaceModelID = workspaceModelSelection?.selectedModelId ?? null;
+  const initialRequest = useRef({
+    modelID: searchParams.get("model"),
+    imageQuality: searchParams.get("quality"),
+    prompt: searchParams.get("prompt") ?? "",
+    workspaceModelID: selectedWorkspaceModelID,
+  });
   const [stage, setStage] = useState<PanelStage>("loading");
   const [catalogLoadAttempt, setCatalogLoadAttempt] = useState(0);
   const [models, setModels] = useState<ImageModel[]>([]);
-  const [modelID, setModelID] = useState("");
-  const [imageQuality, setImageQuality] = useState("");
+  const [fallbackModelID, setFallbackModelID] = useState("");
+  const [qualitySelection, setQualitySelection] = useState<QualitySelection>({ modelID: "", value: "" });
   const [prompt, setPrompt] = useState("");
   const [prepareIntent, setPrepareIntent] = useState<PrepareIntent | null>(null);
   const [preparation, setPreparation] = useState<ImageJobPreparation | null>(null);
@@ -55,7 +64,17 @@ export function ImageGenerationPanel({ onJobChange }: Readonly<ImageGenerationPa
   const [result, setResult] = useState<ImageJobResult | null>(null);
   const [error, setError] = useState<"load" | "noModels" | "prepare" | "activation" | "insufficient" | null>(null);
 
-  const selectedModel = useMemo(() => models.find((model) => model.id === modelID) ?? null, [modelID, models]);
+  const selectedModel = useMemo(() => {
+    const workspaceModel = selectedWorkspaceModelID === null
+      ? undefined
+      : models.find((model) => model.id === selectedWorkspaceModelID);
+    return workspaceModel ?? models.find((model) => model.id === fallbackModelID) ?? null;
+  }, [fallbackModelID, models, selectedWorkspaceModelID]);
+  const imageQuality = selectedModel === null
+    ? ""
+    : qualitySelection.modelID === selectedModel.id && selectedModel.quality_options.includes(qualitySelection.value)
+      ? qualitySelection.value
+      : selectedModel.default_quality;
   const selectedPrice = selectedModel?.price_by_quality?.[imageQuality] ?? null;
   const canPrepare = stage === "editor"
     && prompt.trim() !== ""
@@ -72,24 +91,29 @@ export function ImageGenerationPanel({ onJobChange }: Readonly<ImageGenerationPa
         if (!active) {
           return;
         }
-        const requestedModel = requestedModelID === null
+        const requestedModel = initialRequest.current.modelID === null
           ? undefined
-          : catalog.items.find((model) => model.id === requestedModelID);
-        const initialModel = requestedModel ?? catalog.items[0];
+          : catalog.items.find((model) => model.id === initialRequest.current.modelID);
+        const workspaceModel = initialRequest.current.workspaceModelID === null
+          ? undefined
+          : catalog.items.find((model) => model.id === initialRequest.current.workspaceModelID);
+        const initialModel = requestedModel ?? workspaceModel ?? catalog.items[0];
         if (!initialModel) {
           setError("noModels");
           setStage("loadFailure");
           return;
         }
         setModels(catalog.items);
-        setModelID(initialModel.id);
+        setFallbackModelID(initialModel.id);
         setWorkspaceModelId?.(initialModel.id);
-        setImageQuality(
-          requestedImageQuality !== null && initialModel.quality_options.includes(requestedImageQuality)
-            ? requestedImageQuality
-            : initialModel.default_quality,
-        );
-        setPrompt(requestedPrompt);
+        setQualitySelection({
+          modelID: initialModel.id,
+          value: initialRequest.current.imageQuality !== null
+            && initialModel.quality_options.includes(initialRequest.current.imageQuality)
+              ? initialRequest.current.imageQuality
+              : initialModel.default_quality,
+        });
+        setPrompt(initialRequest.current.prompt);
         setStage("editor");
       } catch {
         if (active) {
@@ -103,7 +127,7 @@ export function ImageGenerationPanel({ onJobChange }: Readonly<ImageGenerationPa
     return () => {
       active = false;
     };
-  }, [catalogLoadAttempt, requestedImageQuality, requestedModelID, requestedPrompt, setWorkspaceModelId]);
+  }, [catalogLoadAttempt, setWorkspaceModelId]);
 
   const retryModelCatalog = () => {
     setError(null);
@@ -118,23 +142,14 @@ export function ImageGenerationPanel({ onJobChange }: Readonly<ImageGenerationPa
     setStage("editor");
   }, []);
 
-  const selectModel = useCallback((nextModelID: string) => {
-    const nextModel = models.find((model) => model.id === nextModelID);
-    if (!nextModel) {
+  const changeImageQuality = useCallback((nextQuality: string) => {
+    if (selectedModel === null) {
       return;
     }
-    setModelID(nextModel.id);
-    setWorkspaceModelId?.(nextModel.id);
-    setImageQuality(nextModel.default_quality);
+    setQualitySelection({ modelID: selectedModel.id, value: nextQuality });
     setPrepareIntent(null);
     setError(null);
-  }, [models, setWorkspaceModelId]);
-
-  const changeImageQuality = useCallback((nextQuality: string) => {
-    setImageQuality(nextQuality);
-    setPrepareIntent(null);
-    setError(null);
-  }, []);
+  }, [selectedModel]);
 
   const changePrompt = useCallback((nextPrompt: string) => {
     setPrompt(nextPrompt);
@@ -250,12 +265,7 @@ export function ImageGenerationPanel({ onJobChange }: Readonly<ImageGenerationPa
   const loadFailure = error === "noModels" ? ru.imageGeneration.noModels : ru.imageGeneration.loadingFailure;
 
   return (
-    <section aria-labelledby="image-generation-title" className={styles.panel}>
-      <header className={styles.header}>
-        <h2 id="image-generation-title">{ru.imageGeneration.title}</h2>
-        <p>{ru.imageGeneration.description}</p>
-      </header>
-
+    <section aria-label={ru.imageGeneration.title} className={styles.panel}>
       {stage === "loading" ? <p role="status">{ru.imageGeneration.loadingModels}</p> : null}
 
       {stage === "loadFailure" ? (
@@ -265,20 +275,18 @@ export function ImageGenerationPanel({ onJobChange }: Readonly<ImageGenerationPa
         </div>
       ) : null}
 
-      {stage === "editor" || stage === "preparing" ? (
-        <ImageGenerationEditor
+      {(stage === "editor" || stage === "preparing") && selectedModel !== null ? (
+        <ImageGenerationComposer
           canSubmit={canPrepare}
           errorMessage={editorError}
           imageQuality={imageQuality}
           isSubmitting={stage === "preparing"}
-          modelID={modelID}
-          models={models}
           onImageQualityChange={changeImageQuality}
-          onModelChange={selectModel}
           onPromptChange={changePrompt}
           onSubmit={() => void prepareImage()}
           price={selectedPrice}
           prompt={prompt}
+          qualityOptions={selectedModel.quality_options}
         />
       ) : null}
 

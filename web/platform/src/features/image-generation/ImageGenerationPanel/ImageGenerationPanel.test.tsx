@@ -89,7 +89,14 @@ function getGenerateButton() {
 function WorkspaceModelSelectionProbe() {
   const selection = useWorkspaceModelSelection();
 
-  return <output>{selection?.selectedModelId ?? "none"}</output>;
+  return (
+    <>
+      <output>{selection?.selectedModelId ?? "none"}</output>
+      <button onClick={() => selection?.setSelectedModelId("nano-banana-2")} type="button">
+        Выбрать Nano Banana 2
+      </button>
+    </>
+  );
 }
 
 describe("ImageGenerationPanel", () => {
@@ -107,11 +114,13 @@ describe("ImageGenerationPanel", () => {
     vi.unstubAllGlobals();
   });
 
-  it("loads the direct editor when the image workspace opens", async () => {
+  it("loads the compact composer without a duplicated model selector", async () => {
     vi.mocked(loadImageModelCatalog).mockResolvedValueOnce(modelsResponse);
     render(<ImageGenerationPanel />);
 
-    expect(await screen.findByRole("combobox", { name: ru.imageGeneration.modelLabel })).toHaveValue("nano-banana-2");
+    expect(await screen.findByRole("textbox", { name: ru.imageGeneration.promptLabel })).toBeEnabled();
+    expect(screen.queryByRole("combobox", { name: ru.imageGeneration.modelLabel })).not.toBeInTheDocument();
+    expect(screen.getByRole("combobox", { name: ru.imageGeneration.qualityLabel })).toHaveValue("1K");
     expect(loadImageModelCatalog).toHaveBeenCalledTimes(1);
   });
 
@@ -119,31 +128,28 @@ describe("ImageGenerationPanel", () => {
     vi.mocked(loadImageModelCatalog).mockResolvedValueOnce(modelsResponse);
     render(<ImageGenerationPanel />);
 
-    await screen.findByRole("combobox", { name: ru.imageGeneration.modelLabel });
+    await screen.findByRole("textbox", { name: ru.imageGeneration.promptLabel });
     expect(screen.getByText(`${ru.imageGeneration.priceLabel}: 16 \u2605`)).toBeInTheDocument();
-    expect(screen.getByRole("button", { name: `${ru.imageGeneration.generate} \u00b7 16 \u2605` })).toBeDisabled();
+    expect(screen.getByRole("button", { name: ru.imageGeneration.generate })).toBeDisabled();
     expect(webBrowserMutation).not.toHaveBeenCalled();
   });
 
-  it("updates the preview price for a model or quality change but not for a prompt edit", async () => {
+  it("updates the preview price for a quality change but not for a prompt edit", async () => {
     vi.mocked(loadImageModelCatalog).mockResolvedValueOnce(multipleModelsResponse);
     render(<ImageGenerationPanel />);
 
-    await screen.findByRole("combobox", { name: ru.imageGeneration.modelLabel });
+    await screen.findByRole("textbox", { name: ru.imageGeneration.promptLabel });
     expect(screen.getByText(`${ru.imageGeneration.priceLabel}: 12 \u2605`)).toBeInTheDocument();
 
     fireEvent.change(screen.getByRole("combobox", { name: ru.imageGeneration.qualityLabel }), { target: { value: "2K" } });
     expect(screen.getByText(`${ru.imageGeneration.priceLabel}: 24 \u2605`)).toBeInTheDocument();
 
-    fireEvent.change(screen.getByRole("combobox", { name: ru.imageGeneration.modelLabel }), { target: { value: "nano-banana-2" } });
-    expect(screen.getByText(`${ru.imageGeneration.priceLabel}: 60 \u2605`)).toBeInTheDocument();
-
     fireEvent.change(screen.getByRole("textbox", { name: ru.imageGeneration.promptLabel }), { target: { value: "new prompt" } });
-    expect(screen.getByText(`${ru.imageGeneration.priceLabel}: 60 \u2605`)).toBeInTheDocument();
+    expect(screen.getByText(`${ru.imageGeneration.priceLabel}: 24 \u2605`)).toBeInTheDocument();
     expect(webBrowserMutation).not.toHaveBeenCalled();
   });
 
-  it("publishes editor model changes to the persistent workspace selection", async () => {
+  it("publishes the initial image model to the persistent workspace selection", async () => {
     vi.mocked(loadImageModelCatalog).mockResolvedValueOnce(multipleModelsResponse);
     render(
       <WorkspaceModelSelectionProvider>
@@ -151,13 +157,26 @@ describe("ImageGenerationPanel", () => {
         <WorkspaceModelSelectionProbe />
       </WorkspaceModelSelectionProvider>,
     );
-    await screen.findByRole("combobox", { name: ru.imageGeneration.modelLabel });
+    await screen.findByRole("textbox", { name: ru.imageGeneration.promptLabel });
+    expect(screen.getByText("first-model", { selector: "output" })).toBeInTheDocument();
+  });
 
-    fireEvent.change(screen.getByRole("combobox", { name: ru.imageGeneration.modelLabel }), {
-      target: { value: "nano-banana-2" },
+  it("adopts a valid model selected from the floating workspace selector", async () => {
+    vi.mocked(loadImageModelCatalog).mockResolvedValueOnce(multipleModelsResponse);
+    render(
+      <WorkspaceModelSelectionProvider>
+        <ImageGenerationPanel />
+        <WorkspaceModelSelectionProbe />
+      </WorkspaceModelSelectionProvider>,
+    );
+    await screen.findByRole("textbox", { name: ru.imageGeneration.promptLabel });
+
+    fireEvent.click(screen.getByRole("button", { name: "Выбрать Nano Banana 2" }));
+
+    await waitFor(() => {
+      expect(screen.getByRole("combobox", { name: ru.imageGeneration.qualityLabel })).toHaveValue("2K");
     });
-
-    expect(screen.getByText("nano-banana-2", { selector: "output" })).toBeInTheDocument();
+    expect(screen.getByText(`${ru.imageGeneration.priceLabel}: 60 \u2605`)).toBeInTheDocument();
   });
 
   it("selects a known requested model when the direct editor loads", async () => {
@@ -165,8 +184,9 @@ describe("ImageGenerationPanel", () => {
     vi.mocked(loadImageModelCatalog).mockResolvedValueOnce(multipleModelsResponse);
     render(<ImageGenerationPanel />);
 
-    expect(await screen.findByRole("combobox", { name: ru.imageGeneration.modelLabel })).toHaveValue("nano-banana-2");
+    await screen.findByRole("textbox", { name: ru.imageGeneration.promptLabel });
     expect(screen.getByRole("combobox", { name: ru.imageGeneration.qualityLabel })).toHaveValue("2K");
+    expect(screen.getByText(`${ru.imageGeneration.priceLabel}: 60 \u2605`)).toBeInTheDocument();
   });
 
   it("restores every image setting from an expired-generation retry link", async () => {
@@ -177,7 +197,6 @@ describe("ImageGenerationPanel", () => {
     render(<ImageGenerationPanel />);
 
     expect(await screen.findByRole("textbox", { name: ru.imageGeneration.promptLabel })).toHaveValue("night city after rain");
-    expect(screen.getByRole("combobox", { name: ru.imageGeneration.modelLabel })).toHaveValue("nano-banana-2");
     expect(screen.getByRole("combobox", { name: ru.imageGeneration.qualityLabel })).toHaveValue("2K");
   });
 
@@ -186,8 +205,9 @@ describe("ImageGenerationPanel", () => {
     vi.mocked(loadImageModelCatalog).mockResolvedValueOnce(multipleModelsResponse);
     render(<ImageGenerationPanel />);
 
-    expect(await screen.findByRole("combobox", { name: ru.imageGeneration.modelLabel })).toHaveValue("first-model");
+    await screen.findByRole("textbox", { name: ru.imageGeneration.promptLabel });
     expect(screen.getByRole("combobox", { name: ru.imageGeneration.qualityLabel })).toHaveValue("1K");
+    expect(screen.getByText(`${ru.imageGeneration.priceLabel}: 12 \u2605`)).toBeInTheDocument();
   });
 
   it("uses only explicit public inputs and shows the server-calculated confirmation", async () => {
@@ -200,7 +220,7 @@ describe("ImageGenerationPanel", () => {
     fireEvent.change(screen.getByRole("combobox", { name: ru.imageGeneration.qualityLabel }), {
       target: { value: "2K" },
     });
-    fireEvent.click(screen.getByRole("button", { name: `${ru.imageGeneration.generate} \u00b7 60 \u2605` }));
+    fireEvent.click(getGenerateButton());
 
     await screen.findByRole("heading", { name: ru.imageGeneration.confirmationTitle });
     expect(webBrowserMutation).toHaveBeenCalledWith("/web/v1/image-jobs/prepare", {
