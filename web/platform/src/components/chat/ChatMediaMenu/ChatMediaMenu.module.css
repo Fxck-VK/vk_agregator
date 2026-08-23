@@ -4,35 +4,7 @@
 }
 
 .trigger {
-  display: inline-flex;
-  align-items: center;
-  gap: var(--space-2);
-  min-block-size: 3rem;
-  padding: 0.625rem 1rem;
-  border: 0.0625rem solid var(--color-border);
-  border-radius: 999px;
-  color: var(--color-text);
-  background: transparent;
-  font: inherit;
-  font-weight: 700;
-  cursor: pointer;
-}
-
-.trigger:hover,
-.trigger[aria-expanded="true"] {
-  border-color: color-mix(in srgb, var(--color-border) 55%, var(--color-text));
-  background: color-mix(in srgb, var(--color-surface-raised) 78%, transparent);
-}
-
-.trigger:disabled {
-  color: var(--color-text-muted);
-  cursor: not-allowed;
-}
-
-.trigger:focus-visible,
-.item:focus-visible {
-  outline: 0.1875rem solid color-mix(in srgb, var(--color-accent) 45%, transparent);
-  outline-offset: 0.125rem;
+  flex: 0 0 auto;
 }
 
 .trigger img {
@@ -87,12 +59,12 @@
   background: var(--color-surface-raised);
 }
 
-@media (width < 40rem) {
-  .trigger {
-    min-block-size: 2.75rem;
-    padding-inline: var(--space-3);
-  }
+.item:focus-visible {
+  outline: 0.1875rem solid color-mix(in srgb, var(--color-accent) 45%, transparent);
+  outline-offset: 0.125rem;
+}
 
+@media (width < 40rem) {
   .menu {
     min-inline-size: min(18.5rem, calc(100vw - 2rem));
   }

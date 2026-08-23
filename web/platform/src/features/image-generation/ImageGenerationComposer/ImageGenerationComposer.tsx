@@ -2,6 +2,8 @@
 
 import { ChatComposer } from "@/components/chat/ChatComposer/ChatComposer";
 import { ImageAspectRatioSelector } from "@/features/image-generation/ImageAspectRatioSelector/ImageAspectRatioSelector";
+import { ImageQualitySelector } from "@/features/image-generation/ImageQualitySelector/ImageQualitySelector";
+import { ImageOutputCountSelector } from "@/features/image-generation/ImageOutputCountSelector/ImageOutputCountSelector";
 import { ru } from "@/i18n/ru";
 
 import styles from "./ImageGenerationComposer.module.css";
@@ -12,11 +14,14 @@ type ImageGenerationComposerProps = {
   errorMessage: string | null;
   imageQuality: string;
   isSubmitting: boolean;
+  maxOutputCount: number;
   onAspectRatioChange: (ratio: string) => void;
   onImageQualityChange: (quality: string) => void;
+  onOutputCountChange: (count: number) => void;
   onPromptChange: (prompt: string) => void;
   onSubmit: () => void;
   price: number | null;
+  outputCount: number;
   prompt: string;
   qualityOptions: string[];
 };
@@ -27,11 +32,14 @@ export function ImageGenerationComposer({
   errorMessage,
   imageQuality,
   isSubmitting,
+  maxOutputCount,
   onAspectRatioChange,
   onImageQualityChange,
+  onOutputCountChange,
   onPromptChange,
   onSubmit,
   price,
+  outputCount,
   prompt,
   qualityOptions,
 }: Readonly<ImageGenerationComposerProps>) {
@@ -47,20 +55,19 @@ export function ImageGenerationComposer({
         leadingControls={(
           <>
             <ImageAspectRatioSelector disabled={isSubmitting} onChange={onAspectRatioChange} value={aspectRatio} />
-            <label className={styles.qualityControl}>
-              <span className={styles.visuallyHidden}>{ru.imageGeneration.qualityLabel}</span>
-              <span aria-hidden="true" className={styles.qualityIcon}>⌁</span>
-              <select
-                aria-label={ru.imageGeneration.qualityLabel}
-                disabled={isSubmitting || qualityOptions.length === 0}
-                onChange={(event) => onImageQualityChange(event.target.value)}
-                value={imageQuality}
-              >
-                {qualityOptions.map((quality) => (
-                  <option key={quality} value={quality}>{quality}</option>
-                ))}
-              </select>
-            </label>
+            <ImageQualitySelector
+              disabled={isSubmitting}
+              label={ru.imageGeneration.resolutionLabel}
+              onChange={onImageQualityChange}
+              options={qualityOptions}
+              value={imageQuality}
+            />
+            <ImageOutputCountSelector
+              disabled={isSubmitting}
+              max={maxOutputCount}
+              onChange={onOutputCountChange}
+              value={outputCount}
+            />
           </>
         )}
         canSubmit={canSubmit}

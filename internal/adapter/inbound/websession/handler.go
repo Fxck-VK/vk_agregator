@@ -547,6 +547,7 @@ func (h *Handler) prepareImageJob(w http.ResponseWriter, r *http.Request) {
 		ModelID      string `json:"model_id"`
 		ImageQuality string `json:"image_quality"`
 		AspectRatio  string `json:"aspect_ratio"`
+		OutputCount  int    `json:"output_count,omitempty"`
 	}
 	if !decodeJSON(w, r, &req) {
 		return
@@ -566,6 +567,7 @@ func (h *Handler) prepareImageJob(w http.ResponseWriter, r *http.Request) {
 		ModelID:     strings.TrimSpace(req.ModelID),
 		Quality:     strings.TrimSpace(req.ImageQuality),
 		AspectRatio: req.AspectRatio,
+		OutputCount: req.OutputCount,
 	})
 	if err != nil {
 		writeError(w, http.StatusBadRequest, "invalid image generation request")
@@ -606,6 +608,7 @@ func (h *Handler) prepareImageJob(w http.ResponseWriter, r *http.Request) {
 		ModelID:     strings.TrimSpace(req.ModelID),
 		Quality:     strings.TrimSpace(req.ImageQuality),
 		AspectRatio: req.AspectRatio,
+		OutputCount: req.OutputCount,
 	})
 	if err != nil {
 		writeError(w, http.StatusBadRequest, "invalid image generation request")
@@ -626,6 +629,7 @@ func (h *Handler) prepareImageJob(w http.ResponseWriter, r *http.Request) {
 		Resolution:   resolution.Worker.Resolution,
 		ImageQuality: resolution.Worker.ImageQuality,
 		AspectRatio:  resolution.Worker.AspectRatio,
+		OutputCount:  resolution.Worker.OutputCount,
 	})
 	if err != nil {
 		writeError(w, http.StatusServiceUnavailable, "image generation unavailable")
@@ -1838,6 +1842,7 @@ type safeImageModel struct {
 	DefaultQuality         string           `json:"default_quality"`
 	SupportsReferenceImage bool             `json:"supports_reference_image"`
 	MaxReferenceImages     int              `json:"max_reference_images"`
+	MaxOutputCount         int              `json:"max_output_count"`
 }
 
 // webImageJobParams is stored with the job for the worker. It is deliberately
@@ -1853,6 +1858,7 @@ type webImageJobParams struct {
 	Resolution   string              `json:"resolution"`
 	ImageQuality string              `json:"image_quality"`
 	AspectRatio  string              `json:"aspect_ratio,omitempty"`
+	OutputCount  int                 `json:"output_count,omitempty"`
 }
 
 type safeImageJobPreparation struct {
@@ -1969,6 +1975,7 @@ func newSafeImageModel(model imagegeneration.PublicModel, resolver imagegenerati
 		DefaultQuality:         defaultQuality,
 		SupportsReferenceImage: model.SupportsReferenceImage,
 		MaxReferenceImages:     model.MaxReferenceImages,
+		MaxOutputCount:         max(model.MaxOutputCount, imagegeneration.DefaultOutputCount),
 	}, true
 }
 
@@ -2006,6 +2013,13 @@ func preparedWebImageJobReplay(job *domain.Job, accountID uuid.UUID, idempotency
 	}
 	aspectRatio, err := imagegeneration.NormalizeAspectRatio(params.AspectRatio)
 	if err != nil || aspectRatio != intent.AspectRatio {
+		return safeImageJob{}, false
+	}
+	outputCount := params.OutputCount
+	if outputCount == 0 {
+		outputCount = imagegeneration.DefaultOutputCount
+	}
+	if outputCount != intent.OutputCount {
 		return safeImageJob{}, false
 	}
 	return newSafeImageJob(job)

@@ -114,6 +114,9 @@ func TestSubmitNanoBanana2TextOnlyUsesGenerationModel(t *testing.T) {
 		if body.Input["prompt"] != "safe prompt" || body.Input["size"] != "16:9" || body.Input["resolution"] != "4K" {
 			t.Fatalf("bad image input: %+v", body.Input)
 		}
+		if body.Input["n"].(float64) != 3 {
+			t.Fatalf("output count = %#v, want 3", body.Input["n"])
+		}
 		if _, ok := body.Input["image_urls"]; ok {
 			t.Fatalf("image_urls must be omitted without references: %+v", body.Input)
 		}
@@ -126,6 +129,7 @@ func TestSubmitNanoBanana2TextOnlyUsesGenerationModel(t *testing.T) {
 	req := baseImageRequest(ModelNanoBanana2New)
 	req.AspectRatio = "16:9"
 	req.Resolution = "4K"
+	req.OutputCount = 3
 
 	task, err := provider.Submit(context.Background(), req)
 	if err != nil {
@@ -154,6 +158,9 @@ func TestSubmitNanoBanana2ReferencesUseEditModelAndImageURLs(t *testing.T) {
 		if body.Input["prompt"] != "safe prompt" || body.Input["size"] != "16:9" || body.Input["resolution"] != "4K" {
 			t.Fatalf("bad image input: %+v", body.Input)
 		}
+		if body.Input["n"].(float64) != 2 {
+			t.Fatalf("output count = %#v, want 2", body.Input["n"])
+		}
 		refs, ok := body.Input["image_urls"].([]any)
 		if !ok || len(refs) != 2 || refs[0] != "https://cdn.test/ref-a.png" || refs[1] != "https://cdn.test/ref-b.png" {
 			t.Fatalf("image_urls = %#v", body.Input["image_urls"])
@@ -171,6 +178,7 @@ func TestSubmitNanoBanana2ReferencesUseEditModelAndImageURLs(t *testing.T) {
 	req.AspectRatio = "16:9"
 	req.Resolution = "4K"
 	req.InputURLs = []string{" https://cdn.test/ref-a.png ", "https://cdn.test/ref-b.png"}
+	req.OutputCount = 2
 
 	task, err := provider.Submit(context.Background(), req)
 	if err != nil {
@@ -198,7 +206,7 @@ func TestSubmitNanoBananaProTextOnlyUsesGenerationModel(t *testing.T) {
 		if body.Input["prompt"] != "safe prompt" || body.Input["size"] != "auto" || body.Input["resolution"] != "1K" {
 			t.Fatalf("bad pro image input: %+v", body.Input)
 		}
-		if body.Input["n"].(float64) != 1 || body.Input["output_format"] != "png" || body.Input["enable_web_search"] != false {
+		if body.Input["n"].(float64) != 3 || body.Input["output_format"] != "png" || body.Input["enable_web_search"] != false {
 			t.Fatalf("bad pro options: %+v", body.Input)
 		}
 		if _, ok := body.Input["image_urls"]; ok {
@@ -213,6 +221,7 @@ func TestSubmitNanoBananaProTextOnlyUsesGenerationModel(t *testing.T) {
 	req := baseImageRequest(ModelNanoBananaPro)
 	req.AspectRatio = ""
 	req.Size = "auto"
+	req.OutputCount = 3
 
 	task, err := provider.Submit(context.Background(), req)
 	if err != nil {

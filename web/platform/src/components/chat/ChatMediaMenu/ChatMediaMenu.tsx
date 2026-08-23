@@ -5,6 +5,7 @@ import Link from "next/link";
 import { useEffect, useId, useRef, useState, type ChangeEvent } from "react";
 
 import { assetPaths } from "@/assets/asset-paths";
+import { InputControlChip } from "@/components/ui/InputControlChip/InputControlChip";
 import styles from "./ChatMediaMenu.module.css";
 
 export type ChatMediaMenuLabels = {
@@ -87,7 +88,7 @@ export function ChatMediaMenu({
 
   return (
     <div className={styles.root} ref={rootRef}>
-      <button
+      <InputControlChip
         aria-controls={isOpen ? menuID : undefined}
         aria-expanded={isOpen}
         aria-haspopup="menu"
@@ -95,11 +96,10 @@ export function ChatMediaMenu({
         className={styles.trigger}
         disabled={disabled}
         onClick={() => setIsOpen((current) => !current)}
-        type="button"
       >
         <Image alt="" aria-hidden="true" height={24} src={assetPaths.icons.ui.uploadMedia} unoptimized width={24} />
         <span>{labels.trigger}</span>
-      </button>
+      </InputControlChip>
 
       <input
         accept={acceptedMediaTypes}

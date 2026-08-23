@@ -9,6 +9,7 @@ package imagegeneration
 import (
 	"errors"
 	"fmt"
+	"math"
 	"strings"
 
 	"vk-ai-aggregator/internal/domain"
@@ -22,11 +23,16 @@ var (
 	ErrReferenceUnsupported   = errors.New("image generation references unsupported")
 	ErrReferenceLimit         = errors.New("image generation reference limit exceeded")
 	ErrInvalidReferenceCount  = errors.New("image generation reference count invalid")
+	ErrInvalidOutputCount     = errors.New("image generation output count invalid")
+	ErrOutputCountLimit       = errors.New("image generation output count limit exceeded")
 	ErrPriceUnavailable       = errors.New("image generation price unavailable")
 	ErrUnsupportedAspectRatio = errors.New("image generation aspect ratio unsupported")
 )
 
-const DefaultAspectRatio = "16:9"
+const (
+	DefaultAspectRatio = "16:9"
+	DefaultOutputCount = 1
+)
 
 var supportedAspectRatios = map[string]struct{}{
 	"16:9": {}, "1:1": {}, "21:9": {}, "2:3": {}, "3:2": {},
@@ -45,6 +51,7 @@ type PublicModel struct {
 	DefaultQuality         string
 	SupportsReferenceImage bool
 	MaxReferenceImages     int
+	MaxOutputCount         int
 }
 
 // Request contains only public product dimensions. It intentionally accepts no
@@ -54,6 +61,7 @@ type Request struct {
 	Quality        string
 	AspectRatio    string
 	ReferenceCount int
+	OutputCount    int
 }
 
 // PublicSelection is the safe subset an inbound adapter may map to its public
@@ -63,6 +71,7 @@ type PublicSelection struct {
 	ModelName    string `json:"model_name"`
 	ImageQuality string `json:"image_quality,omitempty"`
 	AspectRatio  string `json:"aspect_ratio,omitempty"`
+	OutputCount  int    `json:"output_count"`
 }
 
 // WorkerParams contains trusted execution details for an internal job payload.
@@ -76,6 +85,7 @@ type WorkerParams struct {
 	Resolution   string
 	ImageQuality string
 	AspectRatio  string
+	OutputCount  int
 }
 
 // Resolution is the server-trusted result of resolving one public selection.
@@ -131,6 +141,10 @@ func (r Resolver) Resolve(request Request) (Resolution, error) {
 	if err != nil || !snapshot.Valid() {
 		return Resolution{}, fmt.Errorf("%w: %v", ErrPriceUnavailable, err)
 	}
+	snapshot, err = scalePricingSnapshot(snapshot, public.OutputCount)
+	if err != nil {
+		return Resolution{}, err
+	}
 
 	return Resolution{
 		Public: public,
@@ -143,6 +157,7 @@ func (r Resolver) Resolve(request Request) (Resolution, error) {
 			Resolution:   public.ImageQuality,
 			ImageQuality: public.ImageQuality,
 			AspectRatio:  public.AspectRatio,
+			OutputCount:  public.OutputCount,
 		},
 		PricingSnapshot: snapshot,
 	}, nil
@@ -160,6 +175,9 @@ func (r Resolver) ResolvePublic(request Request) (PublicSelection, error) {
 func (r Resolver) resolvePublic(request Request) (modelcatalog.Model, PublicSelection, error) {
 	if request.ReferenceCount < 0 {
 		return modelcatalog.Model{}, PublicSelection{}, ErrInvalidReferenceCount
+	}
+	if request.OutputCount < 0 {
+		return modelcatalog.Model{}, PublicSelection{}, ErrInvalidOutputCount
 	}
 
 	requestedModelID := strings.TrimSpace(request.ModelID)
@@ -183,12 +201,17 @@ func (r Resolver) resolvePublic(request Request) (modelcatalog.Model, PublicSele
 	if err := validateReferenceCount(publicModel, request.ReferenceCount); err != nil {
 		return modelcatalog.Model{}, PublicSelection{}, err
 	}
+	outputCount, err := normalizeOutputCount(publicModel, request.OutputCount)
+	if err != nil {
+		return modelcatalog.Model{}, PublicSelection{}, err
+	}
 
 	return trustedModel, PublicSelection{
 		ModelID:      trustedModel.ModelID,
 		ModelName:    trustedModel.ModelName,
 		ImageQuality: quality,
 		AspectRatio:  aspectRatio,
+		OutputCount:  outputCount,
 	}, nil
 }
 
@@ -259,6 +282,69 @@ func validateReferenceCount(publicModel PublicModel, count int) error {
 		return ErrReferenceLimit
 	}
 	return nil
+}
+
+func normalizeOutputCount(publicModel PublicModel, count int) (int, error) {
+	if count < 0 {
+		return 0, ErrInvalidOutputCount
+	}
+	if count == 0 {
+		count = DefaultOutputCount
+	}
+	maxOutputCount := publicModel.MaxOutputCount
+	if maxOutputCount <= 0 {
+		maxOutputCount = DefaultOutputCount
+	}
+	if count > maxOutputCount {
+		return 0, ErrOutputCountLimit
+	}
+	return count, nil
+}
+
+func scalePricingSnapshot(snapshot pricingcatalog.PricingSnapshot, outputCount int) (pricingcatalog.PricingSnapshot, error) {
+	if outputCount <= 0 {
+		return pricingcatalog.PricingSnapshot{}, ErrInvalidOutputCount
+	}
+	if outputCount == DefaultOutputCount {
+		return snapshot, nil
+	}
+
+	count := int64(outputCount)
+	var ok bool
+	if snapshot.Floor.Amount, ok = checkedMultiply(snapshot.Floor.Amount, count); !ok {
+		return pricingcatalog.PricingSnapshot{}, ErrPriceUnavailable
+	}
+	if snapshot.InternalCredits, ok = checkedMultiply(snapshot.InternalCredits, count); !ok {
+		return pricingcatalog.PricingSnapshot{}, ErrPriceUnavailable
+	}
+	if snapshot.InternalCreditCap, ok = checkedMultiplyOptional(snapshot.InternalCreditCap, count); !ok {
+		return pricingcatalog.PricingSnapshot{}, ErrPriceUnavailable
+	}
+	if snapshot.FloorAmountCap, ok = checkedMultiplyOptional(snapshot.FloorAmountCap, count); !ok {
+		return pricingcatalog.PricingSnapshot{}, ErrPriceUnavailable
+	}
+	if snapshot.DefaultDisplayCredits, ok = checkedMultiplyOptional(snapshot.DefaultDisplayCredits, count); !ok {
+		return pricingcatalog.PricingSnapshot{}, ErrPriceUnavailable
+	}
+	snapshot.CalculationDescription = strings.TrimSpace(fmt.Sprintf("%s; output_count=%d", snapshot.CalculationDescription, outputCount))
+	if !snapshot.Valid() {
+		return pricingcatalog.PricingSnapshot{}, ErrPriceUnavailable
+	}
+	return snapshot, nil
+}
+
+func checkedMultiply(value, multiplier int64) (int64, bool) {
+	if value <= 0 || multiplier <= 0 || value > math.MaxInt64/multiplier {
+		return 0, false
+	}
+	return value * multiplier, true
+}
+
+func checkedMultiplyOptional(value, multiplier int64) (int64, bool) {
+	if value == 0 {
+		return 0, true
+	}
+	return checkedMultiply(value, multiplier)
 }
 
 func imageSizeForQuality(provider domain.ProviderName, quality string) string {

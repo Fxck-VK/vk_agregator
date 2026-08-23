@@ -86,6 +86,7 @@ export const imageModelSchema = z
     default_quality: z.string().trim().min(1),
     supports_reference_image: z.boolean(),
     max_reference_images: z.number().int().nonnegative(),
+    max_output_count: z.number().int().positive().optional(),
   })
   .strict();
 

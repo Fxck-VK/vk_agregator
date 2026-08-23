@@ -52,13 +52,14 @@ func (e *Error) ProviderErrorClass() domain.ProviderErrorClass { return e.Class 
 
 // taskState tracks one submitted task across Poll calls.
 type taskState struct {
-	jobID     uuid.UUID
-	operation domain.OperationType
-	modality  domain.Modality
-	text      string
-	errClass  domain.ProviderErrorClass
-	polls     int
-	cancelled bool
+	jobID       uuid.UUID
+	operation   domain.OperationType
+	modality    domain.Modality
+	text        string
+	outputCount int
+	errClass    domain.ProviderErrorClass
+	polls       int
+	cancelled   bool
 }
 
 // Provider is the mock domain.Provider.
@@ -128,11 +129,12 @@ func (p *Provider) Submit(_ context.Context, req domain.ProviderRequest) (domain
 
 	externalID := "mock-" + uuid.NewString()
 	state := &taskState{
-		jobID:     req.JobID,
-		operation: req.Operation,
-		modality:  req.Modality,
-		text:      textOutput(externalID, req.Modality),
-		errClass:  triggerFor(req.Prompt),
+		jobID:       req.JobID,
+		operation:   req.Operation,
+		modality:    req.Modality,
+		text:        textOutput(externalID, req.Modality),
+		outputCount: max(req.OutputCount, 1),
+		errClass:    triggerFor(req.Prompt),
 	}
 
 	p.mu.Lock()
@@ -185,7 +187,7 @@ func (p *Provider) Poll(_ context.Context, ref domain.ProviderTaskRef) (domain.P
 	}
 	return domain.ProviderTaskResult{
 		Status:     domain.ProviderTaskSucceeded,
-		OutputURLs: []string{outputURL(ref.ExternalID, state.modality)},
+		OutputURLs: outputURLs(ref.ExternalID, state.modality, state.outputCount),
 		Text:       state.text,
 	}, nil
 }
@@ -223,6 +225,23 @@ func outputURL(externalID string, modality domain.Modality) string {
 		ext = "mp3"
 	}
 	return fmt.Sprintf("mock://%s/output.%s", externalID, ext)
+}
+
+func outputURLs(externalID string, modality domain.Modality, count int) []string {
+	count = max(count, 1)
+	if count == 1 {
+		return []string{outputURL(externalID, modality)}
+	}
+	baseURL := outputURL(externalID, modality)
+	dot := strings.LastIndexByte(baseURL, '.')
+	if dot < 0 {
+		dot = len(baseURL)
+	}
+	result := make([]string, count)
+	for index := range result {
+		result[index] = fmt.Sprintf("%s-%d%s", baseURL[:dot], index+1, baseURL[dot:])
+	}
+	return result
 }
 
 func textOutput(externalID string, modality domain.Modality) string {

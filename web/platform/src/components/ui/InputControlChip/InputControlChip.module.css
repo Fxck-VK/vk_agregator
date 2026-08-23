@@ -1,0 +1,51 @@
+.chip {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: var(--space-2);
+  min-block-size: 3.25rem;
+  padding-inline: var(--space-4);
+  border: 0.0625rem solid var(--color-border);
+  border-radius: 999px;
+  color: var(--color-text);
+  background: transparent;
+  font: inherit;
+  font-weight: 700;
+  white-space: nowrap;
+  transition:
+    border-color var(--motion-fast),
+    background-color var(--motion-fast),
+    color var(--motion-fast);
+}
+
+.button {
+  cursor: pointer;
+}
+
+.button:not(:disabled):hover,
+.button[aria-expanded="true"] {
+  border-color: color-mix(in srgb, var(--color-text-muted) 65%, var(--color-border));
+  background: color-mix(in srgb, var(--color-surface-raised) 78%, transparent);
+}
+
+.button:focus-visible {
+  outline: 0.1875rem solid color-mix(in srgb, var(--color-accent) 30%, transparent);
+  outline-offset: 0.125rem;
+}
+
+.button:disabled {
+  color: var(--color-text-muted);
+  cursor: not-allowed;
+  opacity: 0.65;
+}
+
+.group {
+  gap: 0.35rem;
+  padding-inline: 0.45rem;
+}
+
+@media (width < 40rem) {
+  .chip {
+    min-block-size: 3rem;
+  }
+}

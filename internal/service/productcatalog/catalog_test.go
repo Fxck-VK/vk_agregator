@@ -44,7 +44,7 @@ func TestCatalogBuildsOnlyPublicEnabledItems(t *testing.T) {
 		t.Fatalf("Nano Banana 2 missing from public catalog: %+v", items)
 	}
 	assertImageQualityOptions(t, "Nano Banana 2", nano.DefaultQuality, nano.QualityOptions)
-	if !nano.SupportsReferenceImage || nano.MaxReferenceImages != 14 {
+	if !nano.SupportsReferenceImage || nano.MaxReferenceImages != 14 || nano.MaxOutputCount != 4 {
 		t.Fatalf("Nano Banana 2 reference limits missing: %+v", nano)
 	}
 	pro := findItem(items, modelcatalog.MiniAppImageNanoBananaPro)

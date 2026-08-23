@@ -49,6 +49,7 @@ type Model struct {
 	DurationSec            int
 	SupportsReferenceImage bool
 	MaxReferenceImages     int
+	MaxOutputCount         int
 }
 
 var miniAppDefaultModel = map[domain.OperationType]string{
@@ -212,5 +213,6 @@ func modelFromRegistryImage(registryModel providermodels.ImageModel) Model {
 		ExposeID:               true,
 		SupportsReferenceImage: registryModel.Limits.SupportsReferenceImage,
 		MaxReferenceImages:     registryModel.Limits.MaxReferenceImages,
+		MaxOutputCount:         registryModel.Limits.MaxOutputCount,
 	}
 }

@@ -44,6 +44,7 @@ type ImageModel struct {
 	DefaultQuality         string   `json:"default_quality,omitempty"`
 	SupportsReferenceImage bool     `json:"supports_reference_image"`
 	MaxReferenceImages     int      `json:"max_reference_images,omitempty"`
+	MaxOutputCount         int      `json:"max_output_count"`
 }
 
 type VideoRoute struct {
@@ -88,6 +89,7 @@ type Item struct {
 	RequiresStartImage     bool     `json:"requires_start_image"`
 	SupportsReferenceImage bool     `json:"supports_reference_image"`
 	MaxReferenceImages     int      `json:"max_reference_images,omitempty"`
+	MaxOutputCount         int      `json:"max_output_count,omitempty"`
 }
 
 func New(cfg Config) *Catalog {
@@ -174,6 +176,7 @@ func imageModels(cfg Config) []ImageModel {
 			DefaultQuality:         defaultQuality,
 			SupportsReferenceImage: model.SupportsReferenceImage,
 			MaxReferenceImages:     model.MaxReferenceImages,
+			MaxOutputCount:         model.MaxOutputCount,
 		})
 	}
 	return out
@@ -377,6 +380,7 @@ func itemFromImage(model ImageModel) Item {
 		DefaultQuality:         model.DefaultQuality,
 		SupportsReferenceImage: model.SupportsReferenceImage,
 		MaxReferenceImages:     model.MaxReferenceImages,
+		MaxOutputCount:         model.MaxOutputCount,
 	}
 }
 

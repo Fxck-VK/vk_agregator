@@ -117,6 +117,7 @@ func TestWebImageModelsFromRuntimeCatalogExposesOnlyReadyProductDimensions(t *te
 			DefaultQuality:         "1K",
 			SupportsReferenceImage: true,
 			MaxReferenceImages:     4,
+			MaxOutputCount:         4,
 		},
 		{ID: "disabled", Name: "Disabled", Enabled: false},
 	}
@@ -125,7 +126,7 @@ func TestWebImageModelsFromRuntimeCatalogExposesOnlyReadyProductDimensions(t *te
 	if len(models) != 1 {
 		t.Fatalf("models = %+v, want only the enabled runtime model", models)
 	}
-	if !models[0].Ready || !models[0].Enabled || models[0].ID != "nano-banana-2" || models[0].Name != "Nano Banana 2" || models[0].DefaultQuality != "1K" || len(models[0].QualityOptions) != 2 {
+	if !models[0].Ready || !models[0].Enabled || models[0].ID != "nano-banana-2" || models[0].Name != "Nano Banana 2" || models[0].DefaultQuality != "1K" || len(models[0].QualityOptions) != 2 || models[0].MaxOutputCount != 4 {
 		t.Fatalf("web model = %+v", models[0])
 	}
 	models[0].QualityOptions[0] = "mutated"

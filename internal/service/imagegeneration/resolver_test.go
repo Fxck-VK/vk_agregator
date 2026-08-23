@@ -24,12 +24,14 @@ func TestResolver_UsesTrustedModelAndExactPricingSnapshot(t *testing.T) {
 		DefaultQuality:         modelcatalog.ImageQuality1K,
 		SupportsReferenceImage: true,
 		MaxReferenceImages:     4,
+		MaxOutputCount:         4,
 	}}, pricing)
 
 	got, err := resolver.Resolve(imagegeneration.Request{
 		ModelID:        modelcatalog.MiniAppImageNanoBanana2,
 		Quality:        " 2k ",
 		ReferenceCount: 2,
+		OutputCount:    4,
 	})
 	if err != nil {
 		t.Fatalf("resolve image: %v", err)
@@ -45,8 +47,12 @@ func TestResolver_UsesTrustedModelAndExactPricingSnapshot(t *testing.T) {
 		got.Worker.ModelName != "Nano Banana 2" ||
 		got.Worker.ImageQuality != modelcatalog.ImageQuality2K ||
 		got.Worker.Resolution != modelcatalog.ImageQuality2K ||
-		got.Worker.Size != "1:1" {
+		got.Worker.Size != "1:1" ||
+		got.Worker.OutputCount != 4 {
 		t.Fatalf("trusted worker params = %+v", got.Worker)
+	}
+	if got.Public.OutputCount != 4 {
+		t.Fatalf("public output count = %d, want 4", got.Public.OutputCount)
 	}
 
 	wantSnapshot, err := pricing.Snapshot(pricingcatalog.ProductKey{
@@ -58,11 +64,41 @@ func TestResolver_UsesTrustedModelAndExactPricingSnapshot(t *testing.T) {
 	if err != nil {
 		t.Fatalf("snapshot: %v", err)
 	}
-	if !reflect.DeepEqual(got.PricingSnapshot, wantSnapshot) {
-		t.Fatalf("pricing snapshot = %+v, want %+v", got.PricingSnapshot, wantSnapshot)
+	if got.PricingSnapshot.InternalCredits != wantSnapshot.InternalCredits*4 {
+		t.Fatalf("exact server price = %d, want %d", got.PricingSnapshot.InternalCredits, wantSnapshot.InternalCredits*4)
 	}
-	if got.PricingSnapshot.InternalCredits != 60 {
-		t.Fatalf("exact server price = %d, want 60", got.PricingSnapshot.InternalCredits)
+	if got.PricingSnapshot.Floor.Amount != wantSnapshot.Floor.Amount*4 {
+		t.Fatalf("scaled floor = %d, want %d", got.PricingSnapshot.Floor.Amount, wantSnapshot.Floor.Amount*4)
+	}
+}
+
+func TestResolver_NormalizesAndValidatesOutputCount(t *testing.T) {
+	resolver := imagegeneration.NewResolver([]imagegeneration.PublicModel{{
+		ID:             modelcatalog.MiniAppImageNanoBanana2,
+		Name:           "Nano Banana 2",
+		Enabled:        true,
+		Ready:          true,
+		QualityOptions: []string{modelcatalog.ImageQuality1K},
+		DefaultQuality: modelcatalog.ImageQuality1K,
+		MaxOutputCount: 4,
+	}}, staticPricingCatalog(t))
+
+	defaulted, err := resolver.Resolve(imagegeneration.Request{ModelID: modelcatalog.MiniAppImageNanoBanana2})
+	if err != nil {
+		t.Fatalf("resolve default output count: %v", err)
+	}
+	if defaulted.Public.OutputCount != imagegeneration.DefaultOutputCount || defaulted.Worker.OutputCount != imagegeneration.DefaultOutputCount {
+		t.Fatalf("default output count = %d / %d, want %d", defaulted.Public.OutputCount, defaulted.Worker.OutputCount, imagegeneration.DefaultOutputCount)
+	}
+
+	_, err = resolver.Resolve(imagegeneration.Request{ModelID: modelcatalog.MiniAppImageNanoBanana2, OutputCount: 5})
+	if !errors.Is(err, imagegeneration.ErrOutputCountLimit) {
+		t.Fatalf("output count limit error = %v, want ErrOutputCountLimit", err)
+	}
+
+	_, err = resolver.Resolve(imagegeneration.Request{ModelID: modelcatalog.MiniAppImageNanoBanana2, OutputCount: -1})
+	if !errors.Is(err, imagegeneration.ErrInvalidOutputCount) {
+		t.Fatalf("invalid output count error = %v, want ErrInvalidOutputCount", err)
 	}
 }
 

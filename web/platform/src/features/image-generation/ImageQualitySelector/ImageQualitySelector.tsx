@@ -1,16 +1,16 @@
 "use client";
 
-import { useEffect, useLayoutEffect, useRef, useState, type CSSProperties } from "react";
+import { useEffect, useLayoutEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 
 import { InputControlChip } from "@/components/ui/InputControlChip/InputControlChip";
-import styles from "./ImageAspectRatioSelector.module.css";
+import styles from "./ImageQualitySelector.module.css";
 
-export const IMAGE_ASPECT_RATIOS = ["16:9", "1:1", "21:9", "2:3", "3:2", "3:4", "4:3", "4:5", "5:4", "9:16"] as const;
-
-type ImageAspectRatioSelectorProps = {
+type ImageQualitySelectorProps = {
   disabled: boolean;
-  onChange: (ratio: string) => void;
+  label: string;
+  onChange: (quality: string) => void;
+  options: readonly string[];
   value: string;
 };
 
@@ -21,7 +21,15 @@ type PanelLayout = {
   width: number;
 };
 
-export function ImageAspectRatioSelector({ disabled, onChange, value }: Readonly<ImageAspectRatioSelectorProps>) {
+const PANEL_WIDTH = 352;
+
+export function ImageQualitySelector({
+  disabled,
+  label,
+  onChange,
+  options,
+  value,
+}: Readonly<ImageQualitySelectorProps>) {
   const [isOpen, setIsOpen] = useState(false);
   const [panelLayout, setPanelLayout] = useState<PanelLayout | null>(null);
   const panelRef = useRef<HTMLDivElement>(null);
@@ -32,6 +40,7 @@ export function ImageAspectRatioSelector({ disabled, onChange, value }: Readonly
     if (!isOpen) {
       return;
     }
+
     const closeOnOutsidePress = (event: MouseEvent) => {
       const target = event.target as Node;
       if (!rootRef.current?.contains(target) && !panelRef.current?.contains(target)) {
@@ -41,8 +50,10 @@ export function ImageAspectRatioSelector({ disabled, onChange, value }: Readonly
     const closeOnEscape = (event: KeyboardEvent) => {
       if (event.key === "Escape") {
         setIsOpen(false);
+        triggerRef.current?.focus();
       }
     };
+
     document.addEventListener("mousedown", closeOnOutsidePress);
     document.addEventListener("keydown", closeOnEscape);
     return () => {
@@ -67,13 +78,17 @@ export function ImageAspectRatioSelector({ disabled, onChange, value }: Readonly
       const gap = 12;
       const viewportWidth = window.innerWidth;
       const viewportHeight = window.innerHeight;
-      const width = Math.max(0, Math.min(816, viewportWidth - margin * 2));
+      const width = Math.max(0, Math.min(PANEL_WIDTH, viewportWidth - margin * 2));
       const maxHeight = Math.max(0, viewportHeight - margin * 2);
       panel.style.width = `${width}px`;
       panel.style.maxHeight = `${maxHeight}px`;
       const panelHeight = Math.min(panel.offsetHeight, maxHeight);
       const triggerRect = trigger.getBoundingClientRect();
-      const left = clamp(triggerRect.left, margin, Math.max(margin, viewportWidth - margin - width));
+      const left = clamp(
+        triggerRect.right - width,
+        margin,
+        Math.max(margin, viewportWidth - margin - width),
+      );
       const above = triggerRect.top - gap - panelHeight;
       const below = triggerRect.bottom + gap;
       const maxTop = Math.max(margin, viewportHeight - margin - panelHeight);
@@ -95,48 +110,52 @@ export function ImageAspectRatioSelector({ disabled, onChange, value }: Readonly
     };
   }, [isOpen]);
 
+  const isDisabled = disabled || options.length === 0;
+
   return (
     <div className={styles.root} ref={rootRef}>
       <InputControlChip
         aria-expanded={isOpen}
         aria-haspopup="dialog"
-        aria-label={`Соотношение сторон: ${value}`}
+        aria-label={`${label}: ${value}`}
         className={styles.trigger}
-        disabled={disabled}
+        disabled={isDisabled}
         onClick={() => setIsOpen((current) => !current)}
         ref={triggerRef}
       >
-        <RatioShape ratio={value} />
+        <TuneIcon />
         <span>{value}</span>
+        <ChevronIcon />
       </InputControlChip>
 
       {isOpen && typeof document !== "undefined" ? createPortal(
         <div
-          aria-label="Соотношение сторон"
+          aria-label={label}
           className={styles.panel}
           ref={panelRef}
           role="dialog"
           style={panelLayout ?? { visibility: "hidden" }}
         >
-          <p className={styles.title}>Соотношение сторон</p>
+          <p className={styles.title}>{label}</p>
           <div className={styles.options} role="radiogroup">
-            {IMAGE_ASPECT_RATIOS.map((ratio) => {
-              const selected = ratio === value;
+            {options.map((quality) => {
+              const selected = quality === value;
               return (
                 <button
                   aria-checked={selected}
-                  aria-label={ratio}
+                  aria-label={quality}
                   className={selected ? `${styles.option} ${styles.selected}` : styles.option}
-                  key={ratio}
+                  key={quality}
                   onClick={() => {
-                    onChange(ratio);
+                    onChange(quality);
                     setIsOpen(false);
+                    triggerRef.current?.focus();
                   }}
                   role="radio"
                   type="button"
                 >
-                  <RatioShape ratio={ratio} />
-                  <span>{ratio}</span>
+                  <span>{quality}</span>
+                  <span aria-hidden="true" className={styles.radio} />
                 </button>
               );
             })}
@@ -152,14 +171,20 @@ function clamp(value: number, minimum: number, maximum: number): number {
   return Math.min(Math.max(value, minimum), maximum);
 }
 
-function RatioShape({ ratio }: Readonly<{ ratio: string }>) {
-  const [rawWidth, rawHeight] = ratio.split(":").map(Number);
-  const width = Number.isFinite(rawWidth) && rawWidth > 0 ? rawWidth : 1;
-  const height = Number.isFinite(rawHeight) && rawHeight > 0 ? rawHeight : 1;
-  const scale = Math.min(24 / width, 18 / height);
-  const style = {
-    "--ratio-height": `${Math.max(5, height * scale)}px`,
-    "--ratio-width": `${Math.max(5, width * scale)}px`,
-  } as CSSProperties;
-  return <span aria-hidden="true" className={styles.ratioShape} style={style} />;
+function TuneIcon() {
+  return (
+    <svg aria-hidden="true" className={styles.tuneIcon} focusable="false" viewBox="0 0 24 24">
+      <path d="M4 7h10m4 0h2M4 17h2m4 0h10" />
+      <circle cx="16" cy="7" r="2" />
+      <circle cx="8" cy="17" r="2" />
+    </svg>
+  );
+}
+
+function ChevronIcon() {
+  return (
+    <svg aria-hidden="true" className={styles.chevronIcon} focusable="false" viewBox="0 0 16 16">
+      <path d="m4 6 4 4 4-4" />
+    </svg>
+  );
 }

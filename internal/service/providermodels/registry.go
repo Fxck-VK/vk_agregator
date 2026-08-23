@@ -77,6 +77,7 @@ type Limits struct {
 	SupportsReferenceImage bool
 	RequiresStartImage     bool
 	MaxReferenceImages     int
+	MaxOutputCount         int
 }
 
 // TextAlias is the public text model alias mapped to the hidden provider model.
@@ -191,7 +192,10 @@ func loadTestImageModels() []ImageModel {
 			ProviderModelID: ProviderModelMockImage,
 			FeatureFlag:     FeatureImageMock,
 			Readiness:       mockReadiness(),
-			LoadTestOnly:    true,
+			Limits: Limits{
+				MaxOutputCount: 4,
+			},
+			LoadTestOnly: true,
 		},
 	}
 }
@@ -222,6 +226,7 @@ func imageModelWithQualities(publicID, displayName string, provider domain.Provi
 			AllowedQualities:       qualities,
 			SupportsReferenceImage: true,
 			MaxReferenceImages:     maxRefs,
+			MaxOutputCount:         4,
 		},
 		PricingKeys: keys,
 	}
@@ -640,6 +645,9 @@ func validateImageModel(model ImageModel, loadTestOnly bool) error {
 	}
 	if !loadTestOnly && model.Limits.SupportsReferenceImage && model.Limits.MaxReferenceImages <= 0 {
 		return fmt.Errorf("providermodels: image %s missing reference limits", model.PublicID)
+	}
+	if !loadTestOnly && model.Limits.MaxOutputCount <= 0 {
+		return fmt.Errorf("providermodels: image %s missing output count limit", model.PublicID)
 	}
 	return nil
 }

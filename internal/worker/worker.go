@@ -1189,6 +1189,7 @@ type promptParams struct {
 	Provider               domain.ProviderName       `json:"provider,omitempty"`
 	Size                   string                    `json:"size,omitempty"`
 	AspectRatio            string                    `json:"aspect_ratio,omitempty"`
+	OutputCount            int                       `json:"output_count,omitempty"`
 	Resolution             string                    `json:"resolution,omitempty"`
 	ReferenceArtifactIDs   []uuid.UUID               `json:"reference_artifact_ids,omitempty"`
 	InputURLs              []string                  `json:"input_urls,omitempty"`
@@ -1282,6 +1283,9 @@ func (p *processor) buildRequest(ctx context.Context, job *domain.Job, attempt i
 		}
 	}
 	if job.Modality == domain.ModalityImage {
+		if pp.OutputCount <= 0 {
+			pp.OutputCount = 1
+		}
 		if modelCode == "" {
 			modelCode = p.imageModel
 		}
@@ -1364,6 +1368,7 @@ func (p *processor) buildRequest(ctx context.Context, job *domain.Job, attempt i
 		NegativePrompt:       pp.NegativePrompt,
 		Size:                 size,
 		AspectRatio:          pp.AspectRatio,
+		OutputCount:          pp.OutputCount,
 		DurationSec:          durationSec,
 		Resolution:           resolution,
 		Draft:                draft,

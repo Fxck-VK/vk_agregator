@@ -3,34 +3,7 @@
 }
 
 .trigger {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  gap: var(--space-2);
-  min-block-size: 3.25rem;
-  padding-inline: var(--space-4);
-  border: 0.0625rem solid var(--color-border);
-  border-radius: 999px;
-  color: var(--color-text);
-  background: var(--color-surface-raised);
-  font: inherit;
-  font-weight: 700;
-  white-space: nowrap;
-}
-
-.trigger:not(:disabled):hover,
-.trigger[aria-expanded="true"] {
-  border-color: color-mix(in srgb, var(--color-text-muted) 65%, var(--color-border));
-  background: color-mix(in srgb, var(--color-surface-raised) 88%, var(--color-text) 12%);
-}
-
-.trigger:focus-visible {
-  outline: 0.1875rem solid color-mix(in srgb, var(--color-accent) 30%, transparent);
-  outline-offset: 0.125rem;
-}
-
-.trigger:disabled {
-  color: var(--color-text-muted);
+  flex: 0 0 auto;
 }
 
 .panel {
@@ -110,12 +83,6 @@
 @media (width < 62rem) {
   .options {
     grid-template-columns: repeat(3, minmax(4.5rem, 1fr));
-  }
-}
-
-@media (width < 40rem) {
-  .trigger {
-    min-block-size: 3rem;
   }
 }
 

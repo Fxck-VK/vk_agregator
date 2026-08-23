@@ -505,6 +505,7 @@ func webImageModelsFromRuntimeCatalog(runtimeModels []productcatalog.ImageModel)
 			DefaultQuality:         model.DefaultQuality,
 			SupportsReferenceImage: model.SupportsReferenceImage,
 			MaxReferenceImages:     model.MaxReferenceImages,
+			MaxOutputCount:         model.MaxOutputCount,
 		})
 	}
 	return models

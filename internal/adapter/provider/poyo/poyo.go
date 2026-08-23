@@ -670,13 +670,16 @@ func buildImageSubmitRequest(req domain.ProviderRequest) (submitRequest, error) 
 	if modelCode != ModelSeedream45 {
 		input["resolution"] = effectiveImageResolution(req.Resolution)
 	}
+	if modelCode == ModelNanoBanana2New {
+		input["n"] = max(req.OutputCount, 1)
+	}
 	if modelCode == ModelNanoBananaPro {
-		input["n"] = 1
+		input["n"] = max(req.OutputCount, 1)
 		input["output_format"] = "png"
 		input["enable_web_search"] = false
 	}
 	if modelCode == ModelSeedream45 {
-		input["n"] = 1
+		input["n"] = max(req.OutputCount, 1)
 	}
 	if len(inputURLs) > 0 {
 		input["image_urls"] = inputURLs

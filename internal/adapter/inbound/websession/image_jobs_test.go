@@ -74,6 +74,36 @@ func TestWebImageJobPrepareUsesServerResolvedPriceAndReturnsSafeDTO(t *testing.T
 	}
 }
 
+func TestWebImageJobPrepareScalesPriceAndPersistsOutputCount(t *testing.T) {
+	h, jobs, sessions := newImageJobTestHandler(t)
+	accountID := uuid.New()
+	req := safeImageMutationRequest(t, sessions, accountID, http.MethodPost, "/web/v1/image-jobs/prepare", map[string]any{
+		"prompt":        "two matching portraits",
+		"model_id":      modelcatalog.MiniAppImageNanoBanana2,
+		"image_quality": modelcatalog.ImageQuality1K,
+		"aspect_ratio":  "1:1",
+		"output_count":  2,
+	})
+	rec := httptest.NewRecorder()
+
+	h.Routes().ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusCreated {
+		t.Fatalf("status = %d, body = %s", rec.Code, rec.Body.String())
+	}
+	if jobs.prepareInput.CostEstimateCredits != 100 || jobs.prepareInput.PricingSnapshot.InternalCredits != 100 {
+		t.Fatalf("server price = %d / %+v, want 100", jobs.prepareInput.CostEstimateCredits, jobs.prepareInput.PricingSnapshot)
+	}
+	var params webImageJobParams
+	if err := json.Unmarshal(jobs.prepareInput.Params, &params); err != nil {
+		t.Fatalf("decode prepared params: %v", err)
+	}
+	if params.OutputCount != 2 {
+		t.Fatalf("output count = %d, want 2", params.OutputCount)
+	}
+	assertSafeWebImagePreparation(t, rec.Body.Bytes(), jobs.prepared.ID, domain.JobStatusPrepared, 100, 104)
+}
+
 func TestWebImageJobPrepareRejectsAccountScopedRateLimitBeforeDurablePrepare(t *testing.T) {
 	h, jobs, sessions := newImageJobTestHandler(t)
 	accountID := uuid.New()
@@ -383,6 +413,7 @@ func TestWebImageModelsReturnsOnlyServerSafeCatalog(t *testing.T) {
 			DefaultQuality         string           `json:"default_quality"`
 			SupportsReferenceImage bool             `json:"supports_reference_image"`
 			MaxReferenceImages     int              `json:"max_reference_images"`
+			MaxOutputCount         int              `json:"max_output_count"`
 		} `json:"items"`
 	}
 	if err := json.Unmarshal(rec.Body.Bytes(), &response); err != nil {
@@ -391,7 +422,7 @@ func TestWebImageModelsReturnsOnlyServerSafeCatalog(t *testing.T) {
 	if len(response.Items) != 1 || response.Items[0].ID != modelcatalog.MiniAppImageNanoBanana2 || response.Items[0].Name != "Nano Banana 2" || response.Items[0].DefaultQuality != modelcatalog.ImageQuality1K {
 		t.Fatalf("catalog = %+v", response.Items)
 	}
-	if response.Items[0].MaxReferenceImages != 4 || !response.Items[0].SupportsReferenceImage {
+	if response.Items[0].MaxReferenceImages != 4 || !response.Items[0].SupportsReferenceImage || response.Items[0].MaxOutputCount != 4 {
 		t.Fatalf("reference support = %+v", response.Items[0])
 	}
 	if got := response.Items[0].PriceByQuality; !reflect.DeepEqual(got, map[string]int64{
@@ -1504,6 +1535,7 @@ func newImageJobTestHandler(t *testing.T) (*Handler, *imageJobServiceStub, *sess
 		DefaultQuality:         modelcatalog.ImageQuality1K,
 		SupportsReferenceImage: true,
 		MaxReferenceImages:     4,
+		MaxOutputCount:         4,
 	}}
 	h.deps.ImageJobs = jobs
 	h.deps.ImageBalance = imageBalanceStub{balance: 104}
@@ -1556,7 +1588,7 @@ func newPreparedWebImageJobForReplay(t *testing.T, accountID, idempotencyKey uui
 	}
 }
 
-func safeImageMutationRequest(t *testing.T, sessions *sessionStub, accountID uuid.UUID, method, path string, body map[string]string) *http.Request {
+func safeImageMutationRequest(t *testing.T, sessions *sessionStub, accountID uuid.UUID, method, path string, body any) *http.Request {
 	t.Helper()
 	payload, err := json.Marshal(body)
 	if err != nil {

@@ -113,6 +113,9 @@ type ProviderRequest struct {
 	Size string `json:"size,omitempty"`
 	// AspectRatio is the requested output aspect ratio for image/video models.
 	AspectRatio string `json:"aspect_ratio,omitempty"`
+	// OutputCount is the number of image variants requested in one generation.
+	// A zero value is treated as one for backwards compatibility with older jobs.
+	OutputCount int `json:"output_count,omitempty"`
 	// ReferenceArtifactIDs identifies input artifacts used as image references.
 	// Workers may turn these into provider-safe InputURLs before submission.
 	ReferenceArtifactIDs []uuid.UUID `json:"reference_artifact_ids,omitempty"`
@@ -149,6 +152,7 @@ type ImageGenerationRequest struct {
 	ModelCode            string          `json:"model_code,omitempty"`
 	Size                 string          `json:"size,omitempty"`
 	AspectRatio          string          `json:"aspect_ratio,omitempty"`
+	OutputCount          int             `json:"output_count,omitempty"`
 	ReferenceArtifactIDs []uuid.UUID     `json:"reference_artifact_ids,omitempty"`
 	InputURLs            []string        `json:"input_urls,omitempty"`
 	Params               json.RawMessage `json:"params,omitempty"`
@@ -178,6 +182,7 @@ func (r ProviderRequest) ImageRequest() ImageGenerationRequest {
 		ModelCode:            r.ModelCode,
 		Size:                 r.Size,
 		AspectRatio:          r.AspectRatio,
+		OutputCount:          r.OutputCount,
 		ReferenceArtifactIDs: append([]uuid.UUID(nil), r.ReferenceArtifactIDs...),
 		InputURLs:            append([]string(nil), r.InputURLs...),
 		Params:               append(json.RawMessage(nil), r.Params...),

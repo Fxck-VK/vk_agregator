@@ -86,6 +86,35 @@ func TestSubmitPollSuccess(t *testing.T) {
 	}
 }
 
+func TestSubmitPollReturnsRequestedImageCount(t *testing.T) {
+	p := mock.New()
+	ctx := context.Background()
+	request := req(domain.OperationImageGenerate, domain.ModalityImage, "four neon cats")
+	request.OutputCount = 4
+
+	task, err := p.Submit(ctx, request)
+	if err != nil {
+		t.Fatalf("submit: %v", err)
+	}
+	res, err := p.Poll(ctx, domain.ProviderTaskRef{Provider: domain.ProviderMock, ExternalID: task.ExternalID})
+	if err != nil {
+		t.Fatalf("poll: %v", err)
+	}
+	if res.Status != domain.ProviderTaskSucceeded {
+		t.Fatalf("status = %q, want succeeded", res.Status)
+	}
+	if len(res.OutputURLs) != 4 {
+		t.Fatalf("expected four output urls, got %v", res.OutputURLs)
+	}
+	seen := make(map[string]struct{}, len(res.OutputURLs))
+	for _, rawURL := range res.OutputURLs {
+		seen[rawURL] = struct{}{}
+	}
+	if len(seen) != 4 {
+		t.Fatalf("output urls must be unique, got %v", res.OutputURLs)
+	}
+}
+
 func TestPollProcessingThenSuccess(t *testing.T) {
 	p := mock.New(mock.WithCompleteAfterPolls(2))
 	ctx := context.Background()

@@ -30,12 +30,18 @@ type PrepareIntent = {
   modelID: string;
   imageQuality: string;
   aspectRatio: string;
+  outputCount: number;
   idempotencyKey: string;
 };
 
 type QualitySelection = {
   modelID: string;
   value: string;
+};
+
+type OutputCountSelection = {
+  modelID: string;
+  value: number;
 };
 
 type ImageGenerationPanelProps = {
@@ -60,6 +66,7 @@ export function ImageGenerationPanel({ onJobChange }: Readonly<ImageGenerationPa
   const [qualitySelection, setQualitySelection] = useState<QualitySelection>({ modelID: "", value: "" });
   const [prompt, setPrompt] = useState("");
   const [aspectRatio, setAspectRatio] = useState("16:9");
+  const [outputCountSelection, setOutputCountSelection] = useState<OutputCountSelection>({ modelID: "", value: 1 });
   const [prepareIntent, setPrepareIntent] = useState<PrepareIntent | null>(null);
   const [preparation, setPreparation] = useState<ImageJobPreparation | null>(null);
   const [activeJob, setActiveJob] = useState<ImageJob | null>(null);
@@ -77,7 +84,12 @@ export function ImageGenerationPanel({ onJobChange }: Readonly<ImageGenerationPa
     : qualitySelection.modelID === selectedModel.id && selectedModel.quality_options.includes(qualitySelection.value)
       ? qualitySelection.value
       : selectedModel.default_quality;
-  const selectedPrice = selectedModel?.price_by_quality?.[imageQuality] ?? null;
+  const maxOutputCount = selectedModel?.max_output_count ?? 1;
+  const outputCount = selectedModel !== null && outputCountSelection.modelID === selectedModel.id
+    ? Math.min(Math.max(1, outputCountSelection.value), Math.max(1, maxOutputCount))
+    : 1;
+  const unitPrice = selectedModel?.price_by_quality?.[imageQuality] ?? null;
+  const selectedPrice = unitPrice === null ? null : unitPrice * outputCount;
   const canPrepare = stage === "editor"
     && prompt.trim() !== ""
     && selectedModel !== null
@@ -165,19 +177,32 @@ export function ImageGenerationPanel({ onJobChange }: Readonly<ImageGenerationPa
     setError(null);
   }, []);
 
+  const changeOutputCount = useCallback((nextOutputCount: number) => {
+    if (selectedModel === null) {
+      return;
+    }
+    setOutputCountSelection({
+      modelID: selectedModel.id,
+      value: Math.min(Math.max(1, nextOutputCount), Math.max(1, maxOutputCount)),
+    });
+    setPrepareIntent(null);
+    setError(null);
+  }, [maxOutputCount, selectedModel]);
+
   const prepareImage = useCallback(async () => {
     if (!canPrepare || selectedModel === null) {
       return;
     }
 
     const normalizedPrompt = prompt.trim();
-    const intent = prepareIntentMatches(prepareIntent, normalizedPrompt, selectedModel.id, imageQuality, aspectRatio)
+    const intent = prepareIntentMatches(prepareIntent, normalizedPrompt, selectedModel.id, imageQuality, aspectRatio, outputCount)
       ? prepareIntent
       : {
           prompt: normalizedPrompt,
           modelID: selectedModel.id,
           imageQuality,
           aspectRatio,
+          outputCount,
           idempotencyKey: crypto.randomUUID(),
         };
     setPrepareIntent(intent);
@@ -195,6 +220,7 @@ export function ImageGenerationPanel({ onJobChange }: Readonly<ImageGenerationPa
           model_id: intent.modelID,
           image_quality: intent.imageQuality,
           aspect_ratio: intent.aspectRatio,
+          output_count: intent.outputCount,
         }),
       });
       if (response.status === 409) {
@@ -210,7 +236,7 @@ export function ImageGenerationPanel({ onJobChange }: Readonly<ImageGenerationPa
       setError("prepare");
       setStage("editor");
     }
-  }, [aspectRatio, canPrepare, imageQuality, prepareIntent, prompt, resetExpiredPreparation, selectedModel]);
+  }, [aspectRatio, canPrepare, imageQuality, outputCount, prepareIntent, prompt, resetExpiredPreparation, selectedModel]);
 
   const handleJobUpdate = useCallback((nextJob: ImageJob) => {
     setActiveJob(nextJob);
@@ -292,11 +318,14 @@ export function ImageGenerationPanel({ onJobChange }: Readonly<ImageGenerationPa
           errorMessage={editorError}
           imageQuality={imageQuality}
           isSubmitting={stage === "preparing"}
+          maxOutputCount={maxOutputCount}
           onAspectRatioChange={changeAspectRatio}
           onImageQualityChange={changeImageQuality}
+          onOutputCountChange={changeOutputCount}
           onPromptChange={changePrompt}
           onSubmit={() => void prepareImage()}
           price={selectedPrice}
+          outputCount={outputCount}
           prompt={prompt}
           qualityOptions={selectedModel.quality_options}
         />
@@ -328,10 +357,12 @@ function prepareIntentMatches(
   modelID: string,
   imageQuality: string,
   aspectRatio: string,
+  outputCount: number,
 ): intent is PrepareIntent {
   return intent !== null
     && intent.prompt === prompt
     && intent.modelID === modelID
     && intent.imageQuality === imageQuality
-    && intent.aspectRatio === aspectRatio;
+    && intent.aspectRatio === aspectRatio
+    && intent.outputCount === outputCount;
 }

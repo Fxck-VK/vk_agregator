@@ -241,7 +241,7 @@ func (p *Provider) submitImage(ctx context.Context, req domain.ProviderRequest) 
 		Model:            req.ModelCode,
 		Prompt:           strings.TrimSpace(req.Prompt),
 		Size:             effectiveImageSize(req),
-		N:                1,
+		N:                max(req.OutputCount, 1),
 		Resolution:       effectiveImageResolution(req),
 		OfficialFallback: false,
 		ImageURLs:        cleanInputURLs(req.InputURLs),

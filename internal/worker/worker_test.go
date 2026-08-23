@@ -2040,6 +2040,7 @@ func TestGenerationImageRequestCarriesImageDefaultsAndReferences(t *testing.T) {
 		"prompt":                 "a cat",
 		"aspect_ratio":           "1:1",
 		"resolution":             "4K",
+		"output_count":           3,
 		"reference_artifact_ids": []string{reference.ID.String()},
 	})
 	job := &domain.Job{
@@ -2067,6 +2068,9 @@ func TestGenerationImageRequestCarriesImageDefaultsAndReferences(t *testing.T) {
 	}
 	if got.ModelCode != "foundation-image" || got.Size != "1024x1024" || got.AspectRatio != "1:1" || got.Resolution != "4K" {
 		t.Fatalf("unexpected image request defaults: model=%q size=%q aspect=%q resolution=%q", got.ModelCode, got.Size, got.AspectRatio, got.Resolution)
+	}
+	if got.OutputCount != 3 {
+		t.Fatalf("output count = %d, want 3", got.OutputCount)
 	}
 	if len(got.ReferenceArtifactIDs) != 1 || got.ReferenceArtifactIDs[0] != reference.ID {
 		t.Fatalf("reference ids = %v, want %s", got.ReferenceArtifactIDs, reference.ID)

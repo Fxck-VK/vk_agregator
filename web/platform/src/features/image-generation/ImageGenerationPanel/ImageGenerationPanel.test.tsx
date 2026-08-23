@@ -49,6 +49,7 @@ const modelsResponse: ImageModelList = {
       default_quality: "1K",
       supports_reference_image: true,
       max_reference_images: 4,
+      max_output_count: 4,
     },
   ],
 };
@@ -63,6 +64,7 @@ const multipleModelsResponse: ImageModelList = {
       default_quality: "1K",
       supports_reference_image: false,
       max_reference_images: 0,
+      max_output_count: 4,
     },
     {
       id: "nano-banana-2",
@@ -72,6 +74,7 @@ const multipleModelsResponse: ImageModelList = {
       default_quality: "2K",
       supports_reference_image: true,
       max_reference_images: 4,
+      max_output_count: 4,
     },
   ],
 };
@@ -84,6 +87,15 @@ function renderReadyEditor() {
 
 function getGenerateButton() {
   return screen.getByRole("button", { name: new RegExp(`^${ru.imageGeneration.generate}`) });
+}
+
+function getQualityButton(value: string) {
+  return screen.getByRole("button", { name: `Разрешение: ${value}` });
+}
+
+function selectQuality(value: string) {
+  fireEvent.click(screen.getByRole("button", { name: /^Разрешение:/ }));
+  fireEvent.click(screen.getByRole("radio", { name: value }));
 }
 
 function WorkspaceModelSelectionProbe() {
@@ -120,7 +132,7 @@ describe("ImageGenerationPanel", () => {
 
     expect(await screen.findByRole("textbox", { name: ru.imageGeneration.promptLabel })).toBeEnabled();
     expect(screen.queryByRole("combobox", { name: ru.imageGeneration.modelLabel })).not.toBeInTheDocument();
-    expect(screen.getByRole("combobox", { name: ru.imageGeneration.qualityLabel })).toHaveValue("1K");
+    expect(getQualityButton("1K")).toBeVisible();
     expect(loadImageModelCatalog).toHaveBeenCalledTimes(1);
   });
 
@@ -141,12 +153,41 @@ describe("ImageGenerationPanel", () => {
     await screen.findByRole("textbox", { name: ru.imageGeneration.promptLabel });
     expect(screen.getByText(`${ru.imageGeneration.priceLabel}: 12 \u2605`)).toBeInTheDocument();
 
-    fireEvent.change(screen.getByRole("combobox", { name: ru.imageGeneration.qualityLabel }), { target: { value: "2K" } });
+    selectQuality("2K");
     expect(screen.getByText(`${ru.imageGeneration.priceLabel}: 24 \u2605`)).toBeInTheDocument();
 
     fireEvent.change(screen.getByRole("textbox", { name: ru.imageGeneration.promptLabel }), { target: { value: "new prompt" } });
     expect(screen.getByText(`${ru.imageGeneration.priceLabel}: 24 \u2605`)).toBeInTheDocument();
     expect(webBrowserMutation).not.toHaveBeenCalled();
+  });
+
+  it("updates the total price and sends the selected output count", async () => {
+    const promptInput = await renderReadyEditor();
+    vi.mocked(webBrowserMutation).mockResolvedValue(
+      Response.json({ job: { ...job, cost_estimate: 32 }, balance: 104, can_afford: true }, { status: 201 }),
+    );
+
+    expect(screen.getByText("1 / 4")).toBeVisible();
+    fireEvent.click(screen.getByRole("button", { name: ru.imageGeneration.increaseOutputCount }));
+    expect(screen.getByText("2 / 4")).toBeVisible();
+    expect(screen.getByText(`${ru.imageGeneration.priceLabel}: 32 \u2605`)).toBeVisible();
+
+    fireEvent.change(promptInput, { target: { value: job.prompt } });
+    fireEvent.click(getGenerateButton());
+
+    await screen.findByRole("heading", { name: ru.imageGeneration.confirmationTitle });
+    expect(webBrowserMutation).toHaveBeenCalledWith(
+      "/web/v1/image-jobs/prepare",
+      expect.objectContaining({
+        body: JSON.stringify({
+          prompt: job.prompt,
+          model_id: "nano-banana-2",
+          image_quality: "1K",
+          aspect_ratio: "16:9",
+          output_count: 2,
+        }),
+      }),
+    );
   });
 
   it("publishes the initial image model to the persistent workspace selection", async () => {
@@ -174,7 +215,7 @@ describe("ImageGenerationPanel", () => {
     fireEvent.click(screen.getByRole("button", { name: "Выбрать Nano Banana 2" }));
 
     await waitFor(() => {
-      expect(screen.getByRole("combobox", { name: ru.imageGeneration.qualityLabel })).toHaveValue("2K");
+      expect(getQualityButton("2K")).toBeVisible();
     });
     expect(screen.getByText(`${ru.imageGeneration.priceLabel}: 60 \u2605`)).toBeInTheDocument();
   });
@@ -185,7 +226,7 @@ describe("ImageGenerationPanel", () => {
     render(<ImageGenerationPanel />);
 
     await screen.findByRole("textbox", { name: ru.imageGeneration.promptLabel });
-    expect(screen.getByRole("combobox", { name: ru.imageGeneration.qualityLabel })).toHaveValue("2K");
+    expect(getQualityButton("2K")).toBeVisible();
     expect(screen.getByText(`${ru.imageGeneration.priceLabel}: 60 \u2605`)).toBeInTheDocument();
   });
 
@@ -197,7 +238,7 @@ describe("ImageGenerationPanel", () => {
     render(<ImageGenerationPanel />);
 
     expect(await screen.findByRole("textbox", { name: ru.imageGeneration.promptLabel })).toHaveValue("night city after rain");
-    expect(screen.getByRole("combobox", { name: ru.imageGeneration.qualityLabel })).toHaveValue("2K");
+    expect(getQualityButton("2K")).toBeVisible();
   });
 
   it("falls back to the first model and its default quality for an unknown requested model", async () => {
@@ -206,7 +247,7 @@ describe("ImageGenerationPanel", () => {
     render(<ImageGenerationPanel />);
 
     await screen.findByRole("textbox", { name: ru.imageGeneration.promptLabel });
-    expect(screen.getByRole("combobox", { name: ru.imageGeneration.qualityLabel })).toHaveValue("1K");
+    expect(getQualityButton("1K")).toBeVisible();
     expect(screen.getByText(`${ru.imageGeneration.priceLabel}: 12 \u2605`)).toBeInTheDocument();
   });
 
@@ -217,9 +258,7 @@ describe("ImageGenerationPanel", () => {
     );
 
     fireEvent.change(promptInput, { target: { value: job.prompt } });
-    fireEvent.change(screen.getByRole("combobox", { name: ru.imageGeneration.qualityLabel }), {
-      target: { value: "2K" },
-    });
+    selectQuality("2K");
     fireEvent.click(screen.getByRole("button", { name: "Соотношение сторон: 16:9" }));
     fireEvent.click(screen.getByRole("radio", { name: "4:5" }));
     fireEvent.click(getGenerateButton());
@@ -236,6 +275,7 @@ describe("ImageGenerationPanel", () => {
         model_id: "nano-banana-2",
         image_quality: "2K",
         aspect_ratio: "4:5",
+        output_count: 1,
       }),
     });
     expect(screen.getByText("60 ★")).toBeInTheDocument();
