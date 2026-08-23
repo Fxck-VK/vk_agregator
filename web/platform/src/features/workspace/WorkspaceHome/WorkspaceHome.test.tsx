@@ -147,4 +147,17 @@ describe("WorkspaceHome", () => {
     expect(markup).not.toContain('href="/app/image"');
     expect(markup).not.toContain('href="/app/models"');
   });
+
+  it("keeps the new-chat heading and composer in one centered layout group", () => {
+    render(
+      <WorkspaceConversationListProvider accountId="new-chat-layout-test-account" initialConversations={[]}>
+        <WorkspaceHome section="chats" />
+      </WorkspaceConversationListProvider>,
+    );
+
+    const layout = screen.getByRole("group", { name: ru.workspace.startTitle });
+
+    expect(layout).toContainElement(screen.getByRole("heading", { name: ru.workspace.startTitle }));
+    expect(layout).toContainElement(screen.getByRole("textbox", { name: ru.conversations.composerPlaceholder }));
+  });
 });

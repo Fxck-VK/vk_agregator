@@ -30,10 +30,12 @@ export function WorkspaceHome({ access = "authenticated", section = "home" }: Wo
         aria-labelledby="new-chat-title"
         className={`${styles.content} ${styles.startScreen} ${styles.newChatScreen}`}
       >
-        <div className={styles.welcome}>
-          <h1 id="new-chat-title">{ru.workspace.startTitle}</h1>
+        <div aria-labelledby="new-chat-title" className={styles.newChatContent} role="group">
+          <div className={styles.welcome}>
+            <h1 id="new-chat-title">{ru.workspace.startTitle}</h1>
+          </div>
+          <WorkspacePrompt access={access} variant="newChat" />
         </div>
-        <WorkspacePrompt access={access} variant="newChat" />
       </section>
     );
   }
