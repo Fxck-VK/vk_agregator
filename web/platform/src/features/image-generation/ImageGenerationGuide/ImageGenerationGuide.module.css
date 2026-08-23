@@ -56,8 +56,7 @@
   min-inline-size: 0;
 }
 
-.steps,
-.examples {
+.steps {
   display: grid;
   grid-template-columns: repeat(3, minmax(0, 1fr));
   gap: clamp(var(--space-4), 3vw, var(--space-6));
@@ -66,13 +65,11 @@
   list-style: none;
 }
 
-.step,
-.example {
+.step {
   min-inline-size: 0;
 }
 
-.visual,
-.exampleVisual {
+.visual {
   position: relative;
   display: grid;
   min-block-size: 14rem;
@@ -193,42 +190,48 @@
   font-weight: 650;
 }
 
-.step h3,
-.example h3 {
+.step h3 {
   margin: var(--space-2) 0 0;
   color: var(--color-text);
   font-size: 1.125rem;
   line-height: 1.25;
 }
 
-.step p,
-.example p {
+.step p {
   margin: var(--space-2) 0 0;
   color: var(--color-text-muted);
   line-height: 1.5;
 }
 
-.example {
-  padding: var(--space-3);
+.examples {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: clamp(var(--space-4), 3vw, var(--space-6));
+}
+
+.examplesFooter {
+  display: flex;
+  justify-content: center;
+  margin-block-start: var(--space-6);
+}
+
+.viewMoreExamples {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-2);
+  min-block-size: 2.75rem;
   border: 0.0625rem solid var(--color-border);
-  border-radius: var(--radius-lg);
-  background: var(--color-surface);
+  border-radius: 999rem;
+  padding-inline: var(--space-5);
+  color: var(--color-text);
+  font-weight: 700;
+  text-decoration: none;
+  transition: border-color var(--motion-fast), background var(--motion-fast);
 }
 
-.exampleVisual {
-  min-block-size: 12rem;
-}
-
-.exampleVisual1 {
-  background: linear-gradient(145deg, #e0bfa5, #6d4349 48%, #251f35);
-}
-
-.exampleVisual2 {
-  background: linear-gradient(155deg, #6d9eb0, #2f5b6c 45%, #26283f);
-}
-
-.exampleVisual3 {
-  background: linear-gradient(145deg, #dda467, #7f4b39 45%, #292239);
+.viewMoreExamples:hover {
+  border-color: color-mix(in srgb, var(--color-text) 35%, var(--color-border));
+  background: color-mix(in srgb, var(--color-surface-raised) 78%, transparent);
 }
 
 @media (max-width: 62rem) {
@@ -237,8 +240,7 @@
     grid-template-columns: 1fr;
   }
 
-  .visual,
-  .exampleVisual {
+  .visual {
     min-block-size: 16rem;
   }
 }
@@ -256,8 +258,7 @@
     font-size: 1rem;
   }
 
-  .visual,
-  .exampleVisual {
+  .visual {
     min-block-size: 13rem;
   }
 }

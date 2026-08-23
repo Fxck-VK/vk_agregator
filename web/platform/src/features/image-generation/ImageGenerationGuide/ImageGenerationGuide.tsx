@@ -1,7 +1,11 @@
 "use client";
 
+import Link from "next/link";
 import { useState } from "react";
 
+import { InspirationExampleCard } from "@/features/inspiration/InspirationExampleCard/InspirationExampleCard";
+import { selectInspirationExamples } from "@/features/inspiration/inspiration-examples";
+import { useWorkspaceModelSelection } from "@/features/models/WorkspaceModelSelection/WorkspaceModelSelection";
 import { ru } from "@/i18n/ru";
 
 import styles from "./ImageGenerationGuide.module.css";
@@ -60,7 +64,9 @@ function ResultPreview() {
 
 export function ImageGenerationGuide() {
   const [activeTab, setActiveTab] = useState<GuideTab>("guide");
+  const workspaceModelSelection = useWorkspaceModelSelection();
   const guide = ru.imageGeneration.guide;
+  const examples = selectInspirationExamples(workspaceModelSelection?.selectedModelId);
 
   return (
     <section aria-label={guide.tabsLabel} className={styles.root}>
@@ -119,17 +125,19 @@ export function ImageGenerationGuide() {
           role="tabpanel"
         >
           <div className={styles.examples}>
-            {guide.examples.map((example, index) => (
-              <article
-                className={styles.example}
-                data-testid="image-generation-example-placeholder"
-                key={example}
-              >
-                <div aria-hidden="true" className={`${styles.exampleVisual} ${styles[`exampleVisual${index + 1}`]}`} />
-                <h3>{example}</h3>
-                <p>{guide.examplesComingSoon}</p>
-              </article>
+            {examples.map((example) => (
+              <InspirationExampleCard
+                example={example}
+                key={example.id}
+                sizes="(max-width: 62rem) 92vw, 22rem"
+              />
             ))}
+          </div>
+          <div className={styles.examplesFooter}>
+            <Link className={styles.viewMoreExamples} href="/app/inspiration">
+              {guide.viewMoreExamples}
+              <span aria-hidden="true">→</span>
+            </Link>
           </div>
         </div>
       )}

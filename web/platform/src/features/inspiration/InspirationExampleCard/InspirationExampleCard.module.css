@@ -1,0 +1,339 @@
+.card {
+  position: relative;
+  display: block;
+  inline-size: 100%;
+  aspect-ratio: 2 / 3;
+  overflow: hidden;
+  border: 0.0625rem solid var(--color-border);
+  border-radius: 1.25rem;
+  padding: 0;
+  background: var(--color-surface);
+  color: #fff;
+  text-align: start;
+  isolation: isolate;
+}
+
+.cardImage {
+  inline-size: 100%;
+  block-size: 100%;
+  object-fit: cover;
+  transition: transform var(--motion-normal), filter var(--motion-normal);
+}
+
+.cardShade {
+  position: absolute;
+  z-index: 1;
+  inset: 0;
+  background: linear-gradient(180deg, transparent 42%, rgb(17 12 8 / 20%) 62%, rgb(10 9 8 / 85%) 100%);
+  transition: background var(--motion-normal);
+}
+
+.cardAction {
+  position: absolute;
+  z-index: 2;
+  inset: 50% auto auto 50%;
+  border-radius: 999px;
+  padding: 0.8rem 1.25rem;
+  background: var(--color-accent);
+  box-shadow: 0 0.75rem 2rem rgb(0 0 0 / 28%);
+  font-weight: 800;
+  opacity: 0;
+  transform: translate(-50%, -40%);
+  transition: opacity var(--motion-fast), transform var(--motion-fast);
+}
+
+.cardMeta {
+  position: absolute;
+  z-index: 2;
+  inset: auto var(--space-5) var(--space-5);
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  font-size: 1.0625rem;
+  font-weight: 800;
+}
+
+.modelMark {
+  display: inline-grid;
+  flex: 0 0 auto;
+  inline-size: 2rem;
+  block-size: 2rem;
+  place-items: center;
+  border-radius: 50%;
+  background: linear-gradient(135deg, #ffbe0b, #ff3d81 43%, #2187ff 72%, #3ae374);
+  color: #fff;
+  font-size: 1.1rem;
+}
+
+.card:hover .cardImage,
+.card:focus-visible .cardImage {
+  filter: brightness(0.72);
+  transform: scale(1.025);
+}
+
+.card:hover .cardAction,
+.card:focus-visible .cardAction {
+  opacity: 1;
+  transform: translate(-50%, -50%);
+}
+
+.overlay {
+  position: fixed;
+  z-index: 100;
+  inset: 0;
+  overflow: auto;
+  padding: clamp(0.75rem, 2vw, 1.5rem);
+  background: rgb(6 7 9 / 92%);
+  backdrop-filter: blur(1rem);
+}
+
+.dialog {
+  position: relative;
+  display: grid;
+  grid-template-columns: 5rem minmax(20rem, 1fr) minmax(19rem, 28rem);
+  gap: clamp(1rem, 2vw, 2rem);
+  min-block-size: calc(100dvh - clamp(1.5rem, 4vw, 3rem));
+  border: 0.0625rem solid rgb(255 255 255 / 10%);
+  border-radius: 1.5rem;
+  padding: clamp(1rem, 2vw, 2rem);
+  background:
+    radial-gradient(circle at 36% 28%, rgb(169 105 45 / 32%), transparent 42%),
+    linear-gradient(135deg, #21160d, #111318 58%);
+  box-shadow: 0 1.5rem 6rem rgb(0 0 0 / 55%);
+}
+
+.closeButton {
+  position: absolute;
+  z-index: 4;
+  inset: 1rem 1rem auto auto;
+  display: grid;
+  inline-size: 3rem;
+  block-size: 3rem;
+  place-items: center;
+  border: 0.0625rem solid rgb(255 255 255 / 20%);
+  border-radius: 50%;
+  background: rgb(11 12 15 / 70%);
+  color: #fff;
+}
+
+.closeButton > span {
+  font-size: 1.8rem;
+  font-weight: 300;
+  line-height: 1;
+}
+
+.copyButton > span,
+.secondaryButton > span {
+  font-size: 1.2rem;
+  line-height: 1;
+}
+
+.thumbnailRail {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: var(--space-3);
+  overflow-y: auto;
+  padding-block-start: 0.25rem;
+}
+
+.thumbnail {
+  overflow: hidden;
+  inline-size: 4.5rem;
+  aspect-ratio: 2 / 3;
+  border: 0.125rem solid var(--color-accent);
+  border-radius: 0.875rem;
+  padding: 0;
+  background: #111;
+}
+
+.thumbnail img {
+  inline-size: 100%;
+  block-size: 100%;
+  object-fit: cover;
+}
+
+.preview {
+  display: grid;
+  min-block-size: 0;
+  place-items: center;
+  padding: 2.5rem 0.5rem 1rem;
+}
+
+.previewImage {
+  inline-size: auto;
+  max-inline-size: 100%;
+  max-block-size: calc(100dvh - 7rem);
+  block-size: auto;
+  border-radius: 1.25rem;
+  box-shadow: 0 1.5rem 4rem rgb(0 0 0 / 35%);
+  object-fit: contain;
+}
+
+.infoPanel {
+  align-self: stretch;
+  display: flex;
+  min-block-size: 0;
+  flex-direction: column;
+  border: 0.0625rem solid rgb(255 255 255 / 10%);
+  border-radius: 1.5rem;
+  padding: clamp(1.25rem, 2vw, 1.75rem);
+  background: rgb(24 26 32 / 96%);
+  color: #f5f7fa;
+}
+
+.modelTitle {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  padding-inline-end: 3.5rem;
+}
+
+.modelTitle div {
+  display: grid;
+  gap: 0.125rem;
+}
+
+.modelTitle strong {
+  font-size: 1.125rem;
+}
+
+.modelTitle div > span {
+  color: #a8afbd;
+  font-size: 0.875rem;
+}
+
+.promptHeader {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-3);
+  margin-block-start: var(--space-7);
+}
+
+.promptHeader h2 {
+  margin: 0;
+  font-size: 1.125rem;
+}
+
+.copyButton,
+.secondaryButton {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: var(--space-2);
+  border: 0.0625rem solid rgb(255 255 255 / 18%);
+  border-radius: 999px;
+  background: transparent;
+  color: #f5f7fa;
+  text-decoration: none;
+}
+
+.copyButton {
+  padding: 0.5rem 0.75rem;
+  font-size: 0.875rem;
+}
+
+.prompt {
+  margin: var(--space-4) 0;
+  color: #e3e7ee;
+  line-height: 1.62;
+}
+
+.feedback {
+  margin: 0;
+  color: #8fc3ff;
+  font-size: 0.875rem;
+}
+
+.actions {
+  display: grid;
+  gap: var(--space-3);
+  margin-block-start: auto;
+  padding-block-start: var(--space-6);
+}
+
+.recreateButton {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: var(--space-2);
+  min-block-size: 3.5rem;
+  border-radius: 999px;
+  padding: 0.8rem 1.25rem;
+  background: var(--color-accent);
+  color: #fff;
+  font-weight: 800;
+  text-decoration: none;
+}
+
+.recreateButton:hover {
+  background: var(--color-accent-strong);
+}
+
+.secondaryActions {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: var(--space-3);
+}
+
+.secondaryButton {
+  min-block-size: 3.25rem;
+  padding: 0.7rem 1rem;
+  font-weight: 700;
+}
+
+.closeButton:hover,
+.copyButton:hover,
+.secondaryButton:hover {
+  border-color: rgb(255 255 255 / 38%);
+  background: rgb(255 255 255 / 7%);
+}
+
+@media (width < 60rem) {
+  .overlay {
+    padding: 0;
+  }
+
+  .dialog {
+    grid-template-columns: 1fr;
+    gap: var(--space-4);
+    min-block-size: 100dvh;
+    border: 0;
+    border-radius: 0;
+    padding: 4.75rem var(--space-4) var(--space-4);
+  }
+
+  .thumbnailRail {
+    grid-row: 2;
+    flex-direction: row;
+    justify-content: center;
+    overflow-x: auto;
+    overflow-y: visible;
+  }
+
+  .preview {
+    grid-row: 1;
+    padding: 0;
+  }
+
+  .previewImage {
+    max-block-size: 70dvh;
+  }
+
+  .infoPanel {
+    grid-row: 3;
+    min-block-size: 26rem;
+  }
+}
+
+@media (width < 36rem) {
+  .promptHeader {
+    align-items: flex-start;
+    flex-direction: column;
+  }
+
+  .secondaryActions {
+    grid-template-columns: 1fr;
+  }
+}

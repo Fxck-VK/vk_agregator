@@ -33,7 +33,22 @@ describe("ImageGenerationGuide", () => {
       "true",
     );
     expect(screen.getByRole("tabpanel", { name: ru.imageGeneration.guide.examplesTab })).toBeInTheDocument();
-    expect(screen.getAllByTestId("image-generation-example-placeholder")).toHaveLength(3);
+    expect(screen.getByRole("button", { name: ru.inspiration.openExample })).toBeInTheDocument();
+    expect(screen.queryByTestId("image-generation-example-placeholder")).not.toBeInTheDocument();
+    expect(screen.getByRole("link", { name: ru.imageGeneration.guide.viewMoreExamples })).toHaveAttribute(
+      "href",
+      "/app/inspiration",
+    );
     expect(screen.queryByTestId("image-generation-guide-step")).not.toBeInTheDocument();
+  });
+
+  it("opens the shared inspiration dialog from an example card", () => {
+    render(<ImageGenerationGuide />);
+
+    fireEvent.click(screen.getByRole("tab", { name: ru.imageGeneration.guide.examplesTab }));
+    fireEvent.click(screen.getByRole("button", { name: ru.inspiration.openExample }));
+
+    expect(screen.getByRole("dialog", { name: ru.inspiration.dialogLabel })).toBeInTheDocument();
+    expect(screen.getByText(ru.inspiration.prompt)).toBeInTheDocument();
   });
 });
