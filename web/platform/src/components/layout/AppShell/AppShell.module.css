@@ -24,43 +24,49 @@
   border-radius: var(--radius-lg);
   background: var(--color-surface);
   box-shadow: var(--shadow-card);
+  overflow: hidden;
+}
+
+.workspaceScroller {
+  block-size: 100%;
+  margin-inline-end: var(--space-1);
   overflow-x: hidden;
   overflow-y: auto;
 }
 
 @supports (-moz-appearance: none) {
-  .workspace {
+  .workspaceScroller {
     scrollbar-width: thin;
     scrollbar-color: var(--color-border) transparent;
   }
 
-  .workspace:hover,
-  .workspace:focus-within {
+  .workspaceScroller:hover,
+  .workspaceScroller:focus-within {
     scrollbar-color: var(--color-text-muted) transparent;
   }
 }
 
-.workspace::-webkit-scrollbar {
+.workspaceScroller::-webkit-scrollbar {
   inline-size: 0.75rem;
 }
 
-.workspace::-webkit-scrollbar-track {
+.workspaceScroller::-webkit-scrollbar-track {
   background: transparent;
 }
 
-.workspace::-webkit-scrollbar-button {
+.workspaceScroller::-webkit-scrollbar-button {
   display: none;
 }
 
-.workspace::-webkit-scrollbar-thumb {
+.workspaceScroller::-webkit-scrollbar-thumb {
   border: 0.125rem solid transparent;
   border-radius: 999px;
   background-clip: content-box;
   background-color: var(--color-border);
 }
 
-.workspace:hover::-webkit-scrollbar-thumb,
-.workspace:focus-within::-webkit-scrollbar-thumb {
+.workspaceScroller:hover::-webkit-scrollbar-thumb,
+.workspaceScroller:focus-within::-webkit-scrollbar-thumb {
   background-color: var(--color-text-muted);
 }
 
@@ -76,6 +82,10 @@
     margin: 0;
     border-radius: 0;
     box-shadow: none;
+  }
+
+  .workspaceScroller {
+    margin-inline-end: 0;
   }
 }
 

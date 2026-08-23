@@ -25,10 +25,12 @@ export function AppShell({ sidebar, header, children, isDesktopSidebarCollapsed 
       >
         {sidebar}
       </aside>
-      <main className={styles.workspace} data-testid="workspace-scroll-region" tabIndex={-1}>
-        {header}
-        {children}
-      </main>
+      <div className={styles.workspace}>
+        <main className={styles.workspaceScroller} data-testid="workspace-scroll-region" tabIndex={-1}>
+          {header}
+          {children}
+        </main>
+      </div>
     </div>
   );
 }

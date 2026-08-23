@@ -4,22 +4,31 @@ import { resolve } from "node:path";
 import { describe, expect, it } from "vitest";
 
 const stylesheet = readFileSync(resolve(process.cwd(), "src/components/layout/AppShell/AppShell.module.css"), "utf8");
+const component = readFileSync(resolve(process.cwd(), "src/components/layout/AppShell/AppShell.tsx"), "utf8");
 
 const shellRule = stylesheet.match(/\.shell \{([\s\S]*?)\n\}/)?.[1];
 const sidebarRule = stylesheet.match(/\.sidebar \{([\s\S]*?)\n\}/)?.[1];
 const workspaceRule = stylesheet.match(/\.workspace \{([\s\S]*?)\n\}/)?.[1];
-const thumbRule = stylesheet.match(/\.workspace::-webkit-scrollbar-thumb \{([\s\S]*?)\n\}/)?.[1];
+const workspaceScrollerRule = stylesheet.match(/\.workspaceScroller \{([\s\S]*?)\n\}/)?.[1];
+const thumbRule = stylesheet.match(/\.workspaceScroller::-webkit-scrollbar-thumb \{([\s\S]*?)\n\}/)?.[1];
 
 describe("AppShell workspace scrollbar", () => {
+  it("keeps the native scrollbar inside the rounded workspace surface", () => {
+    expect(component).toContain("className={styles.workspaceScroller}");
+    expect(workspaceRule).toContain("overflow: hidden");
+    expect(workspaceScrollerRule).toContain("overflow-y: auto");
+    expect(workspaceScrollerRule).toContain("margin-inline-end: var(--space-1)");
+  });
+
   it("uses a narrow dark custom scrollbar without native arrow buttons", () => {
-    expect(workspaceRule).toContain("overflow-y: auto");
+    expect(workspaceScrollerRule).toContain("overflow-y: auto");
     expect(stylesheet).toMatch(
-      /@supports \(-moz-appearance: none\) \{[\s\S]*\.workspace \{[\s\S]*scrollbar-width: thin;[\s\S]*scrollbar-color: var\(--color-border\) transparent;/,
+      /@supports \(-moz-appearance: none\) \{[\s\S]*\.workspaceScroller \{[\s\S]*scrollbar-width: thin;[\s\S]*scrollbar-color: var\(--color-border\) transparent;/,
     );
-    expect(stylesheet).toContain(".workspace::-webkit-scrollbar");
-    expect(stylesheet).toContain(".workspace::-webkit-scrollbar-track");
-    expect(stylesheet).toContain(".workspace::-webkit-scrollbar-button");
-    expect(stylesheet).toContain(".workspace::-webkit-scrollbar-thumb");
+    expect(stylesheet).toContain(".workspaceScroller::-webkit-scrollbar");
+    expect(stylesheet).toContain(".workspaceScroller::-webkit-scrollbar-track");
+    expect(stylesheet).toContain(".workspaceScroller::-webkit-scrollbar-button");
+    expect(stylesheet).toContain(".workspaceScroller::-webkit-scrollbar-thumb");
     expect(stylesheet).toContain("inline-size: 0.75rem");
     expect(stylesheet).toContain("display: none");
     expect(thumbRule).toContain("border-radius: 999px");
