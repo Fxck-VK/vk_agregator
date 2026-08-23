@@ -2,7 +2,9 @@ import Image from "next/image";
 import Link from "next/link";
 
 import { assetPaths } from "@/assets/asset-paths";
+import { VideoPlayer } from "@/components/media/VideoPlayer/VideoPlayer";
 
+import { FeaturedModels } from "../FeaturedModels/FeaturedModels";
 import { WorkspacePrompt } from "../WorkspacePrompt/WorkspacePrompt";
 
 import { capabilityLinks, frequentlyAskedQuestions, primaryTools } from "./workspace-home-content";
@@ -45,24 +47,12 @@ export function WorkspaceLanding({ access = "authenticated" }: WorkspaceLandingP
         <section aria-labelledby="workspace-models-title" className={styles.section}>
           <div className={styles.sectionHeading}>
             <div>
-              <p className={styles.kicker}>Один аккаунт — разные сценарии</p>
-              <h2 id="workspace-models-title">Нейросети для разных задач</h2>
-              <p>Выберите подходящий инструмент и продолжайте работу в знакомом интерфейсе.</p>
+              <h2 id="workspace-models-title">Популярные нейросети</h2>
+              <p>Конкретные модели, их возможности и актуальная стоимость запуска.</p>
             </div>
             <Link className={styles.primaryButton} href="/app/models">Все нейросети</Link>
           </div>
-          <div className={styles.modelGrid}>
-            {primaryTools.map((tool) => (
-              <Link className={styles.modelCard} href={tool.href} key={tool.label}>
-                <span aria-hidden="true" className={`${styles.modelIcon} ${styles[tool.accent]}`}>
-                  {tool.monogram}
-                </span>
-                <h3>{tool.label}</h3>
-                <p>{tool.description}</p>
-                <span className={styles.cardLink}>Открыть <span aria-hidden="true">→</span></span>
-              </Link>
-            ))}
-          </div>
+          <FeaturedModels />
         </section>
 
         <section aria-labelledby="workspace-how-title" className={styles.section}>
@@ -73,16 +63,7 @@ export function WorkspaceLanding({ access = "authenticated" }: WorkspaceLandingP
               <p>От запроса до готового результата — в одном понятном сценарии.</p>
             </div>
           </div>
-          <div className={styles.howCard}>
-            <div aria-hidden="true" className={styles.howGlow} />
-            <div className={styles.howContent}>
-              <span className={styles.playButton} aria-hidden="true">▶</span>
-              <div>
-                <strong>Сформулируйте задачу</strong>
-                <span>Выберите инструмент, проверьте настройки и получите результат.</span>
-              </div>
-            </div>
-          </div>
+          <VideoPlayer title="Как работает NeiroHub" />
         </section>
 
         <section aria-labelledby="workspace-capabilities-title" className={styles.section}>

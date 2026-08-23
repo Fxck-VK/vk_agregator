@@ -280,6 +280,7 @@
   .panel[data-desktop-collapsed="true"] [data-sidebar-conversation-list="true"] {
     inline-size: 100%;
     padding: 0;
+    scrollbar-gutter: stable both-edges;
   }
 
   .panel[data-desktop-collapsed="true"] [data-sidebar-conversation-row="true"] {

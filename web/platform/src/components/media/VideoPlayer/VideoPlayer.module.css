@@ -1,0 +1,49 @@
+.frame {
+  display: grid;
+  place-items: center;
+  align-content: center;
+  gap: var(--space-4);
+  inline-size: 100%;
+  aspect-ratio: 16 / 9;
+  border: 0.0625rem solid var(--color-border);
+  border-radius: 1.5rem;
+  overflow: hidden;
+  background:
+    radial-gradient(circle at 72% 34%, rgb(36 150 255 / 0.14), transparent 28%),
+    radial-gradient(circle at 24% 74%, rgb(116 87 255 / 0.12), transparent 32%),
+    var(--color-surface);
+  color: var(--color-text-muted);
+}
+
+.video {
+  display: block;
+  inline-size: 100%;
+  block-size: 100%;
+  background: #000;
+  object-fit: contain;
+}
+
+.playIcon {
+  display: grid;
+  place-items: center;
+  inline-size: clamp(3.5rem, 8vw, 5rem);
+  block-size: clamp(3.5rem, 8vw, 5rem);
+  border: 0.0625rem solid color-mix(in srgb, var(--color-text) 16%, transparent);
+  border-radius: 50%;
+  background: color-mix(in srgb, var(--color-surface) 82%, transparent);
+  color: var(--color-text);
+  font-size: clamp(1.15rem, 3vw, 1.5rem);
+  line-height: 1;
+  padding-inline-start: 0.15em;
+}
+
+.placeholder {
+  font-size: clamp(0.95rem, 2vw, 1.125rem);
+  font-weight: 650;
+}
+
+@media (width < 32rem) {
+  .frame {
+    border-radius: 1.125rem;
+  }
+}

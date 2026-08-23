@@ -50,6 +50,9 @@ describe("Sidebar desktop collapse stylesheet", () => {
       /\.panel\[data-desktop-collapsed="true"\] \[data-sidebar-conversation-list="true"\] \{[\s\S]*?inline-size: 100%;/,
     );
     expect(stylesheet).toMatch(
+      /\.panel\[data-desktop-collapsed="true"\] \[data-sidebar-conversation-list="true"\] \{[\s\S]*?scrollbar-gutter: stable both-edges;/,
+    );
+    expect(stylesheet).toMatch(
       /\.panel\[data-desktop-collapsed="true"\] \.navigationList a\[aria-current="page"\] \{[\s\S]*?border-radius: var\(--radius-sm\);/,
     );
     expect(appShellStylesheet).toMatch(
