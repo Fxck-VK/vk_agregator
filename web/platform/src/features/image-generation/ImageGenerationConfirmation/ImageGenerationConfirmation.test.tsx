@@ -39,8 +39,8 @@ describe("ImageGenerationConfirmation", () => {
 
     expect(screen.getByRole("heading", { name: ru.imageGeneration.confirmationTitle })).toBeInTheDocument();
     expect(screen.getByText(ru.imageGeneration.costLabel)).toBeInTheDocument();
-    expect(screen.getByText("60 ★")).toBeInTheDocument();
-    expect(screen.getByText("104 ★")).toBeInTheDocument();
+    expect(screen.getAllByLabelText("60 звёзд").length).toBeGreaterThan(0);
+    expect(screen.getByLabelText("104 звезды")).toBeInTheDocument();
 
     fireEvent.click(screen.getByRole("button", { name: new RegExp(ru.imageGeneration.confirm) }));
     expect(onConfirm).toHaveBeenCalledTimes(1);
@@ -58,6 +58,6 @@ describe("ImageGenerationConfirmation", () => {
     );
 
     expect(screen.getByRole("alert")).toHaveTextContent(ru.imageGeneration.insufficientBalance);
-    expect(screen.getByText("60 ★")).toBeInTheDocument();
+    expect(screen.getAllByLabelText("60 звёзд").length).toBeGreaterThan(0);
   });
 });

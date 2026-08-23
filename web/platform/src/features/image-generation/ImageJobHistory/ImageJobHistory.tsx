@@ -5,6 +5,7 @@
 import { useMemo, useState } from "react";
 
 import { Button } from "@/components/ui/Button/Button";
+import { CreditAmount } from "@/components/ui/CreditAmount/CreditAmount";
 import { ru } from "@/i18n/ru";
 import {
   parseImageJobList,
@@ -161,7 +162,7 @@ export function ImageJobHistory({ latestJob = null }: Readonly<ImageJobHistoryPr
                       </div>
                       <div>
                         <dt>{ru.imageHistory.costLabel}</dt>
-                        <dd>{formatStars(job.cost_estimate)}</dd>
+                        <dd><CreditAmount value={job.cost_estimate} /></dd>
                       </div>
                     </dl>
 
@@ -244,8 +245,4 @@ function historyStatusLabel(status: ImageJob["status"]): string {
     return ru.imageHistory.statusAttention;
   }
   return ru.imageHistory.statusInProgress;
-}
-
-function formatStars(value: number): string {
-  return `${value} ★`;
 }

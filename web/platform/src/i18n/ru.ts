@@ -288,7 +288,7 @@ export const ru = {
     imageTypeLabel: "Генерация изображений",
     referenceSupportedLabel: "Референсы поддерживаются",
     referenceUnsupportedLabel: "Без референсов",
-    priceFrom: (price: number) => `От ${price} ★`,
+    pricePrefix: "От",
     loading: "Загружаем доступные модели…",
     loadFailure: "Не удалось загрузить каталог моделей. Попробуйте ещё раз.",
     empty: "Подходящих моделей пока нет.",

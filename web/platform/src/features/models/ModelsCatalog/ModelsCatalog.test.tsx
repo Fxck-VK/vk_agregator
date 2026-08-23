@@ -90,7 +90,7 @@ describe("ModelsCatalog", () => {
     expect(within(nanoCard).getByText("2K")).toBeInTheDocument();
     expect(within(nanoCard).getByText(ru.modelsCatalog.referenceSupportedLabel)).toBeInTheDocument();
     expect(within(otherCard).getByText(ru.modelsCatalog.referenceUnsupportedLabel)).toBeInTheDocument();
-    expect(within(nanoCard).getByText("От 16 ★")).toBeInTheDocument();
+    expect(within(nanoCard).getByLabelText("От 16 звёзд")).toBeInTheDocument();
 
     fireEvent.change(screen.getByRole("searchbox", { name: ru.modelsCatalog.searchLabel }), {
       target: { value: "banana" },

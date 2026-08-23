@@ -112,7 +112,7 @@ describe("WorkspaceHome", () => {
     expect(cards).toHaveLength(4);
     expect(cards[0]).toHaveAttribute("href", "/app/image?model=nano-banana-2");
     expect(cards[0]).toHaveTextContent("Nano Banana 2");
-    expect(cards[0]).toHaveTextContent("от 55 ★");
+    expect(within(cards[0]).getByLabelText("от 55 звёзд")).toBeInTheDocument();
     expect(cards[0]).toHaveTextContent("1K");
     expect(cards[0]).toHaveTextContent("Поддерживает референсы");
     expect(within(region).queryByText("Пятая модель")).toBeNull();

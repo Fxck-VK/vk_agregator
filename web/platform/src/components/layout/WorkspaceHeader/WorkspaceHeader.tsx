@@ -3,6 +3,7 @@
 import { usePathname } from "next/navigation";
 import type { ReactNode } from "react";
 
+import { CreditAmount } from "@/components/ui/CreditAmount/CreditAmount";
 import { WorkspaceModelSelector } from "@/features/models/WorkspaceModelSelector/WorkspaceModelSelector";
 import { ru } from "@/i18n/ru";
 
@@ -45,14 +46,18 @@ export function WorkspaceHeader({ balance, trailingAction }: WorkspaceHeaderProp
       </div>
       <div className={styles.trailing}>
         {trailingAction ?? (
-          <span
-            aria-busy={isBalanceLoading || undefined}
-            aria-label={isBalanceLoading ? ru.workspace.balanceLoading : `${balance} ★`}
-            className={styles.balance}
-            data-testid="workspace-balance"
-          >
-            {isBalanceLoading ? <span aria-hidden="true">…</span> : <>{balance} <span aria-hidden="true">★</span></>}
-          </span>
+          isBalanceLoading ? (
+            <span
+              aria-busy="true"
+              aria-label={ru.workspace.balanceLoading}
+              className={styles.balance}
+              data-testid="workspace-balance"
+            >
+              <span aria-hidden="true">…</span>
+            </span>
+          ) : (
+            <CreditAmount className={styles.balance} data-testid="workspace-balance" value={balance} />
+          )
         )}
       </div>
     </header>

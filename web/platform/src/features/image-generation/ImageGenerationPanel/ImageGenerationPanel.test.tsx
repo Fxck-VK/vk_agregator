@@ -278,8 +278,8 @@ describe("ImageGenerationPanel", () => {
         output_count: 1,
       }),
     });
-    expect(screen.getByText("60 ★")).toBeInTheDocument();
-    expect(screen.getByText("104 ★")).toBeInTheDocument();
+    expect(screen.getAllByLabelText("60 звёзд").length).toBeGreaterThan(0);
+    expect(screen.getByLabelText("104 звезды")).toBeInTheDocument();
     expect(screen.queryByText(/provider|model_code|pricing_snapshot/i)).not.toBeInTheDocument();
   });
 
@@ -295,7 +295,7 @@ describe("ImageGenerationPanel", () => {
     fireEvent.click(screen.getByRole("button", { name: new RegExp(ru.imageGeneration.confirm) }));
 
     expect(await screen.findByRole("alert")).toHaveTextContent(ru.imageGeneration.insufficientBalance);
-    expect(screen.getByText("60 ★")).toBeInTheDocument();
+    expect(screen.getAllByLabelText("60 звёзд").length).toBeGreaterThan(0);
     expect(webBrowserMutation).toHaveBeenCalledTimes(2);
   });
 

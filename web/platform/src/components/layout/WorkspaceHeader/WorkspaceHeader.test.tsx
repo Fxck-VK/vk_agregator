@@ -56,4 +56,15 @@ describe("WorkspaceHeader", () => {
     expect(screen.getByRole("link", { name: "Войти" })).toHaveAttribute("href", "/login");
     expect(screen.queryByTestId("workspace-balance")).not.toBeInTheDocument();
   });
+
+  it("renders the shared credit-star artwork instead of a text glyph", () => {
+    render(<WorkspaceHeader balance={104} />);
+
+    expect(screen.getByTestId("workspace-balance")).toHaveAttribute(
+      "aria-label",
+      "104 звезды",
+    );
+    expect(screen.getByTestId("credit-star-icon")).toBeInTheDocument();
+    expect(screen.getByTestId("workspace-balance")).not.toHaveTextContent("★");
+  });
 });

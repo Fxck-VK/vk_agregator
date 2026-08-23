@@ -1,5 +1,6 @@
 import Link from "next/link";
 
+import { CreditAmount } from "@/components/ui/CreditAmount/CreditAmount";
 import { ru } from "@/i18n/ru";
 import type { ImageModel } from "@/lib/web-api/contracts";
 
@@ -29,7 +30,7 @@ export function ModelCard({ model }: ModelCardProps) {
           ? ru.modelsCatalog.referenceSupportedLabel
           : ru.modelsCatalog.referenceUnsupportedLabel}
       </p>
-      {minimumPrice !== null ? <p className={styles.price}>{ru.modelsCatalog.priceFrom(minimumPrice)}</p> : null}
+      {minimumPrice !== null ? <CreditAmount className={styles.price} prefix={ru.modelsCatalog.pricePrefix} value={minimumPrice} /> : null}
       <Link
         aria-label={`${ru.modelsCatalog.openGeneratorLabel}: ${model.name}`}
         href={`/app/image?model=${encodeURIComponent(model.id)}`}

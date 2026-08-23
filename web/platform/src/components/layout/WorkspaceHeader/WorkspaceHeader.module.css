@@ -52,11 +52,6 @@
   font-variant-numeric: tabular-nums;
 }
 
-.balance span {
-  margin-inline-start: var(--space-1);
-  color: var(--color-accent);
-}
-
 @media (width < 48rem) {
   .leading {
     inset-inline-start: 4.75rem;

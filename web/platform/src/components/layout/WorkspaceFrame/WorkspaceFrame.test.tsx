@@ -1,4 +1,4 @@
-import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
+import { cleanup, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import { usePathname } from "next/navigation";
 import { hydrateRoot } from "react-dom/client";
 import { renderToString } from "react-dom/server";
@@ -231,7 +231,7 @@ describe("WorkspaceFrame", () => {
     } else {
       expect(screen.getByRole("button", { name: "Model selector" })).toBeInTheDocument();
     }
-    expect(header).toHaveTextContent("42 ★");
+    expect(within(header).getByLabelText("42 звезды")).toBeInTheDocument();
     expect(screen.queryByRole("button", { name: "Выбрать тариф" })).toBeNull();
   });
 

@@ -89,8 +89,8 @@ describe("ModelCard", () => {
       />,
     );
 
-    expect(screen.getByText("От 16 ★")).toBeInTheDocument();
-    expect(screen.queryByText("От 60 ★")).not.toBeInTheDocument();
+    expect(screen.getByLabelText("От 16 звёзд")).toBeInTheDocument();
+    expect(screen.queryByLabelText("От 60 звёзд")).not.toBeInTheDocument();
 
     rerender(
       <ModelCard
@@ -105,6 +105,6 @@ describe("ModelCard", () => {
       />,
     );
 
-    expect(screen.queryByText(/★/)).not.toBeInTheDocument();
+    expect(screen.queryByTestId("credit-star-icon")).not.toBeInTheDocument();
   });
 });

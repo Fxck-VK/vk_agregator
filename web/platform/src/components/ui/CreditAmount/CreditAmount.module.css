@@ -1,0 +1,13 @@
+.amount {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.2em;
+  white-space: nowrap;
+}
+
+.icon {
+  flex: 0 0 auto;
+  inline-size: 1em;
+  block-size: 1em;
+  object-fit: contain;
+}

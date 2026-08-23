@@ -17,6 +17,9 @@ export const assetPaths = {
     },
   },
   images: {
+    credits: {
+      star: "/assets/images/credits/credit-star.png",
+    },
     inspiration: {
       paperCraneCloud: "/assets/images/inspiration/paper-crane-cloud.png",
     },

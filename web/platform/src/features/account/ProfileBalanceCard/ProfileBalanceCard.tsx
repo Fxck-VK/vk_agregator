@@ -1,3 +1,4 @@
+import { CreditAmount } from "@/components/ui/CreditAmount/CreditAmount";
 import { ru } from "@/i18n/ru";
 
 import styles from "./ProfileBalanceCard.module.css";
@@ -17,11 +18,11 @@ export function ProfileBalanceCard({ balance }: ProfileBalanceCardProps) {
       </div>
       <div
         aria-busy={!isBalanceAvailable || undefined}
-        aria-label={isBalanceAvailable ? `${balance} ★` : ru.profile.balanceUnavailable}
+        aria-label={isBalanceAvailable ? undefined : ru.profile.balanceUnavailable}
         className={styles.balance}
       >
         <span>{ru.profile.balanceLabel}</span>
-        <strong>{isBalanceAvailable ? <>{balance} <span aria-hidden="true">★</span></> : ru.profile.balanceUnavailable}</strong>
+        <strong>{isBalanceAvailable ? <CreditAmount value={balance} /> : ru.profile.balanceUnavailable}</strong>
       </div>
     </section>
   );

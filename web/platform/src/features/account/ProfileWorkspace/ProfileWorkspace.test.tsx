@@ -34,7 +34,7 @@ describe("ProfileWorkspace", () => {
     expect(screen.getByRole("heading", { name: "Профиль" })).toBeInTheDocument();
     expect(screen.getAllByText("m***@example.com")).toHaveLength(2);
     expect(screen.queryByText("member@example.com")).not.toBeInTheDocument();
-    expect(screen.getByLabelText("104 ★")).toBeInTheDocument();
+    expect(screen.getByLabelText("104 звезды")).toBeInTheDocument();
     expect(screen.getByText("Электронная почта")).toBeInTheDocument();
     expect(screen.getByText("История покупок и списаний появится здесь после подключения биллинга.")).toBeInTheDocument();
     expect(screen.getByRole("tab", { name: "Реферальная программа" })).toHaveAttribute("aria-selected", "false");
@@ -52,7 +52,7 @@ describe("ProfileWorkspace", () => {
     );
 
     expect(screen.getByLabelText("Баланс временно недоступен")).toHaveAttribute("aria-busy", "true");
-    expect(screen.queryByText(/^0 ★$/)).not.toBeInTheDocument();
+    expect(screen.queryByLabelText("0 звёзд")).not.toBeInTheDocument();
   });
   it("does not claim a verified identity when no verified login method exists", () => {
     const profileWithoutVerifiedIdentity: AccountProfile = {

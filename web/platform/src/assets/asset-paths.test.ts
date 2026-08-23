@@ -37,4 +37,10 @@ describe("assetPaths", () => {
       "/assets/images/inspiration/paper-crane-cloud.png",
     );
   });
+
+  it("exposes the shared credit-star image URL", () => {
+    expect(assetPaths.images.credits.star).toBe(
+      "/assets/images/credits/credit-star.png",
+    );
+  });
 });

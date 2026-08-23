@@ -1,6 +1,7 @@
 "use client";
 
 import { Button } from "@/components/ui/Button/Button";
+import { CreditAmount } from "@/components/ui/CreditAmount/CreditAmount";
 import { ru } from "@/i18n/ru";
 import type { ImageJobPreparation } from "@/lib/web-api/contracts";
 
@@ -27,19 +28,23 @@ export function ImageGenerationConfirmation({
       <dl>
         <div>
           <dt>{ru.imageGeneration.costLabel}</dt>
-          <dd>{formatStars(preparation.job.cost_estimate)}</dd>
+          <dd><CreditAmount value={preparation.job.cost_estimate} /></dd>
         </div>
         <div>
           <dt>{ru.imageGeneration.balanceLabel}</dt>
-          <dd>{formatStars(preparation.balance)}</dd>
+          <dd><CreditAmount value={preparation.balance} /></dd>
         </div>
         <div>
           <dt>{ru.imageGeneration.balanceAfterLabel}</dt>
-          <dd>{formatStars(balanceAfter)}</dd>
+          <dd><CreditAmount value={balanceAfter} /></dd>
         </div>
       </dl>
       <Button disabled={isActivating} onClick={onConfirm}>
-        {isActivating ? ru.imageGeneration.activating : `${ru.imageGeneration.confirm} · ${formatStars(preparation.job.cost_estimate)}`}
+        {isActivating ? (
+          ru.imageGeneration.activating
+        ) : (
+          <>{ru.imageGeneration.confirm} · <CreditAmount value={preparation.job.cost_estimate} /></>
+        )}
       </Button>
       {errorMessage !== null ? (
         <p className={styles.error} role="alert">
@@ -48,8 +53,4 @@ export function ImageGenerationConfirmation({
       ) : null}
     </section>
   );
-}
-
-function formatStars(value: number): string {
-  return `${value} ★`;
 }
