@@ -28,6 +28,23 @@ describe("AccountMenu styles", () => {
     );
   });
 
+  it("uses the NeiroHub scrollbar without native arrow buttons", () => {
+    expect(stylesheet).toMatch(
+      /@supports \(-moz-appearance: none\)\s*\{[\s\S]*?\.menu\s*\{[^}]*scrollbar-width:\s*thin;[^}]*scrollbar-color:\s*var\(--color-border\) transparent;/s,
+    );
+    expect(stylesheet).toMatch(/\.menu::-webkit-scrollbar\s*\{[^}]*inline-size:\s*0\.625rem;/s);
+    expect(stylesheet).toMatch(/\.menu::-webkit-scrollbar-track\s*\{[^}]*background:\s*transparent;/s);
+    expect(stylesheet).toMatch(
+      /\.menu::-webkit-scrollbar-button\s*\{[^}]*display:\s*none;[^}]*inline-size:\s*0;[^}]*block-size:\s*0;/s,
+    );
+    expect(stylesheet).toMatch(
+      /\.menu::-webkit-scrollbar-thumb\s*\{[^}]*border-radius:\s*999px;[^}]*background-color:\s*var\(--color-border\);/s,
+    );
+    expect(stylesheet).toMatch(
+      /\.menu:hover::-webkit-scrollbar-thumb,\s*\.menu:focus-within::-webkit-scrollbar-thumb\s*\{[^}]*background-color:\s*var\(--color-text-muted\);/s,
+    );
+  });
+
   it("keeps the rectangular account trigger transparent until interaction", () => {
     expect(triggerRule).toContain("grid-template-columns: 2.5rem minmax(0, 1fr) 1.5rem");
     expect(triggerRule).toContain("background: transparent");

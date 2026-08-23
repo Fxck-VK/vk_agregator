@@ -1,13 +1,8 @@
-import { cleanup, fireEvent, render, screen } from "@testing-library/react";
+import { cleanup, render, screen } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
 vi.mock("@/features/image-generation/ImageGenerationPanel/ImageGenerationPanel", () => ({
-  ImageGenerationPanel: ({ onJobChange }: { onJobChange?: (job: { prompt: string }) => void }) => (
-    <>
-      <p>generator panel</p>
-      <button onClick={() => onJobChange?.({ prompt: "fresh image job" })} type="button">emit image job</button>
-    </>
-  ),
+  ImageGenerationPanel: () => <p>generator panel</p>,
 }));
 
 vi.mock("@/features/image-generation/ImageJobHistory/ImageJobHistory", () => ({
@@ -27,27 +22,20 @@ describe("ImageWorkspace", () => {
     cleanup();
   });
 
-  it("groups the manual generator and history in a labelled workspace region", () => {
+  it("groups the generator and guide without the history panel", () => {
     render(<ImageWorkspace />);
 
     expect(screen.getByRole("region", { name: ru.imageGeneration.title })).toContainElement(screen.getByText("generator panel"));
-    expect(screen.getByRole("region", { name: ru.imageGeneration.title })).toContainElement(screen.getByText("history panel"));
+    expect(screen.getByText("generation guide")).toBeInTheDocument();
+    expect(screen.queryByText("history panel")).not.toBeInTheDocument();
   });
 
-  it("passes only the latest in-memory job from the generator to history", () => {
-    render(<ImageWorkspace />);
-
-    fireEvent.click(screen.getByRole("button", { name: "emit image job" }));
-
-    expect(screen.getByText("fresh image job")).toBeInTheDocument();
-  });
-
-  it("places the guide between the generator and history", () => {
+  it("places the guide after the generator", () => {
     render(<ImageWorkspace />);
 
     const workspace = screen.getByRole("region", { name: ru.imageGeneration.title });
     const visibleSections = Array.from(workspace.querySelectorAll("p")).map((element) => element.textContent);
 
-    expect(visibleSections).toEqual(["generator panel", "generation guide", "history panel"]);
+    expect(visibleSections).toEqual(["generator panel", "generation guide"]);
   });
 });

@@ -83,6 +83,44 @@
   backdrop-filter: blur(1rem);
 }
 
+@supports (-moz-appearance: none) {
+  .menu {
+    scrollbar-width: thin;
+    scrollbar-color: var(--color-border) transparent;
+  }
+
+  .menu:hover,
+  .menu:focus-within {
+    scrollbar-color: var(--color-text-muted) transparent;
+  }
+}
+
+.menu::-webkit-scrollbar {
+  inline-size: 0.625rem;
+}
+
+.menu::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+.menu::-webkit-scrollbar-button {
+  display: none;
+  inline-size: 0;
+  block-size: 0;
+}
+
+.menu::-webkit-scrollbar-thumb {
+  border: 0.125rem solid transparent;
+  border-radius: 999px;
+  background-clip: content-box;
+  background-color: var(--color-border);
+}
+
+.menu:hover::-webkit-scrollbar-thumb,
+.menu:focus-within::-webkit-scrollbar-thumb {
+  background-color: var(--color-text-muted);
+}
+
 .menuList,
 .logoutSection {
   display: grid;

@@ -5,6 +5,8 @@ import { describe, expect, it } from "vitest";
 
 const stylesheet = readFileSync(resolve(process.cwd(), "src/components/layout/AppShell/AppShell.module.css"), "utf8");
 
+const shellRule = stylesheet.match(/\.shell \{([\s\S]*?)\n\}/)?.[1];
+const sidebarRule = stylesheet.match(/\.sidebar \{([\s\S]*?)\n\}/)?.[1];
 const workspaceRule = stylesheet.match(/\.workspace \{([\s\S]*?)\n\}/)?.[1];
 const thumbRule = stylesheet.match(/\.workspace::-webkit-scrollbar-thumb \{([\s\S]*?)\n\}/)?.[1];
 
@@ -23,5 +25,28 @@ describe("AppShell workspace scrollbar", () => {
     expect(thumbRule).toContain("border-radius: 999px");
     expect(thumbRule).toContain("background-color: var(--color-border)");
     expect(thumbRule).toContain("background-clip: content-box");
+  });
+});
+
+describe("AppShell workspace surface", () => {
+  it("uses the approved lavender canvas behind both floating panels", () => {
+    expect(shellRule).toContain("--app-shell-canvas: #9494F8");
+    expect(shellRule).toContain("background: var(--app-shell-canvas)");
+    expect(sidebarRule).toContain("background: var(--app-shell-canvas)");
+  });
+
+  it("renders the desktop workspace as a floating panel matching the sidebar", () => {
+    expect(workspaceRule).toContain("block-size: calc(100dvh - var(--space-2) - var(--space-2))");
+    expect(workspaceRule).toContain("margin-block: var(--space-2)");
+    expect(workspaceRule).toContain("margin-inline-end: var(--space-2)");
+    expect(workspaceRule).toContain("border-radius: var(--radius-lg)");
+    expect(workspaceRule).toContain("background: var(--color-surface)");
+    expect(workspaceRule).toContain("box-shadow: var(--shadow-card)");
+  });
+
+  it("removes the floating-panel spacing and rounding on mobile", () => {
+    expect(stylesheet).toMatch(
+      /@media \(width < 48rem\) \{[\s\S]*?\.workspace \{[\s\S]*?block-size: 100dvh;[\s\S]*?margin: 0;[\s\S]*?border-radius: 0;/,
+    );
   });
 });

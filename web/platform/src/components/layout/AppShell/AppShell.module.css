@@ -1,7 +1,9 @@
 .shell {
   --sidebar-collapsed-rail-width: 5.5rem;
-  min-block-size: 100dvh;
-  background: var(--color-background);
+  --app-shell-canvas: #9494F8;
+  block-size: 100dvh;
+  background: var(--app-shell-canvas);
+  overflow: hidden;
 }
 
 .sidebar {
@@ -11,12 +13,17 @@
   inline-size: var(--sidebar-width);
   block-size: 100dvh;
   padding: var(--space-2);
-  background: var(--color-background);
+  background: var(--app-shell-canvas);
 }
 
 .workspace {
-  block-size: 100dvh;
+  block-size: calc(100dvh - var(--space-2) - var(--space-2));
+  margin-block: var(--space-2);
   margin-inline-start: var(--sidebar-width);
+  margin-inline-end: var(--space-2);
+  border-radius: var(--radius-lg);
+  background: var(--color-surface);
+  box-shadow: var(--shadow-card);
   overflow-x: hidden;
   overflow-y: auto;
 }
@@ -65,7 +72,10 @@
   }
 
   .workspace {
-    margin-inline-start: 0;
+    block-size: 100dvh;
+    margin: 0;
+    border-radius: 0;
+    box-shadow: none;
   }
 }
 

@@ -15,7 +15,7 @@ const appShellStylesheet = readFileSync(
 describe("Sidebar desktop collapse stylesheet", () => {
   it("floats the desktop sidebar above the workspace background", () => {
     expect(appShellStylesheet).toMatch(
-      /\.sidebar\s*\{[^}]*padding:\s*var\(--space-2\);[^}]*background:\s*var\(--color-background\);/s,
+      /\.sidebar\s*\{[^}]*padding:\s*var\(--space-2\);[^}]*background:\s*var\(--app-shell-canvas\);/s,
     );
     expect(stylesheet).toMatch(
       /\.panel\s*\{[^}]*block-size:\s*100%;[^}]*inline-size:\s*100%;[^}]*border-radius:\s*var\(--radius-lg\);/s,
@@ -35,7 +35,7 @@ describe("Sidebar desktop collapse stylesheet", () => {
       /@media \(min-width: 48rem\) \{[\s\S]*?\.panel\[data-desktop-collapsed="true"\] \{[\s\S]*?transform: translateX\(-105%\);/,
     );
     expect(appShellStylesheet).toMatch(
-      /@media \(width < 48rem\) \{[\s\S]*?\.workspace \{[\s\S]*?margin-inline-start: 0;/,
+      /@media \(width < 48rem\) \{[\s\S]*?\.workspace \{[\s\S]*?margin: 0;/,
     );
     expect(appShellStylesheet).toMatch(
       /@media \(min-width: 48rem\) \{[\s\S]*?\.shell\[data-desktop-sidebar-collapsed="true"\] \.workspace \{[\s\S]*?margin-inline-start: var\(--sidebar-collapsed-rail-width\);/,
