@@ -74,7 +74,7 @@ describe("ChatComposer", () => {
   it("renders optional domain controls alongside the shared media and submit actions", () => {
     render(
       <ChatComposer
-        additionalControls={<button type="button">1K</button>}
+        leadingControls={<button type="button">1K</button>}
         canSubmit
         disabled={false}
         label="Генерация изображения"
@@ -91,6 +91,15 @@ describe("ChatComposer", () => {
     expect(screen.getByRole("button", { name: "Загрузить медиа" })).toBeEnabled();
     expect(screen.getByRole("button", { name: "1K" })).toBeEnabled();
     expect(screen.getByRole("button", { name: "Сгенерировать" })).toBeEnabled();
+    expect(screen.getByRole("group", { name: "Медиа и настройки" })).toContainElement(
+      screen.getByRole("button", { name: "Загрузить медиа" }),
+    );
+    expect(screen.getByRole("group", { name: "Медиа и настройки" })).toContainElement(
+      screen.getByRole("button", { name: "1K" }),
+    );
+    expect(screen.getByRole("group", { name: "Медиа и настройки" })).not.toContainElement(
+      screen.getByRole("button", { name: "Сгенерировать" }),
+    );
   });
 
   it("shows a selected local file in the composer and lets the user remove it", () => {

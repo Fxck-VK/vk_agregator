@@ -23,6 +23,7 @@ type ChatComposerProps = {
   disabled: boolean;
   generatedMediaHref?: string;
   label: string;
+  leadingControls?: ReactNode;
   mediaLabel: string;
   mediaLibraryEnabled?: boolean;
   mediaMenuLabels?: Omit<ChatMediaMenuLabels, "trigger">;
@@ -47,6 +48,7 @@ export function ChatComposer({
   disabled,
   generatedMediaHref,
   label,
+  leadingControls,
   mediaLabel,
   mediaLibraryEnabled = true,
   mediaMenuLabels,
@@ -115,21 +117,24 @@ export function ChatComposer({
           </div>
         )}
         <div className={styles.controls}>
-          <ChatMediaMenu
-            disabled={disabled}
-            generatedHref={generatedMediaHref}
-            labels={{
-              chooseGenerated: mediaMenuLabels?.chooseGenerated ?? "Выбрать из сгенерированных",
-              chooseUploaded: mediaMenuLabels?.chooseUploaded ?? "Выбрать из загруженных",
-              menu: mediaMenuLabels?.menu ?? mediaLabel,
-              trigger: mediaLabel,
-              uploadFile: mediaMenuLabels?.uploadFile ?? "Загрузить файл",
-            }}
-            onChooseGenerated={mediaLibraryEnabled ? openGeneratedPicker : onChooseGeneratedMedia}
-            onChooseUploaded={mediaLibraryEnabled ? openUploadedPicker : onChooseUploadedMedia}
-            onFilesSelected={selectNativeFile}
-            uploadedHref={uploadedMediaHref}
-          />
+          <div aria-label="Медиа и настройки" className={styles.leadingControls} role="group">
+            <ChatMediaMenu
+              disabled={disabled}
+              generatedHref={generatedMediaHref}
+              labels={{
+                chooseGenerated: mediaMenuLabels?.chooseGenerated ?? "Выбрать из сгенерированных",
+                chooseUploaded: mediaMenuLabels?.chooseUploaded ?? "Выбрать из загруженных",
+                menu: mediaMenuLabels?.menu ?? mediaLabel,
+                trigger: mediaLabel,
+                uploadFile: mediaMenuLabels?.uploadFile ?? "Загрузить файл",
+              }}
+              onChooseGenerated={mediaLibraryEnabled ? openGeneratedPicker : onChooseGeneratedMedia}
+              onChooseUploaded={mediaLibraryEnabled ? openUploadedPicker : onChooseUploadedMedia}
+              onFilesSelected={selectNativeFile}
+              uploadedHref={uploadedMediaHref}
+            />
+            {leadingControls}
+          </div>
           <div className={styles.trailingControls}>
             {additionalControls}
             <button

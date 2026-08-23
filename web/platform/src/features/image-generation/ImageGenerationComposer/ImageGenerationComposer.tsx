@@ -44,7 +44,7 @@ export function ImageGenerationComposer({
       }}
     >
       <ChatComposer
-        additionalControls={(
+        leadingControls={(
           <>
             <ImageAspectRatioSelector disabled={isSubmitting} onChange={onAspectRatioChange} value={aspectRatio} />
             <label className={styles.qualityControl}>

@@ -56,11 +56,21 @@
   gap: var(--space-3);
 }
 
+.leadingControls,
 .trailingControls {
   display: flex;
   align-items: center;
-  justify-content: flex-end;
   gap: var(--space-3);
+}
+
+.leadingControls {
+  min-inline-size: 0;
+  justify-content: flex-start;
+}
+
+.trailingControls {
+  flex: 0 0 auto;
+  justify-content: flex-end;
 }
 
 .attachment {
@@ -168,7 +178,12 @@
   }
 
   .controls,
+  .leadingControls,
   .trailingControls {
     flex-wrap: wrap;
+  }
+
+  .leadingControls {
+    flex: 1 1 auto;
   }
 }
