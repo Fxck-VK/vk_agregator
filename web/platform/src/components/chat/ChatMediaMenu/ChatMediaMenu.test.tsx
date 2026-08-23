@@ -19,7 +19,12 @@ describe("ChatMediaMenu", () => {
   it("opens the requested media source actions", () => {
     render(<ChatMediaMenu labels={labels} />);
 
-    fireEvent.click(screen.getByRole("button", { name: labels.trigger }));
+    const trigger = screen.getByRole("button", { name: labels.trigger });
+    expect(trigger.querySelector("img")).toHaveAttribute(
+      "src",
+      "/assets/icons/ui/upload-media.svg",
+    );
+    fireEvent.click(trigger);
 
     expect(screen.getByRole("menu", { name: labels.menu })).toBeVisible();
     expect(screen.getByRole("menuitem", { name: labels.uploadFile })).toBeVisible();

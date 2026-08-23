@@ -20,6 +20,18 @@ describe("assetPaths", () => {
     });
   });
 
+  it("exposes the shared model-selector chevron URL", () => {
+    expect(assetPaths.icons.ui.chevronDown).toBe(
+      "/assets/icons/ui/chevron-down.svg",
+    );
+  });
+
+  it("exposes the shared media-upload icon URL", () => {
+    expect(assetPaths.icons.ui.uploadMedia).toBe(
+      "/assets/icons/ui/upload-media.svg",
+    );
+  });
+
   it("exposes a stable inspiration image URL without eager imports", () => {
     expect(assetPaths.images.inspiration.paperCraneCloud).toBe(
       "/assets/images/inspiration/paper-crane-cloud.png",

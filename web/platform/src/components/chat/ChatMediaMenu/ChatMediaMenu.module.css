@@ -35,7 +35,8 @@
   outline-offset: 0.125rem;
 }
 
-.trigger svg {
+.trigger img {
+  display: block;
   inline-size: 1.5rem;
   block-size: 1.5rem;
   flex: 0 0 auto;

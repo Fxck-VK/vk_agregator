@@ -73,6 +73,10 @@ describe("WorkspaceModelSelector", () => {
 
     const trigger = await screen.findByRole("button", { name: new RegExp("Nano Banana 2") });
     expect(loadImageModelCatalog).toHaveBeenCalledTimes(1);
+    expect(trigger.querySelector("img")).toHaveAttribute(
+      "src",
+      "/assets/icons/ui/chevron-down.svg",
+    );
 
     fireEvent.click(trigger);
 

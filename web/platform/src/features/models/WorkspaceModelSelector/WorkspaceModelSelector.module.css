@@ -44,15 +44,23 @@
 }
 
 .chevron {
+  display: grid;
   flex: 0 0 auto;
-  font-size: 1.125rem;
-  line-height: 1;
-  transform: translateY(-0.125rem);
+  inline-size: 1.125rem;
+  block-size: 1.125rem;
+  place-items: center;
   transition: transform var(--motion-fast);
 }
 
+.chevron img {
+  display: block;
+  inline-size: 100%;
+  block-size: 100%;
+  transform: translateY(0.1rem);
+}
+
 .chevronOpen {
-  transform: rotate(180deg) translateY(-0.125rem);
+  transform: rotate(180deg);
 }
 
 .popover {

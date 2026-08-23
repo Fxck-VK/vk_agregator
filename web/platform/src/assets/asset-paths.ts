@@ -11,6 +11,10 @@ export const assetPaths = {
       moon: "/assets/icons/theme/moon.svg",
       sun: "/assets/icons/theme/sun.svg",
     },
+    ui: {
+      chevronDown: "/assets/icons/ui/chevron-down.svg",
+      uploadMedia: "/assets/icons/ui/upload-media.svg",
+    },
   },
   images: {
     inspiration: {

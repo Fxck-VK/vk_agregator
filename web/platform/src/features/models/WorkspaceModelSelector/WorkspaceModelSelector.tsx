@@ -1,9 +1,11 @@
 "use client";
 
+import Image from "next/image";
 import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
 import { useEffect, useMemo, useRef, useState } from "react";
 
+import { assetPaths } from "@/assets/asset-paths";
 import { ru } from "@/i18n/ru";
 import type { ImageModel } from "@/lib/web-api/contracts";
 
@@ -152,7 +154,9 @@ export function WorkspaceModelSelector() {
         <span className={styles.triggerText}>
           {status === "loading" ? ru.modelSelector.loadingShort : (selectedModel?.name ?? ru.modelSelector.unavailable)}
         </span>
-        <span aria-hidden="true" className={`${styles.chevron} ${isOpen ? styles.chevronOpen : ""}`}>⌄</span>
+        <span aria-hidden="true" className={`${styles.chevron} ${isOpen ? styles.chevronOpen : ""}`}>
+          <Image alt="" height={18} src={assetPaths.icons.ui.chevronDown} unoptimized width={18} />
+        </span>
       </button>
 
       {isOpen ? (
