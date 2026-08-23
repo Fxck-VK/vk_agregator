@@ -1,0 +1,63 @@
+.root {
+  inline-size: 100%;
+}
+
+.qualityControl {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-2);
+  min-block-size: 3.25rem;
+  padding-inline: var(--space-3);
+  border: 0.0625rem solid var(--color-border);
+  border-radius: 999px;
+  color: var(--color-text);
+  background: var(--color-surface-raised);
+}
+
+.qualityControl:focus-within {
+  border-color: color-mix(in srgb, var(--color-accent) 70%, var(--color-border));
+  outline: 0.1875rem solid color-mix(in srgb, var(--color-accent) 20%, transparent);
+  outline-offset: 0.125rem;
+}
+
+.qualityControl select {
+  border: 0;
+  outline: 0;
+  color: inherit;
+  background: transparent;
+  font: inherit;
+  font-weight: 700;
+}
+
+.qualityControl select:disabled {
+  color: var(--color-text-muted);
+}
+
+.qualityIcon {
+  color: var(--color-text-muted);
+  font-size: 1.25rem;
+}
+
+.visuallyHidden {
+  position: absolute;
+  inline-size: 1px;
+  block-size: 1px;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0 0 0 0);
+  white-space: nowrap;
+}
+
+.error {
+  inline-size: min(100%, 58rem);
+  margin: var(--space-3) auto 0;
+  color: var(--color-danger);
+  font-size: 0.9375rem;
+  text-align: center;
+}
+
+@media (width < 40rem) {
+  .qualityControl {
+    min-block-size: 3rem;
+  }
+}
