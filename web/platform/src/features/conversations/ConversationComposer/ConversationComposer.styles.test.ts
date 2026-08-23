@@ -31,4 +31,9 @@ describe("shared ChatComposer layout", () => {
     );
     expect(inputStylesheet).toMatch(/\.composer\s*\{[^}]*border:\s*0;/s);
   });
+
+  it("keeps only the landing-page hero composer compact", () => {
+    expect(composerStylesheet).toMatch(/\.hero\s*\{[^}]*padding:\s*var\(--space-4\);/s);
+    expect(composerStylesheet).toMatch(/\.hero textarea\s*\{[^}]*block-size:\s*3\.75rem;/s);
+  });
 });

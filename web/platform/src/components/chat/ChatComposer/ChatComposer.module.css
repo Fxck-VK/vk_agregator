@@ -20,10 +20,14 @@
 }
 
 .hero {
-  padding: clamp(var(--space-4), 3vw, var(--space-6));
+  padding: var(--space-4);
   border-color: color-mix(in srgb, var(--color-border) 75%, var(--color-text-muted));
   background: color-mix(in srgb, var(--color-surface) 92%, var(--color-accent));
   box-shadow: 0 1.75rem 5rem rgb(0 0 0 / 0.18);
+}
+
+.hero textarea {
+  block-size: 3.75rem;
 }
 
 .workspace {

@@ -1,9 +1,7 @@
 .page {
   min-inline-size: 0;
   overflow: hidden;
-  background:
-    radial-gradient(circle at 50% 2%, color-mix(in srgb, var(--color-accent) 12%, transparent), transparent 24rem),
-    var(--color-background);
+  background: var(--color-background);
 }
 
 .main {
@@ -19,9 +17,9 @@
 .hero {
   display: grid;
   align-content: center;
-  gap: clamp(var(--space-6), 4vw, var(--space-8));
-  min-block-size: min(48rem, calc(100dvh - 4.5rem));
-  padding-block-start: clamp(3.5rem, 8vw, 7rem);
+  gap: clamp(var(--space-4), 2vw, var(--space-6));
+  min-block-size: min(40rem, calc(100dvh - 4.5rem));
+  padding-block-start: clamp(2.5rem, 5vw, 4rem);
 }
 
 .heroCopy {
@@ -39,7 +37,8 @@
 }
 
 .heroCopy h1 {
-  font-size: clamp(2.25rem, 6vw, 4.25rem);
+  font-size: clamp(2.25rem, 3.5vw, 3rem);
+  white-space: nowrap;
 }
 
 .heroCopy h1 span {
@@ -778,6 +777,10 @@
   .hero {
     min-block-size: auto;
     padding-block-start: 3rem;
+  }
+
+  .heroCopy h1 {
+    white-space: normal;
   }
 
   .toolRail {

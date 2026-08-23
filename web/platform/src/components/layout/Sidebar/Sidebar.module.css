@@ -21,12 +21,14 @@
 .panel {
   display: flex;
   flex-direction: column;
-  block-size: 100dvh;
-  inline-size: var(--sidebar-width);
+  block-size: 100%;
+  inline-size: 100%;
   padding: var(--space-4);
+  border-radius: var(--radius-lg);
   background: var(--color-surface);
+  box-shadow: var(--shadow-card);
   overflow: hidden;
-  transition: inline-size var(--motion-normal), padding var(--motion-normal);
+  transition: inline-size var(--motion-normal), padding var(--motion-normal), border-radius var(--motion-normal);
 }
 
 .brandRow {
@@ -200,6 +202,9 @@
     position: fixed;
     z-index: 30;
     inset: 0 auto 0 0;
+    inline-size: var(--sidebar-width);
+    block-size: 100dvh;
+    border-radius: 0;
     visibility: hidden;
     pointer-events: none;
     box-shadow: 0 0.75rem 2rem rgb(0 0 0 / 35%);
@@ -225,7 +230,7 @@
 
 @media (min-width: 48rem) {
   .panel[data-desktop-collapsed="true"] {
-    inline-size: var(--sidebar-collapsed-rail-width);
+    inline-size: 100%;
     padding: var(--space-3) var(--space-4);
   }
 

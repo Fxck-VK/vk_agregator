@@ -13,6 +13,18 @@ const appShellStylesheet = readFileSync(
 );
 
 describe("Sidebar desktop collapse stylesheet", () => {
+  it("floats the desktop sidebar above the workspace background", () => {
+    expect(appShellStylesheet).toMatch(
+      /\.sidebar\s*\{[^}]*padding:\s*var\(--space-2\);[^}]*background:\s*var\(--color-background\);/s,
+    );
+    expect(stylesheet).toMatch(
+      /\.panel\s*\{[^}]*block-size:\s*100%;[^}]*inline-size:\s*100%;[^}]*border-radius:\s*var\(--radius-lg\);/s,
+    );
+    expect(stylesheet).toMatch(
+      /@media \(width < 48rem\)[\s\S]*\.panel\s*\{[^}]*border-radius:\s*0;/s,
+    );
+  });
+
   it("uses complementary breakpoints without hiding the collapsed desktop rail", () => {
     expect(stylesheet).not.toContain("max-width: 47.99rem");
     expect(appShellStylesheet).not.toContain("max-width: 47.99rem");
@@ -32,7 +44,7 @@ describe("Sidebar desktop collapse stylesheet", () => {
 
   it("reserves a full icon rail with square active controls and hover tooltips", () => {
     expect(stylesheet).toMatch(
-      /\.panel\[data-desktop-collapsed="true"\] \{[\s\S]*?inline-size: var\(--sidebar-collapsed-rail-width\);/,
+      /\.panel\[data-desktop-collapsed="true"\] \{[\s\S]*?inline-size: 100%;/,
     );
     expect(stylesheet).toMatch(
       /\.panel\[data-desktop-collapsed="true"\] \.navigationList a\[aria-current="page"\] \{[\s\S]*?border-radius: var\(--radius-sm\);/,
