@@ -53,13 +53,17 @@ export function AccountMenu({ identityLabel, isLogoutPending, logoutFailure, onL
   }, [isOpen]);
 
   useEffect(() => {
-    if (!isUpdatesOpen) return;
+    if (!isOpen) return;
 
     const closeOnOutsidePointer = (event: PointerEvent) => {
-      if (!rootRef.current?.contains(event.target as Node)) setIsUpdatesOpen(false);
+      if (rootRef.current?.contains(event.target as Node)) return;
+
+      setIsUpdatesOpen(false);
+      setIsOpen(false);
+      triggerRef.current?.focus();
     };
     const closeOnEscape = (event: KeyboardEvent) => {
-      if (event.key === "Escape") setIsUpdatesOpen(false);
+      if (event.key === "Escape" && isUpdatesOpen) setIsUpdatesOpen(false);
     };
 
     document.addEventListener("pointerdown", closeOnOutsidePointer);
@@ -69,7 +73,7 @@ export function AccountMenu({ identityLabel, isLogoutPending, logoutFailure, onL
       document.removeEventListener("pointerdown", closeOnOutsidePointer);
       document.removeEventListener("keydown", closeOnEscape);
     };
-  }, [isUpdatesOpen]);
+  }, [isOpen, isUpdatesOpen]);
 
   const closeMenu = () => {
     setIsUpdatesOpen(false);

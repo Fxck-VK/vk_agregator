@@ -75,7 +75,7 @@ describe("AccountControl", () => {
     expect(container.querySelectorAll("a")).toHaveLength(2);
   });
 
-  it("toggles the updates panel and closes it without closing the account menu", () => {
+  it("toggles the updates panel and closes the full account overlay on an outside press", () => {
     render(
       <div>
         <AccountControl profile={profile} />
@@ -111,7 +111,7 @@ describe("AccountControl", () => {
     fireEvent.pointerDown(screen.getByRole("button", { name: "Вне панели" }));
 
     expect(screen.queryByRole("region", { name: ru.account.updatesPanelLabel })).not.toBeInTheDocument();
-    expect(screen.getByRole("region", { name: ru.account.menuLabel })).toBeInTheDocument();
+    expect(screen.queryByRole("region", { name: ru.account.menuLabel })).not.toBeInTheDocument();
   });
 
   it("uses a generic unavailable label when no verified safe label exists", () => {
@@ -188,6 +188,22 @@ describe("AccountControl", () => {
     fireEvent.keyDown(document.activeElement as HTMLElement, { key: "Escape" });
 
     expect(screen.queryByRole("region", { name: "Меню аккаунта" })).not.toBeInTheDocument();
+    expect(trigger).toHaveFocus();
+  });
+
+  it("closes the account menu when the user presses outside it", () => {
+    render(
+      <div>
+        <AccountControl profile={profile} />
+        <button type="button">Вне меню</button>
+      </div>,
+    );
+    const trigger = screen.getByRole("button", { name: ru.account.openMenuLabel });
+
+    fireEvent.click(trigger);
+    fireEvent.pointerDown(screen.getByRole("button", { name: "Вне меню" }));
+
+    expect(screen.queryByRole("region", { name: ru.account.menuLabel })).not.toBeInTheDocument();
     expect(trigger).toHaveFocus();
   });
 });
