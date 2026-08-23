@@ -49,6 +49,7 @@ func TestWebImageJobPrepareUsesServerResolvedPriceAndReturnsSafeDTO(t *testing.T
 		"prompt":        "night city after rain",
 		"model_id":      modelcatalog.MiniAppImageNanoBanana2,
 		"image_quality": modelcatalog.ImageQuality2K,
+		"aspect_ratio":  "4:5",
 	})
 	rec := httptest.NewRecorder()
 
@@ -66,7 +67,7 @@ func TestWebImageJobPrepareUsesServerResolvedPriceAndReturnsSafeDTO(t *testing.T
 	if jobs.prepareInput.CostEstimateCredits != 60 || jobs.prepareInput.PricingSnapshot.InternalCredits != 60 {
 		t.Fatalf("server price = %d / %+v, want 60", jobs.prepareInput.CostEstimateCredits, jobs.prepareInput.PricingSnapshot)
 	}
-	assertPreparedImageJobParams(t, jobs.prepareInput.Params, "night city after rain", modelcatalog.MiniAppImageNanoBanana2, modelcatalog.ImageQuality2K)
+	assertPreparedImageJobParams(t, jobs.prepareInput.Params, "night city after rain", modelcatalog.MiniAppImageNanoBanana2, modelcatalog.ImageQuality2K, "4:5")
 	assertSafeWebImagePreparation(t, rec.Body.Bytes(), jobs.prepared.ID, domain.JobStatusPrepared, 60, 104)
 	if bytes.Contains(bytes.ToLower(rec.Body.Bytes()), []byte("provider")) || bytes.Contains(bytes.ToLower(rec.Body.Bytes()), []byte("model_code")) {
 		t.Fatalf("public response leaked private routing: %s", rec.Body.String())
@@ -1588,7 +1589,7 @@ func mustMarshalWebImageJobParams(t *testing.T, params webImageJobParams) json.R
 	return payload
 }
 
-func assertPreparedImageJobParams(t *testing.T, raw json.RawMessage, prompt, modelID, quality string) {
+func assertPreparedImageJobParams(t *testing.T, raw json.RawMessage, prompt, modelID, quality, aspectRatio string) {
 	t.Helper()
 	var params map[string]json.RawMessage
 	if err := json.Unmarshal(raw, &params); err != nil {
@@ -1598,6 +1599,7 @@ func assertPreparedImageJobParams(t *testing.T, raw json.RawMessage, prompt, mod
 		"prompt":        prompt,
 		"model_id":      modelID,
 		"image_quality": quality,
+		"aspect_ratio":  aspectRatio,
 	} {
 		var got string
 		if err := json.Unmarshal(params[field], &got); err != nil || got != want {

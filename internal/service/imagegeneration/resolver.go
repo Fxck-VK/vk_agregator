@@ -23,7 +23,15 @@ var (
 	ErrReferenceLimit         = errors.New("image generation reference limit exceeded")
 	ErrInvalidReferenceCount  = errors.New("image generation reference count invalid")
 	ErrPriceUnavailable       = errors.New("image generation price unavailable")
+	ErrUnsupportedAspectRatio = errors.New("image generation aspect ratio unsupported")
 )
+
+const DefaultAspectRatio = "16:9"
+
+var supportedAspectRatios = map[string]struct{}{
+	"16:9": {}, "1:1": {}, "21:9": {}, "2:3": {}, "3:2": {},
+	"3:4": {}, "4:3": {}, "4:5": {}, "5:4": {}, "9:16": {},
+}
 
 // PublicModel is a server-built, safe product catalog entry. The caller must
 // obtain it from backend feature/readiness filtering; it intentionally has no
@@ -44,6 +52,7 @@ type PublicModel struct {
 type Request struct {
 	ModelID        string
 	Quality        string
+	AspectRatio    string
 	ReferenceCount int
 }
 
@@ -53,6 +62,7 @@ type PublicSelection struct {
 	ModelID      string `json:"model_id"`
 	ModelName    string `json:"model_name"`
 	ImageQuality string `json:"image_quality,omitempty"`
+	AspectRatio  string `json:"aspect_ratio,omitempty"`
 }
 
 // WorkerParams contains trusted execution details for an internal job payload.
@@ -65,6 +75,7 @@ type WorkerParams struct {
 	Size         string
 	Resolution   string
 	ImageQuality string
+	AspectRatio  string
 }
 
 // Resolution is the server-trusted result of resolving one public selection.
@@ -131,6 +142,7 @@ func (r Resolver) Resolve(request Request) (Resolution, error) {
 			Size:         imageSizeForQuality(trustedModel.Provider, public.ImageQuality),
 			Resolution:   public.ImageQuality,
 			ImageQuality: public.ImageQuality,
+			AspectRatio:  public.AspectRatio,
 		},
 		PricingSnapshot: snapshot,
 	}, nil
@@ -164,6 +176,10 @@ func (r Resolver) resolvePublic(request Request) (modelcatalog.Model, PublicSele
 	if err != nil {
 		return modelcatalog.Model{}, PublicSelection{}, err
 	}
+	aspectRatio, err := NormalizeAspectRatio(request.AspectRatio)
+	if err != nil {
+		return modelcatalog.Model{}, PublicSelection{}, err
+	}
 	if err := validateReferenceCount(publicModel, request.ReferenceCount); err != nil {
 		return modelcatalog.Model{}, PublicSelection{}, err
 	}
@@ -172,7 +188,21 @@ func (r Resolver) resolvePublic(request Request) (modelcatalog.Model, PublicSele
 		ModelID:      trustedModel.ModelID,
 		ModelName:    trustedModel.ModelName,
 		ImageQuality: quality,
+		AspectRatio:  aspectRatio,
 	}, nil
+}
+
+// NormalizeAspectRatio applies the public default and rejects values that are
+// not supported by the image-generation UI and provider contract.
+func NormalizeAspectRatio(raw string) (string, error) {
+	ratio := strings.TrimSpace(raw)
+	if ratio == "" {
+		ratio = DefaultAspectRatio
+	}
+	if _, ok := supportedAspectRatios[ratio]; !ok {
+		return "", ErrUnsupportedAspectRatio
+	}
+	return ratio, nil
 }
 
 func (r Resolver) publicModelFor(trusted modelcatalog.Model) (PublicModel, bool) {

@@ -21,10 +21,12 @@ describe("ImageGenerationComposer", () => {
       const [prompt, setPrompt] = useState("");
       return (
         <ImageGenerationComposer
+          aspectRatio="16:9"
           canSubmit={prompt.trim() !== ""}
           errorMessage={null}
           imageQuality="2K"
           isSubmitting={false}
+          onAspectRatioChange={vi.fn()}
           onImageQualityChange={onImageQualityChange}
           onPromptChange={(value) => {
             setPrompt(value);
@@ -57,10 +59,12 @@ describe("ImageGenerationComposer", () => {
   it("disables mutable controls while preparing and reports an unavailable price", () => {
     render(
       <ImageGenerationComposer
+        aspectRatio="16:9"
         canSubmit={false}
         errorMessage={null}
         imageQuality="1K"
         isSubmitting
+        onAspectRatioChange={vi.fn()}
         onImageQualityChange={vi.fn()}
         onPromptChange={vi.fn()}
         onSubmit={vi.fn()}
@@ -72,6 +76,7 @@ describe("ImageGenerationComposer", () => {
 
     expect(screen.getByRole("textbox", { name: ru.imageGeneration.promptLabel })).toBeDisabled();
     expect(screen.getByRole("combobox", { name: ru.imageGeneration.qualityLabel })).toBeDisabled();
+    expect(screen.getByRole("button", { name: "Соотношение сторон: 16:9" })).toBeDisabled();
     expect(screen.getByRole("button", { name: ru.imageGeneration.preparing })).toBeDisabled();
     expect(screen.getByText(ru.imageGeneration.priceUnavailable)).toBeVisible();
   });
@@ -79,10 +84,12 @@ describe("ImageGenerationComposer", () => {
   it("renders workflow errors below the compact composer", () => {
     render(
       <ImageGenerationComposer
+        aspectRatio="16:9"
         canSubmit
         errorMessage={ru.imageGeneration.prepareFailure}
         imageQuality="1K"
         isSubmitting={false}
+        onAspectRatioChange={vi.fn()}
         onImageQualityChange={vi.fn()}
         onPromptChange={vi.fn()}
         onSubmit={vi.fn()}

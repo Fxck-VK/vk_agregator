@@ -220,6 +220,8 @@ describe("ImageGenerationPanel", () => {
     fireEvent.change(screen.getByRole("combobox", { name: ru.imageGeneration.qualityLabel }), {
       target: { value: "2K" },
     });
+    fireEvent.click(screen.getByRole("button", { name: "Соотношение сторон: 16:9" }));
+    fireEvent.click(screen.getByRole("radio", { name: "4:5" }));
     fireEvent.click(getGenerateButton());
 
     await screen.findByRole("heading", { name: ru.imageGeneration.confirmationTitle });
@@ -233,6 +235,7 @@ describe("ImageGenerationPanel", () => {
         prompt: job.prompt,
         model_id: "nano-banana-2",
         image_quality: "2K",
+        aspect_ratio: "4:5",
       }),
     });
     expect(screen.getByText("60 ★")).toBeInTheDocument();

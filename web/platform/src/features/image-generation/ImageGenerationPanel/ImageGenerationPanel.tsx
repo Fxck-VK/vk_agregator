@@ -29,6 +29,7 @@ type PrepareIntent = {
   prompt: string;
   modelID: string;
   imageQuality: string;
+  aspectRatio: string;
   idempotencyKey: string;
 };
 
@@ -58,6 +59,7 @@ export function ImageGenerationPanel({ onJobChange }: Readonly<ImageGenerationPa
   const [fallbackModelID, setFallbackModelID] = useState("");
   const [qualitySelection, setQualitySelection] = useState<QualitySelection>({ modelID: "", value: "" });
   const [prompt, setPrompt] = useState("");
+  const [aspectRatio, setAspectRatio] = useState("16:9");
   const [prepareIntent, setPrepareIntent] = useState<PrepareIntent | null>(null);
   const [preparation, setPreparation] = useState<ImageJobPreparation | null>(null);
   const [activeJob, setActiveJob] = useState<ImageJob | null>(null);
@@ -151,6 +153,12 @@ export function ImageGenerationPanel({ onJobChange }: Readonly<ImageGenerationPa
     setError(null);
   }, [selectedModel]);
 
+  const changeAspectRatio = useCallback((nextAspectRatio: string) => {
+    setAspectRatio(nextAspectRatio);
+    setPrepareIntent(null);
+    setError(null);
+  }, []);
+
   const changePrompt = useCallback((nextPrompt: string) => {
     setPrompt(nextPrompt);
     setPrepareIntent(null);
@@ -163,12 +171,13 @@ export function ImageGenerationPanel({ onJobChange }: Readonly<ImageGenerationPa
     }
 
     const normalizedPrompt = prompt.trim();
-    const intent = prepareIntentMatches(prepareIntent, normalizedPrompt, selectedModel.id, imageQuality)
+    const intent = prepareIntentMatches(prepareIntent, normalizedPrompt, selectedModel.id, imageQuality, aspectRatio)
       ? prepareIntent
       : {
           prompt: normalizedPrompt,
           modelID: selectedModel.id,
           imageQuality,
+          aspectRatio,
           idempotencyKey: crypto.randomUUID(),
         };
     setPrepareIntent(intent);
@@ -185,6 +194,7 @@ export function ImageGenerationPanel({ onJobChange }: Readonly<ImageGenerationPa
           prompt: intent.prompt,
           model_id: intent.modelID,
           image_quality: intent.imageQuality,
+          aspect_ratio: intent.aspectRatio,
         }),
       });
       if (response.status === 409) {
@@ -200,7 +210,7 @@ export function ImageGenerationPanel({ onJobChange }: Readonly<ImageGenerationPa
       setError("prepare");
       setStage("editor");
     }
-  }, [canPrepare, imageQuality, prepareIntent, prompt, resetExpiredPreparation, selectedModel]);
+  }, [aspectRatio, canPrepare, imageQuality, prepareIntent, prompt, resetExpiredPreparation, selectedModel]);
 
   const handleJobUpdate = useCallback((nextJob: ImageJob) => {
     setActiveJob(nextJob);
@@ -277,10 +287,12 @@ export function ImageGenerationPanel({ onJobChange }: Readonly<ImageGenerationPa
 
       {(stage === "editor" || stage === "preparing") && selectedModel !== null ? (
         <ImageGenerationComposer
+          aspectRatio={aspectRatio}
           canSubmit={canPrepare}
           errorMessage={editorError}
           imageQuality={imageQuality}
           isSubmitting={stage === "preparing"}
+          onAspectRatioChange={changeAspectRatio}
           onImageQualityChange={changeImageQuality}
           onPromptChange={changePrompt}
           onSubmit={() => void prepareImage()}
@@ -315,6 +327,11 @@ function prepareIntentMatches(
   prompt: string,
   modelID: string,
   imageQuality: string,
+  aspectRatio: string,
 ): intent is PrepareIntent {
-  return intent !== null && intent.prompt === prompt && intent.modelID === modelID && intent.imageQuality === imageQuality;
+  return intent !== null
+    && intent.prompt === prompt
+    && intent.modelID === modelID
+    && intent.imageQuality === imageQuality
+    && intent.aspectRatio === aspectRatio;
 }

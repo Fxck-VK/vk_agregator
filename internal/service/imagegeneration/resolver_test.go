@@ -91,6 +91,46 @@ func TestResolver_ResolvePublicSelectionDoesNotRequireCurrentPrice(t *testing.T)
 	}
 }
 
+func TestResolver_NormalizesAndValidatesAspectRatio(t *testing.T) {
+	resolver := imagegeneration.NewResolver([]imagegeneration.PublicModel{{
+		ID:             modelcatalog.MiniAppImageNanoBanana2,
+		Name:           "Nano Banana 2",
+		Enabled:        true,
+		Ready:          true,
+		QualityOptions: []string{modelcatalog.ImageQuality1K},
+		DefaultQuality: modelcatalog.ImageQuality1K,
+	}}, staticPricingCatalog(t))
+
+	defaulted, err := resolver.Resolve(imagegeneration.Request{
+		ModelID: modelcatalog.MiniAppImageNanoBanana2,
+	})
+	if err != nil {
+		t.Fatalf("resolve default aspect ratio: %v", err)
+	}
+	if defaulted.Public.AspectRatio != imagegeneration.DefaultAspectRatio || defaulted.Worker.AspectRatio != imagegeneration.DefaultAspectRatio {
+		t.Fatalf("default aspect ratio = %q / %q, want %q", defaulted.Public.AspectRatio, defaulted.Worker.AspectRatio, imagegeneration.DefaultAspectRatio)
+	}
+
+	selected, err := resolver.Resolve(imagegeneration.Request{
+		ModelID:     modelcatalog.MiniAppImageNanoBanana2,
+		AspectRatio: " 4:5 ",
+	})
+	if err != nil {
+		t.Fatalf("resolve selected aspect ratio: %v", err)
+	}
+	if selected.Public.AspectRatio != "4:5" || selected.Worker.AspectRatio != "4:5" {
+		t.Fatalf("selected aspect ratio = %q / %q, want 4:5", selected.Public.AspectRatio, selected.Worker.AspectRatio)
+	}
+
+	_, err = resolver.Resolve(imagegeneration.Request{
+		ModelID:     modelcatalog.MiniAppImageNanoBanana2,
+		AspectRatio: "7:5",
+	})
+	if !errors.Is(err, imagegeneration.ErrUnsupportedAspectRatio) {
+		t.Fatalf("unsupported aspect ratio error = %v, want ErrUnsupportedAspectRatio", err)
+	}
+}
+
 func TestResolver_FailsClosedForDisabledOrUnreadyPublicModel(t *testing.T) {
 	pricing := staticPricingCatalog(t)
 	tests := []struct {

@@ -546,6 +546,7 @@ func (h *Handler) prepareImageJob(w http.ResponseWriter, r *http.Request) {
 		Prompt       string `json:"prompt"`
 		ModelID      string `json:"model_id"`
 		ImageQuality string `json:"image_quality"`
+		AspectRatio  string `json:"aspect_ratio"`
 	}
 	if !decodeJSON(w, r, &req) {
 		return
@@ -562,8 +563,9 @@ func (h *Handler) prepareImageJob(w http.ResponseWriter, r *http.Request) {
 	}
 	resolver := imagegeneration.NewResolver(h.cfg.ImageModels, h.deps.ImagePricing)
 	publicIntent, err := resolver.ResolvePublic(imagegeneration.Request{
-		ModelID: strings.TrimSpace(req.ModelID),
-		Quality: strings.TrimSpace(req.ImageQuality),
+		ModelID:     strings.TrimSpace(req.ModelID),
+		Quality:     strings.TrimSpace(req.ImageQuality),
+		AspectRatio: req.AspectRatio,
 	})
 	if err != nil {
 		writeError(w, http.StatusBadRequest, "invalid image generation request")
@@ -601,8 +603,9 @@ func (h *Handler) prepareImageJob(w http.ResponseWriter, r *http.Request) {
 	}
 
 	resolution, err := resolver.Resolve(imagegeneration.Request{
-		ModelID: strings.TrimSpace(req.ModelID),
-		Quality: strings.TrimSpace(req.ImageQuality),
+		ModelID:     strings.TrimSpace(req.ModelID),
+		Quality:     strings.TrimSpace(req.ImageQuality),
+		AspectRatio: req.AspectRatio,
 	})
 	if err != nil {
 		writeError(w, http.StatusBadRequest, "invalid image generation request")
@@ -622,6 +625,7 @@ func (h *Handler) prepareImageJob(w http.ResponseWriter, r *http.Request) {
 		Size:         resolution.Worker.Size,
 		Resolution:   resolution.Worker.Resolution,
 		ImageQuality: resolution.Worker.ImageQuality,
+		AspectRatio:  resolution.Worker.AspectRatio,
 	})
 	if err != nil {
 		writeError(w, http.StatusServiceUnavailable, "image generation unavailable")
@@ -1848,6 +1852,7 @@ type webImageJobParams struct {
 	Size         string              `json:"size"`
 	Resolution   string              `json:"resolution"`
 	ImageQuality string              `json:"image_quality"`
+	AspectRatio  string              `json:"aspect_ratio,omitempty"`
 }
 
 type safeImageJobPreparation struct {
@@ -1997,6 +2002,10 @@ func preparedWebImageJobReplay(job *domain.Job, accountID uuid.UUID, idempotency
 	var params webImageJobParams
 	if err := json.Unmarshal(job.Params, &params); err != nil || params.Prompt != prompt || params.ModelID != intent.ModelID || params.ImageQuality != intent.ImageQuality ||
 		strings.TrimSpace(params.ModelName) == "" || params.Provider == "" || strings.TrimSpace(params.ModelCode) == "" {
+		return safeImageJob{}, false
+	}
+	aspectRatio, err := imagegeneration.NormalizeAspectRatio(params.AspectRatio)
+	if err != nil || aspectRatio != intent.AspectRatio {
 		return safeImageJob{}, false
 	}
 	return newSafeImageJob(job)

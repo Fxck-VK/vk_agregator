@@ -1,0 +1,123 @@
+.root {
+  position: relative;
+}
+
+.trigger {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: var(--space-2);
+  min-block-size: 3.25rem;
+  padding-inline: var(--space-4);
+  border: 0.0625rem solid var(--color-border);
+  border-radius: 999px;
+  color: var(--color-text);
+  background: var(--color-surface-raised);
+  font: inherit;
+  font-weight: 700;
+  white-space: nowrap;
+}
+
+.trigger:not(:disabled):hover,
+.trigger[aria-expanded="true"] {
+  border-color: color-mix(in srgb, var(--color-text-muted) 65%, var(--color-border));
+  background: color-mix(in srgb, var(--color-surface-raised) 88%, var(--color-text) 12%);
+}
+
+.trigger:focus-visible {
+  outline: 0.1875rem solid color-mix(in srgb, var(--color-accent) 30%, transparent);
+  outline-offset: 0.125rem;
+}
+
+.trigger:disabled {
+  color: var(--color-text-muted);
+}
+
+.panel {
+  position: absolute;
+  inset-block-end: calc(100% + var(--space-3));
+  inset-inline-start: 0;
+  z-index: 50;
+  inline-size: min(51rem, calc(100vw - 3rem));
+  padding: var(--space-4);
+  border: 0.0625rem solid color-mix(in srgb, var(--color-border) 78%, var(--color-text-muted));
+  border-radius: 1.5rem;
+  background: color-mix(in srgb, var(--color-surface) 94%, transparent);
+  box-shadow: 0 1.5rem 4rem rgb(0 0 0 / 0.38);
+  backdrop-filter: blur(1.25rem);
+}
+
+.title {
+  margin: 0 0 var(--space-3);
+  color: var(--color-text);
+  font-size: 1.125rem;
+  font-weight: 800;
+}
+
+.options {
+  display: grid;
+  grid-template-columns: repeat(6, minmax(5.25rem, 1fr));
+  gap: var(--space-2);
+}
+
+.option {
+  display: grid;
+  place-items: center;
+  align-content: center;
+  gap: var(--space-2);
+  min-block-size: 6rem;
+  padding: var(--space-3);
+  border: 0.0625rem solid transparent;
+  border-radius: 1rem;
+  color: var(--color-text);
+  background: color-mix(in srgb, var(--color-surface-raised) 92%, black 8%);
+  font: inherit;
+  font-weight: 700;
+}
+
+.option:hover {
+  background: color-mix(in srgb, var(--color-surface-raised) 82%, var(--color-text) 18%);
+}
+
+.option.selected {
+  border-color: var(--color-accent);
+  background: color-mix(in srgb, var(--color-accent) 14%, var(--color-surface-raised));
+}
+
+.ratioShape {
+  display: block;
+  inline-size: var(--ratio-width);
+  block-size: var(--ratio-height);
+  border: 0.125rem solid currentColor;
+  border-radius: 0.2rem;
+}
+
+@media (width < 62rem) {
+  .panel {
+    inset-inline-start: auto;
+    inset-inline-end: 0;
+  }
+
+  .options {
+    grid-template-columns: repeat(5, minmax(4.5rem, 1fr));
+  }
+}
+
+@media (width < 40rem) {
+  .trigger {
+    min-block-size: 3rem;
+  }
+
+  .panel {
+    position: fixed;
+    inset-block: auto 1rem;
+    inset-inline: 1rem;
+    inline-size: auto;
+  }
+
+  .options {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    max-block-size: 22rem;
+    overflow-y: auto;
+  }
+}
