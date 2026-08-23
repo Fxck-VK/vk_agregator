@@ -231,7 +231,7 @@
 @media (min-width: 48rem) {
   .panel[data-desktop-collapsed="true"] {
     inline-size: 100%;
-    padding: var(--space-3) var(--space-4);
+    padding: var(--space-3) var(--space-2);
   }
 
   .panel[data-desktop-collapsed="true"] .brandRow {
@@ -278,7 +278,7 @@
   }
 
   .panel[data-desktop-collapsed="true"] [data-sidebar-conversation-list="true"] {
-    inline-size: calc(var(--sidebar-collapsed-rail-width) - 2 * var(--space-3));
+    inline-size: 100%;
     padding: 0;
   }
 

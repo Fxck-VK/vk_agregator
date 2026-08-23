@@ -44,7 +44,10 @@ describe("Sidebar desktop collapse stylesheet", () => {
 
   it("reserves a full icon rail with square active controls and hover tooltips", () => {
     expect(stylesheet).toMatch(
-      /\.panel\[data-desktop-collapsed="true"\] \{[\s\S]*?inline-size: 100%;/,
+      /\.panel\[data-desktop-collapsed="true"\] \{[\s\S]*?inline-size: 100%;[\s\S]*?padding: var\(--space-3\) var\(--space-2\);/,
+    );
+    expect(stylesheet).toMatch(
+      /\.panel\[data-desktop-collapsed="true"\] \[data-sidebar-conversation-list="true"\] \{[\s\S]*?inline-size: 100%;/,
     );
     expect(stylesheet).toMatch(
       /\.panel\[data-desktop-collapsed="true"\] \.navigationList a\[aria-current="page"\] \{[\s\S]*?border-radius: var\(--radius-sm\);/,

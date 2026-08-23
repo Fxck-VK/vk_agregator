@@ -36,4 +36,11 @@ describe("shared ChatComposer layout", () => {
     expect(composerStylesheet).toMatch(/\.hero\s*\{[^}]*padding:\s*var\(--space-4\);/s);
     expect(composerStylesheet).toMatch(/\.hero textarea\s*\{[^}]*block-size:\s*3\.75rem;/s);
   });
+
+  it("keeps the landing-page hero composer background neutral", () => {
+    const heroRule = composerStylesheet.match(/\.hero\s*\{[^}]*\}/s)?.[0] ?? "";
+
+    expect(heroRule).toContain("background: var(--color-surface)");
+    expect(heroRule).not.toContain("var(--color-accent)");
+  });
 });

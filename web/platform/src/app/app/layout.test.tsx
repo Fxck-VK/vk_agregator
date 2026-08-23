@@ -132,7 +132,8 @@ describe("Workspace destinations", () => {
     );
 
     expect(markup).toContain("Задайте вопрос NeiroHub");
-    expect(markup).toContain("Новости");
+    expect(markup).not.toContain("Новости");
+    expect(markup).not.toContain("Всё нужное для работы с AI — рядом");
     expect(markup).toContain("Нейросети для разных задач");
     expect(markup).toContain("Частые вопросы");
     expect(markup).toContain('href="/app/chats"');

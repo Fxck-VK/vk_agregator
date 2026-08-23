@@ -42,28 +42,6 @@ export function WorkspaceLanding({ access = "authenticated" }: WorkspaceLandingP
           </nav>
         </section>
 
-        <section aria-labelledby="workspace-news-title" className={styles.section}>
-          <div className={styles.sectionHeading}>
-            <div>
-              <p className={styles.kicker}>Обновления платформы</p>
-              <h2 id="workspace-news-title">Новости</h2>
-            </div>
-          </div>
-          <article className={styles.newsCard}>
-            <div aria-hidden="true" className={styles.newsVisual}>
-              <span>NeiroHub</span>
-              <strong>Всё нужное для работы с AI — рядом</strong>
-            </div>
-            <div className={styles.newsBody}>
-              <div>
-                <h3>Единое рабочее пространство</h3>
-                <p>Начинайте диалог, создавайте изображения и возвращайтесь к результатам без лишних переходов.</p>
-              </div>
-              <Link className={styles.secondaryButton} href="/app/models">Посмотреть инструменты</Link>
-            </div>
-          </article>
-        </section>
-
         <section aria-labelledby="workspace-models-title" className={styles.section}>
           <div className={styles.sectionHeading}>
             <div>

@@ -20,7 +20,8 @@ describe("WorkspaceHome", () => {
     const text = markup.replace(/<[^>]+>/g, "");
 
     expect(text).toContain("Простой старт в мир нейросетей");
-    expect(markup).toContain("Новости");
+    expect(markup).not.toContain("Новости");
+    expect(markup).not.toContain("Всё нужное для работы с AI — рядом");
     expect(markup).toContain("Нейросети для разных задач");
     expect(markup).toContain("Как работает NeiroHub");
     expect(markup).toContain("Откройте новые возможности");

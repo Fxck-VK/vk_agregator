@@ -194,84 +194,12 @@
   border-color: var(--color-accent);
 }
 
-.newsCard {
-  overflow: hidden;
-  border: 0.0625rem solid var(--color-border);
-  border-radius: 1.5rem;
-  background: var(--color-surface);
-}
-
-.newsVisual {
-  position: relative;
-  display: grid;
-  align-content: center;
-  min-block-size: clamp(16rem, 37vw, 24rem);
-  padding: clamp(var(--space-6), 6vw, 4.5rem);
-  overflow: hidden;
-  isolation: isolate;
-  background:
-    radial-gradient(circle at 80% 35%, rgb(80 187 255 / 0.95) 0 0.35rem, transparent 0.45rem),
-    radial-gradient(circle at 72% 58%, rgb(132 83 255 / 0.8) 0 0.25rem, transparent 0.35rem),
-    radial-gradient(circle at 88% 70%, rgb(45 223 198 / 0.8) 0 0.18rem, transparent 0.28rem),
-    linear-gradient(120deg, #101c34, #123b6b 48%, #0b8083);
-  color: #fff;
-}
-
-.newsVisual::before,
-.newsVisual::after {
-  position: absolute;
-  z-index: -1;
-  content: "";
-  border-radius: 999px;
-  filter: blur(0.25rem);
-}
-
-.newsVisual::before {
-  inset: 14% -4% auto auto;
-  inline-size: 22rem;
-  block-size: 22rem;
-  border: 3.5rem solid rgb(80 183 255 / 0.16);
-}
-
-.newsVisual::after {
-  inset: auto auto -65% 16%;
-  inline-size: 28rem;
-  block-size: 28rem;
-  border: 4rem solid rgb(70 240 210 / 0.12);
-}
-
-.newsVisual span {
-  color: #8dd8ff;
-  font-size: 0.875rem;
-  font-weight: 800;
-  letter-spacing: 0.1em;
-  text-transform: uppercase;
-}
-
-.newsVisual strong {
-  max-inline-size: 38rem;
-  margin-block-start: var(--space-3);
-  font-size: clamp(2rem, 5vw, 3.75rem);
-  letter-spacing: -0.04em;
-  line-height: 1.05;
-}
-
-.newsBody {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: var(--space-6);
-  padding: clamp(var(--space-5), 4vw, var(--space-7));
-}
-
-.newsBody h3,
 .modelCard h3 {
   margin: 0;
   color: var(--color-text);
   font-size: 1.25rem;
 }
 
-.newsBody p,
 .modelCard p {
   margin: var(--space-1) 0 0;
   color: var(--color-text-muted);
@@ -788,8 +716,7 @@
     row-gap: var(--space-5);
   }
 
-  .sectionHeading,
-  .newsBody {
+  .sectionHeading {
     align-items: flex-start;
     flex-direction: column;
   }
@@ -838,10 +765,6 @@
   .modelGrid,
   .footerLinks {
     grid-template-columns: 1fr;
-  }
-
-  .newsVisual {
-    min-block-size: 18rem;
   }
 
   .promptImage {
