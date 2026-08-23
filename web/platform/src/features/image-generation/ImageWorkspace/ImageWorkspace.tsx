@@ -2,6 +2,7 @@
 
 import { useCallback, useState } from "react";
 
+import { ImageGenerationGuide } from "@/features/image-generation/ImageGenerationGuide/ImageGenerationGuide";
 import { ImageGenerationPanel } from "@/features/image-generation/ImageGenerationPanel/ImageGenerationPanel";
 import { ImageJobHistory } from "@/features/image-generation/ImageJobHistory/ImageJobHistory";
 import { ru } from "@/i18n/ru";
@@ -18,6 +19,7 @@ export function ImageWorkspace() {
   return (
     <section aria-label={ru.imageGeneration.title} className={styles.workspace}>
       <ImageGenerationPanel onJobChange={handleJobChange} />
+      <ImageGenerationGuide />
       <ImageJobHistory latestJob={latestJob} />
     </section>
   );

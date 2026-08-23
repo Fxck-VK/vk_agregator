@@ -14,6 +14,10 @@ vi.mock("@/features/image-generation/ImageJobHistory/ImageJobHistory", () => ({
   ImageJobHistory: ({ latestJob }: { latestJob?: { prompt: string } | null }) => <p>{latestJob?.prompt ?? "history panel"}</p>,
 }));
 
+vi.mock("@/features/image-generation/ImageGenerationGuide/ImageGenerationGuide", () => ({
+  ImageGenerationGuide: () => <p>generation guide</p>,
+}));
+
 import { ru } from "@/i18n/ru";
 
 import { ImageWorkspace } from "./ImageWorkspace";
@@ -36,5 +40,14 @@ describe("ImageWorkspace", () => {
     fireEvent.click(screen.getByRole("button", { name: "emit image job" }));
 
     expect(screen.getByText("fresh image job")).toBeInTheDocument();
+  });
+
+  it("places the guide between the generator and history", () => {
+    render(<ImageWorkspace />);
+
+    const workspace = screen.getByRole("region", { name: ru.imageGeneration.title });
+    const visibleSections = Array.from(workspace.querySelectorAll("p")).map((element) => element.textContent);
+
+    expect(visibleSections).toEqual(["generator panel", "generation guide", "history panel"]);
   });
 });

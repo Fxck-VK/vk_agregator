@@ -1,0 +1,263 @@
+.root {
+  display: grid;
+  gap: var(--space-5);
+  margin-block-start: clamp(3rem, 7vw, 5.5rem);
+}
+
+.tabs {
+  display: flex;
+  gap: var(--space-5);
+  overflow-x: auto;
+  border-block-end: 0.0625rem solid color-mix(in srgb, var(--color-border) 72%, transparent);
+  scrollbar-width: none;
+}
+
+.tabs::-webkit-scrollbar {
+  display: none;
+}
+
+.tab {
+  position: relative;
+  flex: 0 0 auto;
+  padding: 0 0 var(--space-3);
+  border: 0;
+  color: var(--color-text-muted);
+  font: inherit;
+  font-size: 1.125rem;
+  font-weight: 700;
+  background: transparent;
+  cursor: pointer;
+}
+
+.tab::after {
+  position: absolute;
+  inset: auto 0 -0.0625rem;
+  block-size: 0.125rem;
+  background: transparent;
+  content: "";
+}
+
+.tab:hover,
+.tab[aria-selected="true"] {
+  color: var(--color-text);
+}
+
+.tab[aria-selected="true"]::after {
+  background: var(--color-text);
+}
+
+.tab:focus-visible {
+  border-radius: var(--radius-sm);
+  outline: 0.1875rem solid color-mix(in srgb, var(--color-focus) 55%, transparent);
+  outline-offset: 0.25rem;
+}
+
+.panel {
+  min-inline-size: 0;
+}
+
+.steps,
+.examples {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: clamp(var(--space-4), 3vw, var(--space-6));
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.step,
+.example {
+  min-inline-size: 0;
+}
+
+.visual,
+.exampleVisual {
+  position: relative;
+  display: grid;
+  min-block-size: 14rem;
+  overflow: hidden;
+  border: 0.0625rem solid color-mix(in srgb, var(--color-border) 88%, transparent);
+  border-radius: var(--radius-lg);
+  background:
+    linear-gradient(145deg, color-mix(in srgb, var(--color-surface-raised) 92%, transparent), var(--color-surface));
+}
+
+.visual {
+  place-items: stretch;
+  padding: var(--space-3);
+}
+
+.promptPreview {
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+  min-block-size: 100%;
+  padding: var(--space-4);
+  border: 0.0625rem solid var(--color-border);
+  border-radius: calc(var(--radius-lg) - var(--space-2));
+  background: color-mix(in srgb, var(--color-background) 72%, transparent);
+}
+
+.promptPreview p {
+  margin: 0;
+  color: var(--color-text);
+  line-height: 1.55;
+}
+
+.promptPreviewCompact {
+  gap: var(--space-4);
+}
+
+.previewControls {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-2);
+}
+
+.previewControl {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-2);
+  min-block-size: 2.5rem;
+  padding-inline: var(--space-3);
+  border: 0.0625rem solid var(--color-border);
+  border-radius: 999rem;
+  color: var(--color-text);
+  font-size: 0.875rem;
+  font-weight: 650;
+  background: color-mix(in srgb, var(--color-surface-raised) 80%, transparent);
+}
+
+.controlIcon {
+  inline-size: 1.15rem;
+  block-size: 1.15rem;
+  fill: none;
+  stroke: currentColor;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+  stroke-width: 1.7;
+}
+
+.resultPreview {
+  position: relative;
+  min-block-size: 100%;
+  perspective: 40rem;
+}
+
+.resultLayerBack,
+.resultLayerFront {
+  position: absolute;
+  overflow: hidden;
+  border-radius: calc(var(--radius-lg) - var(--space-2));
+  box-shadow: 0 1.25rem 2.75rem color-mix(in srgb, #000 34%, transparent);
+}
+
+.resultLayerBack {
+  inset: 0.15rem 1.2rem 3.5rem 0.15rem;
+  transform: rotate(-3deg);
+  background:
+    radial-gradient(circle at 72% 32%, #ffb15b 0 8%, transparent 9%),
+    linear-gradient(145deg, #5d3a33, #261d2c 72%);
+}
+
+.resultLayerFront {
+  inset: 3.15rem 0.1rem 0.1rem 1.35rem;
+  transform: rotate(2deg);
+  background: linear-gradient(165deg, #a8dcff 0 42%, #4e91ba 43% 55%, #263b63 56% 100%);
+}
+
+.resultSun {
+  position: absolute;
+  inset: 18% 18% auto auto;
+  inline-size: 2.25rem;
+  aspect-ratio: 1;
+  border-radius: 50%;
+  background: #fff2a6;
+}
+
+.resultMountain {
+  position: absolute;
+  inset: auto -8% -24% 14%;
+  block-size: 72%;
+  transform: rotate(11deg);
+  border-radius: 35% 10% 0 0;
+  background: linear-gradient(145deg, #e7eef2, #5b7790 52%, #334558 53%);
+}
+
+.stepNumber {
+  display: block;
+  margin-block-start: var(--space-4);
+  color: var(--color-text-muted);
+  font-size: 0.875rem;
+  font-weight: 650;
+}
+
+.step h3,
+.example h3 {
+  margin: var(--space-2) 0 0;
+  color: var(--color-text);
+  font-size: 1.125rem;
+  line-height: 1.25;
+}
+
+.step p,
+.example p {
+  margin: var(--space-2) 0 0;
+  color: var(--color-text-muted);
+  line-height: 1.5;
+}
+
+.example {
+  padding: var(--space-3);
+  border: 0.0625rem solid var(--color-border);
+  border-radius: var(--radius-lg);
+  background: var(--color-surface);
+}
+
+.exampleVisual {
+  min-block-size: 12rem;
+}
+
+.exampleVisual1 {
+  background: linear-gradient(145deg, #e0bfa5, #6d4349 48%, #251f35);
+}
+
+.exampleVisual2 {
+  background: linear-gradient(155deg, #6d9eb0, #2f5b6c 45%, #26283f);
+}
+
+.exampleVisual3 {
+  background: linear-gradient(145deg, #dda467, #7f4b39 45%, #292239);
+}
+
+@media (max-width: 62rem) {
+  .steps,
+  .examples {
+    grid-template-columns: 1fr;
+  }
+
+  .visual,
+  .exampleVisual {
+    min-block-size: 16rem;
+  }
+}
+
+@media (max-width: 40rem) {
+  .root {
+    margin-block-start: var(--space-8);
+  }
+
+  .tabs {
+    gap: var(--space-4);
+  }
+
+  .tab {
+    font-size: 1rem;
+  }
+
+  .visual,
+  .exampleVisual {
+    min-block-size: 13rem;
+  }
+}
