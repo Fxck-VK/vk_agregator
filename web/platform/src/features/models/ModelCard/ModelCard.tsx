@@ -4,6 +4,8 @@ import { CreditAmount } from "@/components/ui/CreditAmount/CreditAmount";
 import { ru } from "@/i18n/ru";
 import type { ImageModel } from "@/lib/web-api/contracts";
 
+import { ModelIcon } from "../ModelIcon/ModelIcon";
+
 import styles from "./ModelCard.module.css";
 
 type ModelCardProps = {
@@ -16,6 +18,7 @@ export function ModelCard({ model }: ModelCardProps) {
 
   return (
     <article className={styles.card}>
+      <ModelIcon className={styles.modelIcon} />
       <div className={styles.heading}>
         <p className={styles.type}>{ru.modelsCatalog.imageTypeLabel}</p>
         <h3>{model.name}</h3>

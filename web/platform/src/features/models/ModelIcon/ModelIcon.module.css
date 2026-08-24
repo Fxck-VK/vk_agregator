@@ -1,0 +1,15 @@
+.icon {
+  display: block;
+  inline-size: 3.5rem;
+  block-size: 3.5rem;
+  border-radius: var(--radius-md);
+  object-fit: cover;
+  object-position: center;
+}
+
+@media (max-width: 42rem) {
+  .icon {
+    inline-size: 3rem;
+    block-size: 3rem;
+  }
+}

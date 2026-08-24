@@ -23,5 +23,8 @@ export const assetPaths = {
     inspiration: {
       paperCraneCloud: "/assets/images/inspiration/paper-crane-cloud.png",
     },
+    models: {
+      fallback: "/assets/images/models/default-model.png",
+    },
   },
 } as const;

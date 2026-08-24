@@ -51,7 +51,7 @@ describe("ModelsCatalog responsive styles", () => {
     expect(toolbarStylesheet).toMatch(/\.searchField\s*\{[^}]*inline-size:\s*100%;/s);
   });
 
-  it("renders the model-card sparkle as decorative CSS content", () => {
-    expect(modelCardStylesheet).toMatch(/\.card::before\s*\{[^}]*content:\s*["'][^"']+["'];/s);
+  it("positions the shared model icon in the card artwork area", () => {
+    expect(modelCardStylesheet).toMatch(/\.modelIcon\s*\{[^}]*grid-area:\s*spark;/s);
   });
 });

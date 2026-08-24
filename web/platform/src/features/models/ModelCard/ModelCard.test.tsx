@@ -35,6 +35,27 @@ describe("ModelCard", () => {
     expect(screen.getByRole("heading", { level: 3, name: "Nano Banana" })).toBeInTheDocument();
   });
 
+  it("uses the shared model fallback artwork", () => {
+    render(
+      <ModelCard
+        model={{
+          default_quality: "1K",
+          id: "nano-banana-2",
+          max_reference_images: 1,
+          name: "Nano Banana",
+          quality_options: ["1K", "2K"],
+          supports_reference_image: true,
+        }}
+      />,
+    );
+
+    const iconSource = screen.getByTestId("model-icon").getAttribute("src") ?? "";
+
+    expect(decodeURIComponent(iconSource)).toContain(
+      "/assets/images/models/default-model.png",
+    );
+  });
+
   it("links a safe model card to the selected generator", () => {
     render(
       <ModelCard
