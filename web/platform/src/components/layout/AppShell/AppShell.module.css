@@ -12,15 +12,15 @@
   inset: 0 auto 0 0;
   inline-size: var(--sidebar-width);
   block-size: 100dvh;
-  padding: var(--space-2);
+  padding: var(--space-1);
   background: var(--app-shell-canvas);
 }
 
 .workspace {
-  block-size: calc(100dvh - var(--space-2) - var(--space-2));
-  margin-block: var(--space-2);
+  block-size: calc(100dvh - var(--space-1) - var(--space-1));
+  margin-block: var(--space-1);
   margin-inline-start: var(--sidebar-width);
-  margin-inline-end: var(--space-2);
+  margin-inline-end: var(--space-1);
   border-radius: var(--radius-lg);
   background: var(--color-surface);
   box-shadow: var(--shadow-card);

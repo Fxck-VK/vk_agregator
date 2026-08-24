@@ -33,6 +33,12 @@ describe("ModelsCatalog responsive styles", () => {
     );
   });
 
+  it("keeps the desktop catalog narrow and symmetrically centered", () => {
+    expect(stylesheet).toMatch(
+      /\.catalog\s*\{[^}]*inline-size:\s*min\(100%,\s*64rem\);[^}]*margin-inline:\s*auto;/s,
+    );
+  });
+
   it("uses one non-overflowing column when the catalog container is narrow", () => {
     expect(stylesheet).toMatch(
       /@container models-catalog \(max-width: 52rem\) \{[\s\S]*?\.grid\s*\{[\s\S]*?grid-template-columns:\s*minmax\(0,\s*1fr\);/,

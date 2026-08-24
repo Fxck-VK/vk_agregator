@@ -1,6 +1,6 @@
 .catalog {
   display: grid;
-  inline-size: min(100%, 72rem);
+  inline-size: min(100%, 64rem);
   container-name: models-catalog;
   container-type: inline-size;
   gap: var(--space-8);
