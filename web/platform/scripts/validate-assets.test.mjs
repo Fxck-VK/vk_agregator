@@ -42,3 +42,23 @@ test("keeps the upload-media icon transparent and uses the approved artwork", ()
   assert.match(icon, /stroke-width="6\.5"/);
   assert.match(icon, /M111 35V65/);
 });
+
+test("provides square favicon assets at the declared browser sizes", () => {
+  const assets = [
+    ["../public/assets/brand/favicons/neirohub-favicon-32.png", 32],
+    ["../public/assets/brand/favicons/neirohub-favicon-48.png", 48],
+    ["../public/assets/brand/favicons/neirohub-apple-touch-icon-180.png", 180],
+  ];
+
+  for (const [relativePath, expectedSize] of assets) {
+    const png = readFileSync(new URL(relativePath, import.meta.url));
+
+    assert.deepEqual(
+      [...png.subarray(0, 8)],
+      [137, 80, 78, 71, 13, 10, 26, 10],
+      `${relativePath} must be a PNG file`,
+    );
+    assert.equal(png.readUInt32BE(16), expectedSize, `${relativePath} width`);
+    assert.equal(png.readUInt32BE(20), expectedSize, `${relativePath} height`);
+  }
+});

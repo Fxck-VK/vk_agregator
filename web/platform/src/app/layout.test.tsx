@@ -25,10 +25,28 @@ describe("RootLayout", () => {
     expect(document.documentElement.getAttribute("lang")).toBe("ru");
   });
 
-  it("uses the NeiroHub chip as the browser tab icon", () => {
+  it("uses dedicated square NeiroHub assets for browser and device icons", () => {
     expect(metadata.icons).toEqual({
-      icon: "/assets/brand/marks/neirohub-chip.png",
-      shortcut: "/assets/brand/marks/neirohub-chip.png",
+      icon: [
+        {
+          url: "/assets/brand/favicons/neirohub-favicon-32.png",
+          sizes: "32x32",
+          type: "image/png",
+        },
+        {
+          url: "/assets/brand/favicons/neirohub-favicon-48.png",
+          sizes: "48x48",
+          type: "image/png",
+        },
+      ],
+      shortcut: "/assets/brand/favicons/neirohub-favicon-32.png",
+      apple: [
+        {
+          url: "/assets/brand/favicons/neirohub-apple-touch-icon-180.png",
+          sizes: "180x180",
+          type: "image/png",
+        },
+      ],
     });
   });
 
