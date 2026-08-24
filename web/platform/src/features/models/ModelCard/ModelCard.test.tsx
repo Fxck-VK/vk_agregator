@@ -56,7 +56,7 @@ describe("ModelCard", () => {
     );
   });
 
-  it("links a safe model card to the selected generator", () => {
+  it("makes the whole safe model card a generator link without a separate action", () => {
     render(
       <ModelCard
         model={{
@@ -70,9 +70,11 @@ describe("ModelCard", () => {
       />,
     );
 
-    expect(
-      screen.getByRole("link", { name: `${ru.modelsCatalog.openGeneratorLabel}: Nano Banana` }),
-    ).toHaveAttribute("href", "/app/image?model=nano-banana-2");
+    expect(screen.getByRole("link", { name: /Nano Banana/i })).toHaveAttribute(
+      "href",
+      "/app/image?model=nano-banana-2",
+    );
+    expect(screen.queryByText(ru.modelsCatalog.openGeneratorLabel)).not.toBeInTheDocument();
     expect(screen.queryByText(/provider|price|description/i)).not.toBeInTheDocument();
   });
 
@@ -90,9 +92,10 @@ describe("ModelCard", () => {
       />,
     );
 
-    expect(
-      screen.getByRole("link", { name: `${ru.modelsCatalog.openGeneratorLabel}: Nano Banana` }),
-    ).toHaveAttribute("data-prefetch", "false");
+    expect(screen.getByRole("link", { name: /Nano Banana/i })).toHaveAttribute(
+      "data-prefetch",
+      "false",
+    );
   });
 
   it("shows the lowest verified quality price and omits pricing without API data", () => {

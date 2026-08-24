@@ -17,30 +17,36 @@ export function ModelCard({ model }: ModelCardProps) {
   const minimumPrice = prices.length > 0 ? Math.min(...prices) : null;
 
   return (
-    <article className={styles.card}>
-      <ModelIcon className={styles.modelIcon} />
-      <div className={styles.heading}>
-        <p className={styles.type}>{ru.modelsCatalog.imageTypeLabel}</p>
-        <h3>{model.name}</h3>
-      </div>
-      <ul aria-label={ru.modelsCatalog.qualityFilterLabel} className={styles.qualities}>
-        {model.quality_options.map((value) => (
-          <li key={value}>{value}</li>
-        ))}
-      </ul>
-      <p className={styles.reference}>
-        {model.supports_reference_image
-          ? ru.modelsCatalog.referenceSupportedLabel
-          : ru.modelsCatalog.referenceUnsupportedLabel}
-      </p>
-      {minimumPrice !== null ? <CreditAmount className={styles.price} prefix={ru.modelsCatalog.pricePrefix} value={minimumPrice} /> : null}
-      <Link
-        aria-label={`${ru.modelsCatalog.openGeneratorLabel}: ${model.name}`}
-        href={`/app/image?model=${encodeURIComponent(model.id)}`}
-        prefetch={false}
-      >
-        {ru.modelsCatalog.openGeneratorLabel}
-      </Link>
-    </article>
+    <Link
+      aria-label={`${ru.modelsCatalog.openGeneratorLabel}: ${model.name}`}
+      className={styles.cardLink}
+      href={`/app/image?model=${encodeURIComponent(model.id)}`}
+      prefetch={false}
+    >
+      <article className={styles.card}>
+        <ModelIcon className={styles.modelIcon} />
+        <div className={styles.heading}>
+          <p className={styles.type}>{ru.modelsCatalog.imageTypeLabel}</p>
+          <h3>{model.name}</h3>
+        </div>
+        <ul aria-label={ru.modelsCatalog.qualityFilterLabel} className={styles.qualities}>
+          {model.quality_options.map((value) => (
+            <li key={value}>{value}</li>
+          ))}
+        </ul>
+        <p className={styles.reference}>
+          {model.supports_reference_image
+            ? ru.modelsCatalog.referenceSupportedLabel
+            : ru.modelsCatalog.referenceUnsupportedLabel}
+        </p>
+        {minimumPrice !== null ? (
+          <CreditAmount
+            className={styles.price}
+            prefix={ru.modelsCatalog.pricePrefix}
+            value={minimumPrice}
+          />
+        ) : null}
+      </article>
+    </Link>
   );
 }

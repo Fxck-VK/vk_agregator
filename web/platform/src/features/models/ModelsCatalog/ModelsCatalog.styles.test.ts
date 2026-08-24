@@ -17,10 +17,14 @@ const toolbarStylesheet = readFileSync(
 );
 
 describe("ModelsCatalog responsive styles", () => {
-  it("uses the global text token for CTAs on the accent surface", () => {
+  it("styles the whole model card as the interactive link", () => {
     expect(modelCardStylesheet).toMatch(
-      /\.card a\s*\{[^}]*background:\s*var\(--color-accent\);[^}]*color:\s*var\(--color-text\);/s,
+      /\.cardLink\s*\{[^}]*color:\s*inherit;[^}]*text-decoration:\s*none;/s,
     );
+    expect(modelCardStylesheet).toMatch(/\.card\s*\{[^}]*cursor:\s*pointer;/s);
+    expect(modelCardStylesheet).toMatch(/\.cardLink:hover \.card\s*\{/);
+    expect(modelCardStylesheet).toMatch(/\.cardLink:focus-visible \.card\s*\{/);
+    expect(modelCardStylesheet).not.toMatch(/\.card a\s*\{/);
   });
 
   it("establishes the catalog as an inline-size query container", () => {
