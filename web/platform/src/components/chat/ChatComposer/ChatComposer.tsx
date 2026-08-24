@@ -27,7 +27,7 @@ type ChatComposerProps = {
   mediaLabel: string;
   mediaLibraryEnabled?: boolean;
   mediaMenuLabels?: Omit<ChatMediaMenuLabels, "trigger">;
-  note?: string;
+  note?: ReactNode;
   onChooseGeneratedMedia?: () => void;
   onChooseUploadedMedia?: () => void;
   onChange: ChangeEventHandler<HTMLTextAreaElement>;

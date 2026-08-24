@@ -141,7 +141,7 @@ describe("ImageGenerationPanel", () => {
     render(<ImageGenerationPanel />);
 
     await screen.findByRole("textbox", { name: ru.imageGeneration.promptLabel });
-    expect(screen.getByText(`${ru.imageGeneration.priceLabel}: 16 \u2605`)).toBeInTheDocument();
+    expect(screen.getByLabelText(`${ru.imageGeneration.priceLabel}: 16 звёзд`)).toBeInTheDocument();
     expect(screen.getByRole("button", { name: ru.imageGeneration.generate })).toBeDisabled();
     expect(webBrowserMutation).not.toHaveBeenCalled();
   });
@@ -151,13 +151,13 @@ describe("ImageGenerationPanel", () => {
     render(<ImageGenerationPanel />);
 
     await screen.findByRole("textbox", { name: ru.imageGeneration.promptLabel });
-    expect(screen.getByText(`${ru.imageGeneration.priceLabel}: 12 \u2605`)).toBeInTheDocument();
+    expect(screen.getByLabelText(`${ru.imageGeneration.priceLabel}: 12 звёзд`)).toBeInTheDocument();
 
     selectQuality("2K");
-    expect(screen.getByText(`${ru.imageGeneration.priceLabel}: 24 \u2605`)).toBeInTheDocument();
+    expect(screen.getByLabelText(`${ru.imageGeneration.priceLabel}: 24 звезды`)).toBeInTheDocument();
 
     fireEvent.change(screen.getByRole("textbox", { name: ru.imageGeneration.promptLabel }), { target: { value: "new prompt" } });
-    expect(screen.getByText(`${ru.imageGeneration.priceLabel}: 24 \u2605`)).toBeInTheDocument();
+    expect(screen.getByLabelText(`${ru.imageGeneration.priceLabel}: 24 звезды`)).toBeInTheDocument();
     expect(webBrowserMutation).not.toHaveBeenCalled();
   });
 
@@ -170,7 +170,7 @@ describe("ImageGenerationPanel", () => {
     expect(screen.getByText("1 / 4")).toBeVisible();
     fireEvent.click(screen.getByRole("button", { name: ru.imageGeneration.increaseOutputCount }));
     expect(screen.getByText("2 / 4")).toBeVisible();
-    expect(screen.getByText(`${ru.imageGeneration.priceLabel}: 32 \u2605`)).toBeVisible();
+    expect(screen.getByLabelText(`${ru.imageGeneration.priceLabel}: 32 звезды`)).toBeVisible();
 
     fireEvent.change(promptInput, { target: { value: job.prompt } });
     fireEvent.click(getGenerateButton());
@@ -217,7 +217,7 @@ describe("ImageGenerationPanel", () => {
     await waitFor(() => {
       expect(getQualityButton("2K")).toBeVisible();
     });
-    expect(screen.getByText(`${ru.imageGeneration.priceLabel}: 60 \u2605`)).toBeInTheDocument();
+    expect(screen.getByLabelText(`${ru.imageGeneration.priceLabel}: 60 звёзд`)).toBeInTheDocument();
   });
 
   it("selects a known requested model when the direct editor loads", async () => {
@@ -227,7 +227,7 @@ describe("ImageGenerationPanel", () => {
 
     await screen.findByRole("textbox", { name: ru.imageGeneration.promptLabel });
     expect(getQualityButton("2K")).toBeVisible();
-    expect(screen.getByText(`${ru.imageGeneration.priceLabel}: 60 \u2605`)).toBeInTheDocument();
+    expect(screen.getByLabelText(`${ru.imageGeneration.priceLabel}: 60 звёзд`)).toBeInTheDocument();
   });
 
   it("restores every image setting from an expired-generation retry link", async () => {
@@ -248,7 +248,7 @@ describe("ImageGenerationPanel", () => {
 
     await screen.findByRole("textbox", { name: ru.imageGeneration.promptLabel });
     expect(getQualityButton("1K")).toBeVisible();
-    expect(screen.getByText(`${ru.imageGeneration.priceLabel}: 12 \u2605`)).toBeInTheDocument();
+    expect(screen.getByLabelText(`${ru.imageGeneration.priceLabel}: 12 звёзд`)).toBeInTheDocument();
   });
 
   it("uses only explicit public inputs and shows the server-calculated confirmation", async () => {

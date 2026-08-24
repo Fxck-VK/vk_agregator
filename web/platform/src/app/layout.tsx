@@ -10,6 +10,10 @@ import "./globals.css";
 export const metadata: Metadata = {
   title: ru.document.title,
   description: ru.document.description,
+  icons: {
+    icon: "/assets/brand/marks/neirohub-chip.png",
+    shortcut: "/assets/brand/marks/neirohub-chip.png",
+  },
 };
 
 export default async function RootLayout({ children }: Readonly<{ children: ReactNode }>) {

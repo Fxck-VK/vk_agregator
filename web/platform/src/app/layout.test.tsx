@@ -7,7 +7,7 @@ vi.mock("next/headers", () => ({
 
 import { headers } from "next/headers";
 
-import RootLayout from "./layout";
+import RootLayout, { metadata } from "./layout";
 
 describe("RootLayout", () => {
   beforeEach(() => {
@@ -23,6 +23,13 @@ describe("RootLayout", () => {
     const document = new DOMParser().parseFromString(markup, "text/html");
 
     expect(document.documentElement.getAttribute("lang")).toBe("ru");
+  });
+
+  it("uses the NeiroHub chip as the browser tab icon", () => {
+    expect(metadata.icons).toEqual({
+      icon: "/assets/brand/marks/neirohub-chip.png",
+      shortcut: "/assets/brand/marks/neirohub-chip.png",
+    });
   });
 
   it("bootstraps the persisted theme in the head before page content with the request CSP nonce", async () => {

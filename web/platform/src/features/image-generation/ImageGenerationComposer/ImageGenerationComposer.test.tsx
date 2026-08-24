@@ -4,6 +4,7 @@ import { cleanup, fireEvent, render, screen } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
 import { ru } from "@/i18n/ru";
+import { inspirationExamples } from "@/features/inspiration/inspiration-examples";
 
 import { ImageGenerationComposer } from "./ImageGenerationComposer";
 
@@ -45,7 +46,7 @@ describe("ImageGenerationComposer", () => {
 
     const { container } = render(<StatefulComposer />);
 
-    expect(container.querySelectorAll('[data-ui="input-control-chip"]')).toHaveLength(4);
+    expect(container.querySelectorAll('[data-ui="input-control-chip"]')).toHaveLength(5);
 
     fireEvent.change(screen.getByRole("textbox", { name: ru.imageGeneration.promptLabel }), {
       target: { value: "night city after rain" },
@@ -58,7 +59,52 @@ describe("ImageGenerationComposer", () => {
     expect(onPromptChange).toHaveBeenCalledWith("night city after rain");
     expect(onImageQualityChange).toHaveBeenCalledWith("1K");
     expect(onSubmit).toHaveBeenCalledTimes(1);
-    expect(screen.getByText(`${ru.imageGeneration.priceLabel}: 60 \u2605`)).toBeVisible();
+    expect(screen.getByLabelText(`${ru.imageGeneration.priceLabel}: 60 звёзд`)).toBeVisible();
+    expect(screen.getByTestId("credit-star-icon")).toBeInTheDocument();
+    expect(container).not.toHaveTextContent("\u2605");
+  });
+
+  it("fills the prompt from a shared Inspiration template without leaving the composer", () => {
+    function StatefulComposer() {
+      const [prompt, setPrompt] = useState("");
+      return (
+        <ImageGenerationComposer
+          aspectRatio="16:9"
+          canSubmit={prompt.trim() !== ""}
+          errorMessage={null}
+          imageQuality="1K"
+          isSubmitting={false}
+          maxOutputCount={4}
+          onAspectRatioChange={vi.fn()}
+          onImageQualityChange={vi.fn()}
+          onOutputCountChange={vi.fn()}
+          onPromptChange={setPrompt}
+          onSubmit={vi.fn()}
+          price={50}
+          prompt={prompt}
+          qualityOptions={["1K"]}
+          outputCount={1}
+        />
+      );
+    }
+
+    render(<StatefulComposer />);
+
+    fireEvent.click(screen.getByRole("button", { name: ru.imageGeneration.templatePicker.open }));
+    expect(
+      screen.getByRole("dialog", { name: ru.imageGeneration.templatePicker.title }),
+    ).toBeVisible();
+
+    fireEvent.click(
+      screen.getByRole("button", {
+        name: `${ru.imageGeneration.templatePicker.select} ${inspirationExamples[0].title}`,
+      }),
+    );
+
+    expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
+    expect(screen.getByRole("textbox", { name: ru.imageGeneration.promptLabel })).toHaveValue(
+      inspirationExamples[0].prompt,
+    );
   });
 
   it("disables mutable controls while preparing and reports an unavailable price", () => {

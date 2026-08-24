@@ -1,9 +1,11 @@
 "use client";
 
 import { ChatComposer } from "@/components/chat/ChatComposer/ChatComposer";
+import { CreditAmount } from "@/components/ui/CreditAmount/CreditAmount";
 import { ImageAspectRatioSelector } from "@/features/image-generation/ImageAspectRatioSelector/ImageAspectRatioSelector";
 import { ImageQualitySelector } from "@/features/image-generation/ImageQualitySelector/ImageQualitySelector";
 import { ImageOutputCountSelector } from "@/features/image-generation/ImageOutputCountSelector/ImageOutputCountSelector";
+import { ImageTemplatePicker } from "@/features/image-generation/ImageTemplatePicker/ImageTemplatePicker";
 import { ru } from "@/i18n/ru";
 
 import styles from "./ImageGenerationComposer.module.css";
@@ -54,6 +56,10 @@ export function ImageGenerationComposer({
       <ChatComposer
         leadingControls={(
           <>
+            <ImageTemplatePicker
+              disabled={isSubmitting}
+              onSelect={(template) => onPromptChange(template.prompt)}
+            />
             <ImageAspectRatioSelector disabled={isSubmitting} onChange={onAspectRatioChange} value={aspectRatio} />
             <ImageQualitySelector
               disabled={isSubmitting}
@@ -76,7 +82,7 @@ export function ImageGenerationComposer({
         mediaLabel="Загрузить медиа"
         note={price === null
           ? ru.imageGeneration.priceUnavailable
-          : `${ru.imageGeneration.priceLabel}: ${formatStars(price)}`}
+          : <CreditAmount prefix={`${ru.imageGeneration.priceLabel}:`} value={price} />}
         onChange={(event) => onPromptChange(event.target.value)}
         onSend={onSubmit}
         placeholder={ru.imageGeneration.promptPlaceholder}
@@ -89,8 +95,4 @@ export function ImageGenerationComposer({
       )}
     </form>
   );
-}
-
-function formatStars(value: number): string {
-  return `${value} \u2605`;
 }
