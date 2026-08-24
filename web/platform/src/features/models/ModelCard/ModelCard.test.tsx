@@ -52,7 +52,7 @@ describe("ModelCard", () => {
     const iconSource = screen.getByTestId("model-icon").getAttribute("src") ?? "";
 
     expect(decodeURIComponent(iconSource)).toContain(
-      "/assets/images/models/default-model.png",
+      "/assets/images/models/default-model-87465de8.png",
     );
   });
 
