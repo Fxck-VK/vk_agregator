@@ -400,9 +400,6 @@ function ConversationHistoryReady({
         />
       ) : null}
       <div className={styles.history}>
-        <header className={styles.header}>
-          <p className={styles.eyebrow}>{ru.conversations.historyEyebrow}</p>
-        </header>
         {refreshDelayed ? (
           <p className={styles.refreshStatus} role="status">
             {ru.conversations.refreshDelayed}

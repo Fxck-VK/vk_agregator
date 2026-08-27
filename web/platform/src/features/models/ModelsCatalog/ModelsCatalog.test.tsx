@@ -66,6 +66,14 @@ afterEach(() => {
 });
 
 describe("ModelsCatalog", () => {
+  it("omits the standalone NeiroHub eyebrow while keeping the catalogue title", () => {
+    vi.mocked(loadImageModelCatalog).mockReturnValue(new Promise(() => {}));
+    render(<ModelsCatalog />);
+
+    expect(screen.queryByText("NeiroHub", { exact: true, selector: "header > p" })).not.toBeInTheDocument();
+    expect(screen.getByRole("heading", { name: ru.modelsCatalog.title })).toBeInTheDocument();
+  });
+
   it("loads catalog data, exposes truthful DTO card facts, and links to the selected generator", async () => {
     vi.mocked(loadImageModelCatalog).mockResolvedValue(modelsResponse);
     render(<ModelsCatalog />);

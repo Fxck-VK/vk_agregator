@@ -144,7 +144,6 @@ export const ru = {
     createLabel: "Создать чат",
     createPending: "Создаём чат…",
     createFailure: "Не удалось создать чат. Попробуйте ещё раз.",
-    historyEyebrow: "Диалог",
     historyTitle: "Сообщения",
     historyEmpty: "В этом чате пока нет сообщений.",
     historyUnavailable: "Этот чат недоступен.",
@@ -276,7 +275,6 @@ export const ru = {
     },
   },
   modelsCatalog: {
-    eyebrow: "NeiroHub",
     title: "Нейросети",
     description: "Каталог нейросетей NeiroHub для творческих и рабочих задач.",
     searchLabel: "Поиск нейросети",
@@ -412,7 +410,6 @@ export const ru = {
     shareFailure: "Не удалось поделиться",
   },
   workspace: {
-    eyebrow: "NeiroHub",
     navigationLoading: "Открываем раздел…",
     balanceLoading: "Загружаем баланс…",
     startTitle: "Что хотите сделать?",

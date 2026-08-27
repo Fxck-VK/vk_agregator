@@ -58,7 +58,6 @@
   gap: var(--space-3);
 }
 
-.toolShortcut,
 .allToolsShortcut {
   display: grid;
   justify-items: center;
@@ -72,13 +71,11 @@
   text-decoration: none;
 }
 
-.toolShortcut:hover .toolIcon,
 .allToolsShortcut:hover .arrowIcon {
   translate: 0 -0.2rem;
   border-color: var(--color-accent);
 }
 
-.toolIcon,
 .arrowIcon {
   display: inline-grid;
   place-items: center;
@@ -88,7 +85,6 @@
   transition: translate var(--motion-fast), border-color var(--motion-fast);
 }
 
-.toolIcon,
 .arrowIcon {
   inline-size: 3.5rem;
   block-size: 3.5rem;
@@ -101,22 +97,6 @@
   background: var(--color-surface);
   color: var(--color-text);
   font-size: 1.5rem;
-}
-
-.blue {
-  background: linear-gradient(145deg, #0d6fde, #2496ff);
-}
-
-.cyan {
-  background: linear-gradient(145deg, #147be8, #15d6b8);
-}
-
-.violet {
-  background: linear-gradient(145deg, #7457ff, #d85bcf);
-}
-
-.orange {
-  background: linear-gradient(145deg, #ed6f45, #f5aa43);
 }
 
 .sectionHeading {

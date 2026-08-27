@@ -130,9 +130,6 @@ export function PendingConversationBootstrap({ conversationKey }: PendingConvers
   return (
     <section aria-label={ru.conversations.historyTitle} className={styles.content}>
       <div className={styles.history}>
-        <header className={styles.header}>
-          <p className={styles.eyebrow}>{ru.conversations.historyEyebrow}</p>
-        </header>
         <ol className={styles.messages}>
           <li className={styles.userMessage} data-chat-pending="user">
             <p>{intent.prompt}</p>

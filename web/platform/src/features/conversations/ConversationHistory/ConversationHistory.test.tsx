@@ -62,6 +62,7 @@ describe("ConversationHistory", () => {
   it("renders conversation messages without visible role labels", () => {
     render(<ConversationHistory history={initialHistory as never} />);
 
+    expect(screen.queryByText("Диалог", { exact: true })).toBeNull();
     expect(screen.queryByRole("heading", { name: ru.conversations.historyTitle })).toBeNull();
     const messageItems = within(screen.getByRole("list")).getAllByRole("listitem");
 

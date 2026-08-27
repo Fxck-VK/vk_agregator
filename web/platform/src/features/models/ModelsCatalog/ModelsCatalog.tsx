@@ -60,7 +60,6 @@ export function ModelsCatalog() {
   return (
     <section aria-labelledby="models-catalog-title" className={styles.catalog}>
       <header className={styles.header}>
-        <p className={styles.eyebrow}>{ru.modelsCatalog.eyebrow}</p>
         <h1 id="models-catalog-title">{ru.modelsCatalog.title}</h1>
         <p>{ru.modelsCatalog.description}</p>
       </header>

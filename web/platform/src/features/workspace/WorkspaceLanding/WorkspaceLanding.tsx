@@ -4,10 +4,11 @@ import Link from "next/link";
 import { assetPaths } from "@/assets/asset-paths";
 import { VideoPlayer } from "@/components/media/VideoPlayer/VideoPlayer";
 
+import { FeaturedModelShortcuts } from "../FeaturedModelShortcuts/FeaturedModelShortcuts";
 import { FeaturedModels } from "../FeaturedModels/FeaturedModels";
 import { WorkspacePrompt } from "../WorkspacePrompt/WorkspacePrompt";
 
-import { capabilityLinks, frequentlyAskedQuestions, primaryTools } from "./workspace-home-content";
+import { capabilityLinks, frequentlyAskedQuestions } from "./workspace-home-content";
 import styles from "./WorkspaceLanding.module.css";
 
 type WorkspaceLandingProps = {
@@ -29,14 +30,7 @@ export function WorkspaceLanding({ access = "authenticated" }: WorkspaceLandingP
           <WorkspacePrompt access={access} variant="hero" />
 
           <nav aria-label="Основные возможности" className={styles.toolRail}>
-            {primaryTools.map((tool) => (
-              <Link className={styles.toolShortcut} href={tool.href} key={tool.label}>
-                <span aria-hidden="true" className={`${styles.toolIcon} ${styles[tool.accent]}`}>
-                  {tool.monogram}
-                </span>
-                <span>{tool.label}</span>
-              </Link>
-            ))}
+            <FeaturedModelShortcuts />
             <Link className={styles.allToolsShortcut} href="/app/models">
               <span aria-hidden="true" className={styles.arrowIcon}>→</span>
               <span>Все нейросети</span>

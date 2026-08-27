@@ -12,24 +12,10 @@
   padding-block-end: var(--space-8);
 }
 
-.header {
-  margin-block-end: var(--space-6);
-}
-
-.eyebrow,
 .empty,
 .messages,
 .userMessage > p {
   margin: 0;
-}
-
-.eyebrow {
-  margin-block-end: var(--space-2);
-  color: var(--color-accent);
-  font-size: 0.875rem;
-  font-weight: 700;
-  letter-spacing: 0.08em;
-  text-transform: uppercase;
 }
 
 .messages {

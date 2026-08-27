@@ -42,7 +42,6 @@ export function WorkspaceHome({ access = "authenticated", section = "home" }: Wo
 
   return (
     <section aria-labelledby="workspace-title" className={styles.content}>
-      <p className={styles.eyebrow}>{ru.workspace.eyebrow}</p>
       <h1 id="workspace-title">{content.title}</h1>
       <p className={styles.description}>{content.description}</p>
     </section>

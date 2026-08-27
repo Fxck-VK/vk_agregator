@@ -61,6 +61,7 @@ describe("PendingConversationBootstrap", () => {
     vi.mocked(webBrowserMutation).mockReturnValueOnce(new Promise<Response>(() => {}));
     renderPending();
 
+    expect(screen.queryByText("Диалог", { exact: true })).toBeNull();
     expect(screen.queryByRole("heading", { name: ru.conversations.historyTitle })).toBeNull();
     expect(screen.getAllByText("Первый вопрос")[0]).toBeVisible();
     expect(screen.queryByText(ru.conversations.userRole)).toBeNull();

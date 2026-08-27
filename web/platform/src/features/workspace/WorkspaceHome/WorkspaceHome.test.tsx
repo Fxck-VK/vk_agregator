@@ -17,6 +17,13 @@ import { loadImageModelCatalog } from "@/features/models/image-model-catalog-cac
 import { WorkspaceHome } from "./WorkspaceHome";
 
 describe("WorkspaceHome", () => {
+  it("omits the standalone NeiroHub eyebrow from generic section headings", () => {
+    const markup = renderToStaticMarkup(<WorkspaceHome section="models" />);
+
+    expect(markup).toContain(ru.workspace.sections.models.title);
+    expect(markup).not.toMatch(/<p[^>]*>NeiroHub<\/p>/);
+  });
+
   it("renders the complete NeiroHub overview only on the workspace home route", () => {
     const markup = renderToStaticMarkup(
       <WorkspaceConversationListProvider accountId="workspace-home-test-account" initialConversations={[]}>
@@ -108,6 +115,9 @@ describe("WorkspaceHome", () => {
 
     const region = await screen.findByRole("region", { name: "Популярные нейросети" });
     const cards = within(region).getAllByTestId("featured-model-card");
+    const shortcutsNavigation = screen.getByRole("navigation", { name: "Основные возможности" });
+    const shortcuts = within(shortcutsNavigation).getAllByTestId("featured-model-shortcut");
+    const shortcutLinks = within(shortcutsNavigation).getAllByRole("link");
 
     expect(cards).toHaveLength(4);
     expect(cards[0]).toHaveAttribute("href", "/app/image?model=nano-banana-2");
@@ -120,6 +130,20 @@ describe("WorkspaceHome", () => {
     expect(region).not.toHaveTextContent("Открыть");
     expect(region).not.toHaveTextContent("рейтинг");
     expect(region).not.toHaveTextContent("запусков");
+    expect(shortcuts).toHaveLength(4);
+    expect(shortcuts.map((shortcut) => shortcut.textContent)).toEqual([
+      "Nano Banana 2",
+      "GPT Image 2",
+      "Seedream 5.0 Pro",
+      "Midjourney",
+    ]);
+    expect(shortcuts[0]).toHaveAttribute("href", "/app/image?model=nano-banana-2");
+    expect(shortcutsNavigation).not.toHaveTextContent("NeiroHub Chat");
+    expect(shortcutsNavigation).not.toHaveTextContent("Генератор изображений");
+    expect(shortcutsNavigation).not.toHaveTextContent("Каталог нейросетей");
+    expect(shortcutsNavigation).not.toHaveTextContent("Вдохновение");
+    expect(shortcutLinks.at(-1)).toHaveTextContent("Все нейросети");
+    expect(shortcutLinks.at(-1)).toHaveAttribute("href", "/app/models");
   });
 
   it("renders the interactive inspiration example instead of a placeholder", () => {
