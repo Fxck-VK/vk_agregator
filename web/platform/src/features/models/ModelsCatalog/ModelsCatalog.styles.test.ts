@@ -53,7 +53,13 @@ describe("ModelsCatalog responsive styles", () => {
 
   it("uses exactly two catalogue columns on desktop", () => {
     expect(stylesheet).toMatch(
-      /\.grid\s*\{[^}]*grid-template-columns:\s*repeat\(2,\s*minmax\(0,\s*1fr\)\);/s,
+      /\.grid\s*\{[^}]*grid-template-columns:\s*repeat\(2,\s*minmax\(0,\s*1fr\)\);[^}]*gap:\s*var\(--space-5\);/s,
+    );
+  });
+
+  it("keeps desktop model cards compact", () => {
+    expect(modelCardStylesheet).toMatch(
+      /\.card\s*\{[^}]*min-block-size:\s*17\.75rem;/s,
     );
   });
 
