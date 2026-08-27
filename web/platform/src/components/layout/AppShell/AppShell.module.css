@@ -1,6 +1,7 @@
 .shell {
   --sidebar-collapsed-rail-width: 5.5rem;
   --app-shell-canvas: #9494F8;
+  --app-shell-edge-gap: 0.125rem;
   block-size: 100dvh;
   background: var(--app-shell-canvas);
   overflow: hidden;
@@ -12,15 +13,15 @@
   inset: 0 auto 0 0;
   inline-size: var(--sidebar-width);
   block-size: 100dvh;
-  padding: var(--space-1);
+  padding: var(--app-shell-edge-gap);
   background: var(--app-shell-canvas);
 }
 
 .workspace {
-  block-size: calc(100dvh - var(--space-1) - var(--space-1));
-  margin-block: var(--space-1);
+  block-size: calc(100dvh - var(--app-shell-edge-gap) - var(--app-shell-edge-gap));
+  margin-block: var(--app-shell-edge-gap);
   margin-inline-start: var(--sidebar-width);
-  margin-inline-end: var(--space-1);
+  margin-inline-end: var(--app-shell-edge-gap);
   border-radius: var(--radius-lg);
   background: var(--color-surface);
   box-shadow: var(--shadow-card);

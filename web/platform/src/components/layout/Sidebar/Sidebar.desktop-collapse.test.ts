@@ -15,7 +15,7 @@ const appShellStylesheet = readFileSync(
 describe("Sidebar desktop collapse stylesheet", () => {
   it("floats the desktop sidebar above the workspace background", () => {
     expect(appShellStylesheet).toMatch(
-      /\.sidebar\s*\{[^}]*padding:\s*var\(--space-2\);[^}]*background:\s*var\(--app-shell-canvas\);/s,
+      /\.sidebar\s*\{[^}]*padding:\s*var\(--app-shell-edge-gap\);[^}]*background:\s*var\(--app-shell-canvas\);/s,
     );
     expect(stylesheet).toMatch(
       /\.panel\s*\{[^}]*block-size:\s*100%;[^}]*inline-size:\s*100%;[^}]*border-radius:\s*var\(--radius-lg\);/s,

@@ -45,9 +45,12 @@ describe("AppShell workspace surface", () => {
   });
 
   it("renders the desktop workspace as a floating panel matching the sidebar", () => {
-    expect(workspaceRule).toContain("block-size: calc(100dvh - var(--space-2) - var(--space-2))");
-    expect(workspaceRule).toContain("margin-block: var(--space-2)");
-    expect(workspaceRule).toContain("margin-inline-end: var(--space-2)");
+    expect(shellRule).toContain("--app-shell-edge-gap: 0.125rem");
+    expect(workspaceRule).toContain(
+      "block-size: calc(100dvh - var(--app-shell-edge-gap) - var(--app-shell-edge-gap))",
+    );
+    expect(workspaceRule).toContain("margin-block: var(--app-shell-edge-gap)");
+    expect(workspaceRule).toContain("margin-inline-end: var(--app-shell-edge-gap)");
     expect(workspaceRule).toContain("border-radius: var(--radius-lg)");
     expect(workspaceRule).toContain("background: var(--color-surface)");
     expect(workspaceRule).toContain("box-shadow: var(--shadow-card)");
