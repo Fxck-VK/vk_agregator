@@ -10,6 +10,7 @@ const shellRule = stylesheet.match(/\.shell \{([\s\S]*?)\n\}/)?.[1];
 const sidebarRule = stylesheet.match(/\.sidebar \{([\s\S]*?)\n\}/)?.[1];
 const workspaceRule = stylesheet.match(/\.workspace \{([\s\S]*?)\n\}/)?.[1];
 const workspaceScrollerRule = stylesheet.match(/\.workspaceScroller \{([\s\S]*?)\n\}/)?.[1];
+const trackRule = stylesheet.match(/\.workspaceScroller::-webkit-scrollbar-track \{([\s\S]*?)\n\}/)?.[1];
 const thumbRule = stylesheet.match(/\.workspaceScroller::-webkit-scrollbar-thumb \{([\s\S]*?)\n\}/)?.[1];
 
 describe("AppShell workspace scrollbar", () => {
@@ -31,9 +32,11 @@ describe("AppShell workspace scrollbar", () => {
     expect(stylesheet).toContain(".workspaceScroller::-webkit-scrollbar-thumb");
     expect(stylesheet).toContain("inline-size: 0.75rem");
     expect(stylesheet).toContain("display: none");
+    expect(trackRule).toContain("margin-block-start: calc(var(--space-8) + var(--space-3))");
     expect(thumbRule).toContain("border-radius: 999px");
     expect(thumbRule).toContain("background-color: var(--color-border)");
     expect(thumbRule).toContain("background-clip: content-box");
+    expect(stylesheet).not.toContain("var(--color-text-muted)");
   });
 });
 
