@@ -23,6 +23,8 @@ COPY --from=build --chown=node:node /app/.next/standalone ./
 COPY --from=build --chown=node:node /app/.next/static ./.next/static
 COPY --from=build --chown=node:node /app/public ./public
 
+RUN apk add --no-cache 'libcrypto3>=3.5.8-r0' 'libssl3>=3.5.8-r0'
+
 # The prebuilt standalone server needs Node.js, not package-management tools.
 # Remove their full payload after all application copies to keep npm-only CVEs
 # and unused package-manager attack surface out of the runtime image.

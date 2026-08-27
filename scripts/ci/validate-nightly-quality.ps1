@@ -316,6 +316,13 @@ foreach ($dockerfile in $expectedDockerfiles) {
     if ($dockerfileContent -match '(?im)^\s*RUN\s+.*\bapk\s+upgrade\b') {
         throw "$dockerfile must not run apk upgrade during an otherwise pinned image build"
     }
+
+    $finalStage = @($dockerfileContent -split '(?im)^\s*FROM\s+')[-1]
+    foreach ($opensslPackage in @('libcrypto3>=3.5.8-r0', 'libssl3>=3.5.8-r0')) {
+        if (-not $finalStage.Contains($opensslPackage)) {
+            throw "$dockerfile final stage must install $opensslPackage to remediate CVE-2026-14456"
+        }
+    }
 }
 
 Write-Host "Production Dockerfile inventory ($($expectedDockerfiles.Count)):"
