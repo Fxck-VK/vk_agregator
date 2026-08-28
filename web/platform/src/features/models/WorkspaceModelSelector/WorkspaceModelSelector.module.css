@@ -24,12 +24,8 @@
 
 .modelIcon,
 .optionIcon {
-  display: grid;
   flex: 0 0 auto;
-  place-items: center;
   border-radius: 50%;
-  background: linear-gradient(145deg, #ffb31f 5%, #f54d72 34%, #2e87ff 67%, #22d3a6 100%);
-  color: #ffffff;
 }
 
 .modelIcon {

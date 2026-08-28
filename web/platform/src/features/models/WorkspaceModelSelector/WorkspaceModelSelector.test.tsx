@@ -73,10 +73,8 @@ describe("WorkspaceModelSelector", () => {
 
     const trigger = await screen.findByRole("button", { name: new RegExp("Nano Banana 2") });
     expect(loadImageModelCatalog).toHaveBeenCalledTimes(1);
-    expect(trigger.querySelector("img")).toHaveAttribute(
-      "src",
-      "/assets/icons/ui/chevron-down.svg",
-    );
+    expect(trigger.querySelector('img[src="/assets/icons/ui/chevron-down.svg"]')).toBeInTheDocument();
+    expect(within(trigger).getByTestId("model-icon")).toBeInTheDocument();
 
     fireEvent.click(trigger);
 
@@ -87,6 +85,7 @@ describe("WorkspaceModelSelector", () => {
     expect(within(dialog).getByRole("button", { name: /Nano Banana 2/ })).toHaveTextContent(
       ru.modelSelector.referenceDescription,
     );
+    expect(within(dialog).getAllByTestId("model-icon")).toHaveLength(2);
     expect(screen.getByRole("link", { name: ru.modelSelector.openCatalogue })).toHaveAttribute("href", "/app/models");
   });
 

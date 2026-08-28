@@ -7,6 +7,26 @@
   object-position: center;
 }
 
+.fallback {
+  display: grid;
+  place-items: center;
+  color: var(--color-text);
+}
+
+.fallback svg {
+  display: block;
+  inline-size: 100%;
+  block-size: 100%;
+}
+
+.faceCutout {
+  fill: var(--color-surface-raised);
+}
+
+.faceStroke {
+  stroke: var(--color-surface-raised);
+}
+
 @media (max-width: 42rem) {
   .icon {
     inline-size: 3rem;

@@ -10,6 +10,7 @@ import { ru } from "@/i18n/ru";
 import type { ImageModel } from "@/lib/web-api/contracts";
 
 import { loadImageModelCatalog } from "../image-model-catalog-cache";
+import { ModelIcon } from "../ModelIcon/ModelIcon";
 import { useWorkspaceModelSelection } from "../WorkspaceModelSelection/WorkspaceModelSelection";
 import styles from "./WorkspaceModelSelector.module.css";
 
@@ -150,7 +151,7 @@ export function WorkspaceModelSelector() {
         ref={triggerRef}
         type="button"
       >
-        <span aria-hidden="true" className={styles.modelIcon}>✦</span>
+        <ModelIcon className={styles.modelIcon} />
         <span className={styles.triggerText}>
           {status === "loading" ? ru.modelSelector.loadingShort : (selectedModel?.name ?? ru.modelSelector.unavailable)}
         </span>
@@ -195,7 +196,7 @@ export function WorkspaceModelSelector() {
                         onClick={() => selectModel(model)}
                         type="button"
                       >
-                        <span aria-hidden="true" className={styles.optionIcon}>✦</span>
+                        <ModelIcon className={styles.optionIcon} />
                         <span className={styles.optionCopy}>
                           <span className={styles.optionTitle}>{model.name}</span>
                           <span className={styles.optionDescription}>
