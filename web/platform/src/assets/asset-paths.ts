@@ -24,7 +24,10 @@ export const assetPaths = {
       paperCraneCloud: "/assets/images/inspiration/paper-crane-cloud.png",
     },
     models: {
-      fallback: "/assets/images/models/chip-silhouette.svg",
+      fallback: {
+        darkTheme: "/assets/images/models/chip-silhouette.svg",
+        lightTheme: "/assets/images/models/chip-silhouette-dark.svg",
+      },
     },
   },
 } as const;

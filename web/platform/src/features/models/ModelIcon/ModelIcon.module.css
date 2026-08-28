@@ -8,9 +8,20 @@
 }
 
 .fallback {
+  background-image: var(--model-icon-fallback-dark);
   background-position: center;
   background-repeat: no-repeat;
   background-size: contain;
+}
+
+:global(:root[data-theme="light"]) .fallback {
+  background-image: var(--model-icon-fallback-light);
+}
+
+@media (prefers-color-scheme: light) {
+  :global(:root[data-theme="system"]) .fallback {
+    background-image: var(--model-icon-fallback-light);
+  }
 }
 
 @media (max-width: 42rem) {

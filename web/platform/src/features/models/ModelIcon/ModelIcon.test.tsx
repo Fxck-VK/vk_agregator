@@ -8,13 +8,16 @@ describe("ModelIcon", () => {
     cleanup();
   });
 
-  it("uses the supplied chip silhouette as the default artwork", () => {
+  it("provides both theme-specific chip silhouettes to the default artwork", () => {
     render(<ModelIcon />);
 
     const fallback = screen.getByTestId("model-icon-fallback");
 
     expect(fallback).toHaveStyle({
-      backgroundImage: 'url("/assets/images/models/chip-silhouette.svg")',
+      "--model-icon-fallback-dark":
+        'url("/assets/images/models/chip-silhouette.svg")',
+      "--model-icon-fallback-light":
+        'url("/assets/images/models/chip-silhouette-dark.svg")',
     });
     expect(fallback.querySelector("svg")).not.toBeInTheDocument();
     expect(screen.queryByTestId("model-icon")).not.toBeInTheDocument();
@@ -35,7 +38,10 @@ describe("ModelIcon", () => {
     fireEvent.error(screen.getByTestId("model-icon"));
 
     expect(screen.getByTestId("model-icon-fallback")).toHaveStyle({
-      backgroundImage: 'url("/assets/images/models/chip-silhouette.svg")',
+      "--model-icon-fallback-dark":
+        'url("/assets/images/models/chip-silhouette.svg")',
+      "--model-icon-fallback-light":
+        'url("/assets/images/models/chip-silhouette-dark.svg")',
     });
     expect(screen.queryByTestId("model-icon")).not.toBeInTheDocument();
   });

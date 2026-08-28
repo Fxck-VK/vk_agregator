@@ -44,9 +44,10 @@ describe("assetPaths", () => {
     );
   });
 
-  it("exposes the supplied model placeholder URL", () => {
-    expect(assetPaths.images.models.fallback).toBe(
-      "/assets/images/models/chip-silhouette.svg",
-    );
+  it("exposes both theme-specific model placeholder URLs", () => {
+    expect(assetPaths.images.models.fallback).toEqual({
+      darkTheme: "/assets/images/models/chip-silhouette.svg",
+      lightTheme: "/assets/images/models/chip-silhouette-dark.svg",
+    });
   });
 });
