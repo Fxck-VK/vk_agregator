@@ -5,6 +5,10 @@ vi.mock("next/headers", () => ({
   headers: vi.fn(),
 }));
 
+vi.mock("next/font/google", () => ({
+  Geist: vi.fn(() => ({ variable: "font-geist-sans-test" })),
+}));
+
 import { headers } from "next/headers";
 
 import RootLayout, { metadata } from "./layout";
@@ -23,6 +27,17 @@ describe("RootLayout", () => {
     const document = new DOMParser().parseFromString(markup, "text/html");
 
     expect(document.documentElement.getAttribute("lang")).toBe("ru");
+  });
+
+  it("loads Geist Sans as the global interface font", async () => {
+    const markup = renderToStaticMarkup(
+      await RootLayout({
+        children: <main>Тест</main>,
+      }),
+    );
+    const document = new DOMParser().parseFromString(markup, "text/html");
+
+    expect(document.documentElement.classList.contains("font-geist-sans-test")).toBe(true);
   });
 
   it("uses dedicated square NeiroHub assets for browser and device icons", () => {

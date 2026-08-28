@@ -26,13 +26,27 @@ describe("global theme tokens", () => {
     expect(systemLightMedia ?? "").toContain("color-scheme: light");
   });
 
-  it("defines the shared public layout and interaction token contract", () => {
+  it("defines the shared layout, typography, and interaction token contract", () => {
     expect(stylesheet).toContain("--container-narrow: 48rem");
     expect(stylesheet).toContain("--container-content: 66rem");
     expect(stylesheet).toContain("--container-wide: 76rem");
-    expect(stylesheet).toContain("--font-size-label: 0.875rem");
-    expect(stylesheet).toContain("--font-size-display: clamp(2.25rem, 6vw, 4.25rem)");
-    expect(stylesheet).toContain("--line-height-tight: 1.08");
+    expect(stylesheet).toContain("--font-size-display: 2.5rem");
+    expect(stylesheet).toContain("--line-height-display: 2.75rem");
+    expect(stylesheet).toContain("--font-size-section: 2rem");
+    expect(stylesheet).toContain("--line-height-section: 2.375rem");
+    expect(stylesheet).toContain("--font-size-supporting: 1.125rem");
+    expect(stylesheet).toContain("--line-height-supporting: 1.6875rem");
+    expect(stylesheet).toContain("--font-size-body: 1rem");
+    expect(stylesheet).toContain("--line-height-body: 1.5rem");
+    expect(stylesheet).toContain("--font-size-navigation: 0.9375rem");
+    expect(stylesheet).toContain("--line-height-navigation: 1.375rem");
+    expect(stylesheet).toContain("--font-size-ui: 0.875rem");
+    expect(stylesheet).toContain("--line-height-ui: 1.25rem");
+    expect(stylesheet).toContain("--font-size-caption: 0.8125rem");
+    expect(stylesheet).toContain("--line-height-caption: 1.125rem");
+    expect(stylesheet).toContain("--font-sans: var(--font-geist-sans)");
+    expect(stylesheet).toMatch(/@media \(width < 48rem\)[\s\S]*--font-size-display:\s*2rem/);
+    expect(stylesheet).toMatch(/@media \(width < 48rem\)[\s\S]*--font-size-section:\s*1\.75rem/);
     expect(stylesheet).toContain("--radius-xl: 1.25rem");
     expect(stylesheet).toContain("--radius-pill: 999px");
     expect(stylesheet).toContain("--shadow-card:");

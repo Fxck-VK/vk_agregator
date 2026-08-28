@@ -1,4 +1,5 @@
 import type { Metadata } from "next";
+import { Geist } from "next/font/google";
 import { headers } from "next/headers";
 import type { ReactNode } from "react";
 
@@ -6,6 +7,12 @@ import { themeBootstrapScript } from "@/features/theme/theme-preference";
 import { ru } from "@/i18n/ru";
 
 import "./globals.css";
+
+const geistSans = Geist({
+  display: "swap",
+  subsets: ["cyrillic", "latin", "latin-ext"],
+  variable: "--font-geist-sans",
+});
 
 export const metadata: Metadata = {
   title: ru.document.title,
@@ -38,7 +45,7 @@ export default async function RootLayout({ children }: Readonly<{ children: Reac
   const nonce = (await headers()).get("x-nonce") ?? undefined;
 
   return (
-    <html data-theme="system" lang="ru" suppressHydrationWarning>
+    <html className={geistSans.variable} data-theme="system" lang="ru" suppressHydrationWarning>
       <head>
         <script dangerouslySetInnerHTML={{ __html: themeBootstrapScript }} nonce={nonce} />
       </head>
