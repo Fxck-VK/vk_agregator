@@ -8,23 +8,9 @@
 }
 
 .fallback {
-  display: grid;
-  place-items: center;
-  color: var(--color-text);
-}
-
-.fallback svg {
-  display: block;
-  inline-size: 100%;
-  block-size: 100%;
-}
-
-.faceCutout {
-  fill: var(--color-surface-raised);
-}
-
-.faceStroke {
-  stroke: var(--color-surface-raised);
+  background-position: center;
+  background-repeat: no-repeat;
+  background-size: contain;
 }
 
 @media (max-width: 42rem) {

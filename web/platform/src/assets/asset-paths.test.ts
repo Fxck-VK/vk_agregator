@@ -43,4 +43,10 @@ describe("assetPaths", () => {
       "/assets/images/credits/credit-star.png",
     );
   });
+
+  it("exposes the supplied model placeholder URL", () => {
+    expect(assetPaths.images.models.fallback).toBe(
+      "/assets/images/models/chip-silhouette.svg",
+    );
+  });
 });
