@@ -49,11 +49,8 @@ describe("ModelCard", () => {
       />,
     );
 
-    const iconSource = screen.getByTestId("model-icon").getAttribute("src") ?? "";
-
-    expect(decodeURIComponent(iconSource)).toContain(
-      "/assets/images/models/default-model-87465de8.png",
-    );
+    expect(screen.getByTestId("model-icon-fallback")).toBeInTheDocument();
+    expect(screen.queryByTestId("model-icon")).not.toBeInTheDocument();
   });
 
   it("makes the whole safe model card a generator link without a separate action", () => {

@@ -78,10 +78,8 @@ describe("FeaturedModelShortcuts", () => {
       "href",
       "/app/image?model=nano%20%2F%20banana",
     );
-    expect(within(shortcuts[0]).getByTestId("model-icon")).toHaveAttribute(
-      "src",
-      expect.stringContaining("default-model-87465de8.png"),
-    );
+    expect(within(shortcuts[0]).getByTestId("model-icon-fallback")).toBeInTheDocument();
+    expect(within(shortcuts[0]).queryByTestId("model-icon")).not.toBeInTheDocument();
   });
 
   it("uses supplied artwork for a matching model id", async () => {

@@ -8,19 +8,24 @@ describe("ModelIcon", () => {
     cleanup();
   });
 
-  it("loads the public fallback artwork directly", () => {
+  it("renders the embedded default artwork without requesting an image", () => {
     render(<ModelIcon />);
 
-    const source = screen.getByTestId("model-icon").getAttribute("src") ?? "";
-
-    expect(new URL(source, "http://localhost").pathname).toBe(
-      "/assets/images/models/default-model-87465de8.png",
-    );
-    expect(source).not.toContain("/_next/image");
+    expect(screen.getByTestId("model-icon-fallback")).toBeInTheDocument();
+    expect(screen.queryByTestId("model-icon")).not.toBeInTheDocument();
   });
 
-  it("replaces a failed image with the embedded fallback artwork", () => {
-    render(<ModelIcon />);
+  it("renders supplied model artwork", () => {
+    render(<ModelIcon src="/assets/images/models/custom.png" />);
+
+    expect(screen.getByTestId("model-icon")).toHaveAttribute(
+      "src",
+      expect.stringContaining("custom.png"),
+    );
+  });
+
+  it("replaces failed supplied artwork with the embedded default artwork", () => {
+    render(<ModelIcon src="/assets/images/models/missing.png" />);
 
     fireEvent.error(screen.getByTestId("model-icon"));
 
