@@ -43,7 +43,10 @@
 }
 
 .heroCopy h1 span {
-  color: var(--color-accent);
+  background: var(--gradient-brand);
+  background-clip: text;
+  color: transparent;
+  -webkit-background-clip: text;
 }
 
 .heroCopy p {
@@ -165,7 +168,7 @@
 
 .primaryButton {
   background: var(--color-accent);
-  color: #fff;
+  color: var(--color-text-on-accent);
 }
 
 .primaryButton:hover {
@@ -532,7 +535,7 @@
   inline-size: 2.75rem;
   block-size: 2.75rem;
   border-radius: 50%;
-  background: var(--color-accent);
+  background: var(--gradient-brand);
   color: #fff;
   font-size: 0.75rem;
   font-weight: 800;

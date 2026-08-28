@@ -32,7 +32,7 @@
   block-size: 2rem;
   place-items: center;
   border-radius: 50%;
-  background: var(--color-accent);
+  background: var(--gradient-brand);
   color: #fff;
   font-size: 0.6875rem;
   letter-spacing: 0.04em;

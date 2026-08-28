@@ -6,7 +6,7 @@
   border-radius: var(--radius-pill);
   padding: var(--space-2) var(--space-5);
   background: var(--color-accent);
-  color: #fff;
+  color: var(--color-text-on-accent);
   font-weight: 700;
   text-decoration: none;
   transition: background-color var(--motion-fast), translate var(--motion-fast);

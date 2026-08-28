@@ -23,7 +23,7 @@
   block-size: 2.75rem;
   place-items: center;
   border-radius: 50%;
-  background: var(--color-accent);
+  background: var(--gradient-brand);
   color: #fff;
   font-size: 0.75rem;
   font-weight: 800;

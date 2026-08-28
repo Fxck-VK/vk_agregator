@@ -38,10 +38,13 @@
 }
 
 .balance strong {
-  color: var(--color-accent);
+  background: var(--gradient-brand);
+  background-clip: text;
+  color: transparent;
   font-size: clamp(1.5rem, 4vw, 2rem);
   font-variant-numeric: tabular-nums;
   white-space: nowrap;
+  -webkit-background-clip: text;
 }
 
 .balance strong span {

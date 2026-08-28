@@ -30,7 +30,7 @@
   border: 0;
   border-radius: var(--radius-pill);
   background: var(--color-accent);
-  color: #fff;
+  color: var(--color-text-on-accent);
   font: inherit;
   font-weight: 700;
   white-space: nowrap;
