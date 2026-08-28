@@ -13,12 +13,16 @@
 }
 
 .conversations h2 {
-  font-size: 0.875rem;
+  font-size: var(--font-size-caption);
+  font-weight: var(--font-weight-semibold);
+  line-height: var(--line-height-caption);
 }
 
 .empty {
   color: var(--color-text-muted);
-  font-size: 0.875rem;
+  font-size: var(--font-size-ui);
+  font-weight: var(--font-weight-regular);
+  line-height: var(--line-height-ui);
 }
 
 .list {

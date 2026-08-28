@@ -40,9 +40,11 @@
 .identity {
   min-inline-size: 0;
   overflow: hidden;
+  font-size: var(--font-size-ui);
+  font-weight: var(--font-weight-semibold);
+  line-height: var(--line-height-ui);
   text-overflow: ellipsis;
   white-space: nowrap;
-  font-weight: 700;
 }
 
 .chevron {
@@ -140,9 +142,11 @@
   background: transparent;
   color: var(--color-text);
   font: inherit;
+  font-size: var(--font-size-ui);
+  font-weight: var(--font-weight-medium);
+  line-height: var(--line-height-ui);
   text-align: start;
   text-decoration: none;
-  font-weight: 700;
   transition:
     background-color var(--motion-fast),
     color var(--motion-fast);
@@ -231,7 +235,8 @@
 .error {
   margin: var(--space-2) var(--space-3) var(--space-1);
   color: var(--color-danger);
-  font-size: 0.875rem;
+  font-size: var(--font-size-caption);
+  line-height: var(--line-height-caption);
 }
 
 @media (min-width: 48rem) {

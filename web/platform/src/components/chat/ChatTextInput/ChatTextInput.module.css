@@ -6,7 +6,9 @@
   padding: var(--space-3);
   color: var(--color-text);
   font: inherit;
-  line-height: 1.5;
+  font-size: var(--font-size-body);
+  font-weight: var(--font-weight-regular);
+  line-height: var(--line-height-body);
 }
 
 .input:focus-visible {

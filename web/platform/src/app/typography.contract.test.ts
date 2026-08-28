@@ -68,3 +68,71 @@ describe("primary interface typography", () => {
     expect(supportingRule).toContain("font-weight: var(--font-weight-regular)");
   });
 });
+
+describe("workspace control typography", () => {
+  it.each([
+    [
+      "src/components/layout/Sidebar/Sidebar.module.css",
+      ".brand",
+      "--font-size-supporting",
+      "--line-height-body",
+      "--font-weight-semibold",
+    ],
+    [
+      "src/components/layout/Sidebar/Sidebar.module.css",
+      ".navigationList a",
+      "--font-size-navigation",
+      "--line-height-navigation",
+      "--font-weight-medium",
+    ],
+    [
+      "src/components/layout/WorkspaceHeader/WorkspaceHeader.module.css",
+      ".title",
+      "--font-size-navigation",
+      "--line-height-navigation",
+      "--font-weight-medium",
+    ],
+    [
+      "src/features/models/WorkspaceModelSelector/WorkspaceModelSelector.module.css",
+      ".trigger",
+      "--font-size-navigation",
+      "--line-height-navigation",
+      "--font-weight-medium",
+    ],
+    [
+      "src/components/chat/ChatTextInput/ChatTextInput.module.css",
+      ".input",
+      "--font-size-body",
+      "--line-height-body",
+      "--font-weight-regular",
+    ],
+  ])("maps %s %s to its semantic role", (path, selector, size, lineHeight, weight) => {
+    const controlRule = rule(path, selector);
+
+    expect(controlRule).toContain(`font-size: var(${size})`);
+    expect(controlRule).toContain(`line-height: var(${lineHeight})`);
+    expect(controlRule).toContain(`font-weight: var(${weight})`);
+  });
+
+  it.each([
+    ["src/components/layout/WorkspaceHeader/WorkspaceHeader.module.css", ".balance"],
+    ["src/features/conversations/ConversationRow/ConversationRow.module.css", ".link"],
+    ["src/components/chat/ChatComposer/ChatComposer.module.css", ".attachment > span:not(.fileIcon)"],
+    ["src/features/account/AccountMenu/AccountMenu.module.css", ".identity"],
+  ])("uses the compact UI role in %s", (path, selector) => {
+    const uiRule = rule(path, selector);
+
+    expect(uiRule).toContain("font-size: var(--font-size-ui)");
+    expect(uiRule).toContain("line-height: var(--line-height-ui)");
+  });
+
+  it.each([
+    ["src/features/conversations/SidebarConversations/SidebarConversations.module.css", ".conversations h2"],
+    ["src/components/chat/ChatComposer/ChatComposer.module.css", ".note"],
+  ])("uses the service-label role in %s", (path, selector) => {
+    const captionRule = rule(path, selector);
+
+    expect(captionRule).toContain("font-size: var(--font-size-caption)");
+    expect(captionRule).toContain("line-height: var(--line-height-caption)");
+  });
+});
