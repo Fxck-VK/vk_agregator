@@ -31,8 +31,9 @@
   background: transparent;
   color: var(--color-text-muted);
   font: inherit;
-  font-size: 1rem;
-  font-weight: 700;
+  font-size: var(--font-size-navigation);
+  font-weight: var(--font-weight-medium);
+  line-height: var(--line-height-navigation);
 }
 
 .tab[aria-selected="true"] {
@@ -57,7 +58,9 @@
 
 .section h2 {
   margin: 0;
-  font-size: 1.125rem;
+  font-size: var(--font-size-supporting);
+  font-weight: var(--font-weight-semibold);
+  line-height: var(--line-height-body);
 }
 
 .placeholderCard {
@@ -74,7 +77,8 @@
 .placeholderCard p {
   max-inline-size: 32rem;
   margin: 0;
-  font-size: 1rem;
+  font-size: var(--font-size-body);
+  line-height: var(--line-height-body);
 }
 
 .placeholderCard button {
@@ -85,7 +89,9 @@
   background: var(--color-background);
   color: var(--color-text-muted);
   font: inherit;
-  font-weight: 700;
+  font-size: var(--font-size-ui);
+  font-weight: var(--font-weight-medium);
+  line-height: var(--line-height-ui);
 }
 
 .placeholderCard button:disabled {

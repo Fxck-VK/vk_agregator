@@ -37,8 +37,10 @@
 
 .header h2 {
   margin: 0;
-  font-size: clamp(1.5rem, 3vw, 2rem);
-  line-height: 1.1;
+  font-size: var(--font-size-section);
+  font-weight: var(--font-weight-semibold);
+  letter-spacing: var(--letter-spacing-section);
+  line-height: var(--line-height-section);
 }
 
 .closeButton {
@@ -91,7 +93,9 @@
   background: transparent;
   color: var(--color-text);
   font: inherit;
-  font-size: 1.05rem;
+  font-size: var(--font-size-body);
+  font-weight: var(--font-weight-regular);
+  line-height: var(--line-height-body);
 }
 
 .search input::placeholder {
@@ -151,11 +155,15 @@
 }
 
 .cardMeta strong {
-  font-size: 1rem;
+  font-size: var(--font-size-ui);
+  font-weight: var(--font-weight-semibold);
+  line-height: var(--line-height-caption);
 }
 
 .cardMeta small {
   color: rgb(255 255 255 / 72%);
+  font-size: var(--font-size-caption);
+  line-height: var(--line-height-caption);
 }
 
 .cardAction {

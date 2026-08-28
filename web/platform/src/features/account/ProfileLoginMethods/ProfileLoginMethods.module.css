@@ -9,7 +9,9 @@
 }
 
 .section h2 {
-  font-size: 1.125rem;
+  font-size: var(--font-size-supporting);
+  font-weight: var(--font-weight-semibold);
+  line-height: var(--line-height-body);
 }
 
 .card {
@@ -69,5 +71,6 @@
 
 .details span {
   color: var(--color-text-muted);
-  font-size: 0.8125rem;
+  font-size: var(--font-size-caption);
+  line-height: var(--line-height-caption);
 }

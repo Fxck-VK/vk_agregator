@@ -91,20 +91,23 @@
 }
 
 .content h2 {
-  font-size: 1rem;
-  line-height: 1.4;
+  font-size: var(--font-size-ui);
+  font-weight: var(--font-weight-semibold);
+  line-height: var(--line-height-caption);
   overflow-wrap: anywhere;
 }
 
 .content > p:last-child {
   color: var(--color-text-muted);
-  font-size: 0.875rem;
+  font-size: var(--font-size-ui);
+  line-height: var(--line-height-ui);
 }
 
 .status {
   color: var(--color-primary);
-  font-size: 0.75rem;
-  font-weight: 800;
+  font-size: var(--font-size-caption);
+  font-weight: var(--font-weight-semibold);
+  line-height: var(--line-height-caption);
   letter-spacing: 0.08em;
   text-transform: uppercase;
 }

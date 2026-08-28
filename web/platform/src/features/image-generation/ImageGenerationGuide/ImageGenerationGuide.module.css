@@ -23,8 +23,9 @@
   border: 0;
   color: var(--color-text-muted);
   font: inherit;
-  font-size: 1.125rem;
-  font-weight: 700;
+  font-size: var(--font-size-navigation);
+  font-weight: var(--font-weight-medium);
+  line-height: var(--line-height-navigation);
   background: transparent;
   cursor: pointer;
 }
@@ -99,7 +100,9 @@
 .promptPreview p {
   margin: 0;
   color: var(--color-text);
-  line-height: 1.55;
+  font-size: var(--font-size-body);
+  font-weight: var(--font-weight-regular);
+  line-height: var(--line-height-body);
 }
 
 .promptPreviewCompact {
@@ -121,8 +124,9 @@
   border: 0.0625rem solid var(--color-border);
   border-radius: 999rem;
   color: var(--color-text);
-  font-size: 0.875rem;
-  font-weight: 650;
+  font-size: var(--font-size-ui);
+  font-weight: var(--font-weight-medium);
+  line-height: var(--line-height-ui);
   background: color-mix(in srgb, var(--color-surface-raised) 80%, transparent);
 }
 
@@ -186,21 +190,25 @@
   display: block;
   margin-block-start: var(--space-4);
   color: var(--color-text-muted);
-  font-size: 0.875rem;
-  font-weight: 650;
+  font-size: var(--font-size-caption);
+  font-weight: var(--font-weight-semibold);
+  line-height: var(--line-height-caption);
 }
 
 .step h3 {
   margin: var(--space-2) 0 0;
   color: var(--color-text);
-  font-size: 1.125rem;
-  line-height: 1.25;
+  font-size: var(--font-size-supporting);
+  font-weight: var(--font-weight-semibold);
+  line-height: var(--line-height-body);
 }
 
 .step p {
   margin: var(--space-2) 0 0;
   color: var(--color-text-muted);
-  line-height: 1.5;
+  font-size: var(--font-size-body);
+  font-weight: var(--font-weight-regular);
+  line-height: var(--line-height-body);
 }
 
 .examples {
@@ -224,7 +232,9 @@
   border-radius: 999rem;
   padding-inline: var(--space-5);
   color: var(--color-text);
-  font-weight: 700;
+  font-size: var(--font-size-navigation);
+  font-weight: var(--font-weight-semibold);
+  line-height: var(--line-height-navigation);
   text-decoration: none;
   transition: border-color var(--motion-fast), background var(--motion-fast);
 }
@@ -253,11 +263,6 @@
   .tabs {
     gap: var(--space-4);
   }
-
-  .tab {
-    font-size: 1rem;
-  }
-
   .visual {
     min-block-size: 13rem;
   }

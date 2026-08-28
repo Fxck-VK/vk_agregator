@@ -34,12 +34,15 @@
 }
 
 .emptyState h2 {
-  font-size: clamp(1.5rem, 3vw, 2.25rem);
-  letter-spacing: -0.03em;
+  font-size: var(--font-size-section);
+  font-weight: var(--font-weight-semibold);
+  letter-spacing: var(--letter-spacing-section);
+  line-height: var(--line-height-section);
 }
 
 .emptyState p {
   color: var(--color-text-muted);
-  font-size: 1.0625rem;
-  line-height: 1.5;
+  font-size: var(--font-size-supporting);
+  font-weight: var(--font-weight-regular);
+  line-height: var(--line-height-supporting);
 }

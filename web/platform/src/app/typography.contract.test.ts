@@ -136,3 +136,55 @@ describe("workspace control typography", () => {
     expect(captionRule).toContain("line-height: var(--line-height-caption)");
   });
 });
+
+describe("card and secondary surface typography", () => {
+  it.each([
+    ["src/features/models/ModelCard/ModelCard.module.css", ".heading h3"],
+    ["src/features/workspace/FeaturedModels/FeaturedModels.module.css", ".copy strong"],
+    ["src/features/workspace/FeaturedModelShortcuts/FeaturedModelShortcuts.module.css", ".shortcut"],
+    ["src/features/files/FileCard/FileCard.module.css", ".content h2"],
+    ["src/components/public/ModelPreviewCard/ModelPreviewCard.module.css", ".copy h3"],
+  ])("uses compact model and file names in %s", (path, selector) => {
+    const nameRule = rule(path, selector);
+
+    expect(nameRule).toContain("font-size: var(--font-size-ui)");
+    expect(nameRule).toContain("line-height: var(--line-height-caption)");
+    expect(nameRule).toContain("font-weight: var(--font-weight-semibold)");
+  });
+
+  it.each([
+    ["src/features/files/FilesEmptyState/FilesEmptyState.module.css", ".emptyState h2"],
+    ["src/features/image-generation/ImageTemplatePicker/ImageTemplatePicker.module.css", ".header h2"],
+    ["src/components/public/EmptyState/EmptyState.module.css", ".root h2"],
+  ])("uses the section role for standalone secondary headings in %s", (path, selector) => {
+    const headingRule = rule(path, selector);
+
+    expect(headingRule).toContain("font-size: var(--font-size-section)");
+    expect(headingRule).toContain("line-height: var(--line-height-section)");
+    expect(headingRule).toContain("font-weight: var(--font-weight-semibold)");
+    expect(headingRule).toContain("letter-spacing: var(--letter-spacing-section)");
+  });
+
+  it.each([
+    ["src/features/account/ProfileWorkspace/ProfileWorkspace.module.css", ".section h2"],
+    ["src/features/account/ProfileLoginMethods/ProfileLoginMethods.module.css", ".section h2"],
+    ["src/features/account/ProfileReferralFaq/ProfileReferralFaq.module.css", ".section h2"],
+  ])("uses the supporting role for profile subsection headings in %s", (path, selector) => {
+    const headingRule = rule(path, selector);
+
+    expect(headingRule).toContain("font-size: var(--font-size-supporting)");
+    expect(headingRule).toContain("line-height: var(--line-height-body)");
+    expect(headingRule).toContain("font-weight: var(--font-weight-semibold)");
+  });
+
+  it("uses navigation, supporting, and body roles in image-generation guidance", () => {
+    const path = "src/features/image-generation/ImageGenerationGuide/ImageGenerationGuide.module.css";
+
+    expect(rule(path, ".tab")).toContain("font-size: var(--font-size-navigation)");
+    expect(rule(path, ".tab")).toContain("line-height: var(--line-height-navigation)");
+    expect(rule(path, ".step h3")).toContain("font-size: var(--font-size-supporting)");
+    expect(rule(path, ".step h3")).toContain("line-height: var(--line-height-body)");
+    expect(rule(path, ".step p")).toContain("font-size: var(--font-size-body)");
+    expect(rule(path, ".step p")).toContain("line-height: var(--line-height-body)");
+  });
+});

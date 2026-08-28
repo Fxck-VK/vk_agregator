@@ -4,9 +4,9 @@
   gap: var(--space-2);
   min-inline-size: 0;
   color: var(--color-text);
-  font-size: 0.875rem;
-  font-weight: 700;
-  line-height: 1.25;
+  font-size: var(--font-size-ui);
+  font-weight: var(--font-weight-semibold);
+  line-height: var(--line-height-caption);
   text-align: center;
   text-decoration: none;
 }
