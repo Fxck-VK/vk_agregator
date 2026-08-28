@@ -1,6 +1,6 @@
 .shell {
   --sidebar-collapsed-rail-width: 5.5rem;
-  --app-shell-canvas: #9494F8;
+  --app-shell-canvas: var(--color-background);
   --app-shell-edge-gap: 0.125rem;
   block-size: 100dvh;
   background: var(--app-shell-canvas);
@@ -23,7 +23,7 @@
   margin-inline-start: var(--sidebar-width);
   margin-inline-end: var(--app-shell-edge-gap);
   border-radius: var(--radius-lg);
-  background: var(--color-surface);
+  background: var(--color-workspace);
   box-shadow: var(--shadow-card);
   overflow: hidden;
 }

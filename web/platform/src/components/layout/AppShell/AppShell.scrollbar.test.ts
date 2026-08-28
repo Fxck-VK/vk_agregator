@@ -41,8 +41,8 @@ describe("AppShell workspace scrollbar", () => {
 });
 
 describe("AppShell workspace surface", () => {
-  it("uses the approved lavender canvas behind both floating panels", () => {
-    expect(shellRule).toContain("--app-shell-canvas: #9494F8");
+  it("uses the approved graphite canvas behind both floating panels", () => {
+    expect(shellRule).toContain("--app-shell-canvas: var(--color-background)");
     expect(shellRule).toContain("background: var(--app-shell-canvas)");
     expect(sidebarRule).toContain("background: var(--app-shell-canvas)");
   });
@@ -55,7 +55,7 @@ describe("AppShell workspace surface", () => {
     expect(workspaceRule).toContain("margin-block: var(--app-shell-edge-gap)");
     expect(workspaceRule).toContain("margin-inline-end: var(--app-shell-edge-gap)");
     expect(workspaceRule).toContain("border-radius: var(--radius-lg)");
-    expect(workspaceRule).toContain("background: var(--color-surface)");
+    expect(workspaceRule).toContain("background: var(--color-workspace)");
     expect(workspaceRule).toContain("box-shadow: var(--shadow-card)");
   });
 

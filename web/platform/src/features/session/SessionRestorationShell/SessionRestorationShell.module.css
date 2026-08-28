@@ -11,12 +11,13 @@
   padding: var(--space-5);
   border-inline-end: 0.0625rem solid var(--color-border);
   flex-direction: column;
-  background: var(--color-surface);
+  background: var(--color-panel);
 }
 
 .workspace {
   min-block-size: 100dvh;
   margin-inline-start: var(--sidebar-width);
+  background: var(--color-workspace);
 }
 
 .header {
