@@ -10,7 +10,7 @@ const stylesheet = readFileSync(
 
 describe("ImageJobTracker styles", () => {
   it("uses only the platform's shared color tokens", () => {
-    expect(stylesheet).toMatch(/var\(--color-surface-raised\)/);
+    expect(stylesheet).toMatch(/var\(--color-surface\)/);
     expect(stylesheet).toMatch(/var\(--color-border\)/);
     expect(stylesheet).toMatch(/var\(--color-text-muted\)/);
     expect(stylesheet).not.toMatch(/--border-subtle|--surface-raised|--text-secondary|--accent-primary|--danger-text/);

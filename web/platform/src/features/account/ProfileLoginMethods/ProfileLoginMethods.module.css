@@ -17,7 +17,7 @@
 .card {
   padding: var(--space-3);
   border-radius: var(--radius-lg);
-  background: var(--color-surface-raised);
+  background: var(--color-surface);
 }
 
 .card p {

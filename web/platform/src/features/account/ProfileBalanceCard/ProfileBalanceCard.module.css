@@ -5,7 +5,7 @@
   align-items: center;
   padding: clamp(var(--space-4), 4vw, var(--space-5));
   border-radius: var(--radius-lg);
-  background: var(--color-surface-raised);
+  background: var(--color-surface);
 }
 
 .plan,

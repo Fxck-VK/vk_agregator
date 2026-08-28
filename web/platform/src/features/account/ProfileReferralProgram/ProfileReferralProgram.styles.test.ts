@@ -13,7 +13,7 @@ const faqStylesheet = readFileSync(
 );
 
 describe("ProfileReferralProgram responsive styles", () => {
-  it("uses a decorative blue accent treatment for the launch card", () => {
+  it("uses a restrained brand accent treatment for the launch card", () => {
     expect(programStylesheet).toMatch(
       /\.launchCard\s*\{[^}]*position:\s*relative;[^}]*overflow:\s*hidden;[^}]*background:\s*radial-gradient\(/s,
     );
@@ -37,7 +37,7 @@ describe("ProfileReferralProgram responsive styles", () => {
 
   it("keeps FAQ rows full-width with a distinct disclosure affordance", () => {
     expect(faqStylesheet).toMatch(
-      /\.item\s*\{[^}]*inline-size:\s*100%;[^}]*background:\s*var\(--color-surface-raised\);/s,
+      /\.item\s*\{[^}]*inline-size:\s*100%;[^}]*background:\s*var\(--color-surface\);/s,
     );
     expect(faqStylesheet).toMatch(
       /\.indicator\s*\{[^}]*border:\s*0\.0625rem solid var\(--color-border\);[^}]*border-radius:\s*999px;/s,

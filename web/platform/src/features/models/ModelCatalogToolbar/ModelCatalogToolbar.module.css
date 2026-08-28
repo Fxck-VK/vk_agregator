@@ -20,7 +20,7 @@
   align-items: center;
   border: 0.0625rem solid var(--color-border);
   border-radius: var(--radius-lg);
-  background: var(--color-surface-raised);
+  background: var(--color-surface);
   transition: border-color var(--motion-fast), box-shadow var(--motion-fast);
 }
 
