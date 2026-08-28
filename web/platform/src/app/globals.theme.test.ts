@@ -6,15 +6,51 @@ import { describe, expect, it } from "vitest";
 const stylesheet = readFileSync(resolve(process.cwd(), "src/app/globals.css"), "utf8");
 
 describe("global theme tokens", () => {
-  it("defines explicit dark and approved light semantic palettes", () => {
-    expect(stylesheet).toContain(':root[data-theme="dark"]');
-    expect(stylesheet).toContain(':root[data-theme="light"]');
-    expect(stylesheet).toContain("--color-background: #f6f7f9");
-    expect(stylesheet).toContain("--color-surface: #ffffff");
-    expect(stylesheet).toContain("--color-text: #171a21");
-    expect(stylesheet).toContain("--color-text-muted: #667085");
-    expect(stylesheet).toContain("color-scheme: light");
-    expect(stylesheet).toContain("color-scheme: dark");
+  it("defines the approved graphite and brand palettes", () => {
+    const darkTheme = stylesheet.match(/:root\[data-theme="dark"\]\s*\{([\s\S]*?)\n\}/)?.[1] ?? "";
+    const lightTheme = stylesheet.match(/:root\[data-theme="light"\]\s*\{([\s\S]*?)\n\}/)?.[1] ?? "";
+
+    for (const token of [
+      "--color-background: #0c0c0f",
+      "--color-workspace: #111217",
+      "--color-panel: #15161c",
+      "--color-surface: #1a1b22",
+      "--color-surface-raised: #20212a",
+      "--color-border: #2a2b35",
+      "--color-text: #f5f5f7",
+      "--color-text-muted: #9b9da8",
+      "--color-brand-violet: #9a7cf5",
+      "--color-brand-blue: #7c8ff7",
+      "--color-brand-pink: #f09af0",
+      "--color-focus: #a9cfff",
+      "--color-text-on-accent: #111217",
+    ]) {
+      expect(darkTheme).toContain(token);
+    }
+
+    for (const token of [
+      "--color-background: #f7f7fa",
+      "--color-workspace: #ffffff",
+      "--color-panel: #f3f3f7",
+      "--color-surface: #eeeef4",
+      "--color-surface-raised: #e8e8f0",
+      "--color-border: #dedfe7",
+      "--color-text: #17171b",
+      "--color-text-muted: #6b6c76",
+      "--color-brand-violet: #7563e6",
+      "--color-brand-blue: #6678e6",
+      "--color-brand-pink: #d56dd9",
+      "--color-focus: #8475f0",
+      "--color-text-on-accent: #ffffff",
+    ]) {
+      expect(lightTheme).toContain(token);
+    }
+
+    expect(stylesheet).toContain("--color-accent: var(--color-brand-violet)");
+    expect(stylesheet).toContain("--color-accent-strong: var(--color-brand-blue)");
+    expect(stylesheet).toContain(
+      "--gradient-brand: linear-gradient(120deg, #f29af3 0%, #b983f6 48%, #7c8ff7 100%)",
+    );
   });
 
   it("maps system preference to the light palette through the operating-system media query", () => {
@@ -22,7 +58,10 @@ describe("global theme tokens", () => {
 
     expect(systemLightMedia).toBeDefined();
     expect(systemLightMedia ?? "").toContain(':root[data-theme="system"]');
-    expect(systemLightMedia ?? "").toContain("--color-background: #f6f7f9");
+    expect(systemLightMedia ?? "").toContain("--color-background: #f7f7fa");
+    expect(systemLightMedia ?? "").toContain("--color-workspace: #ffffff");
+    expect(systemLightMedia ?? "").toContain("--color-panel: #f3f3f7");
+    expect(systemLightMedia ?? "").toContain("--color-brand-violet: #7563e6");
     expect(systemLightMedia ?? "").toContain("color-scheme: light");
   });
 
