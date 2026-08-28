@@ -32,12 +32,13 @@
 .planIntro h2 {
   margin: 0;
   color: var(--color-text);
-  letter-spacing: -0.035em;
-  line-height: 1.08;
 }
 
 .heroCopy h1 {
-  font-size: clamp(2.25rem, 3.5vw, 3rem);
+  font-size: var(--font-size-display);
+  font-weight: var(--font-weight-semibold);
+  letter-spacing: var(--letter-spacing-display);
+  line-height: var(--line-height-display);
   white-space: nowrap;
 }
 
@@ -49,7 +50,9 @@
   max-inline-size: 43rem;
   margin: var(--space-3) auto 0;
   color: var(--color-text-muted);
-  font-size: clamp(1rem, 2vw, 1.25rem);
+  font-size: var(--font-size-supporting);
+  font-weight: var(--font-weight-regular);
+  line-height: var(--line-height-supporting);
 }
 
 .toolRail {
@@ -110,7 +113,10 @@
 .sectionHeading h2,
 .communityCard h2,
 .planIntro h2 {
-  font-size: clamp(1.75rem, 4vw, 2.5rem);
+  font-size: var(--font-size-section);
+  font-weight: var(--font-weight-semibold);
+  letter-spacing: var(--letter-spacing-section);
+  line-height: var(--line-height-section);
 }
 
 .sectionHeading p:not(.kicker),
@@ -119,14 +125,17 @@
   max-inline-size: 43rem;
   margin: var(--space-2) 0 0;
   color: var(--color-text-muted);
-  font-size: 1.0625rem;
+  font-size: var(--font-size-supporting);
+  font-weight: var(--font-weight-regular);
+  line-height: var(--line-height-supporting);
 }
 
 .kicker {
   margin: 0 0 var(--space-2);
   color: var(--color-accent);
-  font-size: 0.78rem;
-  font-weight: 800;
+  font-size: var(--font-size-caption);
+  font-weight: var(--font-weight-semibold);
+  line-height: var(--line-height-caption);
   letter-spacing: 0.09em;
   text-transform: uppercase;
 }

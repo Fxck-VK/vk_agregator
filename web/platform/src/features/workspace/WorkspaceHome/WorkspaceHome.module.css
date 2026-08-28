@@ -46,8 +46,10 @@
 .content h1 {
   max-inline-size: 36rem;
   margin-block-end: var(--space-3);
-  font-size: clamp(2rem, 5vw, 3.5rem);
-  line-height: 1.08;
+  font-size: var(--font-size-display);
+  font-weight: var(--font-weight-semibold);
+  letter-spacing: var(--letter-spacing-display);
+  line-height: var(--line-height-display);
 }
 
 .newChatContent h1 {
@@ -60,7 +62,9 @@
   max-inline-size: 42rem;
   margin-block-end: var(--space-8);
   color: var(--color-text-muted);
-  font-size: 1.125rem;
+  font-size: var(--font-size-supporting);
+  font-weight: var(--font-weight-regular);
+  line-height: var(--line-height-supporting);
 }
 
 .welcome .description {

@@ -24,8 +24,9 @@
 .eyebrow {
   margin-block-end: var(--space-2);
   color: var(--color-accent);
-  font-size: 0.78rem;
-  font-weight: 800;
+  font-size: var(--font-size-caption);
+  font-weight: var(--font-weight-semibold);
+  line-height: var(--line-height-caption);
   letter-spacing: 0.09em;
   text-transform: uppercase;
 }
@@ -33,19 +34,25 @@
 .title {
   color: var(--color-text);
   font-size: var(--font-size-section);
-  letter-spacing: -0.035em;
-  line-height: var(--line-height-tight);
+  font-weight: var(--font-weight-semibold);
+  letter-spacing: var(--letter-spacing-section);
+  line-height: var(--line-height-section);
 }
 
 .copy > h1.title {
   font-size: var(--font-size-display);
+  font-weight: var(--font-weight-semibold);
+  letter-spacing: var(--letter-spacing-display);
+  line-height: var(--line-height-display);
 }
 
 .description {
   max-inline-size: 43rem;
   margin-block-start: var(--space-2);
   color: var(--color-text-muted);
-  font-size: var(--font-size-body-lg);
+  font-size: var(--font-size-supporting);
+  font-weight: var(--font-weight-regular);
+  line-height: var(--line-height-supporting);
 }
 
 .root[data-align="center"] .description {

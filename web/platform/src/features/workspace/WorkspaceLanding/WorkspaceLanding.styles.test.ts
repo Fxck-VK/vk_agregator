@@ -21,7 +21,7 @@ describe("WorkspaceLanding hero", () => {
   it("keeps the desktop heading compact and on one line", () => {
     const headingRule = stylesheet.match(/\.heroCopy h1\s*\{[^}]*\}/s)?.[0] ?? "";
 
-    expect(headingRule).toContain("font-size: clamp(2.25rem, 3.5vw, 3rem)");
+    expect(headingRule).toContain("font-size: var(--font-size-display)");
     expect(headingRule).toContain("white-space: nowrap");
   });
 
