@@ -126,7 +126,8 @@ describe("WorkspaceHome", () => {
     expect(cards[0]).toHaveTextContent("1K");
     expect(cards[0]).toHaveTextContent("Поддерживает референсы");
     expect(within(region).queryByText("Пятая модель")).toBeNull();
-    expect(within(region).getAllByTestId("model-icon-placeholder")).toHaveLength(4);
+    expect(within(region).getAllByTestId("model-icon-fallback")).toHaveLength(4);
+    expect(within(region).queryByTestId("model-icon-placeholder")).toBeNull();
     expect(region).not.toHaveTextContent("Открыть");
     expect(region).not.toHaveTextContent("рейтинг");
     expect(region).not.toHaveTextContent("запусков");

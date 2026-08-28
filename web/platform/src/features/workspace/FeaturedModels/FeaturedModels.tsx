@@ -4,6 +4,7 @@ import Link from "next/link";
 import { useEffect, useState } from "react";
 
 import { CreditAmount } from "@/components/ui/CreditAmount/CreditAmount";
+import { ModelIcon } from "@/features/models/ModelIcon/ModelIcon";
 import { loadImageModelCatalog } from "@/features/models/image-model-catalog-cache";
 import type { ImageModel } from "@/lib/web-api/contracts";
 
@@ -75,7 +76,7 @@ export function FeaturedModels() {
             prefetch={false}
           >
             <span className={styles.cardTop}>
-              <span aria-hidden="true" className={styles.iconPlaceholder} data-testid="model-icon-placeholder" />
+              <ModelIcon />
               {minimumPrice !== null ? <CreditAmount className={styles.price} prefix="от" value={minimumPrice} /> : null}
             </span>
             <span className={styles.copy}>

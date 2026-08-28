@@ -32,27 +32,6 @@
   gap: var(--space-3);
 }
 
-.iconPlaceholder {
-  position: relative;
-  inline-size: 3.5rem;
-  block-size: 3.5rem;
-  flex: 0 0 auto;
-  border: 0.0625rem solid var(--color-border);
-  border-radius: 1rem;
-  background:
-    radial-gradient(circle at 35% 35%, color-mix(in srgb, var(--color-text-muted) 30%, transparent) 0 0.3rem, transparent 0.35rem),
-    var(--color-surface-raised);
-}
-
-.iconPlaceholder::after {
-  position: absolute;
-  inset: 1rem;
-  border: 0.125rem solid var(--color-text-muted);
-  border-radius: 0.45rem;
-  content: "";
-  opacity: 0.7;
-}
-
 .price {
   color: var(--color-text);
   font-size: 0.95rem;
