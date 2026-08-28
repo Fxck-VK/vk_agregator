@@ -14,15 +14,11 @@
 .icon {
   inline-size: 3.5rem;
   block-size: 3.5rem;
-  border: 0.0625rem solid var(--color-border);
-  border-radius: 1rem;
-  background: var(--color-surface);
-  transition: translate var(--motion-fast), border-color var(--motion-fast);
+  transition: translate var(--motion-fast);
 }
 
 .shortcut:hover .icon {
   translate: 0 -0.2rem;
-  border-color: var(--color-accent);
 }
 
 .skeleton {
