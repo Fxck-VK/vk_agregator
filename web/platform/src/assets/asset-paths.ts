@@ -25,6 +25,7 @@ export const assetPaths = {
     },
     workspace: {
       allModelsBadge: "/assets/images/workspace/all-models-90-plus.png",
+      allModelsButtonBackground: "/assets/images/workspace/all-models-button-background.png",
     },
     models: {
       fallback: {

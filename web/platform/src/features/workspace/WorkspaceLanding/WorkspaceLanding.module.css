@@ -185,12 +185,32 @@
 }
 
 .primaryButton {
-  background: var(--color-accent);
+  position: relative;
+  isolation: isolate;
+  background: transparent;
   color: var(--color-text-on-accent);
 }
 
 .primaryButton:hover {
-  background: var(--color-accent-strong);
+  background: transparent;
+}
+
+.primaryButtonBackground {
+  z-index: 0;
+  inline-size: 100%;
+  block-size: 100%;
+  object-fit: fill;
+  pointer-events: none;
+  transition: filter var(--motion-fast);
+}
+
+.primaryButton:hover .primaryButtonBackground {
+  filter: brightness(1.08);
+}
+
+.primaryButtonLabel {
+  position: relative;
+  z-index: 1;
 }
 
 .secondaryButton {

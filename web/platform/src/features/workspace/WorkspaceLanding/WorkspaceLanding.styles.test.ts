@@ -73,4 +73,22 @@ describe("WorkspaceLanding hero", () => {
     expect(badgeRule).toMatch(/inset-inline-start:\s*-/);
     expect(badgeRule).toContain("pointer-events: none");
   });
+
+  it("uses the supplied artwork behind the popular-models button label", () => {
+    const primaryButtonRule = stylesheet.match(/(?:^|\n)\.primaryButton\s*\{[^}]*\}/s)?.[0] ?? "";
+    const backgroundRule = stylesheet.match(/\.primaryButtonBackground\s*\{[^}]*\}/s)?.[0] ?? "";
+
+    expect(componentSource).toContain("assetPaths.images.workspace.allModelsButtonBackground");
+    expect(componentSource).toMatch(
+      /<Image[^>]*alt=""[^>]*className=\{styles\.primaryButtonBackground\}[^>]*fill[^>]*sizes="12rem"[^>]*src=\{assetPaths\.images\.workspace\.allModelsButtonBackground\}/s,
+    );
+    expect(componentSource).toContain('<span className={styles.primaryButtonLabel}>Все нейросети</span>');
+    expect(primaryButtonRule).toContain("position: relative");
+    expect(primaryButtonRule).toContain("background: transparent");
+    expect(backgroundRule).toContain("object-fit: fill");
+    expect(backgroundRule).toContain("pointer-events: none");
+    expect(stylesheet).toMatch(
+      /\.primaryButton:hover \.primaryButtonBackground\s*\{[^}]*filter:\s*brightness\(/s,
+    );
+  });
 });
