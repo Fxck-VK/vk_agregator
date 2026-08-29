@@ -69,7 +69,7 @@ describe("WorkspaceLanding hero", () => {
     );
     expect(arrowRule).toContain("position: relative");
     expect(badgeRule).toContain("position: absolute");
-    expect(badgeRule).toMatch(/inset-block-start:\s*-/);
+    expect(badgeRule).toContain("inset-block-start: -1.1rem");
     expect(badgeRule).toMatch(/inset-inline-start:\s*-/);
     expect(badgeRule).toContain("pointer-events: none");
   });

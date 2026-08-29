@@ -115,7 +115,7 @@
 .modelCountBadge {
   position: absolute;
   z-index: 1;
-  inset-block-start: -1.6rem;
+  inset-block-start: -1.1rem;
   inset-inline-start: -0.95rem;
   inline-size: 3.5rem;
   block-size: auto;
