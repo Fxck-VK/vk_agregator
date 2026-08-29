@@ -49,4 +49,13 @@ describe("WorkspaceLanding hero", () => {
       /@media \(width < 48rem\)[\s\S]*\.heroCopy h1\s*\{[^}]*white-space:\s*normal;/s,
     );
   });
+
+  it("keeps the all-models arrow transparent until hover or keyboard focus", () => {
+    expect(stylesheet).toMatch(
+      /\.arrowIcon\s*\{[^}]*border-color:\s*transparent;[^}]*background:\s*transparent;[^}]*color:\s*var\(--color-text\);/s,
+    );
+    expect(stylesheet).toMatch(
+      /\.allToolsShortcut:hover \.arrowIcon,\s*\.allToolsShortcut:focus-visible \.arrowIcon\s*\{[^}]*border-color:\s*var\(--color-accent\);/s,
+    );
+  });
 });
