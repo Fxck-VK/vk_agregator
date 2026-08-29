@@ -40,6 +40,42 @@ describe("loadWorkspaceSession", () => {
 
   afterEach(() => {
     vi.clearAllMocks();
+    vi.unstubAllEnvs();
+  });
+
+  it("returns a fixed authenticated preview session only in local development", async () => {
+    vi.stubEnv("NODE_ENV", "development");
+    vi.stubEnv("NEIROHUB_LOCAL_WORKSPACE_PREVIEW", "1");
+
+    await expect(loadWorkspaceSession()).resolves.toMatchObject({
+      kind: "authenticated",
+      profile: {
+        account_id: "10000000-0000-4000-8000-000000000001",
+        identity_refs: [
+          {
+            label: "preview@neirohub.local",
+          },
+        ],
+      },
+      balance: 1000,
+      conversations: [
+        { title: "Подготовить макет" },
+        { title: "Идеи для проекта" },
+        { title: "Тексты для сайта" },
+      ],
+    });
+    expect(webServerFetch).not.toHaveBeenCalled();
+    expect(cookies).not.toHaveBeenCalled();
+  });
+
+  it("never enables the local preview session in production", async () => {
+    vi.stubEnv("NODE_ENV", "production");
+    vi.stubEnv("NEIROHUB_LOCAL_WORKSPACE_PREVIEW", "1");
+    vi.mocked(webServerFetch).mockResolvedValueOnce(new Response(null, { status: 401 }));
+
+    await expect(loadWorkspaceSession()).resolves.toEqual({ kind: "unauthenticated" });
+    expect(webServerFetch).toHaveBeenCalledTimes(1);
+    expect(webServerFetch).toHaveBeenCalledWith("/web/v1/me");
   });
 
   it("maps a profile 401 without a refresh cookie to unauthenticated without loading conversations", async () => {

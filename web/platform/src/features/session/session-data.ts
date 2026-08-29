@@ -10,6 +10,12 @@ import {
   type ConversationItem,
 } from "../../lib/web-api/contracts";
 import { webServerFetch } from "../../lib/web-api/server";
+import {
+  isLocalWorkspacePreviewEnabled,
+  localWorkspacePreviewBalance,
+  localWorkspacePreviewConversations,
+  localWorkspacePreviewProfile,
+} from "./local-workspace-preview";
 
 export type WorkspaceSession =
   | { kind: "authenticated"; profile: AccountProfile; conversations: ConversationItem[]; balance: number | null }
@@ -18,6 +24,15 @@ export type WorkspaceSession =
   | { kind: "unavailable" };
 
 export async function loadWorkspaceSession(): Promise<WorkspaceSession> {
+  if (isLocalWorkspacePreviewEnabled()) {
+    return {
+      kind: "authenticated",
+      profile: localWorkspacePreviewProfile,
+      balance: localWorkspacePreviewBalance,
+      conversations: localWorkspacePreviewConversations,
+    };
+  }
+
   try {
     const profileResponse = await webServerFetch("/web/v1/me");
     if (profileResponse.status === 401) {
