@@ -9,6 +9,7 @@ const repositoryDirectory = resolve(platformDirectory, "..", "..");
 const dockerfilePath = resolve(repositoryDirectory, "Dockerfile.platform");
 const dockerignorePath = resolve(repositoryDirectory, ".dockerignore");
 const ciWorkflowPath = resolve(repositoryDirectory, ".github", "workflows", "ci.yml");
+const packageJsonPath = resolve(platformDirectory, "package.json");
 
 let dockerfile;
 try {
@@ -19,6 +20,13 @@ try {
 
 const dockerignore = await readFile(dockerignorePath, "utf8");
 const ciWorkflow = (await readFile(ciWorkflowPath, "utf8")).replace(/\r\n/g, "\n");
+const packageJson = JSON.parse(await readFile(packageJsonPath, "utf8"));
+
+assert.equal(
+  packageJson.scripts.dev,
+  "next dev --port 7158",
+  "local platform development must use port 7158",
+);
 
 assert.doesNotMatch(
   dockerfile,
