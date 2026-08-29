@@ -69,31 +69,31 @@ describe("WorkspaceHome", () => {
           max_reference_images: 4,
         },
         {
+          id: "nano-banana-pro",
+          name: "Nano Banana Pro",
+          quality_options: ["1K"],
+          price_by_quality: { "1K": 50 },
+          default_quality: "1K",
+          supports_reference_image: true,
+          max_reference_images: 4,
+        },
+        {
           id: "gpt-image-2",
           name: "GPT Image 2",
           quality_options: ["1K"],
-          price_by_quality: { "1K": 51 },
+          price_by_quality: { "1K": 40 },
           default_quality: "1K",
           supports_reference_image: false,
           max_reference_images: 0,
         },
         {
-          id: "seedream-5-pro",
-          name: "Seedream 5.0 Pro",
-          quality_options: ["2K"],
-          price_by_quality: { "2K": 35 },
+          id: "seedream-4.5",
+          name: "Seedream 4.5",
+          quality_options: ["2K", "4K"],
+          price_by_quality: { "2K": 30, "4K": 45 },
           default_quality: "2K",
           supports_reference_image: true,
           max_reference_images: 2,
-        },
-        {
-          id: "midjourney-v7",
-          name: "Midjourney",
-          quality_options: ["standard"],
-          price_by_quality: { standard: 55 },
-          default_quality: "standard",
-          supports_reference_image: true,
-          max_reference_images: 1,
         },
         {
           id: "hidden-fifth-model",
@@ -122,9 +122,17 @@ describe("WorkspaceHome", () => {
     expect(cards).toHaveLength(4);
     expect(cards[0]).toHaveAttribute("href", "/app/image?model=nano-banana-2");
     expect(cards[0]).toHaveTextContent("Nano Banana 2");
-    expect(within(cards[0]).getByLabelText("от 55 звёзд")).toBeInTheDocument();
-    expect(cards[0]).toHaveTextContent("1K");
-    expect(cards[0]).toHaveTextContent("Поддерживает референсы");
+    expect(within(cards[0]).getByLabelText("55 звёзд")).toBeInTheDocument();
+    expect(within(cards[0]).queryByLabelText("от 55 звёзд")).toBeNull();
+    expect(cards[0]).toHaveTextContent("Быстрая генерация и редактирование изображений для повседневных задач");
+    expect(cards[1]).toHaveTextContent("Детализированные изображения для сложных творческих и рабочих задач");
+    expect(cards[2]).toHaveTextContent("Точное создание изображений по описанию с хорошей передачей текста");
+    expect(cards[3]).toHaveTextContent("Фотореалистичные изображения с высокой детализацией и выразительным стилем");
+    expect(region).not.toHaveTextContent("1K");
+    expect(region).not.toHaveTextContent("2K");
+    expect(region).not.toHaveTextContent("4K");
+    expect(region).not.toHaveTextContent("Поддерживает референсы");
+    expect(region).not.toHaveTextContent("По текстовому запросу");
     expect(within(region).queryByText("Пятая модель")).toBeNull();
     expect(within(region).getAllByTestId("model-icon-fallback")).toHaveLength(4);
     expect(within(region).queryByTestId("model-icon-placeholder")).toBeNull();
@@ -134,9 +142,9 @@ describe("WorkspaceHome", () => {
     expect(shortcuts).toHaveLength(4);
     expect(shortcuts.map((shortcut) => shortcut.textContent)).toEqual([
       "Nano Banana 2",
+      "Nano Banana Pro",
       "GPT Image 2",
-      "Seedream 5.0 Pro",
-      "Midjourney",
+      "Seedream 4.5",
     ]);
     expect(shortcuts[0]).toHaveAttribute("href", "/app/image?model=nano-banana-2");
     expect(shortcutsNavigation).not.toHaveTextContent("NeiroHub Chat");

@@ -2,13 +2,15 @@
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
   gap: var(--space-4);
+  inline-size: min(100%, 58rem);
+  margin-inline: auto;
 }
 
 .card {
   display: grid;
-  grid-template-rows: auto 1fr auto;
-  gap: var(--space-5);
-  min-block-size: 14.5rem;
+  grid-template-rows: auto 1fr;
+  gap: var(--space-3);
+  min-block-size: 11.5rem;
   border: 0.0625rem solid var(--color-border);
   border-radius: 1.25rem;
   padding: clamp(var(--space-5), 3vw, var(--space-6));
@@ -24,8 +26,7 @@
   background: var(--color-surface-raised);
 }
 
-.cardTop,
-.facts {
+.cardTop {
   display: flex;
   align-items: center;
   justify-content: space-between;
@@ -57,21 +58,6 @@
   font-size: var(--font-size-body);
   font-weight: var(--font-weight-regular);
   line-height: var(--line-height-body);
-}
-
-.facts {
-  justify-content: flex-start;
-  flex-wrap: wrap;
-  color: var(--color-text-muted);
-  font-size: var(--font-size-caption);
-  line-height: var(--line-height-caption);
-}
-
-.facts span {
-  border: 0.0625rem solid var(--color-border);
-  border-radius: 999px;
-  padding: 0.3rem 0.6rem;
-  background: color-mix(in srgb, var(--color-surface-raised) 80%, transparent);
 }
 
 .empty {
@@ -112,10 +98,6 @@
 @media (max-width: 48rem) {
   .grid {
     grid-template-columns: 1fr;
-  }
-
-  .card {
-    min-block-size: 13rem;
   }
 }
 

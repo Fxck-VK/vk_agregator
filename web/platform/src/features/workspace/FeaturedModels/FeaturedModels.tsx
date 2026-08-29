@@ -12,6 +12,13 @@ import styles from "./FeaturedModels.module.css";
 
 const featuredModelLimit = 4;
 
+const featuredModelDescriptions: Readonly<Record<string, string>> = {
+  "Nano Banana 2": "Быстрая генерация и редактирование изображений для повседневных задач",
+  "Nano Banana Pro": "Детализированные изображения для сложных творческих и рабочих задач",
+  "GPT Image 2": "Точное создание изображений по описанию с хорошей передачей текста",
+  "Seedream 4.5": "Фотореалистичные изображения с высокой детализацией и выразительным стилем",
+};
+
 type LoadState = "loading" | "ready" | "failed";
 
 function getMinimumPrice(model: ImageModel): number | null {
@@ -20,9 +27,7 @@ function getMinimumPrice(model: ImageModel): number | null {
 }
 
 function getModelDescription(model: ImageModel): string {
-  return model.supports_reference_image
-    ? "Создание и редактирование изображений по запросу и референсам"
-    : "Генерация изображений по текстовому запросу";
+  return featuredModelDescriptions[model.name] ?? `${model.name} для создания изображений по вашему описанию`;
 }
 
 export function FeaturedModels() {
@@ -77,15 +82,11 @@ export function FeaturedModels() {
           >
             <span className={styles.cardTop}>
               <ModelIcon />
-              {minimumPrice !== null ? <CreditAmount className={styles.price} prefix="от" value={minimumPrice} /> : null}
+              {minimumPrice !== null ? <CreditAmount className={styles.price} value={minimumPrice} /> : null}
             </span>
             <span className={styles.copy}>
               <strong>{model.name}</strong>
               <span>{getModelDescription(model)}</span>
-            </span>
-            <span className={styles.facts}>
-              <span>{model.quality_options.join(" · ")}</span>
-              <span>{model.supports_reference_image ? "Поддерживает референсы" : "По текстовому запросу"}</span>
             </span>
           </Link>
         );
