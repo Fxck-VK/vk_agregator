@@ -39,6 +39,12 @@ describe("ConversationRow styles", () => {
     expect(stylesheet).not.toMatch(/\.actionToggle:hover\s*\{[^}]*background:/s);
   });
 
+  it("keeps collapsed-sidebar conversation icons square with soft corners", () => {
+    expect(stylesheet).toMatch(
+      /\.railIcon\s*\{[^}]*inline-size:\s*2rem;[^}]*block-size:\s*2rem;[^}]*border-radius:\s*var\(--radius-sm\);/s,
+    );
+  });
+
   it("reveals the ellipsis on hover or while its menu is open, but not only because the chat is active", () => {
     expect(stylesheet).toMatch(/@media \(hover: hover\) and \(pointer: fine\)[\s\S]*\.actionToggle\s*\{\s*opacity:\s*0;/s);
     expect(stylesheet).toMatch(/\.row:hover \.actionToggle,[\s\S]*\.row\[data-panel-open="true"\] \.actionToggle,[\s\S]*\.actions:focus-within \.actionToggle\s*\{\s*opacity:\s*1;/s);
