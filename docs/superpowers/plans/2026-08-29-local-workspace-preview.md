@@ -4,7 +4,7 @@
 
 **Goal:** Render the complete authenticated `/app` workspace locally without the backend stack when an explicit development-only flag is enabled.
 
-**Architecture:** The server-only session loader checks a private preview flag before making API requests. A fixed, non-sensitive `WorkspaceSession` supplies layout data only in development; all other environments retain the existing API-backed flow.
+**Architecture:** A server-only preview module owns the private flag and fixed non-sensitive layout/catalog data. The session loader uses it before API requests, while the platform BFF serves only the preview image-model catalogue; all other environments and routes retain the existing API-backed flow.
 
 **Tech Stack:** Next.js 16, TypeScript, Vitest, ignored Next.js development environment file
 
@@ -23,11 +23,14 @@
 **Files:**
 - Modify: `web/platform/src/features/session/session-data.ts`
 - Test: `web/platform/src/features/session/session-data.test.ts`
+- Create: `web/platform/src/features/session/local-workspace-preview.ts`
+- Modify: `web/platform/src/app/web/v1/[...path]/route.ts`
+- Test: `web/platform/src/app/web/v1/[...path]/route.test.ts`
 - Create locally, ignored by Git: `web/platform/.env.development.local`
 
 **Interfaces:**
 - Consumes: `NODE_ENV` and the server-only `NEIROHUB_LOCAL_WORKSPACE_PREVIEW` environment variable.
-- Produces: the existing `WorkspaceSession` authenticated variant for layout-only local development.
+- Produces: the existing `WorkspaceSession` authenticated variant and a read-only `GET /web/v1/image-models` response for layout-only local development.
 
 - [ ] **Step 1: Write failing preview tests**
 
@@ -52,11 +55,19 @@ process.env.NODE_ENV === "development" &&
 process.env.NEIROHUB_LOCAL_WORKSPACE_PREVIEW === "1"
 ```
 
-- [ ] **Step 4: Run the focused test and observe GREEN**
+- [ ] **Step 4: Add the failing catalogue route tests**
 
-Run the focused Vitest command again and expect all `session-data` tests to pass.
+Test that `GET /web/v1/image-models` returns four preview models without consulting the internal API only when both preview conditions are true. Test that production still calls the existing internal-origin and proxy functions.
 
-- [ ] **Step 5: Enable and verify the local preview**
+- [ ] **Step 5: Add the minimal read-only preview catalogue**
+
+Move the shared preview flag and fixed data into `local-workspace-preview.ts`. Intercept only an exact development-preview `GET /web/v1/image-models` in the route handler and return the static catalogue with `Cache-Control: no-store`; pass every other request through unchanged.
+
+- [ ] **Step 6: Run the focused tests and observe GREEN**
+
+Run both focused Vitest files and expect all session and route tests to pass.
+
+- [ ] **Step 7: Enable and verify the local preview**
 
 Create the ignored file `web/platform/.env.development.local` containing:
 
@@ -64,8 +75,8 @@ Create the ignored file `web/platform/.env.development.local` containing:
 NEIROHUB_LOCAL_WORKSPACE_PREVIEW=1
 ```
 
-Restart `npm run dev`, reload `http://localhost:7158/app`, and verify that the workspace content, sidebar, preview account, balance, and conversations are visible while the unavailable fallback is absent.
+Restart `npm run dev`, reload `http://localhost:7158/app`, and verify that the workspace content, sidebar, preview account, balance, conversations, model selector, shortcuts, and cards are visible while the unavailable fallback is absent.
 
-- [ ] **Step 6: Run regression checks and commit**
+- [ ] **Step 8: Run regression checks and commit**
 
-Run the full test suite, lint, typecheck, and packaging checks. Stage only the two tracked session files and commit the verified implementation; keep the local env file untracked and ignored.
+Run the full test suite, lint, typecheck, and packaging checks. Stage only the tracked preview/session/route files and commit the verified implementation; keep the local env file untracked and ignored.
