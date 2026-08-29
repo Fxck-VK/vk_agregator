@@ -53,10 +53,10 @@ describe("AccountMenu styles", () => {
     );
   });
 
-  it("renders a fixed circular account icon without turning the trigger into a pill", () => {
+  it("renders a fixed rounded-square account icon without turning the trigger into a pill", () => {
     expect(stylesheet).toMatch(/\.avatar\s*\{[^}]*inline-size:\s*2\.5rem;/s);
     expect(stylesheet).toMatch(/\.avatar\s*\{[^}]*block-size:\s*2\.5rem;/s);
-    expect(stylesheet).toMatch(/\.avatar\s*\{[^}]*border-radius:\s*50%;/s);
+    expect(stylesheet).toMatch(/\.avatar\s*\{[^}]*border-radius:\s*var\(--radius-sm\);/s);
     expect(triggerRule).toContain("border-radius: var(--radius-lg)");
   });
 

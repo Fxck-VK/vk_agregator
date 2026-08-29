@@ -523,7 +523,7 @@
   display: grid;
   grid-template-columns: 1fr 1.2fr;
   gap: clamp(var(--space-8), 8vw, 6rem);
-  inline-size: min(100%, 66rem);
+  inline-size: min(100%, 50rem);
   margin-inline: auto;
   padding: clamp(var(--space-8), 6vw, 4rem) clamp(var(--space-4), 4.5vw, 3.5rem);
 }

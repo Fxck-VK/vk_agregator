@@ -55,7 +55,7 @@ export function WorkspaceLanding({ access = "authenticated" }: WorkspaceLandingP
           <FeaturedModels />
         </section>
 
-        <section aria-labelledby="workspace-how-title" className={styles.section}>
+        <section aria-labelledby="workspace-how-title" className={`${styles.section} ${styles.contentFrame}`}>
           <div className={styles.sectionHeading}>
             <div>
               <p className={styles.kicker}>Коротко о главном</p>
@@ -66,7 +66,7 @@ export function WorkspaceLanding({ access = "authenticated" }: WorkspaceLandingP
           <VideoPlayer title="Как работает NeiroHub" />
         </section>
 
-        <section aria-labelledby="workspace-capabilities-title" className={styles.section}>
+        <section aria-labelledby="workspace-capabilities-title" className={`${styles.section} ${styles.contentFrame}`}>
           <div className={styles.sectionHeading}>
             <div>
               <p className={styles.kicker}>Не только обычный чат</p>
@@ -106,7 +106,7 @@ export function WorkspaceLanding({ access = "authenticated" }: WorkspaceLandingP
           </nav>
         </section>
 
-        <section aria-labelledby="workspace-plan-title" className={styles.section}>
+        <section aria-labelledby="workspace-plan-title" className={`${styles.section} ${styles.contentFrame}`}>
           <div className={styles.planCard}>
             <div className={styles.planIntro}>
               <p className={styles.kicker}>Аккаунт и баланс</p>
@@ -122,7 +122,7 @@ export function WorkspaceLanding({ access = "authenticated" }: WorkspaceLandingP
           </div>
         </section>
 
-        <section aria-labelledby="workspace-prompts-title" className={styles.section}>
+        <section aria-labelledby="workspace-prompts-title" className={`${styles.section} ${styles.contentFrame}`}>
           <div className={styles.sectionHeading}>
             <div>
               <p className={styles.kicker}>Начните с готовой идеи</p>
@@ -147,7 +147,7 @@ export function WorkspaceLanding({ access = "authenticated" }: WorkspaceLandingP
           </Link>
         </section>
 
-        <section aria-labelledby="workspace-faq-title" className={styles.section}>
+        <section aria-labelledby="workspace-faq-title" className={`${styles.section} ${styles.contentFrame}`}>
           <div className={styles.sectionHeading}>
             <div>
               <p className={styles.kicker}>Помощь по платформе</p>
@@ -164,7 +164,7 @@ export function WorkspaceLanding({ access = "authenticated" }: WorkspaceLandingP
           </div>
         </section>
 
-        <section aria-labelledby="workspace-community-title" className={`${styles.section} ${styles.communitySection}`}>
+        <section aria-labelledby="workspace-community-title" className={`${styles.section} ${styles.communitySection} ${styles.contentFrame}`}>
           <div className={styles.communityCard}>
             <div>
               <p className={styles.kicker}>Идеи и примеры</p>

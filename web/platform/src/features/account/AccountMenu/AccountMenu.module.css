@@ -29,7 +29,7 @@
   inline-size: 2.5rem;
   block-size: 2.5rem;
   place-items: center;
-  border-radius: 50%;
+  border-radius: var(--radius-sm);
   background: var(--color-accent);
   color: var(--color-text);
   font-size: 0.75rem;

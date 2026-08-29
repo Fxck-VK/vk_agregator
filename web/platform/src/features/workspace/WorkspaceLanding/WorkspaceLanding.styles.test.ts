@@ -23,12 +23,14 @@ describe("WorkspaceLanding background", () => {
 });
 
 describe("WorkspaceLanding hero", () => {
-  it("aligns the hero and featured models to one centered content frame", () => {
+  it("aligns every home section and the footer to one centered content frame", () => {
     const contentFrameRule = stylesheet.match(/\.contentFrame\s*\{[^}]*\}/s)?.[0] ?? "";
+    const footerInnerRule = stylesheet.match(/\.footerInner\s*\{[^}]*\}/s)?.[0] ?? "";
 
     expect(contentFrameRule).toContain("inline-size: min(100%, 50rem)");
     expect(contentFrameRule).toContain("margin-inline: auto");
-    expect(componentSource.match(/styles\.contentFrame/g)).toHaveLength(2);
+    expect(componentSource.match(/styles\.contentFrame/g)).toHaveLength(8);
+    expect(footerInnerRule).toContain("inline-size: min(100%, 50rem)");
   });
 
   it("keeps the desktop heading compact and on one line", () => {
