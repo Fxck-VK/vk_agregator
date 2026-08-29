@@ -14,6 +14,11 @@
   padding-block-start: clamp(4.5rem, 9vw, 7.5rem);
 }
 
+.contentFrame {
+  inline-size: min(100%, 50rem);
+  margin-inline: auto;
+}
+
 .hero {
   display: grid;
   align-content: center;

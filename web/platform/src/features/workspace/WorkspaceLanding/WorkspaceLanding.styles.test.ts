@@ -8,6 +8,11 @@ const stylesheet = readFileSync(
   "utf8",
 );
 
+const componentSource = readFileSync(
+  resolve(process.cwd(), "src/features/workspace/WorkspaceLanding/WorkspaceLanding.tsx"),
+  "utf8",
+);
+
 describe("WorkspaceLanding background", () => {
   it("uses a flat workspace background without an accent glow", () => {
     const pageRule = stylesheet.match(/\.page\s*\{[^}]*\}/s)?.[0] ?? "";
@@ -18,6 +23,14 @@ describe("WorkspaceLanding background", () => {
 });
 
 describe("WorkspaceLanding hero", () => {
+  it("aligns the hero and featured models to one centered content frame", () => {
+    const contentFrameRule = stylesheet.match(/\.contentFrame\s*\{[^}]*\}/s)?.[0] ?? "";
+
+    expect(contentFrameRule).toContain("inline-size: min(100%, 50rem)");
+    expect(contentFrameRule).toContain("margin-inline: auto");
+    expect(componentSource.match(/styles\.contentFrame/g)).toHaveLength(2);
+  });
+
   it("keeps the desktop heading compact and on one line", () => {
     const headingRule = stylesheet.match(/\.heroCopy h1\s*\{[^}]*\}/s)?.[0] ?? "";
 

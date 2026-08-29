@@ -19,7 +19,10 @@ export function WorkspaceLanding({ access = "authenticated" }: WorkspaceLandingP
   return (
     <div className={styles.page}>
       <div className={styles.main}>
-        <section aria-labelledby="workspace-home-title" className={`${styles.section} ${styles.hero}`}>
+        <section
+          aria-labelledby="workspace-home-title"
+          className={`${styles.section} ${styles.hero} ${styles.contentFrame}`}
+        >
           <div className={styles.heroCopy}>
             <h1 id="workspace-home-title">
               Простой старт в мир <span>нейросетей</span>
@@ -38,7 +41,10 @@ export function WorkspaceLanding({ access = "authenticated" }: WorkspaceLandingP
           </nav>
         </section>
 
-        <section aria-labelledby="workspace-models-title" className={styles.section}>
+        <section
+          aria-labelledby="workspace-models-title"
+          className={`${styles.section} ${styles.contentFrame}`}
+        >
           <div className={styles.sectionHeading}>
             <div>
               <h2 id="workspace-models-title">Популярные нейросети</h2>
