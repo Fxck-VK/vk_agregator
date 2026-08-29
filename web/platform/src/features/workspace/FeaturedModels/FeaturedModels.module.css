@@ -6,6 +6,54 @@
   margin-inline: auto;
 }
 
+.actions {
+  display: flex;
+  justify-content: center;
+  margin-block-start: var(--space-6);
+}
+
+.catalogAction {
+  position: relative;
+  isolation: isolate;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-block-size: 2.75rem;
+  border: 0;
+  border-radius: 999px;
+  padding: var(--space-2) var(--space-5);
+  overflow: hidden;
+  background: transparent;
+  color: var(--color-text-on-accent);
+  font: inherit;
+  font-weight: 700;
+  text-decoration: none;
+  cursor: pointer;
+  transition: translate var(--motion-fast);
+}
+
+.catalogAction:hover {
+  translate: 0 -0.1rem;
+}
+
+.catalogActionBackground {
+  z-index: 0;
+  inline-size: 100%;
+  block-size: 100%;
+  object-fit: fill;
+  pointer-events: none;
+  transition: filter var(--motion-fast);
+}
+
+.catalogAction:hover .catalogActionBackground {
+  filter: brightness(1.08);
+}
+
+.catalogActionLabel {
+  position: relative;
+  z-index: 1;
+}
+
 .card {
   display: grid;
   grid-template-rows: auto 1fr;

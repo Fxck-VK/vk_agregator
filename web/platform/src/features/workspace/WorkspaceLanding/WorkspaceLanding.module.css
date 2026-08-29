@@ -161,7 +161,6 @@
   text-transform: uppercase;
 }
 
-.primaryButton,
 .secondaryButton,
 .lightButton,
 .outlineLightButton {
@@ -177,40 +176,10 @@
   transition: translate var(--motion-fast), background var(--motion-fast), border-color var(--motion-fast);
 }
 
-.primaryButton:hover,
 .secondaryButton:hover,
 .lightButton:hover,
 .outlineLightButton:hover {
   translate: 0 -0.1rem;
-}
-
-.primaryButton {
-  position: relative;
-  isolation: isolate;
-  background: transparent;
-  color: var(--color-text-on-accent);
-}
-
-.primaryButton:hover {
-  background: transparent;
-}
-
-.primaryButtonBackground {
-  z-index: 0;
-  inline-size: 100%;
-  block-size: 100%;
-  object-fit: fill;
-  pointer-events: none;
-  transition: filter var(--motion-fast);
-}
-
-.primaryButton:hover .primaryButtonBackground {
-  filter: brightness(1.08);
-}
-
-.primaryButtonLabel {
-  position: relative;
-  z-index: 1;
 }
 
 .secondaryButton {

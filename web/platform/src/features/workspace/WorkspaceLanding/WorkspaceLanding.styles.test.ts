@@ -13,6 +13,16 @@ const componentSource = readFileSync(
   "utf8",
 );
 
+const featuredModelsStylesheet = readFileSync(
+  resolve(process.cwd(), "src/features/workspace/FeaturedModels/FeaturedModels.module.css"),
+  "utf8",
+);
+
+const featuredModelsSource = readFileSync(
+  resolve(process.cwd(), "src/features/workspace/FeaturedModels/FeaturedModels.tsx"),
+  "utf8",
+);
+
 describe("WorkspaceLanding background", () => {
   it("uses a flat workspace background without an accent glow", () => {
     const pageRule = stylesheet.match(/\.page\s*\{[^}]*\}/s)?.[0] ?? "";
@@ -74,21 +84,23 @@ describe("WorkspaceLanding hero", () => {
     expect(badgeRule).toContain("pointer-events: none");
   });
 
-  it("uses the supplied artwork behind the popular-models button label", () => {
-    const primaryButtonRule = stylesheet.match(/(?:^|\n)\.primaryButton\s*\{[^}]*\}/s)?.[0] ?? "";
-    const backgroundRule = stylesheet.match(/\.primaryButtonBackground\s*\{[^}]*\}/s)?.[0] ?? "";
+  it("uses the supplied artwork for the centered popular-model actions", () => {
+    const actionRule = featuredModelsStylesheet.match(/\.catalogAction\s*\{[^}]*\}/s)?.[0] ?? "";
+    const backgroundRule = featuredModelsStylesheet.match(/\.catalogActionBackground\s*\{[^}]*\}/s)?.[0] ?? "";
 
-    expect(componentSource).toContain("assetPaths.images.workspace.allModelsButtonBackground");
-    expect(componentSource).toMatch(
-      /<Image[^>]*alt=""[^>]*className=\{styles\.primaryButtonBackground\}[^>]*fill[^>]*sizes="12rem"[^>]*src=\{assetPaths\.images\.workspace\.allModelsButtonBackground\}/s,
+    expect(componentSource).not.toContain("styles.primaryButton");
+    expect(featuredModelsSource).toContain("assetPaths.images.workspace.allModelsButtonBackground");
+    expect(featuredModelsSource).toMatch(
+      /<Image[^>]*alt=""[^>]*className=\{styles\.catalogActionBackground\}[^>]*fill[^>]*sizes="12rem"[^>]*src=\{assetPaths\.images\.workspace\.allModelsButtonBackground\}/s,
     );
-    expect(componentSource).toContain('<span className={styles.primaryButtonLabel}>Все нейросети</span>');
-    expect(primaryButtonRule).toContain("position: relative");
-    expect(primaryButtonRule).toContain("background: transparent");
+    expect(featuredModelsSource).toContain('<CatalogActionContent label="Показать ещё" />');
+    expect(featuredModelsSource).toContain('<CatalogActionContent label="Все нейросети" />');
+    expect(actionRule).toContain("position: relative");
+    expect(actionRule).toContain("background: transparent");
     expect(backgroundRule).toContain("object-fit: fill");
     expect(backgroundRule).toContain("pointer-events: none");
-    expect(stylesheet).toMatch(
-      /\.primaryButton:hover \.primaryButtonBackground\s*\{[^}]*filter:\s*brightness\(/s,
+    expect(featuredModelsStylesheet).toMatch(
+      /\.catalogAction:hover \.catalogActionBackground\s*\{[^}]*filter:\s*brightness\(/s,
     );
   });
 });

@@ -59,16 +59,6 @@ export function WorkspaceLanding({ access = "authenticated" }: WorkspaceLandingP
               <h2 id="workspace-models-title">Популярные нейросети</h2>
               <p>Конкретные модели, их возможности и актуальная стоимость запуска.</p>
             </div>
-            <Link className={styles.primaryButton} href="/app/models">
-              <Image
-                alt=""
-                className={styles.primaryButtonBackground}
-                fill
-                sizes="12rem"
-                src={assetPaths.images.workspace.allModelsButtonBackground}
-              />
-              <span className={styles.primaryButtonLabel}>Все нейросети</span>
-            </Link>
           </div>
           <FeaturedModels />
         </section>
