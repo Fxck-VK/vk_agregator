@@ -35,7 +35,16 @@ export function WorkspaceLanding({ access = "authenticated" }: WorkspaceLandingP
           <nav aria-label="Основные возможности" className={styles.toolRail}>
             <FeaturedModelShortcuts />
             <Link className={styles.allToolsShortcut} href="/app/models">
-              <span aria-hidden="true" className={styles.arrowIcon}>→</span>
+              <span aria-hidden="true" className={styles.arrowIcon}>
+                <Image
+                  alt=""
+                  className={styles.modelCountBadge}
+                  height={36}
+                  src={assetPaths.images.workspace.allModelsBadge}
+                  width={48}
+                />
+                →
+              </span>
               <span>Все нейросети</span>
             </Link>
           </nav>

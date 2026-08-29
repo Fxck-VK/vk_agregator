@@ -23,6 +23,9 @@ export const assetPaths = {
     inspiration: {
       paperCraneCloud: "/assets/images/inspiration/paper-crane-cloud.png",
     },
+    workspace: {
+      allModelsBadge: "/assets/images/workspace/all-models-90-plus.png",
+    },
     models: {
       fallback: {
         darkTheme: "/assets/images/models/chip-silhouette.svg",

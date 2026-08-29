@@ -58,4 +58,19 @@ describe("WorkspaceLanding hero", () => {
       /\.allToolsShortcut:hover \.arrowIcon,\s*\.allToolsShortcut:focus-visible \.arrowIcon\s*\{[^}]*border-color:\s*var\(--color-accent\);/s,
     );
   });
+
+  it("pins the supplied 90+ artwork above the all-models arrow", () => {
+    const arrowRule = stylesheet.match(/(?:^|\n)\.arrowIcon\s*\{[^}]*\}/s)?.[0] ?? "";
+    const badgeRule = stylesheet.match(/\.modelCountBadge\s*\{[^}]*\}/s)?.[0] ?? "";
+
+    expect(componentSource).toContain("assetPaths.images.workspace.allModelsBadge");
+    expect(componentSource).toMatch(
+      /<Image[^>]*alt=""[^>]*className=\{styles\.modelCountBadge\}[^>]*src=\{assetPaths\.images\.workspace\.allModelsBadge\}/s,
+    );
+    expect(arrowRule).toContain("position: relative");
+    expect(badgeRule).toContain("position: absolute");
+    expect(badgeRule).toMatch(/inset-block-start:\s*-/);
+    expect(badgeRule).toMatch(/inset-inline-start:\s*-/);
+    expect(badgeRule).toContain("pointer-events: none");
+  });
 });

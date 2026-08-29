@@ -89,6 +89,7 @@
 }
 
 .arrowIcon {
+  position: relative;
   display: inline-grid;
   place-items: center;
   border: 0.0625rem solid color-mix(in srgb, currentColor 20%, transparent);
@@ -109,6 +110,17 @@
   background: transparent;
   color: var(--color-text);
   font-size: 1.5rem;
+}
+
+.modelCountBadge {
+  position: absolute;
+  z-index: 1;
+  inset-block-start: -1.6rem;
+  inset-inline-start: -0.95rem;
+  inline-size: 3.5rem;
+  block-size: auto;
+  pointer-events: none;
+  user-select: none;
 }
 
 .sectionHeading {

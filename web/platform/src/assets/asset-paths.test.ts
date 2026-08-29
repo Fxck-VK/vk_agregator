@@ -44,6 +44,12 @@ describe("assetPaths", () => {
     );
   });
 
+  it("exposes the all-models count badge URL", () => {
+    expect(assetPaths.images.workspace.allModelsBadge).toBe(
+      "/assets/images/workspace/all-models-90-plus.png",
+    );
+  });
+
   it("exposes both theme-specific model placeholder URLs", () => {
     expect(assetPaths.images.models.fallback).toEqual({
       darkTheme: "/assets/images/models/chip-silhouette.svg",
