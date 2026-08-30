@@ -20,4 +20,17 @@ describe("VideoPlayer layout", () => {
     expect(videoRule).toContain("block-size: 100%");
     expect(videoRule).toContain("object-fit: contain");
   });
+
+  it("covers native controls with a centered gradient start overlay", () => {
+    const overlayRule = stylesheet.match(/\.posterOverlay\s*\{[^}]*\}/s)?.[0] ?? "";
+    const playButtonRule = stylesheet.match(/\.playButton\s*\{[^}]*\}/s)?.[0] ?? "";
+
+    expect(overlayRule).toContain("position: absolute");
+    expect(overlayRule).toContain("inset: 0");
+    expect(overlayRule).toContain("display: grid");
+    expect(overlayRule).toContain("place-items: center");
+    expect(overlayRule).toContain("radial-gradient");
+    expect(playButtonRule).toContain("border-radius: 50%");
+    expect(playButtonRule).toContain("cursor: pointer");
+  });
 });

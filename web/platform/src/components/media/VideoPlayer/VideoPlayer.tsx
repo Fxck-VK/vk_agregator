@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useRef, useState } from "react";
 
 import styles from "./VideoPlayer.module.css";
 
@@ -17,6 +17,18 @@ type VideoPlayerProps = {
 
 export function VideoPlayer({ poster, source, title }: Readonly<VideoPlayerProps>) {
   const [hasPlaybackError, setHasPlaybackError] = useState(false);
+  const [hasStarted, setHasStarted] = useState(false);
+  const videoRef = useRef<HTMLVideoElement>(null);
+
+  const startPlayback = () => {
+    const video = videoRef.current;
+    if (!video) {
+      return;
+    }
+
+    setHasStarted(true);
+    video.play()?.catch(() => setHasStarted(false));
+  };
 
   if (source && !hasPlaybackError) {
     return (
@@ -24,14 +36,28 @@ export function VideoPlayer({ poster, source, title }: Readonly<VideoPlayerProps
         <video
           aria-label={title}
           className={styles.video}
-          controls
+          controls={hasStarted}
           onError={() => setHasPlaybackError(true)}
+          onPlay={() => setHasStarted(true)}
           poster={poster}
           preload="none"
+          ref={videoRef}
         >
           <source src={source.src} type={source.type} />
           Ваш браузер не поддерживает воспроизведение видео.
         </video>
+        {!hasStarted ? (
+          <div className={styles.posterOverlay}>
+            <button
+              aria-label={`Воспроизвести: ${title}`}
+              className={styles.playButton}
+              onClick={startPlayback}
+              type="button"
+            >
+              <span aria-hidden="true">▶</span>
+            </button>
+          </div>
+        ) : null}
       </div>
     );
   }

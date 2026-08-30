@@ -26,6 +26,49 @@
   object-fit: contain;
 }
 
+.posterOverlay {
+  position: absolute;
+  z-index: 1;
+  inset: 0;
+  display: grid;
+  place-items: center;
+  background:
+    radial-gradient(circle at 72% 34%, rgb(36 150 255 / 0.14), transparent 28%),
+    radial-gradient(circle at 24% 74%, rgb(116 87 255 / 0.12), transparent 32%),
+    var(--color-surface);
+}
+
+.playButton {
+  display: grid;
+  place-items: center;
+  inline-size: clamp(3.5rem, 8vw, 5rem);
+  block-size: clamp(3.5rem, 8vw, 5rem);
+  border: 0.0625rem solid color-mix(in srgb, var(--color-text) 16%, transparent);
+  border-radius: 50%;
+  padding: 0;
+  background: color-mix(in srgb, var(--color-surface) 82%, transparent);
+  color: var(--color-text);
+  font: inherit;
+  font-size: clamp(1.15rem, 3vw, 1.5rem);
+  line-height: 1;
+  cursor: pointer;
+  transition: border-color var(--motion-fast), translate var(--motion-fast);
+}
+
+.playButton span {
+  padding-inline-start: 0.15em;
+}
+
+.playButton:hover {
+  border-color: var(--color-accent);
+  translate: 0 -0.1rem;
+}
+
+.playButton:focus-visible {
+  outline: 0.125rem solid var(--color-focus);
+  outline-offset: 0.1875rem;
+}
+
 .playIcon {
   display: grid;
   place-items: center;
