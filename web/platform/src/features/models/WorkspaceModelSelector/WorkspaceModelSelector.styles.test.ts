@@ -13,6 +13,17 @@ const headerStylesheet = readFileSync(
 );
 
 describe("WorkspaceModelSelector layout", () => {
+  it("keeps the floating trigger compact beside the landing content", () => {
+    const triggerRule = stylesheet.match(/\.trigger\s*\{[^}]*\}/s)?.[0] ?? "";
+    const modelIconRule = stylesheet.match(/\.modelIcon\s*\{[^}]*\}/s)?.[0] ?? "";
+
+    expect(triggerRule).toContain("gap: var(--space-1)");
+    expect(triggerRule).toContain("max-inline-size: min(11.5rem, 42vw)");
+    expect(triggerRule).toContain("padding: var(--space-2)");
+    expect(modelIconRule).toContain("inline-size: 1.5rem");
+    expect(modelIconRule).toContain("block-size: 1.5rem");
+  });
+
   it("keeps search and footer fixed while only the model list scrolls", () => {
     expect(stylesheet).toMatch(
       /\.popover\s*\{[^}]*grid-template-rows:\s*auto minmax\(0,\s*1fr\) auto;[^}]*overflow:\s*hidden;/s,

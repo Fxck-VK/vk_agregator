@@ -15,7 +15,7 @@
 }
 
 .contentFrame {
-  inline-size: min(100%, 50rem);
+  inline-size: min(100%, 46rem);
   margin-inline: auto;
 }
 
@@ -525,7 +525,7 @@
   display: grid;
   grid-template-columns: 1fr 1.2fr;
   gap: clamp(var(--space-8), 8vw, 6rem);
-  inline-size: min(100%, 50rem);
+  inline-size: min(100%, 46rem);
   margin-inline: auto;
   padding: clamp(var(--space-8), 6vw, 4rem) clamp(var(--space-4), 4.5vw, 3.5rem);
 }
@@ -586,6 +586,16 @@
 
 .footerLinks a:hover {
   color: var(--color-accent);
+}
+
+@media (48rem <= width < 82rem) {
+  .main {
+    padding-inline-end: var(--space-4);
+  }
+
+  .contentFrame {
+    margin-inline-end: 0;
+  }
 }
 
 @media (width < 48rem) {

@@ -37,10 +37,13 @@ describe("WorkspaceLanding hero", () => {
     const contentFrameRule = stylesheet.match(/\.contentFrame\s*\{[^}]*\}/s)?.[0] ?? "";
     const footerInnerRule = stylesheet.match(/\.footerInner\s*\{[^}]*\}/s)?.[0] ?? "";
 
-    expect(contentFrameRule).toContain("inline-size: min(100%, 50rem)");
+    expect(contentFrameRule).toContain("inline-size: min(100%, 46rem)");
     expect(contentFrameRule).toContain("margin-inline: auto");
     expect(componentSource.match(/styles\.contentFrame/g)).toHaveLength(8);
-    expect(footerInnerRule).toContain("inline-size: min(100%, 50rem)");
+    expect(footerInnerRule).toContain("inline-size: min(100%, 46rem)");
+    expect(stylesheet).toMatch(
+      /@media \(48rem <= width < 82rem\)\s*\{[\s\S]*?\.main\s*\{[^}]*padding-inline-end:\s*var\(--space-4\);[\s\S]*?\.contentFrame\s*\{[^}]*margin-inline-end:\s*0;/,
+    );
   });
 
   it("keeps the desktop heading compact and on one line", () => {
