@@ -76,6 +76,8 @@ Expected: оба набора завершаются успешно.
 **Files:**
 - Modify: `web/platform/src/features/workspace/WorkspaceHome/WorkspaceHome.test.tsx`
 - Modify: `web/platform/src/features/workspace/WorkspaceLanding/WorkspaceLanding.tsx`
+- Create: `web/platform/src/components/media/VideoPlayer/VideoPlayer.styles.test.ts`
+- Modify: `web/platform/src/components/media/VideoPlayer/VideoPlayer.module.css`
 
 **Interfaces:**
 - Consumes: `assetPaths.videos.workspace.howItWorks` и существующий `VideoPlayer`.
@@ -98,6 +100,22 @@ Expected: FAIL, потому что `WorkspaceLanding` пока не перед�
   source={{ src: assetPaths.videos.workspace.howItWorks, type: "video/mp4" }}
   title="Как работает NeiroHub"
 />
+```
+
+Закрепить видео по всем краям существующего контейнера:
+
+```css
+.frame {
+  position: relative;
+}
+
+.video {
+  position: absolute;
+  inset: 0;
+  inline-size: 100%;
+  block-size: 100%;
+  object-fit: contain;
+}
 ```
 
 - [ ] **Step 4: Run focused and full verification**

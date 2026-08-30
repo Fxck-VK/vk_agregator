@@ -56,6 +56,12 @@ describe("assetPaths", () => {
     );
   });
 
+  it("exposes the workspace how-to video URL", () => {
+    expect(assetPaths.videos.workspace.howItWorks).toBe(
+      "/assets/videos/workspace/neirohub-how-it-works.mp4",
+    );
+  });
+
   it("exposes both theme-specific model placeholder URLs", () => {
     expect(assetPaths.images.models.fallback).toEqual({
       darkTheme: "/assets/images/models/chip-silhouette.svg",

@@ -34,4 +34,9 @@ export const assetPaths = {
       },
     },
   },
+  videos: {
+    workspace: {
+      howItWorks: "/assets/videos/workspace/neirohub-how-it-works.mp4",
+    },
+  },
 } as const;

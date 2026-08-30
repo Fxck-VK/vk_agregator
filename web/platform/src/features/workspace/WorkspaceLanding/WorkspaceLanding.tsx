@@ -70,7 +70,10 @@ export function WorkspaceLanding({ access = "authenticated" }: WorkspaceLandingP
               <p>От запроса до готового результата — в одном понятном сценарии.</p>
             </div>
           </div>
-          <VideoPlayer title="Как работает NeiroHub" />
+          <VideoPlayer
+            source={{ src: assetPaths.videos.workspace.howItWorks, type: "video/mp4" }}
+            title="Как работает NeiroHub"
+          />
         </section>
 
         <section aria-labelledby="workspace-capabilities-title" className={`${styles.section} ${styles.contentFrame}`}>

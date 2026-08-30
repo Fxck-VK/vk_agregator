@@ -2,9 +2,9 @@ import { access, readdir, readFile } from "node:fs/promises";
 import { dirname, extname, relative, resolve, sep } from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
 
-const allowedExtensions = new Set([".avif", ".png", ".svg", ".webp"]);
+const allowedExtensions = new Set([".avif", ".mp4", ".png", ".svg", ".webp"]);
 const allowedMetadataNames = new Set([".gitkeep", "README.md"]);
-const kebabCaseAssetName = /^[a-z0-9]+(?:-[a-z0-9]+)*\.(?:avif|png|svg|webp)$/;
+const kebabCaseAssetName = /^[a-z0-9]+(?:-[a-z0-9]+)*\.(?:avif|mp4|png|svg|webp)$/;
 const unsafeSvgPatterns = [
   /<script\b/i,
   /<foreignObject\b/i,

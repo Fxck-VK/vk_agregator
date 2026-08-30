@@ -17,6 +17,15 @@ test("accepts named raster assets and safe SVG", () => {
   );
 });
 
+test("accepts a kebab-case MP4 video asset", () => {
+  assert.deepEqual(
+    inspectAssetEntries([
+      { relativePath: "public/assets/videos/workspace/example-video.mp4" },
+    ]),
+    [],
+  );
+});
+
 test("rejects invalid names, extensions, duplicates and unsafe SVG", () => {
   const errors = inspectAssetEntries([
     { relativePath: "public/assets/images/Icon 1.png" },
