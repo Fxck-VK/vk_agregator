@@ -56,6 +56,25 @@ describe("WorkspaceHome", () => {
     expect(markup).not.toContain("image-job-history-title");
   });
 
+  it("omits the four editorial kicker labels while preserving the remaining section labels", () => {
+    const markup = renderToStaticMarkup(
+      <WorkspaceConversationListProvider accountId="workspace-kickers-test-account" initialConversations={[]}>
+        <WorkspaceHome />
+      </WorkspaceConversationListProvider>,
+    );
+
+    for (const removedLabel of [
+      "Коротко о главном",
+      "Не только обычный чат",
+      "Начните с готовой идеи",
+      "Помощь по платформе",
+    ]) {
+      expect(markup).not.toContain(removedLabel);
+    }
+    expect(markup).toContain("Аккаунт и баланс");
+    expect(markup).toContain("Идеи и примеры");
+  });
+
   it("renders four compact model cards from truthful catalogue data", async () => {
     vi.mocked(loadImageModelCatalog).mockResolvedValue({
       items: [

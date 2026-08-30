@@ -66,7 +66,6 @@ export function WorkspaceLanding({ access = "authenticated" }: WorkspaceLandingP
         <section aria-labelledby="workspace-how-title" className={`${styles.section} ${styles.contentFrame}`}>
           <div className={styles.sectionHeading}>
             <div>
-              <p className={styles.kicker}>Коротко о главном</p>
               <h2 id="workspace-how-title">Как работает NeiroHub</h2>
               <p>От запроса до готового результата — в одном понятном сценарии.</p>
             </div>
@@ -77,7 +76,6 @@ export function WorkspaceLanding({ access = "authenticated" }: WorkspaceLandingP
         <section aria-labelledby="workspace-capabilities-title" className={`${styles.section} ${styles.contentFrame}`}>
           <div className={styles.sectionHeading}>
             <div>
-              <p className={styles.kicker}>Не только обычный чат</p>
               <h2 id="workspace-capabilities-title">Откройте новые возможности</h2>
               <p>Используйте отдельные инструменты для текста, изображений, файлов и вдохновения.</p>
             </div>
@@ -133,7 +131,6 @@ export function WorkspaceLanding({ access = "authenticated" }: WorkspaceLandingP
         <section aria-labelledby="workspace-prompts-title" className={`${styles.section} ${styles.contentFrame}`}>
           <div className={styles.sectionHeading}>
             <div>
-              <p className={styles.kicker}>Начните с готовой идеи</p>
               <h2 id="workspace-prompts-title">Библиотека промптов</h2>
               <p>Примеры формулировок для быстрых экспериментов с нейросетями.</p>
             </div>
@@ -158,7 +155,6 @@ export function WorkspaceLanding({ access = "authenticated" }: WorkspaceLandingP
         <section aria-labelledby="workspace-faq-title" className={`${styles.section} ${styles.contentFrame}`}>
           <div className={styles.sectionHeading}>
             <div>
-              <p className={styles.kicker}>Помощь по платформе</p>
               <h2 id="workspace-faq-title">Частые вопросы</h2>
             </div>
           </div>
