@@ -106,4 +106,16 @@ describe("WorkspaceLanding hero", () => {
       /\.catalogAction:hover \.catalogActionBackground\s*\{[^}]*filter:\s*brightness\(/s,
     );
   });
+
+  it("keeps the workspace prompt card narrow on desktop and fluid below 36rem", () => {
+    const promptExampleRule = stylesheet.match(/\.promptExample\s*\{[^}]*\}/s)?.[0] ?? "";
+
+    expect(promptExampleRule).toContain("inline-size: min(100%, 25rem)");
+    expect(stylesheet).toMatch(
+      /@media \(width < 36rem\)[\s\S]*\.promptExample\s*\{[^}]*inline-size:\s*100%;/s,
+    );
+    expect(componentSource).toContain('sizes="(max-width: 36rem) 100vw, 25rem"');
+    expect(stylesheet).not.toContain(".promptFeature");
+    expect(stylesheet).not.toContain(".promptImage");
+  });
 });
