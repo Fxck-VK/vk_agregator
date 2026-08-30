@@ -56,6 +56,12 @@ describe("assetPaths", () => {
     );
   });
 
+  it("exposes the workspace how-to poster URL", () => {
+    expect(assetPaths.images.workspace.howItWorksPoster).toBe(
+      "/assets/images/workspace/neirohub-how-it-works-poster.png",
+    );
+  });
+
   it("exposes the workspace how-to video URL", () => {
     expect(assetPaths.videos.workspace.howItWorks).toBe(
       "/assets/videos/workspace/neirohub-how-it-works.mp4",

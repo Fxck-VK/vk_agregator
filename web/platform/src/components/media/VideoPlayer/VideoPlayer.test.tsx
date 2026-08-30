@@ -29,8 +29,12 @@ describe("VideoPlayer", () => {
 
     const video = screen.getByLabelText("Как работает NeiroHub");
     const playButton = screen.getByRole("button", { name: "Воспроизвести: Как работает NeiroHub" });
+    const posterOverlay = screen.getByTestId("video-poster-overlay");
 
     expect(playButton).toBeVisible();
+    expect(posterOverlay).toHaveStyle({
+      "--video-player-poster": 'url("/assets/images/video/how-it-works-poster.webp")',
+    });
     expect(screen.queryByText("Видео скоро появится")).not.toBeInTheDocument();
     expect(video).not.toHaveAttribute("controls");
     expect(video).toHaveAttribute("poster", "/assets/images/video/how-it-works-poster.webp");

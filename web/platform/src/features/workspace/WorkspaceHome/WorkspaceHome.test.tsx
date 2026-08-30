@@ -44,6 +44,7 @@ describe("WorkspaceHome", () => {
     expect(markup).toContain("<video");
     expect(markup).not.toContain(" controls");
     expect(markup).toContain('preload="none"');
+    expect(markup).toContain('poster="/assets/images/workspace/neirohub-how-it-works-poster.png"');
     expect(markup).toContain('src="/assets/videos/workspace/neirohub-how-it-works.mp4"');
     expect(markup).toContain('type="video/mp4"');
     expect(markup).toContain('aria-label="Воспроизвести: Как работает NeiroHub"');

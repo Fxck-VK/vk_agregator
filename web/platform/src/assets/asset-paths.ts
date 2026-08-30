@@ -26,6 +26,7 @@ export const assetPaths = {
     workspace: {
       allModelsBadge: "/assets/images/workspace/all-models-90-plus.png",
       allModelsButtonBackground: "/assets/images/workspace/all-models-button-background.png",
+      howItWorksPoster: "/assets/images/workspace/neirohub-how-it-works-poster.png",
     },
     models: {
       fallback: {

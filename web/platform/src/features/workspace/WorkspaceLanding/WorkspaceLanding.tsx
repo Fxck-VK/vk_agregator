@@ -71,6 +71,7 @@ export function WorkspaceLanding({ access = "authenticated" }: WorkspaceLandingP
             </div>
           </div>
           <VideoPlayer
+            poster={assetPaths.images.workspace.howItWorksPoster}
             source={{ src: assetPaths.videos.workspace.howItWorks, type: "video/mp4" }}
             title="Как работает NeiroHub"
           />

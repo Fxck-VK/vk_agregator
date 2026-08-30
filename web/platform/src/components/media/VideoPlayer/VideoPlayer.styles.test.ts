@@ -29,7 +29,11 @@ describe("VideoPlayer layout", () => {
     expect(overlayRule).toContain("inset: 0");
     expect(overlayRule).toContain("display: grid");
     expect(overlayRule).toContain("place-items: center");
+    expect(overlayRule).toContain("var(--video-player-poster)");
+    expect(overlayRule).toContain("center / cover no-repeat");
     expect(overlayRule).toContain("radial-gradient");
+    expect(playButtonRule).toContain("position: relative");
+    expect(playButtonRule).toContain("z-index: 1");
     expect(playButtonRule).toContain("border-radius: 50%");
     expect(playButtonRule).toContain("cursor: pointer");
   });

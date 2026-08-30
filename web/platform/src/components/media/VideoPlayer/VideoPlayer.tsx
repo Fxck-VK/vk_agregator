@@ -1,6 +1,6 @@
 "use client";
 
-import { useRef, useState } from "react";
+import { type CSSProperties, useRef, useState } from "react";
 
 import styles from "./VideoPlayer.module.css";
 
@@ -19,6 +19,9 @@ export function VideoPlayer({ poster, source, title }: Readonly<VideoPlayerProps
   const [hasPlaybackError, setHasPlaybackError] = useState(false);
   const [hasStarted, setHasStarted] = useState(false);
   const videoRef = useRef<HTMLVideoElement>(null);
+  const posterOverlayStyle = {
+    "--video-player-poster": poster ? `url("${poster}")` : "none",
+  } as CSSProperties;
 
   const startPlayback = () => {
     const video = videoRef.current;
@@ -47,7 +50,11 @@ export function VideoPlayer({ poster, source, title }: Readonly<VideoPlayerProps
           Ваш браузер не поддерживает воспроизведение видео.
         </video>
         {!hasStarted ? (
-          <div className={styles.posterOverlay}>
+          <div
+            className={styles.posterOverlay}
+            data-testid="video-poster-overlay"
+            style={posterOverlayStyle}
+          >
             <button
               aria-label={`Воспроизвести: ${title}`}
               className={styles.playButton}

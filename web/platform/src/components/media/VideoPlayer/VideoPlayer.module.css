@@ -33,12 +33,15 @@
   display: grid;
   place-items: center;
   background:
+    var(--video-player-poster) center / cover no-repeat,
     radial-gradient(circle at 72% 34%, rgb(36 150 255 / 0.14), transparent 28%),
     radial-gradient(circle at 24% 74%, rgb(116 87 255 / 0.12), transparent 32%),
     var(--color-surface);
 }
 
 .playButton {
+  position: relative;
+  z-index: 1;
   display: grid;
   place-items: center;
   inline-size: clamp(3.5rem, 8vw, 5rem);
