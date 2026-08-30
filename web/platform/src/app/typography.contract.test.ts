@@ -67,6 +67,28 @@ describe("primary interface typography", () => {
     expect(supportingRule).toContain("line-height: var(--line-height-supporting)");
     expect(supportingRule).toContain("font-weight: var(--font-weight-regular)");
   });
+
+  it("uses the subsection role for assistant-message H3 headings", () => {
+    const headingRule = rule(
+      "src/components/chat/AssistantMessageContent/AssistantMessageContent.module.css",
+      ".content h3",
+    );
+
+    expect(headingRule).toContain("font-size: var(--font-size-subsection)");
+    expect(headingRule).toContain("line-height: var(--line-height-subsection)");
+    expect(headingRule).toContain("font-weight: var(--font-weight-semibold)");
+    expect(headingRule).toContain("letter-spacing: var(--letter-spacing-subsection)");
+  });
+
+  it("uses the approved tracking across assistant-message heading levels", () => {
+    const path = "src/components/chat/AssistantMessageContent/AssistantMessageContent.module.css";
+
+    expect(rule(path, ".content h1")).toContain("letter-spacing: var(--letter-spacing-display)");
+    expect(rule(path, ".content h2")).toContain("letter-spacing: var(--letter-spacing-section)");
+    expect(rule(path, ".content h3")).toContain("letter-spacing: var(--letter-spacing-subsection)");
+    expect(rule(path, ".content h4")).toContain("letter-spacing: var(--letter-spacing-interface)");
+    expect(stylesheet(path)).not.toContain("letter-spacing: -0.015em");
+  });
 });
 
 describe("workspace control typography", () => {

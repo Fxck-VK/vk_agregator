@@ -73,6 +73,8 @@ describe("global theme tokens", () => {
     expect(stylesheet).toContain("--line-height-display: 2.75rem");
     expect(stylesheet).toContain("--font-size-section: 2rem");
     expect(stylesheet).toContain("--line-height-section: 2.375rem");
+    expect(stylesheet).toContain("--font-size-subsection: 1.5rem");
+    expect(stylesheet).toContain("--line-height-subsection: 2rem");
     expect(stylesheet).toContain("--font-size-supporting: 1.125rem");
     expect(stylesheet).toContain("--line-height-supporting: 1.6875rem");
     expect(stylesheet).toContain("--font-size-body: 1rem");
@@ -83,9 +85,17 @@ describe("global theme tokens", () => {
     expect(stylesheet).toContain("--line-height-ui: 1.25rem");
     expect(stylesheet).toContain("--font-size-caption: 0.8125rem");
     expect(stylesheet).toContain("--line-height-caption: 1.125rem");
+    expect(stylesheet).toContain("--letter-spacing-display: -0.01em");
+    expect(stylesheet).toContain("--letter-spacing-section: -0.01em");
+    expect(stylesheet).toContain("--letter-spacing-subsection: 0");
+    expect(stylesheet).toContain("--letter-spacing-interface: 0");
+    expect(stylesheet).not.toContain("--letter-spacing-display: -0.03em");
+    expect(stylesheet).not.toContain("--letter-spacing-section: -0.025em");
     expect(stylesheet).toContain("--font-sans: var(--font-geist-sans)");
+    expect(stylesheet).toMatch(/body\s*\{[^}]*letter-spacing:\s*var\(--letter-spacing-interface\)/s);
     expect(stylesheet).toMatch(/@media \(width < 48rem\)[\s\S]*--font-size-display:\s*2rem/);
     expect(stylesheet).toMatch(/@media \(width < 48rem\)[\s\S]*--font-size-section:\s*1\.75rem/);
+    expect(stylesheet).toMatch(/@media \(width < 48rem\)[\s\S]*--font-size-subsection:\s*1\.375rem/);
     expect(stylesheet).toContain("--radius-xl: 1.25rem");
     expect(stylesheet).toContain("--radius-pill: 999px");
     expect(stylesheet).toContain("--shadow-card:");

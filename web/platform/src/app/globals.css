@@ -48,6 +48,8 @@
   --line-height-display: 2.75rem;
   --font-size-section: 2rem;
   --line-height-section: 2.375rem;
+  --font-size-subsection: 1.5rem;
+  --line-height-subsection: 2rem;
   --font-size-supporting: 1.125rem;
   --line-height-supporting: 1.6875rem;
   --font-size-body: 1rem;
@@ -63,8 +65,10 @@
   --font-weight-regular: 400;
   --font-weight-medium: 500;
   --font-weight-semibold: 600;
-  --letter-spacing-display: -0.03em;
-  --letter-spacing-section: -0.025em;
+  --letter-spacing-display: -0.01em;
+  --letter-spacing-section: -0.01em;
+  --letter-spacing-subsection: 0;
+  --letter-spacing-interface: 0;
   --line-height-tight: 1.08;
   --line-height-normal: 1.5;
   --line-height-relaxed: 1.65;
@@ -156,6 +160,7 @@ body {
   color: var(--color-text);
   font-family: var(--font-sans);
   font-size: var(--font-size-body);
+  letter-spacing: var(--letter-spacing-interface);
   line-height: var(--line-height-body);
   transition:
     background-color var(--motion-normal),
@@ -188,6 +193,7 @@ a {
     --line-height-display: 2.375rem;
     --font-size-section: 1.75rem;
     --line-height-section: 2.125rem;
+    --font-size-subsection: 1.375rem;
   }
 }
 

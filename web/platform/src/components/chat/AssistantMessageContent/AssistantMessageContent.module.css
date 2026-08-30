@@ -23,23 +23,28 @@
 .content h4 {
   margin: var(--space-7) 0 var(--space-3);
   line-height: 1.25;
-  letter-spacing: -0.015em;
 }
 
 .content h1 {
   font-size: clamp(1.625rem, 3vw, 2rem);
+  letter-spacing: var(--letter-spacing-display);
 }
 
 .content h2 {
   font-size: clamp(1.375rem, 2.5vw, 1.625rem);
+  letter-spacing: var(--letter-spacing-section);
 }
 
 .content h3 {
-  font-size: 1.25rem;
+  font-size: var(--font-size-subsection);
+  font-weight: var(--font-weight-semibold);
+  letter-spacing: var(--letter-spacing-subsection);
+  line-height: var(--line-height-subsection);
 }
 
 .content h4 {
   font-size: 1.125rem;
+  letter-spacing: var(--letter-spacing-interface);
 }
 
 .content ol,
