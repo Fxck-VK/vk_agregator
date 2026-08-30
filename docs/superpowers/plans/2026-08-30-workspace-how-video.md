@@ -135,3 +135,67 @@ Expected: все команды завершаются успешно.
 - [ ] **Step 5: Verify locally and commit**
 
 Открыть `http://localhost:7158/app`, прокрутить к секции «Как работает NeiroHub» и убедиться, что отображается видеоплеер. Stage только файлы задания; `web/platform/next-env.d.ts` не включать.
+
+---
+
+### Task 3: Кастомная заставка до первого запуска
+
+**Files:**
+- Modify: `web/platform/src/components/media/VideoPlayer/VideoPlayer.test.tsx`
+- Modify: `web/platform/src/components/media/VideoPlayer/VideoPlayer.styles.test.ts`
+- Modify: `web/platform/src/components/media/VideoPlayer/VideoPlayer.tsx`
+- Modify: `web/platform/src/components/media/VideoPlayer/VideoPlayer.module.css`
+- Modify: `web/platform/src/features/workspace/WorkspaceHome/WorkspaceHome.test.tsx`
+
+**Interfaces:**
+- Consumes: существующие `source`, `title`, `preload="none"` и fallback ошибки `VideoPlayer`.
+- Produces: доступную кнопку `Воспроизвести: <title>`, скрывающую заставку и запускающую `<video>`.
+
+- [ ] **Step 1: Write failing interaction and style tests**
+
+До клика ожидать кнопку запуска, отсутствие текста «Видео скоро появится» и отсутствие атрибута controls. После клика ожидать вызов `HTMLMediaElement.play()`, исчезновение кнопки и появление controls.
+
+CSS-контракт фиксирует `.posterOverlay` с `position: absolute`, `inset: 0`, градиентным фоном и `.playButton` круглой формы.
+
+- [ ] **Step 2: Run focused tests and verify RED**
+
+Run: `npx vitest run src/components/media/VideoPlayer/VideoPlayer.test.tsx src/components/media/VideoPlayer/VideoPlayer.styles.test.ts src/features/workspace/WorkspaceHome/WorkspaceHome.test.tsx`
+
+Expected: FAIL, потому что сейчас native controls видны сразу, а отдельной кнопки и overlay нет.
+
+- [ ] **Step 3: Implement the overlay and first-play transition**
+
+Использовать `useRef<HTMLVideoElement>` и состояние `hasStarted`. Рендерить `controls={hasStarted}` и до первого запуска показывать:
+
+```tsx
+<div className={styles.posterOverlay}>
+  <button
+    aria-label={`Воспроизвести: ${title}`}
+    className={styles.playButton}
+    onClick={startPlayback}
+    type="button"
+  >
+    <span aria-hidden="true">▶</span>
+  </button>
+</div>
+```
+
+`startPlayback` переключает состояние и вызывает `videoRef.current?.play()`. Отклонение промиса возвращает заставку; событие `onError` сохраняет существующий fallback.
+
+- [ ] **Step 4: Run focused and full verification**
+
+Run: `npx vitest run src/components/media/VideoPlayer/VideoPlayer.test.tsx src/components/media/VideoPlayer/VideoPlayer.styles.test.ts src/features/workspace/WorkspaceHome/WorkspaceHome.test.tsx`
+
+Run: `npm test`
+
+Run: `npm run typecheck`
+
+Run: `npm run lint`
+
+Run: `npm run build`
+
+Expected: все команды завершаются успешно.
+
+- [ ] **Step 5: Verify locally and commit**
+
+На `http://localhost:7158/app#workspace-how-title` до клика должны быть видны только градиент и центральная кнопка. После клика должны исчезнуть overlay, начаться воспроизведение и появиться стандартные controls. Stage только файлы задания; `web/platform/next-env.d.ts` не включать.
