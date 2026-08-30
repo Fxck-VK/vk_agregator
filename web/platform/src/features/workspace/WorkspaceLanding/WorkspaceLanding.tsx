@@ -3,6 +3,8 @@ import Link from "next/link";
 
 import { assetPaths } from "@/assets/asset-paths";
 import { VideoPlayer } from "@/components/media/VideoPlayer/VideoPlayer";
+import { InspirationExampleCard } from "@/features/inspiration/InspirationExampleCard/InspirationExampleCard";
+import { inspirationExamples } from "@/features/inspiration/inspiration-examples";
 
 import { FeaturedModelShortcuts } from "../FeaturedModelShortcuts/FeaturedModelShortcuts";
 import { FeaturedModels } from "../FeaturedModels/FeaturedModels";
@@ -16,6 +18,8 @@ type WorkspaceLandingProps = {
 };
 
 export function WorkspaceLanding({ access = "authenticated" }: WorkspaceLandingProps) {
+  const promptExample = inspirationExamples[0];
+
   return (
     <div className={styles.page}>
       <div className={styles.main}>
@@ -136,24 +140,18 @@ export function WorkspaceLanding({ access = "authenticated" }: WorkspaceLandingP
           <div className={styles.sectionHeading}>
             <div>
               <h2 id="workspace-prompts-title">Библиотека промптов</h2>
-              <p>Примеры формулировок для быстрых экспериментов с нейросетями.</p>
+              <p>Собрали промпты для любых задач и идей</p>
             </div>
-            <Link className={styles.secondaryButton} href="/app/inspiration">Все идеи</Link>
           </div>
-          <Link className={styles.promptFeature} href="/app/inspiration">
-            <Image
-              alt="Пример изображения из библиотеки промптов"
-              className={styles.promptImage}
-              height={720}
-              src={assetPaths.images.inspiration.paperCraneCloud}
-              width={540}
-            />
-            <span>
-              <small>Промпт для изображения</small>
-              <strong>Воздушная бумажная скульптура среди мягких облаков</strong>
-              <em>Посмотреть пример →</em>
-            </span>
-          </Link>
+          {promptExample ? (
+            <div className={styles.promptExample} data-testid="workspace-prompt-example">
+              <InspirationExampleCard
+                example={promptExample}
+                priority
+                sizes="(max-width: 36rem) 100vw, 25rem"
+              />
+            </div>
+          ) : null}
         </section>
 
         <section aria-labelledby="workspace-faq-title" className={`${styles.section} ${styles.contentFrame}`}>

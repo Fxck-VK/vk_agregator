@@ -1,5 +1,5 @@
 import { renderToStaticMarkup } from "react-dom/server";
-import { render, screen, within } from "@testing-library/react";
+import { fireEvent, render, screen, within } from "@testing-library/react";
 import { describe, expect, it, vi } from "vitest";
 
 vi.mock("next/navigation", () => ({
@@ -12,6 +12,7 @@ vi.mock("@/features/models/image-model-catalog-cache", () => ({
 
 import { ru } from "@/i18n/ru";
 import { WorkspaceConversationListProvider } from "@/features/conversations/WorkspaceConversationList/WorkspaceConversationList";
+import { inspirationExamples } from "@/features/inspiration/inspiration-examples";
 import { loadImageModelCatalog } from "@/features/models/image-model-catalog-cache";
 
 import { WorkspaceHome } from "./WorkspaceHome";
@@ -79,6 +80,32 @@ describe("WorkspaceHome", () => {
     }
     expect(markup).toContain("Аккаунт и баланс");
     expect(markup).toContain("Идеи и примеры");
+  });
+
+  it("renders one shared prompt-library card and opens its existing dialog", () => {
+    vi.mocked(loadImageModelCatalog).mockResolvedValue({ items: [] });
+
+    render(
+      <WorkspaceConversationListProvider accountId="prompt-library-test-account" initialConversations={[]}>
+        <WorkspaceHome />
+      </WorkspaceConversationListProvider>,
+    );
+
+    expect(screen.getByText("Собрали промпты для любых задач и идей")).toBeInTheDocument();
+    for (const removedText of [
+      "Все идеи",
+      "Промпт для изображения",
+      "Воздушная бумажная скульптура среди мягких облаков",
+      "Посмотреть пример",
+    ]) {
+      expect(screen.queryByText(removedText)).not.toBeInTheDocument();
+    }
+
+    const promptCards = screen.getAllByRole("button", { name: inspirationExamples[0].openLabel });
+
+    expect(promptCards).toHaveLength(1);
+    fireEvent.click(promptCards[0]);
+    expect(screen.getByRole("dialog", { name: ru.inspiration.dialogLabel })).toBeInTheDocument();
   });
 
   it("renders four compact model cards from truthful catalogue data", async () => {
