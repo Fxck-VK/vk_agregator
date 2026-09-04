@@ -10,7 +10,8 @@ import { FeaturedModelShortcuts } from "../FeaturedModelShortcuts/FeaturedModelS
 import { FeaturedModels } from "../FeaturedModels/FeaturedModels";
 import { WorkspacePrompt } from "../WorkspacePrompt/WorkspacePrompt";
 
-import { capabilityLinks, frequentlyAskedQuestions } from "./workspace-home-content";
+import { CapabilityLinks } from "./CapabilityLinks";
+import { frequentlyAskedQuestions } from "./workspace-home-content";
 import styles from "./WorkspaceLanding.module.css";
 
 type WorkspaceLandingProps = {
@@ -113,11 +114,7 @@ export function WorkspaceLanding({ access = "authenticated" }: WorkspaceLandingP
               <small>Созданные и загруженные материалы в одном месте</small>
             </Link>
           </div>
-          <nav aria-label="Дополнительные возможности" className={styles.chipList}>
-            {capabilityLinks.map((item) => (
-              <Link href={item.href} key={item.label}>{item.label}</Link>
-            ))}
-          </nav>
+          <CapabilityLinks />
         </section>
 
         <section aria-labelledby="workspace-plan-title" className={`${styles.section} ${styles.contentFrame}`}>

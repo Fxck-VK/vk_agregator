@@ -4,7 +4,7 @@
 
 **Goal:** Replace the plain secondary capability chips with the approved divider-and-icon pill layout.
 
-**Architecture:** Extract the block into a focused `CapabilityLinks` component so the new layout and tests remain isolated from the existing landing-page and FAQ edits. Reuse `ModelIcon` without a source to render the existing theme-aware fallback artwork, while preserving the current `capabilityLinks` data and destinations.
+**Architecture:** Extract the block into a focused `CapabilityLinks` component so the new layout and tests remain isolated from the existing landing-page and FAQ edits. Reuse the existing fallback artwork through a decorative span with theme-aware CSS backgrounds, while preserving the current `capabilityLinks` data and destinations.
 
 **Tech Stack:** React 19, Next.js 16, CSS Modules, Vitest, Testing Library
 
@@ -28,7 +28,7 @@
 - Modify: `web/platform/src/features/workspace/WorkspaceLanding/WorkspaceLanding.tsx`
 
 **Interfaces:**
-- Consumes: `capabilityLinks` from `workspace-home-content.ts` and `ModelIcon({ className, src })` with an omitted `src`.
+- Consumes: `capabilityLinks` from `workspace-home-content.ts` and the existing dark/light chip silhouette asset paths.
 - Produces: `CapabilityLinks(): JSX.Element`, a self-contained divider and navigation block.
 
 - [ ] **Step 1: Write the failing component test**
@@ -42,7 +42,7 @@ const links = within(navigation).getAllByTestId("workspace-capability-link");
 expect(links).toHaveLength(6);
 expect(links.map((link) => link.textContent)).toEqual(capabilityLinks.map((item) => item.label));
 expect(links.map((link) => link.getAttribute("href"))).toEqual(capabilityLinks.map((item) => item.href));
-expect(within(navigation).getAllByTestId("model-icon-fallback")).toHaveLength(6);
+expect(within(navigation).getAllByTestId("workspace-capability-icon")).toHaveLength(6);
 ```
 
 - [ ] **Step 2: Write the failing stylesheet test**
@@ -77,7 +77,7 @@ export function CapabilityLinks() {
       <nav aria-label="Дополнительные возможности" className={styles.list}>
         {capabilityLinks.map((item) => (
           <Link className={styles.link} data-testid="workspace-capability-link" href={item.href} key={item.label}>
-            <ModelIcon className={styles.icon} />
+            <span aria-hidden="true" className={styles.icon} data-testid="workspace-capability-icon" />
             <span>{item.label}</span>
           </Link>
         ))}
@@ -87,7 +87,7 @@ export function CapabilityLinks() {
 }
 ```
 
-Use a three-column `max-content` grid on desktop, a two-column equal grid below `48rem`, and a single column below `36rem`. Give `.link` a transparent background, pill radius, border, and accent hover/focus state. Size `.link .icon` to `1.125rem` square.
+Use a three-column `max-content` grid on desktop, a two-column equal grid below `48rem`, and a single column below `36rem`. Give `.link` a transparent background, pill radius, border, and accent hover/focus state. Size `.link .icon` to `1.125rem` square, use `chip-silhouette.svg` by default, and switch to `chip-silhouette-dark.svg` for explicit or system light themes.
 
 Replace the inline `chipList` navigation in `WorkspaceLanding.tsx` with `<CapabilityLinks />` and remove the now-unused `capabilityLinks` import.
 

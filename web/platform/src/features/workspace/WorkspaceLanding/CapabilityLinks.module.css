@@ -1,0 +1,101 @@
+.wrapper {
+  margin-block-start: clamp(var(--space-7), 5vw, 3.5rem);
+}
+
+.divider {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr);
+  align-items: center;
+  gap: var(--space-6);
+  margin: 0 0 var(--space-6);
+  color: var(--color-text);
+  font-size: var(--font-size-body);
+  font-weight: var(--font-weight-semibold);
+  line-height: var(--line-height-body);
+  text-align: center;
+}
+
+.divider::before,
+.divider::after {
+  block-size: 0.0625rem;
+  content: "";
+  background: var(--color-border);
+}
+
+.divider span {
+  white-space: nowrap;
+}
+
+.list {
+  display: grid;
+  grid-template-columns: repeat(3, max-content);
+  justify-content: center;
+  gap: var(--space-2);
+}
+
+.link {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: var(--space-2);
+  min-block-size: 3.25rem;
+  border: 0.0625rem solid var(--color-border);
+  border-radius: var(--radius-pill);
+  padding: var(--space-2) var(--space-4);
+  background: transparent;
+  color: var(--color-text);
+  font-size: var(--font-size-body);
+  font-weight: var(--font-weight-semibold);
+  line-height: var(--line-height-body);
+  text-decoration: none;
+  transition: border-color var(--motion-fast), box-shadow var(--motion-fast), translate var(--motion-fast);
+}
+
+.link:hover,
+.link:focus-visible {
+  translate: 0 -0.0625rem;
+  border-color: var(--color-accent);
+  box-shadow: 0 0 0 0.0625rem color-mix(in srgb, var(--color-accent) 24%, transparent);
+  outline: none;
+}
+
+.link .icon {
+  flex: 0 0 auto;
+  inline-size: 1.125rem;
+  block-size: 1.125rem;
+  border-radius: 0.25rem;
+  background-image: url("/assets/images/models/chip-silhouette.svg");
+  background-position: center;
+  background-repeat: no-repeat;
+  background-size: contain;
+}
+
+:global(:root[data-theme="light"]) .icon {
+  background-image: url("/assets/images/models/chip-silhouette-dark.svg");
+}
+
+@media (prefers-color-scheme: light) {
+  :global(:root[data-theme="system"]) .icon {
+    background-image: url("/assets/images/models/chip-silhouette-dark.svg");
+  }
+}
+
+@media (width < 48rem) {
+  .list {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .link {
+    inline-size: 100%;
+  }
+}
+
+@media (width < 36rem) {
+  .divider {
+    gap: var(--space-3);
+  }
+
+  .list {
+    grid-template-columns: 1fr;
+  }
+}
