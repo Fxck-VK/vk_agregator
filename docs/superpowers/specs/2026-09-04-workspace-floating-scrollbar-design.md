@@ -21,4 +21,4 @@ Add a stable `data-app-shell` marker to `AppShell`. A scoped global selector loc
 
 - Static contract tests cover the scoped root lock, the single internal scroll owner, transparent tracks, removal of the extra inset, and matching background.
 - The full platform test suite, typecheck, lint, and production build must pass.
-- Runtime browser metrics must show `documentElement.scrollHeight === documentElement.clientHeight` while `workspaceScroller.scrollHeight > workspaceScroller.clientHeight`.
+- Runtime browser metrics must show `overflow: hidden` on both `html` and `body`, a viewport-sized document client area, and `workspaceScroller.scrollHeight > workspaceScroller.clientHeight`. The Next.js development overlay may still increase the root `scrollHeight`, but it must not create a usable or visible document scrollbar.

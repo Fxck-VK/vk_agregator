@@ -9,7 +9,7 @@ const stylesheet = readFileSync(
 );
 
 describe("AppShell floating panel gaps", () => {
-  it("uses a reduced edge gap without changing the scroller inset", () => {
+  it("uses a reduced edge gap without a contrasting scroller inset", () => {
     expect(stylesheet).toMatch(
       /\.shell\s*\{[^}]*--app-shell-edge-gap:\s*0\.125rem;/s,
     );
@@ -19,8 +19,7 @@ describe("AppShell floating panel gaps", () => {
     expect(stylesheet).toMatch(
       /\.workspace\s*\{[^}]*block-size:\s*calc\(100dvh - var\(--app-shell-edge-gap\) - var\(--app-shell-edge-gap\)\);[^}]*margin-block:\s*var\(--app-shell-edge-gap\);[^}]*margin-inline-end:\s*var\(--app-shell-edge-gap\);/s,
     );
-    expect(stylesheet).toMatch(
-      /\.workspaceScroller\s*\{[^}]*margin-inline-end:\s*var\(--space-1\);/s,
-    );
+    expect(stylesheet).toMatch(/\.workspaceScroller\s*\{[^}]*background:\s*var\(--color-background\);/s);
+    expect(stylesheet).not.toMatch(/\.workspaceScroller\s*\{[^}]*margin-inline-end:/s);
   });
 });

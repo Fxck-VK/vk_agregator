@@ -1,3 +1,9 @@
+:global(html:has(body > [data-app-shell])),
+:global(body:has(> [data-app-shell])) {
+  block-size: 100%;
+  overflow: hidden;
+}
+
 .shell {
   --sidebar-collapsed-rail-width: 5.5rem;
   --app-shell-canvas: var(--color-background);
@@ -30,7 +36,7 @@
 
 .workspaceScroller {
   block-size: 100%;
-  margin-inline-end: var(--space-1);
+  background: var(--color-background);
   overflow-x: hidden;
   overflow-y: auto;
 }
@@ -74,10 +80,6 @@
     margin: 0;
     border-radius: 0;
     box-shadow: none;
-  }
-
-  .workspaceScroller {
-    margin-inline-end: 0;
   }
 }
 

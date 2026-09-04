@@ -15,6 +15,7 @@ export function AppShell({ sidebar, header, children, isDesktopSidebarCollapsed 
   return (
     <div
       className={styles.shell}
+      data-app-shell=""
       data-desktop-sidebar-collapsed={isDesktopSidebarCollapsed}
       data-testid="app-shell"
     >

@@ -53,7 +53,7 @@ Expected: both test files pass.
 
 Run: `npm test`, `npm run typecheck`, `npm run lint`, and `npm run build` from `web/platform`.
 
-Expected: all commands exit with code 0. In the local browser, the document height equals the viewport height while the workspace scroller remains overflowed and scrollable.
+Expected: all commands exit with code 0. In the local browser, `html` and `body` report `overflow: hidden`, the document client height equals the viewport height, and the workspace scroller remains overflowed and scrollable. The Next.js development overlay may still make the root `scrollHeight` numerically larger than its client height.
 
 - [ ] **Step 6: Commit only the scrollbar implementation**
 

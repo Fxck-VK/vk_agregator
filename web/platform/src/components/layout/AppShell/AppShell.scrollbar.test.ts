@@ -14,14 +14,24 @@ const trackRule = stylesheet.match(/\.workspaceScroller::-webkit-scrollbar-track
 const thumbRule = stylesheet.match(/\.workspaceScroller::-webkit-scrollbar-thumb \{([\s\S]*?)\n\}/)?.[1];
 
 describe("AppShell workspace scrollbar", () => {
-  it("keeps the native scrollbar inside the rounded workspace surface", () => {
+  it("locks document scrolling only while the app shell is mounted", () => {
+    expect(component).toContain("data-app-shell");
+    expect(stylesheet).toContain(":global(html:has(body > [data-app-shell]))");
+    expect(stylesheet).toContain(":global(body:has(> [data-app-shell]))");
+    expect(stylesheet).toMatch(
+      /:global\(html:has\(body > \[data-app-shell\]\)\),[\s\S]*:global\(body:has\(> \[data-app-shell\]\)\)\s*\{[^}]*block-size:\s*100%;[^}]*overflow:\s*hidden;/s,
+    );
+  });
+
+  it("keeps the native workspace scroller as the only scroll owner", () => {
     expect(component).toContain("className={styles.workspaceScroller}");
     expect(workspaceRule).toContain("overflow: hidden");
     expect(workspaceScrollerRule).toContain("overflow-y: auto");
-    expect(workspaceScrollerRule).toContain("margin-inline-end: var(--space-1)");
+    expect(workspaceScrollerRule).toContain("background: var(--color-background)");
+    expect(workspaceScrollerRule).not.toContain("margin-inline-end");
   });
 
-  it("uses a narrow dark custom scrollbar without native arrow buttons", () => {
+  it("uses a rounded floating thumb with transparent tracks and no native arrow buttons", () => {
     expect(workspaceScrollerRule).toContain("overflow-y: auto");
     expect(stylesheet).toMatch(
       /@supports \(-moz-appearance: none\) \{[\s\S]*\.workspaceScroller \{[\s\S]*scrollbar-width: thin;[\s\S]*scrollbar-color: var\(--color-border\) transparent;/,
@@ -33,6 +43,7 @@ describe("AppShell workspace scrollbar", () => {
     expect(stylesheet).toContain("inline-size: 0.75rem");
     expect(stylesheet).toContain("display: none");
     expect(trackRule).toContain("margin-block-start: calc(var(--space-8) + var(--space-3))");
+    expect(trackRule).toContain("background: transparent");
     expect(thumbRule).toContain("border-radius: 999px");
     expect(thumbRule).toContain("background-color: var(--color-border)");
     expect(thumbRule).toContain("background-clip: content-box");
