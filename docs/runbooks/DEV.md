@@ -17,9 +17,13 @@ before exposure. No DB price rows are changed by this implementation.
 Grok 2.0 uses the public $0.015 price selected by the user despite the API docs
 listing $0.08; check actual provider cost during the authorized live test.
 
-Deploy API and worker together; rebuild the platform for the model-specific aspect
-ratio selector. Check `/web/v1/image-models` for both public IDs, supported ratios
-and price 10, then verify history and one ledger capture using a live generation.
+Deploy API and worker together. In the DEV VK bot, open "Create photo" and check
+that the existing models and both Groks are present. The model buttons use two
+columns to fit VK's six-row inline keyboard limit, including Back. Select each
+Grok and its standard quality: the displayed price must be 10. During an
+authorized live generation, verify photo delivery and one ledger capture.
+The shared worker-resolution mapping omits resolution for Grok 1.5 and uses
+`quality` for 2.0; the public billing quality remains `standard`.
 To hide new selections, set the corresponding model flag to false while keeping
 the adapter available to poll existing tasks. An indeterminate Grok 2.0 submit
 stops automatic retries and releases the user reservation; investigate the original

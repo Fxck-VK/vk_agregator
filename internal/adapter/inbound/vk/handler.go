@@ -36,6 +36,7 @@ import (
 	"vk-ai-aggregator/internal/service/billingservice"
 	"vk-ai-aggregator/internal/service/commandrouter"
 	"vk-ai-aggregator/internal/service/identityresolver"
+	"vk-ai-aggregator/internal/service/imagegeneration"
 	"vk-ai-aggregator/internal/service/joborchestrator"
 	"vk-ai-aggregator/internal/service/modelcatalog"
 	"vk-ai-aggregator/internal/service/paymentservice"
@@ -1161,7 +1162,7 @@ func (h *Handler) process(ctx context.Context, cb callback, rawBody []byte, even
 			jp.Provider = string(photoSelection.Model.Provider)
 			jp.ModelCode = photoSelection.Model.ModelCode
 			jp.Size = imageSizeForSelection(photoSelection)
-			jp.Resolution = photoSelection.Quality
+			jp.Resolution = imagegeneration.WorkerResolution(photoSelection.Model.ModelID, photoSelection.Quality)
 			jp.ImageQuality = photoSelection.Quality
 			jp.ReferenceArtifactIDs = imageReferenceIDs
 		}

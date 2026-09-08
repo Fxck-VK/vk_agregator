@@ -1454,13 +1454,18 @@ func photoModeKeyboard() *vkdelivery.Keyboard {
 
 func (h *Handler) photoModeKeyboard() *vkdelivery.Keyboard {
 	rows := make([][]vkdelivery.KeyboardButton, 0, len(h.cfg.ImageModels)+1)
+	// VK inline keyboards allow at most six rows. Keep two models per row
+	// so the full current catalog and the back button fit in one message.
+	modelCount := 0
 	for _, model := range h.cfg.ImageModels {
 		if !model.Enabled || strings.TrimSpace(model.ID) == "" || strings.TrimSpace(model.Name) == "" {
 			continue
 		}
-		rows = append(rows, []vkdelivery.KeyboardButton{
-			photoModelButton(model.Name, model.ID, "primary"),
-		})
+		if modelCount%2 == 0 {
+			rows = append(rows, []vkdelivery.KeyboardButton{})
+		}
+		rows[len(rows)-1] = append(rows[len(rows)-1], photoModelButton(model.Name, model.ID, "primary"))
+		modelCount++
 	}
 	rows = append(rows, []vkdelivery.KeyboardButton{
 		button("⬅️ Назад", domain.CommandShowMenu, "secondary"),

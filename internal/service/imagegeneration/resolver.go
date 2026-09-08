@@ -148,13 +148,6 @@ func (r Resolver) Resolve(request Request) (Resolution, error) {
 		return Resolution{}, err
 	}
 
-	workerResolution := public.ImageQuality
-	switch trustedModel.ModelID {
-	case modelcatalog.MiniAppImageGrokImage15:
-		workerResolution = ""
-	case modelcatalog.MiniAppImageGrokImage20:
-		workerResolution = "quality"
-	}
 	return Resolution{
 		Public: public,
 		Worker: WorkerParams{
@@ -163,13 +156,26 @@ func (r Resolver) Resolve(request Request) (Resolution, error) {
 			Provider:     trustedModel.Provider,
 			ModelCode:    trustedModel.ModelCode,
 			Size:         imageSizeForQuality(trustedModel.Provider, public.ImageQuality),
-			Resolution:   workerResolution,
+			Resolution:   WorkerResolution(trustedModel.ModelID, public.ImageQuality),
 			ImageQuality: public.ImageQuality,
 			AspectRatio:  public.AspectRatio,
 			OutputCount:  public.OutputCount,
 		},
 		PricingSnapshot: snapshot,
 	}, nil
+}
+
+// WorkerResolution maps a validated public model/quality selection to the
+// worker contract. VK and the shared resolver must use the same mapping.
+func WorkerResolution(modelID, quality string) string {
+	switch modelID {
+	case modelcatalog.MiniAppImageGrokImage15:
+		return ""
+	case modelcatalog.MiniAppImageGrokImage20:
+		return "quality"
+	default:
+		return quality
+	}
 }
 
 // ResolvePublic validates and normalizes only the public image intent. It
