@@ -1711,6 +1711,7 @@ func (h *Handler) setSessionCookies(w http.ResponseWriter, tokens accountauth.Se
 
 func (h *Handler) expireSessionCookies(w http.ResponseWriter) {
 	for _, name := range []string{accessCookieName, refreshCookieName, csrfCookieName} {
+		// #nosec G124 -- Only the non-auth CSRF cookie is browser-readable; auth cookies remain HttpOnly, and all are Secure/SameSite and expired here.
 		http.SetCookie(w, &http.Cookie{Name: name, Value: "", Path: "/", Secure: true, HttpOnly: name != csrfCookieName, SameSite: http.SameSiteLaxMode, MaxAge: -1, Expires: time.Unix(1, 0)})
 	}
 }
@@ -1724,6 +1725,7 @@ func sessionCookie(name, value string, expires time.Time) *http.Cookie {
 }
 
 func csrfCookie(value string, expires time.Time) *http.Cookie {
+	// #nosec G124 -- The double-submit CSRF token must be readable for the request header; sessionCookie retains Secure and SameSite, and auth cookies remain HttpOnly.
 	cookie := sessionCookie(csrfCookieName, value, expires)
 	cookie.HttpOnly = false
 	return cookie

@@ -623,7 +623,7 @@ func loadEvidence(path string, now time.Time) (map[string]priceReport, error) {
 	if path == "" {
 		return out, nil
 	}
-	f, err := os.Open(path)
+	f, err := os.Open(path) // #nosec G304 -- Explicit local operator CLI evidence file; not an HTTP input. Size/schema are validated and raw contents are never emitted.
 	if err != nil {
 		return nil, err
 	}
