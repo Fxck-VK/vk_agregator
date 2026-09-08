@@ -296,6 +296,7 @@ func TestStaticCatalogUsesOnlyBoundedAliasesAndExplicitUnits(t *testing.T) {
 		PublicImageNanoBanana2:   true,
 		PublicImageNanoBananaPro: true,
 		PublicImageGPTImage2:     true,
+		PublicImageQwenImage3:    true,
 		PublicImageSeedream45:    true,
 	}
 	allowedVideos := map[domain.VideoRouteAlias]bool{
@@ -338,8 +339,8 @@ func TestStaticCatalogUsesOnlyBoundedAliasesAndExplicitUnits(t *testing.T) {
 }
 
 func TestStaticCatalogVersionChangesWithCompetitivePrices(t *testing.T) {
-	if StaticCatalogVersion != 4 {
-		t.Fatalf("static catalog version = %d, want 4", StaticCatalogVersion)
+	if StaticCatalogVersion != 5 {
+		t.Fatalf("static catalog version = %d, want 5", StaticCatalogVersion)
 	}
 }
 

@@ -3,6 +3,32 @@
 The DEV contour mirrors production architecture with separate secrets, domains,
 VK community, YooKassa/test settings and Cloudflare tunnel.
 
+## Qwen Image 3.0 configuration
+
+The public `qwen_image_3` route uses APIMart `qwen-image-3.0` through the existing
+worker. `FEATURE_APIMART_QWEN_IMAGE_3_ENABLED` defaults to `false`; readiness also
+requires `APIMART_PROVIDER_ENABLED`, `APIMART_API_KEY` and `APIMART_BASE_URL`.
+Use the existing APIMart worker registration and provider-chain configuration.
+API and worker must run code that supports this model before exposing it.
+
+The DEV deploy profile enables Qwen when APIMart is configured with a key.
+An explicit `FEATURE_APIMART_QWEN_IMAGE_3_ENABLED=false` in the assembled DEV env
+keeps it disabled. Missing provider credentials keep it disabled even if requested.
+The application default and the production deploy profile remain unchanged.
+
+The static catalog supplies 1K/2K at 15 internal credits per image. The recorded
+public floor is 0.205712 APIMart credits for either quality (checked 2026-09-08).
+For runtime DB pricing, each exposed `qwen_image_3` quality needs its own enabled
+key. Missing prices hide that quality; no priced quality hides the model. No DB prices or env
+values are changed by the implementation. Confirm the intended retail price and
+key-group cost when enabling in a contour.
+
+Disabling the model flag hides it from new public jobs; existing jobs retain their
+route and price snapshots and can finish while APIMart remains configured.
+The shared image UI lists the model from the backend catalog. This release adds no
+Web reference-upload controls. Paid canary and deployed UI verification are separate
+from local tests; see [implementation and checks](../superpowers/plans/2026-09-08-study24-apimart/45-qwen-image-3.md).
+
 ## DEV Domains
 
 | Surface | URL |
@@ -14,6 +40,10 @@ VK community, YooKassa/test settings and Cloudflare tunnel.
 | YooKassa webhook | `https://dev.neiirohub.ru/billing/webhooks/yookassa` |
 
 ## Local DEV Start
+
+APIMart model metadata and price-source checks use the read-only
+[APIMart preflight runbook](APIMART_PREFLIGHT.md). This operator tool does not
+submit generations, change runtime flags or verify personal billing by itself.
 
 Create local env:
 

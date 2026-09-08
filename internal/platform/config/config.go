@@ -294,6 +294,7 @@ type Config struct {
 
 	FeatureImageModelNanoBananaProEnabled       bool
 	FeatureImageModelGPTImage2Enabled           bool
+	FeatureAPIMartQwenImage3Enabled             bool
 	FeatureImageModelNanoBanana2Enabled         bool
 	FeatureImageModelSeedream45Enabled          bool
 	FeatureImageModelMockEnabled                bool
@@ -1338,6 +1339,7 @@ func Load() Config {
 		DeepInfraBalanceBaseURL:                   env("DEEPINFRA_BALANCE_BASE_URL", "https://api.deepinfra.com"),
 		FeatureImageModelNanoBananaProEnabled:     envBool("FEATURE_IMAGE_MODEL_NANO_BANANA_PRO_ENABLED", false),
 		FeatureImageModelGPTImage2Enabled:         envBool("FEATURE_IMAGE_MODEL_GPT_IMAGE_2_ENABLED", false),
+		FeatureAPIMartQwenImage3Enabled:           envBool("FEATURE_APIMART_QWEN_IMAGE_3_ENABLED", false),
 		FeatureImageModelNanoBanana2Enabled:       envBool("FEATURE_IMAGE_MODEL_NANO_BANANA_2_ENABLED", false),
 		FeatureImageModelSeedream45Enabled:        envBool("FEATURE_IMAGE_MODEL_SEEDREAM_4_5_ENABLED", false),
 		FeatureImageModelMockEnabled:              envBool("FEATURE_IMAGE_MODEL_MOCK_ENABLED", false),
@@ -1743,6 +1745,17 @@ func (c Config) validateVideoRouteProviderConfig() error {
 		}
 		if strings.TrimSpace(c.APIMartBaseURL) == "" {
 			return fmt.Errorf("config: FEATURE_IMAGE_MODEL_GPT_IMAGE_2_ENABLED=true requires APIMART_BASE_URL")
+		}
+	}
+	if c.FeatureAPIMartQwenImage3Enabled {
+		if !c.APIMartProviderEnabled {
+			return fmt.Errorf("config: FEATURE_APIMART_QWEN_IMAGE_3_ENABLED=true requires APIMART_PROVIDER_ENABLED=true")
+		}
+		if strings.TrimSpace(c.APIMartAPIKey) == "" {
+			return fmt.Errorf("config: FEATURE_APIMART_QWEN_IMAGE_3_ENABLED=true requires APIMART_API_KEY")
+		}
+		if strings.TrimSpace(c.APIMartBaseURL) == "" {
+			return fmt.Errorf("config: FEATURE_APIMART_QWEN_IMAGE_3_ENABLED=true requires APIMART_BASE_URL")
 		}
 	}
 	if c.FeatureImageModelMockEnabled {

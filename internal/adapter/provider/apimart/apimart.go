@@ -26,6 +26,7 @@ const (
 	ModelHailuo23Fast     = "MiniMax-Hailuo-2.3-Fast"
 	ModelGemini3ProImage  = "gemini-3-pro-image-preview"
 	ModelGPTImage2        = "gpt-image-2"
+	ModelQwenImage3       = "qwen-image-3.0"
 
 	defaultVideoProviderCostCredits = 1
 	defaultImageProviderCostCredits = 1
@@ -94,6 +95,12 @@ func (p *Provider) Capabilities(context.Context) ([]domain.Capability, error) {
 			Operation:       domain.OperationImageGenerate,
 			Modality:        domain.ModalityImage,
 			ModelCode:       ModelGPTImage2,
+			SupportsPolling: true,
+		},
+		{
+			Operation:       domain.OperationImageGenerate,
+			Modality:        domain.ModalityImage,
+			ModelCode:       ModelQwenImage3,
 			SupportsPolling: true,
 		},
 		{
@@ -246,6 +253,11 @@ func (p *Provider) submitImage(ctx context.Context, req domain.ProviderRequest) 
 		OfficialFallback: false,
 		ImageURLs:        cleanInputURLs(req.InputURLs),
 	}
+	if strings.TrimSpace(req.ModelCode) == ModelQwenImage3 {
+		body.NegativePrompt = strings.TrimSpace(req.NegativePrompt)
+		promptExtend := false
+		body.PromptExtend = &promptExtend
+	}
 	var decoded submitResponse
 	if err := p.postJSON(ctx, "/images/generations", body, &decoded, req.IdempotencyKey); err != nil {
 		return domain.ProviderTask{}, err
@@ -381,6 +393,8 @@ type imageGenerationRequest struct {
 	Resolution       string   `json:"resolution,omitempty"`
 	OfficialFallback bool     `json:"official_fallback,omitempty"`
 	ImageURLs        []string `json:"image_urls,omitempty"`
+	NegativePrompt   string   `json:"negative_prompt,omitempty"`
+	PromptExtend     *bool    `json:"prompt_extend,omitempty"`
 }
 
 type submitResponse struct {
@@ -529,6 +543,10 @@ func imageProviderCostCredits(req domain.ProviderRequest) (int64, error) {
 	// so known public variants use a conservative one-credit ceiling.
 	resolution := strings.ToUpper(effectiveImageResolution(req))
 	switch strings.TrimSpace(req.ModelCode) {
+	case ModelQwenImage3:
+		if resolution == "1K" || resolution == "2K" {
+			return defaultImageProviderCostCredits, nil
+		}
 	case ModelGPTImage2:
 		if resolution == "1K" || resolution == "2K" || resolution == "4K" {
 			return defaultImageProviderCostCredits, nil
@@ -585,6 +603,11 @@ func validateImageShape(req domain.ProviderRequest, requirePrompt bool) error {
 	if !isSupportedImageModel(model) {
 		return &Error{Class: domain.ProviderErrUnsupportedCapab, Message: "unsupported APIMart image model"}
 	}
+	if model == ModelQwenImage3 {
+		if err := validateQwenImageOptions(req); err != nil {
+			return err
+		}
+	}
 	if requirePrompt {
 		prompt := strings.TrimSpace(req.Prompt)
 		if prompt == "" {
@@ -632,7 +655,7 @@ func isSupportedVideoModel(model string) bool {
 
 func isSupportedImageModel(model string) bool {
 	switch strings.TrimSpace(model) {
-	case ModelGemini3ProImage, ModelGPTImage2:
+	case ModelGemini3ProImage, ModelGPTImage2, ModelQwenImage3:
 		return true
 	default:
 		return false
@@ -643,6 +666,9 @@ func isSupportedImageSize(model, value string) bool {
 	value = strings.ToLower(strings.TrimSpace(value))
 	if value == "" {
 		return false
+	}
+	if model == ModelQwenImage3 {
+		return isQwenImageSize(value)
 	}
 	if model == ModelGPTImage2 && isImagePixelSize(value) {
 		return true
@@ -719,6 +745,9 @@ func effectiveImageResolution(req domain.ProviderRequest) string {
 	if isSupportedImageResolution(req.Size) {
 		return normalizeImageResolution(req.Size, lowercase)
 	}
+	if strings.TrimSpace(req.ModelCode) == ModelQwenImage3 && qwenImagePixelArea(effectiveImageSize(req)) > 2_250_000 {
+		return "2K"
+	}
 	return normalizeImageResolution("1K", lowercase)
 }
 
@@ -732,6 +761,8 @@ func normalizeImageResolution(value string, lowercase bool) string {
 
 func maxImageReferenceImages(model string) int {
 	switch strings.TrimSpace(model) {
+	case ModelQwenImage3:
+		return 3
 	case ModelGPTImage2:
 		return maxGPTImage2ReferenceImages
 	default:

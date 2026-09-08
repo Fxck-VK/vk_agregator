@@ -1,0 +1,8 @@
+{
+  "model": "qwen-image-3.0",
+  "prompt": "Synthetic test image",
+  "size": "1:1",
+  "resolution": "1K",
+  "n": 1,
+  "prompt_extend": false
+}

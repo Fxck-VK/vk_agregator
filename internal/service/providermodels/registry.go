@@ -17,6 +17,7 @@ const (
 	PublicImageNanoBanana2   = "nano_banana_2"
 	PublicImageNanoBananaPro = "nano_banana_pro"
 	PublicImageGPTImage2     = "gpt_image_2"
+	PublicImageQwenImage3    = "qwen_image_3"
 	PublicImageSeedream45    = "seedream_4_5"
 	LoadTestImageMock        = "mock_image"
 
@@ -26,11 +27,13 @@ const (
 	ProviderModelPoYoSeedream45Edit = "seedream-4.5-edit"
 	ProviderModelGemini3ProImage    = "gemini-3-pro-image-preview"
 	ProviderModelGPTImage2          = "gpt-image-2"
+	ProviderModelQwenImage3         = "qwen-image-3.0"
 	ProviderModelMockImage          = "mock-image"
 
 	FeatureImageNanoBanana2   = "FEATURE_IMAGE_MODEL_NANO_BANANA_2_ENABLED"
 	FeatureImageNanoBananaPro = "FEATURE_IMAGE_MODEL_NANO_BANANA_PRO_ENABLED"
 	FeatureImageGPTImage2     = "FEATURE_IMAGE_MODEL_GPT_IMAGE_2_ENABLED"
+	FeatureImageQwenImage3    = "FEATURE_APIMART_QWEN_IMAGE_3_ENABLED"
 	FeatureImageSeedream45    = "FEATURE_IMAGE_MODEL_SEEDREAM_4_5_ENABLED"
 	FeatureImageMock          = "FEATURE_IMAGE_MODEL_MOCK_ENABLED"
 
@@ -176,6 +179,7 @@ func imageModels() []ImageModel {
 		imageModel(PublicImageNanoBanana2, "Nano Banana 2", domain.ProviderPoYo, ProviderModelPoYoNanoBanana2, FeatureImageNanoBanana2, poyoReadiness(), 14),
 		imageModel(PublicImageNanoBananaPro, "Nano Banana Pro", domain.ProviderAPIMart, ProviderModelGemini3ProImage, FeatureImageNanoBananaPro, apimartReadiness(), 14),
 		imageModel(PublicImageGPTImage2, "GPT Image 2", domain.ProviderAPIMart, ProviderModelGPTImage2, FeatureImageGPTImage2, apimartReadiness(), 16),
+		qwenImage3Model(),
 		imageModelWithQualities(PublicImageSeedream45, "Seedream 4.5", domain.ProviderPoYo, ProviderModelPoYoSeedream45, FeatureImageSeedream45, poyoReadiness(), []string{
 			pricingcatalog.ImageQuality2K,
 			pricingcatalog.ImageQuality4K,
@@ -198,6 +202,15 @@ func loadTestImageModels() []ImageModel {
 			LoadTestOnly: true,
 		},
 	}
+}
+
+func qwenImage3Model() ImageModel {
+	model := imageModelWithQualities(PublicImageQwenImage3, "Qwen Image 3.0", domain.ProviderAPIMart, ProviderModelQwenImage3, FeatureImageQwenImage3, apimartReadiness(), []string{
+		pricingcatalog.ImageQuality1K,
+		pricingcatalog.ImageQuality2K,
+	}, 3)
+	model.Limits.MaxOutputCount = 1
+	return model
 }
 
 func imageModel(publicID, displayName string, provider domain.ProviderName, providerModelID, featureFlag string, readiness ProviderReadiness, maxRefs int) ImageModel {

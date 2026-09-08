@@ -16,6 +16,7 @@ const (
 
 	MiniAppImageNanoBananaPro   = providermodels.PublicImageNanoBananaPro
 	MiniAppImageGPTImage2       = providermodels.PublicImageGPTImage2
+	MiniAppImageQwenImage3      = providermodels.PublicImageQwenImage3
 	MiniAppImageNanoBananaFlash = "nano_banana_flash"
 	MiniAppImageNanoBanana2     = providermodels.PublicImageNanoBanana2
 	MiniAppImageSeedream45      = providermodels.PublicImageSeedream45
@@ -28,6 +29,7 @@ const (
 	ModelCodePoYoNanoBanana2 = providermodels.ProviderModelPoYoNanoBanana2
 	ModelCodeGemini3ProImage = providermodels.ProviderModelGemini3ProImage
 	ModelCodeGPTImage2       = providermodels.ProviderModelGPTImage2
+	ModelCodeQwenImage3      = providermodels.ProviderModelQwenImage3
 	ModelCodeSeedream45      = "ByteDance/Seedream-4.5"
 	ModelCodeSDXLTurbo       = "stabilityai/sdxl-turbo"
 	ModelCodeMockImage       = providermodels.ProviderModelMockImage

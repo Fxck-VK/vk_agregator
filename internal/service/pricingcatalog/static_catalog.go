@@ -3,11 +3,12 @@ package pricingcatalog
 import "vk-ai-aggregator/internal/domain"
 
 const (
-	StaticCatalogVersion = 4
+	StaticCatalogVersion = 5
 
 	PublicImageNanoBanana2   = "nano_banana_2"
 	PublicImageNanoBananaPro = "nano_banana_pro"
 	PublicImageGPTImage2     = "gpt_image_2"
+	PublicImageQwenImage3    = "qwen_image_3"
 	PublicImageSeedream45    = "seedream_4_5"
 
 	ImageQuality1K = "1K"
@@ -58,6 +59,8 @@ func StaticProductPrices() []ProductPrice {
 		imageTariff(PublicImageNanoBananaPro, ImageQuality4K, 500_000, FloorUnitAPIMartCredits, apimartCreditToInternal, 70),
 		fixedInternalImageTariff(PublicImageSeedream45, ImageQuality2K, 10, 30),
 		fixedInternalImageTariff(PublicImageSeedream45, ImageQuality4K, 15, 40),
+		qwenImage3Tariff(ImageQuality1K),
+		qwenImage3Tariff(ImageQuality2K),
 	}
 
 	for _, resolution := range []string{VideoResolution720p, VideoResolution1080p} {
@@ -140,6 +143,14 @@ func imageTariff(modelID, quality string, floorAmount int64, unit FloorUnit, con
 		},
 		Enabled: true,
 	}
+}
+
+func qwenImage3Tariff(quality string) ProductPrice {
+	// APIMart public Standard tariff, checked 2026-09-08:
+	// https://apimart.ai/ru/pricing — 0.205712 APIMart credits/image, both 1K/2K.
+	// The x3 floor rounds up to the catalog's five-credit price step: 15.
+	// References are free. Preserve the exact retail multiplier in the snapshot.
+	return imageTariff(PublicImageQwenImage3, quality, 205_712, FloorUnitAPIMartCredits, apimartCreditToInternal, 15)
 }
 
 func fixedInternalImageTariff(modelID, quality string, floorCredits, retailCredits int64) ProductPrice {

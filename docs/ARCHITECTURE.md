@@ -2827,3 +2827,24 @@ Operator/admin referral view живЄт только под защищЄнным `/admin/referrals/*`.
 [10]: https://kling.ai/document-api/apiReference/model/textToVideo?utm_source=chatgpt.com "Text-to-Video API"
 [11]: https://developers.openai.com/codex/learn/best-practices "Best practices Ц Codex | OpenAI Developers"
 [12]: https://developers.openai.com/codex/guides/agents-md "Custom instructions with AGENTS.md Ц Codex | OpenAI Developers"
+
+## Qwen Image 3.0 image route (2026-09-08)
+
+The public `qwen_image_3` model maps to APIMart `qwen-image-3.0` through the
+existing image resolver, trusted Job snapshot and worker adapter. Its independent
+`FEATURE_APIMART_QWEN_IMAGE_3_ENABLED` flag defaults to false. Provider readiness
+and an exact active tariff are required before public catalog exposure.
+
+The initial public route generates one image at 1K or 2K, with up to three
+backend reference artifacts and no prompt rewriting. The standard model is never
+replaced with Pro. The shared artifact storage, output moderation, owner checks,
+account history and append-only reserve/capture/release lifecycle apply unchanged.
+Static pricing version 5 adds two exact Qwen keys at 15 internal credits each;
+existing Jobs keep their stored price and route snapshots. Runtime pricing rows
+and environment values are not mutated by this implementation.
+
+This route reuses existing APIMart submit/poll recovery. Durable pre-submit intents
+and recovery of a process crash between upstream acceptance and saving task_id
+remain separate work; the new model does not establish that guarantee.
+See [Qwen implementation](superpowers/plans/2026-09-08-study24-apimart/45-qwen-image-3.md)
+and [DEV configuration](runbooks/DEV.md).

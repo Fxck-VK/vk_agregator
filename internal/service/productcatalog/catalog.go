@@ -298,6 +298,8 @@ func imageDescription(modelID string) string {
 		return "Премиальная генерация изображений с сильной детализацией и референсами."
 	case modelcatalog.MiniAppImageGPTImage2:
 		return "Качественная генерация и редактирование изображений с надежной композицией."
+	case modelcatalog.MiniAppImageQwenImage3:
+		return "Генерация и редактирование изображений с текстом, 1K и 2K."
 	case modelcatalog.MiniAppImageSeedream45:
 		return "Быстрая эстетичная генерация изображений для концептов и визуалов."
 	case modelcatalog.MiniAppImageSDXLTurbo:
@@ -315,6 +317,8 @@ func imageQualityOptions(modelID string) []string {
 		return []string{modelcatalog.ImageQuality1K, modelcatalog.ImageQuality2K, modelcatalog.ImageQuality4K}
 	case modelcatalog.MiniAppImageSeedream45:
 		return []string{modelcatalog.ImageQuality2K, modelcatalog.ImageQuality4K}
+	case modelcatalog.MiniAppImageQwenImage3:
+		return []string{modelcatalog.ImageQuality1K, modelcatalog.ImageQuality2K}
 	default:
 		return nil
 	}

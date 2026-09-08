@@ -1,0 +1,2585 @@
+{
+  "checked_at": "2026-09-08",
+  "scope": "Study24 → APIMart; implementation registry, Qwen Image 3.0 implemented locally",
+  "foundation_status": {
+    "B0_tooling": "implemented_local_tests_passed",
+    "B0_live_metadata": "not_run_no_live_model_selection",
+    "B0_key_group_and_actual_cost": "not_verified",
+    "B0_complete": false,
+    "B1_B3_new_implementation": "general_foundation_deferred; Qwen scoped static pricing implemented",
+    "runbook": "docs/runbooks/APIMART_PREFLIGHT.md"
+  },
+  "implementation_audit": {
+    "checked_at": "2026-09-08",
+    "branch": "dev-deploy",
+    "head": "cb34ded57",
+    "basis": "local source and package tests; Qwen official contract and public price reverified; no live provider, runtime flag or active DB price verification",
+    "existing_apimart_route_count": 3,
+    "optional_provider_migration_count": 1,
+    "new_apimart_route_count": 55,
+    "next_tasks": ["Qwen_Image_3_live_rollout_not_run", "next_model_by_user_selection", "R0_R2_general_foundation_deferred"],
+    "go_packages_passed": 13,
+    "web_image_tests": "not_run_vitest_missing"
+  },
+  "source_catalog_count": 71,
+  "planned_count": 59,
+  "conditional_version_count": 13,
+  "unconfirmed_count": 12,
+  "docs_base": "https://docs.apimart.ai/ru/api-reference/",
+  "pricing_url": "https://apimart.ai/ru/pricing",
+  "models": [
+    {
+      "i": 2,
+      "name": "Claude Opus 4.8",
+      "study": "https://study24.ai/chat/claude_opus_48",
+      "kind": "text",
+      "model": "claude-opus-4-8",
+      "public_id": "claude_opus_4_8",
+      "doc": "texts/general/chat-completions",
+      "extra_docs": [],
+      "endpoint": "/v1/chat/completions",
+      "poll": null,
+      "request": {
+        "model": "claude-opus-4-8",
+        "stream": false,
+        "messages": [
+          {
+            "role": "user",
+            "content": "Ответь одним коротким предложением."
+          }
+        ],
+        "max_tokens": 800
+      },
+      "price": "$4 / $20 за 1 млн входных / выходных токенов (обычный контекст, без инструментов и скидки кэша).",
+      "rates": {
+        "input_usd_nanos_per_million": 4000000000,
+        "output_usd_nanos_per_million": 20000000000
+      },
+      "note": "Модель найдена в опубликованном прайсе APIMart. Для новых версий общая документация Chat API не доказывает поддержку каждого необязательного параметра.",
+      "conditional": false,
+      "gate": "account_catalog",
+      "limits": "Первый выпуск: текстовый ввод, один ответ, stream=false, до 800 токенов вывода и консервативный бюджет входа 1600 токенов с учётом системного контекста. Это наши стартовые лимиты, а не заявленный максимум модели. temperature, tools, reasoning_effort, вложения и cache-control не отправлять до проверки контракта конкретного ID.",
+      "cases": [
+        "Запрос с public_id=claude_opus_4_8 резолвится строго в APIMart/claude-opus-4-8.",
+        "При входе 1000 и выходе 1000 токенов себестоимость равна $0.024; применение скидки второй раз запрещено.",
+        "Ответ без choices[0].message.content или с некорректным usage не должен пройти как успешная бесплатная генерация."
+      ],
+      "wave": "T",
+      "release": "После общей текстовой основы и контрактной проверки конкретного ID.",
+      "implementation": {
+        "status": "new_apimart_route",
+        "target_route_implemented": false
+      },
+      "file": "02-claude-opus-4-8.md",
+      "flag": "FEATURE_APIMART_CLAUDE_OPUS_4_8_ENABLED"
+    },
+    {
+      "i": 3,
+      "name": "GPT 5.6 Terra",
+      "study": "https://study24.ai/chat/gpt_56",
+      "kind": "text",
+      "model": "gpt-5.6-terra",
+      "public_id": "gpt_5_6_terra",
+      "doc": "texts/general/chat-completions",
+      "extra_docs": [],
+      "endpoint": "/v1/chat/completions",
+      "poll": null,
+      "request": {
+        "model": "gpt-5.6-terra",
+        "stream": false,
+        "messages": [
+          {
+            "role": "user",
+            "content": "Ответь одним коротким предложением."
+          }
+        ],
+        "max_tokens": 800
+      },
+      "price": "$1.6 / $9.6 за 1 млн входных / выходных токенов (обычный контекст, без инструментов и скидки кэша).",
+      "rates": {
+        "input_usd_nanos_per_million": 1600000000,
+        "output_usd_nanos_per_million": 9600000000
+      },
+      "note": "Модель найдена в опубликованном прайсе APIMart. Для новых версий общая документация Chat API не доказывает поддержку каждого необязательного параметра.",
+      "conditional": false,
+      "gate": "account_catalog",
+      "limits": "Первый выпуск: текстовый ввод, один ответ, stream=false, до 800 токенов вывода и консервативный бюджет входа 1600 токенов с учётом системного контекста. Это наши стартовые лимиты, а не заявленный максимум модели. temperature, tools, reasoning_effort, вложения и cache-control не отправлять до проверки контракта конкретного ID.",
+      "cases": [
+        "Запрос с public_id=gpt_5_6_terra резолвится строго в APIMart/gpt-5.6-terra.",
+        "При входе 1000 и выходе 1000 токенов себестоимость равна $0.0112; применение скидки второй раз запрещено.",
+        "Ответ без choices[0].message.content или с некорректным usage не должен пройти как успешная бесплатная генерация."
+      ],
+      "wave": "T",
+      "release": "После общей текстовой основы и контрактной проверки конкретного ID.",
+      "implementation": {
+        "status": "new_apimart_route",
+        "target_route_implemented": false
+      },
+      "file": "03-gpt-5-6-terra.md",
+      "flag": "FEATURE_APIMART_GPT_5_6_TERRA_ENABLED"
+    },
+    {
+      "i": 4,
+      "name": "GPT 6 Astra",
+      "study": "https://study24.ai/chat/gpt-6",
+      "kind": "text",
+      "model": "gpt-6-astra",
+      "public_id": "gpt_6_astra",
+      "doc": "texts/general/chat-completions",
+      "extra_docs": [],
+      "endpoint": "/v1/chat/completions",
+      "poll": null,
+      "request": {
+        "model": "gpt-6-astra",
+        "stream": false,
+        "messages": [
+          {
+            "role": "user",
+            "content": "Ответь одним коротким предложением."
+          }
+        ],
+        "max_tokens": 800
+      },
+      "price": "$8 / $40 за 1 млн входных / выходных токенов (обычный контекст, без инструментов и скидки кэша).",
+      "rates": {
+        "input_usd_nanos_per_million": 8000000000,
+        "output_usd_nanos_per_million": 40000000000
+      },
+      "note": "Модель найдена в опубликованном прайсе APIMart. Для новых версий общая документация Chat API не доказывает поддержку каждого необязательного параметра.",
+      "conditional": false,
+      "gate": "account_catalog",
+      "limits": "Первый выпуск: текстовый ввод, один ответ, stream=false, до 800 токенов вывода и консервативный бюджет входа 1600 токенов с учётом системного контекста. Это наши стартовые лимиты, а не заявленный максимум модели. temperature, tools, reasoning_effort, вложения и cache-control не отправлять до проверки контракта конкретного ID.",
+      "cases": [
+        "Запрос с public_id=gpt_6_astra резолвится строго в APIMart/gpt-6-astra.",
+        "При входе 1000 и выходе 1000 токенов себестоимость равна $0.048; применение скидки второй раз запрещено.",
+        "Ответ без choices[0].message.content или с некорректным usage не должен пройти как успешная бесплатная генерация."
+      ],
+      "wave": "T",
+      "release": "После общей текстовой основы и контрактной проверки конкретного ID.",
+      "implementation": {
+        "status": "new_apimart_route",
+        "target_route_implemented": false
+      },
+      "file": "04-gpt-6-astra.md",
+      "flag": "FEATURE_APIMART_GPT_6_ASTRA_ENABLED"
+    },
+    {
+      "i": 6,
+      "name": "Claude Opus 5",
+      "study": "https://study24.ai/chat/claude_5",
+      "kind": "text",
+      "model": "claude-opus-5",
+      "public_id": "claude_opus_5",
+      "doc": "texts/general/chat-completions",
+      "extra_docs": [],
+      "endpoint": "/v1/chat/completions",
+      "poll": null,
+      "request": {
+        "model": "claude-opus-5",
+        "stream": false,
+        "messages": [
+          {
+            "role": "user",
+            "content": "Ответь одним коротким предложением."
+          }
+        ],
+        "max_tokens": 800
+      },
+      "price": "$4 / $20 за 1 млн входных / выходных токенов (обычный контекст, без инструментов и скидки кэша).",
+      "rates": {
+        "input_usd_nanos_per_million": 4000000000,
+        "output_usd_nanos_per_million": 20000000000
+      },
+      "note": "Модель найдена в опубликованном прайсе APIMart. Для новых версий общая документация Chat API не доказывает поддержку каждого необязательного параметра.",
+      "conditional": false,
+      "gate": "account_catalog",
+      "limits": "Первый выпуск: текстовый ввод, один ответ, stream=false, до 800 токенов вывода и консервативный бюджет входа 1600 токенов с учётом системного контекста. Это наши стартовые лимиты, а не заявленный максимум модели. temperature, tools, reasoning_effort, вложения и cache-control не отправлять до проверки контракта конкретного ID.",
+      "cases": [
+        "Запрос с public_id=claude_opus_5 резолвится строго в APIMart/claude-opus-5.",
+        "При входе 1000 и выходе 1000 токенов себестоимость равна $0.024; применение скидки второй раз запрещено.",
+        "Ответ без choices[0].message.content или с некорректным usage не должен пройти как успешная бесплатная генерация."
+      ],
+      "wave": "T",
+      "release": "После общей текстовой основы и контрактной проверки конкретного ID.",
+      "implementation": {
+        "status": "new_apimart_route",
+        "target_route_implemented": false
+      },
+      "file": "06-claude-opus-5.md",
+      "flag": "FEATURE_APIMART_CLAUDE_OPUS_5_ENABLED"
+    },
+    {
+      "i": 7,
+      "name": "Gemini 3.7 Flash",
+      "study": "https://study24.ai/chat/gemini-flash-37",
+      "kind": "text",
+      "model": "gemini-3.7-flash",
+      "public_id": "gemini_3_7_flash",
+      "doc": "texts/general/chat-completions",
+      "extra_docs": [],
+      "endpoint": "/v1/chat/completions",
+      "poll": null,
+      "request": {
+        "model": "gemini-3.7-flash",
+        "stream": false,
+        "messages": [
+          {
+            "role": "user",
+            "content": "Ответь одним коротким предложением."
+          }
+        ],
+        "max_tokens": 800
+      },
+      "price": "$0.6 / $3 за 1 млн входных / выходных токенов (обычный контекст, без инструментов и скидки кэша).",
+      "rates": {
+        "input_usd_nanos_per_million": 600000000,
+        "output_usd_nanos_per_million": 3000000000
+      },
+      "note": "Модель найдена в опубликованном прайсе APIMart. Для новых версий общая документация Chat API не доказывает поддержку каждого необязательного параметра.",
+      "conditional": false,
+      "gate": "account_catalog",
+      "limits": "Первый выпуск: текстовый ввод, один ответ, stream=false, до 800 токенов вывода и консервативный бюджет входа 1600 токенов с учётом системного контекста. Это наши стартовые лимиты, а не заявленный максимум модели. temperature, tools, reasoning_effort, вложения и cache-control не отправлять до проверки контракта конкретного ID.",
+      "cases": [
+        "Запрос с public_id=gemini_3_7_flash резолвится строго в APIMart/gemini-3.7-flash.",
+        "При входе 1000 и выходе 1000 токенов себестоимость равна $0.0036; применение скидки второй раз запрещено.",
+        "Ответ без choices[0].message.content или с некорректным usage не должен пройти как успешная бесплатная генерация."
+      ],
+      "wave": "T",
+      "release": "После общей текстовой основы и контрактной проверки конкретного ID.",
+      "implementation": {
+        "status": "new_apimart_route",
+        "target_route_implemented": false
+      },
+      "file": "07-gemini-3-7-flash.md",
+      "flag": "FEATURE_APIMART_GEMINI_3_7_FLASH_ENABLED"
+    },
+    {
+      "i": 8,
+      "name": "Fable 5.1",
+      "study": "https://study24.ai/chat/fable_51",
+      "kind": "text",
+      "model": "claude-fable-5.1",
+      "public_id": "claude_fable_5_1",
+      "doc": "texts/general/chat-completions",
+      "extra_docs": [],
+      "endpoint": "/v1/chat/completions",
+      "poll": null,
+      "request": {
+        "model": "claude-fable-5.1",
+        "stream": false,
+        "messages": [
+          {
+            "role": "user",
+            "content": "Ответь одним коротким предложением."
+          }
+        ],
+        "max_tokens": 800
+      },
+      "price": "$8 / $40 за 1 млн входных / выходных токенов (обычный контекст, без инструментов и скидки кэша).",
+      "rates": {
+        "input_usd_nanos_per_million": 8000000000,
+        "output_usd_nanos_per_million": 40000000000
+      },
+      "note": "Модель найдена в опубликованном прайсе APIMart. Для новых версий общая документация Chat API не доказывает поддержку каждого необязательного параметра.",
+      "conditional": false,
+      "gate": "account_catalog",
+      "limits": "Первый выпуск: текстовый ввод, один ответ, stream=false, до 800 токенов вывода и консервативный бюджет входа 1600 токенов с учётом системного контекста. Это наши стартовые лимиты, а не заявленный максимум модели. temperature, tools, reasoning_effort, вложения и cache-control не отправлять до проверки контракта конкретного ID.",
+      "cases": [
+        "Запрос с public_id=claude_fable_5_1 резолвится строго в APIMart/claude-fable-5.1.",
+        "При входе 1000 и выходе 1000 токенов себестоимость равна $0.048; применение скидки второй раз запрещено.",
+        "Ответ без choices[0].message.content или с некорректным usage не должен пройти как успешная бесплатная генерация."
+      ],
+      "wave": "T",
+      "release": "После общей текстовой основы и контрактной проверки конкретного ID.",
+      "implementation": {
+        "status": "new_apimart_route",
+        "target_route_implemented": false
+      },
+      "file": "08-claude-fable-5-1.md",
+      "flag": "FEATURE_APIMART_CLAUDE_FABLE_5_1_ENABLED"
+    },
+    {
+      "i": 9,
+      "name": "Claude Fable 5",
+      "study": "https://study24.ai/chat/claude_fable",
+      "kind": "text",
+      "model": "claude-fable-5",
+      "public_id": "claude_fable_5",
+      "doc": "texts/general/chat-completions",
+      "extra_docs": [],
+      "endpoint": "/v1/chat/completions",
+      "poll": null,
+      "request": {
+        "model": "claude-fable-5",
+        "stream": false,
+        "messages": [
+          {
+            "role": "user",
+            "content": "Ответь одним коротким предложением."
+          }
+        ],
+        "max_tokens": 800
+      },
+      "price": "$8 / $40 за 1 млн входных / выходных токенов (обычный контекст, без инструментов и скидки кэша).",
+      "rates": {
+        "input_usd_nanos_per_million": 8000000000,
+        "output_usd_nanos_per_million": 40000000000
+      },
+      "note": "Модель найдена в опубликованном прайсе APIMart. Для новых версий общая документация Chat API не доказывает поддержку каждого необязательного параметра.",
+      "conditional": false,
+      "gate": "account_catalog",
+      "limits": "Первый выпуск: текстовый ввод, один ответ, stream=false, до 800 токенов вывода и консервативный бюджет входа 1600 токенов с учётом системного контекста. Это наши стартовые лимиты, а не заявленный максимум модели. temperature, tools, reasoning_effort, вложения и cache-control не отправлять до проверки контракта конкретного ID.",
+      "cases": [
+        "Запрос с public_id=claude_fable_5 резолвится строго в APIMart/claude-fable-5.",
+        "При входе 1000 и выходе 1000 токенов себестоимость равна $0.048; применение скидки второй раз запрещено.",
+        "Ответ без choices[0].message.content или с некорректным usage не должен пройти как успешная бесплатная генерация."
+      ],
+      "wave": "T",
+      "release": "После общей текстовой основы и контрактной проверки конкретного ID.",
+      "implementation": {
+        "status": "new_apimart_route",
+        "target_route_implemented": false
+      },
+      "file": "09-claude-fable-5.md",
+      "flag": "FEATURE_APIMART_CLAUDE_FABLE_5_ENABLED"
+    },
+    {
+      "i": 10,
+      "name": "Gemini 3.6 Flash",
+      "study": "https://study24.ai/chat/gemini_36_flash",
+      "kind": "text",
+      "model": "gemini-3.6-flash",
+      "public_id": "gemini_3_6_flash",
+      "doc": "texts/general/chat-completions",
+      "extra_docs": [],
+      "endpoint": "/v1/chat/completions",
+      "poll": null,
+      "request": {
+        "model": "gemini-3.6-flash",
+        "stream": false,
+        "messages": [
+          {
+            "role": "user",
+            "content": "Ответь одним коротким предложением."
+          }
+        ],
+        "max_tokens": 800
+      },
+      "price": "$1.2 / $6 за 1 млн входных / выходных токенов (обычный контекст, без инструментов и скидки кэша).",
+      "rates": {
+        "input_usd_nanos_per_million": 1200000000,
+        "output_usd_nanos_per_million": 6000000000
+      },
+      "note": "Модель найдена в опубликованном прайсе APIMart. Для новых версий общая документация Chat API не доказывает поддержку каждого необязательного параметра.",
+      "conditional": false,
+      "gate": "account_catalog",
+      "limits": "Первый выпуск: текстовый ввод, один ответ, stream=false, до 800 токенов вывода и консервативный бюджет входа 1600 токенов с учётом системного контекста. Это наши стартовые лимиты, а не заявленный максимум модели. temperature, tools, reasoning_effort, вложения и cache-control не отправлять до проверки контракта конкретного ID.",
+      "cases": [
+        "Запрос с public_id=gemini_3_6_flash резолвится строго в APIMart/gemini-3.6-flash.",
+        "При входе 1000 и выходе 1000 токенов себестоимость равна $0.0072; применение скидки второй раз запрещено.",
+        "Ответ без choices[0].message.content или с некорректным usage не должен пройти как успешная бесплатная генерация."
+      ],
+      "wave": "T",
+      "release": "После общей текстовой основы и контрактной проверки конкретного ID.",
+      "implementation": {
+        "status": "new_apimart_route",
+        "target_route_implemented": false
+      },
+      "file": "10-gemini-3-6-flash.md",
+      "flag": "FEATURE_APIMART_GEMINI_3_6_FLASH_ENABLED"
+    },
+    {
+      "i": 11,
+      "name": "ChatGPT 5",
+      "study": "https://study24.ai/chat/chat_gpt5",
+      "kind": "text",
+      "model": "gpt-5",
+      "public_id": "gpt_5",
+      "doc": "texts/general/chat-completions",
+      "extra_docs": [],
+      "endpoint": "/v1/chat/completions",
+      "poll": null,
+      "request": {
+        "model": "gpt-5",
+        "stream": false,
+        "messages": [
+          {
+            "role": "user",
+            "content": "Ответь одним коротким предложением."
+          }
+        ],
+        "max_tokens": 800
+      },
+      "price": "$1 / $8 за 1 млн входных / выходных токенов (обычный контекст, без инструментов и скидки кэша).",
+      "rates": {
+        "input_usd_nanos_per_million": 1000000000,
+        "output_usd_nanos_per_million": 8000000000
+      },
+      "note": "Модель найдена в опубликованном прайсе APIMart. Для новых версий общая документация Chat API не доказывает поддержку каждого необязательного параметра.",
+      "conditional": false,
+      "gate": "account_catalog",
+      "limits": "Первый выпуск: текстовый ввод, один ответ, stream=false, до 800 токенов вывода и консервативный бюджет входа 1600 токенов с учётом системного контекста. Это наши стартовые лимиты, а не заявленный максимум модели. temperature, tools, reasoning_effort, вложения и cache-control не отправлять до проверки контракта конкретного ID.",
+      "cases": [
+        "Запрос с public_id=gpt_5 резолвится строго в APIMart/gpt-5.",
+        "При входе 1000 и выходе 1000 токенов себестоимость равна $0.009; применение скидки второй раз запрещено.",
+        "Ответ без choices[0].message.content или с некорректным usage не должен пройти как успешная бесплатная генерация."
+      ],
+      "wave": "T",
+      "release": "После общей текстовой основы и контрактной проверки конкретного ID.",
+      "implementation": {
+        "status": "new_apimart_route",
+        "target_route_implemented": false
+      },
+      "file": "11-gpt-5.md",
+      "flag": "FEATURE_APIMART_GPT_5_ENABLED"
+    },
+    {
+      "i": 12,
+      "name": "GPT 5.6 Luna",
+      "study": "https://study24.ai/chat/gpt_56_luna",
+      "kind": "text",
+      "model": "gpt-5.6-luna",
+      "public_id": "gpt_5_6_luna",
+      "doc": "texts/general/chat-completions",
+      "extra_docs": [],
+      "endpoint": "/v1/chat/completions",
+      "poll": null,
+      "request": {
+        "model": "gpt-5.6-luna",
+        "stream": false,
+        "messages": [
+          {
+            "role": "user",
+            "content": "Ответь одним коротким предложением."
+          }
+        ],
+        "max_tokens": 800
+      },
+      "price": "$0.16 / $0.96 за 1 млн входных / выходных токенов (обычный контекст, без инструментов и скидки кэша).",
+      "rates": {
+        "input_usd_nanos_per_million": 160000000,
+        "output_usd_nanos_per_million": 960000000
+      },
+      "note": "Модель найдена в опубликованном прайсе APIMart. Для новых версий общая документация Chat API не доказывает поддержку каждого необязательного параметра.",
+      "conditional": false,
+      "gate": "account_catalog",
+      "limits": "Первый выпуск: текстовый ввод, один ответ, stream=false, до 800 токенов вывода и консервативный бюджет входа 1600 токенов с учётом системного контекста. Это наши стартовые лимиты, а не заявленный максимум модели. temperature, tools, reasoning_effort, вложения и cache-control не отправлять до проверки контракта конкретного ID.",
+      "cases": [
+        "Запрос с public_id=gpt_5_6_luna резолвится строго в APIMart/gpt-5.6-luna.",
+        "При входе 1000 и выходе 1000 токенов себестоимость равна $0.00112; применение скидки второй раз запрещено.",
+        "Ответ без choices[0].message.content или с некорректным usage не должен пройти как успешная бесплатная генерация."
+      ],
+      "wave": "T",
+      "release": "После общей текстовой основы и контрактной проверки конкретного ID.",
+      "implementation": {
+        "status": "new_apimart_route",
+        "target_route_implemented": false
+      },
+      "file": "12-gpt-5-6-luna.md",
+      "flag": "FEATURE_APIMART_GPT_5_6_LUNA_ENABLED"
+    },
+    {
+      "i": 13,
+      "name": "Grok 4.5",
+      "study": "https://study24.ai/chat/grok_45",
+      "kind": "text",
+      "model": "grok-4.5",
+      "public_id": "grok_4_5",
+      "doc": "texts/general/chat-completions",
+      "extra_docs": [],
+      "endpoint": "/v1/chat/completions",
+      "poll": null,
+      "request": {
+        "model": "grok-4.5",
+        "stream": false,
+        "messages": [
+          {
+            "role": "user",
+            "content": "Ответь одним коротким предложением."
+          }
+        ],
+        "max_tokens": 800
+      },
+      "price": "$1.6 / $3.2 за 1 млн входных / выходных токенов (обычный контекст, без инструментов и скидки кэша).",
+      "rates": {
+        "input_usd_nanos_per_million": 1600000000,
+        "output_usd_nanos_per_million": 3200000000
+      },
+      "note": "Модель найдена в опубликованном прайсе APIMart. Для новых версий общая документация Chat API не доказывает поддержку каждого необязательного параметра.",
+      "conditional": false,
+      "gate": "account_catalog",
+      "limits": "Первый выпуск: текстовый ввод, один ответ, stream=false, до 800 токенов вывода и консервативный бюджет входа 1600 токенов с учётом системного контекста. Это наши стартовые лимиты, а не заявленный максимум модели. temperature, tools, reasoning_effort, вложения и cache-control не отправлять до проверки контракта конкретного ID.",
+      "cases": [
+        "Запрос с public_id=grok_4_5 резолвится строго в APIMart/grok-4.5.",
+        "При входе 1000 и выходе 1000 токенов себестоимость равна $0.0048; применение скидки второй раз запрещено.",
+        "Ответ без choices[0].message.content или с некорректным usage не должен пройти как успешная бесплатная генерация."
+      ],
+      "wave": "T",
+      "release": "После общей текстовой основы и контрактной проверки конкретного ID.",
+      "implementation": {
+        "status": "new_apimart_route",
+        "target_route_implemented": false
+      },
+      "file": "13-grok-4-5.md",
+      "flag": "FEATURE_APIMART_GROK_4_5_ENABLED"
+    },
+    {
+      "i": 14,
+      "name": "Gemini 3.1 Pro",
+      "study": "https://study24.ai/chat/gemini3_pro",
+      "kind": "text",
+      "model": "gemini-3.1-pro-preview",
+      "public_id": "gemini_3_1_pro_preview",
+      "doc": "texts/general/chat-completions",
+      "extra_docs": [],
+      "endpoint": "/v1/chat/completions",
+      "poll": null,
+      "request": {
+        "model": "gemini-3.1-pro-preview",
+        "stream": false,
+        "messages": [
+          {
+            "role": "user",
+            "content": "Ответь одним коротким предложением."
+          }
+        ],
+        "max_tokens": 800
+      },
+      "price": "$1.6 / $9.6 за 1 млн входных / выходных токенов (обычный контекст, без инструментов и скидки кэша).",
+      "rates": {
+        "input_usd_nanos_per_million": 1600000000,
+        "output_usd_nanos_per_million": 9600000000
+      },
+      "note": "В Study24 нет суффикса preview. Подключать под явным названием Gemini 3.1 Pro Preview; равенство версии Study24 пока не доказано.",
+      "conditional": true,
+      "gate": "account_catalog",
+      "limits": "Первый выпуск: текстовый ввод, один ответ, stream=false, до 800 токенов вывода и консервативный бюджет входа 1600 токенов с учётом системного контекста. Это наши стартовые лимиты, а не заявленный максимум модели. temperature, tools, reasoning_effort, вложения и cache-control не отправлять до проверки контракта конкретного ID.",
+      "cases": [
+        "Запрос с public_id=gemini_3_1_pro_preview резолвится строго в APIMart/gemini-3.1-pro-preview.",
+        "При входе 1000 и выходе 1000 токенов себестоимость равна $0.0112; применение скидки второй раз запрещено.",
+        "Ответ без choices[0].message.content или с некорректным usage не должен пройти как успешная бесплатная генерация."
+      ],
+      "wave": "T",
+      "release": "После общей текстовой основы и контрактной проверки конкретного ID.",
+      "implementation": {
+        "status": "new_apimart_route",
+        "target_route_implemented": false
+      },
+      "file": "14-gemini-3-1-pro-preview.md",
+      "flag": "FEATURE_APIMART_GEMINI_3_1_PRO_PREVIEW_ENABLED"
+    },
+    {
+      "i": 15,
+      "name": "DeepSeek V4 Pro",
+      "study": "https://study24.ai/chat/deepseek_v4",
+      "kind": "text",
+      "model": "deepseek-v4-pro",
+      "public_id": "deepseek_v4_pro",
+      "doc": "texts/general/chat-completions",
+      "extra_docs": [],
+      "endpoint": "/v1/chat/completions",
+      "poll": null,
+      "request": {
+        "model": "deepseek-v4-pro",
+        "stream": false,
+        "messages": [
+          {
+            "role": "user",
+            "content": "Ответь одним коротким предложением."
+          }
+        ],
+        "max_tokens": 800
+      },
+      "price": "$1.0285712 / $3.0857144 за 1 млн входных / выходных токенов (обычный контекст, без инструментов и скидки кэша).",
+      "rates": {
+        "input_usd_nanos_per_million": 1028571200,
+        "output_usd_nanos_per_million": 3085714400
+      },
+      "note": "Пиковый тариф использован для резерва. Вне пика: $0.5142856 / $1.5428572 за 1 млн токенов; расписание в просмотренном кабинете: 03:00–17:00 Europe/Moscow — пик. Проверять момент фактического отправления; не переносить часовой пояс браузера в код.",
+      "conditional": false,
+      "gate": "account_catalog",
+      "limits": "Первый выпуск: текстовый ввод, один ответ, stream=false, до 800 токенов вывода и консервативный бюджет входа 1600 токенов с учётом системного контекста. Это наши стартовые лимиты, а не заявленный максимум модели. temperature, tools, reasoning_effort, вложения и cache-control не отправлять до проверки контракта конкретного ID.",
+      "cases": [
+        "Запрос с public_id=deepseek_v4_pro резолвится строго в APIMart/deepseek-v4-pro.",
+        "При входе 1000 и выходе 1000 токенов себестоимость равна $0.0041142856; применение скидки второй раз запрещено.",
+        "Ответ без choices[0].message.content или с некорректным usage не должен пройти как успешная бесплатная генерация."
+      ],
+      "wave": "T",
+      "release": "После общей текстовой основы и контрактной проверки конкретного ID.",
+      "implementation": {
+        "status": "new_apimart_route",
+        "target_route_implemented": false
+      },
+      "file": "15-deepseek-v4-pro.md",
+      "flag": "FEATURE_APIMART_DEEPSEEK_V4_PRO_ENABLED"
+    },
+    {
+      "i": 16,
+      "name": "Gemini 3.5 Flash",
+      "study": "https://study24.ai/chat/gemini_3_5_flash",
+      "kind": "text",
+      "model": "gemini-3.5-flash",
+      "public_id": "gemini_3_5_flash",
+      "doc": "texts/general/chat-completions",
+      "extra_docs": [],
+      "endpoint": "/v1/chat/completions",
+      "poll": null,
+      "request": {
+        "model": "gemini-3.5-flash",
+        "stream": false,
+        "messages": [
+          {
+            "role": "user",
+            "content": "Ответь одним коротким предложением."
+          }
+        ],
+        "max_tokens": 800
+      },
+      "price": "$1.2 / $7.2 за 1 млн входных / выходных токенов (обычный контекст, без инструментов и скидки кэша).",
+      "rates": {
+        "input_usd_nanos_per_million": 1200000000,
+        "output_usd_nanos_per_million": 7200000000
+      },
+      "note": "Модель найдена в опубликованном прайсе APIMart. Для новых версий общая документация Chat API не доказывает поддержку каждого необязательного параметра.",
+      "conditional": false,
+      "gate": "account_catalog",
+      "limits": "Первый выпуск: текстовый ввод, один ответ, stream=false, до 800 токенов вывода и консервативный бюджет входа 1600 токенов с учётом системного контекста. Это наши стартовые лимиты, а не заявленный максимум модели. temperature, tools, reasoning_effort, вложения и cache-control не отправлять до проверки контракта конкретного ID.",
+      "cases": [
+        "Запрос с public_id=gemini_3_5_flash резолвится строго в APIMart/gemini-3.5-flash.",
+        "При входе 1000 и выходе 1000 токенов себестоимость равна $0.0084; применение скидки второй раз запрещено.",
+        "Ответ без choices[0].message.content или с некорректным usage не должен пройти как успешная бесплатная генерация."
+      ],
+      "wave": "T",
+      "release": "После общей текстовой основы и контрактной проверки конкретного ID.",
+      "implementation": {
+        "status": "new_apimart_route",
+        "target_route_implemented": false
+      },
+      "file": "16-gemini-3-5-flash.md",
+      "flag": "FEATURE_APIMART_GEMINI_3_5_FLASH_ENABLED"
+    },
+    {
+      "i": 17,
+      "name": "Claude Opus 4.7",
+      "study": "https://study24.ai/chat/claude_opus_47",
+      "kind": "text",
+      "model": "claude-opus-4-7",
+      "public_id": "claude_opus_4_7",
+      "doc": "texts/general/chat-completions",
+      "extra_docs": [],
+      "endpoint": "/v1/chat/completions",
+      "poll": null,
+      "request": {
+        "model": "claude-opus-4-7",
+        "stream": false,
+        "messages": [
+          {
+            "role": "user",
+            "content": "Ответь одним коротким предложением."
+          }
+        ],
+        "max_tokens": 800
+      },
+      "price": "$4 / $20 за 1 млн входных / выходных токенов (обычный контекст, без инструментов и скидки кэша).",
+      "rates": {
+        "input_usd_nanos_per_million": 4000000000,
+        "output_usd_nanos_per_million": 20000000000
+      },
+      "note": "Модель найдена в опубликованном прайсе APIMart. Для новых версий общая документация Chat API не доказывает поддержку каждого необязательного параметра.",
+      "conditional": false,
+      "gate": "account_catalog",
+      "limits": "Первый выпуск: текстовый ввод, один ответ, stream=false, до 800 токенов вывода и консервативный бюджет входа 1600 токенов с учётом системного контекста. Это наши стартовые лимиты, а не заявленный максимум модели. temperature, tools, reasoning_effort, вложения и cache-control не отправлять до проверки контракта конкретного ID.",
+      "cases": [
+        "Запрос с public_id=claude_opus_4_7 резолвится строго в APIMart/claude-opus-4-7.",
+        "При входе 1000 и выходе 1000 токенов себестоимость равна $0.024; применение скидки второй раз запрещено.",
+        "Ответ без choices[0].message.content или с некорректным usage не должен пройти как успешная бесплатная генерация."
+      ],
+      "wave": "T",
+      "release": "После общей текстовой основы и контрактной проверки конкретного ID.",
+      "implementation": {
+        "status": "new_apimart_route",
+        "target_route_implemented": false
+      },
+      "file": "17-claude-opus-4-7.md",
+      "flag": "FEATURE_APIMART_CLAUDE_OPUS_4_7_ENABLED"
+    },
+    {
+      "i": 18,
+      "name": "Kimi K3",
+      "study": "https://study24.ai/chat/kimi_k3",
+      "kind": "text",
+      "model": "kimi-k3",
+      "public_id": "kimi_k3",
+      "doc": "texts/general/chat-completions",
+      "extra_docs": [],
+      "endpoint": "/v1/chat/completions",
+      "poll": null,
+      "request": {
+        "model": "kimi-k3",
+        "stream": false,
+        "messages": [
+          {
+            "role": "user",
+            "content": "Ответь одним коротким предложением."
+          }
+        ],
+        "max_tokens": 800
+      },
+      "price": "$2.4 / $12 за 1 млн входных / выходных токенов (обычный контекст, без инструментов и скидки кэша).",
+      "rates": {
+        "input_usd_nanos_per_million": 2400000000,
+        "output_usd_nanos_per_million": 12000000000
+      },
+      "note": "Модель найдена в опубликованном прайсе APIMart. Для новых версий общая документация Chat API не доказывает поддержку каждого необязательного параметра.",
+      "conditional": false,
+      "gate": "account_catalog",
+      "limits": "Первый выпуск: текстовый ввод, один ответ, stream=false, до 800 токенов вывода и консервативный бюджет входа 1600 токенов с учётом системного контекста. Это наши стартовые лимиты, а не заявленный максимум модели. temperature, tools, reasoning_effort, вложения и cache-control не отправлять до проверки контракта конкретного ID.",
+      "cases": [
+        "Запрос с public_id=kimi_k3 резолвится строго в APIMart/kimi-k3.",
+        "При входе 1000 и выходе 1000 токенов себестоимость равна $0.0144; применение скидки второй раз запрещено.",
+        "Ответ без choices[0].message.content или с некорректным usage не должен пройти как успешная бесплатная генерация."
+      ],
+      "wave": "T",
+      "release": "После общей текстовой основы и контрактной проверки конкретного ID.",
+      "implementation": {
+        "status": "new_apimart_route",
+        "target_route_implemented": false
+      },
+      "file": "18-kimi-k3.md",
+      "flag": "FEATURE_APIMART_KIMI_K3_ENABLED"
+    },
+    {
+      "i": 19,
+      "name": "Qwen 3.8 Max",
+      "study": "https://study24.ai/chat/qwen_max",
+      "kind": "text",
+      "model": "qwen3.8-max",
+      "public_id": "qwen3_8_max",
+      "doc": "texts/general/chat-completions",
+      "extra_docs": [
+        "texts/qwen3.8-max/guide",
+        "texts/qwen3.8-max/pricing"
+      ],
+      "endpoint": "/v1/chat/completions",
+      "poll": null,
+      "request": {
+        "model": "qwen3.8-max",
+        "stream": false,
+        "messages": [
+          {
+            "role": "user",
+            "content": "Ответь одним коротким предложением."
+          }
+        ],
+        "max_tokens": 800
+      },
+      "price": "$1.3714288 / $4.1142856 за 1 млн входных / выходных токенов (обычный контекст, без инструментов и скидки кэша).",
+      "rates": {
+        "input_usd_nanos_per_million": 1371428800,
+        "output_usd_nanos_per_million": 4114285600
+      },
+      "note": "Thinking нельзя отключить. Встроенные инструменты доступны через Responses и оплачиваются отдельно; в первой версии только текст. В расчёт включить reasoning tokens. Источник ставки — pricing.effective_rates.",
+      "conditional": false,
+      "gate": "account_catalog",
+      "limits": "Первый выпуск: текстовый ввод, один ответ, stream=false, до 800 токенов вывода и консервативный бюджет входа 1600 токенов с учётом системного контекста. Это наши стартовые лимиты, а не заявленный максимум модели. temperature, tools, reasoning_effort, вложения и cache-control не отправлять до проверки контракта конкретного ID.",
+      "cases": [
+        "Запрос с public_id=qwen3_8_max резолвится строго в APIMart/qwen3.8-max.",
+        "При входе 1000 и выходе 1000 токенов себестоимость равна $0.0054857144; применение скидки второй раз запрещено.",
+        "Если ответ содержит только reasoning_content и пустой content, не выдавать рассуждение как ответ; завершить управляемой ошибкой."
+      ],
+      "wave": "T",
+      "release": "После общей текстовой основы и контрактной проверки конкретного ID.",
+      "implementation": {
+        "status": "new_apimart_route",
+        "target_route_implemented": false
+      },
+      "file": "19-qwen3-8-max.md",
+      "flag": "FEATURE_APIMART_QWEN3_8_MAX_ENABLED"
+    },
+    {
+      "i": 20,
+      "name": "Claude Sonnet 5",
+      "study": "https://study24.ai/chat/claude_sonnet",
+      "kind": "text",
+      "model": "claude-sonnet-5",
+      "public_id": "claude_sonnet_5",
+      "doc": "texts/general/chat-completions",
+      "extra_docs": [],
+      "endpoint": "/v1/chat/completions",
+      "poll": null,
+      "request": {
+        "model": "claude-sonnet-5",
+        "stream": false,
+        "messages": [
+          {
+            "role": "user",
+            "content": "Ответь одним коротким предложением."
+          }
+        ],
+        "max_tokens": 800
+      },
+      "price": "$1.6 / $8 за 1 млн входных / выходных токенов (обычный контекст, без инструментов и скидки кэша).",
+      "rates": {
+        "input_usd_nanos_per_million": 1600000000,
+        "output_usd_nanos_per_million": 8000000000
+      },
+      "note": "Модель найдена в опубликованном прайсе APIMart. Для новых версий общая документация Chat API не доказывает поддержку каждого необязательного параметра.",
+      "conditional": false,
+      "gate": "account_catalog",
+      "limits": "Первый выпуск: текстовый ввод, один ответ, stream=false, до 800 токенов вывода и консервативный бюджет входа 1600 токенов с учётом системного контекста. Это наши стартовые лимиты, а не заявленный максимум модели. temperature, tools, reasoning_effort, вложения и cache-control не отправлять до проверки контракта конкретного ID.",
+      "cases": [
+        "Запрос с public_id=claude_sonnet_5 резолвится строго в APIMart/claude-sonnet-5.",
+        "При входе 1000 и выходе 1000 токенов себестоимость равна $0.0096; применение скидки второй раз запрещено.",
+        "Ответ без choices[0].message.content или с некорректным usage не должен пройти как успешная бесплатная генерация."
+      ],
+      "wave": "T",
+      "release": "После общей текстовой основы и контрактной проверки конкретного ID.",
+      "implementation": {
+        "status": "new_apimart_route",
+        "target_route_implemented": false
+      },
+      "file": "20-claude-sonnet-5.md",
+      "flag": "FEATURE_APIMART_CLAUDE_SONNET_5_ENABLED"
+    },
+    {
+      "i": 21,
+      "name": "ChatGPT 5.4",
+      "study": "https://study24.ai/chat/chat_gpt5_4",
+      "kind": "text",
+      "model": "gpt-5.4",
+      "public_id": "gpt_5_4",
+      "doc": "texts/general/chat-completions",
+      "extra_docs": [],
+      "endpoint": "/v1/chat/completions",
+      "poll": null,
+      "request": {
+        "model": "gpt-5.4",
+        "stream": false,
+        "messages": [
+          {
+            "role": "user",
+            "content": "Ответь одним коротким предложением."
+          }
+        ],
+        "max_tokens": 800
+      },
+      "price": "$2 / $12 за 1 млн входных / выходных токенов (обычный контекст, без инструментов и скидки кэша).",
+      "rates": {
+        "input_usd_nanos_per_million": 2000000000,
+        "output_usd_nanos_per_million": 12000000000
+      },
+      "note": "Модель найдена в опубликованном прайсе APIMart. Для новых версий общая документация Chat API не доказывает поддержку каждого необязательного параметра.",
+      "conditional": false,
+      "gate": "account_catalog",
+      "limits": "Первый выпуск: текстовый ввод, один ответ, stream=false, до 800 токенов вывода и консервативный бюджет входа 1600 токенов с учётом системного контекста. Это наши стартовые лимиты, а не заявленный максимум модели. temperature, tools, reasoning_effort, вложения и cache-control не отправлять до проверки контракта конкретного ID.",
+      "cases": [
+        "Запрос с public_id=gpt_5_4 резолвится строго в APIMart/gpt-5.4.",
+        "При входе 1000 и выходе 1000 токенов себестоимость равна $0.014; применение скидки второй раз запрещено.",
+        "Ответ без choices[0].message.content или с некорректным usage не должен пройти как успешная бесплатная генерация."
+      ],
+      "wave": "T",
+      "release": "После общей текстовой основы и контрактной проверки конкретного ID.",
+      "implementation": {
+        "status": "new_apimart_route",
+        "target_route_implemented": false
+      },
+      "file": "21-gpt-5-4.md",
+      "flag": "FEATURE_APIMART_GPT_5_4_ENABLED"
+    },
+    {
+      "i": 22,
+      "name": "ChatGPT 5.5",
+      "study": "https://study24.ai/chat/chat_gpt5_5",
+      "kind": "text",
+      "model": "gpt-5.5",
+      "public_id": "gpt_5_5",
+      "doc": "texts/general/chat-completions",
+      "extra_docs": [],
+      "endpoint": "/v1/chat/completions",
+      "poll": null,
+      "request": {
+        "model": "gpt-5.5",
+        "stream": false,
+        "messages": [
+          {
+            "role": "user",
+            "content": "Ответь одним коротким предложением."
+          }
+        ],
+        "max_tokens": 800
+      },
+      "price": "$4 / $24 за 1 млн входных / выходных токенов (обычный контекст, без инструментов и скидки кэша).",
+      "rates": {
+        "input_usd_nanos_per_million": 4000000000,
+        "output_usd_nanos_per_million": 24000000000
+      },
+      "note": "Модель найдена в опубликованном прайсе APIMart. Для новых версий общая документация Chat API не доказывает поддержку каждого необязательного параметра.",
+      "conditional": false,
+      "gate": "account_catalog",
+      "limits": "Первый выпуск: текстовый ввод, один ответ, stream=false, до 800 токенов вывода и консервативный бюджет входа 1600 токенов с учётом системного контекста. Это наши стартовые лимиты, а не заявленный максимум модели. temperature, tools, reasoning_effort, вложения и cache-control не отправлять до проверки контракта конкретного ID.",
+      "cases": [
+        "Запрос с public_id=gpt_5_5 резолвится строго в APIMart/gpt-5.5.",
+        "При входе 1000 и выходе 1000 токенов себестоимость равна $0.028; применение скидки второй раз запрещено.",
+        "Ответ без choices[0].message.content или с некорректным usage не должен пройти как успешная бесплатная генерация."
+      ],
+      "wave": "T",
+      "release": "После общей текстовой основы и контрактной проверки конкретного ID.",
+      "implementation": {
+        "status": "new_apimart_route",
+        "target_route_implemented": false
+      },
+      "file": "22-gpt-5-5.md",
+      "flag": "FEATURE_APIMART_GPT_5_5_ENABLED"
+    },
+    {
+      "i": 23,
+      "name": "ChatGPT 5.3 Codex",
+      "study": "https://study24.ai/chat/chatgpt_codex",
+      "kind": "text",
+      "model": "gpt-5.3-codex",
+      "public_id": "gpt_5_3_codex",
+      "doc": "texts/general/chat-completions",
+      "extra_docs": [],
+      "endpoint": "/v1/chat/completions",
+      "poll": null,
+      "request": {
+        "model": "gpt-5.3-codex",
+        "stream": false,
+        "messages": [
+          {
+            "role": "user",
+            "content": "Ответь одним коротким предложением."
+          }
+        ],
+        "max_tokens": 800
+      },
+      "price": "$1.4 / $11.2 за 1 млн входных / выходных токенов (обычный контекст, без инструментов и скидки кэша).",
+      "rates": {
+        "input_usd_nanos_per_million": 1400000000,
+        "output_usd_nanos_per_million": 11200000000
+      },
+      "note": "ID присутствует в прайсе, но отдельный контракт GPT 5.3 Codex не опубликован на просмотренных страницах. Общий Chat API — кандидат; поддержка endpoint и лимита вывода должна быть проверена до включения. Не выдавать доступ к инструментам/исполнению кода.",
+      "conditional": false,
+      "gate": "endpoint_contract",
+      "limits": "Первый выпуск: текстовый ввод, один ответ, stream=false, до 800 токенов вывода и консервативный бюджет входа 1600 токенов с учётом системного контекста. Это наши стартовые лимиты, а не заявленный максимум модели. temperature, tools, reasoning_effort, вложения и cache-control не отправлять до проверки контракта конкретного ID.",
+      "cases": [
+        "Запрос с public_id=gpt_5_3_codex резолвится строго в APIMart/gpt-5.3-codex.",
+        "При входе 1000 и выходе 1000 токенов себестоимость равна $0.0126; применение скидки второй раз запрещено.",
+        "Ответ без choices[0].message.content или с некорректным usage не должен пройти как успешная бесплатная генерация."
+      ],
+      "wave": "T",
+      "release": "После общей текстовой основы и контрактной проверки конкретного ID.",
+      "implementation": {
+        "status": "new_apimart_route",
+        "target_route_implemented": false
+      },
+      "file": "23-gpt-5-3-codex.md",
+      "flag": "FEATURE_APIMART_GPT_5_3_CODEX_ENABLED"
+    },
+    {
+      "i": 24,
+      "name": "Grok 4.3",
+      "study": "https://study24.ai/chat/grok_4_3",
+      "kind": "text",
+      "model": "grok-4.3",
+      "public_id": "grok_4_3",
+      "doc": "texts/general/chat-completions",
+      "extra_docs": [],
+      "endpoint": "/v1/chat/completions",
+      "poll": null,
+      "request": {
+        "model": "grok-4.3",
+        "stream": false,
+        "messages": [
+          {
+            "role": "user",
+            "content": "Ответь одним коротким предложением."
+          }
+        ],
+        "max_tokens": 800
+      },
+      "price": "$1 / $2 за 1 млн входных / выходных токенов (обычный контекст, без инструментов и скидки кэша).",
+      "rates": {
+        "input_usd_nanos_per_million": 1000000000,
+        "output_usd_nanos_per_million": 2000000000
+      },
+      "note": "Модель найдена в опубликованном прайсе APIMart. Для новых версий общая документация Chat API не доказывает поддержку каждого необязательного параметра.",
+      "conditional": false,
+      "gate": "account_catalog",
+      "limits": "Первый выпуск: текстовый ввод, один ответ, stream=false, до 800 токенов вывода и консервативный бюджет входа 1600 токенов с учётом системного контекста. Это наши стартовые лимиты, а не заявленный максимум модели. temperature, tools, reasoning_effort, вложения и cache-control не отправлять до проверки контракта конкретного ID.",
+      "cases": [
+        "Запрос с public_id=grok_4_3 резолвится строго в APIMart/grok-4.3.",
+        "При входе 1000 и выходе 1000 токенов себестоимость равна $0.003; применение скидки второй раз запрещено.",
+        "Ответ без choices[0].message.content или с некорректным usage не должен пройти как успешная бесплатная генерация."
+      ],
+      "wave": "T",
+      "release": "После общей текстовой основы и контрактной проверки конкретного ID.",
+      "implementation": {
+        "status": "new_apimart_route",
+        "target_route_implemented": false
+      },
+      "file": "24-grok-4-3.md",
+      "flag": "FEATURE_APIMART_GROK_4_3_ENABLED"
+    },
+    {
+      "i": 25,
+      "name": "Grok 4.6",
+      "study": "https://study24.ai/chat/grok-46",
+      "kind": "text",
+      "model": "grok-4.6",
+      "public_id": "grok_4_6",
+      "doc": "texts/general/chat-completions",
+      "extra_docs": [],
+      "endpoint": "/v1/chat/completions",
+      "poll": null,
+      "request": {
+        "model": "grok-4.6",
+        "stream": false,
+        "messages": [
+          {
+            "role": "user",
+            "content": "Ответь одним коротким предложением."
+          }
+        ],
+        "max_tokens": 800
+      },
+      "price": "$1.6 / $4.8 за 1 млн входных / выходных токенов (обычный контекст, без инструментов и скидки кэша).",
+      "rates": {
+        "input_usd_nanos_per_million": 1600000000,
+        "output_usd_nanos_per_million": 4800000000
+      },
+      "note": "Приведён обычный уровень. В прайсе есть повышенный уровень $3.2 / $9.6; длинный контекст закрыть до подтверждения порога и тарифа.",
+      "conditional": false,
+      "gate": "account_catalog",
+      "limits": "Первый выпуск: текстовый ввод, один ответ, stream=false, до 800 токенов вывода и консервативный бюджет входа 1600 токенов с учётом системного контекста. Это наши стартовые лимиты, а не заявленный максимум модели. temperature, tools, reasoning_effort, вложения и cache-control не отправлять до проверки контракта конкретного ID.",
+      "cases": [
+        "Запрос с public_id=grok_4_6 резолвится строго в APIMart/grok-4.6.",
+        "При входе 1000 и выходе 1000 токенов себестоимость равна $0.0064; применение скидки второй раз запрещено.",
+        "Ответ без choices[0].message.content или с некорректным usage не должен пройти как успешная бесплатная генерация."
+      ],
+      "wave": "T",
+      "release": "После общей текстовой основы и контрактной проверки конкретного ID.",
+      "implementation": {
+        "status": "new_apimart_route",
+        "target_route_implemented": false
+      },
+      "file": "25-grok-4-6.md",
+      "flag": "FEATURE_APIMART_GROK_4_6_ENABLED"
+    },
+    {
+      "i": 26,
+      "name": "Claude Haiku 4.5",
+      "study": "https://study24.ai/chat/claude_haiku",
+      "kind": "text",
+      "model": "claude-haiku-4-5-20251001",
+      "public_id": "claude_haiku_4_5_20251001",
+      "doc": "texts/general/chat-completions",
+      "extra_docs": [],
+      "endpoint": "/v1/chat/completions",
+      "poll": null,
+      "request": {
+        "model": "claude-haiku-4-5-20251001",
+        "stream": false,
+        "messages": [
+          {
+            "role": "user",
+            "content": "Ответь одним коротким предложением."
+          }
+        ],
+        "max_tokens": 800
+      },
+      "price": "$0.8 / $4 за 1 млн входных / выходных токенов (обычный контекст, без инструментов и скидки кэша).",
+      "rates": {
+        "input_usd_nanos_per_million": 800000000,
+        "output_usd_nanos_per_million": 4000000000
+      },
+      "note": "Используется явно датированная версия 20251001; показать её в сведениях о модели, не заменять на плавающий alias без проверки.",
+      "conditional": true,
+      "gate": "account_catalog",
+      "limits": "Первый выпуск: текстовый ввод, один ответ, stream=false, до 800 токенов вывода и консервативный бюджет входа 1600 токенов с учётом системного контекста. Это наши стартовые лимиты, а не заявленный максимум модели. temperature, tools, reasoning_effort, вложения и cache-control не отправлять до проверки контракта конкретного ID.",
+      "cases": [
+        "Запрос с public_id=claude_haiku_4_5_20251001 резолвится строго в APIMart/claude-haiku-4-5-20251001.",
+        "При входе 1000 и выходе 1000 токенов себестоимость равна $0.0048; применение скидки второй раз запрещено.",
+        "Ответ без choices[0].message.content или с некорректным usage не должен пройти как успешная бесплатная генерация."
+      ],
+      "wave": "T",
+      "release": "После общей текстовой основы и контрактной проверки конкретного ID.",
+      "implementation": {
+        "status": "new_apimart_route",
+        "target_route_implemented": false
+      },
+      "file": "26-claude-haiku-4-5-20251001.md",
+      "flag": "FEATURE_APIMART_CLAUDE_HAIKU_4_5_20251001_ENABLED"
+    },
+    {
+      "i": 27,
+      "name": "ChatGPT 5.2",
+      "study": "https://study24.ai/chat/chat_gpt5_2",
+      "kind": "text",
+      "model": "gpt-5.2",
+      "public_id": "gpt_5_2",
+      "doc": "texts/general/chat-completions",
+      "extra_docs": [],
+      "endpoint": "/v1/chat/completions",
+      "poll": null,
+      "request": {
+        "model": "gpt-5.2",
+        "stream": false,
+        "messages": [
+          {
+            "role": "user",
+            "content": "Ответь одним коротким предложением."
+          }
+        ],
+        "max_tokens": 800
+      },
+      "price": "$1.4 / $11.2 за 1 млн входных / выходных токенов (обычный контекст, без инструментов и скидки кэша).",
+      "rates": {
+        "input_usd_nanos_per_million": 1400000000,
+        "output_usd_nanos_per_million": 11200000000
+      },
+      "note": "Модель найдена в опубликованном прайсе APIMart. Для новых версий общая документация Chat API не доказывает поддержку каждого необязательного параметра.",
+      "conditional": false,
+      "gate": "account_catalog",
+      "limits": "Первый выпуск: текстовый ввод, один ответ, stream=false, до 800 токенов вывода и консервативный бюджет входа 1600 токенов с учётом системного контекста. Это наши стартовые лимиты, а не заявленный максимум модели. temperature, tools, reasoning_effort, вложения и cache-control не отправлять до проверки контракта конкретного ID.",
+      "cases": [
+        "Запрос с public_id=gpt_5_2 резолвится строго в APIMart/gpt-5.2.",
+        "При входе 1000 и выходе 1000 токенов себестоимость равна $0.0126; применение скидки второй раз запрещено.",
+        "Ответ без choices[0].message.content или с некорректным usage не должен пройти как успешная бесплатная генерация."
+      ],
+      "wave": "T",
+      "release": "После общей текстовой основы и контрактной проверки конкретного ID.",
+      "implementation": {
+        "status": "new_apimart_route",
+        "target_route_implemented": false
+      },
+      "file": "27-gpt-5-2.md",
+      "flag": "FEATURE_APIMART_GPT_5_2_ENABLED"
+    },
+    {
+      "i": 28,
+      "name": "Claude Opus 4.6",
+      "study": "https://study24.ai/chat/claude_opus",
+      "kind": "text",
+      "model": "claude-opus-4-6",
+      "public_id": "claude_opus_4_6",
+      "doc": "texts/general/chat-completions",
+      "extra_docs": [],
+      "endpoint": "/v1/chat/completions",
+      "poll": null,
+      "request": {
+        "model": "claude-opus-4-6",
+        "stream": false,
+        "messages": [
+          {
+            "role": "user",
+            "content": "Ответь одним коротким предложением."
+          }
+        ],
+        "max_tokens": 800
+      },
+      "price": "$4 / $20 за 1 млн входных / выходных токенов (обычный контекст, без инструментов и скидки кэша).",
+      "rates": {
+        "input_usd_nanos_per_million": 4000000000,
+        "output_usd_nanos_per_million": 20000000000
+      },
+      "note": "Модель найдена в опубликованном прайсе APIMart. Для новых версий общая документация Chat API не доказывает поддержку каждого необязательного параметра.",
+      "conditional": false,
+      "gate": "account_catalog",
+      "limits": "Первый выпуск: текстовый ввод, один ответ, stream=false, до 800 токенов вывода и консервативный бюджет входа 1600 токенов с учётом системного контекста. Это наши стартовые лимиты, а не заявленный максимум модели. temperature, tools, reasoning_effort, вложения и cache-control не отправлять до проверки контракта конкретного ID.",
+      "cases": [
+        "Запрос с public_id=claude_opus_4_6 резолвится строго в APIMart/claude-opus-4-6.",
+        "При входе 1000 и выходе 1000 токенов себестоимость равна $0.024; применение скидки второй раз запрещено.",
+        "Ответ без choices[0].message.content или с некорректным usage не должен пройти как успешная бесплатная генерация."
+      ],
+      "wave": "T",
+      "release": "После общей текстовой основы и контрактной проверки конкретного ID.",
+      "implementation": {
+        "status": "new_apimart_route",
+        "target_route_implemented": false
+      },
+      "file": "28-claude-opus-4-6.md",
+      "flag": "FEATURE_APIMART_CLAUDE_OPUS_4_6_ENABLED"
+    },
+    {
+      "i": 31,
+      "name": "DeepSeek V4",
+      "study": "https://study24.ai/chat/deepseek_v4_lite",
+      "kind": "text",
+      "model": "deepseek-v4-flash",
+      "public_id": "deepseek_v4_flash",
+      "doc": "texts/general/chat-completions",
+      "extra_docs": [],
+      "endpoint": "/v1/chat/completions",
+      "poll": null,
+      "request": {
+        "model": "deepseek-v4-flash",
+        "stream": false,
+        "messages": [
+          {
+            "role": "user",
+            "content": "Ответь одним коротким предложением."
+          }
+        ],
+        "max_tokens": 800
+      },
+      "price": "$0.3428568 / $1.0285712 за 1 млн входных / выходных токенов (обычный контекст, без инструментов и скидки кэша).",
+      "rates": {
+        "input_usd_nanos_per_million": 342856800,
+        "output_usd_nanos_per_million": 1028571200
+      },
+      "note": "Default chatgpt / NeiroHub Chat уже связан в registry с DeepInfra/deepseek-ai/DeepSeek-V4-Flash. Этот план добавляет отдельный APIMart public route после T, не меняя default. Study24 использует общее имя DeepSeek V4; равенство Flash-версии не доказано. Вне пика по исходному исследованию: $0.1714284 / $0.5142856; резерв по пиковому тарифу. Ставки заново не проверялись.",
+      "conditional": true,
+      "gate": "account_catalog",
+      "limits": "Первый выпуск: текстовый ввод, один ответ, stream=false, до 800 токенов вывода и консервативный бюджет входа 1600 токенов с учётом системного контекста. Это наши стартовые лимиты, а не заявленный максимум модели. temperature, tools, reasoning_effort, вложения и cache-control не отправлять до проверки контракта конкретного ID.",
+      "cases": [
+        "Запрос с public_id=deepseek_v4_flash резолвится строго в APIMart/deepseek-v4-flash.",
+        "При входе 1000 и выходе 1000 токенов себестоимость равна $0.001371428; применение скидки второй раз запрещено.",
+        "Ответ без choices[0].message.content или с некорректным usage не должен пройти как успешная бесплатная генерация."
+      ],
+      "wave": "T",
+      "release": "После общей текстовой основы и контрактной проверки конкретного ID.",
+      "implementation": {
+        "status": "new_apimart_route",
+        "target_route_implemented": false,
+        "related_existing_public_id": "chatgpt",
+        "related_existing_provider": "deepinfra",
+        "related_existing_model_id": "deepseek-ai/DeepSeek-V4-Flash",
+        "remaining": [
+          "T_foundation",
+          "new_public_apimart_route",
+          "preserve_default_chat"
+        ]
+      },
+      "file": "31-deepseek-v4-flash.md",
+      "flag": "FEATURE_APIMART_DEEPSEEK_V4_FLASH_ENABLED"
+    },
+    {
+      "i": 32,
+      "name": "Gemini 2.5 Pro",
+      "study": "https://study24.ai/chat/gemini_pro_plus_bot",
+      "kind": "text",
+      "model": "gemini-2.5-pro",
+      "public_id": "gemini_2_5_pro",
+      "doc": "texts/general/chat-completions",
+      "extra_docs": [],
+      "endpoint": "/v1/chat/completions",
+      "poll": null,
+      "request": {
+        "model": "gemini-2.5-pro",
+        "stream": false,
+        "messages": [
+          {
+            "role": "user",
+            "content": "Ответь одним коротким предложением."
+          }
+        ],
+        "max_tokens": 800
+      },
+      "price": "$1 / $8 за 1 млн входных / выходных токенов (обычный контекст, без инструментов и скидки кэша).",
+      "rates": {
+        "input_usd_nanos_per_million": 1000000000,
+        "output_usd_nanos_per_million": 8000000000
+      },
+      "note": "Модель найдена в опубликованном прайсе APIMart. Для новых версий общая документация Chat API не доказывает поддержку каждого необязательного параметра.",
+      "conditional": false,
+      "gate": "account_catalog",
+      "limits": "Первый выпуск: текстовый ввод, один ответ, stream=false, до 800 токенов вывода и консервативный бюджет входа 1600 токенов с учётом системного контекста. Это наши стартовые лимиты, а не заявленный максимум модели. temperature, tools, reasoning_effort, вложения и cache-control не отправлять до проверки контракта конкретного ID.",
+      "cases": [
+        "Запрос с public_id=gemini_2_5_pro резолвится строго в APIMart/gemini-2.5-pro.",
+        "При входе 1000 и выходе 1000 токенов себестоимость равна $0.009; применение скидки второй раз запрещено.",
+        "Ответ без choices[0].message.content или с некорректным usage не должен пройти как успешная бесплатная генерация."
+      ],
+      "wave": "T",
+      "release": "После общей текстовой основы и контрактной проверки конкретного ID.",
+      "implementation": {
+        "status": "new_apimart_route",
+        "target_route_implemented": false
+      },
+      "file": "32-gemini-2-5-pro.md",
+      "flag": "FEATURE_APIMART_GEMINI_2_5_PRO_ENABLED"
+    },
+    {
+      "i": 33,
+      "name": "Qwen 3.7 Flash",
+      "study": "https://study24.ai/chat/qwen",
+      "kind": "text",
+      "model": "qwen3.7-flash",
+      "public_id": "qwen3_7_flash",
+      "doc": "texts/general/chat-completions",
+      "extra_docs": [],
+      "endpoint": "/v1/chat/completions",
+      "poll": null,
+      "request": {
+        "model": "qwen3.7-flash",
+        "stream": false,
+        "messages": [
+          {
+            "role": "user",
+            "content": "Ответь одним коротким предложением."
+          }
+        ],
+        "max_tokens": 800
+      },
+      "price": "$0.0228568 / $0.0914288 за 1 млн входных / выходных токенов (обычный контекст, без инструментов и скидки кэша).",
+      "rates": {
+        "input_usd_nanos_per_million": 22856800,
+        "output_usd_nanos_per_million": 91428800
+      },
+      "note": "Модель найдена в опубликованном прайсе APIMart. Для новых версий общая документация Chat API не доказывает поддержку каждого необязательного параметра.",
+      "conditional": false,
+      "gate": "account_catalog",
+      "limits": "Первый выпуск: текстовый ввод, один ответ, stream=false, до 800 токенов вывода и консервативный бюджет входа 1600 токенов с учётом системного контекста. Это наши стартовые лимиты, а не заявленный максимум модели. temperature, tools, reasoning_effort, вложения и cache-control не отправлять до проверки контракта конкретного ID.",
+      "cases": [
+        "Запрос с public_id=qwen3_7_flash резолвится строго в APIMart/qwen3.7-flash.",
+        "При входе 1000 и выходе 1000 токенов себестоимость равна $0.0001142856; применение скидки второй раз запрещено.",
+        "Ответ без choices[0].message.content или с некорректным usage не должен пройти как успешная бесплатная генерация."
+      ],
+      "wave": "T",
+      "release": "После общей текстовой основы и контрактной проверки конкретного ID.",
+      "implementation": {
+        "status": "new_apimart_route",
+        "target_route_implemented": false
+      },
+      "file": "33-qwen3-7-flash.md",
+      "flag": "FEATURE_APIMART_QWEN3_7_FLASH_ENABLED"
+    },
+    {
+      "i": 34,
+      "name": "Deepseek R1",
+      "study": "https://study24.ai/chat/a24_deepseek_r1",
+      "kind": "text",
+      "model": "deepseek-r1",
+      "public_id": "deepseek_r1",
+      "doc": "texts/general/chat-completions",
+      "extra_docs": [],
+      "endpoint": "/v1/chat/completions",
+      "poll": null,
+      "request": {
+        "model": "deepseek-r1",
+        "stream": false,
+        "messages": [
+          {
+            "role": "user",
+            "content": "Ответь одним коротким предложением."
+          }
+        ],
+        "max_tokens": 800
+      },
+      "price": "$0.448 / $1.792 за 1 млн входных / выходных токенов (обычный контекст, без инструментов и скидки кэша).",
+      "rates": {
+        "input_usd_nanos_per_million": 448000000,
+        "output_usd_nanos_per_million": 1792000000
+      },
+      "note": "Study24 не раскрывает ревизию R1. В прайсе отдельно есть deepseek-r1-0528 ($0.408 / $1.23216); не подменять deepseek-r1 этой более дешёвой ревизией автоматически.",
+      "conditional": true,
+      "gate": "account_catalog",
+      "limits": "Первый выпуск: текстовый ввод, один ответ, stream=false, до 800 токенов вывода и консервативный бюджет входа 1600 токенов с учётом системного контекста. Это наши стартовые лимиты, а не заявленный максимум модели. temperature, tools, reasoning_effort, вложения и cache-control не отправлять до проверки контракта конкретного ID.",
+      "cases": [
+        "Запрос с public_id=deepseek_r1 резолвится строго в APIMart/deepseek-r1.",
+        "При входе 1000 и выходе 1000 токенов себестоимость равна $0.00224; применение скидки второй раз запрещено.",
+        "Ответ без choices[0].message.content или с некорректным usage не должен пройти как успешная бесплатная генерация."
+      ],
+      "wave": "T",
+      "release": "После общей текстовой основы и контрактной проверки конкретного ID.",
+      "implementation": {
+        "status": "new_apimart_route",
+        "target_route_implemented": false
+      },
+      "file": "34-deepseek-r1.md",
+      "flag": "FEATURE_APIMART_DEEPSEEK_R1_ENABLED"
+    },
+    {
+      "i": 35,
+      "name": "Gemini 2.5 Flash Lite",
+      "study": "https://study24.ai/chat/gemini25_flash_lite",
+      "kind": "text",
+      "model": "gemini-2.5-flash-lite",
+      "public_id": "gemini_2_5_flash_lite",
+      "doc": "texts/general/chat-completions",
+      "extra_docs": [],
+      "endpoint": "/v1/chat/completions",
+      "poll": null,
+      "request": {
+        "model": "gemini-2.5-flash-lite",
+        "stream": false,
+        "messages": [
+          {
+            "role": "user",
+            "content": "Ответь одним коротким предложением."
+          }
+        ],
+        "max_tokens": 800
+      },
+      "price": "$0.08 / $0.32 за 1 млн входных / выходных токенов (обычный контекст, без инструментов и скидки кэша).",
+      "rates": {
+        "input_usd_nanos_per_million": 80000000,
+        "output_usd_nanos_per_million": 320000000
+      },
+      "note": "Модель найдена в опубликованном прайсе APIMart. Для новых версий общая документация Chat API не доказывает поддержку каждого необязательного параметра.",
+      "conditional": false,
+      "gate": "account_catalog",
+      "limits": "Первый выпуск: текстовый ввод, один ответ, stream=false, до 800 токенов вывода и консервативный бюджет входа 1600 токенов с учётом системного контекста. Это наши стартовые лимиты, а не заявленный максимум модели. temperature, tools, reasoning_effort, вложения и cache-control не отправлять до проверки контракта конкретного ID.",
+      "cases": [
+        "Запрос с public_id=gemini_2_5_flash_lite резолвится строго в APIMart/gemini-2.5-flash-lite.",
+        "При входе 1000 и выходе 1000 токенов себестоимость равна $0.0004; применение скидки второй раз запрещено.",
+        "Ответ без choices[0].message.content или с некорректным usage не должен пройти как успешная бесплатная генерация."
+      ],
+      "wave": "T",
+      "release": "После общей текстовой основы и контрактной проверки конкретного ID.",
+      "implementation": {
+        "status": "new_apimart_route",
+        "target_route_implemented": false
+      },
+      "file": "35-gemini-2-5-flash-lite.md",
+      "flag": "FEATURE_APIMART_GEMINI_2_5_FLASH_LITE_ENABLED"
+    },
+    {
+      "i": 37,
+      "name": "Nano Banana Pro",
+      "study": "https://study24.ai/chat/nano_banana_pro",
+      "kind": "image",
+      "model": "gemini-3-pro-image-preview",
+      "public_id": "nano_banana_pro",
+      "doc": "images/gemini-3-pro/generation",
+      "extra_docs": [],
+      "endpoint": "/v1/images/generations",
+      "poll": "/v1/tasks/{task_id}",
+      "request": {
+        "model": "gemini-3-pro-image-preview",
+        "prompt": "Спокойное горное озеро.",
+        "resolution": "1K",
+        "size": "1:1",
+        "n": 1
+      },
+      "price": "$0.03 / $0.03 / $0.04 за 1K / 2K / 4K.",
+      "limits": "1K/2K/4K; до 14 референсов. Первый выпуск n=1. official_fallback=false.",
+      "cases": [
+        "14 референсов принимаются; 15 отклоняются до отправки.",
+        "1K: $0.03; 4K: $0.04; новый прайс не меняет snapshot уже созданного Job."
+      ],
+      "note": "Маршрут APIMart, serializer, flag/readiness, 1K/2K/4K, 14 refs, цены и тесты уже есть. Оставлены только сверка контракта/floors и общая защита submit; повторное подключение исключено. Web reference upload ещё отсутствует.",
+      "conditional": false,
+      "wave": "existing_maintenance",
+      "gate": "account_catalog",
+      "release": "Существующий APIMart route. Обновлять только подтверждённые расхождения через B0/B2 и image-часть B3; текущие runtime flags при актуализации не менять.",
+      "implementation": {
+        "status": "existing_apimart_route",
+        "target_route_implemented": true,
+        "current_public_id": "nano_banana_pro",
+        "current_provider": "apimart",
+        "current_model_id": "gemini-3-pro-image-preview",
+        "remaining": [
+          "B0_contract_and_price_verification",
+          "B2_durable_submit",
+          "web_references_if_selected"
+        ]
+      },
+      "file": "37-nano-banana-pro.md",
+      "flag": "FEATURE_IMAGE_MODEL_NANO_BANANA_PRO_ENABLED"
+    },
+    {
+      "i": 38,
+      "name": "GPT Image 2",
+      "study": "https://study24.ai/chat/gpt_image",
+      "kind": "image",
+      "model": "gpt-image-2",
+      "public_id": "gpt_image_2",
+      "doc": "images/gpt-image-2/generation",
+      "extra_docs": [],
+      "endpoint": "/v1/images/generations",
+      "poll": "/v1/tasks/{task_id}",
+      "request": {
+        "model": "gpt-image-2",
+        "prompt": "Спокойное горное озеро.",
+        "resolution": "1k",
+        "size": "1:1",
+        "n": 1
+      },
+      "price": "$0.0085 / $0.014 / $0.021 за 1K / 2K / 4K.",
+      "limits": "Передавать resolution в каноническом нижнем регистре. Первый выпуск n=1; текст и image-to-image. Для 4K квадрат документация даёт 2880×2880; не обещать 4096×4096.",
+      "cases": [
+        "Запрос 4K преобразуется в resolution=4k; результат проверяется по реальным размерам.",
+        "Пример n=2 противоречит описанию EXT; n>1 заблокирован до проверки."
+      ],
+      "note": "Маршрут APIMart, serializer, flag/readiness, lowercase resolution, n=1, 16 refs, цены и тесты уже есть. Оставлены сверка schema/floors и B2; не создавать второй serializer или карточку. Web reference upload ещё отсутствует.",
+      "conditional": false,
+      "wave": "existing_maintenance",
+      "gate": "account_catalog",
+      "release": "Существующий APIMart route. Только подтверждённые contract/price изменения и B2; первичное подключение не требуется.",
+      "implementation": {
+        "status": "existing_apimart_route",
+        "target_route_implemented": true,
+        "current_public_id": "gpt_image_2",
+        "current_provider": "apimart",
+        "current_model_id": "gpt-image-2",
+        "remaining": [
+          "B0_contract_and_price_verification",
+          "B2_durable_submit",
+          "web_references_if_selected"
+        ]
+      },
+      "file": "38-gpt-image-2.md",
+      "flag": "FEATURE_IMAGE_MODEL_GPT_IMAGE_2_ENABLED"
+    },
+    {
+      "i": 39,
+      "name": "Seedream 5.0 Pro",
+      "study": "https://study24.ai/chat/seedream5",
+      "kind": "image",
+      "model": "seedream-5-0-pro",
+      "public_id": "seedream_5_0_pro",
+      "doc": "images/seedream-5-0-pro/generation",
+      "extra_docs": [],
+      "endpoint": "/v1/images/generations",
+      "poll": "/v1/tasks/{task_id}",
+      "request": {
+        "model": "seedream-5-0-pro",
+        "prompt": "Спокойное горное озеро.",
+        "resolution": "1K",
+        "size": "1:1",
+        "n": 1
+      },
+      "price": "$0.02925 за 1K, $0.0585 за 2K. Строка «по умолчанию» $0.036; явно задавать уровень. Цена 1.5K и доплата за референсы требуют сверки.",
+      "limits": "1K/1.5K/2K; только n=1; до 10 референсов. Старт: 1K/2K и 0–1 референс. Для прозрачности требуется один вход с alpha и PNG. Слои — отдельный режим с отдельным расчётом.",
+      "cases": [
+        "4K и n=2 отклоняются.",
+        "1 референс бесплатен по документации; 2-й блокируется до тарифа доплаты.",
+        "Формат size в пикселях не может обойти уровень цены."
+      ],
+      "note": "Документация заявляет доплату начиная со второго референса; её размер не подтверждён. Слои включать отдельным продуктом после проверки результата.",
+      "conditional": false,
+      "wave": "I2",
+      "gate": "account_catalog",
+      "release": "После общей основы изображений; только проверенные ценовые варианты.",
+      "implementation": {
+        "status": "new_apimart_route",
+        "target_route_implemented": false
+      },
+      "file": "39-seedream-5-0-pro.md",
+      "flag": "FEATURE_APIMART_SEEDREAM_5_0_PRO_ENABLED"
+    },
+    {
+      "i": 40,
+      "name": "Midjourney",
+      "study": "https://study24.ai/chat/midjourney_toe_bot",
+      "kind": "image",
+      "model": "midjourney",
+      "public_id": "midjourney_v7",
+      "doc": "images/midjourney/imagine",
+      "extra_docs": [
+        "images/midjourney/query"
+      ],
+      "endpoint": "/v1/midjourney/generations",
+      "poll": "/v1/tasks/{task_id}",
+      "request": {
+        "prompt": "A calm mountain lake",
+        "version": "7",
+        "speed": "relax"
+      },
+      "price": "Imagine relax $0.04504, fast $0.05504, turbo $0.10 за вызов. Версионную комбинацию v7×speed подтвердить.",
+      "limits": "Отдельный POST /v1/midjourney/generations; version=7 — предлагаемый явный старт. Старт Imagine, без repeat и без сырых --параметров. Сохранять полученную сетку/отдельные изображения без повторной оплаты каждого файла.",
+      "cases": [
+        "speed=relax: один вызов, один резерв, даже если вернулось 4 плитки.",
+        "repeat=2 и prompt с переопределением --version/--repeat отклоняются.",
+        "Poll штатно через /v1/tasks/{id}; кнопки действий получать через /v1/midjourney/{id}."
+      ],
+      "note": "Study24 не раскрывает версию Midjourney. V7 — предложение; не выдавать за доказанное совпадение. Upscale/variation/reroll — последующие отдельные Jobs с тарифом, не бесплатные кнопки.",
+      "conditional": true,
+      "wave": "M",
+      "gate": "account_catalog",
+      "release": "После общей основы изображений; только проверенные ценовые варианты.",
+      "implementation": {
+        "status": "new_apimart_route",
+        "target_route_implemented": false
+      },
+      "file": "40-midjourney-v7.md",
+      "flag": "FEATURE_APIMART_MIDJOURNEY_V7_ENABLED"
+    },
+    {
+      "i": 41,
+      "name": "Nano Banana 2",
+      "study": "https://study24.ai/chat/nano_banana_2",
+      "kind": "image",
+      "model": "gemini-3.1-flash-image-preview",
+      "public_id": "nano_banana_2",
+      "doc": "images/gemini-3.1-flash/generation",
+      "extra_docs": [],
+      "endpoint": "/v1/images/generations",
+      "poll": "/v1/tasks/{task_id}",
+      "request": {
+        "model": "gemini-3.1-flash-image-preview",
+        "prompt": "Спокойное горное озеро.",
+        "resolution": "1K",
+        "size": "1:1",
+        "n": 1
+      },
+      "price": "$0.015 / $0.02 / $0.025 за 1K / 2K / 4K.",
+      "limits": "До 14 референсов, n=1. Старт 1K/2K/4K; 0.5K закрыт до отдельной цены. Поиск и официальный fallback выключены.",
+      "cases": [
+        "Новые Jobs используют APIMart, старые сохраняют исходного провайдера из snapshot.",
+        "Стоимость 2K=$0.02; 15-й референс отклоняется."
+      ],
+      "note": "Nano Banana 2 уже реализована через PoYo/nano-banana-2-new, refs через nano-banana-2-new-edit. APIMart — отдельная необязательная миграция после выбора плана 41; сохранять snapshots подготовленных и незавершённых Jobs. Не входит в очередь первичного подключения.",
+      "conditional": false,
+      "wave": "optional_provider_migration",
+      "gate": "account_catalog",
+      "release": "Только при отдельном выборе миграции с PoYo, после preflight и проверки совместимости prepared/inflight Jobs; текущее подключение сохраняется.",
+      "implementation": {
+        "status": "optional_provider_migration",
+        "target_route_implemented": false,
+        "current_public_id": "nano_banana_2",
+        "current_provider": "poyo",
+        "current_model_id": "nano-banana-2-new",
+        "current_reference_model_id": "nano-banana-2-new-edit",
+        "remaining": [
+          "explicit_migration_selection",
+          "B0_B1_B2_B3_image_scope",
+          "preserve_prepared_and_inflight_poyo_jobs"
+        ]
+      },
+      "file": "41-nano-banana-2.md",
+      "flag": "FEATURE_IMAGE_MODEL_NANO_BANANA_2_ENABLED"
+    },
+    {
+      "i": 43,
+      "name": "Grok Image",
+      "study": "https://study24.ai/chat/grok_image",
+      "kind": "image",
+      "model": "grok-imagine-1.5-ext",
+      "public_id": "grok_image_1_5",
+      "doc": "images/grok-imagine/generation",
+      "extra_docs": [],
+      "endpoint": "/v1/images/generations",
+      "poll": "/v1/tasks/{task_id}",
+      "request": {
+        "model": "grok-imagine-1.5-ext",
+        "prompt": "Спокойное горное озеро.",
+        "size": "1:1",
+        "n": 1
+      },
+      "price": "$0.015 за изображение EXT. grok-imagine-image ($0.016) — другой маршрут, его тариф не смешивать.",
+      "limits": "5 соотношений: 1:1,16:9,9:16,3:2,2:3; до 5 референсов; старт n=1. Нет документированного выбора 1K/2K в данном контракте.",
+      "cases": [
+        "6 референсов отклоняются.",
+        "В запрос не попадает resolution=2K и цена другого grok-imagine-image."
+      ],
+      "note": "Study24 «Grok Image» не раскрывает версию. Документация сейчас описывает 1.5 EXT, alias grok-imagine-1.5-apimart. Включать с явным номером 1.5 после подтверждения выбора.",
+      "conditional": true,
+      "wave": "I2",
+      "gate": "account_catalog",
+      "release": "После общей основы изображений; только проверенные ценовые варианты.",
+      "implementation": {
+        "status": "new_apimart_route",
+        "target_route_implemented": false
+      },
+      "file": "43-grok-image-1-5.md",
+      "flag": "FEATURE_APIMART_GROK_IMAGE_1_5_ENABLED"
+    },
+    {
+      "i": 44,
+      "name": "Grok Image 2.0",
+      "study": "https://study24.ai/chat/grok_image2",
+      "kind": "image",
+      "model": "grok-imagine-2.0-ext",
+      "public_id": "grok_image_2_0",
+      "doc": "images/grok-imagine-2.0-ext/generation",
+      "extra_docs": [],
+      "endpoint": "/v1/images/generations",
+      "poll": "/v1/tasks/{task_id}",
+      "request": {
+        "model": "grok-imagine-2.0-ext",
+        "prompt": "Спокойное горное озеро.",
+        "resolution": "quality",
+        "size": "1:1",
+        "n": 1,
+        "response_format": "url"
+      },
+      "price": "Конфликт: прайс $0.015/изображение, документация $0.08/изображение. Рабочий тариф не назначать до сверки группы/модели.",
+      "limits": "Только text-to-image; resolution=quality, n=1 на старте. Заголовок X-APIMart-Response-Version: 2026-07-27. Ответ HTTP 202 data.id; запрещены image_urls, quality, stream и response_format≠url.",
+      "cases": [
+        "HTTP 202 с data.id распознаётся как созданная задача.",
+        "409 in-progress повторяется только тем же ключом после Retry-After; indeterminate не вызывает новый платный submit.",
+        "Цена из конфликта блокирует продажу; референсы отвергаются."
+      ],
+      "note": "Дополнительные layer/region-edit имеют отдельную документацию и не входят в базовую генерацию. Эту модель включать после решения ценового конфликта.",
+      "conditional": false,
+      "wave": "I3",
+      "gate": "pricing_conflict",
+      "release": "После общей основы изображений; только проверенные ценовые варианты.",
+      "implementation": {
+        "status": "new_apimart_route",
+        "target_route_implemented": false
+      },
+      "file": "44-grok-image-2-0.md",
+      "flag": "FEATURE_APIMART_GROK_IMAGE_2_0_ENABLED"
+    },
+    {
+      "i": 45,
+      "name": "Qwen Image 3.0",
+      "study": "https://study24.ai/chat/qwen-image",
+      "kind": "image",
+      "model": "qwen-image-3.0",
+      "public_id": "qwen_image_3",
+      "doc": "images/qwen-image-3.0/generation",
+      "extra_docs": [],
+      "endpoint": "/v1/images/generations",
+      "poll": "/v1/tasks/{task_id}",
+      "request": {
+        "model": "qwen-image-3.0",
+        "prompt": "Спокойное горное озеро.",
+        "size": "1:1",
+        "resolution": "1K",
+        "n": 1,
+        "prompt_extend": false
+      },
+      "price": "$0.0205712 за изображение базовой версии; тариф pro не использовать.",
+      "limits": "Размеры сторон 512–2048, соотношение в пределах 1:8–8:1; референсы 1–3, до 10 MB; старт n=1. prompt_extend_mode=agent не использовать для image-to-image.",
+      "cases": [
+        "4 референса отклоняются.",
+        "agent+референс отклоняется; base model не становится pro из-за 2K."
+      ],
+      "note": "Локально реализованы 1K/2K, n=1, без prompt rewriting. Публичный floor одинаковый для 1K/2K; статическая цена 15 внутренних кредитов. Web использует существующую квадратную форму без загрузки референсов.",
+      "conditional": false,
+      "wave": "I2",
+      "gate": "account_catalog",
+      "release": "Локально реализовано на существующей основе. Runtime/env и активная БД тарифов не менялись; live canary не выполнялся.",
+      "implementation": {
+        "status": "implemented_local_tests_passed",
+        "target_route_implemented": true,
+        "live_verified": false,
+        "enabled_by_default": false,
+        "static_catalog_version": 5,
+        "retail_credits": 15,
+        "general_B2_completed": false
+      },
+      "file": "45-qwen-image-3.md",
+      "flag": "FEATURE_APIMART_QWEN_IMAGE_3_ENABLED"
+    },
+    {
+      "i": 46,
+      "name": "Flux 2 Pro",
+      "study": "https://study24.ai/chat/flux_2",
+      "kind": "image",
+      "model": "flux-2-pro",
+      "public_id": "flux_2_pro",
+      "doc": "images/flux-2/generation",
+      "extra_docs": [],
+      "endpoint": "/v1/images/generations",
+      "poll": "/v1/tasks/{task_id}",
+      "request": {
+        "model": "flux-2-pro",
+        "prompt": "Спокойное горное озеро.",
+        "resolution": "1MP",
+        "size": "1:1",
+        "n": 1,
+        "prompt_upsampling": false
+      },
+      "price": "$0.024 / $0.036 / $0.048 / $0.06 за 1/2/3/4 MP вывода. Стоимость входных MP сверить перед открытием референсов.",
+      "limits": "1MP=1 048 576 пикселей; до 8 референсов, суммарно вход+выход≤9 MP. Первый выпуск T2I, n=1, уровни 1–4MP. width/height закрыть до полного расчёта площади.",
+      "cases": [
+        "1MP явно передаётся как 1MP: старый alias 1K означает 2MP и не применяется.",
+        "4MP T2I=$0.06; превышение общей площади 9MP отклоняется.",
+        "steps/guidance для Flux Flex не отправляются в Pro."
+      ],
+      "note": "Референсы открывать после проверки тарифа входных пикселей. Сохранить отдельную единицу MP в UI/цене.",
+      "conditional": false,
+      "wave": "I2",
+      "gate": "account_catalog",
+      "release": "После общей основы изображений; только проверенные ценовые варианты.",
+      "implementation": {
+        "status": "new_apimart_route",
+        "target_route_implemented": false
+      },
+      "file": "46-flux-2-pro.md",
+      "flag": "FEATURE_APIMART_FLUX_2_PRO_ENABLED"
+    },
+    {
+      "i": 48,
+      "name": "Nano Banana",
+      "study": "https://study24.ai/chat/google_image",
+      "kind": "image",
+      "model": "gemini-2.5-flash-image-preview",
+      "public_id": "nano_banana",
+      "doc": "images/gemini-2.5-flash/generation",
+      "extra_docs": [],
+      "endpoint": "/v1/images/generations",
+      "poll": "/v1/tasks/{task_id}",
+      "request": {
+        "model": "gemini-2.5-flash-image-preview",
+        "prompt": "Спокойное горное озеро.",
+        "resolution": "1K",
+        "size": "1:1",
+        "n": 1
+      },
+      "price": "$0.0125 за изображение 1K.",
+      "limits": "Только 1K, n=1; до 14 референсов; prompt до 1000 символов. official_fallback=false.",
+      "cases": [
+        "1001 символ отклоняется до submit.",
+        "2K/4K не принимаются; 14 референсов допустимы."
+      ],
+      "note": "Документированный alias nano-banana-ext. Не подменять этой моделью Nano Banana 2.",
+      "conditional": false,
+      "wave": "I2",
+      "gate": "account_catalog",
+      "release": "После общей основы изображений; только проверенные ценовые варианты.",
+      "implementation": {
+        "status": "new_apimart_route",
+        "target_route_implemented": false
+      },
+      "file": "48-nano-banana.md",
+      "flag": "FEATURE_APIMART_NANO_BANANA_ENABLED"
+    },
+    {
+      "i": 49,
+      "name": "Seedream 5.0 Lite",
+      "study": "https://study24.ai/chat/seedream_5",
+      "kind": "image",
+      "model": "seedream-5-0-lite",
+      "public_id": "seedream_5_0_lite",
+      "doc": "images/seedream-5-lite/generation",
+      "extra_docs": [],
+      "endpoint": "/v1/images/generations",
+      "poll": "/v1/tasks/{task_id}",
+      "request": {
+        "model": "seedream-5-0-lite",
+        "prompt": "Спокойное горное озеро.",
+        "resolution": "2K",
+        "size": "1:1",
+        "n": 1,
+        "output_format": "jpeg"
+      },
+      "price": "$0.028 за изображение; подтвердить применение flat-тарифа к 2K/3K/4K.",
+      "limits": "Только 2K/3K/4K; 1K не поддерживается. n+число референсов≤15; старт n=1, референсы≤14, JPEG/PNG до 10 MB. auto требует референса.",
+      "cases": [
+        "1K и 9:21 отклоняются.",
+        "n=1 + 14 референсов допустимо; +15 недопустимо.",
+        "auto без референса отклоняется."
+      ],
+      "note": "Множественный вывод требует резерва на число изображений; первый выпуск сохраняет n=1.",
+      "conditional": false,
+      "wave": "I2",
+      "gate": "account_catalog",
+      "release": "После общей основы изображений; только проверенные ценовые варианты.",
+      "implementation": {
+        "status": "new_apimart_route",
+        "target_route_implemented": false
+      },
+      "file": "49-seedream-5-0-lite.md",
+      "flag": "FEATURE_APIMART_SEEDREAM_5_0_LITE_ENABLED"
+    },
+    {
+      "i": 50,
+      "name": "Nano Banana 2 Lite",
+      "study": "https://study24.ai/chat/banana_2lite",
+      "kind": "image",
+      "model": "gemini-3.1-flash-lite-image-ext",
+      "public_id": "nano_banana_2_lite",
+      "doc": "images/gemini-3.1-flash/generation-lite",
+      "extra_docs": [],
+      "endpoint": "/v1/images/generations",
+      "poll": "/v1/tasks/{task_id}",
+      "request": {
+        "model": "gemini-3.1-flash-lite-image-ext",
+        "prompt": "Спокойное горное озеро.",
+        "resolution": "1K",
+        "size": "1:1",
+        "n": 1
+      },
+      "price": "$0.0125 за изображение по прайсу. Описание upstream token pricing не использовать как итоговую ставку APIMart.",
+      "limits": "Только 1K: переданные 2K/4K/0.5K провайдер может тихо понизить. Наш backend отклоняет их. До 14 референсов; n=1 на старте; поиск, маска и fallback недоступны.",
+      "cases": [
+        "2K отклоняется локально и не выдаётся пользователю как 2K.",
+        "Передаётся точный model ID Lite; параметры поиска не уходят."
+      ],
+      "note": "Alias nano-banana-2-lite-ext документирован. Проверить фактический flat-тариф ключевой группы перед включением.",
+      "conditional": false,
+      "wave": "I2",
+      "gate": "account_catalog",
+      "release": "После общей основы изображений; только проверенные ценовые варианты.",
+      "implementation": {
+        "status": "new_apimart_route",
+        "target_route_implemented": false
+      },
+      "file": "50-nano-banana-2-lite.md",
+      "flag": "FEATURE_APIMART_NANO_BANANA_2_LITE_ENABLED"
+    },
+    {
+      "i": 51,
+      "name": "Seedance 2.5",
+      "study": "https://study24.ai/chat/seedance25",
+      "kind": "video",
+      "model": "seedance-2.5",
+      "public_id": "seedance_2_5",
+      "doc": "videos/seedance-2-5/generation",
+      "extra_docs": [],
+      "endpoint": "/v1/videos/generations",
+      "poll": "/v1/tasks/{task_id}",
+      "request": {
+        "model": "seedance-2.5",
+        "prompt": "Плавное движение камеры над горным озером.",
+        "resolution": "480p",
+        "size": "16:9",
+        "duration": 5,
+        "generate_audio": true
+      },
+      "price": "Без входного видео: $0.09608 / $0.216 / $0.38488 за секунду 480p/720p/1080p. С входным видео: $0.0576 / $0.1296 / $0.22992 × (вход+выход).",
+      "limits": "4–30 секунд; 480p/720p/1080p; 30 изображений, 10 видео, 10 аудио по полной схеме. Старт T2V/I2V, фиксированные 5/10/15/30 с, MP4; duration=-1 отключён.",
+      "cases": [
+        "5 с 480p без video=$0.4804.",
+        "5 с входа + 5 с выхода 720p=$1.296 по посекундной таблице, не $0.648.",
+        "4K отклоняется."
+      ],
+      "note": "Прайс содержит также token-тарифы: до запуска сверить правило расчёта token usage и точность посекундной оценки. Edit/extend, MOV и audio-only references — следующая стадия этого плана с отдельными snapshots.",
+      "wave": "V2",
+      "conditional": false,
+      "gate": "account_catalog",
+      "release": "После общей видеоосновы и прохождения тестов этой конфигурации.",
+      "implementation": {
+        "status": "new_apimart_route",
+        "target_route_implemented": false
+      },
+      "file": "51-seedance-2-5.md",
+      "flag": "FEATURE_APIMART_SEEDANCE_2_5_ENABLED"
+    },
+    {
+      "i": 52,
+      "name": "Seedance 2.0",
+      "study": "https://study24.ai/chat/seedance",
+      "kind": "video",
+      "model": "seedance-2.0",
+      "public_id": "seedance_2_0",
+      "doc": "videos/seedance-2-0/generation",
+      "extra_docs": [],
+      "endpoint": "/v1/videos/generations",
+      "poll": "/v1/tasks/{task_id}",
+      "request": {
+        "model": "seedance-2.0",
+        "prompt": "Плавное движение камеры над горным озером.",
+        "resolution": "480p",
+        "size": "16:9",
+        "duration": 5,
+        "generate_audio": true
+      },
+      "price": "Без входного видео: $0.066 / $0.142 / $0.3544 / $0.722 за секунду 480p/720p/1080p/4K. Тариф с video-reference брать из отдельной строки input.",
+      "limits": "4–15 секунд; 4 разрешения; до 9 изображений, 3 видео, 3 аудио. Старт 5/10/15 с T2V/I2V, generate_audio задавать явно.",
+      "cases": [
+        "5 с 480p=$0.33; 5 с 1080p=$1.772.",
+        "16 с отклоняется; первые/последние кадры сохраняют явные роли."
+      ],
+      "note": "Для референсного видео учитывать обе длительности и профиль input, не применять тариф обычного T2V. Fast не является выбранной стандартной версией.",
+      "wave": "V1",
+      "conditional": false,
+      "gate": "account_catalog",
+      "release": "После общей видеоосновы и прохождения тестов этой конфигурации.",
+      "implementation": {
+        "status": "new_apimart_route",
+        "target_route_implemented": false
+      },
+      "file": "52-seedance-2-0.md",
+      "flag": "FEATURE_APIMART_SEEDANCE_2_0_ENABLED"
+    },
+    {
+      "i": 53,
+      "name": "Gemini Omni 1.1",
+      "study": "https://study24.ai/chat/gemini_omni1",
+      "kind": "video",
+      "model": "gemini-omni-1.1-flash-ext",
+      "public_id": "gemini_omni_1_1_flash_ext",
+      "doc": "videos/omni-flash-ext/generation",
+      "extra_docs": [
+        "videos/gemini-omni-1.1-flash/generation"
+      ],
+      "endpoint": "/v1/videos/generations",
+      "poll": "/v1/tasks/{task_id}",
+      "request": {
+        "model": "gemini-omni-1.1-flash-ext",
+        "prompt": "Плавное движение камеры над горным озером.",
+        "resolution": "720p",
+        "aspect_ratio": "16:9",
+        "duration": 4
+      },
+      "price": "720p/1080p: 4/6/8/10 с стоят $0.25/$0.30/$0.35/$0.40 за вызов. 4K: $0.75/$0.80/$0.85/$0.90. 360p: $0.15/$0.175/$0.20/$0.225.",
+      "limits": "Длительность 4/6/8/10 с, generation_type frame/reference; 1 или 3 изображения, не 2. Старт 720p/1080p, T2V/I2V. video_urls и duration взаимоисключающие.",
+      "cases": [
+        "5 с отклоняется; 4 с 1080p=$0.25 за весь вызов.",
+        "2 изображения отклоняются; video_urls+duration отклоняется."
+      ],
+      "note": "В Study24 название без Flash/EXT. Это документированный более дешёвый кандидат, не доказанное тождество. Официальный gemini-omni-1.1-flash имеет другой контракт; не включать автоматическую замену.",
+      "wave": "V2",
+      "conditional": true,
+      "gate": "account_catalog",
+      "release": "После общей видеоосновы и прохождения тестов этой конфигурации.",
+      "implementation": {
+        "status": "new_apimart_route",
+        "target_route_implemented": false
+      },
+      "file": "53-gemini-omni-1-1-flash-ext.md",
+      "flag": "FEATURE_APIMART_GEMINI_OMNI_1_1_FLASH_EXT_ENABLED"
+    },
+    {
+      "i": 54,
+      "name": "Gemini Omni Flash",
+      "study": "https://study24.ai/chat/gemini_omni_flash",
+      "kind": "video",
+      "model": "gemini-omni-flash-preview",
+      "public_id": "gemini_omni_flash_preview",
+      "doc": "videos/gemini-omni-flash-preview/generation",
+      "extra_docs": [],
+      "endpoint": "/v1/videos/generations",
+      "poll": "/v1/tasks/{task_id}",
+      "request": {
+        "model": "gemini-omni-flash-preview",
+        "prompt": "Плавное движение камеры над горным озером.",
+        "resolution": "720p",
+        "aspect_ratio": "16:9"
+      },
+      "price": "$0.088 за секунду 720p вывода. Для переменной длины до 10 с предварительный потолок $0.88 без входных доплат.",
+      "limits": "720p, 24fps, звук; результат 3–10 с. В документации нет поля duration: не отправлять и не показывать фиктивный выбор секунд. До 16 изображений; 1 видео; video_urls исключает extend_from_task_id.",
+      "cases": [
+        "JSON не содержит duration.",
+        "Выход 8 с без входных доплат=$0.704; резерв допускает 10 с.",
+        "Расширение по чужому task_id запрещено."
+      ],
+      "note": "Используется Preview — показать явно. Входное видео и многораундовое редактирование открывать после расчёта входной стоимости; старт T2V/I2V.",
+      "wave": "V2",
+      "conditional": true,
+      "gate": "account_catalog",
+      "release": "После общей видеоосновы и прохождения тестов этой конфигурации.",
+      "implementation": {
+        "status": "new_apimart_route",
+        "target_route_implemented": false
+      },
+      "file": "54-gemini-omni-flash-preview.md",
+      "flag": "FEATURE_APIMART_GEMINI_OMNI_FLASH_PREVIEW_ENABLED"
+    },
+    {
+      "i": 55,
+      "name": "Wan 3.0",
+      "study": "https://study24.ai/chat/wan_3",
+      "kind": "video",
+      "model": "wan3.0-video",
+      "public_id": "wan_3_0",
+      "doc": "videos/wan3.0-video/generation",
+      "extra_docs": [],
+      "endpoint": "/v1/videos/generations",
+      "poll": "/v1/tasks/{task_id}",
+      "request": {
+        "model": "wan3.0-video",
+        "prompt": "Плавное движение камеры над горным озером.",
+        "resolution": "480P",
+        "size": "16:9",
+        "duration": 5,
+        "audio": true
+      },
+      "price": "$0.034288 / $0.068568 / $0.137144 за секунду 480P/720P/1080P. Порядок расчёта с входным видео сверить отдельно.",
+      "limits": "2–30 с; старт 5/10/15 с T2V/I2V. Видеовход + вывод≤30 с; duration=-1 отключён. Документы и URL страниц не открывать в первой версии.",
+      "cases": [
+        "5 с 480P=$0.17144.",
+        "15 с входа + 20 с вывода отклоняются.",
+        "prompt сверх 20000 символов отклоняется вместо незаметного обрезания."
+      ],
+      "note": "Звук по документации не меняет цену. Расширенный мультимодальный режим требует typed references и расчёта реальной длительности.",
+      "wave": "V1",
+      "conditional": false,
+      "gate": "account_catalog",
+      "release": "После общей видеоосновы и прохождения тестов этой конфигурации.",
+      "implementation": {
+        "status": "new_apimart_route",
+        "target_route_implemented": false
+      },
+      "file": "55-wan-3-0.md",
+      "flag": "FEATURE_APIMART_WAN_3_0_ENABLED"
+    },
+    {
+      "i": 56,
+      "name": "Google Veo 3.1",
+      "study": "https://study24.ai/chat/google_veo3",
+      "kind": "video",
+      "model": "veo3.1-fast",
+      "public_id": "veo_3_1_fast",
+      "doc": "videos/veo3/generation",
+      "extra_docs": [],
+      "endpoint": "/v1/videos/generations",
+      "poll": "/v1/tasks/{task_id}",
+      "request": {
+        "model": "veo3.1-fast",
+        "prompt": "Плавное движение камеры над горным озером.",
+        "duration": 8,
+        "resolution": "720p",
+        "aspect_ratio": "16:9",
+        "official_fallback": false
+      },
+      "price": "Fast $0.14 за 8 с (4K $0.64); Quality $1.00 (4K $1.50); Lite $0.07 (4K $0.57). Это разные режимы, не цена одной одинаковой конфигурации.",
+      "limits": "Фиксированные 8 с; Fast: frame 1–2 изображения или reference до 3; 720p/1080p/4K. Lite не поддерживает image_urls/generation_type; Quality не поддерживает reference.",
+      "cases": [
+        "duration=5 отклоняется.",
+        "Fast 8 с 720p=$0.14 за вызов, не $0.14/с.",
+        "Lite с изображением отклоняется, а не подменяется Fast."
+      ],
+      "note": "Study24 не уточняет режим. Предлагаемый старт — явно названный Veo 3.1 Fast. Lite/Quality добавить как отдельные доступные варианты с собственными ключами цены и лимитами.",
+      "wave": "V1",
+      "conditional": true,
+      "gate": "account_catalog",
+      "release": "После общей видеоосновы и прохождения тестов этой конфигурации.",
+      "implementation": {
+        "status": "new_apimart_route",
+        "target_route_implemented": false
+      },
+      "file": "56-veo-3-1-fast.md",
+      "flag": "FEATURE_APIMART_VEO_3_1_FAST_ENABLED"
+    },
+    {
+      "i": 57,
+      "name": "Seedance 2.0 Mini",
+      "study": "https://study24.ai/chat/seedance_mini",
+      "kind": "video",
+      "model": "seedance-2.0-mini",
+      "public_id": "seedance_2_0_mini",
+      "doc": "videos/seedance-2-0/generation",
+      "extra_docs": [],
+      "endpoint": "/v1/videos/generations",
+      "poll": "/v1/tasks/{task_id}",
+      "request": {
+        "model": "seedance-2.0-mini",
+        "prompt": "Плавное движение камеры над горным озером.",
+        "resolution": "480p",
+        "size": "16:9",
+        "duration": 5,
+        "generate_audio": true
+      },
+      "price": "Без video: $0.01056/с 480p, $0.02288/с 720p. С video: $0.0064/$0.01384 × (вход+выход).",
+      "limits": "4–15 с; только 480p/720p. Старт 5/10/15 с T2V/I2V. До 9 изображений/3 видео/3 аудио после расширения media contract.",
+      "cases": [
+        "5 с 480p=$0.0528; 5 с 720p=$0.1144.",
+        "1080p и 4K отклоняются.",
+        "5+5 с 720p с video=$0.1384, до учёта возможных token-особенностей."
+      ],
+      "note": "Создать отдельный public ID Mini; не направлять его на Standard при ошибке.",
+      "wave": "V1",
+      "conditional": false,
+      "gate": "account_catalog",
+      "release": "После общей видеоосновы и прохождения тестов этой конфигурации.",
+      "implementation": {
+        "status": "new_apimart_route",
+        "target_route_implemented": false
+      },
+      "file": "57-seedance-2-0-mini.md",
+      "flag": "FEATURE_APIMART_SEEDANCE_2_0_MINI_ENABLED"
+    },
+    {
+      "i": 59,
+      "name": "Minimax H3",
+      "study": "https://study24.ai/chat/minimax-h3",
+      "kind": "video",
+      "model": "MiniMax-H3",
+      "public_id": "minimax_h3",
+      "doc": "videos/minimax-h3/generation",
+      "extra_docs": [],
+      "endpoint": "/v1/videos/generations",
+      "poll": "/v1/tasks/{task_id}",
+      "request": {
+        "model": "MiniMax-H3",
+        "prompt": "Плавное движение камеры над горным озером.",
+        "duration": 5,
+        "resolution": "768P",
+        "aspect_ratio": "16:9"
+      },
+      "price": "$0.05712/с 768P; $0.09144/с 2K. В прайсе +$0.02288 за изображение сверх первых пяти; видео-референсы тарифицируются отдельно.",
+      "limits": "4–15 с; 768P/2K; prompt обязателен, до 7000 символов. first_frame_image/last_frame_image отличаются от image_urls (референсы). Старт T2V/I2V с одним изображением.",
+      "cases": [
+        "5 с 768P=$0.2856; 5 с 2K=$0.4572.",
+        "Имя MiniMax-H3 отправляется с точным регистром.",
+        "6 референсов требуют доплаты; без неё вариант недоступен."
+      ],
+      "note": "Расширенный режим: до 9 изображений, 3 видео, 3 аудио; аудио требует изображения/видео. Не наследовать поля Hailuo (prompt_optimizer/fast_pretreatment) без подтверждения.",
+      "wave": "V1",
+      "conditional": false,
+      "gate": "account_catalog",
+      "release": "После общей видеоосновы и прохождения тестов этой конфигурации.",
+      "implementation": {
+        "status": "new_apimart_route",
+        "target_route_implemented": false
+      },
+      "file": "59-minimax-h3.md",
+      "flag": "FEATURE_APIMART_MINIMAX_H3_ENABLED"
+    },
+    {
+      "i": 60,
+      "name": "Kling 3.0",
+      "study": "https://study24.ai/chat/kling_3",
+      "kind": "video",
+      "model": "kling-v3",
+      "public_id": "kling_3_0",
+      "doc": "videos/kling-v3/generation",
+      "extra_docs": [],
+      "endpoint": "/v1/videos/generations",
+      "poll": "/v1/tasks/{task_id}",
+      "request": {
+        "model": "kling-v3",
+        "prompt": "Плавное движение камеры над горным озером.",
+        "mode": "std",
+        "duration": 5,
+        "aspect_ratio": "16:9",
+        "audio": false
+      },
+      "price": "720p std: $0.0672/с без звука, $0.1008 со звуком. 1080p pro: $0.0896/$0.1344. 4K: $0.42856/с с/без звука.",
+      "limits": "3–15 с; mode std/pro/4k определяет разрешение. 1–2 изображения для первого/последнего кадра. Старт 5/10/15 с, std/pro, audio выбран явно.",
+      "cases": [
+        "5 с std без звука=$0.336; со звуком=$0.504.",
+        "Цена audio=true отличается, snapshot не может совпадать с silent.",
+        "Во второй стадии сумма длительностей 1–6 шотов равна общей duration."
+      ],
+      "note": "Сначала один шот; multi_shot и 4K включать отдельными вариантами после проверки цены и media contract.",
+      "wave": "V1",
+      "conditional": false,
+      "gate": "account_catalog",
+      "release": "После общей видеоосновы и прохождения тестов этой конфигурации.",
+      "implementation": {
+        "status": "new_apimart_route",
+        "target_route_implemented": false
+      },
+      "file": "60-kling-3-0.md",
+      "flag": "FEATURE_APIMART_KLING_3_0_ENABLED"
+    },
+    {
+      "i": 61,
+      "name": "Kling 3.0 Turbo",
+      "study": "https://study24.ai/chat/kling_3_turbo",
+      "kind": "video",
+      "model": "kling-3.0-turbo",
+      "public_id": "kling_3_0_turbo",
+      "doc": "videos/kling-3.0-turbo/generation",
+      "extra_docs": [],
+      "endpoint": "/v1/videos/generations",
+      "poll": "/v1/tasks/{task_id}",
+      "request": {
+        "model": "kling-3.0-turbo",
+        "prompt": "Плавное движение камеры над горным озером.",
+        "resolution": "720p",
+        "duration": 5,
+        "aspect_ratio": "16:9"
+      },
+      "price": "$0.1144/с 720p; $0.1432/с 1080p.",
+      "limits": "3–15 с; 720p/1080p; текст или первый кадр. Старт 5/10/15 с. Поля mode из kling-v3 не переносить в этот контракт.",
+      "cases": [
+        "5 с 720p=$0.572; 5 с 1080p=$0.716.",
+        "4K и 16 с отклоняются."
+      ],
+      "note": "Мультишот здесь задаётся форматированным промптом; не использовать JSON multi_shot от другой модели.",
+      "wave": "V1",
+      "conditional": false,
+      "gate": "account_catalog",
+      "release": "После общей видеоосновы и прохождения тестов этой конфигурации.",
+      "implementation": {
+        "status": "new_apimart_route",
+        "target_route_implemented": false
+      },
+      "file": "61-kling-3-0-turbo.md",
+      "flag": "FEATURE_APIMART_KLING_3_0_TURBO_ENABLED"
+    },
+    {
+      "i": 62,
+      "name": "Kling 2.6",
+      "study": "https://study24.ai/chat/kling_2_6",
+      "kind": "video",
+      "model": "kling-v2-6",
+      "public_id": "kling_2_6",
+      "doc": "videos/kling-v2-6/generation",
+      "extra_docs": [],
+      "endpoint": "/v1/videos/generations",
+      "poll": "/v1/tasks/{task_id}",
+      "request": {
+        "model": "kling-v2-6",
+        "prompt": "Плавное движение камеры над горным озером.",
+        "mode": "std",
+        "duration": 5,
+        "aspect_ratio": "16:9",
+        "audio": false
+      },
+      "price": "std 720p $0.0368/с без звука. pro 1080p $0.0625/с без звука, $0.125/с со звуком.",
+      "limits": "Только 5/10 с; std без audio; pro допускает audio. Последний кадр поддерживается только pro, несовместим со звуком.",
+      "cases": [
+        "5 с std=$0.184.",
+        "std+audio=true и last-frame+audio=true отклоняются.",
+        "pro 10 с audio=true=$1.25."
+      ],
+      "note": "Первый/последний кадр и качество — серверная матрица допустимых комбинаций, не независимые переключатели.",
+      "wave": "V1",
+      "conditional": false,
+      "gate": "account_catalog",
+      "release": "После общей видеоосновы и прохождения тестов этой конфигурации.",
+      "implementation": {
+        "status": "new_apimart_route",
+        "target_route_implemented": false
+      },
+      "file": "62-kling-2-6.md",
+      "flag": "FEATURE_APIMART_KLING_2_6_ENABLED"
+    },
+    {
+      "i": 64,
+      "name": "Kling Motion Control",
+      "study": "https://study24.ai/chat/kling_mc",
+      "kind": "video",
+      "model": "kling-v2-6-motion-control",
+      "public_id": "kling_motion_control",
+      "doc": "videos/kling-v2-6/kling-v2-6-motion-control-generation",
+      "extra_docs": [],
+      "endpoint": "/v1/videos/generations",
+      "poll": "/v1/tasks/{task_id}",
+      "request": {
+        "model": "kling-v2-6-motion-control",
+        "prompt": "Плавное движение камеры над горным озером.",
+        "image_url": "https://example.com/owned-image.png",
+        "video_url": "https://example.com/owned-video.mp4",
+        "mode": "std",
+        "character_orientation": "image",
+        "keep_original_sound": "yes"
+      },
+      "price": "std 720p: $0.05712 × фактические секунды исходного видео.",
+      "limits": "Обязательны image_url+video_url. character_orientation=image: 3–10 с; video: 3–30 с. Длительность определяет backend по файлу, поля duration нет.",
+      "cases": [
+        "Источник 8 с: $0.45696, клиентские duration/price игнорируются.",
+        "image orientation + 11 с отклоняется.",
+        "Чужой reference artifact не даёт создать Job."
+      ],
+      "note": "Study24 не раскрывает номер Kling под Motion Control. План для документированного v2.6 std; версия 3 имеет другой тариф и не подменяет её.",
+      "wave": "C",
+      "conditional": true,
+      "gate": "account_catalog",
+      "release": "После общей видеоосновы и прохождения тестов этой конфигурации.",
+      "implementation": {
+        "status": "new_apimart_route",
+        "target_route_implemented": false
+      },
+      "file": "64-kling-motion-control.md",
+      "flag": "FEATURE_APIMART_KLING_MOTION_CONTROL_ENABLED"
+    },
+    {
+      "i": 65,
+      "name": "Kling Motion Control Pro",
+      "study": "https://study24.ai/chat/kmc_pro",
+      "kind": "video",
+      "model": "kling-v2-6-motion-control",
+      "public_id": "kling_motion_control_pro",
+      "doc": "videos/kling-v2-6/kling-v2-6-motion-control-generation",
+      "extra_docs": [],
+      "endpoint": "/v1/videos/generations",
+      "poll": "/v1/tasks/{task_id}",
+      "request": {
+        "model": "kling-v2-6-motion-control",
+        "prompt": "Плавное движение камеры над горным озером.",
+        "image_url": "https://example.com/owned-image.png",
+        "video_url": "https://example.com/owned-video.mp4",
+        "mode": "pro",
+        "character_orientation": "image",
+        "keep_original_sound": "yes"
+      },
+      "price": "pro 1080p: $0.09144 × фактические секунды исходного видео.",
+      "limits": "Обязательны image_url+video_url; mode=pro; orientation image: 3–10 с, video: 3–30 с. Без поля duration.",
+      "cases": [
+        "Источник 8 с: $0.73152.",
+        "Выбор Pro всегда сериализуется в mode=pro; std не является fallback.",
+        "Повторная доставка Job не создаёт второе видео и второе списание."
+      ],
+      "note": "Отдельный публичный продукт и цена Pro при общем API model ID с Standard. Соответствие версии Study24 v2.6 ещё требуется подтвердить.",
+      "wave": "C",
+      "conditional": true,
+      "gate": "account_catalog",
+      "release": "После общей видеоосновы и прохождения тестов этой конфигурации.",
+      "implementation": {
+        "status": "new_apimart_route",
+        "target_route_implemented": false
+      },
+      "file": "65-kling-motion-control-pro.md",
+      "flag": "FEATURE_APIMART_KLING_MOTION_CONTROL_PRO_ENABLED"
+    },
+    {
+      "i": 66,
+      "name": "Grok Imagine 1.5",
+      "study": "https://study24.ai/chat/grok_imagine_1_5",
+      "kind": "video",
+      "model": "grok-imagine-1.5-video-ext",
+      "public_id": "grok_imagine_1_5",
+      "doc": "videos/grok-imagine/generation",
+      "extra_docs": [],
+      "endpoint": "/v1/videos/generations",
+      "poll": "/v1/tasks/{task_id}",
+      "request": {
+        "model": "grok-imagine-1.5-video-ext",
+        "prompt": "Плавное движение камеры над горным озером.",
+        "size": "16:9",
+        "resolution": "480p",
+        "duration": 6
+      },
+      "price": "$0.0102/с 480p; $0.01912/с 720p.",
+      "limits": "6–15 с; 480p/720p; до 7 изображений, публичные URL без base64. При референсе выходное соотношение следует ему.",
+      "cases": [
+        "6 с 480p=$0.0612; 6 с 720p=$0.11472.",
+        "5 с и 1080p отклоняются.",
+        "8-й референс отклоняется."
+      ],
+      "note": "EXT и официальный grok-imagine-video-1.5 имеют разные тарифы/лимиты; фиксировать выбранный EXT в snapshot.",
+      "wave": "V1",
+      "conditional": false,
+      "gate": "account_catalog",
+      "release": "После общей видеоосновы и прохождения тестов этой конфигурации.",
+      "implementation": {
+        "status": "new_apimart_route",
+        "target_route_implemented": false
+      },
+      "file": "66-grok-imagine-1-5.md",
+      "flag": "FEATURE_APIMART_GROK_IMAGINE_1_5_ENABLED"
+    },
+    {
+      "i": 67,
+      "name": "Happy Horse",
+      "study": "https://study24.ai/chat/happy_horse",
+      "kind": "video",
+      "model": "happyhorse-1.0",
+      "public_id": "happy_horse_1_0",
+      "doc": "videos/happyhorse-1.0/generation",
+      "extra_docs": [],
+      "endpoint": "/v1/videos/generations",
+      "poll": "/v1/tasks/{task_id}",
+      "request": {
+        "model": "happyhorse-1.0",
+        "prompt": "Плавное движение камеры над горным озером.",
+        "resolution": "720P",
+        "size": "16:9",
+        "duration": 5
+      },
+      "price": "Таблица HAPPYHORSE: $0.13/с 720P и $0.23/с 1080P. Связь этого billing ID с документированным happyhorse-1.0 подтвердить.",
+      "limits": "3–15 с; 720P/1080P. first_frame_image — I2V; image_urls — до 9 референсов; video_url — edit. Старт T2V/I2V.",
+      "cases": [
+        "5 с 720P=$0.65 при подтверждённом тарифе.",
+        "first_frame_image+image_urls отклоняются.",
+        "Edit с исходником >15 с не обрезается молча: backend отклоняет до пользовательского выбора."
+      ],
+      "note": "Study24 «Happy Horse» не раскрывает 1.0/1.1. План для явно выбранной 1.0, без скрытого перехода на 1.1.",
+      "wave": "V2",
+      "conditional": true,
+      "gate": "pricing_alias",
+      "release": "После общей видеоосновы и прохождения тестов этой конфигурации.",
+      "implementation": {
+        "status": "new_apimart_route",
+        "target_route_implemented": false
+      },
+      "file": "67-happy-horse-1-0.md",
+      "flag": "FEATURE_APIMART_HAPPY_HORSE_1_0_ENABLED"
+    },
+    {
+      "i": 68,
+      "name": "Suno",
+      "study": "https://study24.ai/chat/suno",
+      "kind": "audio",
+      "model": "suno",
+      "public_id": "suno_v5_5",
+      "doc": "audios/suno/generation",
+      "extra_docs": [
+        "audios/suno/overview"
+      ],
+      "endpoint": "/v1/music/generations",
+      "poll": "/v1/music/tasks/{task_id}",
+      "request": {
+        "model": "suno",
+        "version": "v5.5",
+        "custom": false,
+        "instrumental": true,
+        "prompt": "Спокойная инструментальная композиция с пианино."
+      },
+      "price": "$0.05 за вызов music-v5.5. Оплата за вызов, не за каждый возвращённый трек; обычно возвращаются две версии, число проверять по факту.",
+      "limits": "version обязателен. custom=false: prompt — описание, title/style игнорируются; custom=true: prompt — текст песни, style — жанр. Сохранить все data.result.music[] как отдельные аудиоартефакты.",
+      "cases": [
+        "Нет version → локальная ошибка, submit не вызывается.",
+        "Два трека одного Job дают один capture на вызов и два результата.",
+        "Poll идёт на /v1/music/tasks/{id}; все audio_url скачиваются, lyrics проходят модерацию."
+      ],
+      "note": "В Study24 точная версия не раскрыта. v5.5 — предлагаемый явный старт. TTS не использовать вместо операции генерации музыки.",
+      "wave": "A",
+      "conditional": true,
+      "gate": "account_catalog",
+      "release": "После новой операции audio_music_generate, аудио-хранилища/доставки и тарифа.",
+      "implementation": {
+        "status": "new_apimart_route",
+        "target_route_implemented": false
+      },
+      "file": "68-suno-v5-5.md",
+      "flag": "FEATURE_APIMART_SUNO_V5_5_ENABLED"
+    }
+  ],
+  "unconfirmed": [
+    {
+      "i": 1,
+      "name": "StudyAI Plus",
+      "study": "https://study24.ai/chat/sai_plus",
+      "reason": "Собственный продукт StudyAI Plus; базовая модель не раскрыта."
+    },
+    {
+      "i": 5,
+      "name": "GPT 5.6 Sol",
+      "study": "https://study24.ai/chat/gpt_56_sol",
+      "reason": "Точный gpt-5.6-sol не найден в просмотренном прайсе/индексе APIMart; gpt-5.6 не считать тем же ID."
+    },
+    {
+      "i": 29,
+      "name": "Perplexity",
+      "study": "https://study24.ai/chat/perplexity_plus_bot",
+      "reason": "Perplexity — название сервиса; не найден документированный маршрут Sonar для этой карточки."
+    },
+    {
+      "i": 30,
+      "name": "Gemini 3.1 Flash",
+      "study": "https://study24.ai/chat/gemini3_flash",
+      "reason": "Текстовый Gemini 3.1 Flash не подтверждён; Flash Lite, Flash Image и Flash TTS — другие модели."
+    },
+    {
+      "i": 36,
+      "name": "ChatGPT Mini",
+      "study": "https://study24.ai/chat/gpt_mini",
+      "reason": "ChatGPT Mini не раскрывает версию; gpt-5-mini/gpt-4o-mini и другие mini не подставлять по догадке."
+    },
+    {
+      "i": 42,
+      "name": "Microsoft: MAI-Image-2.5",
+      "study": "https://study24.ai/chat/mai_image_2_5",
+      "reason": "MAI-Image-2.5 не найден в просмотренных публичных моделях/документации APIMart."
+    },
+    {
+      "i": 47,
+      "name": "Krea 2",
+      "study": "https://study24.ai/chat/krea_2",
+      "reason": "Krea 2 не найден в просмотренных публичных моделях/документации APIMart."
+    },
+    {
+      "i": 58,
+      "name": "Seedance 2.0 Pro",
+      "study": "https://study24.ai/chat/seedance_20_pro",
+      "reason": "Seedance 2.0 Pro не подтверждён отдельным ID; Standard/Fast/Mini не считать Pro."
+    },
+    {
+      "i": 63,
+      "name": "Kling 2.5 Turbo",
+      "study": "https://study24.ai/chat/kling_2_1_master",
+      "reason": "Kling 2.5 Turbo не найден среди просмотренных актуальных API-контрактов APIMart."
+    },
+    {
+      "i": 69,
+      "name": "Eleven Labs (озвучка текста)",
+      "study": "https://study24.ai/chat/eleven_labs",
+      "reason": "API ElevenLabs не найден; OpenAI TTS/Flow Music не заменяют выбранную озвучку."
+    },
+    {
+      "i": 70,
+      "name": "Recraft AI",
+      "study": "https://study24.ai/chat/recraft_ai",
+      "reason": "API Recraft для операции из карточки Study24 не найден."
+    },
+    {
+      "i": 71,
+      "name": "Topaz",
+      "study": "https://study24.ai/chat/topaz",
+      "reason": "API Topaz для операции из карточки Study24 не найден."
+    }
+  ]
+}

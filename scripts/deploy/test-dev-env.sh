@@ -111,6 +111,7 @@ run_valid_case() {
   assert_file_contains "${rendered}" "VK_MENU_VIDEO_ROUTES_PREVIEW_ENABLED=true"
   assert_file_contains "${rendered}" "FEATURE_IMAGE_MODEL_NANO_BANANA_PRO_ENABLED=true"
   assert_file_contains "${rendered}" "FEATURE_IMAGE_MODEL_GPT_IMAGE_2_ENABLED=true"
+  assert_file_contains "${rendered}" "FEATURE_APIMART_QWEN_IMAGE_3_ENABLED=true"
   assert_file_contains "${rendered}" "FEATURE_IMAGE_MODEL_NANO_BANANA_2_ENABLED=true"
   assert_file_contains "${rendered}" "FEATURE_IMAGE_MODEL_MOCK_ENABLED=false"
   assert_file_contains "${rendered}" "FEATURE_VIDEO_ROUTER_ENABLED=true"
@@ -138,6 +139,21 @@ for script in scripts/deploy/*.sh; do
 done
 
 run_valid_case "mock-dev" "mock"
+
+for qwen_case in disabled missing-key; do
+  qwen_raw="${tmpdir}/qwen-${qwen_case}.raw.env"
+  qwen_rendered="${tmpdir}/qwen-${qwen_case}.rendered.env"
+  write_common_dev_env "${qwen_raw}" mock
+  if [[ "${qwen_case}" == disabled ]]; then
+    echo 'FEATURE_APIMART_QWEN_IMAGE_3_ENABLED=false' >> "${qwen_raw}"
+  else
+    sed -i '/^APIMART_API_KEY=/d' "${qwen_raw}"
+    echo 'FEATURE_APIMART_QWEN_IMAGE_3_ENABLED=true' >> "${qwen_raw}"
+  fi
+  bash "${prepare_script}" --input "${qwen_raw}" --output "${qwen_rendered}" \
+    --image-tag sha-test123 --ghcr-username test-ghcr-user --ghcr-token GHCR_TEST >/dev/null
+  assert_file_contains "${qwen_rendered}" 'FEATURE_APIMART_QWEN_IMAGE_3_ENABLED=false'
+done
 run_valid_case "yookassa-dev" "yookassa"
 
 prod_url_env="${tmpdir}/prod-url.env"
