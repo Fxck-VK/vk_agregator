@@ -1,6 +1,7 @@
 package modelcatalog
 
 import (
+	"reflect"
 	"testing"
 
 	"vk-ai-aggregator/internal/domain"
@@ -69,7 +70,7 @@ func TestResolveMiniAppMockImageModel(t *testing.T) {
 func TestResolvePublicModelKeepsLegacyMiniAppResolutionCompatible(t *testing.T) {
 	legacy, legacyOK := ResolveMiniAppModel(domain.OperationImageGenerate, MiniAppImageNanoBanana2)
 	public, publicOK := ResolvePublicModel(domain.OperationImageGenerate, MiniAppImageNanoBanana2)
-	if !legacyOK || !publicOK || public != legacy {
+	if !legacyOK || !publicOK || !reflect.DeepEqual(public, legacy) {
 		t.Fatalf("public resolver = %+v/%v, legacy resolver = %+v/%v", public, publicOK, legacy, legacyOK)
 	}
 }

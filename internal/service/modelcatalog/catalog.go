@@ -17,6 +17,8 @@ const (
 	MiniAppImageNanoBananaPro   = providermodels.PublicImageNanoBananaPro
 	MiniAppImageGPTImage2       = providermodels.PublicImageGPTImage2
 	MiniAppImageQwenImage3      = providermodels.PublicImageQwenImage3
+	MiniAppImageGrokImage15     = providermodels.PublicImageGrokImage15
+	MiniAppImageGrokImage20     = providermodels.PublicImageGrokImage20
 	MiniAppImageNanoBananaFlash = "nano_banana_flash"
 	MiniAppImageNanoBanana2     = providermodels.PublicImageNanoBanana2
 	MiniAppImageSeedream45      = providermodels.PublicImageSeedream45
@@ -52,6 +54,7 @@ type Model struct {
 	SupportsReferenceImage bool
 	MaxReferenceImages     int
 	MaxOutputCount         int
+	AllowedAspectRatios    []string
 }
 
 var miniAppDefaultModel = map[domain.OperationType]string{
@@ -90,6 +93,8 @@ func MiniAppResponseModelID(model Model) string {
 
 func NormalizeImageQuality(raw string) (string, bool) {
 	switch strings.ToUpper(strings.TrimSpace(raw)) {
+	case "STANDARD":
+		return "standard", true
 	case ImageQuality1K:
 		return ImageQuality1K, true
 	case ImageQuality2K:
@@ -216,5 +221,6 @@ func modelFromRegistryImage(registryModel providermodels.ImageModel) Model {
 		SupportsReferenceImage: registryModel.Limits.SupportsReferenceImage,
 		MaxReferenceImages:     registryModel.Limits.MaxReferenceImages,
 		MaxOutputCount:         registryModel.Limits.MaxOutputCount,
+		AllowedAspectRatios:    append([]string(nil), registryModel.Limits.AllowedAspectRatios...),
 	}
 }

@@ -9,6 +9,7 @@ import styles from "./ImageAspectRatioSelector.module.css";
 export const IMAGE_ASPECT_RATIOS = ["16:9", "1:1", "21:9", "2:3", "3:2", "3:4", "4:3", "4:5", "5:4", "9:16"] as const;
 
 type ImageAspectRatioSelectorProps = {
+  options?: readonly string[];
   disabled: boolean;
   onChange: (ratio: string) => void;
   value: string;
@@ -21,7 +22,7 @@ type PanelLayout = {
   width: number;
 };
 
-export function ImageAspectRatioSelector({ disabled, onChange, value }: Readonly<ImageAspectRatioSelectorProps>) {
+export function ImageAspectRatioSelector({ disabled, onChange, value, options = IMAGE_ASPECT_RATIOS }: Readonly<ImageAspectRatioSelectorProps>) {
   const [isOpen, setIsOpen] = useState(false);
   const [panelLayout, setPanelLayout] = useState<PanelLayout | null>(null);
   const panelRef = useRef<HTMLDivElement>(null);
@@ -120,7 +121,7 @@ export function ImageAspectRatioSelector({ disabled, onChange, value }: Readonly
         >
           <p className={styles.title}>Соотношение сторон</p>
           <div className={styles.options} role="radiogroup">
-            {IMAGE_ASPECT_RATIOS.map((ratio) => {
+            {options.map((ratio) => {
               const selected = ratio === value;
               return (
                 <button

@@ -3,6 +3,28 @@
 The DEV contour mirrors production architecture with separate secrets, domains,
 VK community, YooKassa/test settings and Cloudflare tunnel.
 
+## Grok Imagine image configuration
+
+`grok_image_1_5` and `grok_image_2_0` use the existing APIMart worker with
+`FEATURE_APIMART_GROK_IMAGE_1_5_ENABLED` and
+`FEATURE_APIMART_GROK_IMAGE_2_0_ENABLED`. Both application defaults are false.
+The DEV renderer enables them when APIMart is configured with a key, preserving
+an explicit false for each flag. Missing credentials keep both disabled.
+
+Static pricing version 6 provides one `standard` quality at 10 internal credits
+per image for each model. A DB-backed catalog needs that exact enabled price key
+before exposure. No DB price rows are changed by this implementation.
+Grok 2.0 uses the public $0.015 price selected by the user despite the API docs
+listing $0.08; check actual provider cost during the authorized live test.
+
+Deploy API and worker together; rebuild the platform for the model-specific aspect
+ratio selector. Check `/web/v1/image-models` for both public IDs, supported ratios
+and price 10, then verify history and one ledger capture using a live generation.
+To hide new selections, set the corresponding model flag to false while keeping
+the adapter available to poll existing tasks. An indeterminate Grok 2.0 submit
+stops automatic retries and releases the user reservation; investigate the original
+server-side intent before creating another.
+
 ## Qwen Image 3.0 configuration
 
 The public `qwen_image_3` route uses APIMart `qwen-image-3.0` through the existing

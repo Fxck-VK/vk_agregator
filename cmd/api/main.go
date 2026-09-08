@@ -506,6 +506,7 @@ func webImageModelsFromRuntimeCatalog(runtimeModels []productcatalog.ImageModel)
 			SupportsReferenceImage: model.SupportsReferenceImage,
 			MaxReferenceImages:     model.MaxReferenceImages,
 			MaxOutputCount:         model.MaxOutputCount,
+			AllowedAspectRatios:    append([]string(nil), model.AllowedAspectRatios...),
 		})
 	}
 	return models

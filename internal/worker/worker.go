@@ -2696,6 +2696,8 @@ func safeTerminalFailure(job *domain.Job, class domain.ProviderErrorClass) (stri
 
 func safeProviderFailureMessage(class domain.ProviderErrorClass) string {
 	switch class {
+	case domain.ProviderErrSubmitIndeterminate:
+		return "generation submission could not be confirmed; automatic retries stopped; credits were not charged"
 	case domain.ProviderErrRateLimited, domain.ProviderErrOverloaded, domain.ProviderErrTimeout:
 		return "provider is temporarily unavailable; credits were not charged"
 	case domain.ProviderErrContentRejected:

@@ -1843,6 +1843,7 @@ type safeImageModel struct {
 	SupportsReferenceImage bool             `json:"supports_reference_image"`
 	MaxReferenceImages     int              `json:"max_reference_images"`
 	MaxOutputCount         int              `json:"max_output_count"`
+	AllowedAspectRatios    []string         `json:"allowed_aspect_ratios,omitempty"`
 }
 
 // webImageJobParams is stored with the job for the worker. It is deliberately
@@ -1976,6 +1977,7 @@ func newSafeImageModel(model imagegeneration.PublicModel, resolver imagegenerati
 		SupportsReferenceImage: model.SupportsReferenceImage,
 		MaxReferenceImages:     model.MaxReferenceImages,
 		MaxOutputCount:         max(model.MaxOutputCount, imagegeneration.DefaultOutputCount),
+		AllowedAspectRatios:    append([]string(nil), model.AllowedAspectRatios...),
 	}, true
 }
 

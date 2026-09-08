@@ -2848,3 +2848,27 @@ and recovery of a process crash between upstream acceptance and saving task_id
 remain separate work; the new model does not establish that guarantee.
 See [Qwen implementation](superpowers/plans/2026-09-08-study24-apimart/45-qwen-image-3.md)
 and [DEV configuration](runbooks/DEV.md).
+
+## Grok Imagine image routes (2026-09-08)
+
+The public `grok_image_1_5` and `grok_image_2_0` routes use the existing resolver,
+Job snapshot, APIMart worker and moderated Artifact pipeline. Independent feature
+flags and exact enabled tariffs gate exposure. Static pricing version 6 adds one
+`standard` key at 10 internal credits per model. For Grok 2.0 the user selected
+public pricing at $0.015 despite the API documentation listing $0.08; actual
+provider cost remains unverified. Existing Job pricing snapshots are retained.
+
+Both routes generate one image. Grok 1.5 accepts up to one backend reference;
+2.0 accepts text only. Model-specific aspect ratios travel in safe catalog DTOs
+and are enforced against the trusted registry. Public `standard` is not a pixel
+resolution: the worker omits resolution for 1.5 and sends `quality` for 2.0.
+
+Grok 2.0 uses versioned HTTP 202/data.id submission. Its adapter replays transient
+or in-progress submits with identical body/key/version and respects Retry-After
+within a bounded window. An unresolved outcome maps to the non-retryable
+`provider_submit_indeterminate` class, preventing automatic fresh paid attempts.
+This does not close the process-crash window before saving the provider task;
+durable pre-submit intents remain separate B2 work.
+
+See [Grok 1.5](superpowers/plans/2026-09-08-study24-apimart/43-grok-image-1-5.md)
+and [Grok 2.0](superpowers/plans/2026-09-08-study24-apimart/44-grok-image-2-0.md).

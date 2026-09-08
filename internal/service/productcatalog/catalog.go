@@ -45,6 +45,7 @@ type ImageModel struct {
 	SupportsReferenceImage bool     `json:"supports_reference_image"`
 	MaxReferenceImages     int      `json:"max_reference_images,omitempty"`
 	MaxOutputCount         int      `json:"max_output_count"`
+	AllowedAspectRatios    []string `json:"allowed_aspect_ratios,omitempty"`
 }
 
 type VideoRoute struct {
@@ -177,6 +178,7 @@ func imageModels(cfg Config) []ImageModel {
 			SupportsReferenceImage: model.SupportsReferenceImage,
 			MaxReferenceImages:     model.MaxReferenceImages,
 			MaxOutputCount:         model.MaxOutputCount,
+			AllowedAspectRatios:    append([]string(nil), model.AllowedAspectRatios...),
 		})
 	}
 	return out
@@ -300,6 +302,10 @@ func imageDescription(modelID string) string {
 		return "Качественная генерация и редактирование изображений с надежной композицией."
 	case modelcatalog.MiniAppImageQwenImage3:
 		return "Генерация и редактирование изображений с текстом, 1K и 2K."
+	case modelcatalog.MiniAppImageGrokImage15:
+		return "Генерация изображений по тексту и редактирование с одним референсом."
+	case modelcatalog.MiniAppImageGrokImage20:
+		return "Генерация изображений по тексту с выбором формата кадра."
 	case modelcatalog.MiniAppImageSeedream45:
 		return "Быстрая эстетичная генерация изображений для концептов и визуалов."
 	case modelcatalog.MiniAppImageSDXLTurbo:
@@ -311,6 +317,8 @@ func imageDescription(modelID string) string {
 
 func imageQualityOptions(modelID string) []string {
 	switch modelID {
+	case modelcatalog.MiniAppImageGrokImage15, modelcatalog.MiniAppImageGrokImage20:
+		return []string{pricingcatalog.ImageQualityStandard}
 	case modelcatalog.MiniAppImageNanoBanana2,
 		modelcatalog.MiniAppImageNanoBananaPro,
 		modelcatalog.MiniAppImageGPTImage2:
@@ -385,6 +393,7 @@ func itemFromImage(model ImageModel) Item {
 		SupportsReferenceImage: model.SupportsReferenceImage,
 		MaxReferenceImages:     model.MaxReferenceImages,
 		MaxOutputCount:         model.MaxOutputCount,
+		AllowedAspectRatios:    append([]string(nil), model.AllowedAspectRatios...),
 	}
 }
 
@@ -411,6 +420,7 @@ func itemFromVideo(route VideoRoute) Item {
 
 func copyImageModel(model ImageModel) ImageModel {
 	model.QualityOptions = append([]string(nil), model.QualityOptions...)
+	model.AllowedAspectRatios = append([]string(nil), model.AllowedAspectRatios...)
 	return model
 }
 

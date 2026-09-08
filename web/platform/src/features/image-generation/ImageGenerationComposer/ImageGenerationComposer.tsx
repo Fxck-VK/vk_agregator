@@ -12,6 +12,7 @@ import styles from "./ImageGenerationComposer.module.css";
 
 type ImageGenerationComposerProps = {
   aspectRatio: string;
+  allowedAspectRatios?: string[];
   canSubmit: boolean;
   errorMessage: string | null;
   imageQuality: string;
@@ -30,6 +31,7 @@ type ImageGenerationComposerProps = {
 
 export function ImageGenerationComposer({
   aspectRatio,
+  allowedAspectRatios,
   canSubmit,
   errorMessage,
   imageQuality,
@@ -60,14 +62,14 @@ export function ImageGenerationComposer({
               disabled={isSubmitting}
               onSelect={(template) => onPromptChange(template.prompt)}
             />
-            <ImageAspectRatioSelector disabled={isSubmitting} onChange={onAspectRatioChange} value={aspectRatio} />
-            <ImageQualitySelector
+            <ImageAspectRatioSelector disabled={isSubmitting} onChange={onAspectRatioChange} value={aspectRatio} options={allowedAspectRatios} />
+            {qualityOptions.length > 1 ? <ImageQualitySelector
               disabled={isSubmitting}
               label={ru.imageGeneration.resolutionLabel}
               onChange={onImageQualityChange}
               options={qualityOptions}
               value={imageQuality}
-            />
+            /> : null}
             <ImageOutputCountSelector
               disabled={isSubmitting}
               max={maxOutputCount}

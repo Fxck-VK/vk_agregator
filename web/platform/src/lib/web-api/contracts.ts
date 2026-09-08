@@ -87,6 +87,7 @@ export const imageModelSchema = z
     supports_reference_image: z.boolean(),
     max_reference_images: z.number().int().nonnegative(),
     max_output_count: z.number().int().positive().optional(),
+    allowed_aspect_ratios: z.array(z.string().trim().min(1)).min(1).optional(),
   })
   .strict();
 

@@ -295,6 +295,8 @@ type Config struct {
 	FeatureImageModelNanoBananaProEnabled       bool
 	FeatureImageModelGPTImage2Enabled           bool
 	FeatureAPIMartQwenImage3Enabled             bool
+	FeatureAPIMartGrokImage15Enabled            bool
+	FeatureAPIMartGrokImage20Enabled            bool
 	FeatureImageModelNanoBanana2Enabled         bool
 	FeatureImageModelSeedream45Enabled          bool
 	FeatureImageModelMockEnabled                bool
@@ -1340,6 +1342,8 @@ func Load() Config {
 		FeatureImageModelNanoBananaProEnabled:     envBool("FEATURE_IMAGE_MODEL_NANO_BANANA_PRO_ENABLED", false),
 		FeatureImageModelGPTImage2Enabled:         envBool("FEATURE_IMAGE_MODEL_GPT_IMAGE_2_ENABLED", false),
 		FeatureAPIMartQwenImage3Enabled:           envBool("FEATURE_APIMART_QWEN_IMAGE_3_ENABLED", false),
+		FeatureAPIMartGrokImage15Enabled:          envBool("FEATURE_APIMART_GROK_IMAGE_1_5_ENABLED", false),
+		FeatureAPIMartGrokImage20Enabled:          envBool("FEATURE_APIMART_GROK_IMAGE_2_0_ENABLED", false),
 		FeatureImageModelNanoBanana2Enabled:       envBool("FEATURE_IMAGE_MODEL_NANO_BANANA_2_ENABLED", false),
 		FeatureImageModelSeedream45Enabled:        envBool("FEATURE_IMAGE_MODEL_SEEDREAM_4_5_ENABLED", false),
 		FeatureImageModelMockEnabled:              envBool("FEATURE_IMAGE_MODEL_MOCK_ENABLED", false),
@@ -1756,6 +1760,26 @@ func (c Config) validateVideoRouteProviderConfig() error {
 		}
 		if strings.TrimSpace(c.APIMartBaseURL) == "" {
 			return fmt.Errorf("config: FEATURE_APIMART_QWEN_IMAGE_3_ENABLED=true requires APIMART_BASE_URL")
+		}
+	}
+	for _, model := range []struct {
+		enabled bool
+		flag    string
+	}{
+		{c.FeatureAPIMartGrokImage15Enabled, "FEATURE_APIMART_GROK_IMAGE_1_5_ENABLED"},
+		{c.FeatureAPIMartGrokImage20Enabled, "FEATURE_APIMART_GROK_IMAGE_2_0_ENABLED"},
+	} {
+		if !model.enabled {
+			continue
+		}
+		if !c.APIMartProviderEnabled {
+			return fmt.Errorf("config: %s=true requires APIMART_PROVIDER_ENABLED=true", model.flag)
+		}
+		if strings.TrimSpace(c.APIMartAPIKey) == "" {
+			return fmt.Errorf("config: %s=true requires APIMART_API_KEY", model.flag)
+		}
+		if strings.TrimSpace(c.APIMartBaseURL) == "" {
+			return fmt.Errorf("config: %s=true requires APIMART_BASE_URL", model.flag)
 		}
 	}
 	if c.FeatureImageModelMockEnabled {

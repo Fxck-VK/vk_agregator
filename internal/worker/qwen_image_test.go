@@ -36,11 +36,26 @@ func (m *qwenOutputModerator) Check(context.Context, moderationservice.Input) (m
 }
 
 func TestQwenImageAsyncLifecycle(t *testing.T) {
-	for _, blocked := range []bool{false, true} {
-		name := "allowed"
-		if blocked {
-			name = "moderation blocked"
-		}
+	testAPIMartImageLifecycle(t, "qwen_image_3", "qwen-image-3.0", "2K", "2K", 15, true)
+}
+
+func TestGrokImageAsyncLifecycle(t *testing.T) {
+	t.Run("1.5", func(t *testing.T) {
+		testAPIMartImageLifecycle(t, "grok_image_1_5", apimart.ModelGrokImage15, "standard", "", 10, true)
+	})
+	t.Run("2.0", func(t *testing.T) {
+		testAPIMartImageLifecycle(t, "grok_image_2_0", apimart.ModelGrokImage20, "standard", "quality", 10, false)
+	})
+}
+
+func testAPIMartImageLifecycle(t *testing.T, publicModel, providerModel, quality, resolution string, credits int64, withReference bool) {
+	t.Helper()
+	scenarios := []string{"allowed", "moderation blocked"}
+	if providerModel == apimart.ModelGrokImage20 {
+		scenarios = append(scenarios, "submit indeterminate")
+	}
+	for _, name := range scenarios {
+		blocked := name == "moderation blocked"
 		t.Run(name, func(t *testing.T) {
 			ctx := context.Background()
 			var submits atomic.Int32
@@ -48,12 +63,31 @@ func TestQwenImageAsyncLifecycle(t *testing.T) {
 				switch {
 				case r.Method == http.MethodPost && r.URL.Path == "/v1/images/generations":
 					submits.Add(1)
+					if name == "submit indeterminate" {
+						w.WriteHeader(http.StatusConflict)
+						_, _ = w.Write([]byte(`{"error":{"code":"idempotency_result_indeterminate"}}`))
+						return
+					}
 					var body map[string]any
 					if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
 						t.Error(err)
 					}
-					if body["model"] != "qwen-image-3.0" || body["resolution"] != "2K" || body["n"] != float64(1) {
+					if body["model"] != providerModel || body["n"] != float64(1) {
 						t.Error("wrong worker request")
+					}
+					if resolution == "" && body["resolution"] != nil || resolution != "" && body["resolution"] != resolution {
+						t.Error("wrong provider resolution")
+					}
+					if withReference && body["image_urls"] == nil || !withReference && body["image_urls"] != nil {
+						t.Error("wrong reference input")
+					}
+					if providerModel == apimart.ModelGrokImage20 {
+						if r.Header.Get("X-APIMart-Response-Version") != "2026-07-27" || r.Header.Get("Idempotency-Key") == "" {
+							t.Error("missing Grok 2.0 headers")
+						}
+						w.WriteHeader(http.StatusAccepted)
+						_, _ = w.Write([]byte(`{"code":202,"data":{"id":"qwen-task","status":"queued"}}`))
+						return
 					}
 					_, _ = w.Write([]byte(`{"code":200,"data":[{"status":"submitted","task_id":"qwen-task"}]}`))
 				case r.Method == http.MethodGet && r.URL.Path == "/v1/tasks/qwen-task":
@@ -73,7 +107,7 @@ func TestQwenImageAsyncLifecycle(t *testing.T) {
 			if err != nil {
 				t.Fatal(err)
 			}
-			snapshot, err := prices.Snapshot(pricingcatalog.ProductKey{Operation: domain.OperationImageGenerate, Modality: domain.ModalityImage, ImageModelID: "qwen_image_3", Quality: "2K"})
+			snapshot, err := prices.Snapshot(pricingcatalog.ProductKey{Operation: domain.OperationImageGenerate, Modality: domain.ModalityImage, ImageModelID: publicModel, Quality: quality})
 			if err != nil {
 				t.Fatal(err)
 			}
@@ -82,16 +116,20 @@ func TestQwenImageAsyncLifecycle(t *testing.T) {
 				t.Fatal(err)
 			}
 			owner := uuid.New()
-			reference := h.createInputImageArtifact(t, owner, validPNGBytes(t), "image/png")
-			params, err := json.Marshal(map[string]any{"prompt": "Synthetic test image", "provider": domain.ProviderAPIMart, "model_code": "qwen-image-3.0", "model_id": "qwen_image_3", "resolution": "2K", "image_quality": "2K", "size": "1:1", "reference_artifact_ids": []string{reference.ID.String()}})
+			input := map[string]any{"prompt": "Synthetic test image", "provider": domain.ProviderAPIMart, "model_code": providerModel, "model_id": publicModel, "resolution": resolution, "image_quality": quality, "size": "1:1"}
+			if withReference {
+				reference := h.createInputImageArtifact(t, owner, validPNGBytes(t), "image/png")
+				input["reference_artifact_ids"] = []string{reference.ID.String()}
+			}
+			params, err := json.Marshal(input)
 			if err != nil {
 				t.Fatal(err)
 			}
-			job := &domain.Job{ID: uuid.New(), AccountID: owner, UserID: owner, Source: "web", ResultMode: domain.ResultModeAccountHistory, ChannelContext: &domain.ChannelContext{Channel: domain.ChannelWeb}, OperationType: domain.OperationImageGenerate, Modality: domain.ModalityImage, Status: domain.JobStatusQueued, IdempotencyKey: uuid.NewString(), CostEstimate: 15, CostReserved: 15, PricingSnapshot: raw, Params: params}
+			job := &domain.Job{ID: uuid.New(), AccountID: owner, UserID: owner, Source: "web", ResultMode: domain.ResultModeAccountHistory, ChannelContext: &domain.ChannelContext{Channel: domain.ChannelWeb}, OperationType: domain.OperationImageGenerate, Modality: domain.ModalityImage, Status: domain.JobStatusQueued, IdempotencyKey: uuid.NewString(), CostEstimate: credits, CostReserved: credits, PricingSnapshot: raw, Params: params}
 			if err := h.jobs.Create(ctx, job); err != nil {
 				t.Fatal(err)
 			}
-			if _, err := billing.Reserve(ctx, owner, job.ID, 15); err != nil {
+			if _, err := billing.Reserve(ctx, owner, job.ID, credits); err != nil {
 				t.Fatal(err)
 			}
 			for i := 0; i < 2; i++ {
@@ -101,6 +139,17 @@ func TestQwenImageAsyncLifecycle(t *testing.T) {
 			}
 			if submits.Load() != 1 {
 				t.Fatal("Job replay resubmitted provider request")
+			}
+			if name == "submit indeterminate" {
+				job = h.reload(t, job.ID)
+				if job.Status != domain.JobStatusFailedTerminal || job.CostCaptured != 0 || moderator.calls != 0 || len(job.OutputArtifactIDs) != 0 {
+					t.Fatal("uncertain submission retried or became visible")
+				}
+				account, err := billingRepo.GetAccountByUser(ctx, owner, domain.CurrencyCredits)
+				if err != nil || account.BalanceCached != billingservice.DefaultStartingBalance {
+					t.Fatal("uncertain submission charged")
+				}
+				return
 			}
 			pollTasks := h.streams.byStream[redisqueue.StreamProviderPoll]
 			if len(pollTasks) == 0 {
@@ -149,14 +198,14 @@ func TestQwenImageAsyncLifecycle(t *testing.T) {
 				}
 			}
 			job = h.reload(t, job.ID)
-			if job.Status != domain.JobStatusSucceeded || job.CostCaptured != 15 {
+			if job.Status != domain.JobStatusSucceeded || job.CostCaptured != credits {
 				t.Fatal("wrong final status or capture")
 			}
 			account, err := billingRepo.GetAccountByUser(ctx, owner, domain.CurrencyCredits)
 			if err != nil {
 				t.Fatal(err)
 			}
-			if account.BalanceCached != billingservice.DefaultStartingBalance-15 {
+			if account.BalanceCached != billingservice.DefaultStartingBalance-credits {
 				t.Fatal("wrong ledger balance after replay")
 			}
 		})

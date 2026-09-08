@@ -1,25 +1,29 @@
 {
   "checked_at": "2026-09-08",
-  "scope": "Study24 → APIMart; implementation registry, Qwen Image 3.0 implemented locally",
+  "scope": "Study24 -> APIMart; Qwen verified by user on DEV; Grok 1.5 and 2.0 implemented locally",
   "foundation_status": {
     "B0_tooling": "implemented_local_tests_passed",
     "B0_live_metadata": "not_run_no_live_model_selection",
     "B0_key_group_and_actual_cost": "not_verified",
     "B0_complete": false,
-    "B1_B3_new_implementation": "general_foundation_deferred; Qwen scoped static pricing implemented",
+    "B1_B3_new_implementation": "general foundation deferred; Qwen and Grok scoped integrations implemented",
     "runbook": "docs/runbooks/APIMART_PREFLIGHT.md"
   },
   "implementation_audit": {
     "checked_at": "2026-09-08",
     "branch": "dev-deploy",
-    "head": "cb34ded57",
-    "basis": "local source and package tests; Qwen official contract and public price reverified; no live provider, runtime flag or active DB price verification",
-    "existing_apimart_route_count": 3,
+    "head": "cdc3b17 + local Grok changes",
+    "basis": "local source and tests; official Grok contracts checked; Grok 2.0 public pricing selected by user; live Grok not run",
+    "existing_apimart_route_count": 5,
     "optional_provider_migration_count": 1,
-    "new_apimart_route_count": 55,
-    "next_tasks": ["Qwen_Image_3_live_rollout_not_run", "next_model_by_user_selection", "R0_R2_general_foundation_deferred"],
-    "go_packages_passed": 13,
-    "web_image_tests": "not_run_vitest_missing"
+    "new_apimart_route_count": 53,
+    "next_tasks": [
+      "Grok_1_5_and_2_0_DEV_rollout_and_live_test",
+      "next_model_by_user_selection",
+      "R0_R2_general_foundation_deferred"
+    ],
+    "go_packages_passed": "go test ./... and go vet ./... passed",
+    "web_image_tests": "npm test: 742 + 4 assets passed; additional aspect-ratio switch test passed; lint, typecheck and production build passed"
   },
   "source_catalog_count": 71,
   "planned_count": 59,
@@ -1646,32 +1650,36 @@
       "name": "Grok Image",
       "study": "https://study24.ai/chat/grok_image",
       "kind": "image",
-      "model": "grok-imagine-1.5-ext",
+      "model": "grok-imagine-1.5-apimart",
       "public_id": "grok_image_1_5",
       "doc": "images/grok-imagine/generation",
       "extra_docs": [],
       "endpoint": "/v1/images/generations",
       "poll": "/v1/tasks/{task_id}",
       "request": {
-        "model": "grok-imagine-1.5-ext",
+        "model": "grok-imagine-1.5-apimart",
         "prompt": "Спокойное горное озеро.",
         "size": "1:1",
         "n": 1
       },
       "price": "$0.015 за изображение EXT. grok-imagine-image ($0.016) — другой маршрут, его тариф не смешивать.",
-      "limits": "5 соотношений: 1:1,16:9,9:16,3:2,2:3; до 5 референсов; старт n=1. Нет документированного выбора 1K/2K в данном контракте.",
+      "limits": "5 aspect ratios: 1:1,16:9,9:16,3:2,2:3; at most 1 reference; n=1; no pixel resolution selector.",
       "cases": [
-        "6 референсов отклоняются.",
+        "2 references rejected before HTTP.",
         "В запрос не попадает resolution=2K и цена другого grok-imagine-image."
       ],
-      "note": "Study24 «Grok Image» не раскрывает версию. Документация сейчас описывает 1.5 EXT, alias grok-imagine-1.5-apimart. Включать с явным номером 1.5 после подтверждения выбора.",
+      "note": "Canonical documented APIMart 1.5 route selected by user; UI name Grok Imagine 1.5. Study24 version identity remains unproven.",
       "conditional": true,
       "wave": "I2",
       "gate": "account_catalog",
-      "release": "После общей основы изображений; только проверенные ценовые варианты.",
+      "release": "User authorized DEV rollout; workflow outcome is authoritative. Live generation and actual provider cost remain unverified.",
       "implementation": {
-        "status": "new_apimart_route",
-        "target_route_implemented": false
+        "status": "implemented_apimart_route_local",
+        "target_route_implemented": true,
+        "live_verified": false,
+        "pricing_catalog_version": 6,
+        "internal_credits": 10,
+        "deployment": "user_authorized_DEV_workflow; consult Deploy DEV run for outcome"
       },
       "file": "43-grok-image-1-5.md",
       "flag": "FEATURE_APIMART_GROK_IMAGE_1_5_ENABLED"
@@ -1695,21 +1703,25 @@
         "n": 1,
         "response_format": "url"
       },
-      "price": "Конфликт: прайс $0.015/изображение, документация $0.08/изображение. Рабочий тариф не назначать до сверки группы/модели.",
+      "price": "User selected public pricing $0.015/image -> 10 internal credits on 2026-09-08. API documentation still says $0.08; actual key-group cost unverified.",
       "limits": "Только text-to-image; resolution=quality, n=1 на старте. Заголовок X-APIMart-Response-Version: 2026-07-27. Ответ HTTP 202 data.id; запрещены image_urls, quality, stream и response_format≠url.",
       "cases": [
         "HTTP 202 с data.id распознаётся как созданная задача.",
         "409 in-progress повторяется только тем же ключом после Retry-After; indeterminate не вызывает новый платный submit.",
-        "Цена из конфликта блокирует продажу; референсы отвергаются."
+        "Selected public tariff gives 10 credits; references rejected."
       ],
-      "note": "Дополнительные layer/region-edit имеют отдельную документацию и не входят в базовую генерацию. Эту модель включать после решения ценового конфликта.",
+      "note": "Base text-to-image only; layer/region-edit excluded. Fixed provider resolution=quality, public quality=standard.",
       "conditional": false,
       "wave": "I3",
-      "gate": "pricing_conflict",
-      "release": "После общей основы изображений; только проверенные ценовые варианты.",
+      "gate": "live_verification",
+      "release": "User authorized DEV rollout; workflow outcome is authoritative. Live generation and actual provider cost remain unverified.",
       "implementation": {
-        "status": "new_apimart_route",
-        "target_route_implemented": false
+        "status": "implemented_apimart_route_local",
+        "target_route_implemented": true,
+        "live_verified": false,
+        "pricing_catalog_version": 6,
+        "internal_credits": 10,
+        "deployment": "user_authorized_DEV_workflow; consult Deploy DEV run for outcome"
       },
       "file": "44-grok-image-2-0.md",
       "flag": "FEATURE_APIMART_GROK_IMAGE_2_0_ENABLED"
@@ -1743,15 +1755,16 @@
       "conditional": false,
       "wave": "I2",
       "gate": "account_catalog",
-      "release": "Локально реализовано на существующей основе. Runtime/env и активная БД тарифов не менялись; live canary не выполнялся.",
+      "release": "Deployed on DEV; user confirmed successful generation. PROD rollout and actual cost verification remain separate.",
       "implementation": {
         "status": "implemented_local_tests_passed",
         "target_route_implemented": true,
-        "live_verified": false,
+        "live_verified": true,
         "enabled_by_default": false,
         "static_catalog_version": 5,
         "retail_credits": 15,
-        "general_B2_completed": false
+        "general_B2_completed": false,
+        "live_verification_source": "User confirmed working on DEV after deployment cdc3b17; actual provider cost not audited."
       },
       "file": "45-qwen-image-3.md",
       "flag": "FEATURE_APIMART_QWEN_IMAGE_3_ENABLED"

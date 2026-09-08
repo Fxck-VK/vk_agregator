@@ -27,6 +27,8 @@ const (
 	ModelGemini3ProImage  = "gemini-3-pro-image-preview"
 	ModelGPTImage2        = "gpt-image-2"
 	ModelQwenImage3       = "qwen-image-3.0"
+	ModelGrokImage15      = "grok-imagine-1.5-apimart"
+	ModelGrokImage20      = "grok-imagine-2.0-ext"
 
 	defaultVideoProviderCostCredits = 1
 	defaultImageProviderCostCredits = 1
@@ -85,6 +87,8 @@ func (p *Provider) Name() domain.ProviderName { return domain.ProviderAPIMart }
 // Capabilities reports supported APIMart media routes.
 func (p *Provider) Capabilities(context.Context) ([]domain.Capability, error) {
 	return []domain.Capability{
+		{Operation: domain.OperationImageGenerate, Modality: domain.ModalityImage, ModelCode: ModelGrokImage15, SupportsPolling: true},
+		{Operation: domain.OperationImageGenerate, Modality: domain.ModalityImage, ModelCode: ModelGrokImage20, SupportsPolling: true},
 		{
 			Operation:       domain.OperationImageGenerate,
 			Modality:        domain.ModalityImage,
@@ -243,6 +247,9 @@ func (p *Provider) submitVideo(ctx context.Context, req domain.ProviderRequest) 
 func (p *Provider) submitImage(ctx context.Context, req domain.ProviderRequest) (domain.ProviderTask, error) {
 	if err := validateImageShape(req, true); err != nil {
 		return domain.ProviderTask{}, err
+	}
+	if isGrokImageModel(req.ModelCode) {
+		return p.submitGrokImage(ctx, req)
 	}
 	body := imageGenerationRequest{
 		Model:            req.ModelCode,
@@ -543,6 +550,8 @@ func imageProviderCostCredits(req domain.ProviderRequest) (int64, error) {
 	// so known public variants use a conservative one-credit ceiling.
 	resolution := strings.ToUpper(effectiveImageResolution(req))
 	switch strings.TrimSpace(req.ModelCode) {
+	case ModelGrokImage15, ModelGrokImage20:
+		return defaultImageProviderCostCredits, nil
 	case ModelQwenImage3:
 		if resolution == "1K" || resolution == "2K" {
 			return defaultImageProviderCostCredits, nil
@@ -603,6 +612,9 @@ func validateImageShape(req domain.ProviderRequest, requirePrompt bool) error {
 	if !isSupportedImageModel(model) {
 		return &Error{Class: domain.ProviderErrUnsupportedCapab, Message: "unsupported APIMart image model"}
 	}
+	if isGrokImageModel(model) {
+		return validateGrokImageRequest(req, requirePrompt)
+	}
 	if model == ModelQwenImage3 {
 		if err := validateQwenImageOptions(req); err != nil {
 			return err
@@ -655,7 +667,7 @@ func isSupportedVideoModel(model string) bool {
 
 func isSupportedImageModel(model string) bool {
 	switch strings.TrimSpace(model) {
-	case ModelGemini3ProImage, ModelGPTImage2, ModelQwenImage3:
+	case ModelGemini3ProImage, ModelGPTImage2, ModelQwenImage3, ModelGrokImage15, ModelGrokImage20:
 		return true
 	default:
 		return false
@@ -666,6 +678,9 @@ func isSupportedImageSize(model, value string) bool {
 	value = strings.ToLower(strings.TrimSpace(value))
 	if value == "" {
 		return false
+	}
+	if isGrokImageModel(model) {
+		return isGrokImageSize(model, value)
 	}
 	if model == ModelQwenImage3 {
 		return isQwenImageSize(value)
@@ -1116,6 +1131,9 @@ func apiEnvelopeError(code int, errValue providerError, message string) error {
 }
 
 func classifyAPIMartError(status int, code, typ, msg string) domain.ProviderErrorClass {
+	if strings.EqualFold(strings.TrimSpace(code), "content_rejected") {
+		return domain.ProviderErrContentRejected
+	}
 	lower := strings.ToLower(strings.Join([]string{code, typ, msg}, " "))
 	switch {
 	case strings.Contains(lower, "balance") || strings.Contains(lower, "insufficient") || strings.Contains(lower, "quota"):

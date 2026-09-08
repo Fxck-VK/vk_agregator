@@ -52,6 +52,7 @@ type PublicModel struct {
 	SupportsReferenceImage bool
 	MaxReferenceImages     int
 	MaxOutputCount         int
+	AllowedAspectRatios    []string
 }
 
 // Request contains only public product dimensions. It intentionally accepts no
@@ -114,6 +115,7 @@ func NewResolver(publicModels []PublicModel, pricing SnapshotCatalog) Resolver {
 	models := make([]PublicModel, 0, len(publicModels))
 	for _, model := range publicModels {
 		model.QualityOptions = append([]string(nil), model.QualityOptions...)
+		model.AllowedAspectRatios = append([]string(nil), model.AllowedAspectRatios...)
 		models = append(models, model)
 	}
 	return Resolver{publicModels: models, pricing: pricing}
@@ -146,6 +148,13 @@ func (r Resolver) Resolve(request Request) (Resolution, error) {
 		return Resolution{}, err
 	}
 
+	workerResolution := public.ImageQuality
+	switch trustedModel.ModelID {
+	case modelcatalog.MiniAppImageGrokImage15:
+		workerResolution = ""
+	case modelcatalog.MiniAppImageGrokImage20:
+		workerResolution = "quality"
+	}
 	return Resolution{
 		Public: public,
 		Worker: WorkerParams{
@@ -154,7 +163,7 @@ func (r Resolver) Resolve(request Request) (Resolution, error) {
 			Provider:     trustedModel.Provider,
 			ModelCode:    trustedModel.ModelCode,
 			Size:         imageSizeForQuality(trustedModel.Provider, public.ImageQuality),
-			Resolution:   public.ImageQuality,
+			Resolution:   workerResolution,
 			ImageQuality: public.ImageQuality,
 			AspectRatio:  public.AspectRatio,
 			OutputCount:  public.OutputCount,
@@ -198,6 +207,15 @@ func (r Resolver) resolvePublic(request Request) (modelcatalog.Model, PublicSele
 	if err != nil {
 		return modelcatalog.Model{}, PublicSelection{}, err
 	}
+	if len(trustedModel.AllowedAspectRatios) > 0 {
+		allowed := false
+		for _, ratio := range trustedModel.AllowedAspectRatios {
+			allowed = allowed || ratio == aspectRatio
+		}
+		if !allowed {
+			return modelcatalog.Model{}, PublicSelection{}, ErrUnsupportedAspectRatio
+		}
+	}
 	if err := validateReferenceCount(publicModel, request.ReferenceCount); err != nil {
 		return modelcatalog.Model{}, PublicSelection{}, err
 	}
@@ -237,6 +255,7 @@ func (r Resolver) publicModelFor(trusted modelcatalog.Model) (PublicModel, bool)
 			return PublicModel{}, false
 		}
 		model.QualityOptions = append([]string(nil), model.QualityOptions...)
+		model.AllowedAspectRatios = append([]string(nil), model.AllowedAspectRatios...)
 		return model, true
 	}
 	return PublicModel{}, false

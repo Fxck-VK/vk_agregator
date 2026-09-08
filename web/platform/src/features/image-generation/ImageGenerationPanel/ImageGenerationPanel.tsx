@@ -65,7 +65,7 @@ export function ImageGenerationPanel({ onJobChange }: Readonly<ImageGenerationPa
   const [fallbackModelID, setFallbackModelID] = useState("");
   const [qualitySelection, setQualitySelection] = useState<QualitySelection>({ modelID: "", value: "" });
   const [prompt, setPrompt] = useState("");
-  const [aspectRatio, setAspectRatio] = useState("16:9");
+  const [requestedAspectRatio, setAspectRatio] = useState("16:9");
   const [outputCountSelection, setOutputCountSelection] = useState<OutputCountSelection>({ modelID: "", value: 1 });
   const [prepareIntent, setPrepareIntent] = useState<PrepareIntent | null>(null);
   const [preparation, setPreparation] = useState<ImageJobPreparation | null>(null);
@@ -85,6 +85,10 @@ export function ImageGenerationPanel({ onJobChange }: Readonly<ImageGenerationPa
       ? qualitySelection.value
       : selectedModel.default_quality;
   const maxOutputCount = selectedModel?.max_output_count ?? 1;
+  const allowedAspectRatios = selectedModel?.allowed_aspect_ratios;
+  const aspectRatio = allowedAspectRatios?.length && !allowedAspectRatios.includes(requestedAspectRatio)
+    ? allowedAspectRatios[0]
+    : requestedAspectRatio;
   const outputCount = selectedModel !== null && outputCountSelection.modelID === selectedModel.id
     ? Math.min(Math.max(1, outputCountSelection.value), Math.max(1, maxOutputCount))
     : 1;
@@ -314,6 +318,7 @@ export function ImageGenerationPanel({ onJobChange }: Readonly<ImageGenerationPa
       {(stage === "editor" || stage === "preparing") && selectedModel !== null ? (
         <ImageGenerationComposer
           aspectRatio={aspectRatio}
+          allowedAspectRatios={allowedAspectRatios}
           canSubmit={canPrepare}
           errorMessage={editorError}
           imageQuality={imageQuality}

@@ -73,6 +73,7 @@ const (
 	ProviderErrOverloaded           ProviderErrorClass = "provider_overloaded"
 	ProviderErrTimeout              ProviderErrorClass = "provider_timeout"
 	ProviderErrInternal             ProviderErrorClass = "provider_internal_error"
+	ProviderErrSubmitIndeterminate  ProviderErrorClass = "provider_submit_indeterminate" // Never start a fresh paid intent automatically.
 	ProviderErrTaskNotFound         ProviderErrorClass = "task_not_found"
 	ProviderErrOutputDownloadFailed ProviderErrorClass = "output_download_failed"
 	ProviderErrMediaProbeFailed     ProviderErrorClass = "media_probe_failed"

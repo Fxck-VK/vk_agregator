@@ -287,6 +287,16 @@ fi
 image_nano_banana_2_enabled="${poyo_provider_enabled}"
 image_nano_banana_pro_enabled="${apimart_provider_enabled}"
 image_gpt_image_2_enabled="${apimart_provider_enabled}"
+image_grok_image_1_5_enabled=false
+image_grok_image_2_0_enabled=false
+for grok_version in 1_5 2_0; do
+  grok_requested="$(get_raw_env_value "FEATURE_APIMART_GROK_IMAGE_${grok_version}_ENABLED")"
+  if [[ "${apimart_provider_enabled}" == "true" ]] && has_raw_env_value APIMART_API_KEY; then
+    if [[ -z "${grok_requested}" ]] || is_true_value "${grok_requested}"; then
+      printf -v "image_grok_image_${grok_version}_enabled" '%s' true
+    fi
+  fi
+done
 image_qwen_image_3_enabled=false
 qwen_requested="$(get_raw_env_value FEATURE_APIMART_QWEN_IMAGE_3_ENABLED)"
 if [[ "${apimart_provider_enabled}" == "true" ]] && has_raw_env_value APIMART_API_KEY; then
@@ -355,6 +365,8 @@ sed \
   -e '/^FEATURE_IMAGE_MODEL_NANO_BANANA_PRO_ENABLED=/d' \
   -e '/^FEATURE_IMAGE_MODEL_GPT_IMAGE_2_ENABLED=/d' \
   -e '/^FEATURE_APIMART_QWEN_IMAGE_3_ENABLED=/d' \
+  -e '/^FEATURE_APIMART_GROK_IMAGE_1_5_ENABLED=/d' \
+  -e '/^FEATURE_APIMART_GROK_IMAGE_2_0_ENABLED=/d' \
   -e '/^FEATURE_IMAGE_MODEL_NANO_BANANA_2_ENABLED=/d' \
   -e '/^FEATURE_IMAGE_MODEL_MOCK_ENABLED=/d' \
   -e '/^FEATURE_VIDEO_ROUTER_ENABLED=/d' \
@@ -406,6 +418,8 @@ sed \
   printf 'FEATURE_IMAGE_MODEL_NANO_BANANA_PRO_ENABLED=%s\n' "${image_nano_banana_pro_enabled}"
   printf 'FEATURE_IMAGE_MODEL_GPT_IMAGE_2_ENABLED=%s\n' "${image_gpt_image_2_enabled}"
   printf 'FEATURE_APIMART_QWEN_IMAGE_3_ENABLED=%s\n' "${image_qwen_image_3_enabled}"
+  printf 'FEATURE_APIMART_GROK_IMAGE_1_5_ENABLED=%s\n' "${image_grok_image_1_5_enabled}"
+  printf 'FEATURE_APIMART_GROK_IMAGE_2_0_ENABLED=%s\n' "${image_grok_image_2_0_enabled}"
   printf 'FEATURE_IMAGE_MODEL_NANO_BANANA_2_ENABLED=%s\n' "${image_nano_banana_2_enabled}"
   printf 'FEATURE_IMAGE_MODEL_MOCK_ENABLED=false\n'
   printf 'FEATURE_VIDEO_ROUTER_ENABLED=%s\n' "${video_router_enabled}"

@@ -18,6 +18,8 @@ const (
 	PublicImageNanoBananaPro = "nano_banana_pro"
 	PublicImageGPTImage2     = "gpt_image_2"
 	PublicImageQwenImage3    = "qwen_image_3"
+	PublicImageGrokImage15   = "grok_image_1_5"
+	PublicImageGrokImage20   = "grok_image_2_0"
 	PublicImageSeedream45    = "seedream_4_5"
 	LoadTestImageMock        = "mock_image"
 
@@ -28,12 +30,16 @@ const (
 	ProviderModelGemini3ProImage    = "gemini-3-pro-image-preview"
 	ProviderModelGPTImage2          = "gpt-image-2"
 	ProviderModelQwenImage3         = "qwen-image-3.0"
+	ProviderModelGrokImage15        = "grok-imagine-1.5-apimart"
+	ProviderModelGrokImage20        = "grok-imagine-2.0-ext"
 	ProviderModelMockImage          = "mock-image"
 
 	FeatureImageNanoBanana2   = "FEATURE_IMAGE_MODEL_NANO_BANANA_2_ENABLED"
 	FeatureImageNanoBananaPro = "FEATURE_IMAGE_MODEL_NANO_BANANA_PRO_ENABLED"
 	FeatureImageGPTImage2     = "FEATURE_IMAGE_MODEL_GPT_IMAGE_2_ENABLED"
 	FeatureImageQwenImage3    = "FEATURE_APIMART_QWEN_IMAGE_3_ENABLED"
+	FeatureImageGrokImage15   = "FEATURE_APIMART_GROK_IMAGE_1_5_ENABLED"
+	FeatureImageGrokImage20   = "FEATURE_APIMART_GROK_IMAGE_2_0_ENABLED"
 	FeatureImageSeedream45    = "FEATURE_IMAGE_MODEL_SEEDREAM_4_5_ENABLED"
 	FeatureImageMock          = "FEATURE_IMAGE_MODEL_MOCK_ENABLED"
 
@@ -180,6 +186,8 @@ func imageModels() []ImageModel {
 		imageModel(PublicImageNanoBananaPro, "Nano Banana Pro", domain.ProviderAPIMart, ProviderModelGemini3ProImage, FeatureImageNanoBananaPro, apimartReadiness(), 14),
 		imageModel(PublicImageGPTImage2, "GPT Image 2", domain.ProviderAPIMart, ProviderModelGPTImage2, FeatureImageGPTImage2, apimartReadiness(), 16),
 		qwenImage3Model(),
+		grokImageModel(PublicImageGrokImage15, "Grok Imagine 1.5", ProviderModelGrokImage15, FeatureImageGrokImage15, 1),
+		grokImageModel(PublicImageGrokImage20, "Grok Imagine 2.0", ProviderModelGrokImage20, FeatureImageGrokImage20, 0),
 		imageModelWithQualities(PublicImageSeedream45, "Seedream 4.5", domain.ProviderPoYo, ProviderModelPoYoSeedream45, FeatureImageSeedream45, poyoReadiness(), []string{
 			pricingcatalog.ImageQuality2K,
 			pricingcatalog.ImageQuality4K,
@@ -210,6 +218,17 @@ func qwenImage3Model() ImageModel {
 		pricingcatalog.ImageQuality2K,
 	}, 3)
 	model.Limits.MaxOutputCount = 1
+	return model
+}
+
+func grokImageModel(publicID, name, providerModelID, flag string, maxRefs int) ImageModel {
+	model := imageModelWithQualities(publicID, name, domain.ProviderAPIMart, providerModelID, flag, apimartReadiness(), []string{pricingcatalog.ImageQualityStandard}, maxRefs)
+	model.Limits.MaxOutputCount = 1
+	model.Limits.SupportsReferenceImage = maxRefs > 0
+	model.Limits.AllowedAspectRatios = []string{"16:9", "1:1", "2:3", "3:2", "9:16"}
+	if publicID == PublicImageGrokImage20 {
+		model.Limits.AllowedAspectRatios = []string{"16:9", "1:1", "2:3", "3:2", "3:4", "4:3", "9:16"}
+	}
 	return model
 }
 

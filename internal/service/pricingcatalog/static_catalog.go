@@ -3,17 +3,20 @@ package pricingcatalog
 import "vk-ai-aggregator/internal/domain"
 
 const (
-	StaticCatalogVersion = 5
+	StaticCatalogVersion = 6
 
 	PublicImageNanoBanana2   = "nano_banana_2"
 	PublicImageNanoBananaPro = "nano_banana_pro"
 	PublicImageGPTImage2     = "gpt_image_2"
 	PublicImageQwenImage3    = "qwen_image_3"
+	PublicImageGrokImage15   = "grok_image_1_5"
+	PublicImageGrokImage20   = "grok_image_2_0"
 	PublicImageSeedream45    = "seedream_4_5"
 
-	ImageQuality1K = "1K"
-	ImageQuality2K = "2K"
-	ImageQuality4K = "4K"
+	ImageQuality1K       = "1K"
+	ImageQuality2K       = "2K"
+	ImageQuality4K       = "4K"
+	ImageQualityStandard = "standard"
 
 	VideoResolution720p  = "720p"
 	VideoResolution768p  = "768p"
@@ -61,6 +64,8 @@ func StaticProductPrices() []ProductPrice {
 		fixedInternalImageTariff(PublicImageSeedream45, ImageQuality4K, 15, 40),
 		qwenImage3Tariff(ImageQuality1K),
 		qwenImage3Tariff(ImageQuality2K),
+		grokImageTariff(PublicImageGrokImage15),
+		grokImageTariff(PublicImageGrokImage20),
 	}
 
 	for _, resolution := range []string{VideoResolution720p, VideoResolution1080p} {
@@ -151,6 +156,14 @@ func qwenImage3Tariff(quality string) ProductPrice {
 	// The x3 floor rounds up to the catalog's five-credit price step: 15.
 	// References are free. Preserve the exact retail multiplier in the snapshot.
 	return imageTariff(PublicImageQwenImage3, quality, 205_712, FloorUnitAPIMartCredits, apimartCreditToInternal, 15)
+}
+
+func grokImageTariff(modelID string) ProductPrice {
+	// APIMart public pricing checked 2026-09-08: 0.15 provider credits/image.
+	// The user explicitly selected this pricing source for Grok 2.0 over the
+	// conflicting $0.08 documentation rate. x3 rounds up to 10 internal credits.
+	// https://apimart.ai/ru/pricing
+	return imageTariff(modelID, ImageQualityStandard, 150_000, FloorUnitAPIMartCredits, apimartCreditToInternal, 10)
 }
 
 func fixedInternalImageTariff(modelID, quality string, floorCredits, retailCredits int64) ProductPrice {

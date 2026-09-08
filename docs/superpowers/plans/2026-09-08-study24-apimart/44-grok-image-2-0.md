@@ -1,108 +1,63 @@
-# 44. Grok Image 2.0 — Implementation Plan
+# 44. Grok Imagine 2.0 Ext — интеграция
 
-> **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
+**Статус 08.09.2026:** реализовано локально по запросу пользователя на существующей основе Qwen. Пользователь разрешил DEV deploy; выпуск выполняется через GitHub Actions. Live-генерация ещё не проверена. Пользователь выбрал прайс $0.015 → 10 кредитов. Общие B0–B3 отложены.
 
-**Goal:** подключить Grok Image 2.0 через выбранный маршрут APIMart.
+## Контракт
 
-**Architecture:** backend resolver → доверенный Job snapshot → worker → APIMart → Artifact → moderation → delivery.
-**Tech Stack:** Go/PostgreSQL/Redis + Web UI.
-**Spec:** [полный реестр](./README.md), [общая основа](./00-common-foundation.md). Статус: план, не реализовано в рамках этого задания.
+- [Документация](https://docs.apimart.ai/ru/api-reference/images/grok-imagine-2.0-ext/generation) и [прайс](https://apimart.ai/ru/pricing), проверены 08.09.2026.
+- Public ID: `grok_image_2_0`; UI: **Grok Imagine 2.0**; provider ID: `grok-imagine-2.0-ext`.
+- Флаг: `FEATURE_APIMART_GROK_IMAGE_2_0_ENABLED`, application default `false`.
+- Только text-to-image, первый выпуск `n=1`, `resolution=quality`, `response_format=url`.
+- `POST /v1/images/generations` с `X-APIMart-Response-Version: 2026-07-27`, `Accept: application/json`, стабильным `Idempotency-Key`.
+- Submit HTTP 202, `data.id`; затем `GET /v1/tasks/{id}`. URL результата разбираются в форме строки и массива.
+- UI: `1:1`, `16:9`, `9:16`, `2:3`, `3:2`, `3:4`, `4:3`. Adapter также принимает документированные пиксельные alias, не выводит из них качество.
+- Публичное качество `standard` — фиксированный ключ цены; UI не обещает 1K/2K. Provider `quality`, `style`, refs, `stream=true`, base64 output и batch > 1 отвергаются.
 
-## Global Constraints
+Fixture: `internal/adapter/provider/apimart/testdata/contracts/grok_image_2_0.request.json`. Layer/region-edit и другие Grok provider IDs не входят в выпуск.
 
-Выполнять после B0–B3 и раздела I общей основы. Для этой модели отдельный флаг; разрешение на её реализацию не означает включение остальных. Provider key, prompt, raw payload и private URLs не записываются в отчёт/fixtures. Старые Jobs используют собственные snapshots. Платные проверки, commit/push/deploy не выполняются при подготовке плана.
+## Источник тарифа
 
-## Документация и точное соответствие
+Прайс APIMart показывает **$0.015**, страница API — **$0.08** за изображение. Пользователь 08.09.2026 явно выбрал **прайс $0.015 → 10 внутренних кредитов**. Это утверждённый выбор источника, а не подтверждение фактического списания рабочей группы.
 
-- [Карточка Study24](https://study24.ai/chat/grok_image2)
-- [Документация grok-imagine-2.0-ext/generation](https://docs.apimart.ai/ru/api-reference/images/grok-imagine-2.0-ext/generation)
-- [Актуальный прайс APIMart](https://apimart.ai/ru/pricing), проверен 08.09.2026.
-- [Доступность ID и schema для конкретного ключа](https://docs.apimart.ai/ru/api-reference/texts/models/list).
+Статический каталог версии **6**: `150000 apimart_credit_micros` = 0.15 APIMart credits; retail/cap **10**. Quote, резерв и capture определяются серверным snapshot. Действующие DB-тарифы автоматически не переписываются. Другой фактический provider cost не увеличивает принятый пользователем резерв.
 
-| Поле | Значение |
-| --- | --- |
-| Название Study24 | Grok Image 2.0 |
-| Предлагаемый public ID | `grok_image_2_0` |
-| APIMart model ID | `grok-imagine-2.0-ext` |
-| Метод | `POST https://api.apimart.ai/v1/images/generations` |
-| Флаг | `FEATURE_APIMART_GROK_IMAGE_2_0_ENABLED` |
-| Соответствие | Название модели сопоставлено с каталогом/контрактом APIMart; доступ рабочего ключа ещё не проверен |
+## Безопасная отправка и обработка
 
-Дополнительные layer/region-edit имеют отдельную документацию и не входят в базовую генерацию. Эту модель включать после решения ценового конфликта.
+Serializer отправляет только разрешённые поля. При `409 idempotency_in_progress`, сетевом сбое, 429 или 5xx adapter делает до трёх попыток с одинаковыми body/key/version в пределах 30 секунд; перед повтором соблюдает `Retry-After` (при отсутствии — 1 секунда). Если ожидание не помещается в deadline, новая попытка не начинается.
 
-**Блокировка включения:** противоречие цен должно быть разрешено до продаж.
+`idempotency_result_indeterminate`, неизвестный conflict, исчерпанные попытки или неоднозначный успешный ответ дают `provider_submit_indeterminate`. Worker завершает задание без автоматического нового платного intent и освобождает резерв. `idempotency_key_reused` отклоняется как invalid request.
 
-## Контракт первого выпуска
+Обычный успех проходит существующие async Job → Artifact → moderation → owner-checked history → ledger capture. Повторная обработка сохранённой задачи не создаёт повторное списание. Durable pre-submit intent и восстановление после падения процесса между HTTP и записью task ID остаются общей задачей B2.
 
-Только text-to-image; resolution=quality, n=1 на старте. Заголовок X-APIMart-Response-Version: 2026-07-27. Ответ HTTP 202 data.id; запрещены image_urls, quality, stream и response_format≠url.
+## Выполнено локально
 
-Пример тела запроса — основа fixture, не команда на выполнение. URL example.com в референсах обозначают тестовые входы; рабочие ссылки формирует worker из принадлежащих аккаунту артефактов.
+- [x] Документированный контракт, exact serializer/capability и fixture.
+- [x] HTTP 202 / data.id, polling и нормализация результата.
+- [x] Отдельный config flag, readiness, registry, public catalog и backend resolver.
+- [x] Цена 10 по выбранному источнику, versioned Job snapshot, без автоподмены модели.
+- [x] Референсы, неподдерживаемые поля/форматы, 1K/2K и batch > 1 отклоняются до HTTP.
+- [x] 409 replay после Retry-After, одинаковые body/key/version, остановка при indeterminate.
+- [x] Web catalog/prepare: форматы и цена с сервера, приватные поля не выдаются.
+- [x] Worker lifecycle: модерация, owner checks, хранение, однократный capture, возврат резерва при отказе/неопределённом submit.
+- [x] DEV renderer включает модель при настроенном APIMart и ключе, сохраняет явное false.
+- [x] `go test ./...`, `go vet ./...`, `gofmt`, DEV env script tests.
 
-```json
-{
-  "model": "grok-imagine-2.0-ext",
-  "prompt": "Спокойное горное озеро.",
-  "resolution": "quality",
-  "size": "1:1",
-  "n": 1,
-  "response_format": "url"
-}
-```
+Основные файлы: `internal/adapter/provider/apimart/grok_image.go`, `model_grok_image_test.go`, `internal/domain/provider.go`, `internal/worker/worker.go`, `internal/worker/qwen_image_test.go`, registry/config/pricing/resolver и Web image-generation.
 
-Дополнительные заголовки: `X-APIMart-Response-Version: 2026-07-27` и стабильный `Idempotency-Key` для одного intent.
+Целевые тесты: `TestModel_grok_image_2_0`, `TestGrok20SafeSubmitReplay`, `TestGrokImageCatalogAndPricing`, `TestGrokImageReadiness`, `TestWebGrokImageCatalogAndPrepare`, `TestGrokImageAsyncLifecycle`.
 
-Асинхронный submit HTTP 202 → data.id; GET /v1/tasks/{task_id}. Сохранить все result.images[].url в собственное хранилище и провести модерацию до доставки.
+- [x] Web: lint, typecheck, полный npm test (742 теста + 4 asset tests), дополнительный тест смены формата; production build. Первая сборка не смогла загрузить Google Fonts в sandbox, повтор с доступом к сети прошёл.
+- [x] Документация и git diff --check. Проверка docker compose config выполнена на пустом тестовом env.
 
-## Цена
+Настроенный golangci-lint отсутствует в окружении; вместо него выполнен go vet. Браузерный smoke и сборка Docker-образа отдельно не выполнялись.
 
-Конфликт: прайс $0.015/изображение, документация $0.08/изображение. Рабочий тариф не назначать до сверки группы/модели.
+## Осталось
 
-Это себестоимость APIMart на дату проверки, не утверждённая пользовательская цена. Перед включением зафиксировать точный тариф/единицу/группу в версии price catalog. Quote и резерв определяет backend; итог не превышает принятый резерв. Не полагаться на значения по умолчанию провайдера, если они меняют цену.
+- [x] Подготовлен выпуск через dev-deploy по разрешению пользователя. Итог выкладки и smoke проверяется в GitHub Actions.
+- [ ] Реальная генерация рабочим ключом и проверка результата.
+- [ ] Фактическая себестоимость, выбранный прайс и пользовательский ledger.
+- [ ] Следующая отдельная задача: layer/region-edit, если будет запрошена.
 
-## Файлы реализации
+При локальной реализации платные вызовы и изменение действующих env/DB-тарифов не выполнялись. Последующая выкладка разрешена пользователем; её результат подтверждает workflow Deploy DEV.
 
-Пути от корня репозитория; новые общие файлы создаются по плану основы, существующие изменяются.
-
-- `internal/adapter/provider/apimart/images.go`
-- `internal/adapter/provider/apimart/apimart_test.go`
-- `internal/service/providermodels/registry.go`
-- `internal/service/imagegeneration/resolver.go`
-- `internal/service/productcatalog/catalog.go`
-- `internal/service/pricingcatalog/static_catalog.go`
-- `web/platform/src/features/image-generation/ImageGenerationPanel/ImageGenerationPanel.tsx`
-- `internal/platform/config/config.go`
-- Создать fixture `internal/adapter/provider/apimart/testdata/contracts/grok_image_2_0.request.json`.
-- Создать `internal/adapter/provider/apimart/model_grok_image_2_0_test.go` с именем теста `TestModel_grok_image_2_0`.
-
-## Порядок реализации
-
-- [ ] **1. Контракт.** В B0 проверить `grok-imagine-2.0-ext`, записать разрешённые поля/операции и очищенный fixture указанного запроса. Для спорной версии сохранить предлагаемое полное название в UI и закрыть rollout до подтверждения выбора. Не выводить статус «подключено» по одному наличию в прайсе.
-- [ ] **2. Адаптер.** Реализовать serializer и capability для `grok-imagine-2.0-ext` по указанному JSON; локально проверять лимиты. Разобрать описанную форму результата. В тестовом HTTP server проверить exact endpoint/body; неподдерживаемое значение не должно вызывать HTTP.
-- [ ] **3. Каталог и стоимость.** Добавить/обновить public ID `grok_image_2_0`, backend readiness и `FEATURE_APIMART_GROK_IMAGE_2_0_ENABLED` в config wiring. Создать отдельные ключи всех открываемых вариантов; определить exact rates и reserve/capture fixture. Сохранить model ID и тариф в Job snapshot.
-- [ ] **4. Пользовательский поток.** Backend resolver разрешает только зарегистрированный public ID; UI показывает допустимые варианты и серверный quote. Job создаётся под владельцем с idempotency key, результат появляется в его истории. Ошибка модели не переключает на иной ID.
-- [ ] **5. Проверки этой модели.** Реализовать перечисленные ниже positive/negative cases; общий lifecycle B2/B3 применяется к этому exact ID. Сначала получить ожидаемое падение нового contract test, затем реализовать маршрут и добиться PASS.
-- [ ] **6. Выпуск.** Пройти preflight, тесты и ограниченный отдельно разрешённый canary именно этой конфигурации; сверить provider cost и ledger. До этого `FEATURE_APIMART_GROK_IMAGE_2_0_ENABLED` выключен. Отключение запрещает новые submit, но не мешает завершить старые Jobs.
-
-## Приёмочные сценарии
-
-- [ ] HTTP 202 с data.id распознаётся как созданная задача.
-- [ ] 409 in-progress повторяется только тем же ключом после Retry-After; indeterminate не вызывает новый платный submit.
-- [ ] Цена из конфликта блокирует продажу; референсы отвергаются.
-- [ ] `FEATURE_APIMART_GROK_IMAGE_2_0_ENABLED=false` → модель недоступна для нового Job; ключ/остаток провайдера не раскрываются клиенту.
-- [ ] Повторный Job с тем же idempotency key не создаёт второй платный запрос; result повторно не списывается.
-- [ ] Невалидный ответ, provider failure и блокировка модерацией дают контролируемый статус без выдачи непроверенного результата.
-
-## Следующая стадия этой модели
-
-- [ ] Стадия 2: layer/region-edit только по отдельной документации и price key. Сначала снять блокировку базовой цены $0.015 против $0.08; не включать автопереход на официальный grok-imagine-image-2.0.
-
-## Команды проверки при реализации
-
-```powershell
-go test ./internal/adapter/provider/apimart -run '^TestModel_grok_image_2_0$' -count=1
-go test ./internal/service/providermodels ./internal/service/pricingcatalog ./internal/service/joborchestrator ./internal/worker
-```
-
-Для изменённого resolver добавить его package test; при изменении UI выполнить typecheck/lint/test из [общей основы](./00-common-foundation.md). Эти команды предназначены для будущей реализации и не являются заявлением о пройденных сейчас тестах.
-
-**Готовность:** После общей основы изображений; только проверенные ценовые варианты. При незакрытом условии соответствия/стоимости план подготовлен, но модель не готова к включению.
+[Реестр](README.md) · [Общая основа](00-common-foundation.md) · [DEV](../../../runbooks/DEV.md)

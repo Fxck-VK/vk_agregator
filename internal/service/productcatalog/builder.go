@@ -205,6 +205,10 @@ func featureFlagValue(cfg config.Config, flag string) (bool, bool) {
 		return cfg.FeatureImageModelGPTImage2Enabled, true
 	case providermodels.FeatureImageQwenImage3:
 		return cfg.FeatureAPIMartQwenImage3Enabled, true
+	case providermodels.FeatureImageGrokImage15:
+		return cfg.FeatureAPIMartGrokImage15Enabled, true
+	case providermodels.FeatureImageGrokImage20:
+		return cfg.FeatureAPIMartGrokImage20Enabled, true
 	case providermodels.FeatureImageSeedream45:
 		return cfg.FeatureImageModelSeedream45Enabled, true
 	case providermodels.FeatureImageMock:
