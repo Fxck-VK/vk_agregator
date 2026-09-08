@@ -42,7 +42,7 @@ from local tests; see [implementation and checks](../superpowers/plans/2026-09-0
 ## Local DEV Start
 
 APIMart model metadata and price-source checks use the read-only
-[APIMart preflight runbook](APIMART_PREFLIGHT.md). This operator tool does not
+[APIMart preflight runbook](../../docs/runbooks/APIMART_PREFLIGHT.md). This operator tool does not
 submit generations, change runtime flags or verify personal billing by itself.
 
 Create local env:
