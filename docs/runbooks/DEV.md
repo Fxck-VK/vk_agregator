@@ -53,7 +53,7 @@ Disabling the model flag hides it from new public jobs; existing jobs retain the
 route and price snapshots and can finish while APIMart remains configured.
 The shared image UI lists the model from the backend catalog. This release adds no
 Web reference-upload controls. Paid canary and deployed UI verification are separate
-from local tests; see [Qwen architecture](../ARCHITECTURE.md#qwen-image-30-image-route-2026-09-08).
+from local tests; see [Qwen architecture](../../docs/ARCHITECTURE.md#qwen-image-30-image-route-2026-09-08).
 
 ## DEV Domains
 
@@ -255,7 +255,7 @@ files and deploy profiles are not edited by this implementation.
 Static catalog version 7 supplies twelve `video_seedance_2_5` keys:
 480p/720p/1080p x 5/10/15/30 seconds, estimate x3 rounded up to five credits.
 A DB-backed catalog needs those enabled keys before exposure. No DB price rows
-are changed automatically. See [video prices and limits](../VIDEO_GENERATION.md#seedance-25).
+are changed automatically. See [video prices and limits](../../docs/VIDEO_GENERATION.md#seedance-25).
 
 Before exposing real users, verify key access to `seedance-2.5` and perform an
 explicitly authorized paid canary, checking token-settled cost and MP4 playback/audio.
@@ -327,7 +327,7 @@ rejection and log-safe output.
 Eleven paid text models have separate opt-in routes: ten through KIE and
 Claude Fable 5.1 through APIMart. Each provider has an independent text-limit
 verification gate; individual model flags default to false.
-See [Text models](KIE_TEXT_MODELS.md) for verified prices, native contracts,
+See [Text models](../../docs/runbooks/KIE_TEXT_MODELS.md) for verified prices, native contracts,
 required output-limit verification, environment flags and migration 000052.
 No provider-chain change is needed. Keep all new flags off until contract
 verification and an authorized paid canary have passed.
