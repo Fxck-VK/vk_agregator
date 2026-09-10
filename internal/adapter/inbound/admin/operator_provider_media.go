@@ -729,6 +729,7 @@ func runtimeVideoRoutes(cfg platformconfig.Config) []RuntimeVideoRoute {
 		domain.VideoRouteKlingO3Standard:  cfg.FeatureVideoRouteKlingO3StandardEnabled,
 		domain.VideoRouteRunwayGen4Turbo:  cfg.FeatureVideoRouteRunwayGen4TurboEnabled,
 		domain.VideoRouteSeedance20Fast:   cfg.FeatureVideoRouteSeedance20FastEnabled,
+		domain.VideoRouteSeedance25:       cfg.FeatureAPIMartSeedance25Enabled,
 		domain.VideoRouteRunwayGen45:      cfg.FeatureVideoRouteRunwayGen45Enabled,
 		domain.VideoRouteMockTextToVideo:  cfg.FeatureVideoRouteMockTextToVideoEnabled,
 	}

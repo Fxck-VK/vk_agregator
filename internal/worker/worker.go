@@ -1183,6 +1183,8 @@ func referenceInputError(format string, args ...any) error {
 
 // promptParams is the subset of job params the provider request needs.
 type promptParams struct {
+	ModelName              string                    `json:"model_name,omitempty"`
+	ModelID                string                    `json:"model_id,omitempty"`
 	Prompt                 string                    `json:"prompt"`
 	NegativePrompt         string                    `json:"negative_prompt"`
 	ModelCode              string                    `json:"model_code,omitempty"`
@@ -1261,6 +1263,10 @@ func (p *processor) buildRequest(ctx context.Context, job *domain.Job, attempt i
 	var pp promptParams
 	if len(job.Params) > 0 {
 		_ = json.Unmarshal(job.Params, &pp)
+	}
+	textInputLimit, textOutputLimit, err := paidTextJobLimits(job, pp)
+	if err != nil {
+		return domain.ProviderRequest{}, err
 	}
 	prompt := pp.Prompt
 	modelCode := pp.ModelCode
@@ -1344,6 +1350,9 @@ func (p *processor) buildRequest(ctx context.Context, job *domain.Job, attempt i
 			}
 		}
 	}
+	if textOutputLimit > 0 {
+		maxOutputTokens = textOutputLimit
+	}
 	var inputURLs []string
 	if (job.Modality == domain.ModalityImage || job.Modality == domain.ModalityVideo) && len(pp.ReferenceArtifactIDs) > 0 {
 		var err error
@@ -1376,6 +1385,7 @@ func (p *processor) buildRequest(ctx context.Context, job *domain.Job, attempt i
 		InputURLs:            inputURLs,
 		Params:               providerParams,
 		MaxOutputTokens:      maxOutputTokens,
+		MaxInputTokens:       textInputLimit,
 		IdempotencyKey:       fmt.Sprintf("provider_submit:%s:%d", job.ID, attempt),
 		AttemptNo:            attempt,
 	}, nil
@@ -1909,6 +1919,9 @@ func (p *processor) activeTask(ctx context.Context, jobID uuid.UUID) (*domain.Pr
 		return nil, err
 	}
 	for i := len(tasks) - 1; i >= 0; i-- {
+		if unresolvedPaidSubmitIntent(tasks[i]) {
+			return tasks[i], nil
+		}
 		switch tasks[i].Status {
 		case domain.ProviderTaskPending, domain.ProviderTaskProcessing, domain.ProviderTaskSucceeded:
 			return tasks[i], nil
@@ -2642,7 +2655,7 @@ func (p *processor) handleFailure(ctx context.Context, job *domain.Job, task que
 		attempts = task.Attempt + 1
 	}
 
-	if isRetryable(class) && attempts < p.maxAttempts {
+	if isRetryable(class) && attempts < p.maxAttempts && !isDurablePaidSubmitJob(job) {
 		if err := p.setStatus(ctx, job, domain.JobStatusFailedRetryable, code, msg); err != nil {
 			return err
 		}

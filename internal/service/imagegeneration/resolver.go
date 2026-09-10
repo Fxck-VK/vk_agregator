@@ -18,15 +18,16 @@ import (
 )
 
 var (
-	ErrPublicModelUnavailable = errors.New("image generation public model unavailable")
-	ErrUnsupportedQuality     = errors.New("image generation quality unsupported")
-	ErrReferenceUnsupported   = errors.New("image generation references unsupported")
-	ErrReferenceLimit         = errors.New("image generation reference limit exceeded")
-	ErrInvalidReferenceCount  = errors.New("image generation reference count invalid")
-	ErrInvalidOutputCount     = errors.New("image generation output count invalid")
-	ErrOutputCountLimit       = errors.New("image generation output count limit exceeded")
-	ErrPriceUnavailable       = errors.New("image generation price unavailable")
-	ErrUnsupportedAspectRatio = errors.New("image generation aspect ratio unsupported")
+	ErrPublicModelUnavailable   = errors.New("image generation public model unavailable")
+	ErrUnsupportedQuality       = errors.New("image generation quality unsupported")
+	ErrReferenceUnsupported     = errors.New("image generation references unsupported")
+	ErrReferenceLimit           = errors.New("image generation reference limit exceeded")
+	ErrInvalidReferenceCount    = errors.New("image generation reference count invalid")
+	ErrInvalidOutputCount       = errors.New("image generation output count invalid")
+	ErrOutputCountLimit         = errors.New("image generation output count limit exceeded")
+	ErrPriceUnavailable         = errors.New("image generation price unavailable")
+	ErrUnsupportedAspectRatio   = errors.New("image generation aspect ratio unsupported")
+	ErrUnsupportedPromptOptions = errors.New("native prompt options are unsupported")
 )
 
 const (
@@ -58,6 +59,7 @@ type PublicModel struct {
 // Request contains only public product dimensions. It intentionally accepts no
 // client-owned provider choice, model code, price, or pricing snapshot.
 type Request struct {
+	Prompt         string
 	ModelID        string
 	Quality        string
 	AspectRatio    string
@@ -196,6 +198,9 @@ func (r Resolver) resolvePublic(request Request) (modelcatalog.Model, PublicSele
 	}
 
 	requestedModelID := strings.TrimSpace(request.ModelID)
+	if requestedModelID == modelcatalog.MiniAppImageMidjourneyV7 && (strings.Contains(request.Prompt, "--") || strings.ContainsAny(request.Prompt, "{}")) {
+		return modelcatalog.Model{}, PublicSelection{}, ErrUnsupportedPromptOptions
+	}
 	trustedModel, ok := modelcatalog.ResolvePublicModel(domain.OperationImageGenerate, requestedModelID)
 	if !ok || !trustedModel.ExposeID || (requestedModelID != "" && requestedModelID != trustedModel.ModelID) {
 		return modelcatalog.Model{}, PublicSelection{}, ErrPublicModelUnavailable
@@ -209,9 +214,9 @@ func (r Resolver) resolvePublic(request Request) (modelcatalog.Model, PublicSele
 	if err != nil {
 		return modelcatalog.Model{}, PublicSelection{}, err
 	}
-	aspectRatio, err := NormalizeAspectRatio(request.AspectRatio)
-	if err != nil {
-		return modelcatalog.Model{}, PublicSelection{}, err
+	aspectRatio := strings.TrimSpace(request.AspectRatio)
+	if aspectRatio == "" {
+		aspectRatio = DefaultAspectRatio
 	}
 	if len(trustedModel.AllowedAspectRatios) > 0 {
 		allowed := false
@@ -221,6 +226,8 @@ func (r Resolver) resolvePublic(request Request) (modelcatalog.Model, PublicSele
 		if !allowed {
 			return modelcatalog.Model{}, PublicSelection{}, ErrUnsupportedAspectRatio
 		}
+	} else if _, err := NormalizeAspectRatio(aspectRatio); err != nil {
+		return modelcatalog.Model{}, PublicSelection{}, err
 	}
 	if err := validateReferenceCount(publicModel, request.ReferenceCount); err != nil {
 		return modelcatalog.Model{}, PublicSelection{}, err

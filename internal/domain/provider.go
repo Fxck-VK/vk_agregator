@@ -10,6 +10,9 @@ import (
 
 // ProviderName is the stable code identifying an external AI provider, e.g.
 // "openai", "google", "kling". It is used to look up the right adapter.
+const PaidTextMaxInputTokens = 8192
+const PaidTextMaxOutputTokens = 2048
+
 type ProviderName string
 
 const (
@@ -19,6 +22,7 @@ const (
 	ProviderDeepInfra ProviderName = "deepinfra"
 	// ProviderAPIMart is the APIMart reseller provider.
 	ProviderAPIMart ProviderName = "apimart"
+	ProviderKIE     ProviderName = "kie"
 	// ProviderPoYo is the PoYo reseller provider.
 	ProviderPoYo ProviderName = "poyo"
 	// ProviderGoogle is the Google Gemini provider.
@@ -126,6 +130,8 @@ type ProviderRequest struct {
 	Params json.RawMessage `json:"params,omitempty"`
 	// MaxOutputTokens caps provider text output when the adapter supports it.
 	MaxOutputTokens int `json:"max_output_tokens,omitempty"`
+	// MaxInputTokens is the immutable paid text budget including trusted framing.
+	MaxInputTokens int `json:"max_input_tokens,omitempty"`
 	// DurationSec is the requested video length when supported by the adapter.
 	DurationSec int `json:"duration_sec,omitempty"`
 	// Resolution is a provider-specific resolution token (e.g. "720p").
@@ -336,6 +342,9 @@ func DurableProviderTaskRequestJSON() json.RawMessage {
 // ProviderTask is the persisted record of one submission to an external
 // provider. It lets the platform poll, cancel and reconcile asynchronously.
 type ProviderTask struct {
+	// ImmediateResult is transient synchronous output. The worker persists it as
+	// a private Artifact before checkpointing the terminal provider task.
+	ImmediateResult *ProviderTaskResult `json:"-"`
 	// ID is the internal primary key.
 	ID uuid.UUID `json:"id"`
 	// JobID is the job this task belongs to.

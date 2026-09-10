@@ -56,10 +56,16 @@ func (g *GenerationWorker) Process(ctx context.Context, task queue.Task) error {
 	if active, err := g.activeTask(ctx, job.ID); err != nil {
 		return err
 	} else if active != nil {
+		if unresolvedPaidSubmitIntent(active) {
+			return g.resumePaidSubmit(ctx, job, active, task)
+		}
 		if job.Status == domain.JobStatusDispatchingProvider {
 			if err := g.setStatus(ctx, job, domain.JobStatusProviderSubmitted, "", ""); err != nil {
 				return err
 			}
+		}
+		if res, ok := durableProviderTaskResultForJob(active, job); ok {
+			return g.applyResult(ctx, job, active, res, task)
 		}
 		provider, perr := g.providers.ForName(active.Provider)
 		if perr != nil {
@@ -90,6 +96,14 @@ func (g *GenerationWorker) Process(ctx context.Context, task queue.Task) error {
 		class := domain.ProviderErrUnsupportedCapab
 		return g.handleFailure(ctx, job, task, class, safeProviderFailureMessage(class))
 	}
+	var intent *domain.ProviderTask
+	if durablePaidSubmitRoute(provider.Name(), req.ModelCode) {
+		req.Provider = provider.Name()
+		intent, err = g.claimPaidSubmit(ctx, &req)
+		if err != nil {
+			return err
+		}
+	}
 	callCtx, cancel := g.providerCallContext(ctx)
 	submitCtx, submitSpan := tracing.Start(callCtx, "provider.submit",
 		attribute.String("job.id", job.ID.String()),
@@ -103,21 +117,42 @@ func (g *GenerationWorker) Process(ctx context.Context, task queue.Task) error {
 		tracing.RecordError(submitSpan, err)
 		submitSpan.End()
 		cancel()
+		if intent != nil {
+			return g.failPaidSubmit(ctx, job, intent, task, class)
+		}
 		return g.handleFailure(ctx, job, task, class, safeProviderFailureMessage(class))
 	}
 	submitSpan.End()
 	cancel()
 
+	if submitted.ImmediateResult != nil {
+		if intent == nil || job.Modality != domain.ModalityText || submitted.ImmediateResult.Status != domain.ProviderTaskSucceeded {
+			return errors.New("worker: unexpected synchronous result")
+		}
+		// Save private text before the terminal provider checkpoint. A restart can
+		// finish from artifact IDs even if the checkpoint write is interrupted.
+		if err := g.saveOutputs(ctx, job, nil, submitted.ImmediateResult.Text); err != nil {
+			return g.failPaidSubmit(ctx, job, intent, task, outputArtifactFailureClass(err))
+		}
+	}
 	taskProvider := provider.Name()
 	if submitted.Provider != "" {
 		taskProvider = submitted.Provider
 	}
-	pt, err := g.persistTask(ctx, job, taskProvider, submitted, req, attempt)
+	var pt *domain.ProviderTask
+	if intent != nil {
+		pt, err = g.completePaidSubmit(ctx, intent, submitted)
+	} else {
+		pt, err = g.persistTask(ctx, job, taskProvider, submitted, req, attempt)
+	}
 	if err != nil {
 		return err
 	}
 	if err := g.setStatus(ctx, job, domain.JobStatusProviderSubmitted, "", ""); err != nil {
 		return err
+	}
+	if submitted.ImmediateResult != nil {
+		return g.applyResult(ctx, job, pt, *submitted.ImmediateResult, task)
 	}
 	if shouldDeferInitialPoll(job, taskProvider, pt) {
 		return g.streams.PublishTo(ctx, redisqueue.StreamProviderPoll, taskOf(job))

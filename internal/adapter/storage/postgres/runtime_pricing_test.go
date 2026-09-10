@@ -292,6 +292,7 @@ func TestRuntimePricingMigrationUpDownPreservesReadableJobSnapshots(t *testing.T
 	runMigrationFile(t, ctx, conn, filepath.Join(root, "migrations", "000001_init_schema.up.sql"))
 	runMigrationFile(t, ctx, conn, filepath.Join(root, "migrations", "000027_job_pricing_snapshot.up.sql"))
 	runMigrationFile(t, ctx, conn, filepath.Join(root, "migrations", "000028_runtime_pricing_catalog.up.sql"))
+	runMigrationFile(t, ctx, conn, filepath.Join(root, "migrations", "000052_text_model_pricing.up.sql"))
 
 	var userID uuid.UUID
 	if err := conn.QueryRow(ctx, `INSERT INTO users (vk_user_id) VALUES ($1) RETURNING id`, uniqueVKID()).Scan(&userID); err != nil {
@@ -383,6 +384,19 @@ func ensureRuntimePricingTables(t *testing.T, ctx context.Context, pool *pgxpool
 		}
 		if _, err := pool.Exec(ctx, stmt); err != nil {
 			t.Fatalf("apply runtime pricing migration statement %q: %v", stmt, err)
+		}
+	}
+	var hasTextColumn bool
+	if err := pool.QueryRow(ctx, `SELECT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_schema=current_schema() AND table_name='runtime_generation_prices' AND column_name='text_model_id')`).Scan(&hasTextColumn); err != nil {
+		t.Fatal(err)
+	}
+	if !hasTextColumn {
+		raw, err := os.ReadFile(filepath.Join(root, "migrations", "000052_text_model_pricing.up.sql"))
+		if err != nil {
+			t.Fatal(err)
+		}
+		if _, err := pool.Exec(ctx, string(raw)); err != nil {
+			t.Fatal(err)
 		}
 	}
 }

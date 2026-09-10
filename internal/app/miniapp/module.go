@@ -95,6 +95,7 @@ func NewHandler(ctx context.Context, cfg config.Config, deps Deps) *miniappapi.H
 		FrontendTelemetryUserHashSecret:     cfg.FrontendTelemetryUserHashSecret,
 		PaymentReturnURL:                    firstNonEmpty(cfg.YooKassaReturnURLMiniApp, cfg.YooKassaReturnURL),
 		PaymentCancelEnabled:                cfg.FeatureMiniAppPaymentCancelEnabled,
+		TextModels:                          runtimeCatalog.TextModels,
 		ImageModels:                         miniAppImageModels(runtimeCatalog.Catalog),
 		VideoRoutes:                         miniAppVideoRoutes(runtimeCatalog.Catalog),
 		VideoRouteResolver:                  miniAppVideoRouteResolver(runtimeCatalog.VideoRouteCatalog),

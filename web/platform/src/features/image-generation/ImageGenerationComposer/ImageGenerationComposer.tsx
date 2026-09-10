@@ -11,6 +11,7 @@ import { ru } from "@/i18n/ru";
 import styles from "./ImageGenerationComposer.module.css";
 
 type ImageGenerationComposerProps = {
+  modelID?: string;
   aspectRatio: string;
   allowedAspectRatios?: string[];
   canSubmit: boolean;
@@ -30,6 +31,7 @@ type ImageGenerationComposerProps = {
 };
 
 export function ImageGenerationComposer({
+  modelID,
   aspectRatio,
   allowedAspectRatios,
   canSubmit,
@@ -47,6 +49,7 @@ export function ImageGenerationComposer({
   prompt,
   qualityOptions,
 }: Readonly<ImageGenerationComposerProps>) {
+  const isImagine = modelID === "midjourney_v7";
   return (
     <form
       className={styles.root}
@@ -65,17 +68,17 @@ export function ImageGenerationComposer({
             <ImageAspectRatioSelector disabled={isSubmitting} onChange={onAspectRatioChange} value={aspectRatio} options={allowedAspectRatios} />
             {qualityOptions.length > 1 ? <ImageQualitySelector
               disabled={isSubmitting}
-              label={ru.imageGeneration.resolutionLabel}
+              label={isImagine ? "Режим" : ru.imageGeneration.resolutionLabel}
               onChange={onImageQualityChange}
               options={qualityOptions}
               value={imageQuality}
             /> : null}
-            <ImageOutputCountSelector
+            {!isImagine ? <ImageOutputCountSelector
               disabled={isSubmitting}
               max={maxOutputCount}
               onChange={onOutputCountChange}
               value={outputCount}
-            />
+            /> : null}
           </>
         )}
         canSubmit={canSubmit}
@@ -84,7 +87,7 @@ export function ImageGenerationComposer({
         mediaLabel="Загрузить медиа"
         note={price === null
           ? ru.imageGeneration.priceUnavailable
-          : <CreditAmount prefix={`${ru.imageGeneration.priceLabel}:`} value={price} />}
+          : <CreditAmount prefix={isImagine ? "За запуск Imagine:" : `${ru.imageGeneration.priceLabel}:`} value={price} />}
         onChange={(event) => onPromptChange(event.target.value)}
         onSend={onSubmit}
         placeholder={ru.imageGeneration.promptPlaceholder}

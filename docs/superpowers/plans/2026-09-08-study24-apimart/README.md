@@ -1,146 +1,89 @@
-# Study24 → APIMart: документация и планы интеграции
+# Study24 → APIMart: каталог и документация
 
-**Дата исследования API: 8 сентября 2026. Сверка с кодом: `dev-deploy`, HEAD `cdc3b17` + локальная интеграция Grok. Qwen Image 3.0 работает на DEV по подтверждению пользователя. Grok Imagine 1.5 и 2.0 реализованы локально; их live-проверки ещё не выполнены.**
+Исследование от 8 сентября 2026 года: 71 позиция Study24, для 59 найдены
+кандидаты маршрутов APIMart, для 12 точный API не подтверждён.
+У 13 из 59 соответствие версии или режима условное. Цены ниже относятся
+к дате исследования; текущая доступность и фактическая стоимость требуют проверки.
 
-**Текущий выбор пользователя — [43. Grok Imagine 1.5](./43-grok-image-1-5.md) и [44. Grok Imagine 2.0](./44-grok-image-2-0.md).** Обе модели используют существующий image pipeline, одно изображение и цену 10 кредитов. Для 2.0 пользователь явно выбрал публичный прайс $0.015; расхождение с документацией $0.08 сохранено в плане. Отдельные подготовительные B0–B3 отложены по выбору пользователя. Qwen уже проверена пользователем на DEV.
+Отдельные Markdown-планы моделей удалены. Реестр сохраняет model IDs,
+документацию, примеры запросов, тарифы и ограничения в [models.json](./models.json).
+Записи о реализации в JSON отражают дату исследования; актуальные условия
+включения находятся в инструкциях запуска и коде.
 
-Проверки Qwen: `go test` по 13 пакетам и `go vet` — PASS. Контракт, Web prepare, worker submit/poll, артефакты, модерация, owner checks и ledger replay проверены локально. Подробные команды и непройденные внешние проверки — в плане 45; исходная сверка ниже описывает состояние до реализации.
+- [Настройки и включение интеграций](../../../runbooks/DEV.md).
+- [Текстовые модели через KIE и APIMart](../../../runbooks/KIE_TEXT_MODELS.md).
+- [Общие задачи интеграционной основы](./00-common-foundation.md).
+- [Проверка доступности и тарифов APIMart](../../../runbooks/APIMART_PREFLIGHT.md).
 
-Подготовлено **59 отдельных планов** для 71 позиции каталога Study24: 31 текстовая модель, 12 моделей изображений, 15 видеомоделей и Suno. Для **12 позиций точный маршрут APIMart не подтверждён**. У **13 из 59** сопоставление версии или режима условное — это отмечено в реестре и в соответствующем плане.
+## Каталог моделей
 
-59 планов не означают 59 новых моделей: **5 маршрутов реализованы через APIMart, 1 модель реализована через PoYo и имеет отдельный план возможной миграции, 53 маршрута APIMart остаются новыми кандидатами**. В числе последних есть DeepSeek V4 Flash: семейство уже используется через DeepInfra, но отдельного публичного маршрута APIMart нет.
+В столбце «соответствие» **каталог** означает найденный маршрут с соответствующим названием, а не успешный платный вызов. **Условное** означает уточнение версии/режима относительно названия Study24. Указанные цены — опубликованная себестоимость, без пользовательской наценки; варианты и оговорки приведены в [models.json](./models.json).
 
-Сверка интеграций выполнена по локальному коду и тестам. Рабочие ключи, значения флагов в DEV/PROD, фактические списания и доступность групп не проверялись. При реализации B0 перепроверена официальная документация metadata/schema/public pricing; таблица ставок ниже остаётся материалом исходного исследования и заново не сверялась. Наличие реализации не означает подтверждённый запуск в конкретном контуре.
-
-## Уже реализовано — повторно не подключать
-
-| План | Текущий маршрут в коде | Что уже есть | Оставшийся объём |
-| --- | --- | --- | --- |
-| [43. Grok Imagine 1.5](./43-grok-image-1-5.md) | `grok_image_1_5` → APIMart / `grok-imagine-1.5-apimart` | Отдельный флаг, 5 форматов, до 1 ref на backend, n=1, цена 10, submit/poll и lifecycle tests | DEV deploy и live-проверка |
-| [44. Grok Imagine 2.0](./44-grok-image-2-0.md) | `grok_image_2_0` → APIMart / `grok-imagine-2.0-ext` | Отдельный флаг, 7 форматов, text-to-image, цена 10, HTTP 202, безопасные повторы, lifecycle tests | DEV deploy, live-проверка и фактическая себестоимость |
-| [45. Qwen Image 3.0](./45-qwen-image-3.md) | `qwen_image_3` → APIMart / `qwen-image-3.0` | 1K/2K, до 3 refs, n=1, цена 15; DEV deploy и успешная генерация подтверждены пользователем | Аудит фактической себестоимости и отдельный PROD rollout |
-| [37. Nano Banana Pro](./37-nano-banana-pro.md) | `nano_banana_pro` → APIMart / `gemini-3-pro-image-preview` | Флаг, readiness, 1K/2K/4K, до 14 refs, submit/poll, тарифы и тесты | Только сверка контракта/себестоимости и общие улучшения B2; без новой карточки/serializer |
-| [38. GPT Image 2](./38-gpt-image-2.md) | `gpt_image_2` → APIMart / `gpt-image-2` | Флаг, readiness, 1K/2K/4K, до 16 refs, lowercase resolution, n=1, submit/poll, тарифы и тесты | Только сверка schema/себестоимости и общие улучшения B2; lowercase resolution уже реализован |
-| [41. Nano Banana 2](./41-nano-banana-2.md) | `nano_banana_2` → PoYo / `nano-banana-2-new`; edit через `nano-banana-2-new-edit` | Флаг, readiness, 1K/2K/4K, до 14 refs, submit/poll, тарифы и тесты | Миграция на APIMart отложена до отдельного выбора; текущее подключение не переделывать |
-| [31. DeepSeek V4](./31-deepseek-v4-flash.md) | Registry: `chatgpt` / NeiroHub Chat → DeepInfra / `deepseek-ai/DeepSeek-V4-Flash` | Существующий default chat; Web выбирает default без model_id | Отдельный APIMart route/выбор модели после T; не подменять default chat |
-
-Основания: [registry и маршруты](../../../../internal/service/providermodels/registry.go), [APIMart adapter](../../../../internal/adapter/provider/apimart/apimart.go), [PoYo adapter](../../../../internal/adapter/provider/poyo/poyo.go), [статический прайс](../../../../internal/service/pricingcatalog/static_catalog.go), [config](../../../../internal/platform/config/config.go).
-
-Общий image-путь также существует: backend resolver и immutable pricing snapshot, Web prepare/activate/retry/history/result, модерация и owner-checked выдача Artifact, форма выбора модели/качества/цены. **Загрузка референсов в Web ещё не реализована:** request DTO принимает только prompt/model_id/image_quality, форма не загружает файлы. Поддержка refs в адаптере не означает готовый Web image-to-image.
-
-Другие имеющиеся модели не подменяют кандидатов: Seedream 4.5 ≠ Seedream 5.0, Kling O3 Standard ≠ Kling v3, Seedance 2.0 Fast ≠ Seedance 2.0/Mini/2.5. Конкретные provider/model IDs остаются отдельными контрактами.
-
-## Актуальные пункты для начала работы
-
-- [ ] **R0 → B0: завершить внешнюю проверку выбранных ID и тарифов.** Скрипт `scripts/providers/apimart-preflight.ps1`, Go reader и локальные contract/CLI tests реализованы. Остались реальные metadata/schema и подтверждение рабочей группы/себестоимости; новый маршрут по одному публичному тарифу не открывать. [Запуск](../../../runbooks/APIMART_PREFLIGHT.md).
-- [ ] **R1 → B2 + необходимые части B1: сохранить намерение отправки до HTTP.** Сейчас provider task записывается после submit, а кэш APIMart живёт в памяти процесса. Добавить durable intent/lease и ограниченное разрешение неопределённых исходов; проверить параллельную доставку и падение между HTTP и записью task_id. Existing polling/artifact recovery использовать повторно.
-- [ ] **R2 → B3 для фиксированной цены изображений.** Сверить provider floors выбранного ID и подготовить новую версию тарифа только при подтверждённом расхождении. Exact math, price snapshots и ledger уже есть. Text/audio keys и metered settlement делать при переходе к соответствующей модальности.
-- [x] **R3 → Qwen Image 3.0.** [План 45](./45-qwen-image-3.md) реализован; модель выложена на DEV и проверена пользователем. R0–R2 остаются отложенными работами.
-- [x] **R4 → Grok Imagine 1.5 и 2.0: локальная реализация.** Планы 43/44 выполнены на существующей основе; для 2.0 источник цены выбран пользователем.
-- [ ] **R4 → Grok: DEV deploy и live-проверка.** Проверить реальную генерацию и фактическую стоимость каждой модели.
-- [ ] **R5 → следующие выбранные модели.** Остальные изображения; затем T для текста, V для видео, C для Motion Control, A для Suno.
-
-Планы 37/38 — сопровождение существующих интеграций, выполняются при выявленном расхождении. План 41 — отдельная миграция провайдера, исключён из обязательной первой очереди. Полный B0–B3 не означает предварительную реализацию всех text/audio/video возможностей.
-
-## Реализация инструмента B0
-
-- [x] Read-only CLI с явным списком ID, безопасной выдачей metadata/schema и price-source checks; GET без генераций, без изменения runtime/env/тарифов.
-- [x] Локальные тесты Go и PowerShell; `go vet` нового пакета. Contract fixtures искусственные и не доказывают live-доступность.
-- [ ] Внешний preflight: список ID для реального вызова не выбран; рабочий ключ не использовался. Группа ключа и фактическая себестоимость остаются непроверенными.
-
-В JSON-отчёте `b0_complete=false` независимо от успеха автоматических проверок: подтверждение персональной цены/cost требует отдельной сверки. B1–B3 и runtime-подключение моделей в этой реализации не выполнялись.
-
-## Подтверждение предшествующей локальной сверки кода
-
-- PASS: `go test ./internal/adapter/provider/apimart ./internal/service/providermodels ./internal/service/imagegeneration ./internal/service/modelcatalog ./internal/service/productcatalog ./internal/service/pricingcatalog ./internal/adapter/inbound/websession`.
-- PASS: `go test ./internal/worker ./internal/platform/config ./internal/adapter/provider/poyo`.
-- Первый запуск Go в песочнице остановился на доступе к build cache; тот же набор успешно выполнен вне песочницы.
-- Web: `npm --prefix web/platform run test -- src/features/image-generation` не запустился — локально отсутствует `vitest`. Исходники и тестовые сценарии прочитаны; PASS для Web не заявляется.
-- Платные вызовы, изменение runtime/env, commit/push/deploy не выполнялись. Полные lint/build и `go vet` не запускались: изменяется только документация.
-
-## Как пользоваться
-
-1. Проверить статус реализации выше и выбрать незавершённый пункт R0–R4 или отдельную миграцию.
-2. Открыть план выбранной модели и использовать готовые компоненты. Общие улучшения [основы](./00-common-foundation.md) выполнять отдельно по выбранному объёму, без обязательного запуска всей цепочки перед каждой моделью. `[x]` означает наличие в коде, а не live-проверку.
-3. Реализовать оставшийся объём, проверить exact model ID и условия выпуска. Существующие public IDs, флаги и формы повторно не создавать.
-
-[Машиночитаемый реестр всех моделей, примеров и ограничений](./models.json).
-
-## Что входит в каждый план
-
-Точная ссылка на документацию APIMart, кандидат model ID, endpoint и тело запроса; лимиты первого выпуска; цена с единицей; конкретные файлы проекта; этапы подключения; отдельные приёмочные сценарии; условия, которые мешают включению. Следующие режимы той же модели перечислены отдельно, когда требуют другого расчёта или контракта.
-
-У текстовых моделей APIMart часто нет отдельной статьи на каждый ID: используется общий Chat API плюс запись в прайсе. Это прямо указано; поддержка необязательных параметров конкретной новой версии не объявляется подтверждённой без проверки. Для Qwen 3.8 Max найдена отдельная инструкция.
-
-## Реестр отдельных планов
-
-В столбце «соответствие» **каталог** означает найденный маршрут с соответствующим названием, а не успешный платный вызов. **Условное** означает уточнение версии/режима относительно названия Study24. Указанные цены — опубликованная себестоимость, без пользовательской наценки; все варианты и оговорки приведены внутри плана.
-
-| № | Модель Study24 / план | APIMart model ID | Соответствие | Цена APIMart |
+| № | Модель Study24 / документация | APIMart model ID | Соответствие | Цена APIMart |
 | --- | --- | --- | --- | --- |
-| 2 | [Claude Opus 4.8](./02-claude-opus-4-8.md) | `claude-opus-4-8` | Каталог | $4 / $20 за 1 млн входных / выходных токенов (обычный контекст, без инструментов и скидки кэша). |
-| 3 | [GPT 5.6 Terra](./03-gpt-5-6-terra.md) | `gpt-5.6-terra` | Каталог | $1.6 / $9.6 за 1 млн входных / выходных токенов (обычный контекст, без инструментов и скидки кэша). |
-| 4 | [GPT 6 Astra](./04-gpt-6-astra.md) | `gpt-6-astra` | Каталог | $8 / $40 за 1 млн входных / выходных токенов (обычный контекст, без инструментов и скидки кэша). |
-| 6 | [Claude Opus 5](./06-claude-opus-5.md) | `claude-opus-5` | Каталог | $4 / $20 за 1 млн входных / выходных токенов (обычный контекст, без инструментов и скидки кэша). |
-| 7 | [Gemini 3.7 Flash](./07-gemini-3-7-flash.md) | `gemini-3.7-flash` | Каталог | $0.6 / $3 за 1 млн входных / выходных токенов (обычный контекст, без инструментов и скидки кэша). |
-| 8 | [Fable 5.1](./08-claude-fable-5-1.md) | `claude-fable-5.1` | Каталог | $8 / $40 за 1 млн входных / выходных токенов (обычный контекст, без инструментов и скидки кэша). |
-| 9 | [Claude Fable 5](./09-claude-fable-5.md) | `claude-fable-5` | Каталог | $8 / $40 за 1 млн входных / выходных токенов (обычный контекст, без инструментов и скидки кэша). |
-| 10 | [Gemini 3.6 Flash](./10-gemini-3-6-flash.md) | `gemini-3.6-flash` | Каталог | $1.2 / $6 за 1 млн входных / выходных токенов (обычный контекст, без инструментов и скидки кэша). |
-| 11 | [ChatGPT 5](./11-gpt-5.md) | `gpt-5` | Каталог | $1 / $8 за 1 млн входных / выходных токенов (обычный контекст, без инструментов и скидки кэша). |
-| 12 | [GPT 5.6 Luna](./12-gpt-5-6-luna.md) | `gpt-5.6-luna` | Каталог | $0.16 / $0.96 за 1 млн входных / выходных токенов (обычный контекст, без инструментов и скидки кэша). |
-| 13 | [Grok 4.5](./13-grok-4-5.md) | `grok-4.5` | Каталог | $1.6 / $3.2 за 1 млн входных / выходных токенов (обычный контекст, без инструментов и скидки кэша). |
-| 14 | [Gemini 3.1 Pro](./14-gemini-3-1-pro-preview.md) | `gemini-3.1-pro-preview` | Условное | $1.6 / $9.6 за 1 млн входных / выходных токенов (обычный контекст, без инструментов и скидки кэша). |
-| 15 | [DeepSeek V4 Pro](./15-deepseek-v4-pro.md) | `deepseek-v4-pro` | Каталог | $1.0285712 / $3.0857144 за 1 млн входных / выходных токенов (обычный контекст, без инструментов и скидки кэша). |
-| 16 | [Gemini 3.5 Flash](./16-gemini-3-5-flash.md) | `gemini-3.5-flash` | Каталог | $1.2 / $7.2 за 1 млн входных / выходных токенов (обычный контекст, без инструментов и скидки кэша). |
-| 17 | [Claude Opus 4.7](./17-claude-opus-4-7.md) | `claude-opus-4-7` | Каталог | $4 / $20 за 1 млн входных / выходных токенов (обычный контекст, без инструментов и скидки кэша). |
-| 18 | [Kimi K3](./18-kimi-k3.md) | `kimi-k3` | Каталог | $2.4 / $12 за 1 млн входных / выходных токенов (обычный контекст, без инструментов и скидки кэша). |
-| 19 | [Qwen 3.8 Max](./19-qwen3-8-max.md) | `qwen3.8-max` | Каталог | $1.3714288 / $4.1142856 за 1 млн входных / выходных токенов (обычный контекст, без инструментов и скидки кэша). |
-| 20 | [Claude Sonnet 5](./20-claude-sonnet-5.md) | `claude-sonnet-5` | Каталог | $1.6 / $8 за 1 млн входных / выходных токенов (обычный контекст, без инструментов и скидки кэша). |
-| 21 | [ChatGPT 5.4](./21-gpt-5-4.md) | `gpt-5.4` | Каталог | $2 / $12 за 1 млн входных / выходных токенов (обычный контекст, без инструментов и скидки кэша). |
-| 22 | [ChatGPT 5.5](./22-gpt-5-5.md) | `gpt-5.5` | Каталог | $4 / $24 за 1 млн входных / выходных токенов (обычный контекст, без инструментов и скидки кэша). |
-| 23 | [ChatGPT 5.3 Codex](./23-gpt-5-3-codex.md) | `gpt-5.3-codex` | Каталог; API требует проверки | $1.4 / $11.2 за 1 млн входных / выходных токенов (обычный контекст, без инструментов и скидки кэша). |
-| 24 | [Grok 4.3](./24-grok-4-3.md) | `grok-4.3` | Каталог | $1 / $2 за 1 млн входных / выходных токенов (обычный контекст, без инструментов и скидки кэша). |
-| 25 | [Grok 4.6](./25-grok-4-6.md) | `grok-4.6` | Каталог | $1.6 / $4.8 за 1 млн входных / выходных токенов (обычный контекст, без инструментов и скидки кэша). |
-| 26 | [Claude Haiku 4.5](./26-claude-haiku-4-5-20251001.md) | `claude-haiku-4-5-20251001` | Условное | $0.8 / $4 за 1 млн входных / выходных токенов (обычный контекст, без инструментов и скидки кэша). |
-| 27 | [ChatGPT 5.2](./27-gpt-5-2.md) | `gpt-5.2` | Каталог | $1.4 / $11.2 за 1 млн входных / выходных токенов (обычный контекст, без инструментов и скидки кэша). |
-| 28 | [Claude Opus 4.6](./28-claude-opus-4-6.md) | `claude-opus-4-6` | Каталог | $4 / $20 за 1 млн входных / выходных токенов (обычный контекст, без инструментов и скидки кэша). |
-| 31 | [DeepSeek V4](./31-deepseek-v4-flash.md) | `deepseek-v4-flash` | Условное | $0.3428568 / $1.0285712 за 1 млн входных / выходных токенов (обычный контекст, без инструментов и скидки кэша). |
-| 32 | [Gemini 2.5 Pro](./32-gemini-2-5-pro.md) | `gemini-2.5-pro` | Каталог | $1 / $8 за 1 млн входных / выходных токенов (обычный контекст, без инструментов и скидки кэша). |
-| 33 | [Qwen 3.7 Flash](./33-qwen3-7-flash.md) | `qwen3.7-flash` | Каталог | $0.0228568 / $0.0914288 за 1 млн входных / выходных токенов (обычный контекст, без инструментов и скидки кэша). |
-| 34 | [Deepseek R1](./34-deepseek-r1.md) | `deepseek-r1` | Условное | $0.448 / $1.792 за 1 млн входных / выходных токенов (обычный контекст, без инструментов и скидки кэша). |
-| 35 | [Gemini 2.5 Flash Lite](./35-gemini-2-5-flash-lite.md) | `gemini-2.5-flash-lite` | Каталог | $0.08 / $0.32 за 1 млн входных / выходных токенов (обычный контекст, без инструментов и скидки кэша). |
-| 37 | [Nano Banana Pro](./37-nano-banana-pro.md) | `gemini-3-pro-image-preview` | Каталог | $0.03 / $0.03 / $0.04 за 1K / 2K / 4K. |
-| 38 | [GPT Image 2](./38-gpt-image-2.md) | `gpt-image-2` | Каталог | $0.0085 / $0.014 / $0.021 за 1K / 2K / 4K. |
-| 39 | [Seedream 5.0 Pro](./39-seedream-5-0-pro.md) | `seedream-5-0-pro` | Каталог | $0.02925 за 1K, $0.0585 за 2K. Строка «по умолчанию» $0.036; явно задавать уровень. Цена 1.5K и доплата за референсы требуют сверки. |
-| 40 | [Midjourney](./40-midjourney-v7.md) | `midjourney` | Условное | Imagine relax $0.04504, fast $0.05504, turbo $0.10 за вызов. Версионную комбинацию v7×speed подтвердить. |
-| 41 | [Nano Banana 2](./41-nano-banana-2.md) | `gemini-3.1-flash-image-preview` | Каталог | $0.015 / $0.02 / $0.025 за 1K / 2K / 4K. |
-| 43 | [Grok Imagine 1.5](./43-grok-image-1-5.md) | `grok-imagine-1.5-apimart` | Реализовано локально | $0.015/изображение; пользовательская цена 10 кредитов. |
-| 44 | [Grok Imagine 2.0](./44-grok-image-2-0.md) | `grok-imagine-2.0-ext` | Реализовано локально | По выбору пользователя: прайс $0.015 → 10 кредитов. В документации остаётся $0.08; live cost не проверен. |
-| 45 | [Qwen Image 3](./45-qwen-image-3.md) | `qwen-image-3.0` | Каталог | $0.0205712 за изображение базовой версии; тариф pro не использовать. |
-| 46 | [Flux 2 Pro](./46-flux-2-pro.md) | `flux-2-pro` | Каталог | $0.024 / $0.036 / $0.048 / $0.06 за 1/2/3/4 MP вывода. Стоимость входных MP сверить перед открытием референсов. |
-| 48 | [Nano Banana](./48-nano-banana.md) | `gemini-2.5-flash-image-preview` | Каталог | $0.0125 за изображение 1K. |
-| 49 | [Seedream 5.0 Lite](./49-seedream-5-0-lite.md) | `seedream-5-0-lite` | Каталог | $0.028 за изображение; подтвердить применение flat-тарифа к 2K/3K/4K. |
-| 50 | [Nano Banana 2 Lite](./50-nano-banana-2-lite.md) | `gemini-3.1-flash-lite-image-ext` | Каталог | $0.0125 за изображение по прайсу. Описание upstream token pricing не использовать как итоговую ставку APIMart. |
-| 51 | [Seedance 2.5](./51-seedance-2-5.md) | `seedance-2.5` | Каталог | Без входного видео: $0.09608 / $0.216 / $0.38488 за секунду 480p/720p/1080p. С входным видео: $0.0576 / $0.1296 / $0.22992 × (вход+выход). |
-| 52 | [Seedance 2.0](./52-seedance-2-0.md) | `seedance-2.0` | Каталог | Без входного видео: $0.066 / $0.142 / $0.3544 / $0.722 за секунду 480p/720p/1080p/4K. Тариф с video-reference брать из отдельной строки input. |
-| 53 | [Gemini Omni 1.1](./53-gemini-omni-1-1-flash-ext.md) | `gemini-omni-1.1-flash-ext` | Условное | 720p/1080p: 4/6/8/10 с стоят $0.25/$0.30/$0.35/$0.40 за вызов. 4K: $0.75/$0.80/$0.85/$0.90. 360p: $0.15/$0.175/$0.20/$0.225. |
-| 54 | [Gemini Omni Flash](./54-gemini-omni-flash-preview.md) | `gemini-omni-flash-preview` | Условное | $0.088 за секунду 720p вывода. Для переменной длины до 10 с предварительный потолок $0.88 без входных доплат. |
-| 55 | [Wan 3.0](./55-wan-3-0.md) | `wan3.0-video` | Каталог | $0.034288 / $0.068568 / $0.137144 за секунду 480P/720P/1080P. Порядок расчёта с входным видео сверить отдельно. |
-| 56 | [Google Veo 3.1](./56-veo-3-1-fast.md) | `veo3.1-fast` | Условное | Fast $0.14 за 8 с (4K $0.64); Quality $1.00 (4K $1.50); Lite $0.07 (4K $0.57). Это разные режимы, не цена одной одинаковой конфигурации. |
-| 57 | [Seedance 2.0 Mini](./57-seedance-2-0-mini.md) | `seedance-2.0-mini` | Каталог | Без video: $0.01056/с 480p, $0.02288/с 720p. С video: $0.0064/$0.01384 × (вход+выход). |
-| 59 | [Minimax H3](./59-minimax-h3.md) | `MiniMax-H3` | Каталог | $0.05712/с 768P; $0.09144/с 2K. В прайсе +$0.02288 за изображение сверх первых пяти; видео-референсы тарифицируются отдельно. |
-| 60 | [Kling 3.0](./60-kling-3-0.md) | `kling-v3` | Каталог | 720p std: $0.0672/с без звука, $0.1008 со звуком. 1080p pro: $0.0896/$0.1344. 4K: $0.42856/с с/без звука. |
-| 61 | [Kling 3.0 Turbo](./61-kling-3-0-turbo.md) | `kling-3.0-turbo` | Каталог | $0.1144/с 720p; $0.1432/с 1080p. |
-| 62 | [Kling 2.6](./62-kling-2-6.md) | `kling-v2-6` | Каталог | std 720p $0.0368/с без звука. pro 1080p $0.0625/с без звука, $0.125/с со звуком. |
-| 64 | [Kling Motion Control](./64-kling-motion-control.md) | `kling-v2-6-motion-control` | Условное | std 720p: $0.05712 × фактические секунды исходного видео. |
-| 65 | [Kling Motion Control Pro](./65-kling-motion-control-pro.md) | `kling-v2-6-motion-control` | Условное | pro 1080p: $0.09144 × фактические секунды исходного видео. |
-| 66 | [Grok Imagine 1.5](./66-grok-imagine-1-5.md) | `grok-imagine-1.5-video-ext` | Каталог | $0.0102/с 480p; $0.01912/с 720p. |
-| 67 | [Happy Horse](./67-happy-horse-1-0.md) | `happyhorse-1.0` | Условное; billing ID требует проверки | Таблица HAPPYHORSE: $0.13/с 720P и $0.23/с 1080P. Связь этого billing ID с документированным happyhorse-1.0 подтвердить. |
-| 68 | [Suno](./68-suno-v5-5.md) | `suno` | Условное | $0.05 за вызов music-v5.5. Оплата за вызов, не за каждый возвращённый трек; обычно возвращаются две версии, число проверять по факту. |
+| 2 | [Claude Opus 4.8](https://docs.apimart.ai/ru/api-reference/texts/general/chat-completions) | `claude-opus-4-8` | Каталог | $4 / $20 за 1 млн входных / выходных токенов (обычный контекст, без инструментов и скидки кэша). |
+| 3 | [GPT 5.6 Terra](https://docs.apimart.ai/ru/api-reference/texts/general/chat-completions) | `gpt-5.6-terra` | Каталог | $1.6 / $9.6 за 1 млн входных / выходных токенов (обычный контекст, без инструментов и скидки кэша). |
+| 4 | [GPT 6 Astra](https://docs.apimart.ai/ru/api-reference/texts/general/chat-completions) | `gpt-6-astra` | Каталог | $8 / $40 за 1 млн входных / выходных токенов (обычный контекст, без инструментов и скидки кэша). |
+| 6 | [Claude Opus 5](https://docs.apimart.ai/ru/api-reference/texts/general/chat-completions) | `claude-opus-5` | Каталог | $4 / $20 за 1 млн входных / выходных токенов (обычный контекст, без инструментов и скидки кэша). |
+| 7 | [Gemini 3.7 Flash](https://docs.apimart.ai/ru/api-reference/texts/general/chat-completions) | `gemini-3.7-flash` | Каталог | $0.6 / $3 за 1 млн входных / выходных токенов (обычный контекст, без инструментов и скидки кэша). |
+| 8 | [Fable 5.1](https://docs.apimart.ai/ru/api-reference/texts/general/chat-completions) | `claude-fable-5.1` | Каталог | $8 / $40 за 1 млн входных / выходных токенов (обычный контекст, без инструментов и скидки кэша). |
+| 9 | [Claude Fable 5](https://docs.apimart.ai/ru/api-reference/texts/general/chat-completions) | `claude-fable-5` | Каталог | $8 / $40 за 1 млн входных / выходных токенов (обычный контекст, без инструментов и скидки кэша). |
+| 10 | [Gemini 3.6 Flash](https://docs.apimart.ai/ru/api-reference/texts/general/chat-completions) | `gemini-3.6-flash` | Каталог | $1.2 / $6 за 1 млн входных / выходных токенов (обычный контекст, без инструментов и скидки кэша). |
+| 11 | [ChatGPT 5](https://docs.apimart.ai/ru/api-reference/texts/general/chat-completions) | `gpt-5` | Каталог | $1 / $8 за 1 млн входных / выходных токенов (обычный контекст, без инструментов и скидки кэша). |
+| 12 | [GPT 5.6 Luna](https://docs.apimart.ai/ru/api-reference/texts/general/chat-completions) | `gpt-5.6-luna` | Каталог | $0.16 / $0.96 за 1 млн входных / выходных токенов (обычный контекст, без инструментов и скидки кэша). |
+| 13 | [Grok 4.5](https://docs.apimart.ai/ru/api-reference/texts/general/chat-completions) | `grok-4.5` | Каталог | $1.6 / $3.2 за 1 млн входных / выходных токенов (обычный контекст, без инструментов и скидки кэша). |
+| 14 | [Gemini 3.1 Pro](https://docs.apimart.ai/ru/api-reference/texts/general/chat-completions) | `gemini-3.1-pro-preview` | Условное | $1.6 / $9.6 за 1 млн входных / выходных токенов (обычный контекст, без инструментов и скидки кэша). |
+| 15 | [DeepSeek V4 Pro](https://docs.apimart.ai/ru/api-reference/texts/general/chat-completions) | `deepseek-v4-pro` | Каталог | $1.0285712 / $3.0857144 за 1 млн входных / выходных токенов (обычный контекст, без инструментов и скидки кэша). |
+| 16 | [Gemini 3.5 Flash](https://docs.apimart.ai/ru/api-reference/texts/general/chat-completions) | `gemini-3.5-flash` | Каталог | $1.2 / $7.2 за 1 млн входных / выходных токенов (обычный контекст, без инструментов и скидки кэша). |
+| 17 | [Claude Opus 4.7](https://docs.apimart.ai/ru/api-reference/texts/general/chat-completions) | `claude-opus-4-7` | Каталог | $4 / $20 за 1 млн входных / выходных токенов (обычный контекст, без инструментов и скидки кэша). |
+| 18 | [Kimi K3](https://docs.apimart.ai/ru/api-reference/texts/general/chat-completions) | `kimi-k3` | Каталог | $2.4 / $12 за 1 млн входных / выходных токенов (обычный контекст, без инструментов и скидки кэша). |
+| 19 | [Qwen 3.8 Max](https://docs.apimart.ai/ru/api-reference/texts/general/chat-completions) | `qwen3.8-max` | Каталог | $1.3714288 / $4.1142856 за 1 млн входных / выходных токенов (обычный контекст, без инструментов и скидки кэша). |
+| 20 | [Claude Sonnet 5](https://docs.apimart.ai/ru/api-reference/texts/general/chat-completions) | `claude-sonnet-5` | Каталог | $1.6 / $8 за 1 млн входных / выходных токенов (обычный контекст, без инструментов и скидки кэша). |
+| 21 | [ChatGPT 5.4](https://docs.apimart.ai/ru/api-reference/texts/general/chat-completions) | `gpt-5.4` | Каталог | $2 / $12 за 1 млн входных / выходных токенов (обычный контекст, без инструментов и скидки кэша). |
+| 22 | [ChatGPT 5.5](https://docs.apimart.ai/ru/api-reference/texts/general/chat-completions) | `gpt-5.5` | Каталог | $4 / $24 за 1 млн входных / выходных токенов (обычный контекст, без инструментов и скидки кэша). |
+| 23 | [ChatGPT 5.3 Codex](https://docs.apimart.ai/ru/api-reference/texts/general/chat-completions) | `gpt-5.3-codex` | Каталог; API требует проверки | $1.4 / $11.2 за 1 млн входных / выходных токенов (обычный контекст, без инструментов и скидки кэша). |
+| 24 | [Grok 4.3](https://docs.apimart.ai/ru/api-reference/texts/general/chat-completions) | `grok-4.3` | Каталог | $1 / $2 за 1 млн входных / выходных токенов (обычный контекст, без инструментов и скидки кэша). |
+| 25 | [Grok 4.6](https://docs.apimart.ai/ru/api-reference/texts/general/chat-completions) | `grok-4.6` | Каталог | $1.6 / $4.8 за 1 млн входных / выходных токенов (обычный контекст, без инструментов и скидки кэша). |
+| 26 | [Claude Haiku 4.5](https://docs.apimart.ai/ru/api-reference/texts/general/chat-completions) | `claude-haiku-4-5-20251001` | Условное | $0.8 / $4 за 1 млн входных / выходных токенов (обычный контекст, без инструментов и скидки кэша). |
+| 27 | [ChatGPT 5.2](https://docs.apimart.ai/ru/api-reference/texts/general/chat-completions) | `gpt-5.2` | Каталог | $1.4 / $11.2 за 1 млн входных / выходных токенов (обычный контекст, без инструментов и скидки кэша). |
+| 28 | [Claude Opus 4.6](https://docs.apimart.ai/ru/api-reference/texts/general/chat-completions) | `claude-opus-4-6` | Каталог | $4 / $20 за 1 млн входных / выходных токенов (обычный контекст, без инструментов и скидки кэша). |
+| 31 | [DeepSeek V4](https://docs.apimart.ai/ru/api-reference/texts/general/chat-completions) | `deepseek-v4-flash` | Условное | $0.3428568 / $1.0285712 за 1 млн входных / выходных токенов (обычный контекст, без инструментов и скидки кэша). |
+| 32 | [Gemini 2.5 Pro](https://docs.apimart.ai/ru/api-reference/texts/general/chat-completions) | `gemini-2.5-pro` | Каталог | $1 / $8 за 1 млн входных / выходных токенов (обычный контекст, без инструментов и скидки кэша). |
+| 33 | [Qwen 3.7 Flash](https://docs.apimart.ai/ru/api-reference/texts/general/chat-completions) | `qwen3.7-flash` | Каталог | $0.0228568 / $0.0914288 за 1 млн входных / выходных токенов (обычный контекст, без инструментов и скидки кэша). |
+| 34 | [Deepseek R1](https://docs.apimart.ai/ru/api-reference/texts/general/chat-completions) | `deepseek-r1` | Условное | $0.448 / $1.792 за 1 млн входных / выходных токенов (обычный контекст, без инструментов и скидки кэша). |
+| 35 | [Gemini 2.5 Flash Lite](https://docs.apimart.ai/ru/api-reference/texts/general/chat-completions) | `gemini-2.5-flash-lite` | Каталог | $0.08 / $0.32 за 1 млн входных / выходных токенов (обычный контекст, без инструментов и скидки кэша). |
+| 37 | [Nano Banana Pro](https://docs.apimart.ai/ru/api-reference/images/gemini-3-pro/generation) | `gemini-3-pro-image-preview` | Каталог | $0.03 / $0.03 / $0.04 за 1K / 2K / 4K. |
+| 38 | [GPT Image 2](https://docs.apimart.ai/ru/api-reference/images/gpt-image-2/generation) | `gpt-image-2` | Каталог | $0.0085 / $0.014 / $0.021 за 1K / 2K / 4K. |
+| 39 | [Seedream 5.0 Pro](https://docs.apimart.ai/ru/api-reference/images/seedream-5-0-pro/generation) | `seedream-5-0-pro` | Каталог | $0.02925 за 1K, $0.0585 за 2K. Строка «по умолчанию» $0.036; явно задавать уровень. Цена 1.5K и доплата за референсы требуют сверки. |
+| 40 | [Midjourney](https://docs.apimart.ai/ru/api-reference/images/midjourney/imagine) | `midjourney` | Условное | V7 Imagine реализован локально, флаг выключен. Relax $0.04504, Fast $0.05504, Turbo $0.10 за вызов; тариф ×3 с округлением: 30/35/60 кредитов. Платный canary не выполнен. |
+| 41 | [Nano Banana 2](https://docs.apimart.ai/ru/api-reference/images/gemini-3.1-flash/generation) | `gemini-3.1-flash-image-preview` | Каталог | $0.015 / $0.02 / $0.025 за 1K / 2K / 4K. |
+| 43 | [Grok Imagine 1.5](https://docs.apimart.ai/ru/api-reference/images/grok-imagine/generation) | `grok-imagine-1.5-apimart` | Реализовано локально | $0.015/изображение; пользовательская цена 10 кредитов. |
+| 44 | [Grok Imagine 2.0](https://docs.apimart.ai/ru/api-reference/images/grok-imagine-2.0-ext/generation) | `grok-imagine-2.0-ext` | Реализовано локально | По выбору пользователя: прайс $0.015 → 10 кредитов. В документации остаётся $0.08; live cost не проверен. |
+| 45 | [Qwen Image 3](https://docs.apimart.ai/ru/api-reference/images/qwen-image-3.0/generation) | `qwen-image-3.0` | Каталог | $0.0205712 за изображение базовой версии; тариф pro не использовать. |
+| 46 | [FLUX.2 Pro](https://docs.apimart.ai/ru/api-reference/images/flux-2/generation) | `flux-2-pro` | Реализовано локально; флаг off | T2I, 1/2/3/4MP: 15/25/30/40 кредитов (×3); платный canary и выпуск не выполнены. |
+| 48 | [Nano Banana](https://docs.apimart.ai/ru/api-reference/images/gemini-2.5-flash/generation) | `gemini-2.5-flash-image-preview` | Каталог | $0.0125 за изображение 1K. |
+| 49 | [Seedream 5.0 Lite](https://docs.apimart.ai/ru/api-reference/images/seedream-5-lite/generation) | `seedream-5-0-lite` | Каталог | $0.028 за изображение; подтвердить применение flat-тарифа к 2K/3K/4K. |
+| 50 | [Nano Banana 2 Lite](https://docs.apimart.ai/ru/api-reference/images/gemini-3.1-flash/generation-lite) | `gemini-3.1-flash-lite-image-ext` | Каталог | $0.0125 за изображение по прайсу. Описание upstream token pricing не использовать как итоговую ставку APIMart. |
+| 51 | [Seedance 2.5](https://docs.apimart.ai/ru/api-reference/videos/seedance-2-5/generation) | `seedance-2.5` | Каталог | Без входного видео: $0.09608 / $0.216 / $0.38488 за секунду 480p/720p/1080p. С входным видео: $0.0576 / $0.1296 / $0.22992 × (вход+выход). |
+| 52 | [Seedance 2.0](https://docs.apimart.ai/ru/api-reference/videos/seedance-2-0/generation) | `seedance-2.0` | Каталог | Без входного видео: $0.066 / $0.142 / $0.3544 / $0.722 за секунду 480p/720p/1080p/4K. Тариф с video-reference брать из отдельной строки input. |
+| 53 | [Gemini Omni 1.1](https://docs.apimart.ai/ru/api-reference/videos/omni-flash-ext/generation) | `gemini-omni-1.1-flash-ext` | Условное | 720p/1080p: 4/6/8/10 с стоят $0.25/$0.30/$0.35/$0.40 за вызов. 4K: $0.75/$0.80/$0.85/$0.90. 360p: $0.15/$0.175/$0.20/$0.225. |
+| 54 | [Gemini Omni Flash](https://docs.apimart.ai/ru/api-reference/videos/gemini-omni-flash-preview/generation) | `gemini-omni-flash-preview` | Условное | $0.088 за секунду 720p вывода. Для переменной длины до 10 с предварительный потолок $0.88 без входных доплат. |
+| 55 | [Wan 3.0](https://docs.apimart.ai/ru/api-reference/videos/wan3.0-video/generation) | `wan3.0-video` | Каталог | $0.034288 / $0.068568 / $0.137144 за секунду 480P/720P/1080P. Порядок расчёта с входным видео сверить отдельно. |
+| 56 | [Google Veo 3.1](https://docs.apimart.ai/ru/api-reference/videos/veo3/generation) | `veo3.1-fast` | Условное | Fast $0.14 за 8 с (4K $0.64); Quality $1.00 (4K $1.50); Lite $0.07 (4K $0.57). Это разные режимы, не цена одной одинаковой конфигурации. |
+| 57 | [Seedance 2.0 Mini](https://docs.apimart.ai/ru/api-reference/videos/seedance-2-0/generation) | `seedance-2.0-mini` | Каталог | Без video: $0.01056/с 480p, $0.02288/с 720p. С video: $0.0064/$0.01384 × (вход+выход). |
+| 59 | [Minimax H3](https://docs.apimart.ai/ru/api-reference/videos/minimax-h3/generation) | `MiniMax-H3` | Каталог | $0.05712/с 768P; $0.09144/с 2K. В прайсе +$0.02288 за изображение сверх первых пяти; видео-референсы тарифицируются отдельно. |
+| 60 | [Kling 3.0](https://docs.apimart.ai/ru/api-reference/videos/kling-v3/generation) | `kling-v3` | Каталог | 720p std: $0.0672/с без звука, $0.1008 со звуком. 1080p pro: $0.0896/$0.1344. 4K: $0.42856/с с/без звука. |
+| 61 | [Kling 3.0 Turbo](https://docs.apimart.ai/ru/api-reference/videos/kling-3.0-turbo/generation) | `kling-3.0-turbo` | Каталог | $0.1144/с 720p; $0.1432/с 1080p. |
+| 62 | [Kling 2.6](https://docs.apimart.ai/ru/api-reference/videos/kling-v2-6/generation) | `kling-v2-6` | Каталог | std 720p $0.0368/с без звука. pro 1080p $0.0625/с без звука, $0.125/с со звуком. |
+| 64 | [Kling Motion Control](https://docs.apimart.ai/ru/api-reference/videos/kling-v2-6/kling-v2-6-motion-control-generation) | `kling-v2-6-motion-control` | Условное | std 720p: $0.05712 × фактические секунды исходного видео. |
+| 65 | [Kling Motion Control Pro](https://docs.apimart.ai/ru/api-reference/videos/kling-v2-6/kling-v2-6-motion-control-generation) | `kling-v2-6-motion-control` | Условное | pro 1080p: $0.09144 × фактические секунды исходного видео. |
+| 66 | [Grok Imagine 1.5](https://docs.apimart.ai/ru/api-reference/videos/grok-imagine/generation) | `grok-imagine-1.5-video-ext` | Каталог | $0.0102/с 480p; $0.01912/с 720p. |
+| 67 | [Happy Horse](https://docs.apimart.ai/ru/api-reference/videos/happyhorse-1.0/generation) | `happyhorse-1.0` | Условное; billing ID требует проверки | Таблица HAPPYHORSE: $0.13/с 720P и $0.23/с 1080P. Связь этого billing ID с документированным happyhorse-1.0 подтвердить. |
+| 68 | [Suno](https://docs.apimart.ai/ru/api-reference/audios/suno/generation) | `suno` | Условное | $0.05 за вызов music-v5.5. Оплата за вызов, не за каждый возвращённый трек; обычно возвращаются две версии, число проверять по факту. |
 
 ## Позиции без подтверждённого API APIMart
 
-Для этих 12 позиций не придуман фиктивный интеграционный план. Сначала нужен точный model ID и подтверждённый контракт APIMart. Отсутствие в просмотренном публичном каталоге не доказывает, что провайдер никогда не сможет предоставить модель.
+Для этих 12 позиций нужен точный model ID и подтверждённый контракт APIMart. Отсутствие в просмотренном публичном каталоге не доказывает, что провайдер никогда не сможет предоставить модель.
 
 | № | Карточка Study24 | Причина | Следующий шаг |
 | --- | --- | --- | --- |
@@ -159,30 +102,14 @@
 
 ## Условия, требующие внимания
 
-- **Grok Image 2.0 EXT:** публичная таблица показывает $0.015/изображение, страница API — $0.08. Пользователь 08.09.2026 выбрал прайс $0.015 → 10 кредитов. Это выбор источника тарифа, а не подтверждение фактического списания. [План](./44-grok-image-2-0.md).
-- **ChatGPT 5.3 Codex:** ID есть в прайсе, но отдельный контракт и точный output cap не подтверждены. Chat Completions — кандидат, не гарантированная совместимость. [План](./23-gpt-5-3-codex.md).
-- **Happy Horse:** документация использует happyhorse-1.0, прайс — HAPPYHORSE; проверить billing alias и версию Study24. [План](./67-happy-horse-1-0.md).
-- **Seedance 2.5:** есть посекундные и token-тарифы. Нужно проверить, как фактический usage соотносится с оценкой для выбранного разрешения. [План](./51-seedance-2-5.md).
-- **Gemini Omni Flash:** длительность результата переменная, а поля duration в прочитанном контракте нет. Резервировать верхнюю границу и рассчитывать итог по факту. [План](./54-gemini-omni-flash-preview.md).
-- **Suno:** отдельные /music/generations и /music/tasks, несколько аудиорезультатов одного вызова. Нужна операция генерации музыки и готовность аудиомодерации. [План](./68-suno-v5-5.md).
+- **Grok Image 2.0 EXT:** публичная таблица показывает $0.015/изображение, страница API — $0.08. Пользователь 08.09.2026 выбрал прайс $0.015 → 10 кредитов. Это выбор источника тарифа, а не подтверждение фактического списания. [Документация](https://docs.apimart.ai/ru/api-reference/images/grok-imagine-2.0-ext/generation).
+- **ChatGPT 5.3 Codex:** ID есть в прайсе, но отдельный контракт и точный output cap не подтверждены. Chat Completions — кандидат, не гарантированная совместимость. [Документация](https://docs.apimart.ai/ru/api-reference/texts/general/chat-completions).
+- **Happy Horse:** документация использует happyhorse-1.0, прайс — HAPPYHORSE; проверить billing alias и версию Study24. [Документация](https://docs.apimart.ai/ru/api-reference/videos/happyhorse-1.0/generation).
+- **Seedance 2.5:** есть посекундные и token-тарифы. Нужно проверить, как фактический usage соотносится с оценкой для выбранного разрешения. [Документация](https://docs.apimart.ai/ru/api-reference/videos/seedance-2-5/generation).
+- **Gemini Omni Flash:** длительность результата переменная, а поля duration в прочитанном контракте нет. Резервировать верхнюю границу и рассчитывать итог по факту. [Документация](https://docs.apimart.ai/ru/api-reference/videos/gemini-omni-flash-preview/generation).
+- **Suno:** отдельные /music/generations и /music/tasks, несколько аудиорезультатов одного вызова. Нужна операция генерации музыки и готовность аудиомодерации. [Документация](https://docs.apimart.ai/ru/api-reference/audios/suno/generation).
 
-Имена файлов в ссылках формируются из предложенных public IDs; полный точный перечень — в таблице и models.json.
-
-## Предлагаемый порядок реализации
-
-После выбора Qwen пользователем отдельная подготовительная очередь отложена. Следующая модель выбирается отдельно.
-
-| Этап | Работа | Зачем |
-| --- | --- | --- |
-| Текущий | R3: №45 Qwen Image 3.0 — реализована локально | Использован существующий image путь; внешний запуск остаётся открытым |
-| Отложено | R0–R2: metadata ключа, общие B1/B2 и расширение pricing | Отдельные задачи, не объявленные выполненными при подключении Qwen |
-| 2 | Grok 1.5/2.0: DEV и live-проверка; затем следующие выбранные изображения | Источник тарифа Grok 2 выбран пользователем; 41 — лишь при отдельном выборе миграции с PoYo |
-| 3 | Выбранные текстовые модели после T | Выбор модели в чате, токеновый резерв, сохранение синхронного ответа |
-| 4 | Выбранные T2V/I2V после V | Разные serializers, звук/качество и точные media contracts |
-| 5 | Motion Control, расширенные refs/edit/extend | Измерение входной длины и отдельные тарифы |
-| 6 | Midjourney и Suno с их отдельными протоколами | Много результатов одного Job, специальные действия и polling |
-
-Удобные недорогие первые видеокандидаты по этому прайсу: Seedance 2.0 Mini 480p×5s — $0.0528; Grok Imagine 1.5 EXT 480p×6s — $0.0612. Они имеют разные длительности/контракты; это примеры бюджета, не сравнение качества. [Прайс APIMart](https://apimart.ai/ru/pricing).
+Точные model IDs, примеры запросов и ограничения сохранены в [models.json](./models.json).
 
 ## Источники и границы проверки
 
@@ -193,5 +120,3 @@
 - [Публичный pricing API](https://docs.apimart.ai/ru/api-reference/texts/qwen3.8-max/pricing): effective_rates, единицы, скидка группы; данные default не гарантируют персональную стоимость.
 - Context7: библиотека /websites/apimart_ai_cn, разрешение library и два запроса docs. Часть найденных примеров относится к Suno inspo; для обычной музыки использована прочитанная отдельная страница generation, а не похожий endpoint.
 - Первичная сверка была ограничена документами. Позже реализованы B0 tooling и маршрут Qwen Image 3.0; runtime/env и активная БД тарифов не менялись. Qwen contract и публичный прайс перепроверены по официальным страницам 08.09.2026.
-
-**Текущий статус:** 5 APIMart-маршрутов реализованы локально, 1 возможная миграция с PoYo и 53 новых кандидата. Для остальных 12 позиций сохранены причины отсутствия подтверждённого API. Qwen проверена пользователем на DEV; Grok 1.5/2.0 ожидают выкладки и live-проверки.

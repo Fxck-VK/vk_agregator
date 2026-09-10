@@ -1,3 +1,5 @@
+// History tests isolate catalog loading; paid selection is covered by TextModelSelector tests.
+vi.mock("@/features/conversations/TextModelSelector", () => ({ TextModelSelector: () => null }));
 import { StrictMode } from "react";
 import { act, cleanup, fireEvent, render, screen, within } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";

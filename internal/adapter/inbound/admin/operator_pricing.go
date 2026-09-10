@@ -53,6 +53,7 @@ func newOperatorPricingEntries(prices []pricingcatalog.ProductPrice) ([]Operator
 		out = append(out, OperatorPricingEntryDTO{
 			Operation:              string(price.Key.Operation),
 			Modality:               string(price.Key.Modality),
+			TextModelID:            price.Key.TextModelID,
 			ImageModelID:           price.Key.ImageModelID,
 			VideoRouteAlias:        string(price.Key.VideoRouteAlias),
 			Quality:                price.Key.Quality,

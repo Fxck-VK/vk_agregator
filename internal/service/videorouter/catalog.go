@@ -159,7 +159,7 @@ func (r Route) publiclyAvailable() bool {
 		r.ProviderEnabled &&
 		r.ProviderConfigured &&
 		r.ProviderBaseConfigured &&
-		(r.Spec.ProviderCostCreditsFixed > 0 || r.Spec.ProviderCostCreditsPerSecond > 0)
+		(r.Spec.ProviderCostCreditsFixed > 0 || r.Spec.ProviderCostCreditsPerSecond > 0 || len(r.Spec.ProviderCostMicrosPerSecondByResolution) > 0)
 }
 
 func (c *Catalog) Validate(ctx context.Context, req Request) error {
@@ -249,6 +249,10 @@ func (c *Catalog) Resolve(ctx context.Context, req Request) (Resolution, error) 
 		return Resolution{}, fmt.Errorf("%w: %s audio reference", ErrInvalidRouteRequest, routeAlias)
 	}
 	providerCost := route.Spec.ProviderCostCreditsFixed + route.Spec.ProviderCostCreditsPerSecond*int64(durationSec)
+	if len(route.Spec.ProviderCostMicrosPerSecondByResolution) > 0 {
+		rate := route.Spec.ProviderCostMicrosPerSecondByResolution[normalize(resolutionRaw)]
+		providerCost = (rate*int64(durationSec) + 999999) / 1000000
+	}
 	if providerCost <= 0 {
 		return Resolution{}, fmt.Errorf("%w: %s", ErrRouteCostUnavailable, routeAlias)
 	}

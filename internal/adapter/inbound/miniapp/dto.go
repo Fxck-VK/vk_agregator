@@ -48,8 +48,10 @@ type CreateJobRequest struct {
 	// validated server-side and never expanded into URLs in the BFF response.
 	ReferenceArtifactIDs []uuid.UUID `json:"reference_artifact_ids,omitempty"`
 	// DurationSec is the requested video length in seconds for video_generate.
-	// Allowed values: 3, 5, 10. Omitted defaults to 5.
+	// Allowed values and default come from the selected backend route.
 	DurationSec int `json:"duration_sec,omitempty"`
+	// VideoResolution is an optional public option validated against the route.
+	VideoResolution string `json:"video_resolution,omitempty"`
 	// AspectRatio is backend-derived from trusted reference artifact metadata.
 	// It is never accepted from client JSON.
 	AspectRatio string `json:"-"`
@@ -60,7 +62,8 @@ type CreateJobRequest struct {
 
 // ChatMessageRequest is the body accepted by POST /miniapp/chat/messages.
 type ChatMessageRequest struct {
-	Prompt string `json:"prompt"`
+	ModelID string `json:"model_id,omitempty"`
+	Prompt  string `json:"prompt"`
 	// ConversationID is accepted for backward compatibility only. The backend
 	// ignores client-provided values and always uses the single default chat.
 	ConversationID string `json:"conversation_id,omitempty"`

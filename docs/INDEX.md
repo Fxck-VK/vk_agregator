@@ -24,7 +24,8 @@ Read only the document that matches the current task:
 
 | Task scope | Active document |
 | --- | --- |
-| Study24 models on APIMart: implementation status, selected Qwen Image 3.0 route, deferred foundation work and B0 tooling | [Plan registry](../docs/superpowers/plans/2026-09-08-study24-apimart/README.md); [Qwen Image 3.0](../docs/superpowers/plans/2026-09-08-study24-apimart/45-qwen-image-3.md); [shared foundation](../docs/superpowers/plans/2026-09-08-study24-apimart/00-common-foundation.md); [read-only preflight](../docs/runbooks/APIMART_PREFLIGHT.md) |
+| Text models: KIE and APIMart integration, prices and rollout gates | [Text models](runbooks/KIE_TEXT_MODELS.md) |
+| Study24 model research, provider documentation and shared integration work | [Model catalog](superpowers/plans/2026-09-08-study24-apimart/README.md); [shared foundation](superpowers/plans/2026-09-08-study24-apimart/00-common-foundation.md); [DEV configuration](runbooks/DEV.md); [read-only preflight](runbooks/APIMART_PREFLIGHT.md) |
 | Account-first backend core independence, VK adapter separation, neutral sessions and delivery | docs/superpowers/specs/2026-07-30-account-first-backend-core-design.md; implementation plan: docs/superpowers/plans/2026-07-30-channel-neutral-result-delivery.md |
 | Production deploy, domains, Cloudflare, VPS runtime | `docs/runbooks/DEPLOYMENT.md` |
 | Local DEV contour and DEV GitHub deploy | `docs/runbooks/DEV.md` |

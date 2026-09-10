@@ -12,6 +12,7 @@ import (
 	"log/slog"
 	"net/http"
 	"net/url"
+	"slices"
 	"strconv"
 	"strings"
 	"time"
@@ -28,7 +29,9 @@ import (
 	"vk-ai-aggregator/internal/service/modelcatalog"
 	"vk-ai-aggregator/internal/service/paymentservice"
 	"vk-ai-aggregator/internal/service/pricingcatalog"
+	"vk-ai-aggregator/internal/service/providermodels"
 	"vk-ai-aggregator/internal/service/referralservice"
+	"vk-ai-aggregator/internal/service/textgeneration"
 )
 
 type contextKey int
@@ -64,6 +67,7 @@ type ReferralService interface {
 
 // Config holds per-deployment miniapp settings.
 type Config struct {
+	TextModels []textgeneration.PublicModel
 	// AppSecret is the VK App's protected key for verifying launch-params
 	// signatures. When empty the check is skipped (dev/mock mode).
 	AppSecret string
@@ -193,6 +197,7 @@ func (h *Handler) Routes() http.Handler {
 	mux.HandleFunc("POST /miniapp/jobs", h.auth(h.rateLimitMiniApp("miniapp_job", h.createJob)))
 	mux.HandleFunc("GET /miniapp/jobs", h.auth(h.listJobs))
 	mux.HandleFunc("GET /miniapp/jobs/{id}", h.auth(h.getJob))
+	mux.HandleFunc("GET /miniapp/text-models", h.auth(h.listTextModels))
 	mux.HandleFunc("GET /miniapp/model-catalog", h.auth(h.listModelCatalog))
 	mux.HandleFunc("GET /miniapp/balance", h.auth(h.getBalance))
 	mux.HandleFunc("GET /miniapp/referral", h.auth(h.getReferral))
@@ -616,6 +621,10 @@ func (h *Handler) readJobRequest(w http.ResponseWriter, r *http.Request) (Create
 		writeError(w, http.StatusBadRequest, "duration_sec is only supported for video_generate")
 		return CreateJobRequest{}, "", "", miniAppModelSpec{}, false
 	}
+	if strings.TrimSpace(req.VideoResolution) != "" && opType != domain.OperationVideoGenerate {
+		writeError(w, http.StatusBadRequest, "video_resolution is only supported for video_generate")
+		return CreateJobRequest{}, "", "", miniAppModelSpec{}, false
+	}
 	if strings.TrimSpace(req.ImageQuality) != "" && opType != domain.OperationImageGenerate {
 		writeError(w, http.StatusBadRequest, "image_quality is only supported for image_generate")
 		return CreateJobRequest{}, "", "", miniAppModelSpec{}, false
@@ -633,6 +642,13 @@ func (h *Handler) readJobRequest(w http.ResponseWriter, r *http.Request) (Create
 		}
 		req.VideoRouteAlias = route.Alias
 		req.Resolution = route.DefaultResolution
+		if resolution := strings.ToLower(strings.TrimSpace(req.VideoResolution)); resolution != "" {
+			if !slices.Contains(route.AllowedResolutions, resolution) {
+				writeError(w, http.StatusBadRequest, "invalid video resolution")
+				return CreateJobRequest{}, "", "", miniAppModelSpec{}, false
+			}
+			req.Resolution = resolution
+		}
 		duration, ok := normalizeVideoDurationSec(req.DurationSec, route)
 		if !ok {
 			writeError(w, http.StatusBadRequest, "invalid video duration")
@@ -654,12 +670,19 @@ func (h *Handler) readJobRequest(w http.ResponseWriter, r *http.Request) (Create
 			writeError(w, http.StatusBadRequest, "unsupported model")
 			return CreateJobRequest{}, "", "", miniAppModelSpec{}, false
 		}
+		if opType == domain.OperationTextGenerate && providermodels.IsPaidTextRoute(model.Provider, model.ModelCode) {
+			if _, _, err := textgeneration.Resolve(req.ModelID, req.Prompt, h.cfg.TextModels, h.deps.PricingCatalog); err != nil || len(req.ReferenceArtifactIDs) > 0 {
+				writeError(w, http.StatusBadRequest, "text model unavailable")
+				return CreateJobRequest{}, "", "", miniAppModelSpec{}, false
+			}
+		}
 		if opType == domain.OperationImageGenerate {
 			referenceCount, ok := uniqueImageReferenceCount(w, req.ReferenceArtifactIDs)
 			if !ok {
 				return CreateJobRequest{}, "", "", miniAppModelSpec{}, false
 			}
 			resolution, err := h.resolveImageGeneration(imagegeneration.Request{
+				Prompt:         req.Prompt,
 				ModelID:        req.ModelID,
 				Quality:        req.ImageQuality,
 				ReferenceCount: referenceCount,
@@ -696,6 +719,8 @@ func (h *Handler) resolveImageGeneration(request imagegeneration.Request) (image
 
 func writeImageGenerationResolveError(w http.ResponseWriter, err error) {
 	switch {
+	case errors.Is(err, imagegeneration.ErrUnsupportedPromptOptions):
+		writeError(w, http.StatusBadRequest, "native prompt options are unsupported")
 	case errors.Is(err, imagegeneration.ErrUnsupportedQuality):
 		writeError(w, http.StatusBadRequest, "unsupported image quality")
 	case errors.Is(err, imagegeneration.ErrReferenceUnsupported):
@@ -792,6 +817,8 @@ func videoRouteModelSpec(route VideoRouteDTO) miniAppModelSpec {
 
 func videoRouteDisplayName(alias string) string {
 	switch alias {
+	case string(domain.VideoRouteSeedance25):
+		return "Seedance 2.5"
 	case string(domain.VideoRouteHailuo23Fast):
 		return "Hailuo 2.3 Fast"
 	case string(domain.VideoRouteHailuo23Standard):
@@ -1032,6 +1059,10 @@ func (h *Handler) estimateJob(w http.ResponseWriter, r *http.Request) {
 
 func (h *Handler) estimateRequestCost(ctx context.Context, userID uuid.UUID, opType domain.OperationType, modality domain.Modality, model miniAppModelSpec, req CreateJobRequest) (int64, error) {
 	if opType == domain.OperationTextGenerate {
+		if providermodels.IsPaidTextRoute(model.Provider, model.ModelCode) {
+			_, snapshot, err := textgeneration.Resolve(req.ModelID, req.Prompt, h.cfg.TextModels, h.deps.PricingCatalog)
+			return snapshot.InternalCredits, err
+		}
 		return h.deps.Billing.Estimate(opType)
 	}
 	if model.imageResolution != nil {
@@ -1190,7 +1221,10 @@ func (h *Handler) createJob(w http.ResponseWriter, r *http.Request) {
 	metrics.ObserveProductPromptLength("miniapp", string(opType), string(modality), req.Prompt)
 	var pricingSnapshot pricingcatalog.PricingSnapshot
 	var costEstimate int64
-	if opType == domain.OperationTextGenerate {
+	if opType == domain.OperationTextGenerate && providermodels.IsPaidTextRoute(model.Provider, model.ModelCode) {
+		_, pricingSnapshot, err = textgeneration.Resolve(req.ModelID, req.Prompt, h.cfg.TextModels, h.deps.PricingCatalog)
+		costEstimate = pricingSnapshot.InternalCredits
+	} else if opType == domain.OperationTextGenerate {
 		costEstimate, err = h.deps.Billing.Estimate(opType)
 	} else if model.imageResolution != nil {
 		pricingSnapshot = model.imageResolution.PricingSnapshot
@@ -1289,8 +1323,8 @@ func (h *Handler) createChatMessage(w http.ResponseWriter, r *http.Request) {
 	idemKey := fmt.Sprintf("miniapp_chat:%d:%s", vkUserID, clientKey)
 	correlationID := fmt.Sprintf("miniapp-chat:%d:%s", vkUserID, clientKey)
 
-	model, ok := resolveMiniAppModel(domain.OperationTextGenerate, "")
-	if !ok {
+	model, snapshot, resolveErr := textgeneration.Resolve(req.ModelID, req.Prompt, h.cfg.TextModels, h.deps.PricingCatalog)
+	if resolveErr != nil {
 		h.logger.Error("miniapp: chat model catalog missing")
 		writeError(w, http.StatusInternalServerError, "internal error")
 		return
@@ -1308,20 +1342,23 @@ func (h *Handler) createChatMessage(w http.ResponseWriter, r *http.Request) {
 	metrics.ObserveProductPromptLength("miniapp", string(domain.OperationTextGenerate), string(domain.ModalityText), req.Prompt)
 
 	job, err := h.deps.Orchestrator.CreateJob(r.Context(), joborchestrator.CreateJobInput{
-		UserID:         user.ID,
-		AccountID:      accountID,
-		Source:         "miniapp",
-		ChannelContext: &domain.ChannelContext{Channel: domain.ChannelVKMiniApp},
-		ResultMode:     domain.ResultModeAccountHistory,
-		VKPeerID:       vkUserID,
-		CommandID:      uuid.Nil,
-		Operation:      domain.OperationTextGenerate,
-		Modality:       domain.ModalityText,
-		IdempotencyKey: idemKey,
-		CorrelationID:  correlationID,
-		Params:         params,
+		UserID:          user.ID,
+		AccountID:       accountID,
+		Source:          "miniapp",
+		ChannelContext:  &domain.ChannelContext{Channel: domain.ChannelVKMiniApp},
+		ResultMode:      domain.ResultModeAccountHistory,
+		VKPeerID:        vkUserID,
+		CommandID:       uuid.Nil,
+		Operation:       domain.OperationTextGenerate,
+		Modality:        domain.ModalityText,
+		IdempotencyKey:  idemKey,
+		CorrelationID:   correlationID,
+		Params:          params,
+		PricingSnapshot: snapshot,
 	})
 	switch {
+	case errors.Is(err, domain.ErrConflict):
+		writeError(w, http.StatusConflict, "idempotency key belongs to another message")
 	case err == nil:
 		writeJSON(w, http.StatusCreated, newChatJobDTO(job))
 	case errors.Is(err, domain.ErrInsufficientCredits):
@@ -2047,4 +2084,15 @@ func writeJSON(w http.ResponseWriter, status int, body any) {
 
 func writeError(w http.ResponseWriter, status int, message string) {
 	writeJSON(w, status, map[string]string{"error": message})
+}
+
+func (h *Handler) listTextModels(w http.ResponseWriter, r *http.Request) {
+	w.Header().Set("Cache-Control", "no-store")
+	var ids []string
+	for _, m := range h.cfg.TextModels {
+		if m.ID != "chatgpt" {
+			ids = append(ids, m.ID)
+		}
+	}
+	writeJSON(w, http.StatusOK, map[string]any{"items": textgeneration.Models(ids, h.deps.PricingCatalog)})
 }

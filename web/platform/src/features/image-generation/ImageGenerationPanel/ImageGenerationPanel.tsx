@@ -317,6 +317,7 @@ export function ImageGenerationPanel({ onJobChange }: Readonly<ImageGenerationPa
 
       {(stage === "editor" || stage === "preparing") && selectedModel !== null ? (
         <ImageGenerationComposer
+          modelID={selectedModel.id}
           aspectRatio={aspectRatio}
           allowedAspectRatios={allowedAspectRatios}
           canSubmit={canPrepare}

@@ -2,13 +2,13 @@
 
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
-**Goal:** обеспечить безопасное подключение отдельных моделей из [реестра планов](./README.md), без смешения версий и тарифов.
+**Goal:** обеспечить безопасное подключение отдельных моделей из [реестра моделей](./README.md), без смешения версий и тарифов.
 
 **Architecture:** текущий путь Job → worker → provider adapter → Artifact → moderation → delivery сохраняется. Каталог разрешает публичный model_id в доверенный snapshot; только worker вызывает APIMart.
 
 **Tech Stack:** Go, PostgreSQL, Redis, object storage, Next.js/TypeScript.
 
-**Spec:** [границы задания и полный список](./README.md). Статус: локальный инструмент B0 реализован; реальные проверки B0 и оставшиеся расширения основы не завершены. По выбору пользователя [Qwen Image 3.0](./45-qwen-image-3.md) реализована напрямую на существующих компонентах; отдельные B0–B3 не являлись предварительными этапами. Это не закрывает общий B2 и прочие расширения основы.
+**Spec:** [границы задания и полный список](./README.md). Статус: локальный инструмент B0 реализован; реальные проверки B0 и оставшиеся расширения основы не завершены. По выбору пользователя [Qwen Image 3.0](../../../runbooks/DEV.md#qwen-image-30-configuration) реализована напрямую на существующих компонентах; отдельные B0–B3 не являлись предварительными этапами. Это не закрывает общий B2 и прочие расширения основы.
 
 ## Состояние основы после сверки с кодом
 
@@ -27,10 +27,10 @@
 
 ## Global Constraints
 
-- Отдельные планы выбираются независимо. Выполнение одного не разрешает включить весь каталог.
+- Модели выбираются независимо. Подключение одной не разрешает включить весь каталог.
 - Провайдер APIMart, база `https://api.apimart.ai/v1`. Ключ только в существующей серверной конфигурации; значение не писать в код, документы или fixtures.
 - Все флаги новых моделей выключены до проверки API, цены, модерации и сохранения результата. Доступность сайта не доказывает доступность модели конкретному API-ключу.
-- Существующие Pro/GPT Image 2 через APIMart и Nano Banana 2 через PoYo не подключать повторно. Проверка плана не меняет их текущие флаги или цены. Миграция Nano Banana 2 выполняется только при выборе плана 41.
+- Существующие Pro/GPT Image 2 через APIMart и Nano Banana 2 через PoYo не подключать повторно. Проверка плана не меняет их текущие флаги или цены. Миграция Nano Banana 2 выполняется только при отдельном выборе этой миграции.
 - Ни переключения на другую модель при ошибке, ни более дорогого official_fallback без отдельного явного выбора.
 - Пользовательский интерфейс отправляет public ID, параметры и принадлежащие аккаунту artifact IDs. Provider/model code, цена, роли и URL для вызова формируются сервером.
 - Нельзя считать провайдерский nsfw_check заменой существующей модерации: часть проверок у провайдера работает fail-open.
@@ -186,11 +186,11 @@ var qwen37Output = ExactRate{USDNanos: 91428800, Units: 1000000}
 - [ ] В resolved route snapshot сохранить mode/audio/resolution/duration/generation_type и проверенные входные длительности. Нынешний safeVideoProviderParams не должен отбрасывать эти поля.
 - [ ] Реализовать общий UI видео: поля только из backend capabilities, загрузка разрешённых типов, quote, статус Job, результат/ошибка. В интерфейсе нельзя независимо выбрать несовместимые mode/audio/last frame.
 - [ ] Native audio, reference video и динамическую длительность добавить в media contract. Проверка звука/частоты кадров/размера не должна отклонять документированный результат из-за старого Hailuo профиля.
-- [ ] Первая стадия конкретного плана — перечисленные T2V/I2V комбинации. Следующие режимы идут отдельными чекбоксами в этом же плане, с новой ценой, входной проверкой и тестом, без скрытого открытия всех полей APIMart.
+- [ ] Первая стадия интеграции — выбранные T2V/I2V комбинации. Следующие режимы подключаются отдельно, с новой ценой, входной проверкой и тестом, без скрытого открытия всех полей APIMart.
 
 ## C. Motion Control
 
-После B0–B3 и V: два отдельных public ID, общий provider model ID. Создать обязательные входы image+video, backend media probe для длины, orientation=image/video. Разрешение определяется std/pro; пользователь не задаёт независимую несовместимую resolution. Ни duration, ни цена из клиентского JSON не являются источником расчёта. Два плана отличаются mode и тарифом; оба должны иметь отдельный тест маршрутизации.
+После B0–B3 и V: два отдельных public ID, общий provider model ID. Создать обязательные входы image+video, backend media probe для длины, orientation=image/video. Разрешение определяется std/pro; пользователь не задаёт независимую несовместимую resolution. Ни duration, ни цена из клиентского JSON не являются источником расчёта. Два маршрута отличаются mode и тарифом; оба должны иметь отдельный тест маршрутизации.
 
 ## A. Музыка
 
@@ -208,7 +208,7 @@ var qwen37Output = ExactRate{USDNanos: 91428800, Units: 1000000}
 
 ## Проверки реализации и выпуск одной модели
 
-- [ ] Contract fixtures: exact body/path/headers, positive и negative cases конкретного плана, 200/202 и соответствующий poll envelope.
+- [ ] Contract fixtures: exact body/path/headers, positive и negative cases выбранного маршрута, 200/202 и соответствующий poll envelope.
 - [ ] Unit/integration: route/price snapshot, ошибки провайдера, повтор Job/capture, crash recovery, чужие reference/conversation/task IDs, moderation rejection, сохранение результата после истечения provider URL.
 - [ ] Go: `go test ./internal/adapter/provider/apimart ./internal/service/providermodels ./internal/service/modelcatalog ./internal/service/productcatalog ./internal/service/pricingcatalog ./internal/service/joborchestrator ./internal/service/billingservice ./internal/worker`; добавить тесты выбранного resolver и storage при их изменении. `go vet` по тем же затронутым пакетам; gofmt только изменённым Go-файлам.
 - [ ] Web, если менялся: `npm --prefix web/platform run typecheck`, `npm --prefix web/platform run lint`, `npm --prefix web/platform run test`.

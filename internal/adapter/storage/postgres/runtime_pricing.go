@@ -34,7 +34,7 @@ func (r *RuntimePricingRepository) ListActivePrices(ctx context.Context) (pricin
 	const q = `
 SELECT operation, modality, image_model_id, video_route_alias, quality, resolution,
        duration_sec, floor_amount, floor_unit, multiplier_numerator,
-       multiplier_denominator, internal_credit_cap, floor_amount_cap, enabled
+       multiplier_denominator, internal_credit_cap, floor_amount_cap, enabled, text_model_id
 FROM runtime_generation_prices
 WHERE catalog_version_id = $1 AND enabled = true
 ORDER BY operation, modality, image_model_id, video_route_alias, quality, resolution, duration_sec`
@@ -75,7 +75,7 @@ func (r *RuntimePricingRepository) GetActivePrice(ctx context.Context, key prici
 	const q = `
 SELECT operation, modality, image_model_id, video_route_alias, quality, resolution,
        duration_sec, floor_amount, floor_unit, multiplier_numerator,
-       multiplier_denominator, internal_credit_cap, floor_amount_cap, enabled
+       multiplier_denominator, internal_credit_cap, floor_amount_cap, enabled, text_model_id
 FROM runtime_generation_prices
 WHERE catalog_version_id = $1
   AND enabled = true
@@ -85,7 +85,7 @@ WHERE catalog_version_id = $1
   AND video_route_alias = $5
   AND quality = $6
   AND resolution = $7
-  AND duration_sec = $8`
+  AND duration_sec = $8 AND text_model_id = $9`
 	price, err := scanRuntimeProductPrice(r.db.QueryRow(
 		ctx,
 		q,
@@ -97,6 +97,7 @@ WHERE catalog_version_id = $1
 		key.Quality,
 		key.Resolution,
 		key.DurationSec,
+		key.TextModelID,
 	), version)
 	if errors.Is(err, pgx.ErrNoRows) {
 		return pricingcatalog.ProductPrice{}, pricingcatalog.ErrPriceNotFound
@@ -146,6 +147,7 @@ func scanRuntimeProductPrice(row rowScanner, version pricingcatalog.RuntimeCatal
 		operation             string
 		modality              string
 		imageModelID          string
+		textModelID           string
 		videoRouteAlias       string
 		quality               string
 		resolution            string
@@ -173,6 +175,7 @@ func scanRuntimeProductPrice(row rowScanner, version pricingcatalog.RuntimeCatal
 		&internalCreditCap,
 		&floorAmountCap,
 		&enabled,
+		&textModelID,
 	); err != nil {
 		return pricingcatalog.ProductPrice{}, err
 	}
@@ -187,6 +190,7 @@ func scanRuntimeProductPrice(row rowScanner, version pricingcatalog.RuntimeCatal
 			Operation:       domain.OperationType(operation),
 			Modality:        domain.Modality(modality),
 			ImageModelID:    imageModelID,
+			TextModelID:     textModelID,
 			VideoRouteAlias: domain.VideoRouteAlias(videoRouteAlias),
 			Quality:         quality,
 			Resolution:      resolution,

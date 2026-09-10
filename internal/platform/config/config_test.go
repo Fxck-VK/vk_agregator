@@ -363,6 +363,7 @@ func TestLoadVideoRouterFlagsDefaultDisabled(t *testing.T) {
 		"FEATURE_VIDEO_ROUTE_KLING_O3_STANDARD_ENABLED",
 		"FEATURE_VIDEO_ROUTE_RUNWAY_GEN4_TURBO_ENABLED",
 		"FEATURE_VIDEO_ROUTE_SEEDANCE_2_0_FAST_ENABLED",
+		"FEATURE_APIMART_SEEDANCE_2_5_ENABLED",
 		"FEATURE_VIDEO_ROUTE_RUNWAY_GEN4_5_ENABLED",
 		"FEATURE_VIDEO_ROUTE_MOCK_TEXT_TO_VIDEO_ENABLED",
 		"FEATURE_VIDEO_ROUTE_RESELLER_EXPERIMENTS_ENABLED",
@@ -385,6 +386,7 @@ func TestLoadVideoRouterFlagsDefaultDisabled(t *testing.T) {
 		cfg.FeatureVideoRouteKlingO3StandardEnabled ||
 		cfg.FeatureVideoRouteRunwayGen4TurboEnabled ||
 		cfg.FeatureVideoRouteSeedance20FastEnabled ||
+		cfg.FeatureAPIMartSeedance25Enabled ||
 		cfg.FeatureVideoRouteRunwayGen45Enabled ||
 		cfg.FeatureVideoRouteMockTextToVideoEnabled ||
 		cfg.FeatureVideoRouteResellerExperimentsEnabled ||

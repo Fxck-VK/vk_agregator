@@ -2846,8 +2846,7 @@ and environment values are not mutated by this implementation.
 This route reuses existing APIMart submit/poll recovery. Durable pre-submit intents
 and recovery of a process crash between upstream acceptance and saving task_id
 remain separate work; the new model does not establish that guarantee.
-See [Qwen implementation](superpowers/plans/2026-09-08-study24-apimart/45-qwen-image-3.md)
-and [DEV configuration](runbooks/DEV.md).
+See [Qwen DEV configuration](runbooks/DEV.md#qwen-image-30-configuration).
 
 ## Grok Imagine image routes (2026-09-08)
 
@@ -2870,5 +2869,81 @@ within a bounded window. An unresolved outcome maps to the non-retryable
 This does not close the process-crash window before saving the provider task;
 durable pre-submit intents remain separate B2 work.
 
-See [Grok 1.5](superpowers/plans/2026-09-08-study24-apimart/43-grok-image-1-5.md)
-and [Grok 2.0](superpowers/plans/2026-09-08-study24-apimart/44-grok-image-2-0.md).
+See [Grok DEV configuration](runbooks/DEV.md#grok-imagine-image-configuration).
+
+## Seedance 2.5 video route (2026-09-09)
+
+`video_seedance_2_5` maps to APIMart `seedance-2.5` through the existing
+Job/worker/Artifact pipeline. An independent opt-in flag and provider/key/pricing
+readiness gate catalog exposure. The first release supports 5/10/15/30-second MP4
+with native audio, 480p/720p/1080p, and up to four owned image references.
+Multimodal roles and human-face asset approval are not exposed. Mini App validates
+its public `video_resolution` option before quote/reservation; workers consume
+immutable snapshots. Static catalog version 7 adds twelve x3 tariffs rounded up
+to five internal credits. Actual APIMart token settlement can differ from the
+preauthorization estimate, while user capture stays at the reserved price.
+
+Seedance coalesces same-key submissions within the adapter process. Ambiguous
+outcomes stop automatic fresh submits with `provider_submit_indeterminate`.
+Accepted task IDs use durable worker polling; crash recovery before task ID
+persistence remains the shared durable-intent gap. Auth, owner checks, output
+moderation and ledger semantics remain shared.
+See [video contract and prices](VIDEO_GENERATION.md#seedance-25) and
+[DEV configuration](runbooks/DEV.md#seedance-25-configuration).
+## Midjourney V7 Imagine contract (2026-09-09)
+
+Public model `midjourney_v7` maps to APIMart Imagine through the existing image
+Job pipeline. Worker submits `/v1/midjourney/generations` with version `7`,
+quality `1`, a validated aspect ratio and speed `relax`/`fast`/`turbo`; the public
+`image_quality` pricing dimension carries speed for this model. No provider-native
+fields or prompt flags may override the trusted billing dimensions.
+
+An Imagine invocation is one Job and one immutable price snapshot/capture.
+All returned images are stored as owned Artifacts and moderated before delivery.
+Poll stays on `/v1/tasks/{id}`. Mini App supports four owned reference images;
+the existing standalone Web form supports text input. Other Midjourney actions
+require separately priced Jobs and are not exposed.
+
+The route is disabled by default. The APIMart submit helper shared with Seedance
+coalesces requests in-process and stops ambiguous paid resubmissions. Midjourney
+also claims a durable per-Job provider_tasks row before network I/O; only the
+unique-key inserter submits. The accepted external ID updates that same row.
+An unresolved claim after restart never triggers a second paid call: recovery
+waits the call timeout plus one minute, then fails terminal and releases credits.
+A provider-accepted outcome with no saved ID needs operator reconciliation.
+Midjourney never allocates a second paid attempt inside the same Job. Other
+provider retry policies and the database schema are unchanged.
+See [Midjourney DEV configuration](runbooks/DEV.md#midjourney-v7-configuration).
+### FLUX.2 Pro APIMart image route (2026-09-09)
+
+Public `flux_2_pro` resolves to APIMart `flux-2-pro` behind
+`FEATURE_APIMART_FLUX_2_PRO_ENABLED=false` by default. The first release is
+text-to-image with one output and explicit 1MP/2MP/3MP/4MP tiers. Legacy K aliases,
+references and arbitrary pixel dimensions are rejected. Static pricing catalog
+version 9 adds 15/25/30/40 internal credits, provider cost x3 rounded up to five.
+Web and Mini App use the same backend-owned quote and immutable Job snapshot.
+
+The worker calls POST /v1/images/generations and polls GET /v1/tasks/{task_id}.
+All output artifacts pass moderation before visibility and ledger capture.
+The existing Midjourney durable submit claim is shared with FLUX.2: a unique
+provider_tasks row precedes the network call; accepted task IDs update that row.
+No schema migration is required. Midjourney idempotency keys remain unchanged.
+An unresolved claim never starts another paid request after restart; after the
+call deadline plus one minute it fails terminally and releases the reservation.
+Operator reconciliation is required before manually retrying unknown outcomes.
+
+Model-specific aspect ratio allowlists now govern image validation; FLUX.2 adds
+9:21 without widening other models. Prepared Web replay compares the previously
+validated public ratio and stored price. Mini App reference upload respects the
+backend model capability and clears references on unsupported model selection.
+
+See [FLUX.2 DEV configuration](runbooks/DEV.md#flux2-pro-configuration).
+
+
+## Paid synchronous text models (2026-09-09)
+
+Eleven paid text models use worker-only, explicitly pinned routes: ten through KIE and Claude Fable 5.1 through APIMart. A shared textapi adapter implements Responses, Messages, Gemini Chat Completions and APIMart Chat Completions; media adapters keep their existing contracts. Public catalogs and resolvers expose model IDs and fixed bounded reply prices. Pricing snapshots include TextModelID plus immutable input/output token caps; migration 000052 adds the text dimension to runtime pricing. The configured default chat and conversation-title route stay on their existing provider.
+
+A unique provider_tasks submit intent precedes paid HTTP. ImmediateResult is transient; the worker saves text as a private Artifact and attaches it to the Job before checkpointing a terminal provider task. Recovery uses the saved artifact, repeats output moderation and delegates capture to the existing account-history delivery. An ambiguous response without a persisted artifact releases the reservation and never automatically starts a fresh paid submit. No raw response or inline text is stored in provider_tasks.
+
+Model flags, provider credentials, exact prices and the matching KIE_TEXT_LIMITS_VERIFIED or APIMART_TEXT_LIMITS_VERIFIED gate must all be ready. Verification gates are independent; all new model flags default to false. Static pricing version 11 adds the eight new models with cost times three rounded up to five credits. Unconfirmed native output-limit semantics keep rollout disabled. See docs/runbooks/KIE_TEXT_MODELS.md for contracts, prices, tests and rollout gates.

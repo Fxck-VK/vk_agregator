@@ -12,6 +12,8 @@ import { cleanupLegacyChatStorage, defaultThread } from "./store";
 import { loadAppTab, saveAppTab, type AppTab } from "../mode";
 import {
   createChatMessage,
+  listTextModels,
+  type TextModel,
   createJob,
   createIdempotencyKey,
   getJob,
@@ -44,6 +46,7 @@ type SubmitRequest = {
   chat?: boolean;
   referenceArtifactIds?: string[];
   durationSec?: number;
+  videoResolution?: string;
 };
 
 function tabTitle(tab: AppTab): { name: string; sub: string } {
@@ -142,6 +145,15 @@ async function earlyChatBotText(job: Job): Promise<string | undefined> {
 }
 
 export function ChatScreen({ user }: { user: VkUser }) {
+  const [textModels,setTextModels] = useState<TextModel[]>([{id:CHAT_MODEL_ID,name:CHAT_ASSISTANT_NAME,estimate_credits:0}]);
+  const [textModelId,setTextModelId] = useState(CHAT_MODEL_ID);
+  const [textCatalogFailed,setTextCatalogFailed] = useState(false);
+  const [textInputError,setTextInputError] = useState("");
+  useEffect(() => {
+    let active=true;
+    void listTextModels().then(models => {if(active) setTextModels(models);}).catch(() => {if(active) setTextCatalogFailed(true);});
+    return () => {active=false;};
+  }, []);
   const [chat, setChat] = useState<Chat>(() => defaultThread());
   const [balance, setBalance] = useState<number | null>(null);
   const [loading, setLoading] = useState(true);
@@ -341,7 +353,13 @@ export function ChatScreen({ user }: { user: VkUser }) {
   }
 
   function handleSend(text: string): boolean {
-    return runSubmit(text, { operation: CHAT_OPERATION, modelId: CHAT_MODEL_ID, chat: true });
+    const model=textModels.find(item => item.id===textModelId);
+    if (model?.max_prompt_bytes && new TextEncoder().encode(text).length > model.max_prompt_bytes) {
+      setTextInputError("Сообщение слишком длинное для выбранной модели.");
+      return false;
+    }
+    setTextInputError("");
+    return runSubmit(text, { operation: CHAT_OPERATION, modelId: textModelId, chat: true });
   }
 
   function handleRetry(msg: ChatMessage, prompt: string): void {
@@ -387,7 +405,7 @@ export function ChatScreen({ user }: { user: VkUser }) {
     try {
       const job = isChat
         ? await createChatMessage(
-            { prompt: text },
+            { prompt: text, ...(selectedModel !== CHAT_MODEL_ID ? {model_id: selectedModel} : {}) },
             { idempotencyKey },
           )
         : await createJob(
@@ -410,6 +428,7 @@ export function ChatScreen({ user }: { user: VkUser }) {
                 !isChat && operation === "video_generate" && request?.durationSec !== undefined
                   ? request.durationSec
                   : undefined,
+              video_resolution: operation === "video_generate" ? request?.videoResolution : undefined,
             },
             { idempotencyKey },
           );
@@ -578,8 +597,16 @@ export function ChatScreen({ user }: { user: VkUser }) {
             )}
           </div>
 
+          <label className="text-model-picker">Модель
+            <select aria-label="Текстовая модель" value={textModelId} disabled={loading || submitting} onChange={event => setTextModelId(event.target.value)}>
+              {textModels.map(model => <option key={model.id} value={model.id}>{model.name}{model.estimate_credits > 0 ? ` · ${model.estimate_credits} кредитов за ответ` : ""}</option>)}
+            </select>
+          </label>
+          {textModelId !== CHAT_MODEL_ID && <small>До 2048 токенов ответа. При длинном диалоге может потребоваться новый чат.</small>}
+          {textInputError && <small role="alert">{textInputError}</small>}
+          {textCatalogFailed && <small>Каталог дополнительных моделей временно недоступен.</small>}
           <Composer
-            onDraftChange={() => undefined}
+            onDraftChange={() => setTextInputError("")}
             onSend={handleSend}
             disabled={loading || submitting}
           />

@@ -3070,3 +3070,22 @@ body {
     transition-duration: .001ms !important;
   }
 }
+
+.text-model-picker {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  padding: var(--space-2) var(--space-4);
+  color: var(--fg-muted);
+  font-size: 0.875rem;
+}
+.text-model-picker select {
+  min-width: 0;
+  max-width: 100%;
+  padding: var(--space-2);
+  border: 1px solid var(--line);
+  border-radius: var(--radius-control);
+  color: var(--fg);
+  background: var(--surface);
+  font: inherit;
+}

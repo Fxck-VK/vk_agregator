@@ -24,10 +24,10 @@ import (
 	"vk-ai-aggregator/internal/service/accountservice"
 	"vk-ai-aggregator/internal/service/imagegeneration"
 	"vk-ai-aggregator/internal/service/joborchestrator"
-	"vk-ai-aggregator/internal/service/modelcatalog"
 	"vk-ai-aggregator/internal/service/preparedjobexpiry"
 	"vk-ai-aggregator/internal/service/pricingcatalog"
 	"vk-ai-aggregator/internal/service/resultservice"
+	"vk-ai-aggregator/internal/service/textgeneration"
 )
 
 const (
@@ -48,6 +48,7 @@ type principalContextKey struct{}
 
 // Config contains browser adapter settings.
 type Config struct {
+	TextModels                  []textgeneration.PublicModel
 	WebOrigin                   string
 	ImageModels                 []imagegeneration.PublicModel
 	ImageArtifactRedirectPolicy ImageArtifactRedirectPolicy
@@ -347,6 +348,7 @@ func (h *Handler) Routes() http.Handler {
 	mux.HandleFunc("GET /web/v1/conversations", h.requirePrincipal(h.listConversations))
 	mux.HandleFunc("GET /web/v1/conversations/{conversationID}", h.requirePrincipal(h.getConversation))
 	mux.HandleFunc("GET /web/v1/conversations/{conversationID}/messages", h.requirePrincipal(h.listConversationMessages))
+	mux.HandleFunc("GET /web/v1/text-models", h.requirePrincipal(h.listTextModels))
 	mux.HandleFunc("GET /web/v1/image-models", h.requirePrincipal(h.listImageModels))
 	mux.HandleFunc("GET /web/v1/image-jobs", h.requirePrincipal(h.listImageJobs))
 	mux.HandleFunc("GET /web/v1/image-jobs/{jobID}", h.requirePrincipal(h.getImageJob))
@@ -564,6 +566,7 @@ func (h *Handler) prepareImageJob(w http.ResponseWriter, r *http.Request) {
 	}
 	resolver := imagegeneration.NewResolver(h.cfg.ImageModels, h.deps.ImagePricing)
 	publicIntent, err := resolver.ResolvePublic(imagegeneration.Request{
+		Prompt:      req.Prompt,
 		ModelID:     strings.TrimSpace(req.ModelID),
 		Quality:     strings.TrimSpace(req.ImageQuality),
 		AspectRatio: req.AspectRatio,
@@ -605,6 +608,7 @@ func (h *Handler) prepareImageJob(w http.ResponseWriter, r *http.Request) {
 	}
 
 	resolution, err := resolver.Resolve(imagegeneration.Request{
+		Prompt:      req.Prompt,
 		ModelID:     strings.TrimSpace(req.ModelID),
 		Quality:     strings.TrimSpace(req.ImageQuality),
 		AspectRatio: req.AspectRatio,
@@ -1380,7 +1384,8 @@ func (h *Handler) createConversationMessage(w http.ResponseWriter, r *http.Reque
 		return
 	}
 	var req struct {
-		Prompt string `json:"prompt"`
+		Prompt  string `json:"prompt"`
+		ModelID string `json:"model_id,omitempty"`
 	}
 	if !decodeJSON(w, r, &req) {
 		return
@@ -1417,9 +1422,9 @@ func (h *Handler) createConversationMessage(w http.ResponseWriter, r *http.Reque
 		writeError(w, http.StatusTooManyRequests, "chat message rate limited")
 		return
 	}
-	model, ok := modelcatalog.ResolvePublicModel(domain.OperationTextGenerate, "")
-	if !ok {
-		writeError(w, http.StatusServiceUnavailable, "chat message unavailable")
+	model, snapshot, resolveErr := textgeneration.Resolve(req.ModelID, req.Prompt, h.cfg.TextModels, h.deps.ImagePricing)
+	if resolveErr != nil {
+		writeError(w, http.StatusServiceUnavailable, "text model unavailable")
 		return
 	}
 	orchestrationKey := "web-chat:" + principal.AccountID.String() + ":" + idempotencyKey.String()
@@ -1449,9 +1454,13 @@ func (h *Handler) createConversationMessage(w http.ResponseWriter, r *http.Reque
 		IdempotencyKey:             orchestrationKey,
 		CorrelationID:              orchestrationKey,
 		Params:                     params,
+		PricingSnapshot:            snapshot,
 		ConversationTitleRequested: conversation.TitleOrigin == domain.ConversationTitleOriginAutoPending,
 	})
 	switch {
+	case errors.Is(err, domain.ErrConflict):
+		writeError(w, http.StatusConflict, "idempotency key belongs to another message")
+		return
 	case errors.Is(err, domain.ErrActiveJobLimitExceeded):
 		writeError(w, http.StatusTooManyRequests, "chat message rate limited")
 		return
@@ -2015,8 +2024,13 @@ func preparedWebImageJobReplay(job *domain.Job, accountID uuid.UUID, idempotency
 		strings.TrimSpace(params.ModelName) == "" || params.Provider == "" || strings.TrimSpace(params.ModelCode) == "" {
 		return safeImageJob{}, false
 	}
-	aspectRatio, err := imagegeneration.NormalizeAspectRatio(params.AspectRatio)
-	if err != nil || aspectRatio != intent.AspectRatio {
+	// The incoming intent already passed model-specific ratio validation.
+	// Compare the stored value without consulting the current model catalog.
+	aspectRatio := strings.TrimSpace(params.AspectRatio)
+	if aspectRatio == "" {
+		aspectRatio = imagegeneration.DefaultAspectRatio
+	}
+	if aspectRatio != intent.AspectRatio {
 		return safeImageJob{}, false
 	}
 	outputCount := params.OutputCount
@@ -2090,4 +2104,15 @@ func writeJSON(w http.ResponseWriter, status int, value any) {
 
 func writeError(w http.ResponseWriter, status int, message string) {
 	writeJSON(w, status, map[string]string{"error": message})
+}
+
+func (h *Handler) listTextModels(w http.ResponseWriter, r *http.Request) {
+	w.Header().Set("Cache-Control", "no-store")
+	var ids []string
+	for _, m := range h.cfg.TextModels {
+		if m.ID != "chatgpt" {
+			ids = append(ids, m.ID)
+		}
+	}
+	writeJSON(w, http.StatusOK, map[string]any{"items": textgeneration.Models(ids, h.deps.ImagePricing)})
 }

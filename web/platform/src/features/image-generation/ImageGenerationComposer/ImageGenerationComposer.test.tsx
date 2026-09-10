@@ -13,6 +13,20 @@ describe("ImageGenerationComposer", () => {
     cleanup();
   });
 
+  it("selects an Imagine speed without offering multiple paid calls", () => {
+    const onChange = vi.fn();
+    render(<ImageGenerationComposer modelID="midjourney_v7" aspectRatio="16:9" canSubmit errorMessage={null}
+      imageQuality="relax" isSubmitting={false} maxOutputCount={1}
+      onAspectRatioChange={vi.fn()} onImageQualityChange={onChange}
+      onOutputCountChange={vi.fn()} onPromptChange={vi.fn()} onSubmit={vi.fn()}
+      price={30} prompt="Synthetic scene" qualityOptions={["relax", "fast", "turbo"]} outputCount={1} />);
+    fireEvent.click(screen.getByRole("button", { name: "Режим: Relax" }));
+    fireEvent.click(screen.getByRole("radio", { name: "Fast" }));
+    expect(onChange).toHaveBeenCalledWith("fast");
+    expect(screen.queryByRole("button", { name: /Разрешение:/ })).not.toBeInTheDocument();
+    expect(screen.queryByRole("group", { name: "Количество изображений" })).not.toBeInTheDocument();
+  });
+
   it("edits the prompt, changes quality, and submits through the shared composer", () => {
     const onImageQualityChange = vi.fn();
     const onPromptChange = vi.fn();

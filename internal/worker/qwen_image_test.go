@@ -48,11 +48,27 @@ func TestGrokImageAsyncLifecycle(t *testing.T) {
 	})
 }
 
+func TestMidjourneyImagineAsyncLifecycle(t *testing.T) {
+	testAPIMartImageLifecycle(t, "midjourney_v7", apimart.ModelMidjourneyV7, "relax", "relax", 30, true)
+}
+
+func TestFlux2ProAsyncLifecycle(t *testing.T) {
+	testAPIMartImageLifecycle(t, "flux_2_pro", "flux-2-pro", "4MP", "4MP", 40, false)
+}
+
 func testAPIMartImageLifecycle(t *testing.T, publicModel, providerModel, quality, resolution string, credits int64, withReference bool) {
 	t.Helper()
+	imagine := providerModel == apimart.ModelMidjourneyV7
+	endpoint, outputCount := "/v1/images/generations", 1
+	if imagine {
+		endpoint, outputCount = "/v1/midjourney/generations", 4
+	}
 	scenarios := []string{"allowed", "moderation blocked"}
-	if providerModel == apimart.ModelGrokImage20 {
+	if providerModel == apimart.ModelGrokImage20 || imagine || providerModel == apimart.ModelFlux2Pro {
 		scenarios = append(scenarios, "submit indeterminate")
+	}
+	if imagine || providerModel == apimart.ModelFlux2Pro {
+		scenarios = append(scenarios, "provider failure")
 	}
 	for _, name := range scenarios {
 		blocked := name == "moderation blocked"
@@ -61,7 +77,7 @@ func testAPIMartImageLifecycle(t *testing.T, publicModel, providerModel, quality
 			var submits atomic.Int32
 			srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 				switch {
-				case r.Method == http.MethodPost && r.URL.Path == "/v1/images/generations":
+				case r.Method == http.MethodPost && r.URL.Path == endpoint:
 					submits.Add(1)
 					if name == "submit indeterminate" {
 						w.WriteHeader(http.StatusConflict)
@@ -72,10 +88,14 @@ func testAPIMartImageLifecycle(t *testing.T, publicModel, providerModel, quality
 					if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
 						t.Error(err)
 					}
-					if body["model"] != providerModel || body["n"] != float64(1) {
+					if imagine {
+						if body["version"] != "7" || body["speed"] != quality || body["n"] != nil || body["resolution"] != nil {
+							t.Error("incorrect Imagine worker request")
+						}
+					} else if body["model"] != providerModel || body["n"] != float64(1) {
 						t.Error("wrong worker request")
 					}
-					if resolution == "" && body["resolution"] != nil || resolution != "" && body["resolution"] != resolution {
+					if !imagine && (resolution == "" && body["resolution"] != nil || resolution != "" && body["resolution"] != resolution) {
 						t.Error("wrong provider resolution")
 					}
 					if withReference && body["image_urls"] == nil || !withReference && body["image_urls"] != nil {
@@ -91,6 +111,14 @@ func testAPIMartImageLifecycle(t *testing.T, publicModel, providerModel, quality
 					}
 					_, _ = w.Write([]byte(`{"code":200,"data":[{"status":"submitted","task_id":"qwen-task"}]}`))
 				case r.Method == http.MethodGet && r.URL.Path == "/v1/tasks/qwen-task":
+					if name == "provider failure" {
+						_, _ = w.Write([]byte(`{"code":200,"data":{"status":"failed","error":{"code":503,"type":"server_error","message":"Synthetic overload"}}}`))
+						return
+					}
+					if imagine {
+						_, _ = w.Write([]byte(`{"code":200,"data":{"status":"completed","result":{"images":[{"url":["https://example.com/1.png","https://example.com/2.png","https://example.com/3.png","https://example.com/4.png"]}]}}}`))
+						return
+					}
 					_, _ = w.Write([]byte(`{"code":200,"data":{"status":"completed","result":{"images":[{"url":["https://example.com/qwen.png"]}]}}}`))
 				default:
 					t.Error("unexpected provider request")
@@ -161,7 +189,14 @@ func testAPIMartImageLifecycle(t *testing.T, publicModel, providerModel, quality
 				}
 			}
 			job = h.reload(t, job.ID)
-			if moderator.calls != 1 {
+			if name == "provider failure" {
+				account, err := billingRepo.GetAccountByUser(ctx, owner, domain.CurrencyCredits)
+				if err != nil || account.BalanceCached != billingservice.DefaultStartingBalance || job.Status != domain.JobStatusFailedTerminal || job.CostCaptured != 0 || moderator.calls != 0 || len(job.OutputArtifactIDs) != 0 {
+					t.Fatal("failed provider task charged or exposed a result")
+				}
+				return
+			}
+			if moderator.calls != outputCount {
 				t.Fatalf("moderation calls = %d", moderator.calls)
 			}
 			if blocked {
@@ -177,7 +212,7 @@ func testAPIMartImageLifecycle(t *testing.T, publicModel, providerModel, quality
 				}
 				return
 			}
-			if job.Status != domain.JobStatusResultReady || len(job.OutputArtifactIDs) != 1 || resultReadyEventCount(h.outbox, job.ID) != 1 {
+			if job.Status != domain.JobStatusResultReady || len(job.OutputArtifactIDs) != outputCount || resultReadyEventCount(h.outbox, job.ID) != 1 {
 				t.Fatal("result not persisted exactly once")
 			}
 			artifact, err := h.artRepo.GetByID(ctx, job.OutputArtifactIDs[0])

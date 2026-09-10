@@ -37,9 +37,11 @@ export interface CreateJobInput {
   reference_artifact_ids?: string[];
   /** video_generate only: backend route-specific allowed durations */
   duration_sec?: number;
+  video_resolution?: string;
 }
 
 export interface CreateChatMessageInput {
+  model_id?: string;
   prompt: string;
 }
 
@@ -74,6 +76,7 @@ export interface EstimateInput {
   image_quality?: string;
   reference_artifact_ids?: string[];
   duration_sec?: number;
+  video_resolution?: string;
 }
 
 export interface EstimateResponse {
@@ -945,7 +948,7 @@ export async function createChatMessage(input: CreateChatMessageInput, options: 
     headers: {
       "X-Idempotency-Key": options.idempotencyKey,
     },
-    body: JSON.stringify({ prompt: input.prompt }),
+    body: JSON.stringify({ prompt: input.prompt, ...(input.model_id ? {model_id: input.model_id} : {}) }),
   });
 }
 
@@ -972,6 +975,7 @@ function serializeGenerationRequest(input: CreateJobInput | EstimateInput): stri
     image_quality: input.image_quality,
     reference_artifact_ids: input.reference_artifact_ids,
     duration_sec: input.duration_sec,
+    video_resolution: input.operation === "video_generate" ? input.video_resolution : undefined,
   });
 }
 
@@ -1110,4 +1114,13 @@ export async function resolveBotText(job: Job): Promise<string | undefined> {
     if (text) return text;
   }
   return undefined;
+}
+
+export interface TextModel { id: string; name: string; estimate_credits: number; max_prompt_bytes?: number; max_output_tokens?: number }
+export async function listTextModels(): Promise<TextModel[]> {
+  const data = await request<{items: TextModel[]}>("/miniapp/text-models");
+  if (!Array.isArray(data.items) || data.items.length > 12 || data.items.some(m =>
+    !["chatgpt", "gpt_5_5", "claude_opus_4_7", "gemini_3_1_pro", "claude_opus_4_8", "gpt_5_6_terra", "gpt_6_astra", "claude_opus_5", "gemini_3_7_flash", "claude_fable_5_1", "claude_fable_5", "gemini_3_6_flash"].includes(m.id) || typeof m.name !== "string" || !Number.isSafeInteger(m.estimate_credits) || m.estimate_credits < 0
+  )) throw new ApiError(500,"service_unavailable");
+  return data.items;
 }

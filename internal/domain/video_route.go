@@ -15,6 +15,7 @@ const (
 	VideoRouteKlingO3Standard  VideoRouteAlias = "video_kling_o3_standard"
 	VideoRouteRunwayGen4Turbo  VideoRouteAlias = "video_runway_gen4_turbo"
 	VideoRouteSeedance20Fast   VideoRouteAlias = "video_seedance_2_0_fast"
+	VideoRouteSeedance25       VideoRouteAlias = "video_seedance_2_5"
 	VideoRouteRunwayGen45      VideoRouteAlias = "video_runway_gen4_5"
 	VideoRouteMockTextToVideo  VideoRouteAlias = "video_mock_text_to_video"
 )
@@ -55,8 +56,10 @@ type VideoRouteSpec struct {
 	// prices come from pricingcatalog, not from these route fields.
 	ProviderCostCreditsFixed     int64 `json:"provider_cost_credits_fixed,omitempty"`
 	ProviderCostCreditsPerSecond int64 `json:"provider_cost_credits_per_second,omitempty"`
-	MaxProviderCostCredits       int64 `json:"max_provider_cost_credits,omitempty"`
-	MaxInternalCostCredits       int64 `json:"max_internal_cost_credits,omitempty"`
+	// Optional exact rate by resolution, in millionths of a provider credit.
+	ProviderCostMicrosPerSecondByResolution map[string]int64 `json:"provider_cost_micros_per_second_by_resolution,omitempty"`
+	MaxProviderCostCredits                  int64            `json:"max_provider_cost_credits,omitempty"`
+	MaxInternalCostCredits                  int64            `json:"max_internal_cost_credits,omitempty"`
 
 	// PriceMultiplier is retained only for legacy route compatibility and
 	// safety-cap math until the old route pricing path is removed.
@@ -115,6 +118,11 @@ func (r VideoRouteSpec) Validate() error {
 	}
 	if r.ProviderCostCreditsPerSecond < 0 {
 		return fmt.Errorf("video route %s: provider_cost_credits_per_second must be non-negative", r.Alias)
+	}
+	for _, resolution := range r.AllowedResolutions {
+		if len(r.ProviderCostMicrosPerSecondByResolution) > 0 && r.ProviderCostMicrosPerSecondByResolution[resolution] <= 0 {
+			return fmt.Errorf("video route %s: missing provider rate for %s", r.Alias, resolution)
+		}
 	}
 	if r.MaxProviderCostCredits < 0 {
 		return fmt.Errorf("video route %s: max_provider_cost_credits must be non-negative", r.Alias)

@@ -515,6 +515,7 @@ type OperatorPricingDTO struct {
 type OperatorPricingEntryDTO struct {
 	Operation              string `json:"operation"`
 	Modality               string `json:"modality"`
+	TextModelID            string `json:"text_model_id,omitempty"`
 	ImageModelID           string `json:"image_model_id,omitempty"`
 	VideoRouteAlias        string `json:"video_route_alias,omitempty"`
 	Quality                string `json:"quality,omitempty"`

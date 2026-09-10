@@ -53,7 +53,7 @@ Disabling the model flag hides it from new public jobs; existing jobs retain the
 route and price snapshots and can finish while APIMart remains configured.
 The shared image UI lists the model from the backend catalog. This release adds no
 Web reference-upload controls. Paid canary and deployed UI verification are separate
-from local tests; see [implementation and checks](../superpowers/plans/2026-09-08-study24-apimart/45-qwen-image-3.md).
+from local tests; see [Qwen architecture](../ARCHITECTURE.md#qwen-image-30-image-route-2026-09-08).
 
 ## DEV Domains
 
@@ -244,6 +244,72 @@ Review `rg` matches manually. Env var names, placeholders and fake test
 literals are acceptable; real secret values, prompt text, raw provider payloads
 and private media URLs are not.
 
+## Seedance 2.5 configuration
+
+`FEATURE_APIMART_SEEDANCE_2_5_ENABLED` defaults to false. Enable it with
+`FEATURE_VIDEO_ROUTER_ENABLED=true`, `APIMART_PROVIDER_ENABLED=true` and the
+existing APIMart key/base URL (`https://api.apimart.ai/v1`). API and worker must
+both run the new code. Provider registration and chain remain shared; environment
+files and deploy profiles are not edited by this implementation.
+
+Static catalog version 7 supplies twelve `video_seedance_2_5` keys:
+480p/720p/1080p x 5/10/15/30 seconds, estimate x3 rounded up to five credits.
+A DB-backed catalog needs those enabled keys before exposure. No DB price rows
+are changed automatically. See [video prices and limits](../VIDEO_GENERATION.md#seedance-25).
+
+Before exposing real users, verify key access to `seedance-2.5` and perform an
+explicitly authorized paid canary, checking token-settled cost and MP4 playback/audio.
+Local HTTP-fixture tests verify the pipeline, not live availability or quality.
+Mini App and the shared VK catalog are supported; standalone Web video UI is
+separate work. Human-face references require a separate provider asset workflow.
+
+Disable the model flag to hide new requests; keep APIMart configured so accepted
+tasks finish. Reconcile an indeterminate provider outcome before manually
+resubmitting. APIMart token settlement may differ from preauthorization, while
+the user's accepted quote stays fixed.
+
+## Midjourney V7 configuration
+
+`FEATURE_APIMART_MIDJOURNEY_V7_ENABLED` defaults to false. It requires the
+existing `APIMART_PROVIDER_ENABLED`, API key/base URL and all enabled runtime
+prices for `midjourney_v7`. API and worker must run the updated code.
+Static catalog version 8 provides `relax` / `fast` / `turbo` at 30 / 35 / 60
+internal credits per Imagine call. DB-backed catalogs need the corresponding
+keys added through the normal operator workflow; no DB rows are changed here.
+
+The public `image_quality` field selects speed for this model. Web supports
+text-to-image; Mini App also supports up to four owned reference images.
+Each returned tile is stored and moderated, with one ledger capture per Job.
+Native prompt flags and permutations are rejected before Job creation.
+
+Before enabling for users, verify account access and live per-call billing,
+and run an explicitly authorized paid canary. The worker persists a unique
+per-Job submission claim before calling APIMart; a restart cannot issue the
+paid call again. An unresolved claim waits the provider call timeout plus one
+minute before failing closed and releasing the reservation. Uncertain submits are terminal and
+must be reconciled before a manual retry. Disable the model flag to stop new
+Jobs; keep APIMart configured for accepted tasks to finish polling.
+
+Provider contract: [Midjourney Imagine](https://docs.apimart.ai/ru/api-reference/images/midjourney/imagine).
+
+## FLUX.2 Pro configuration
+
+`FEATURE_APIMART_FLUX_2_PRO_ENABLED` defaults to false. It requires the existing
+APIMart provider, key/base URL and enabled runtime tariffs for `flux_2_pro`.
+Static catalog version 9 adds `1MP` / `2MP` / `3MP` / `4MP` at 15 / 25 / 30 / 40
+internal credits. DB-backed pricing needs those keys added through the normal
+operator workflow. No environment files or DB rows are changed automatically.
+
+API and worker must run the updated code. Web and Mini App support text-to-image,
+one output, with MP selection. References and custom pixel sizes remain closed.
+Verify account access, current pricing and an explicitly authorized paid canary
+before rollout. Both FLUX.2 and Midjourney now use the durable per-Job submit
+claim described above; Midjourney keys remain unchanged. Unknown submit outcomes
+require reconciliation before a manual retry. Disable the model flag to hide new
+Jobs while keeping APIMart configured for existing tasks to finish.
+
+Provider contract: [FLUX.2 generation](https://docs.apimart.ai/ru/api-reference/images/flux-2/generation).
+
 ## DEV Env Tests
 
 Before changing DEV deploy env scripts:
@@ -254,3 +320,14 @@ bash scripts/deploy/test-dev-env.sh
 
 This validates shell syntax, mock DEV env, YooKassa DEV env, production URL
 rejection and log-safe output.
+
+
+## KIE and APIMart text models (2026-09-09)
+
+Eleven paid text models have separate opt-in routes: ten through KIE and
+Claude Fable 5.1 through APIMart. Each provider has an independent text-limit
+verification gate; individual model flags default to false.
+See [Text models](KIE_TEXT_MODELS.md) for verified prices, native contracts,
+required output-limit verification, environment flags and migration 000052.
+No provider-chain change is needed. Keep all new flags off until contract
+verification and an authorized paid canary have passed.

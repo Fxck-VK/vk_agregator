@@ -48,6 +48,7 @@ type WorkflowModeProps = {
       imageQuality?: string;
       referenceArtifactIds?: string[];
       durationSec?: number;
+      videoResolution?: string;
     },
   ) => Promise<Job | null>;
 };
@@ -62,7 +63,6 @@ const ESTIMATE_DEBOUNCE_MS = 450;
 const PROMPT_LIMIT = 2000;
 const REFERENCE_ACCEPT = "image/jpeg,image/png";
 const DEFAULT_VIDEO_DURATION_SEC = 5;
-const PREFERRED_VIDEO_DURATION_OPTIONS = [3, 5, 10];
 
 function createLocalReferenceId(): string {
   if (globalThis.crypto?.randomUUID) return globalThis.crypto.randomUUID();
@@ -86,6 +86,8 @@ type CreateMode = {
   defaultQuality?: string;
   durationOptions?: number[];
   defaultDurationSec?: number;
+  resolutionOptions?: string[];
+  defaultResolution?: string;
   aspectRatioOptions?: string[];
   defaultAspectRatio?: string;
   requiresStartImage?: boolean;
@@ -170,12 +172,20 @@ function createModeFromImageItem(model: ModelCatalogItem): CreateMode {
     catalogEstimateCredits: model.estimate_credits,
     qualityOptions: model.quality_options?.filter(Boolean),
     defaultQuality: model.default_quality,
-    supportsReferenceImage: model.supports_reference_image || copy.supportsReferenceImage,
+    supportsReferenceImage: model.supports_reference_image,
     maxReferenceImages: model.max_reference_images ?? copy.maxReferenceImages,
   };
 }
 
 const VIDEO_ROUTE_COPY: Record<string, Omit<CreateMode, "modalityId" | "modelId" | "videoRouteAlias">> = {
+  video_seedance_2_5: {
+    name: "Seedance 2.5",
+    subtitle: "Видео со звуком до 30 секунд",
+    color: "#06b6d4",
+    glow: "rgba(6,182,212,0.32)",
+    placeholders: ["Опишите сцену, движение камеры и звук..."],
+    quickIdeas: ["Реклама продукта", "Морской закат", "Фантастический город", "Анимация иллюстрации"],
+  },
   video_hailuo_2_3_fast: {
     name: "Hailuo 2.3 Fast",
     subtitle: "Image-to-video",
@@ -241,6 +251,8 @@ function createModeFromVideoItem(route: ModelCatalogItem): CreateMode {
     description: route.description,
     catalogEstimateCredits: route.estimate_credits,
     durationOptions: durations,
+    resolutionOptions: route.allowed_resolutions?.filter(Boolean) ?? [],
+    defaultResolution: route.default_resolution,
     defaultDurationSec: route.default_duration_sec ?? durations[0] ?? DEFAULT_VIDEO_DURATION_SEC,
     aspectRatioOptions: aspectRatios,
     defaultAspectRatio: route.default_aspect_ratio ?? aspectRatios[0],
@@ -263,8 +275,7 @@ function durationButtonOptions(model: CreateMode): number[] {
   if (allowed.length === 0) {
     return [model.defaultDurationSec ?? DEFAULT_VIDEO_DURATION_SEC];
   }
-  const preferred = PREFERRED_VIDEO_DURATION_OPTIONS.filter((value) => allowed.includes(value));
-  return preferred.length >= 2 ? preferred : allowed;
+  return allowed;
 }
 
 function defaultDurationForModel(model: CreateMode): number {
@@ -424,6 +435,7 @@ export function WorkflowMode({
   const [referenceUploading, setReferenceUploading] = useState(false);
   const [referenceError, setReferenceError] = useState<string | null>(null);
   const [videoDurationSec, setVideoDurationSec] = useState(DEFAULT_VIDEO_DURATION_SEC);
+  const [selectedVideoResolution, setSelectedVideoResolution] = useState("");
   const [isDragging, setIsDragging] = useState(false);
   const [resultMediaSrc, setResultMediaSrc] = useState<string | null | undefined>(undefined);
   const [resultPreparing, setResultPreparing] = useState(false);
@@ -451,9 +463,13 @@ export function WorkflowMode({
     visibleCreateModes.find((item) => item.modelId === modelId) ?? visibleCreateModes[0];
   const isImageModality = modalityId === "image";
   const isVideoModality = modalityId === "video";
+  const videoResolutionOptions = activeCreateModel?.resolutionOptions ?? [];
+  const videoResolution = videoResolutionOptions.includes(selectedVideoResolution)
+    ? selectedVideoResolution
+    : activeCreateModel?.defaultResolution ?? videoResolutionOptions[0];
   const acceptsImageReferences =
     Boolean(activeCreateModel) &&
-    (isImageModality || (isVideoModality && activeCreateModel.supportsReferenceImage === true));
+    (isImageModality || isVideoModality) && activeCreateModel.supportsReferenceImage === true;
   const maxReferenceItems = Math.max(1, activeCreateModel?.maxReferenceImages ?? MAX_REFERENCE_ARTIFACTS);
   const videoDurationOptions = useMemo(
     () => (activeCreateModel ? durationButtonOptions(activeCreateModel) : []),
@@ -595,6 +611,7 @@ export function WorkflowMode({
         image_quality: isImageModality && imageQuality ? imageQuality : undefined,
         reference_artifact_ids: referenceArtifactIds.length > 0 ? referenceArtifactIds : undefined,
         duration_sec: isVideoModality ? videoDurationSec : undefined,
+        video_resolution: isVideoModality ? videoResolution : undefined,
       })
         .then((data) => {
           if (cancelled) return;
@@ -623,6 +640,7 @@ export function WorkflowMode({
     promptTooLong,
     referenceArtifactIds,
     videoDurationSec,
+    videoResolution,
   ]);
 
   useEffect(() => {
@@ -731,7 +749,7 @@ export function WorkflowMode({
 
   const changeModality = useCallback((id: ModalityId) => {
     const createModel = createModes.find((item) => item.modalityId === id);
-    if (!createModel?.supportsReferenceImage && id !== "image") {
+    if (!createModel?.supportsReferenceImage) {
       clearReferenceItems();
     }
     setModalityId(id);
@@ -748,7 +766,7 @@ export function WorkflowMode({
   }, [clearReferenceItems, createModes]);
 
   function selectCreateModel(mode: CreateMode) {
-    if (!mode.supportsReferenceImage && mode.modalityId !== "image") {
+    if (!mode.supportsReferenceImage) {
       clearReferenceItems();
     }
     setModalityId(mode.modalityId);
@@ -848,6 +866,7 @@ export function WorkflowMode({
         imageQuality: isImageModality && imageQuality ? imageQuality : undefined,
         referenceArtifactIds: referenceArtifactIds.length > 0 ? referenceArtifactIds : undefined,
         durationSec: isVideoModality ? videoDurationSec : undefined,
+        videoResolution: isVideoModality ? videoResolution : undefined,
       });
       if (!job) {
         setSubmitError("Не удалось запустить генерацию");
@@ -1078,8 +1097,8 @@ export function WorkflowMode({
             )}
 
             {activeCreateModel && isImageModality && imageQualityOptions.length > 0 && (
-              <div className="create-setting" role="group" aria-label="Качество изображения">
-                <span className="create-control-label">Качество</span>
+              <div className="create-setting" role="group" aria-label={activeCreateModel.modelId === "midjourney_v7" ? "Режим генерации" : "Качество изображения"}>
+                <span className="create-control-label">{activeCreateModel.modelId === "midjourney_v7" ? "Режим" : "Качество"}</span>
                 <div className="segment create-setting__segment">
                   {imageQualityOptions.map((quality) => (
                     <button
@@ -1088,7 +1107,7 @@ export function WorkflowMode({
                       className={"segment__btn" + (imageQuality === quality ? " is-active" : "")}
                       onClick={() => setImageQuality(quality)}
                     >
-                      {quality}
+                      {({ relax: "Relax", fast: "Fast", turbo: "Turbo" } as Record<string, string>)[quality] ?? quality}
                     </button>
                   ))}
                 </div>
@@ -1114,12 +1133,28 @@ export function WorkflowMode({
                               }
                             : undefined
                         }
-                        onClick={() => setVideoDurationSec(seconds)}
+                        onClick={() => { setBackendEstimate(null); setVideoDurationSec(seconds); }}
                       >
                         {seconds} сек
                       </button>
                     );
                   })}
+                </div>
+              </div>
+            )}
+
+            {activeCreateModel && isVideoModality && videoResolutionOptions.length > 0 && (
+              <div className="create-setting" role="group" aria-label="Разрешение видео">
+                <span className="create-control-label">Разрешение</span>
+                <div className="segment create-setting__segment">
+                  {videoResolutionOptions.map((resolution) => (
+                    <button key={resolution} type="button"
+                      className={"segment__btn" + (videoResolution === resolution ? " is-active" : "")}
+                      aria-pressed={videoResolution === resolution}
+                      onClick={() => { setBackendEstimate(null); setSelectedVideoResolution(resolution); }}>
+                      {resolution}
+                    </button>
+                  ))}
                 </div>
               </div>
             )}

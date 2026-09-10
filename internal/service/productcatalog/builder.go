@@ -9,6 +9,7 @@ import (
 	"vk-ai-aggregator/internal/platform/config"
 	"vk-ai-aggregator/internal/service/pricingcatalog"
 	"vk-ai-aggregator/internal/service/providermodels"
+	"vk-ai-aggregator/internal/service/textgeneration"
 	"vk-ai-aggregator/internal/service/videorouter"
 )
 
@@ -17,6 +18,7 @@ import (
 // config, provider kill switches, route/model flags and required key/base URL
 // presence.
 type RuntimeCatalog struct {
+	TextModels            []textgeneration.PublicModel
 	Catalog               *Catalog
 	VideoRouteCatalog     *videorouter.Catalog
 	PricingCatalog        *pricingcatalog.Catalog
@@ -41,12 +43,14 @@ func FromConfig(cfg config.Config, pricingCatalog *pricingcatalog.Catalog) (Runt
 		VideoRoutes:        publicVideoRoutes,
 		PricingCatalog:     pricingCatalog,
 	})
-	return RuntimeCatalog{
+	result := RuntimeCatalog{
 		Catalog:               catalog,
 		VideoRouteCatalog:     videoCatalog,
 		PricingCatalog:        pricingCatalog,
 		ImageReferenceEnabled: catalogHasReferenceImageModel(catalog),
-	}, err
+	}
+	result.TextModels = textModelsFromConfig(cfg, result)
+	return result, err
 }
 
 func VideoRouteCatalogFromConfig(cfg config.Config) (*videorouter.Catalog, error) {
@@ -178,6 +182,12 @@ func providerEnabledFromFlag(cfg config.Config, flag string) bool {
 }
 
 func providerFlagValue(cfg config.Config, flag string) (bool, bool) {
+	if flag == "APIMART_TEXT_LIMITS_VERIFIED" {
+		return cfg.APIMartProviderEnabled && cfg.APIMartTextLimitsVerified, true
+	}
+	if flag == "KIE_PROVIDER_ENABLED" {
+		return cfg.KIEProviderEnabled && cfg.KIETextLimitsVerified, true
+	}
 	switch flag {
 	case providermodels.ProviderFlagAPIMart:
 		return cfg.APIMartProviderEnabled, true
@@ -197,6 +207,28 @@ func featureFlagEnabled(cfg config.Config, flag string) bool {
 
 func featureFlagValue(cfg config.Config, flag string) (bool, bool) {
 	switch flag {
+	case providermodels.FeatureTextClaudeOpus48:
+		return cfg.FeatureTextClaudeOpus48Enabled, true
+	case providermodels.FeatureTextGPT56Terra:
+		return cfg.FeatureTextGPT56TerraEnabled, true
+	case providermodels.FeatureTextGPT6Astra:
+		return cfg.FeatureTextGPT6AstraEnabled, true
+	case providermodels.FeatureTextClaudeOpus5:
+		return cfg.FeatureTextClaudeOpus5Enabled, true
+	case providermodels.FeatureTextGemini37Flash:
+		return cfg.FeatureTextGemini37FlashEnabled, true
+	case providermodels.FeatureTextClaudeFable51:
+		return cfg.FeatureTextClaudeFable51Enabled, true
+	case providermodels.FeatureTextClaudeFable5:
+		return cfg.FeatureTextClaudeFable5Enabled, true
+	case providermodels.FeatureTextGemini36Flash:
+		return cfg.FeatureTextGemini36FlashEnabled, true
+	case providermodels.FeatureTextGPT55:
+		return cfg.FeatureTextGPT55Enabled, true
+	case providermodels.FeatureTextClaudeOpus47:
+		return cfg.FeatureTextClaudeOpus47Enabled, true
+	case providermodels.FeatureTextGemini31Pro:
+		return cfg.FeatureTextGemini31ProEnabled, true
 	case providermodels.FeatureImageNanoBanana2:
 		return cfg.FeatureImageModelNanoBanana2Enabled, true
 	case providermodels.FeatureImageNanoBananaPro:
@@ -205,6 +237,10 @@ func featureFlagValue(cfg config.Config, flag string) (bool, bool) {
 		return cfg.FeatureImageModelGPTImage2Enabled, true
 	case providermodels.FeatureImageQwenImage3:
 		return cfg.FeatureAPIMartQwenImage3Enabled, true
+	case providermodels.FeatureImageMidjourneyV7:
+		return cfg.FeatureAPIMartMidjourneyV7Enabled, true
+	case providermodels.FeatureImageFlux2Pro:
+		return cfg.FeatureAPIMartFlux2ProEnabled, true
 	case providermodels.FeatureImageGrokImage15:
 		return cfg.FeatureAPIMartGrokImage15Enabled, true
 	case providermodels.FeatureImageGrokImage20:
@@ -225,6 +261,8 @@ func featureFlagValue(cfg config.Config, flag string) (bool, bool) {
 		return cfg.FeatureVideoRouteRunwayGen4TurboEnabled, true
 	case providermodels.FeatureVideoSeedance20Fast:
 		return cfg.FeatureVideoRouteSeedance20FastEnabled, true
+	case providermodels.FeatureVideoSeedance25:
+		return cfg.FeatureAPIMartSeedance25Enabled, true
 	case providermodels.FeatureVideoRunwayGen45:
 		return cfg.FeatureVideoRouteRunwayGen45Enabled, true
 	case providermodels.FeatureVideoMockTextToVideo:
@@ -274,6 +312,10 @@ func configValueByKey(cfg config.Config, key string) string {
 
 func configValue(cfg config.Config, key string) (string, bool) {
 	switch key {
+	case "KIE_API_KEY":
+		return cfg.KIEAPIKey, true
+	case "KIE_BASE_URL":
+		return cfg.KIEBaseURL, true
 	case providermodels.ConfigKeyAPIMartAPIKey:
 		return cfg.APIMartAPIKey, true
 	case providermodels.ConfigKeyAPIMartBaseURL:

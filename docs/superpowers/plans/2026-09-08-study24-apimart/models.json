@@ -26,7 +26,7 @@
     "web_image_tests": "npm test: 742 + 4 assets passed; additional aspect-ratio switch test passed; lint, typecheck and production build passed"
   },
   "source_catalog_count": 71,
-  "planned_count": 59,
+  "mapped_count": 59,
   "conditional_version_count": 13,
   "unconfirmed_count": 12,
   "docs_base": "https://docs.apimart.ai/ru/api-reference/",
@@ -74,7 +74,6 @@
         "status": "new_apimart_route",
         "target_route_implemented": false
       },
-      "file": "02-claude-opus-4-8.md",
       "flag": "FEATURE_APIMART_CLAUDE_OPUS_4_8_ENABLED"
     },
     {
@@ -119,7 +118,6 @@
         "status": "new_apimart_route",
         "target_route_implemented": false
       },
-      "file": "03-gpt-5-6-terra.md",
       "flag": "FEATURE_APIMART_GPT_5_6_TERRA_ENABLED"
     },
     {
@@ -164,7 +162,6 @@
         "status": "new_apimart_route",
         "target_route_implemented": false
       },
-      "file": "04-gpt-6-astra.md",
       "flag": "FEATURE_APIMART_GPT_6_ASTRA_ENABLED"
     },
     {
@@ -209,7 +206,6 @@
         "status": "new_apimart_route",
         "target_route_implemented": false
       },
-      "file": "06-claude-opus-5.md",
       "flag": "FEATURE_APIMART_CLAUDE_OPUS_5_ENABLED"
     },
     {
@@ -254,7 +250,6 @@
         "status": "new_apimart_route",
         "target_route_implemented": false
       },
-      "file": "07-gemini-3-7-flash.md",
       "flag": "FEATURE_APIMART_GEMINI_3_7_FLASH_ENABLED"
     },
     {
@@ -299,7 +294,6 @@
         "status": "new_apimart_route",
         "target_route_implemented": false
       },
-      "file": "08-claude-fable-5-1.md",
       "flag": "FEATURE_APIMART_CLAUDE_FABLE_5_1_ENABLED"
     },
     {
@@ -344,7 +338,6 @@
         "status": "new_apimart_route",
         "target_route_implemented": false
       },
-      "file": "09-claude-fable-5.md",
       "flag": "FEATURE_APIMART_CLAUDE_FABLE_5_ENABLED"
     },
     {
@@ -389,7 +382,6 @@
         "status": "new_apimart_route",
         "target_route_implemented": false
       },
-      "file": "10-gemini-3-6-flash.md",
       "flag": "FEATURE_APIMART_GEMINI_3_6_FLASH_ENABLED"
     },
     {
@@ -434,7 +426,6 @@
         "status": "new_apimart_route",
         "target_route_implemented": false
       },
-      "file": "11-gpt-5.md",
       "flag": "FEATURE_APIMART_GPT_5_ENABLED"
     },
     {
@@ -479,7 +470,6 @@
         "status": "new_apimart_route",
         "target_route_implemented": false
       },
-      "file": "12-gpt-5-6-luna.md",
       "flag": "FEATURE_APIMART_GPT_5_6_LUNA_ENABLED"
     },
     {
@@ -524,7 +514,6 @@
         "status": "new_apimart_route",
         "target_route_implemented": false
       },
-      "file": "13-grok-4-5.md",
       "flag": "FEATURE_APIMART_GROK_4_5_ENABLED"
     },
     {
@@ -569,7 +558,6 @@
         "status": "new_apimart_route",
         "target_route_implemented": false
       },
-      "file": "14-gemini-3-1-pro-preview.md",
       "flag": "FEATURE_APIMART_GEMINI_3_1_PRO_PREVIEW_ENABLED"
     },
     {
@@ -614,7 +602,6 @@
         "status": "new_apimart_route",
         "target_route_implemented": false
       },
-      "file": "15-deepseek-v4-pro.md",
       "flag": "FEATURE_APIMART_DEEPSEEK_V4_PRO_ENABLED"
     },
     {
@@ -659,7 +646,6 @@
         "status": "new_apimart_route",
         "target_route_implemented": false
       },
-      "file": "16-gemini-3-5-flash.md",
       "flag": "FEATURE_APIMART_GEMINI_3_5_FLASH_ENABLED"
     },
     {
@@ -704,7 +690,6 @@
         "status": "new_apimart_route",
         "target_route_implemented": false
       },
-      "file": "17-claude-opus-4-7.md",
       "flag": "FEATURE_APIMART_CLAUDE_OPUS_4_7_ENABLED"
     },
     {
@@ -749,7 +734,6 @@
         "status": "new_apimart_route",
         "target_route_implemented": false
       },
-      "file": "18-kimi-k3.md",
       "flag": "FEATURE_APIMART_KIMI_K3_ENABLED"
     },
     {
@@ -797,7 +781,6 @@
         "status": "new_apimart_route",
         "target_route_implemented": false
       },
-      "file": "19-qwen3-8-max.md",
       "flag": "FEATURE_APIMART_QWEN3_8_MAX_ENABLED"
     },
     {
@@ -842,7 +825,6 @@
         "status": "new_apimart_route",
         "target_route_implemented": false
       },
-      "file": "20-claude-sonnet-5.md",
       "flag": "FEATURE_APIMART_CLAUDE_SONNET_5_ENABLED"
     },
     {
@@ -887,7 +869,6 @@
         "status": "new_apimart_route",
         "target_route_implemented": false
       },
-      "file": "21-gpt-5-4.md",
       "flag": "FEATURE_APIMART_GPT_5_4_ENABLED"
     },
     {
@@ -932,7 +913,6 @@
         "status": "new_apimart_route",
         "target_route_implemented": false
       },
-      "file": "22-gpt-5-5.md",
       "flag": "FEATURE_APIMART_GPT_5_5_ENABLED"
     },
     {
@@ -977,7 +957,6 @@
         "status": "new_apimart_route",
         "target_route_implemented": false
       },
-      "file": "23-gpt-5-3-codex.md",
       "flag": "FEATURE_APIMART_GPT_5_3_CODEX_ENABLED"
     },
     {
@@ -1022,7 +1001,6 @@
         "status": "new_apimart_route",
         "target_route_implemented": false
       },
-      "file": "24-grok-4-3.md",
       "flag": "FEATURE_APIMART_GROK_4_3_ENABLED"
     },
     {
@@ -1067,7 +1045,6 @@
         "status": "new_apimart_route",
         "target_route_implemented": false
       },
-      "file": "25-grok-4-6.md",
       "flag": "FEATURE_APIMART_GROK_4_6_ENABLED"
     },
     {
@@ -1112,7 +1089,6 @@
         "status": "new_apimart_route",
         "target_route_implemented": false
       },
-      "file": "26-claude-haiku-4-5-20251001.md",
       "flag": "FEATURE_APIMART_CLAUDE_HAIKU_4_5_20251001_ENABLED"
     },
     {
@@ -1157,7 +1133,6 @@
         "status": "new_apimart_route",
         "target_route_implemented": false
       },
-      "file": "27-gpt-5-2.md",
       "flag": "FEATURE_APIMART_GPT_5_2_ENABLED"
     },
     {
@@ -1202,7 +1177,6 @@
         "status": "new_apimart_route",
         "target_route_implemented": false
       },
-      "file": "28-claude-opus-4-6.md",
       "flag": "FEATURE_APIMART_CLAUDE_OPUS_4_6_ENABLED"
     },
     {
@@ -1232,7 +1206,7 @@
         "input_usd_nanos_per_million": 342856800,
         "output_usd_nanos_per_million": 1028571200
       },
-      "note": "Default chatgpt / NeiroHub Chat уже связан в registry с DeepInfra/deepseek-ai/DeepSeek-V4-Flash. Этот план добавляет отдельный APIMart public route после T, не меняя default. Study24 использует общее имя DeepSeek V4; равенство Flash-версии не доказано. Вне пика по исходному исследованию: $0.1714284 / $0.5142856; резерв по пиковому тарифу. Ставки заново не проверялись.",
+      "note": "Default chatgpt / NeiroHub Chat уже связан в registry с DeepInfra/deepseek-ai/DeepSeek-V4-Flash. Отдельный APIMart public route рассматривается после T, не меняя default. Study24 использует общее имя DeepSeek V4; равенство Flash-версии не доказано. Вне пика по исходному исследованию: $0.1714284 / $0.5142856; резерв по пиковому тарифу. Ставки заново не проверялись.",
       "conditional": true,
       "gate": "account_catalog",
       "limits": "Первый выпуск: текстовый ввод, один ответ, stream=false, до 800 токенов вывода и консервативный бюджет входа 1600 токенов с учётом системного контекста. Это наши стартовые лимиты, а не заявленный максимум модели. temperature, tools, reasoning_effort, вложения и cache-control не отправлять до проверки контракта конкретного ID.",
@@ -1255,7 +1229,6 @@
           "preserve_default_chat"
         ]
       },
-      "file": "31-deepseek-v4-flash.md",
       "flag": "FEATURE_APIMART_DEEPSEEK_V4_FLASH_ENABLED"
     },
     {
@@ -1300,7 +1273,6 @@
         "status": "new_apimart_route",
         "target_route_implemented": false
       },
-      "file": "32-gemini-2-5-pro.md",
       "flag": "FEATURE_APIMART_GEMINI_2_5_PRO_ENABLED"
     },
     {
@@ -1345,7 +1317,6 @@
         "status": "new_apimart_route",
         "target_route_implemented": false
       },
-      "file": "33-qwen3-7-flash.md",
       "flag": "FEATURE_APIMART_QWEN3_7_FLASH_ENABLED"
     },
     {
@@ -1390,7 +1361,6 @@
         "status": "new_apimart_route",
         "target_route_implemented": false
       },
-      "file": "34-deepseek-r1.md",
       "flag": "FEATURE_APIMART_DEEPSEEK_R1_ENABLED"
     },
     {
@@ -1435,7 +1405,6 @@
         "status": "new_apimart_route",
         "target_route_implemented": false
       },
-      "file": "35-gemini-2-5-flash-lite.md",
       "flag": "FEATURE_APIMART_GEMINI_2_5_FLASH_LITE_ENABLED"
     },
     {
@@ -1479,7 +1448,6 @@
           "web_references_if_selected"
         ]
       },
-      "file": "37-nano-banana-pro.md",
       "flag": "FEATURE_IMAGE_MODEL_NANO_BANANA_PRO_ENABLED"
     },
     {
@@ -1523,7 +1491,6 @@
           "web_references_if_selected"
         ]
       },
-      "file": "38-gpt-image-2.md",
       "flag": "FEATURE_IMAGE_MODEL_GPT_IMAGE_2_ENABLED"
     },
     {
@@ -1560,7 +1527,6 @@
         "status": "new_apimart_route",
         "target_route_implemented": false
       },
-      "file": "39-seedream-5-0-pro.md",
       "flag": "FEATURE_APIMART_SEEDREAM_5_0_PRO_ENABLED"
     },
     {
@@ -1597,7 +1563,6 @@
         "status": "new_apimart_route",
         "target_route_implemented": false
       },
-      "file": "40-midjourney-v7.md",
       "flag": "FEATURE_APIMART_MIDJOURNEY_V7_ENABLED"
     },
     {
@@ -1624,7 +1589,7 @@
         "Новые Jobs используют APIMart, старые сохраняют исходного провайдера из snapshot.",
         "Стоимость 2K=$0.02; 15-й референс отклоняется."
       ],
-      "note": "Nano Banana 2 уже реализована через PoYo/nano-banana-2-new, refs через nano-banana-2-new-edit. APIMart — отдельная необязательная миграция после выбора плана 41; сохранять snapshots подготовленных и незавершённых Jobs. Не входит в очередь первичного подключения.",
+      "note": "Nano Banana 2 уже реализована через PoYo/nano-banana-2-new, refs через nano-banana-2-new-edit. APIMart — отдельная необязательная миграция после отдельного выбора миграции; сохранять snapshots подготовленных и незавершённых Jobs. Не входит в очередь первичного подключения.",
       "conditional": false,
       "wave": "optional_provider_migration",
       "gate": "account_catalog",
@@ -1642,7 +1607,6 @@
           "preserve_prepared_and_inflight_poyo_jobs"
         ]
       },
-      "file": "41-nano-banana-2.md",
       "flag": "FEATURE_IMAGE_MODEL_NANO_BANANA_2_ENABLED"
     },
     {
@@ -1681,7 +1645,6 @@
         "internal_credits": 10,
         "deployment": "user_authorized_DEV_workflow; consult Deploy DEV run for outcome"
       },
-      "file": "43-grok-image-1-5.md",
       "flag": "FEATURE_APIMART_GROK_IMAGE_1_5_ENABLED"
     },
     {
@@ -1723,7 +1686,6 @@
         "internal_credits": 10,
         "deployment": "user_authorized_DEV_workflow; consult Deploy DEV run for outcome"
       },
-      "file": "44-grok-image-2-0.md",
       "flag": "FEATURE_APIMART_GROK_IMAGE_2_0_ENABLED"
     },
     {
@@ -1766,7 +1728,6 @@
         "general_B2_completed": false,
         "live_verification_source": "User confirmed working on DEV after deployment cdc3b17; actual provider cost not audited."
       },
-      "file": "45-qwen-image-3.md",
       "flag": "FEATURE_APIMART_QWEN_IMAGE_3_ENABLED"
     },
     {
@@ -1804,7 +1765,6 @@
         "status": "new_apimart_route",
         "target_route_implemented": false
       },
-      "file": "46-flux-2-pro.md",
       "flag": "FEATURE_APIMART_FLUX_2_PRO_ENABLED"
     },
     {
@@ -1840,7 +1800,6 @@
         "status": "new_apimart_route",
         "target_route_implemented": false
       },
-      "file": "48-nano-banana.md",
       "flag": "FEATURE_APIMART_NANO_BANANA_ENABLED"
     },
     {
@@ -1878,7 +1837,6 @@
         "status": "new_apimart_route",
         "target_route_implemented": false
       },
-      "file": "49-seedream-5-0-lite.md",
       "flag": "FEATURE_APIMART_SEEDREAM_5_0_LITE_ENABLED"
     },
     {
@@ -1914,7 +1872,6 @@
         "status": "new_apimart_route",
         "target_route_implemented": false
       },
-      "file": "50-nano-banana-2-lite.md",
       "flag": "FEATURE_APIMART_NANO_BANANA_2_LITE_ENABLED"
     },
     {
@@ -1943,7 +1900,7 @@
         "5 с входа + 5 с выхода 720p=$1.296 по посекундной таблице, не $0.648.",
         "4K отклоняется."
       ],
-      "note": "Прайс содержит также token-тарифы: до запуска сверить правило расчёта token usage и точность посекундной оценки. Edit/extend, MOV и audio-only references — следующая стадия этого плана с отдельными snapshots.",
+      "note": "Прайс содержит также token-тарифы: до запуска сверить правило расчёта token usage и точность посекундной оценки. Edit/extend, MOV и audio-only references — следующая стадия интеграции с отдельными snapshots.",
       "wave": "V2",
       "conditional": false,
       "gate": "account_catalog",
@@ -1952,7 +1909,6 @@
         "status": "new_apimart_route",
         "target_route_implemented": false
       },
-      "file": "51-seedance-2-5.md",
       "flag": "FEATURE_APIMART_SEEDANCE_2_5_ENABLED"
     },
     {
@@ -1989,7 +1945,6 @@
         "status": "new_apimart_route",
         "target_route_implemented": false
       },
-      "file": "52-seedance-2-0.md",
       "flag": "FEATURE_APIMART_SEEDANCE_2_0_ENABLED"
     },
     {
@@ -2027,7 +1982,6 @@
         "status": "new_apimart_route",
         "target_route_implemented": false
       },
-      "file": "53-gemini-omni-1-1-flash-ext.md",
       "flag": "FEATURE_APIMART_GEMINI_OMNI_1_1_FLASH_EXT_ENABLED"
     },
     {
@@ -2063,7 +2017,6 @@
         "status": "new_apimart_route",
         "target_route_implemented": false
       },
-      "file": "54-gemini-omni-flash-preview.md",
       "flag": "FEATURE_APIMART_GEMINI_OMNI_FLASH_PREVIEW_ENABLED"
     },
     {
@@ -2101,7 +2054,6 @@
         "status": "new_apimart_route",
         "target_route_implemented": false
       },
-      "file": "55-wan-3-0.md",
       "flag": "FEATURE_APIMART_WAN_3_0_ENABLED"
     },
     {
@@ -2139,7 +2091,6 @@
         "status": "new_apimart_route",
         "target_route_implemented": false
       },
-      "file": "56-veo-3-1-fast.md",
       "flag": "FEATURE_APIMART_VEO_3_1_FAST_ENABLED"
     },
     {
@@ -2177,7 +2128,6 @@
         "status": "new_apimart_route",
         "target_route_implemented": false
       },
-      "file": "57-seedance-2-0-mini.md",
       "flag": "FEATURE_APIMART_SEEDANCE_2_0_MINI_ENABLED"
     },
     {
@@ -2214,7 +2164,6 @@
         "status": "new_apimart_route",
         "target_route_implemented": false
       },
-      "file": "59-minimax-h3.md",
       "flag": "FEATURE_APIMART_MINIMAX_H3_ENABLED"
     },
     {
@@ -2252,7 +2201,6 @@
         "status": "new_apimart_route",
         "target_route_implemented": false
       },
-      "file": "60-kling-3-0.md",
       "flag": "FEATURE_APIMART_KLING_3_0_ENABLED"
     },
     {
@@ -2288,7 +2236,6 @@
         "status": "new_apimart_route",
         "target_route_implemented": false
       },
-      "file": "61-kling-3-0-turbo.md",
       "flag": "FEATURE_APIMART_KLING_3_0_TURBO_ENABLED"
     },
     {
@@ -2326,7 +2273,6 @@
         "status": "new_apimart_route",
         "target_route_implemented": false
       },
-      "file": "62-kling-2-6.md",
       "flag": "FEATURE_APIMART_KLING_2_6_ENABLED"
     },
     {
@@ -2356,7 +2302,7 @@
         "image orientation + 11 с отклоняется.",
         "Чужой reference artifact не даёт создать Job."
       ],
-      "note": "Study24 не раскрывает номер Kling под Motion Control. План для документированного v2.6 std; версия 3 имеет другой тариф и не подменяет её.",
+      "note": "Study24 не раскрывает номер Kling под Motion Control. Маршрут для документированного v2.6 std; версия 3 имеет другой тариф и не подменяет её.",
       "wave": "C",
       "conditional": true,
       "gate": "account_catalog",
@@ -2365,7 +2311,6 @@
         "status": "new_apimart_route",
         "target_route_implemented": false
       },
-      "file": "64-kling-motion-control.md",
       "flag": "FEATURE_APIMART_KLING_MOTION_CONTROL_ENABLED"
     },
     {
@@ -2404,7 +2349,6 @@
         "status": "new_apimart_route",
         "target_route_implemented": false
       },
-      "file": "65-kling-motion-control-pro.md",
       "flag": "FEATURE_APIMART_KLING_MOTION_CONTROL_PRO_ENABLED"
     },
     {
@@ -2441,7 +2385,6 @@
         "status": "new_apimart_route",
         "target_route_implemented": false
       },
-      "file": "66-grok-imagine-1-5.md",
       "flag": "FEATURE_APIMART_GROK_IMAGINE_1_5_ENABLED"
     },
     {
@@ -2469,7 +2412,7 @@
         "first_frame_image+image_urls отклоняются.",
         "Edit с исходником >15 с не обрезается молча: backend отклоняет до пользовательского выбора."
       ],
-      "note": "Study24 «Happy Horse» не раскрывает 1.0/1.1. План для явно выбранной 1.0, без скрытого перехода на 1.1.",
+      "note": "Study24 «Happy Horse» не раскрывает 1.0/1.1. Маршрут для явно выбранной 1.0, без скрытого перехода на 1.1.",
       "wave": "V2",
       "conditional": true,
       "gate": "pricing_alias",
@@ -2478,7 +2421,6 @@
         "status": "new_apimart_route",
         "target_route_implemented": false
       },
-      "file": "67-happy-horse-1-0.md",
       "flag": "FEATURE_APIMART_HAPPY_HORSE_1_0_ENABLED"
     },
     {
@@ -2517,7 +2459,6 @@
         "status": "new_apimart_route",
         "target_route_implemented": false
       },
-      "file": "68-suno-v5-5.md",
       "flag": "FEATURE_APIMART_SUNO_V5_5_ENABLED"
     }
   ],

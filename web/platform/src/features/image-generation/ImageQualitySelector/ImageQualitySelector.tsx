@@ -117,14 +117,14 @@ export function ImageQualitySelector({
       <InputControlChip
         aria-expanded={isOpen}
         aria-haspopup="dialog"
-        aria-label={`${label}: ${value}`}
+        aria-label={`${label}: ${qualityLabel(value)}`}
         className={styles.trigger}
         disabled={isDisabled}
         onClick={() => setIsOpen((current) => !current)}
         ref={triggerRef}
       >
         <TuneIcon />
-        <span>{value}</span>
+        <span>{qualityLabel(value)}</span>
         <ChevronIcon />
       </InputControlChip>
 
@@ -143,7 +143,7 @@ export function ImageQualitySelector({
               return (
                 <button
                   aria-checked={selected}
-                  aria-label={quality}
+                  aria-label={qualityLabel(quality)}
                   className={selected ? `${styles.option} ${styles.selected}` : styles.option}
                   key={quality}
                   onClick={() => {
@@ -154,7 +154,7 @@ export function ImageQualitySelector({
                   role="radio"
                   type="button"
                 >
-                  <span>{quality}</span>
+                  <span>{qualityLabel(quality)}</span>
                   <span aria-hidden="true" className={styles.radio} />
                 </button>
               );
@@ -169,6 +169,10 @@ export function ImageQualitySelector({
 
 function clamp(value: number, minimum: number, maximum: number): number {
   return Math.min(Math.max(value, minimum), maximum);
+}
+
+function qualityLabel(value: string): string {
+  return ({ relax: "Relax", fast: "Fast", turbo: "Turbo" } as Record<string, string>)[value] ?? value;
 }
 
 function TuneIcon() {

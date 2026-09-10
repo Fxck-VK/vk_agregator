@@ -17,6 +17,8 @@ const (
 	MiniAppImageNanoBananaPro   = providermodels.PublicImageNanoBananaPro
 	MiniAppImageGPTImage2       = providermodels.PublicImageGPTImage2
 	MiniAppImageQwenImage3      = providermodels.PublicImageQwenImage3
+	MiniAppImageMidjourneyV7    = providermodels.PublicImageMidjourneyV7
+	MiniAppImageFlux2Pro        = providermodels.PublicImageFlux2Pro
 	MiniAppImageGrokImage15     = providermodels.PublicImageGrokImage15
 	MiniAppImageGrokImage20     = providermodels.PublicImageGrokImage20
 	MiniAppImageNanoBananaFlash = "nano_banana_flash"
@@ -93,6 +95,10 @@ func MiniAppResponseModelID(model Model) string {
 
 func NormalizeImageQuality(raw string) (string, bool) {
 	switch strings.ToUpper(strings.TrimSpace(raw)) {
+	case "1MP", "2MP", "3MP", "4MP":
+		return strings.ToUpper(strings.TrimSpace(raw)), true
+	case "RELAX", "FAST", "TURBO":
+		return strings.ToLower(strings.TrimSpace(raw)), true
 	case "STANDARD":
 		return "standard", true
 	case ImageQuality1K:
@@ -185,6 +191,11 @@ func miniAppTextModels() map[string]Model {
 			ModelName: alias.DisplayName,
 		}
 		models[alias.PublicID] = model
+		if providermodels.IsPaidTextRoute(alias.Provider, alias.ProviderModelID) {
+			model.Provider, model.ModelCode, model.ExposeID = alias.Provider, alias.ProviderModelID, true
+			models[alias.PublicID] = model
+			continue
+		}
 		models[alias.DisplayName] = model
 		models[alias.ProviderModelID] = model
 	}

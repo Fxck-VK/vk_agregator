@@ -16,6 +16,7 @@ import (
 	"sync"
 	"time"
 
+	"vk-ai-aggregator/internal/adapter/provider/textapi"
 	"vk-ai-aggregator/internal/domain"
 )
 
@@ -29,6 +30,9 @@ const (
 	ModelQwenImage3       = "qwen-image-3.0"
 	ModelGrokImage15      = "grok-imagine-1.5-apimart"
 	ModelGrokImage20      = "grok-imagine-2.0-ext"
+	ModelMidjourneyV7     = "midjourney"
+	ModelFlux2Pro         = "flux-2-pro"
+	ModelSeedance25       = "seedance-2.5"
 
 	defaultVideoProviderCostCredits = 1
 	defaultImageProviderCostCredits = 1
@@ -43,19 +47,22 @@ const (
 
 // Config holds APIMart connection settings.
 type Config struct {
-	APIKey       string
-	BaseURL      string
-	TaskLanguage string
-	HTTPClient   *http.Client
+	EnabledTextModels []string
+	APIKey            string
+	BaseURL           string
+	TaskLanguage      string
+	HTTPClient        *http.Client
 }
 
 // Provider is the APIMart domain.Provider adapter.
 type Provider struct {
-	cfg        Config
-	http       *http.Client
-	mu         sync.Mutex
-	idempotent map[string]domain.ProviderTask
-	now        func() time.Time
+	text               *textapi.Provider
+	cfg                Config
+	http               *http.Client
+	mu                 sync.Mutex
+	idempotent         map[string]domain.ProviderTask
+	unversionedSubmits map[string]*unversionedSubmission
+	now                func() time.Time
 }
 
 // New builds an APIMart provider adapter.
@@ -72,10 +79,12 @@ func New(cfg Config) *Provider {
 		httpClient = &http.Client{Timeout: 120 * time.Second}
 	}
 	return &Provider{
-		cfg:        cfg,
-		http:       httpClient,
-		idempotent: map[string]domain.ProviderTask{},
-		now:        time.Now,
+		text:               textapi.New(textapi.Config{Provider: domain.ProviderAPIMart, APIKey: cfg.APIKey, BaseURL: cfg.BaseURL, EnabledModels: cfg.EnabledTextModels, HTTPClient: httpClient}),
+		cfg:                cfg,
+		http:               httpClient,
+		idempotent:         map[string]domain.ProviderTask{},
+		unversionedSubmits: map[string]*unversionedSubmission{},
+		now:                time.Now,
 	}
 }
 
@@ -84,9 +93,16 @@ var _ domain.Provider = (*Provider)(nil)
 // Name returns the APIMart provider identifier.
 func (p *Provider) Name() domain.ProviderName { return domain.ProviderAPIMart }
 
-// Capabilities reports supported APIMart media routes.
-func (p *Provider) Capabilities(context.Context) ([]domain.Capability, error) {
-	return []domain.Capability{
+// Capabilities reports enabled text models and supported media routes.
+func (p *Provider) Capabilities(ctx context.Context) ([]domain.Capability, error) {
+	textCaps, err := p.text.Capabilities(ctx)
+	if err != nil {
+		return nil, err
+	}
+	return append(textCaps, []domain.Capability{
+		{Operation: domain.OperationImageGenerate, Modality: domain.ModalityImage, ModelCode: ModelMidjourneyV7, SupportsPolling: true},
+		{Operation: domain.OperationImageGenerate, Modality: domain.ModalityImage, ModelCode: ModelFlux2Pro, SupportsPolling: true},
+		{Operation: domain.OperationVideoGenerate, Modality: domain.ModalityVideo, ModelCode: ModelSeedance25, SupportsPolling: true, MaxDurationSec: 30},
 		{Operation: domain.OperationImageGenerate, Modality: domain.ModalityImage, ModelCode: ModelGrokImage15, SupportsPolling: true},
 		{Operation: domain.OperationImageGenerate, Modality: domain.ModalityImage, ModelCode: ModelGrokImage20, SupportsPolling: true},
 		{
@@ -121,13 +137,21 @@ func (p *Provider) Capabilities(context.Context) ([]domain.Capability, error) {
 			SupportsPolling: true,
 			MaxDurationSec:  10,
 		},
-	}, nil
+	}...), nil
 }
 
 // Estimate reports provider-side credits for worker routing, media safety caps
 // and telemetry. User billing must use pricingcatalog snapshots, never adapter
 // estimates.
-func (p *Provider) Estimate(_ context.Context, req domain.ProviderRequest) (domain.CostEstimate, error) {
+func (p *Provider) Estimate(ctx context.Context, req domain.ProviderRequest) (domain.CostEstimate, error) {
+	if req.Operation == domain.OperationTextGenerate || req.Modality == domain.ModalityText {
+		return p.text.Estimate(ctx, req)
+	}
+	if strings.TrimSpace(req.ModelCode) == ModelSeedance25 {
+		if err := validateSeedance25(req, false); err != nil {
+			return domain.CostEstimate{}, err
+		}
+	}
 	if req.Operation == domain.OperationImageGenerate || req.Modality == domain.ModalityImage {
 		if err := validateImageShape(req, false); err != nil {
 			return domain.CostEstimate{}, err
@@ -153,7 +177,10 @@ func (p *Provider) Estimate(_ context.Context, req domain.ProviderRequest) (doma
 		if snapshot.ProviderCostCredits <= 0 {
 			return domain.CostEstimate{}, &Error{Class: domain.ProviderErrInvalidRequest, Message: "resolved route snapshot provider cost is unavailable"}
 		}
-		return domain.CostEstimate{AmountCredits: snapshot.ProviderCostCredits, Currency: "credits", Estimated: false}, nil
+		return domain.CostEstimate{AmountCredits: snapshot.ProviderCostCredits, Currency: "credits", Estimated: strings.TrimSpace(req.ModelCode) == ModelSeedance25}, nil
+	}
+	if strings.TrimSpace(req.ModelCode) == ModelSeedance25 {
+		return domain.CostEstimate{AmountCredits: seedance25CostCredits(req), Currency: "credits", Estimated: true}, nil
 	}
 	if err := validateVideoShape(req, false); err != nil {
 		return domain.CostEstimate{}, err
@@ -165,8 +192,26 @@ func (p *Provider) Estimate(_ context.Context, req domain.ProviderRequest) (doma
 	}, nil
 }
 
-// Submit creates an async APIMart media task.
+// Submit returns synchronous text to the worker or creates an async media task.
 func (p *Provider) Submit(ctx context.Context, req domain.ProviderRequest) (domain.ProviderTask, error) {
+	if req.Operation == domain.OperationTextGenerate || req.Modality == domain.ModalityText {
+		return p.text.Submit(ctx, req)
+	}
+	if strings.TrimSpace(req.ModelCode) == ModelFlux2Pro {
+		if err := validateImageShape(req, true); err != nil {
+			return domain.ProviderTask{}, err
+		}
+		return p.submitUnversionedOnce(ctx, req, p.submitFlux2Pro)
+	}
+	if strings.TrimSpace(req.ModelCode) == ModelMidjourneyV7 {
+		if err := validateImageShape(req, true); err != nil {
+			return domain.ProviderTask{}, err
+		}
+		return p.submitUnversionedOnce(ctx, req, p.submitMidjourneyV7)
+	}
+	if strings.TrimSpace(req.ModelCode) == ModelSeedance25 {
+		return p.submitSeedance25Once(ctx, req)
+	}
 	if req.IdempotencyKey != "" {
 		if task, ok := p.idempotentTask(req.IdempotencyKey); ok {
 			return task, nil
@@ -303,6 +348,9 @@ func (p *Provider) submitImage(ctx context.Context, req domain.ProviderRequest) 
 // when the task has completed. The worker stores those URLs as our artifacts
 // before the job can become successful.
 func (p *Provider) Poll(ctx context.Context, ref domain.ProviderTaskRef) (domain.ProviderTaskResult, error) {
+	if strings.HasPrefix(ref.ExternalID, "text:") {
+		return p.text.Poll(ctx, ref)
+	}
 	taskID := strings.TrimSpace(ref.ExternalID)
 	if taskID == "" {
 		return domain.ProviderTaskResult{
@@ -550,7 +598,7 @@ func imageProviderCostCredits(req domain.ProviderRequest) (int64, error) {
 	// so known public variants use a conservative one-credit ceiling.
 	resolution := strings.ToUpper(effectiveImageResolution(req))
 	switch strings.TrimSpace(req.ModelCode) {
-	case ModelGrokImage15, ModelGrokImage20:
+	case ModelFlux2Pro, ModelMidjourneyV7, ModelGrokImage15, ModelGrokImage20:
 		return defaultImageProviderCostCredits, nil
 	case ModelQwenImage3:
 		if resolution == "1K" || resolution == "2K" {
@@ -612,6 +660,12 @@ func validateImageShape(req domain.ProviderRequest, requirePrompt bool) error {
 	if !isSupportedImageModel(model) {
 		return &Error{Class: domain.ProviderErrUnsupportedCapab, Message: "unsupported APIMart image model"}
 	}
+	if model == ModelFlux2Pro {
+		return validateFlux2Pro(req, requirePrompt)
+	}
+	if model == ModelMidjourneyV7 {
+		return validateMidjourneyV7(req, requirePrompt)
+	}
 	if isGrokImageModel(model) {
 		return validateGrokImageRequest(req, requirePrompt)
 	}
@@ -667,7 +721,7 @@ func isSupportedVideoModel(model string) bool {
 
 func isSupportedImageModel(model string) bool {
 	switch strings.TrimSpace(model) {
-	case ModelGemini3ProImage, ModelGPTImage2, ModelQwenImage3, ModelGrokImage15, ModelGrokImage20:
+	case ModelFlux2Pro, ModelMidjourneyV7, ModelGemini3ProImage, ModelGPTImage2, ModelQwenImage3, ModelGrokImage15, ModelGrokImage20:
 		return true
 	default:
 		return false
@@ -676,6 +730,14 @@ func isSupportedImageModel(model string) bool {
 
 func isSupportedImageSize(model, value string) bool {
 	value = strings.ToLower(strings.TrimSpace(value))
+	if model == ModelFlux2Pro {
+		for _, ratio := range flux2AspectRatios {
+			if ratio == value {
+				return true
+			}
+		}
+		return false
+	}
 	if value == "" {
 		return false
 	}

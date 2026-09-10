@@ -35,7 +35,7 @@ Important boundaries:
 
 | Provider | Current video role | Required config |
 | --- | --- | --- |
-| APIMart | Hailuo 2.3 Fast / Hailuo 2.3 Standard | `APIMART_PROVIDER_ENABLED`, `APIMART_API_KEY`, `APIMART_BASE_URL` |
+| APIMart | Seedance 2.5, Hailuo 2.3 Fast / Hailuo 2.3 Standard | `APIMART_PROVIDER_ENABLED`, `APIMART_API_KEY`, `APIMART_BASE_URL` |
 | PoYo | Kling O3 Standard, Seedance 2.0 Fast, Runway Gen-4.5 | `POYO_PROVIDER_ENABLED`, `POYO_API_KEY`, `POYO_BASE_URL` |
 | Runway | Runway Gen4 Turbo | `RUNWAY_PROVIDER_ENABLED`, `RUNWAYML_API_SECRET`, `RUNWAYML_BASE_URL` |
 | DeepInfra | Text runtime only in the current architecture | no active video route |
@@ -52,6 +52,7 @@ Routes are defined in:
 
 | Public alias | Provider | Provider model id | Input shape | Duration | Resolution | Notes |
 | --- | --- | --- | --- | --- | --- | --- |
+| `video_seedance_2_5` | APIMart | `seedance-2.5` | text or up to 4 reference images | 5s, 10s, 15s, 30s | 480p, 720p, 1080p | MP4 with native audio. Human-face asset approval is not supported in this release. |
 | `video_hailuo_2_3_fast` | APIMart | `MiniMax-Hailuo-2.3-Fast` | image/start image | 6s, 10s | 768p, 1080p | Requires start image. 1080p is limited to 6s. |
 | `video_hailuo_2_3_standard` | APIMart | `MiniMax-Hailuo-2.3` | text or image | 6s, 10s | 768p, 1080p | Supports one reference image. 1080p is limited to 6s. |
 | `video_kling_o3_standard` | PoYo | `kling-o3/standard` | text or image | 5s, 10s | 720p, 1080p | Supports 16:9, 9:16, 1:1 and one reference image. |
@@ -75,6 +76,7 @@ FEATURE_VIDEO_ROUTE_HAILUO_2_3_FAST_ENABLED=false
 FEATURE_VIDEO_ROUTE_HAILUO_2_3_STANDARD_ENABLED=false
 FEATURE_VIDEO_ROUTE_KLING_O3_STANDARD_ENABLED=false
 FEATURE_VIDEO_ROUTE_SEEDANCE_2_0_FAST_ENABLED=false
+FEATURE_APIMART_SEEDANCE_2_5_ENABLED=false
 FEATURE_VIDEO_ROUTE_RUNWAY_GEN4_TURBO_ENABLED=false
 FEATURE_VIDEO_ROUTE_RUNWAY_GEN4_5_ENABLED=false
 FEATURE_VIDEO_ROUTE_MOCK_TEXT_TO_VIDEO_ENABLED=false
@@ -104,6 +106,46 @@ RUNWAYML_BASE_URL=https://api.dev.runwayml.com/v1
 
 `FEATURE_VIDEO_ROUTE_MOCK_TEXT_TO_VIDEO_ENABLED=true` is valid only for
 `APP_ENV=loadtest` and mock providers.
+
+## Seedance 2.5
+
+[Generation contract](https://docs.apimart.ai/ru/api-reference/videos/seedance-2-5/generation)
+and [public rates](https://apimart.ai/zh/model/doubao-seedance-2-5), checked 2026-09-09.
+Submit uses `POST /v1/videos/generations`, model `seedance-2.5`, fixed duration,
+resolution, size, optional `image_urls`, `generate_audio=true`, `output_format=mp4`,
+`watermark=false`, `NSFWCheck=true`. Polling uses `GET /v1/tasks/{task_id}`.
+Provider NSFW checking supplements mandatory application output moderation.
+
+Public rollout supports text and up to four owned image artifacts. Video/audio
+references, first/last-frame roles, asset library for human faces, edit/extend,
+MOV and automatic duration are deferred. Mini App accepts `video_resolution`,
+validates it against the route and uses it for both quote and Job snapshot.
+Raw `resolution`, provider and billing fields remain forbidden. Duration controls
+show every allowed duration. VK's shared catalog derives the new route automatically;
+the standalone Web platform does not yet have a video-generation form.
+
+Approved retail is provider preauthorization estimate x3, rounded up once to
+five internal credits (one internal credit = $0.005). Static catalog version 7:
+
+| Resolution | Provider estimate, USD/second | 5s credits | 10s credits | 15s credits | 30s credits |
+| --- | --- | --- | --- | --- | --- |
+| 480p | 0.09608 | 290 | 580 | 865 | 1730 |
+| 720p | 0.216 | 650 | 1300 | 1945 | 3890 |
+| 1080p | 0.38488 | 1155 | 2310 | 3465 | 6930 |
+
+APIMart settles successful tasks by actual tokens. The second-based values are
+estimates, not a guaranteed provider bill. User capture stays at the fixed reserved
+snapshot with no retrospective surcharge. Route spend metadata keeps exact
+millionths per second and rounds the final provider credit estimate upward;
+its cap is an estimate guard, not an upstream billing cap.
+
+The adapter coalesces concurrent same-key submits and remembers accepted or
+ambiguous outcomes for its lifetime. Transport failures, HTTP 408/409/5xx and
+unreadable/missing task identifiers stop automatic fresh submission using
+`provider_submit_indeterminate`. Accepted tasks use existing durable worker polling.
+Process crashes between acceptance and saving the task ID remain the shared
+durable-intent gap; no upstream replay guarantee is assumed.
+See [DEV enablement](runbooks/DEV.md#seedance-25-configuration).
 
 ## Deprecated / Legacy Video Notes
 

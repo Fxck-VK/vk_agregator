@@ -6,6 +6,8 @@ import { ChatComposer } from "@/components/chat/ChatComposer/ChatComposer";
 import { ChatScrollToBottom } from "@/components/chat/ChatScrollToBottom/ChatScrollToBottom";
 import { ru } from "@/i18n/ru";
 
+import { TextModelSelector, type TextModel } from "../TextModelSelector";
+
 import styles from "./ConversationComposer.module.css";
 
 type ConversationComposerProps = {
@@ -14,7 +16,7 @@ type ConversationComposerProps = {
   forceScrollRequest: number;
   initialDraft?: string;
   isAwaitingResponse?: boolean;
-  onSubmit: (prompt: string) => void;
+  onSubmit: (prompt: string, modelId?: string) => void;
   scrollContainer: HTMLElement | null;
 };
 
@@ -28,21 +30,24 @@ export function ConversationComposer({
   scrollContainer,
 }: ConversationComposerProps) {
   const [draft, setDraft] = useState(initialDraft);
+  const [model, setModel] = useState<TextModel | null>(null);
   const normalizedDraft = draft.trim();
-  const canSubmit = normalizedDraft !== "" && !disabled;
+  const tooLong = model?.max_prompt_bytes !== undefined && new TextEncoder().encode(normalizedDraft).length > model.max_prompt_bytes;
+  const canSubmit = normalizedDraft !== "" && !disabled && !tooLong;
 
   const changeDraft = (event: ChangeEvent<HTMLTextAreaElement>) => {
     setDraft(event.target.value);
   };
 
   const submit = () => {
-    if (disabled || normalizedDraft === "") {
+    if (disabled || normalizedDraft === "" || tooLong) {
       return;
     }
 
     const prompt = normalizedDraft;
     setDraft("");
-    onSubmit(prompt);
+    if (model && model.id !== "chatgpt") onSubmit(prompt, model.id);
+    else onSubmit(prompt);
   };
 
   const submitForm = (event: FormEvent<HTMLFormElement>) => {
@@ -58,6 +63,8 @@ export function ConversationComposer({
         isAwaitingResponse={isAwaitingResponse}
         scrollContainer={scrollContainer}
       />
+      <TextModelSelector disabled={disabled} onChange={setModel} />
+      {tooLong && <p role="alert">Сообщение слишком длинное для выбранной модели.</p>}
       <ChatComposer
         canSubmit={canSubmit}
         disabled={disabled}

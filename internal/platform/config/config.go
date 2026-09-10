@@ -44,6 +44,22 @@ const (
 
 // Config is the full application configuration shared by the entrypoints.
 type Config struct {
+	KIEAPIKey                       string
+	KIEBaseURL                      string
+	KIEProviderEnabled              bool
+	KIETextLimitsVerified           bool
+	APIMartTextLimitsVerified       bool
+	FeatureTextClaudeOpus48Enabled  bool
+	FeatureTextGPT56TerraEnabled    bool
+	FeatureTextGPT6AstraEnabled     bool
+	FeatureTextClaudeOpus5Enabled   bool
+	FeatureTextGemini37FlashEnabled bool
+	FeatureTextClaudeFable51Enabled bool
+	FeatureTextClaudeFable5Enabled  bool
+	FeatureTextGemini36FlashEnabled bool
+	FeatureTextGPT55Enabled         bool
+	FeatureTextClaudeOpus47Enabled  bool
+	FeatureTextGemini31ProEnabled   bool
 	// Env is the deployment environment ("development", "staging" or
 	// "production"). Production fails closed on the full secret/scanner set;
 	// staging is for test VPS deployments with production-like routing.
@@ -295,6 +311,8 @@ type Config struct {
 	FeatureImageModelNanoBananaProEnabled       bool
 	FeatureImageModelGPTImage2Enabled           bool
 	FeatureAPIMartQwenImage3Enabled             bool
+	FeatureAPIMartMidjourneyV7Enabled           bool
+	FeatureAPIMartFlux2ProEnabled               bool
 	FeatureAPIMartGrokImage15Enabled            bool
 	FeatureAPIMartGrokImage20Enabled            bool
 	FeatureImageModelNanoBanana2Enabled         bool
@@ -306,6 +324,7 @@ type Config struct {
 	FeatureVideoRouteKlingO3StandardEnabled     bool
 	FeatureVideoRouteRunwayGen4TurboEnabled     bool
 	FeatureVideoRouteSeedance20FastEnabled      bool
+	FeatureAPIMartSeedance25Enabled             bool
 	FeatureVideoRouteRunwayGen45Enabled         bool
 	FeatureVideoRouteMockTextToVideoEnabled     bool
 	FeatureVideoRouteResellerExperimentsEnabled bool
@@ -621,6 +640,12 @@ func (c Config) PaymentWebhookHTTPSRequired() bool {
 // Validate fails closed: in production, secrets that protect inbound webhooks
 // and the admin API must be set. Returns a descriptive error otherwise.
 func (c Config) Validate() error {
+	if err := c.validateKIEText(); err != nil {
+		return err
+	}
+	if err := c.validateAPIMartText(); err != nil {
+		return err
+	}
 	var missing []string
 	if c.WebImageArtifactAllowInsecureHTTP && !strings.EqualFold(strings.TrimSpace(c.Env), "development") {
 		return fmt.Errorf("config: WEB_IMAGE_ARTIFACT_ALLOW_INSECURE_HTTP is allowed only in development")
@@ -1324,6 +1349,22 @@ func Load() Config {
 		APIMartAPIKey:                             env("APIMART_API_KEY", ""),
 		APIMartBaseURL:                            env("APIMART_BASE_URL", "https://api.apimart.ai/v1"),
 		APIMartProviderEnabled:                    envBool("APIMART_PROVIDER_ENABLED", false),
+		KIEAPIKey:                                 env("KIE_API_KEY", ""),
+		KIEBaseURL:                                env("KIE_BASE_URL", "https://api.kie.ai"),
+		KIEProviderEnabled:                        envBool("KIE_PROVIDER_ENABLED", false),
+		KIETextLimitsVerified:                     envBool("KIE_TEXT_LIMITS_VERIFIED", false),
+		APIMartTextLimitsVerified:                 envBool("APIMART_TEXT_LIMITS_VERIFIED", false),
+		FeatureTextClaudeOpus48Enabled:            envBool("FEATURE_TEXT_CLAUDE_OPUS_4_8_ENABLED", false),
+		FeatureTextGPT56TerraEnabled:              envBool("FEATURE_TEXT_GPT_5_6_TERRA_ENABLED", false),
+		FeatureTextGPT6AstraEnabled:               envBool("FEATURE_TEXT_GPT_6_ASTRA_ENABLED", false),
+		FeatureTextClaudeOpus5Enabled:             envBool("FEATURE_TEXT_CLAUDE_OPUS_5_ENABLED", false),
+		FeatureTextGemini37FlashEnabled:           envBool("FEATURE_TEXT_GEMINI_3_7_FLASH_ENABLED", false),
+		FeatureTextClaudeFable51Enabled:           envBool("FEATURE_TEXT_CLAUDE_FABLE_5_1_ENABLED", false),
+		FeatureTextClaudeFable5Enabled:            envBool("FEATURE_TEXT_CLAUDE_FABLE_5_ENABLED", false),
+		FeatureTextGemini36FlashEnabled:           envBool("FEATURE_TEXT_GEMINI_3_6_FLASH_ENABLED", false),
+		FeatureTextGPT55Enabled:                   envBool("FEATURE_TEXT_GPT_5_5_ENABLED", false),
+		FeatureTextClaudeOpus47Enabled:            envBool("FEATURE_TEXT_CLAUDE_OPUS_4_7_ENABLED", false),
+		FeatureTextGemini31ProEnabled:             envBool("FEATURE_TEXT_GEMINI_3_1_PRO_ENABLED", false),
 		ProviderBalanceBotEnabled:                 envBool("PROVIDER_BALANCE_BOT_ENABLED", false),
 		ProviderBalancePollInterval:               envDuration("PROVIDER_BALANCE_POLL_INTERVAL", 15*time.Minute),
 		APIMartBalanceWarnRemainBalance:           envFloat("APIMART_BALANCE_WARN_REMAIN_BALANCE", 20),
@@ -1342,6 +1383,8 @@ func Load() Config {
 		FeatureImageModelNanoBananaProEnabled:     envBool("FEATURE_IMAGE_MODEL_NANO_BANANA_PRO_ENABLED", false),
 		FeatureImageModelGPTImage2Enabled:         envBool("FEATURE_IMAGE_MODEL_GPT_IMAGE_2_ENABLED", false),
 		FeatureAPIMartQwenImage3Enabled:           envBool("FEATURE_APIMART_QWEN_IMAGE_3_ENABLED", false),
+		FeatureAPIMartMidjourneyV7Enabled:         envBool("FEATURE_APIMART_MIDJOURNEY_V7_ENABLED", false),
+		FeatureAPIMartFlux2ProEnabled:             envBool("FEATURE_APIMART_FLUX_2_PRO_ENABLED", false),
 		FeatureAPIMartGrokImage15Enabled:          envBool("FEATURE_APIMART_GROK_IMAGE_1_5_ENABLED", false),
 		FeatureAPIMartGrokImage20Enabled:          envBool("FEATURE_APIMART_GROK_IMAGE_2_0_ENABLED", false),
 		FeatureImageModelNanoBanana2Enabled:       envBool("FEATURE_IMAGE_MODEL_NANO_BANANA_2_ENABLED", false),
@@ -1356,6 +1399,7 @@ func Load() Config {
 		),
 		FeatureVideoRouteRunwayGen4TurboEnabled:     envBool("FEATURE_VIDEO_ROUTE_RUNWAY_GEN4_TURBO_ENABLED", false),
 		FeatureVideoRouteSeedance20FastEnabled:      envBool("FEATURE_VIDEO_ROUTE_SEEDANCE_2_0_FAST_ENABLED", false),
+		FeatureAPIMartSeedance25Enabled:             envBool("FEATURE_APIMART_SEEDANCE_2_5_ENABLED", false),
 		FeatureVideoRouteRunwayGen45Enabled:         envBool("FEATURE_VIDEO_ROUTE_RUNWAY_GEN4_5_ENABLED", false),
 		FeatureVideoRouteMockTextToVideoEnabled:     envBool("FEATURE_VIDEO_ROUTE_MOCK_TEXT_TO_VIDEO_ENABLED", false),
 		FeatureVideoRouteResellerExperimentsEnabled: envBool("FEATURE_VIDEO_ROUTE_RESELLER_EXPERIMENTS_ENABLED", false),
@@ -1766,6 +1810,8 @@ func (c Config) validateVideoRouteProviderConfig() error {
 		enabled bool
 		flag    string
 	}{
+		{c.FeatureAPIMartMidjourneyV7Enabled, "FEATURE_APIMART_MIDJOURNEY_V7_ENABLED"},
+		{c.FeatureAPIMartFlux2ProEnabled, "FEATURE_APIMART_FLUX_2_PRO_ENABLED"},
 		{c.FeatureAPIMartGrokImage15Enabled, "FEATURE_APIMART_GROK_IMAGE_1_5_ENABLED"},
 		{c.FeatureAPIMartGrokImage20Enabled, "FEATURE_APIMART_GROK_IMAGE_2_0_ENABLED"},
 	} {
@@ -1850,6 +1896,16 @@ func (c Config) validateVideoRouteProviderConfig() error {
 			requiredEnv:       "POYO_API_KEY", // #nosec G101 -- env var name only; value is read from runtime config.
 			baseURL:           c.PoYoBaseURL,
 			baseURLEnv:        "POYO_BASE_URL",
+		},
+		{
+			enabled:           c.FeatureAPIMartSeedance25Enabled,
+			routeEnv:          "FEATURE_APIMART_SEEDANCE_2_5_ENABLED",
+			providerEnabled:   c.APIMartProviderEnabled,
+			providerSwitchEnv: "APIMART_PROVIDER_ENABLED",
+			requiredValue:     c.APIMartAPIKey,
+			requiredEnv:       "APIMART_API_KEY", // #nosec G101 -- env var name only.
+			baseURL:           c.APIMartBaseURL,
+			baseURLEnv:        "APIMART_BASE_URL",
 		},
 		{
 			enabled:           c.FeatureVideoRouteRunwayGen45Enabled,

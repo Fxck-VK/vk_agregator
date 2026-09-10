@@ -290,10 +290,15 @@ func displayVideoEstimateCredits(catalog *pricingcatalog.Catalog, alias domain.V
 }
 
 func imageDescription(modelID string) string {
+	if modelID == modelcatalog.MiniAppImageFlux2Pro {
+		return "Генерация по тексту. Разрешение 1–4 МП, одно изображение за запрос."
+	}
 	if modelID == modelcatalog.MiniAppImageMock {
 		return "Synthetic image route for load tests without paid provider calls."
 	}
 	switch modelID {
+	case modelcatalog.MiniAppImageMidjourneyV7:
+		return "Генерация по тексту и референсам. Relax, Fast и Turbo; цена за весь результат Imagine."
 	case modelcatalog.MiniAppImageNanoBanana2:
 		return "Быстрая генерация и редактирование изображений с референсами."
 	case modelcatalog.MiniAppImageNanoBananaPro:
@@ -317,6 +322,10 @@ func imageDescription(modelID string) string {
 
 func imageQualityOptions(modelID string) []string {
 	switch modelID {
+	case modelcatalog.MiniAppImageFlux2Pro:
+		return []string{"1MP", "2MP", "3MP", "4MP"}
+	case modelcatalog.MiniAppImageMidjourneyV7:
+		return []string{"relax", "fast", "turbo"}
 	case modelcatalog.MiniAppImageGrokImage15, modelcatalog.MiniAppImageGrokImage20:
 		return []string{pricingcatalog.ImageQualityStandard}
 	case modelcatalog.MiniAppImageNanoBanana2,
@@ -342,6 +351,8 @@ func imageDefaultQuality(modelID string) string {
 
 func videoName(alias domain.VideoRouteAlias) string {
 	switch alias {
+	case domain.VideoRouteSeedance25:
+		return "Seedance 2.5"
 	case domain.VideoRouteHailuo23Fast:
 		return "Hailuo 2.3 Fast"
 	case domain.VideoRouteHailuo23Standard:
@@ -363,6 +374,8 @@ func videoName(alias domain.VideoRouteAlias) string {
 
 func videoDescription(alias domain.VideoRouteAlias) string {
 	switch alias {
+	case domain.VideoRouteSeedance25:
+		return "Видео со звуком по тексту и изображениям: до 30 секунд, 480p–1080p. Фото реальных людей требуют отдельной проверки у провайдера и пока не поддерживаются."
 	case domain.VideoRouteHailuo23Fast:
 		return "Быстрое image-to-video. Требуется стартовое изображение."
 	case domain.VideoRouteHailuo23Standard:

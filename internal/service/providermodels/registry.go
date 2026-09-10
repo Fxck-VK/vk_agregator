@@ -5,6 +5,7 @@ package providermodels
 
 import (
 	"fmt"
+	"maps"
 	"strings"
 
 	"vk-ai-aggregator/internal/domain"
@@ -20,6 +21,8 @@ const (
 	PublicImageQwenImage3    = "qwen_image_3"
 	PublicImageGrokImage15   = "grok_image_1_5"
 	PublicImageGrokImage20   = "grok_image_2_0"
+	PublicImageMidjourneyV7  = "midjourney_v7"
+	PublicImageFlux2Pro      = "flux_2_pro"
 	PublicImageSeedream45    = "seedream_4_5"
 	LoadTestImageMock        = "mock_image"
 
@@ -32,6 +35,8 @@ const (
 	ProviderModelQwenImage3         = "qwen-image-3.0"
 	ProviderModelGrokImage15        = "grok-imagine-1.5-apimart"
 	ProviderModelGrokImage20        = "grok-imagine-2.0-ext"
+	ProviderModelMidjourneyV7       = "midjourney"
+	ProviderModelFlux2Pro           = "flux-2-pro"
 	ProviderModelMockImage          = "mock-image"
 
 	FeatureImageNanoBanana2   = "FEATURE_IMAGE_MODEL_NANO_BANANA_2_ENABLED"
@@ -40,6 +45,8 @@ const (
 	FeatureImageQwenImage3    = "FEATURE_APIMART_QWEN_IMAGE_3_ENABLED"
 	FeatureImageGrokImage15   = "FEATURE_APIMART_GROK_IMAGE_1_5_ENABLED"
 	FeatureImageGrokImage20   = "FEATURE_APIMART_GROK_IMAGE_2_0_ENABLED"
+	FeatureImageMidjourneyV7  = "FEATURE_APIMART_MIDJOURNEY_V7_ENABLED"
+	FeatureImageFlux2Pro      = "FEATURE_APIMART_FLUX_2_PRO_ENABLED"
 	FeatureImageSeedream45    = "FEATURE_IMAGE_MODEL_SEEDREAM_4_5_ENABLED"
 	FeatureImageMock          = "FEATURE_IMAGE_MODEL_MOCK_ENABLED"
 
@@ -49,6 +56,7 @@ const (
 	FeatureVideoKlingO3Standard    = "FEATURE_VIDEO_ROUTE_KLING_O3_STANDARD_ENABLED"
 	FeatureVideoRunwayGen4Turbo    = "FEATURE_VIDEO_ROUTE_RUNWAY_GEN4_TURBO_ENABLED"
 	FeatureVideoSeedance20Fast     = "FEATURE_VIDEO_ROUTE_SEEDANCE_2_0_FAST_ENABLED"
+	FeatureVideoSeedance25         = "FEATURE_APIMART_SEEDANCE_2_5_ENABLED"
 	FeatureVideoRunwayGen45        = "FEATURE_VIDEO_ROUTE_RUNWAY_GEN4_5_ENABLED"
 	FeatureVideoMockTextToVideo    = "FEATURE_VIDEO_ROUTE_MOCK_TEXT_TO_VIDEO_ENABLED"
 	FeatureVideoResellerExperiment = "FEATURE_VIDEO_ROUTE_RESELLER_EXPERIMENTS_ENABLED"
@@ -167,7 +175,7 @@ func StaticRegistry() Registry {
 }
 
 func textAliases() []TextAlias {
-	return []TextAlias{
+	return append([]TextAlias{
 		{
 			PublicID:        PublicTextChatGPT,
 			DisplayName:     "NeiroHub Chat",
@@ -177,11 +185,13 @@ func textAliases() []TextAlias {
 				RequiredConfigKeys: []string{ConfigKeyDeepInfraKey, ConfigKeyDeepInfraURL},
 			},
 		},
-	}
+	}, PaidTextModels()...)
 }
 
 func imageModels() []ImageModel {
 	return []ImageModel{
+		midjourneyV7Model(),
+		flux2ProModel(),
 		imageModel(PublicImageNanoBanana2, "Nano Banana 2", domain.ProviderPoYo, ProviderModelPoYoNanoBanana2, FeatureImageNanoBanana2, poyoReadiness(), 14),
 		imageModel(PublicImageNanoBananaPro, "Nano Banana Pro", domain.ProviderAPIMart, ProviderModelGemini3ProImage, FeatureImageNanoBananaPro, apimartReadiness(), 14),
 		imageModel(PublicImageGPTImage2, "GPT Image 2", domain.ProviderAPIMart, ProviderModelGPTImage2, FeatureImageGPTImage2, apimartReadiness(), 16),
@@ -266,6 +276,7 @@ func imageModelWithQualities(publicID, displayName string, provider domain.Provi
 
 func videoRoutes() []VideoRoute {
 	return []VideoRoute{
+		videoRoute(seedance25Spec(), FeatureVideoSeedance25, apimartReadiness(), videoPricingKeys(domain.VideoRouteSeedance25, []string{pricingcatalog.VideoResolution480p, pricingcatalog.VideoResolution720p, pricingcatalog.VideoResolution1080p}, []int{5, 10, 15, 30}), nil, false),
 		videoRoute(hailuo23FastSpec(), FeatureVideoHailuo23Fast, apimartReadiness(), nil, disabledVideoPricingKeys(domain.VideoRouteHailuo23Fast, []string{pricingcatalog.VideoResolution768p, pricingcatalog.VideoResolution1080p}, map[string][]int{
 			pricingcatalog.VideoResolution768p:  {6, 10},
 			pricingcatalog.VideoResolution1080p: {6},
@@ -395,6 +406,26 @@ func runwayGen4TurboSpec() domain.VideoRouteSpec {
 		MaxProviderCostCredits:       50,
 		MaxInternalCostCredits:       100,
 		PriceMultiplier:              2,
+	}
+}
+
+func seedance25Spec() domain.VideoRouteSpec {
+	return domain.VideoRouteSpec{
+		Alias:                                   domain.VideoRouteSeedance25,
+		Provider:                                domain.ProviderAPIMart,
+		ProviderModelID:                         "seedance-2.5",
+		ModelClass:                              "seedance_2_5",
+		InputModes:                              []domain.VideoInputMode{domain.VideoInputText, domain.VideoInputImage, domain.VideoInputReference},
+		AllowedDurationsSec:                     []int{5, 10, 15, 30},
+		AllowedResolutions:                      []string{"480p", "720p", "1080p"},
+		AllowedAspectRatios:                     []string{"16:9", "9:16", "4:3", "3:4", "1:1", "21:9"},
+		SupportsReferenceImage:                  true,
+		MaxReferenceImages:                      4,
+		ProviderCostMicrosPerSecondByResolution: map[string]int64{"480p": 960800, "720p": 2160000, "1080p": 3848800},
+		MaxProviderCostCredits:                  116, MaxInternalCostCredits: 6960,
+		// Legacy safety metadata converts APIMart credits ($0.10) to internal
+		// credits ($0.005) and applies x3. Exact retail lives in pricingcatalog.
+		PriceMultiplier: 60,
 	}
 }
 
@@ -781,6 +812,7 @@ func copyLimits(limits Limits) Limits {
 }
 
 func copyVideoRouteSpec(spec domain.VideoRouteSpec) domain.VideoRouteSpec {
+	spec.ProviderCostMicrosPerSecondByResolution = maps.Clone(spec.ProviderCostMicrosPerSecondByResolution)
 	spec.InputModes = append([]domain.VideoInputMode(nil), spec.InputModes...)
 	spec.AllowedDurationsSec = append([]int(nil), spec.AllowedDurationsSec...)
 	spec.AllowedResolutions = append([]string(nil), spec.AllowedResolutions...)
@@ -798,4 +830,18 @@ func copyResolutionDurations(in map[string][]int) map[string][]int {
 		out[key] = append([]int(nil), values...)
 	}
 	return out
+}
+
+func midjourneyV7Model() ImageModel {
+	model := imageModelWithQualities(PublicImageMidjourneyV7, "Midjourney V7", domain.ProviderAPIMart, ProviderModelMidjourneyV7, FeatureImageMidjourneyV7, apimartReadiness(), []string{"relax", "fast", "turbo"}, 4)
+	model.Limits.MaxOutputCount = 1
+	return model
+}
+
+func flux2ProModel() ImageModel {
+	model := imageModelWithQualities(PublicImageFlux2Pro, "FLUX.2 Pro", domain.ProviderAPIMart, ProviderModelFlux2Pro, FeatureImageFlux2Pro, apimartReadiness(), []string{"1MP", "2MP", "3MP", "4MP"}, 0)
+	model.Limits.MaxOutputCount = 1
+	model.Limits.SupportsReferenceImage = false
+	model.Limits.AllowedAspectRatios = []string{"16:9", "1:1", "4:3", "3:4", "9:16", "3:2", "2:3", "21:9", "9:21"}
+	return model
 }

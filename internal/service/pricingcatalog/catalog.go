@@ -81,6 +81,7 @@ func (u FloorUnit) Valid() bool {
 // lookup. It intentionally has no provider, provider model id, floor or
 // multiplier fields.
 type ProductKey struct {
+	TextModelID     string                 `json:"text_model_id,omitempty"`
 	Operation       domain.OperationType   `json:"operation"`
 	Modality        domain.Modality        `json:"modality"`
 	ImageModelID    string                 `json:"image_model_id,omitempty"`
@@ -92,6 +93,7 @@ type ProductKey struct {
 
 // Normalize returns a trimmed copy suitable for stable lookup and snapshots.
 func (k ProductKey) Normalize() ProductKey {
+	k.TextModelID = strings.TrimSpace(k.TextModelID)
 	k.ImageModelID = strings.TrimSpace(k.ImageModelID)
 	k.VideoRouteAlias = domain.VideoRouteAlias(strings.TrimSpace(string(k.VideoRouteAlias)))
 	k.Quality = strings.TrimSpace(k.Quality)
@@ -107,13 +109,15 @@ func (k ProductKey) Valid() bool {
 		return false
 	}
 	switch k.Operation {
+	case domain.OperationTextGenerate:
+		return k.Modality == domain.ModalityText && k.TextModelID != "" && k.ImageModelID == "" && k.VideoRouteAlias == "" && k.Quality == "" && k.Resolution == "" && k.DurationSec == 0
 	case domain.OperationImageGenerate, domain.OperationImageEdit, domain.OperationImageUpscale:
-		return k.Modality == domain.ModalityImage &&
+		return k.Modality == domain.ModalityImage && k.TextModelID == "" &&
 			k.ImageModelID != "" &&
 			k.VideoRouteAlias == "" &&
 			k.DurationSec == 0
 	case domain.OperationVideoGenerate, domain.OperationVideoImageToVideo, domain.OperationVideoExtend:
-		return k.Modality == domain.ModalityVideo &&
+		return k.Modality == domain.ModalityVideo && k.TextModelID == "" &&
 			k.VideoRouteAlias != "" &&
 			k.ImageModelID == "" &&
 			k.DurationSec > 0
@@ -269,6 +273,10 @@ func (p ProductPrice) Snapshot() (PricingSnapshot, error) {
 		FloorAmountCap:            p.Caps.FloorAmountCap,
 		DefaultDisplayCredits:     p.DefaultDisplayCredits,
 	}
+	if p.Key.TextModelID != "" {
+		snapshot.TextInputTokenCap = TextMaxInputTokens
+		snapshot.TextOutputTokenCap = TextMaxOutputTokens
+	}
 	if !snapshot.Valid() {
 		return PricingSnapshot{}, ErrInvalidSnapshot
 	}
@@ -280,6 +288,8 @@ func (p ProductPrice) Snapshot() (PricingSnapshot, error) {
 // and exact backend pricing facts, but no prompt, provider payload, private URL
 // or provider-native model id.
 type PricingSnapshot struct {
+	TextInputTokenCap         int            `json:"text_input_token_cap,omitempty"`
+	TextOutputTokenCap        int            `json:"text_output_token_cap,omitempty"`
 	Version                   int            `json:"version"`
 	CreditDenominationVersion int            `json:"credit_denomination_version"`
 	Source                    string         `json:"source"`
@@ -297,6 +307,9 @@ type PricingSnapshot struct {
 // Valid reports whether a snapshot has the minimum data needed to keep an old
 // job price stable after catalog changes.
 func (s PricingSnapshot) Valid() bool {
+	if s.Key.TextModelID != "" && (s.TextInputTokenCap <= 512 || s.TextInputTokenCap > TextMaxInputTokens || s.TextOutputTokenCap <= 0 || s.TextOutputTokenCap > TextMaxOutputTokens) {
+		return false
+	}
 	s.Source = strings.TrimSpace(s.Source)
 	return s.Version > 0 &&
 		(s.CreditDenominationVersion == 0 ||
@@ -441,6 +454,7 @@ func productKeySortKey(key ProductKey) string {
 	return strings.Join([]string{
 		string(key.Operation),
 		string(key.Modality),
+		key.TextModelID,
 		key.ImageModelID,
 		string(key.VideoRouteAlias),
 		key.Quality,

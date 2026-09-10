@@ -3,7 +3,7 @@ package pricingcatalog
 import "vk-ai-aggregator/internal/domain"
 
 const (
-	StaticCatalogVersion = 6
+	StaticCatalogVersion = 11
 
 	PublicImageNanoBanana2   = "nano_banana_2"
 	PublicImageNanoBananaPro = "nano_banana_pro"
@@ -11,6 +11,8 @@ const (
 	PublicImageQwenImage3    = "qwen_image_3"
 	PublicImageGrokImage15   = "grok_image_1_5"
 	PublicImageGrokImage20   = "grok_image_2_0"
+	PublicImageMidjourneyV7  = "midjourney_v7"
+	PublicImageFlux2Pro      = "flux_2_pro"
 	PublicImageSeedream45    = "seedream_4_5"
 
 	ImageQuality1K       = "1K"
@@ -19,6 +21,7 @@ const (
 	ImageQualityStandard = "standard"
 
 	VideoResolution720p  = "720p"
+	VideoResolution480p  = "480p"
 	VideoResolution768p  = "768p"
 	VideoResolution1080p = "1080p"
 )
@@ -51,6 +54,17 @@ func NewStaticCatalog() (*Catalog, error) {
 // StaticProductPrices returns enabled, exact generation tariffs.
 func StaticProductPrices() []ProductPrice {
 	prices := []ProductPrice{
+		// APIMart FLUX.2 Pro text-to-image, 2026-09-09: https://apimart.ai/zh/model/flux-2
+		// $0.024/$0.036/$0.048/$0.060 per output; x3 rounded up to 5 internal credits.
+		imageTariff(PublicImageFlux2Pro, "1MP", 240000, FloorUnitAPIMartCredits, apimartCreditToInternal, 15),
+		imageTariff(PublicImageFlux2Pro, "2MP", 360000, FloorUnitAPIMartCredits, apimartCreditToInternal, 25),
+		imageTariff(PublicImageFlux2Pro, "3MP", 480000, FloorUnitAPIMartCredits, apimartCreditToInternal, 30),
+		imageTariff(PublicImageFlux2Pro, "4MP", 600000, FloorUnitAPIMartCredits, apimartCreditToInternal, 40),
+		// APIMart Imagine V7, 2026-09-09: https://apimart.ai/pricing
+		// Per call, all output tiles included. Provider cost x3 rounded up to 5.
+		imageTariff(PublicImageMidjourneyV7, "relax", 450400, FloorUnitAPIMartCredits, apimartCreditToInternal, 30),
+		imageTariff(PublicImageMidjourneyV7, "fast", 550400, FloorUnitAPIMartCredits, apimartCreditToInternal, 35),
+		imageTariff(PublicImageMidjourneyV7, "turbo", 1000000, FloorUnitAPIMartCredits, apimartCreditToInternal, 60),
 		imageTariff(PublicImageNanoBanana2, ImageQuality1K, 5_000_000, FloorUnitPoYoCredits, poyoCreditToInternal, 50),
 		imageTariff(PublicImageNanoBanana2, ImageQuality2K, 8_000_000, FloorUnitPoYoCredits, poyoCreditToInternal, 60),
 		imageTariff(PublicImageNanoBanana2, ImageQuality4K, 12_000_000, FloorUnitPoYoCredits, poyoCreditToInternal, 70),
@@ -110,7 +124,19 @@ func StaticProductPrices() []ProductPrice {
 		)
 	}
 
-	return append([]ProductPrice(nil), prices...)
+	// APIMart Seedance 2.5 preauthorization rates checked 2026-09-09:
+	// https://apimart.ai/zh/model/doubao-seedance-2-5
+	// Text/image inputs only. Provider settles actual tokens; our user quote is
+	// fixed at this estimate x3, rounded up once to five internal credits.
+	for _, resolution := range []string{VideoResolution480p, VideoResolution720p, VideoResolution1080p} {
+		rate := map[string]int64{VideoResolution480p: 960800, VideoResolution720p: 2160000, VideoResolution1080p: 3848800}[resolution]
+		for _, duration := range []int{5, 10, 15, 30} {
+			floor := rate * int64(duration)
+			retail := ((floor*20*3 + 5*MinorUnitsPerCredit - 1) / (5 * MinorUnitsPerCredit)) * 5
+			prices = append(prices, videoTariff(domain.VideoRouteSeedance25, resolution, duration, floor, FloorUnitAPIMartCredits, apimartCreditToInternal, retail))
+		}
+	}
+	return append(prices, textTariffs()...)
 }
 
 // DisabledStaticProductPrices returns approved tariffs kept fail-closed because

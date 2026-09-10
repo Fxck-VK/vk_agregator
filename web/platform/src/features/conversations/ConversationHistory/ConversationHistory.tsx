@@ -47,6 +47,7 @@ type PollRequest = {
 };
 
 type PendingTurn = PollRequest & {
+  modelId?: string;
   idempotencyKey: string | null;
   prompt: string;
   status: "sending" | "accepted" | "failed";
@@ -190,7 +191,7 @@ function ConversationHistoryReady({
           "Content-Type": "application/json",
           "X-Idempotency-Key": turn.idempotencyKey,
         },
-        body: JSON.stringify({ prompt: turn.prompt }),
+        body: JSON.stringify({ prompt: turn.prompt, ...(turn.modelId ? { model_id: turn.modelId } : {}) }),
       });
       if (response.status !== 200 && response.status !== 201) {
         throw new Error("Unable to complete the request.");
@@ -212,7 +213,7 @@ function ConversationHistoryReady({
     }
   };
 
-  const beginMessageSubmission = (prompt: string) => {
+  const beginMessageSubmission = (prompt: string, modelId?: string) => {
     const baselineSeq = messages.at(-1)?.seq ?? 0;
     if (baselineSeq === 0 && titleSyncFallback === null) {
       const fallbackTitle = fallbackConversationTitle(prompt);
@@ -230,6 +231,7 @@ function ConversationHistoryReady({
     void submitPendingTurn({
       ...request,
       idempotencyKey: crypto.randomUUID(),
+      modelId,
       prompt,
       status: "sending",
     });

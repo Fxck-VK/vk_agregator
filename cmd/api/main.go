@@ -326,6 +326,7 @@ func main() {
 	webImagePreparedExpiry := preparedjobexpiry.New(postgres.NewPreparedWebImageExpiryRepository(pool))
 	web := websession.NewHandler(websession.Config{
 		WebOrigin:                   cfg.WebOrigin,
+		TextModels:                  runtimeCatalog.TextModels,
 		ImageModels:                 webImageModelsFromRuntimeCatalog(runtimeCatalog.ImageModels()),
 		ImageArtifactRedirectPolicy: webArtifactRedirectPolicy,
 	}, websession.Deps{
