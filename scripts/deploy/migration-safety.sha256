@@ -1,0 +1,4 @@
+# Reviewed, data-preserving constraint replacements. Hash exact LF-encoded files.
+# 000052: adds text_model_id and replaces UNIQUE/CHECK constraints atomically;
+# existing image/video rows and job snapshots are retained; no prices activated.
+efdab0751e54ea55897906249108db9d81a5c7d7478a87347b02f47e7433468a  000052_text_model_pricing.up.sql

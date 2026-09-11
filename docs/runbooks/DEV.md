@@ -104,6 +104,15 @@ Status, smoke and stop:
 
 ## DEV GitHub Deploy
 
+Migration safety checks accept reviewed constraint replacements only when the
+filename and exact SHA-256 match `scripts/deploy/migration-safety.sha256`.
+Migration `000052` adds the text pricing dimension and replaces its UNIQUE/CHECK
+constraints in one transaction without deleting rows or activating prices.
+SQL files use LF line endings so the review digest is identical on Windows and
+Linux. Any SQL change requires a fresh review and database regression test before
+updating the digest. Unreviewed destructive operations remain blocked; do not
+enable `MIGRATION_ALLOW_DESTRUCTIVE` to work around a digest mismatch.
+
 Pushing `dev-deploy` first triggers the `Docker Images` workflow. After all
 GHCR images for the pushed SHA are built successfully, GitHub Actions triggers
 `Deploy DEV` through `workflow_run`. `Deploy DEV` can also be started manually
