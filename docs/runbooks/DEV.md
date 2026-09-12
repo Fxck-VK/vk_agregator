@@ -260,14 +260,14 @@ and private media URLs are not.
 independently. Each requires `FEATURE_VIDEO_ROUTER_ENABLED=true`,
 `APIMART_PROVIDER_ENABLED=true`, the existing APIMart key and
 `APIMART_BASE_URL=https://api.apimart.ai/v1`. API and worker must use the same
-release. No environment files, deployment profiles or live prices are changed
-automatically.
+release. Application defaults remain off; the DEV deployment profile enables
+configured APIMart routes as described under Additional APIMart video rollout.
 
 Static pricing version 12 adds four Flash keys (resolution × internal duration
 10) and sixteen EXT keys (resolution × 4/6/8/10). DB pricing requires these exact
 enabled keys in the active price version; static fallback does not override a
 DB catalog. Missing prices keep the route hidden. See the
-[contract and tariffs](../VIDEO_GENERATION.md#gemini-omni-11-flash-and-flash-ext).
+[contract and tariffs](../../docs/VIDEO_GENERATION.md#gemini-omni-11-flash-and-flash-ext).
 
 Local tests cover wire examples, validation, quote/reserve/capture, moderation,
 4K media checks and crash recovery. Before rollout, verify account model access

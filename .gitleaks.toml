@@ -165,6 +165,17 @@ keywords = [
 id = "generic-api-key"
 
   [[rules.allowlists]]
+  description = "Exact non-secret Kling contract-test idempotency marker"
+  condition = "AND"
+  regexTarget = "secret"
+  paths = [
+    '''^internal/adapter/provider/apimart/kling_veo_test\.go$''',
+  ]
+  regexes = [
+    '''^kling-v3-contract$''',
+  ]
+
+  [[rules.allowlists]]
   description = "Exact admin idempotency fixtures"
   condition = "AND"
   regexTarget = "secret"
