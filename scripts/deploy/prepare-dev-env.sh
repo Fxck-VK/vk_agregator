@@ -305,8 +305,28 @@ if [[ "${apimart_provider_enabled}" == "true" ]] && has_raw_env_value APIMART_AP
   fi
 fi
 
+apimart_feature_enabled() {
+  local name="$1"
+  local requested
+  requested="$(get_raw_env_value "${name}")"
+  if [[ "${apimart_provider_enabled}" == "true" ]] && has_raw_env_value APIMART_API_KEY; then
+    if [[ -z "${requested}" ]] || is_true_value "${requested}"; then
+      printf 'true'
+      return
+    fi
+  fi
+  printf 'false'
+}
+
 video_hailuo_fast_enabled="${apimart_provider_enabled}"
 video_hailuo_standard_enabled="${apimart_provider_enabled}"
+video_omni_flash_enabled="$(apimart_feature_enabled FEATURE_APIMART_OMNI_1_1_FLASH_ENABLED)"
+video_omni_flash_ext_enabled="$(apimart_feature_enabled FEATURE_APIMART_OMNI_1_1_FLASH_EXT_ENABLED)"
+video_kling_v3_enabled="$(apimart_feature_enabled FEATURE_APIMART_KLING_V3_ENABLED)"
+video_kling26_motion_enabled="$(apimart_feature_enabled FEATURE_APIMART_KLING_2_6_MOTION_CONTROL_ENABLED)"
+video_veo31_fast_enabled="$(apimart_feature_enabled FEATURE_APIMART_VEO_3_1_FAST_ENABLED)"
+video_veo31_quality_enabled="$(apimart_feature_enabled FEATURE_APIMART_VEO_3_1_QUALITY_ENABLED)"
+video_veo31_lite_enabled="$(apimart_feature_enabled FEATURE_APIMART_VEO_3_1_LITE_ENABLED)"
 video_kling_o3_enabled="${poyo_provider_enabled}"
 video_seedance_fast_enabled="${poyo_provider_enabled}"
 video_runway_gen45_enabled="${poyo_provider_enabled}"
@@ -314,6 +334,13 @@ video_runway_turbo_enabled="${runway_provider_enabled}"
 video_router_enabled=false
 if [[ "${video_hailuo_fast_enabled}" == "true" ||
       "${video_hailuo_standard_enabled}" == "true" ||
+      "${video_omni_flash_enabled}" == "true" ||
+      "${video_omni_flash_ext_enabled}" == "true" ||
+      "${video_kling_v3_enabled}" == "true" ||
+      "${video_kling26_motion_enabled}" == "true" ||
+      "${video_veo31_fast_enabled}" == "true" ||
+      "${video_veo31_quality_enabled}" == "true" ||
+      "${video_veo31_lite_enabled}" == "true" ||
       "${video_kling_o3_enabled}" == "true" ||
       "${video_seedance_fast_enabled}" == "true" ||
       "${video_runway_gen45_enabled}" == "true" ||
@@ -376,6 +403,13 @@ sed \
   -e '/^FEATURE_VIDEO_ROUTE_RUNWAY_GEN4_TURBO_ENABLED=/d' \
   -e '/^FEATURE_VIDEO_ROUTE_SEEDANCE_2_0_FAST_ENABLED=/d' \
   -e '/^FEATURE_VIDEO_ROUTE_RUNWAY_GEN4_5_ENABLED=/d' \
+  -e '/^FEATURE_APIMART_OMNI_1_1_FLASH_ENABLED=/d' \
+  -e '/^FEATURE_APIMART_OMNI_1_1_FLASH_EXT_ENABLED=/d' \
+  -e '/^FEATURE_APIMART_KLING_V3_ENABLED=/d' \
+  -e '/^FEATURE_APIMART_KLING_2_6_MOTION_CONTROL_ENABLED=/d' \
+  -e '/^FEATURE_APIMART_VEO_3_1_FAST_ENABLED=/d' \
+  -e '/^FEATURE_APIMART_VEO_3_1_QUALITY_ENABLED=/d' \
+  -e '/^FEATURE_APIMART_VEO_3_1_LITE_ENABLED=/d' \
   -e '/^FEATURE_VIDEO_ROUTE_MOCK_TEXT_TO_VIDEO_ENABLED=/d' \
   -e '/^FEATURE_VIDEO_ROUTE_RESELLER_EXPERIMENTS_ENABLED=/d' \
   "${input_file}" > "${tmp_output}"
@@ -429,6 +463,13 @@ sed \
   printf 'FEATURE_VIDEO_ROUTE_RUNWAY_GEN4_TURBO_ENABLED=%s\n' "${video_runway_turbo_enabled}"
   printf 'FEATURE_VIDEO_ROUTE_SEEDANCE_2_0_FAST_ENABLED=%s\n' "${video_seedance_fast_enabled}"
   printf 'FEATURE_VIDEO_ROUTE_RUNWAY_GEN4_5_ENABLED=%s\n' "${video_runway_gen45_enabled}"
+  printf 'FEATURE_APIMART_OMNI_1_1_FLASH_ENABLED=%s\n' "${video_omni_flash_enabled}"
+  printf 'FEATURE_APIMART_OMNI_1_1_FLASH_EXT_ENABLED=%s\n' "${video_omni_flash_ext_enabled}"
+  printf 'FEATURE_APIMART_KLING_V3_ENABLED=%s\n' "${video_kling_v3_enabled}"
+  printf 'FEATURE_APIMART_KLING_2_6_MOTION_CONTROL_ENABLED=%s\n' "${video_kling26_motion_enabled}"
+  printf 'FEATURE_APIMART_VEO_3_1_FAST_ENABLED=%s\n' "${video_veo31_fast_enabled}"
+  printf 'FEATURE_APIMART_VEO_3_1_QUALITY_ENABLED=%s\n' "${video_veo31_quality_enabled}"
+  printf 'FEATURE_APIMART_VEO_3_1_LITE_ENABLED=%s\n' "${video_veo31_lite_enabled}"
   printf 'FEATURE_VIDEO_ROUTE_MOCK_TEXT_TO_VIDEO_ENABLED=false\n'
   printf 'FEATURE_VIDEO_ROUTE_RESELLER_EXPERIMENTS_ENABLED=false\n'
   printf 'GHCR_USERNAME=%s\n' "${ghcr_username}"

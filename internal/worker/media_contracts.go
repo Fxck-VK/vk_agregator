@@ -146,7 +146,11 @@ func deliveryReadyVideoOutput(contract *domain.ProviderMediaContract, metadata d
 	if !allowedOutputAspect(metadata.Width, metadata.Height, contract.AllowedAspectRatios) {
 		return false
 	}
-	if !allowedOutputResolution(metadata.Width, metadata.Height, contract.AllowedResolutions) {
+	outputResolutions := contract.AllowedOutputResolutions
+	if len(outputResolutions) == 0 {
+		outputResolutions = contract.AllowedResolutions
+	}
+	if !allowedOutputResolution(metadata.Width, metadata.Height, outputResolutions) {
 		return false
 	}
 	return true
@@ -238,6 +242,9 @@ func outputResolutionMatches(width, height int, token string) bool {
 	token = strings.ToLower(strings.TrimSpace(token))
 	if token == "" {
 		return false
+	}
+	if token == "4k" {
+		return min(width, height) > 0 && min(width, height) <= 2160 && max(width, height) <= 3840
 	}
 	if strings.HasSuffix(token, "p") {
 		maxHeight, err := strconv.Atoi(strings.TrimSuffix(token, "p"))

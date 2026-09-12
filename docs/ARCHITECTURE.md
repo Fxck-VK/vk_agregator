@@ -2871,6 +2871,27 @@ durable pre-submit intents remain separate B2 work.
 
 See [Grok DEV configuration](runbooks/DEV.md#grok-imagine-image-configuration).
 
+## Gemini Omni video routes (2026-09-12)
+
+`video_gemini_omni_1_1_flash` and `video_gemini_omni_1_1_flash_ext` map to separate
+APIMart native model ids through the existing asynchronous video pipeline.
+Flash omits upstream duration, while its immutable 10-second pricing dimension
+selects a fixed retail estimate; output contracts accept provider-selected
+3-10s. EXT accepts 4/6/8/10s and only 0/1/3 reference images. Public metadata
+includes automatic duration and allowed reference counts; provider costs stay
+server-side. Video probes accept both orientations of 4K output.
+
+Both routes use the durable paid-submit intent before network I/O, extending
+the existing image/text claim to video. An unknown acceptance outcome cannot
+trigger another paid submit after restart. Successful tasks retain owner-only
+artifacts, moderation, ledger reserve/capture and normal delivery boundaries.
+No provider calls move into API or client surfaces. Independent default-off
+flags and exact active tariffs gate exposure. Static pricing version 12 adds
+20 cost x3 tariffs, rounded up to five internal credits. There is no schema
+change or automated production activation. See
+[video contracts and pricing](VIDEO_GENERATION.md#gemini-omni-11-flash-and-flash-ext)
+and [activation](runbooks/DEV.md#gemini-omni-video-configuration).
+
 ## Seedance 2.5 video route (2026-09-09)
 
 `video_seedance_2_5` maps to APIMart `seedance-2.5` through the existing
@@ -2947,3 +2968,16 @@ Eleven paid text models use worker-only, explicitly pinned routes: ten through K
 A unique provider_tasks submit intent precedes paid HTTP. ImmediateResult is transient; the worker saves text as a private Artifact and attaches it to the Job before checkpointing a terminal provider task. Recovery uses the saved artifact, repeats output moderation and delegates capture to the existing account-history delivery. An ambiguous response without a persisted artifact releases the reservation and never automatically starts a fresh paid submit. No raw response or inline text is stored in provider_tasks.
 
 Model flags, provider credentials, exact prices and the matching KIE_TEXT_LIMITS_VERIFIED or APIMART_TEXT_LIMITS_VERIFIED gate must all be ready. Verification gates are independent; all new model flags default to false. Static pricing version 11 adds the eight new models with cost times three rounded up to five credits. Unconfirmed native output-limit semantics keep rollout disabled. See docs/runbooks/KIE_TEXT_MODELS.md for contracts, prices, tests and rollout gates.
+
+
+## Signed video references for APIMart Motion Control
+
+Mini App video uploads are authenticated and probed in cmd/api before private input
+artifact storage. Worker-owned providerreference URLs expire after one hour and
+are bound to the active Job, owning account and reference artifact. A dedicated
+HMAC key authenticates GET/HEAD/Range at /provider-references/ on the Mini App
+host; object storage remains private. API serves bytes without calling AI providers.
+Billing duration is derived from persisted probe metadata at estimate, creation and
+worker submission. Kling audio uses a separate quality=audio price key; all new
+Kling/Veo routes use immutable pricing and durable paid-submit claims. See
+docs/VIDEO_GENERATION.md and docs/runbooks/DEV.md for contracts and deployment.

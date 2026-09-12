@@ -3,9 +3,12 @@ package main
 import (
 	"context"
 	"encoding/json"
+	"strings"
 	"testing"
 	"time"
 
+	"vk-ai-aggregator/internal/adapter/storage/memory"
+	apiapp "vk-ai-aggregator/internal/app/api"
 	"vk-ai-aggregator/internal/domain"
 	"vk-ai-aggregator/internal/platform/config"
 	"vk-ai-aggregator/internal/service/joborchestrator"
@@ -46,6 +49,28 @@ func TestWebChatMessageLimitsUseConfiguredValues(t *testing.T) {
 	})
 	if limit != 42 || window != 2*time.Minute {
 		t.Fatalf("web chat message values = limit:%d window:%s", limit, window)
+	}
+}
+
+func TestNewProviderReferenceGatewayDisabled(t *testing.T) {
+	handler, err := newProviderReferenceGatewayWithObjects(config.Config{}, apiapp.SharedCore{}, memory.NewObjectStore())
+	if err != nil || handler != nil {
+		t.Fatalf("handler = %T err = %v, want nil nil when feature is disabled", handler, err)
+	}
+}
+
+func TestNewProviderReferenceGatewayEnabled(t *testing.T) {
+	handler, err := newProviderReferenceGatewayWithObjects(config.Config{
+		FeatureAPIMartKling26MotionEnabled: true,
+		ProviderReferenceBaseURL:           "https://provider-media.example.test",
+		ProviderReferenceSigningKey:        strings.Repeat("s", 32),
+		MediaMaxConcurrentUploads:          1,
+	}, apiapp.SharedCore{
+		Jobs:      memory.NewJobRepo(),
+		Artifacts: memory.NewArtifactRepo(),
+	}, memory.NewObjectStore())
+	if err != nil || handler == nil {
+		t.Fatalf("handler = %T err = %v, want configured provider reference gateway", handler, err)
 	}
 }
 

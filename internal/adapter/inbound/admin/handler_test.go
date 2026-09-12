@@ -910,6 +910,13 @@ func TestProviderMediaAndConfigOperatorDTOsAreSafe(t *testing.T) {
 		FeatureVideoRouterEnabled:            true,
 		FeatureVideoRouteHailuo23FastEnabled: true,
 		FeatureVideoRouteRunwayGen45Enabled:  true,
+		FeatureAPIMartOmni11FlashEnabled:     true,
+		FeatureAPIMartOmni11FlashExtEnabled:  true,
+		FeatureAPIMartKlingV3Enabled:         true,
+		FeatureAPIMartKling26MotionEnabled:   true,
+		FeatureAPIMartVeo31FastEnabled:       true,
+		FeatureAPIMartVeo31QualityEnabled:    true,
+		FeatureAPIMartVeo31LiteEnabled:       true,
 	}
 	h := admin.NewHandler(admin.Config{Token: testAdminToken, Runtime: admin.NewRuntimeSnapshot(cfg)}, admin.Deps{
 		Jobs:          jobs,
@@ -1109,6 +1116,22 @@ func TestProviderMediaAndConfigOperatorDTOsAreSafe(t *testing.T) {
 	}
 	if findVideoRouteDTO(configHealth.VideoRoutes, string(domain.VideoRouteHailuo23Fast)) == nil {
 		t.Fatalf("expected route state in config health: %+v", configHealth.VideoRoutes)
+	}
+	for _, alias := range []domain.VideoRouteAlias{
+		domain.VideoRouteOmni11Flash,
+		domain.VideoRouteOmni11FlashExt,
+		domain.VideoRouteKlingV3,
+		domain.VideoRouteKling26Motion,
+		domain.VideoRouteVeo31Fast,
+		domain.VideoRouteVeo31Quality,
+		domain.VideoRouteVeo31Lite,
+	} {
+		route := findVideoRouteDTO(configHealth.VideoRoutes, string(alias))
+		if route == nil || !route.Enabled || !route.ProviderEnabled || !route.ProviderConfigured ||
+			!route.ProviderBaseConfigured || !route.CostConfigured ||
+			route.Status != "ok" || route.Reason != "ready" {
+			t.Fatalf("expected ready APIMart matrix route %s in config health, got %+v", alias, route)
+		}
 	}
 
 	rec, _ = do(t, h, "/admin/media-safety/operator")

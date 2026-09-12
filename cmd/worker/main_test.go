@@ -148,8 +148,12 @@ func TestDefaultProviderMediaContractsMatchRegistryRoutes(t *testing.T) {
 		if contract.ModelClass != route.ModelClass {
 			t.Fatalf("route %s model_class = %q, want %q", route.Alias, contract.ModelClass, route.ModelClass)
 		}
-		if !reflect.DeepEqual(contract.AllowedDurationsSec, route.Spec.AllowedDurationsSec) {
-			t.Fatalf("route %s durations = %#v, want %#v", route.Alias, contract.AllowedDurationsSec, route.Spec.AllowedDurationsSec)
+		wantDurations := route.Spec.AllowedDurationsSec
+		if route.Spec.AutomaticDuration {
+			wantDurations = []int{3, 4, 5, 6, 7, 8, 9, 10}
+		}
+		if !reflect.DeepEqual(contract.AllowedDurationsSec, wantDurations) {
+			t.Fatalf("route %s durations = %#v, want %#v", route.Alias, contract.AllowedDurationsSec, wantDurations)
 		}
 		if !reflect.DeepEqual(contract.AllowedAspectRatios, route.Spec.AllowedAspectRatios) {
 			t.Fatalf("route %s aspects = %#v, want %#v", route.Alias, contract.AllowedAspectRatios, route.Spec.AllowedAspectRatios)

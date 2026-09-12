@@ -32,6 +32,7 @@ import (
 	"vk-ai-aggregator/internal/service/providermodels"
 	"vk-ai-aggregator/internal/service/referralservice"
 	"vk-ai-aggregator/internal/service/textgeneration"
+	"vk-ai-aggregator/internal/service/videoreference"
 )
 
 type contextKey int
@@ -136,20 +137,21 @@ type ObjectReader interface {
 
 // Deps are the collaborators needed by the miniapp handler.
 type Deps struct {
-	Users          domain.UserRepository
-	Identity       domain.IdentityResolver
-	Jobs           domain.JobRepository
-	Conversations  domain.ConversationRepository
-	Artifacts      domain.ArtifactRepository
-	Moderation     domain.ModerationResultRepository
-	Objects        ObjectReader
-	Billing        *billingservice.Service
-	BillingRepo    domain.BillingRepository
-	Payment        *paymentservice.Service
-	Referrals      ReferralService
-	Orchestrator   *joborchestrator.Orchestrator
-	PricingCatalog *pricingcatalog.Catalog
-	Logger         *slog.Logger
+	VideoReferenceProber videoreference.Prober
+	Users                domain.UserRepository
+	Identity             domain.IdentityResolver
+	Jobs                 domain.JobRepository
+	Conversations        domain.ConversationRepository
+	Artifacts            domain.ArtifactRepository
+	Moderation           domain.ModerationResultRepository
+	Objects              ObjectReader
+	Billing              *billingservice.Service
+	BillingRepo          domain.BillingRepository
+	Payment              *paymentservice.Service
+	Referrals            ReferralService
+	Orchestrator         *joborchestrator.Orchestrator
+	PricingCatalog       *pricingcatalog.Catalog
+	Logger               *slog.Logger
 }
 
 // Handler serves the /miniapp/* routes.
@@ -208,6 +210,7 @@ func (h *Handler) Routes() http.Handler {
 	mux.HandleFunc("GET /miniapp/payments/{id}", h.auth(h.getPaymentIntent))
 	mux.HandleFunc("POST /miniapp/payments/{id}/cancel", h.auth(h.rateLimitMiniApp("miniapp_payment_cancel", h.cancelPaymentIntent)))
 	mux.HandleFunc("POST /miniapp/artifacts", h.auth(h.rateLimitMiniApp("miniapp_artifact", h.limitArtifactUploadConcurrency(h.createArtifact))))
+	mux.HandleFunc("POST /miniapp/video-artifacts", h.auth(h.rateLimitMiniApp("miniapp_artifact", h.limitArtifactUploadConcurrency(h.createVideoArtifact))))
 	mux.HandleFunc("GET /miniapp/artifacts/{id}", h.auth(h.getArtifact))
 	mux.HandleFunc("POST /miniapp/client-events", h.auth(h.rateLimitMiniApp("miniapp_client_events", h.clientEvent)))
 	return mux
@@ -489,6 +492,7 @@ func safeClientRoute(value string) string {
 		"/miniapp/payments/intents",
 		"/miniapp/payments",
 		"/miniapp/artifacts",
+		"/miniapp/video-artifacts",
 		"/miniapp/client-events":
 		return route
 	case "/miniapp/jobs/:id",
@@ -630,6 +634,10 @@ func (h *Handler) readJobRequest(w http.ResponseWriter, r *http.Request) (Create
 		return CreateJobRequest{}, "", "", miniAppModelSpec{}, false
 	}
 	var model miniAppModelSpec
+	if opType != domain.OperationVideoGenerate && (req.VideoAudio || req.ReferenceVideoArtifactID != uuid.Nil || req.CharacterOrientation != "" || req.KeepOriginalSound != nil) {
+		writeError(w, http.StatusBadRequest, "video options require video_generate")
+		return CreateJobRequest{}, "", "", miniAppModelSpec{}, false
+	}
 	if opType == domain.OperationVideoGenerate {
 		if strings.TrimSpace(req.ModelID) != "" {
 			writeError(w, http.StatusBadRequest, "unsupported model")
@@ -641,6 +649,9 @@ func (h *Handler) readJobRequest(w http.ResponseWriter, r *http.Request) (Create
 			return CreateJobRequest{}, "", "", miniAppModelSpec{}, false
 		}
 		req.VideoRouteAlias = route.Alias
+		if !validateVideoOptions(w, route, &req) {
+			return CreateJobRequest{}, "", "", miniAppModelSpec{}, false
+		}
 		req.Resolution = route.DefaultResolution
 		if resolution := strings.ToLower(strings.TrimSpace(req.VideoResolution)); resolution != "" {
 			if !slices.Contains(route.AllowedResolutions, resolution) {
@@ -657,7 +668,9 @@ func (h *Handler) readJobRequest(w http.ResponseWriter, r *http.Request) (Create
 		if !validateVideoReferenceCount(w, route, req.ReferenceArtifactIDs) {
 			return CreateJobRequest{}, "", "", miniAppModelSpec{}, false
 		}
-		req.DurationSec = duration
+		if !route.RequiresReferenceVideo {
+			req.DurationSec = duration
+		}
 		model = videoRouteModelSpec(route)
 	} else {
 		if strings.TrimSpace(req.VideoRouteAlias) != "" {
@@ -788,6 +801,10 @@ func validateVideoReferenceCount(w http.ResponseWriter, route VideoRouteDTO, ids
 		seen[id] = struct{}{}
 	}
 	count := len(seen)
+	if len(route.AllowedReferenceImageCounts) > 0 && !slices.Contains(route.AllowedReferenceImageCounts, count) {
+		writeError(w, http.StatusBadRequest, "invalid reference artifact count")
+		return false
+	}
 	if count > 0 && !route.SupportsReferenceImage {
 		writeError(w, http.StatusBadRequest, "reference_artifacts_unsupported")
 		return false
@@ -817,6 +834,10 @@ func videoRouteModelSpec(route VideoRouteDTO) miniAppModelSpec {
 
 func videoRouteDisplayName(alias string) string {
 	switch alias {
+	case string(domain.VideoRouteOmni11Flash):
+		return "Gemini Omni 1.1 Flash"
+	case string(domain.VideoRouteOmni11FlashExt):
+		return "Gemini Omni 1.1 Flash EXT"
 	case string(domain.VideoRouteSeedance25):
 		return "Seedance 2.5"
 	case string(domain.VideoRouteHailuo23Fast):
@@ -839,6 +860,7 @@ func videoRouteDisplayName(alias string) string {
 }
 
 func copyVideoRouteDTO(route VideoRouteDTO) VideoRouteDTO {
+	route.AllowedReferenceImageCounts = append([]int(nil), route.AllowedReferenceImageCounts...)
 	route.AllowedDurationsSec = append([]int(nil), route.AllowedDurationsSec...)
 	route.AllowedResolutions = append([]string(nil), route.AllowedResolutions...)
 	route.AllowedAspectRatios = append([]string(nil), route.AllowedAspectRatios...)
@@ -881,22 +903,26 @@ func (h *Handler) modelCatalogItemFromImage(model ImageModelDTO) (ModelCatalogIt
 
 func modelCatalogItemFromVideo(route VideoRouteDTO) ModelCatalogItemDTO {
 	return ModelCatalogItemDTO{
-		Type:                   "video",
-		ID:                     route.Alias,
-		Alias:                  route.Alias,
-		Name:                   route.Name,
-		Description:            route.Description,
-		EstimateCredits:        route.EstimateCredits,
-		Enabled:                route.Enabled,
-		AllowedDurationsSec:    append([]int(nil), route.AllowedDurationsSec...),
-		AllowedResolutions:     append([]string(nil), route.AllowedResolutions...),
-		AllowedAspectRatios:    append([]string(nil), route.AllowedAspectRatios...),
-		DefaultDurationSec:     route.DefaultDurationSec,
-		DefaultResolution:      route.DefaultResolution,
-		DefaultAspectRatio:     route.DefaultAspectRatio,
-		RequiresStartImage:     route.RequiresStartImage,
-		SupportsReferenceImage: route.SupportsReferenceImage,
-		MaxReferenceImages:     route.MaxReferenceImages,
+		SupportsAudio:               route.SupportsAudio,
+		RequiresReferenceVideo:      route.RequiresReferenceVideo,
+		AutomaticDuration:           route.AutomaticDuration,
+		AllowedReferenceImageCounts: append([]int(nil), route.AllowedReferenceImageCounts...),
+		Type:                        "video",
+		ID:                          route.Alias,
+		Alias:                       route.Alias,
+		Name:                        route.Name,
+		Description:                 route.Description,
+		EstimateCredits:             route.EstimateCredits,
+		Enabled:                     route.Enabled,
+		AllowedDurationsSec:         append([]int(nil), route.AllowedDurationsSec...),
+		AllowedResolutions:          append([]string(nil), route.AllowedResolutions...),
+		AllowedAspectRatios:         append([]string(nil), route.AllowedAspectRatios...),
+		DefaultDurationSec:          route.DefaultDurationSec,
+		DefaultResolution:           route.DefaultResolution,
+		DefaultAspectRatio:          route.DefaultAspectRatio,
+		RequiresStartImage:          route.RequiresStartImage,
+		SupportsReferenceImage:      route.SupportsReferenceImage,
+		MaxReferenceImages:          route.MaxReferenceImages,
 	}
 }
 
@@ -1002,6 +1028,9 @@ func (h *Handler) estimateJob(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	estimateAccountID := user.EffectiveAccountID()
+	if !h.resolveMotionReference(w, r, estimateAccountID, &req) {
+		return
+	}
 	if len(req.ReferenceArtifactIDs) > 0 {
 		if !h.validateReferenceArtifacts(w, r, estimateAccountID, opType, req.ReferenceArtifactIDs) {
 			return
@@ -1091,13 +1120,17 @@ func (h *Handler) pricingSnapshotForRequest(ctx context.Context, userID uuid.UUI
 	}
 	if opType == domain.OperationVideoGenerate {
 		params, _ := json.Marshal(miniAppJobParams{
-			Prompt:               req.Prompt,
-			ModelName:            model.ModelName,
-			VideoRouteAlias:      strings.TrimSpace(req.VideoRouteAlias),
-			ReferenceArtifactIDs: req.ReferenceArtifactIDs,
-			DurationSec:          req.DurationSec,
-			Resolution:           req.Resolution,
-			AspectRatio:          req.AspectRatio,
+			VideoAudio:               req.VideoAudio,
+			ReferenceVideoArtifactID: req.ReferenceVideoArtifactID,
+			CharacterOrientation:     req.CharacterOrientation,
+			KeepOriginalSound:        req.KeepOriginalSound,
+			Prompt:                   req.Prompt,
+			ModelName:                model.ModelName,
+			VideoRouteAlias:          strings.TrimSpace(req.VideoRouteAlias),
+			ReferenceArtifactIDs:     req.ReferenceArtifactIDs,
+			DurationSec:              req.DurationSec,
+			Resolution:               req.Resolution,
+			AspectRatio:              req.AspectRatio,
 		})
 		resolution, err := h.cfg.VideoRouteResolver.ResolveVideoRoute(ctx, joborchestrator.VideoRouteCheckInput{
 			UserID:           userID,
@@ -1106,7 +1139,7 @@ func (h *Handler) pricingSnapshotForRequest(ctx context.Context, userID uuid.UUI
 			Operation:        opType,
 			Modality:         modality,
 			Params:           params,
-			InputArtifactIDs: req.ReferenceArtifactIDs,
+			InputArtifactIDs: videoInputArtifactIDs(req),
 		})
 		if err != nil {
 			return pricingcatalog.PricingSnapshot{}, err
@@ -1135,6 +1168,9 @@ func (h *Handler) pricingProductKey(opType domain.OperationType, modality domain
 			DurationSec:     req.DurationSec,
 		}
 		key = key.Normalize()
+		if req.VideoAudio {
+			key.Quality = pricingcatalog.VideoQualityAudio
+		}
 		return key, key.Valid()
 	default:
 		return pricingcatalog.ProductKey{}, false
@@ -1168,6 +1204,9 @@ func (h *Handler) createJob(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	accountID := user.EffectiveAccountID()
+	if !h.resolveMotionReference(w, r, accountID, &req) {
+		return
+	}
 	if len(req.ReferenceArtifactIDs) > 0 {
 		if !h.validateReferenceArtifacts(w, r, accountID, opType, req.ReferenceArtifactIDs) {
 			return
@@ -1193,8 +1232,12 @@ func (h *Handler) createJob(w http.ResponseWriter, r *http.Request) {
 	correlationID := fmt.Sprintf("miniapp:%d:%s", vkUserID, clientKey)
 
 	jobParams := miniAppJobParams{
-		Prompt:               req.Prompt,
-		ReferenceArtifactIDs: req.ReferenceArtifactIDs,
+		VideoAudio:               req.VideoAudio,
+		ReferenceVideoArtifactID: req.ReferenceVideoArtifactID,
+		CharacterOrientation:     req.CharacterOrientation,
+		KeepOriginalSound:        req.KeepOriginalSound,
+		Prompt:                   req.Prompt,
+		ReferenceArtifactIDs:     req.ReferenceArtifactIDs,
 	}
 	if opType == domain.OperationVideoGenerate {
 		jobParams.ModelName = model.ModelName
@@ -1253,7 +1296,7 @@ func (h *Handler) createJob(w http.ResponseWriter, r *http.Request) {
 		Modality:            modality,
 		IdempotencyKey:      idemKey,
 		CorrelationID:       correlationID,
-		InputArtifactIDs:    req.ReferenceArtifactIDs,
+		InputArtifactIDs:    videoInputArtifactIDs(req),
 		Params:              params,
 		CostEstimateCredits: costEstimate,
 		PricingSnapshot:     pricingSnapshot,

@@ -28,6 +28,10 @@ type listResponse[T any] struct {
 // no price, cost, provider, provider_cost, multiplier or provider-native model
 // fields; backend pricing and provider resolution stay server-owned.
 type CreateJobRequest struct {
+	VideoAudio               bool      `json:"video_audio,omitempty"`
+	ReferenceVideoArtifactID uuid.UUID `json:"reference_video_artifact_id,omitzero"`
+	CharacterOrientation     string    `json:"character_orientation,omitempty"`
+	KeepOriginalSound        *bool     `json:"keep_original_sound,omitempty"`
 	// Operation is the AI operation to perform.
 	// Allowed values: "text_generate", "image_generate", "video_generate".
 	Operation string `json:"operation"`
@@ -89,42 +93,50 @@ type ClientEventRequest struct {
 // backend-owned provider routing data for workers, but newJobDTO must not echo
 // those fields back through public Mini App responses.
 type miniAppJobParams struct {
-	Prompt               string                    `json:"prompt"`
-	ModelID              string                    `json:"model_id,omitempty"`
-	ModelName            string                    `json:"model_name,omitempty"`
-	VideoRouteAlias      string                    `json:"video_route_alias,omitempty"`
-	Provider             domain.ProviderName       `json:"provider,omitempty"`
-	ModelCode            string                    `json:"model_code,omitempty"`
-	Size                 string                    `json:"size,omitempty"`
-	Resolution           string                    `json:"resolution,omitempty"`
-	ImageQuality         string                    `json:"image_quality,omitempty"`
-	ReferenceArtifactIDs []uuid.UUID               `json:"reference_artifact_ids,omitempty"`
-	ConversationID       string                    `json:"conversation_id,omitempty"`
-	ConversationSource   domain.ConversationSource `json:"conversation_source,omitempty"`
-	ExternalThreadID     string                    `json:"external_thread_id,omitempty"`
-	DurationSec          int                       `json:"duration_sec,omitempty"`
-	AspectRatio          string                    `json:"aspect_ratio,omitempty"`
+	VideoAudio               bool                      `json:"video_audio,omitempty"`
+	ReferenceVideoArtifactID uuid.UUID                 `json:"reference_video_artifact_id,omitempty"`
+	CharacterOrientation     string                    `json:"character_orientation,omitempty"`
+	KeepOriginalSound        *bool                     `json:"keep_original_sound,omitempty"`
+	Prompt                   string                    `json:"prompt"`
+	ModelID                  string                    `json:"model_id,omitempty"`
+	ModelName                string                    `json:"model_name,omitempty"`
+	VideoRouteAlias          string                    `json:"video_route_alias,omitempty"`
+	Provider                 domain.ProviderName       `json:"provider,omitempty"`
+	ModelCode                string                    `json:"model_code,omitempty"`
+	Size                     string                    `json:"size,omitempty"`
+	Resolution               string                    `json:"resolution,omitempty"`
+	ImageQuality             string                    `json:"image_quality,omitempty"`
+	ReferenceArtifactIDs     []uuid.UUID               `json:"reference_artifact_ids,omitempty"`
+	ConversationID           string                    `json:"conversation_id,omitempty"`
+	ConversationSource       domain.ConversationSource `json:"conversation_source,omitempty"`
+	ExternalThreadID         string                    `json:"external_thread_id,omitempty"`
+	DurationSec              int                       `json:"duration_sec,omitempty"`
+	AspectRatio              string                    `json:"aspect_ratio,omitempty"`
 }
 
 // VideoRouteDTO is a public Mini App catalog video route. EstimateCredits is
 // only a backend-provided display hint; clients must use /miniapp/estimate for
 // the exact request cost.
 type VideoRouteDTO struct {
-	Type                   string   `json:"type,omitempty"`
-	Alias                  string   `json:"alias"`
-	Name                   string   `json:"name,omitempty"`
-	Description            string   `json:"description,omitempty"`
-	EstimateCredits        int64    `json:"estimate_credits,omitempty"`
-	Enabled                bool     `json:"enabled"`
-	AllowedDurationsSec    []int    `json:"allowed_durations_sec,omitempty"`
-	AllowedResolutions     []string `json:"allowed_resolutions,omitempty"`
-	AllowedAspectRatios    []string `json:"allowed_aspect_ratios,omitempty"`
-	DefaultDurationSec     int      `json:"default_duration_sec,omitempty"`
-	DefaultResolution      string   `json:"default_resolution,omitempty"`
-	DefaultAspectRatio     string   `json:"default_aspect_ratio,omitempty"`
-	RequiresStartImage     bool     `json:"requires_start_image"`
-	SupportsReferenceImage bool     `json:"supports_reference_image"`
-	MaxReferenceImages     int      `json:"max_reference_images,omitempty"`
+	SupportsAudio               bool     `json:"supports_audio,omitempty"`
+	RequiresReferenceVideo      bool     `json:"requires_reference_video,omitempty"`
+	AutomaticDuration           bool     `json:"automatic_duration,omitempty"`
+	AllowedReferenceImageCounts []int    `json:"allowed_reference_image_counts,omitempty"`
+	Type                        string   `json:"type,omitempty"`
+	Alias                       string   `json:"alias"`
+	Name                        string   `json:"name,omitempty"`
+	Description                 string   `json:"description,omitempty"`
+	EstimateCredits             int64    `json:"estimate_credits,omitempty"`
+	Enabled                     bool     `json:"enabled"`
+	AllowedDurationsSec         []int    `json:"allowed_durations_sec,omitempty"`
+	AllowedResolutions          []string `json:"allowed_resolutions,omitempty"`
+	AllowedAspectRatios         []string `json:"allowed_aspect_ratios,omitempty"`
+	DefaultDurationSec          int      `json:"default_duration_sec,omitempty"`
+	DefaultResolution           string   `json:"default_resolution,omitempty"`
+	DefaultAspectRatio          string   `json:"default_aspect_ratio,omitempty"`
+	RequiresStartImage          bool     `json:"requires_start_image"`
+	SupportsReferenceImage      bool     `json:"supports_reference_image"`
+	MaxReferenceImages          int      `json:"max_reference_images,omitempty"`
 }
 
 // ImageModelDTO is a public Mini App catalog image model. EstimateCredits is
@@ -147,24 +159,28 @@ type ImageModelDTO struct {
 // It exposes estimate_credits only as a backend-provided display hint and never
 // exposes provider, floor, multiplier, provider cost or provider-native ids.
 type ModelCatalogItemDTO struct {
-	Type                   string   `json:"type"`
-	ID                     string   `json:"id"`
-	Alias                  string   `json:"alias,omitempty"`
-	Name                   string   `json:"name"`
-	Description            string   `json:"description,omitempty"`
-	EstimateCredits        int64    `json:"estimate_credits,omitempty"`
-	Enabled                bool     `json:"enabled"`
-	QualityOptions         []string `json:"quality_options,omitempty"`
-	DefaultQuality         string   `json:"default_quality,omitempty"`
-	AllowedDurationsSec    []int    `json:"allowed_durations_sec,omitempty"`
-	AllowedResolutions     []string `json:"allowed_resolutions,omitempty"`
-	AllowedAspectRatios    []string `json:"allowed_aspect_ratios,omitempty"`
-	DefaultDurationSec     int      `json:"default_duration_sec,omitempty"`
-	DefaultResolution      string   `json:"default_resolution,omitempty"`
-	DefaultAspectRatio     string   `json:"default_aspect_ratio,omitempty"`
-	RequiresStartImage     bool     `json:"requires_start_image"`
-	SupportsReferenceImage bool     `json:"supports_reference_image"`
-	MaxReferenceImages     int      `json:"max_reference_images,omitempty"`
+	SupportsAudio               bool     `json:"supports_audio,omitempty"`
+	RequiresReferenceVideo      bool     `json:"requires_reference_video,omitempty"`
+	AutomaticDuration           bool     `json:"automatic_duration,omitempty"`
+	AllowedReferenceImageCounts []int    `json:"allowed_reference_image_counts,omitempty"`
+	Type                        string   `json:"type"`
+	ID                          string   `json:"id"`
+	Alias                       string   `json:"alias,omitempty"`
+	Name                        string   `json:"name"`
+	Description                 string   `json:"description,omitempty"`
+	EstimateCredits             int64    `json:"estimate_credits,omitempty"`
+	Enabled                     bool     `json:"enabled"`
+	QualityOptions              []string `json:"quality_options,omitempty"`
+	DefaultQuality              string   `json:"default_quality,omitempty"`
+	AllowedDurationsSec         []int    `json:"allowed_durations_sec,omitempty"`
+	AllowedResolutions          []string `json:"allowed_resolutions,omitempty"`
+	AllowedAspectRatios         []string `json:"allowed_aspect_ratios,omitempty"`
+	DefaultDurationSec          int      `json:"default_duration_sec,omitempty"`
+	DefaultResolution           string   `json:"default_resolution,omitempty"`
+	DefaultAspectRatio          string   `json:"default_aspect_ratio,omitempty"`
+	RequiresStartImage          bool     `json:"requires_start_image"`
+	SupportsReferenceImage      bool     `json:"supports_reference_image"`
+	MaxReferenceImages          int      `json:"max_reference_images,omitempty"`
 }
 
 // EstimateDTO is returned by POST /miniapp/estimate. cost_estimate is the exact

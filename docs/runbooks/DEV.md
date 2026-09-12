@@ -253,6 +253,30 @@ Review `rg` matches manually. Env var names, placeholders and fake test
 literals are acceptable; real secret values, prompt text, raw provider payloads
 and private media URLs are not.
 
+## Gemini Omni video configuration
+
+`FEATURE_APIMART_OMNI_1_1_FLASH_ENABLED` and
+`FEATURE_APIMART_OMNI_1_1_FLASH_EXT_ENABLED` default to false and can be enabled
+independently. Each requires `FEATURE_VIDEO_ROUTER_ENABLED=true`,
+`APIMART_PROVIDER_ENABLED=true`, the existing APIMart key and
+`APIMART_BASE_URL=https://api.apimart.ai/v1`. API and worker must use the same
+release. No environment files, deployment profiles or live prices are changed
+automatically.
+
+Static pricing version 12 adds four Flash keys (resolution × internal duration
+10) and sixteen EXT keys (resolution × 4/6/8/10). DB pricing requires these exact
+enabled keys in the active price version; static fallback does not override a
+DB catalog. Missing prices keep the route hidden. See the
+[contract and tariffs](../VIDEO_GENERATION.md#gemini-omni-11-flash-and-flash-ext).
+
+Local tests cover wire examples, validation, quote/reserve/capture, moderation,
+4K media checks and crash recovery. Before rollout, verify account model access
+and perform an explicitly authorized paid canary for MP4 playback/audio and
+actual upstream charge. Mini App and the shared VK catalog support these
+routes; standalone Web video UI is separate work. Disable the corresponding
+flag to hide new requests, leaving APIMart configured to finish accepted tasks.
+Reconcile an indeterminate outcome before any manual resubmission.
+
 ## Seedance 2.5 configuration
 
 `FEATURE_APIMART_SEEDANCE_2_5_ENABLED` defaults to false. Enable it with
@@ -340,3 +364,27 @@ See [Text models](../../docs/runbooks/KIE_TEXT_MODELS.md) for verified prices, n
 required output-limit verification, environment flags and migration 000052.
 No provider-chain change is needed. Keep all new flags off until contract
 verification and an authorized paid canary have passed.
+
+## Additional APIMart video rollout
+
+DEV preparation enables Omni Flash/EXT, Kling V3, Motion 2.6, Veo 3.1
+Lite/Fast/Quality when APIMart is configured (explicit false still overrides).
+All model flags retain false application defaults. New flag names:
+`FEATURE_APIMART_KLING_V3_ENABLED`,
+`FEATURE_APIMART_KLING_2_6_MOTION_CONTROL_ENABLED`,
+`FEATURE_APIMART_VEO_3_1_LITE_ENABLED`,
+`FEATURE_APIMART_VEO_3_1_FAST_ENABLED`,
+`FEATURE_APIMART_VEO_3_1_QUALITY_ENABLED`.
+
+Motion requires `PROVIDER_REFERENCE_BASE_URL=https://dev-app.neiirohub.ru` and
+`PROVIDER_REFERENCE_SIGNING_KEY` (dedicated random secret, at least 32 bytes),
+owned by the DEV secret env part. API now needs ffprobe, included in its image.
+Nginx forwards signed provider reads and permits 101 MiB multipart requests on
+`/miniapp/video-artifacts`; API limits the video itself to 100 MiB.
+
+Before promoting the same code and flags to production, configure its own base
+URL/signing secret. Never reuse DEV credentials. DB-backed pricing must contain
+static v13 keys before exposing routes; publish through the operator workflow.
+Smoke checks should verify flags/catalog visibility, unsigned relay rejection,
+unauthenticated upload rejection and runtime health. A real generation is paid
+and requires separate explicit authorization.

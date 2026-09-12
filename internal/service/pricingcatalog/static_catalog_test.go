@@ -304,6 +304,10 @@ func TestStaticCatalogUsesOnlyBoundedAliasesAndExplicitUnits(t *testing.T) {
 		PublicImageSeedream45:    true,
 	}
 	allowedVideos := map[domain.VideoRouteAlias]bool{
+		domain.VideoRouteKlingV3: true, domain.VideoRouteKling26Motion: true,
+		domain.VideoRouteVeo31Fast: true, domain.VideoRouteVeo31Quality: true, domain.VideoRouteVeo31Lite: true,
+		domain.VideoRouteOmni11Flash:     true,
+		domain.VideoRouteOmni11FlashExt:  true,
 		domain.VideoRouteKlingO3Standard: true,
 		domain.VideoRouteRunwayGen4Turbo: true,
 		domain.VideoRouteSeedance20Fast:  true,
@@ -354,8 +358,8 @@ func TestStaticCatalogUsesOnlyBoundedAliasesAndExplicitUnits(t *testing.T) {
 }
 
 func TestStaticCatalogVersionChangesWithCompetitivePrices(t *testing.T) {
-	if StaticCatalogVersion != 11 {
-		t.Fatalf("static catalog version = %d, want 11", StaticCatalogVersion)
+	if StaticCatalogVersion != 13 {
+		t.Fatalf("static catalog version = %d, want 13", StaticCatalogVersion)
 	}
 }
 

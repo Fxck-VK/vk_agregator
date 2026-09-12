@@ -6,6 +6,7 @@ import (
 	"errors"
 	"fmt"
 	"math"
+	"slices"
 	"strings"
 
 	"github.com/google/uuid"
@@ -71,16 +72,20 @@ type Route struct {
 }
 
 type PublicRoute struct {
-	Alias                  domain.VideoRouteAlias `json:"alias"`
-	AllowedDurationsSec    []int                  `json:"allowed_durations_sec,omitempty"`
-	AllowedResolutions     []string               `json:"allowed_resolutions,omitempty"`
-	AllowedAspectRatios    []string               `json:"allowed_aspect_ratios,omitempty"`
-	DefaultDurationSec     int                    `json:"default_duration_sec,omitempty"`
-	DefaultResolution      string                 `json:"default_resolution,omitempty"`
-	DefaultAspectRatio     string                 `json:"default_aspect_ratio,omitempty"`
-	RequiresStartImage     bool                   `json:"requires_start_image"`
-	SupportsReferenceImage bool                   `json:"supports_reference_image"`
-	MaxReferenceImages     int                    `json:"max_reference_images,omitempty"`
+	SupportsAudio               bool                   `json:"supports_audio,omitempty"`
+	RequiresReferenceVideo      bool                   `json:"requires_reference_video,omitempty"`
+	AutomaticDuration           bool                   `json:"automatic_duration,omitempty"`
+	AllowedReferenceImageCounts []int                  `json:"allowed_reference_image_counts,omitempty"`
+	Alias                       domain.VideoRouteAlias `json:"alias"`
+	AllowedDurationsSec         []int                  `json:"allowed_durations_sec,omitempty"`
+	AllowedResolutions          []string               `json:"allowed_resolutions,omitempty"`
+	AllowedAspectRatios         []string               `json:"allowed_aspect_ratios,omitempty"`
+	DefaultDurationSec          int                    `json:"default_duration_sec,omitempty"`
+	DefaultResolution           string                 `json:"default_resolution,omitempty"`
+	DefaultAspectRatio          string                 `json:"default_aspect_ratio,omitempty"`
+	RequiresStartImage          bool                   `json:"requires_start_image"`
+	SupportsReferenceImage      bool                   `json:"supports_reference_image"`
+	MaxReferenceImages          int                    `json:"max_reference_images,omitempty"`
 }
 
 type Catalog struct {
@@ -139,16 +144,20 @@ func (c *Catalog) PublicRoutes() []PublicRoute {
 			continue
 		}
 		out = append(out, PublicRoute{
-			Alias:                  route.Spec.Alias,
-			AllowedDurationsSec:    append([]int(nil), route.Spec.AllowedDurationsSec...),
-			AllowedResolutions:     append([]string(nil), route.Spec.AllowedResolutions...),
-			AllowedAspectRatios:    append([]string(nil), route.Spec.AllowedAspectRatios...),
-			DefaultDurationSec:     defaultDuration(route.Spec),
-			DefaultResolution:      defaultResolution(route.Spec),
-			DefaultAspectRatio:     defaultAspectRatio(route.Spec),
-			RequiresStartImage:     route.Spec.RequiresStartImage,
-			SupportsReferenceImage: route.Spec.SupportsReferenceImage,
-			MaxReferenceImages:     route.Spec.MaxReferenceImages,
+			SupportsAudio:               route.Spec.SupportsAudio,
+			RequiresReferenceVideo:      route.Spec.RequiresReferenceVideo,
+			AutomaticDuration:           route.Spec.AutomaticDuration,
+			AllowedReferenceImageCounts: append([]int(nil), route.Spec.AllowedReferenceImageCounts...),
+			Alias:                       route.Spec.Alias,
+			AllowedDurationsSec:         append([]int(nil), route.Spec.AllowedDurationsSec...),
+			AllowedResolutions:          append([]string(nil), route.Spec.AllowedResolutions...),
+			AllowedAspectRatios:         append([]string(nil), route.Spec.AllowedAspectRatios...),
+			DefaultDurationSec:          defaultDuration(route.Spec),
+			DefaultResolution:           defaultResolution(route.Spec),
+			DefaultAspectRatio:          defaultAspectRatio(route.Spec),
+			RequiresStartImage:          route.Spec.RequiresStartImage,
+			SupportsReferenceImage:      route.Spec.SupportsReferenceImage,
+			MaxReferenceImages:          route.Spec.MaxReferenceImages,
 		})
 	}
 	return out
@@ -159,7 +168,7 @@ func (r Route) publiclyAvailable() bool {
 		r.ProviderEnabled &&
 		r.ProviderConfigured &&
 		r.ProviderBaseConfigured &&
-		(r.Spec.ProviderCostCreditsFixed > 0 || r.Spec.ProviderCostCreditsPerSecond > 0 || len(r.Spec.ProviderCostMicrosPerSecondByResolution) > 0)
+		(r.Spec.ProviderCostCreditsFixed > 0 || r.Spec.ProviderCostCreditsPerSecond > 0 || len(r.Spec.ProviderCostMicrosPerSecondByResolution) > 0 || len(r.Spec.ProviderCostMicrosByResolutionDuration) > 0)
 }
 
 func (c *Catalog) Validate(ctx context.Context, req Request) error {
@@ -233,6 +242,9 @@ func (c *Catalog) Resolve(ctx context.Context, req Request) (Resolution, error) 
 		return Resolution{}, fmt.Errorf("%w: %s aspect %s", ErrUnsupportedAspectRatio, routeAlias, aspectRatio)
 	}
 	imageReferenceCount := imageReferenceCount(req, params)
+	if len(route.Spec.AllowedReferenceImageCounts) > 0 && !slices.Contains(route.Spec.AllowedReferenceImageCounts, imageReferenceCount) {
+		return Resolution{}, fmt.Errorf("%w: unsupported reference image count", ErrInvalidRouteRequest)
+	}
 	if imageReferenceCount > 0 && !route.Spec.SupportsReferenceImage {
 		return Resolution{}, fmt.Errorf("%w: %s image reference", ErrInvalidRouteRequest, routeAlias)
 	}
@@ -242,15 +254,41 @@ func (c *Catalog) Resolve(ctx context.Context, req Request) (Resolution, error) 
 	if route.Spec.RequiresStartImage && imageReferenceCount == 0 {
 		return Resolution{}, fmt.Errorf("%w: %s", ErrMissingStartImage, routeAlias)
 	}
-	if hasVideoReference(params) && !route.Spec.SupportsReferenceVideo {
+	if hasVideoReference(params) {
 		return Resolution{}, fmt.Errorf("%w: %s video reference", ErrInvalidRouteRequest, routeAlias)
+	}
+	if params.VideoAudio && !route.Spec.SupportsAudio {
+		return Resolution{}, ErrInvalidRouteRequest
+	}
+	if route.Spec.RequiresReferenceVideo {
+		if params.ReferenceVideoArtifactID == uuid.Nil {
+			return Resolution{}, ErrInvalidRouteRequest
+		}
+		if params.CharacterOrientation == "" {
+			params.CharacterOrientation = "image"
+		}
+		if params.CharacterOrientation != "image" && params.CharacterOrientation != "video" {
+			return Resolution{}, ErrInvalidRouteRequest
+		}
+		if params.CharacterOrientation == "image" && durationSec > 10 {
+			return Resolution{}, ErrUnsupportedDuration
+		}
+	} else if params.ReferenceVideoArtifactID != uuid.Nil || params.CharacterOrientation != "" || params.KeepOriginalSound != nil {
+		return Resolution{}, ErrInvalidRouteRequest
 	}
 	if hasAudioReference(params) && !route.Spec.SupportsReferenceAudio {
 		return Resolution{}, fmt.Errorf("%w: %s audio reference", ErrInvalidRouteRequest, routeAlias)
 	}
 	providerCost := route.Spec.ProviderCostCreditsFixed + route.Spec.ProviderCostCreditsPerSecond*int64(durationSec)
+	if len(route.Spec.ProviderCostMicrosByResolutionDuration) > 0 {
+		micros := route.Spec.ProviderCostMicrosByResolutionDuration[normalize(resolutionRaw)][durationSec]
+		providerCost = (micros + 999999) / 1000000
+	}
 	if len(route.Spec.ProviderCostMicrosPerSecondByResolution) > 0 {
 		rate := route.Spec.ProviderCostMicrosPerSecondByResolution[normalize(resolutionRaw)]
+		if params.VideoAudio {
+			rate = route.Spec.ProviderCostMicrosPerSecondWithAudioByResolution[normalize(resolutionRaw)]
+		}
 		providerCost = (rate*int64(durationSec) + 999999) / 1000000
 	}
 	if providerCost <= 0 {
@@ -267,6 +305,9 @@ func (c *Catalog) Resolve(ctx context.Context, req Request) (Resolution, error) 
 		return Resolution{}, fmt.Errorf("%w: internal cost %d exceeds route cap %d", domain.ErrCostCapExceeded, internalCost, route.Spec.MaxInternalCostCredits)
 	}
 	snapshot := domain.VideoRouteSnapshot{
+		VideoAudio:             params.VideoAudio,
+		CharacterOrientation:   params.CharacterOrientation,
+		KeepOriginalSound:      params.KeepOriginalSound == nil || *params.KeepOriginalSound,
 		Alias:                  route.Spec.Alias,
 		Provider:               route.Spec.Provider,
 		ProviderModelID:        route.Spec.ProviderModelID,
@@ -279,6 +320,9 @@ func (c *Catalog) Resolve(ctx context.Context, req Request) (Resolution, error) 
 		PriceMultiplier:        route.Spec.PriceMultiplier,
 		MaxProviderCostCredits: route.Spec.MaxProviderCostCredits,
 		MaxInternalCostCredits: route.Spec.MaxInternalCostCredits,
+	}
+	if params.ReferenceVideoArtifactID != uuid.Nil {
+		snapshot.ReferenceVideoArtifactID = params.ReferenceVideoArtifactID.String()
 	}
 	resolvedParams, err := withResolvedSnapshot(req.Params, snapshot)
 	if err != nil {
@@ -293,21 +337,25 @@ func (c *Catalog) Resolve(ctx context.Context, req Request) (Resolution, error) 
 }
 
 type requestParams struct {
-	VideoRouteAlias      string      `json:"video_route_alias"`
-	RouteAlias           string      `json:"route_alias"`
-	ModelID              string      `json:"model_id"`
-	Provider             string      `json:"provider"`
-	ModelCode            string      `json:"model_code"`
-	DurationSec          int         `json:"duration_sec"`
-	Resolution           string      `json:"resolution"`
-	AspectRatio          string      `json:"aspect_ratio"`
-	ReferenceArtifactIDs []uuid.UUID `json:"reference_artifact_ids"`
-	FirstFrameImage      string      `json:"first_frame_image"`
-	InputURLs            []string    `json:"input_urls"`
-	ReferenceVideoURL    string      `json:"reference_video_url"`
-	ReferenceVideoURLs   []string    `json:"reference_video_urls"`
-	ReferenceAudioURL    string      `json:"reference_audio_url"`
-	ReferenceAudioURLs   []string    `json:"reference_audio_urls"`
+	VideoAudio               bool        `json:"video_audio"`
+	ReferenceVideoArtifactID uuid.UUID   `json:"reference_video_artifact_id"`
+	CharacterOrientation     string      `json:"character_orientation"`
+	KeepOriginalSound        *bool       `json:"keep_original_sound"`
+	VideoRouteAlias          string      `json:"video_route_alias"`
+	RouteAlias               string      `json:"route_alias"`
+	ModelID                  string      `json:"model_id"`
+	Provider                 string      `json:"provider"`
+	ModelCode                string      `json:"model_code"`
+	DurationSec              int         `json:"duration_sec"`
+	Resolution               string      `json:"resolution"`
+	AspectRatio              string      `json:"aspect_ratio"`
+	ReferenceArtifactIDs     []uuid.UUID `json:"reference_artifact_ids"`
+	FirstFrameImage          string      `json:"first_frame_image"`
+	InputURLs                []string    `json:"input_urls"`
+	ReferenceVideoURL        string      `json:"reference_video_url"`
+	ReferenceVideoURLs       []string    `json:"reference_video_urls"`
+	ReferenceAudioURL        string      `json:"reference_audio_url"`
+	ReferenceAudioURLs       []string    `json:"reference_audio_urls"`
 }
 
 func (p requestParams) routeAlias() string {
@@ -396,7 +444,7 @@ func hasAudioReference(params requestParams) bool {
 func imageReferenceCount(req Request, params requestParams) int {
 	seen := make(map[uuid.UUID]struct{}, len(req.InputArtifactIDs)+len(params.ReferenceArtifactIDs))
 	for _, id := range req.InputArtifactIDs {
-		if id == uuid.Nil {
+		if id == uuid.Nil || id == params.ReferenceVideoArtifactID {
 			continue
 		}
 		seen[id] = struct{}{}

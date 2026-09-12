@@ -16,6 +16,7 @@ import (
 	"vk-ai-aggregator/internal/service/paymentservice"
 	"vk-ai-aggregator/internal/service/productcatalog"
 	"vk-ai-aggregator/internal/service/referralservice"
+	"vk-ai-aggregator/internal/service/videoreference"
 	"vk-ai-aggregator/internal/service/videorouter"
 )
 
@@ -100,20 +101,21 @@ func NewHandler(ctx context.Context, cfg config.Config, deps Deps) *miniappapi.H
 		VideoRoutes:                         miniAppVideoRoutes(runtimeCatalog.Catalog),
 		VideoRouteResolver:                  miniAppVideoRouteResolver(runtimeCatalog.VideoRouteCatalog),
 	}, miniappapi.Deps{
-		Users:          deps.Users,
-		Identity:       deps.Identity,
-		Jobs:           deps.Jobs,
-		Conversations:  deps.Conversations,
-		Artifacts:      deps.Artifacts,
-		Moderation:     deps.Moderation,
-		Objects:        objectStore,
-		Billing:        deps.Billing,
-		BillingRepo:    deps.BillingRepo,
-		Payment:        deps.Payment,
-		Referrals:      referrals,
-		Orchestrator:   deps.Orchestrator,
-		PricingCatalog: runtimeCatalog.PricingCatalog,
-		Logger:         logger,
+		VideoReferenceProber: videoreference.NewProber(cfg.FFProbePath),
+		Users:                deps.Users,
+		Identity:             deps.Identity,
+		Jobs:                 deps.Jobs,
+		Conversations:        deps.Conversations,
+		Artifacts:            deps.Artifacts,
+		Moderation:           deps.Moderation,
+		Objects:              objectStore,
+		Billing:              deps.Billing,
+		BillingRepo:          deps.BillingRepo,
+		Payment:              deps.Payment,
+		Referrals:            referrals,
+		Orchestrator:         deps.Orchestrator,
+		PricingCatalog:       runtimeCatalog.PricingCatalog,
+		Logger:               logger,
 	})
 }
 
@@ -148,21 +150,25 @@ func miniAppVideoRoutes(catalog *productcatalog.Catalog) []miniappapi.VideoRoute
 	routes := make([]miniappapi.VideoRouteDTO, 0, len(publicRoutes))
 	for _, route := range publicRoutes {
 		routes = append(routes, miniappapi.VideoRouteDTO{
-			Type:                   route.Type,
-			Alias:                  route.Alias,
-			Name:                   route.Name,
-			Description:            route.Description,
-			EstimateCredits:        route.EstimateCredits,
-			Enabled:                route.Enabled,
-			AllowedDurationsSec:    append([]int(nil), route.AllowedDurationsSec...),
-			AllowedResolutions:     append([]string(nil), route.AllowedResolutions...),
-			AllowedAspectRatios:    append([]string(nil), route.AllowedAspectRatios...),
-			DefaultDurationSec:     route.DefaultDurationSec,
-			DefaultResolution:      route.DefaultResolution,
-			DefaultAspectRatio:     route.DefaultAspectRatio,
-			RequiresStartImage:     route.RequiresStartImage,
-			SupportsReferenceImage: route.SupportsReferenceImage,
-			MaxReferenceImages:     route.MaxReferenceImages,
+			SupportsAudio:               route.SupportsAudio,
+			RequiresReferenceVideo:      route.RequiresReferenceVideo,
+			AutomaticDuration:           route.AutomaticDuration,
+			AllowedReferenceImageCounts: append([]int(nil), route.AllowedReferenceImageCounts...),
+			Type:                        route.Type,
+			Alias:                       route.Alias,
+			Name:                        route.Name,
+			Description:                 route.Description,
+			EstimateCredits:             route.EstimateCredits,
+			Enabled:                     route.Enabled,
+			AllowedDurationsSec:         append([]int(nil), route.AllowedDurationsSec...),
+			AllowedResolutions:          append([]string(nil), route.AllowedResolutions...),
+			AllowedAspectRatios:         append([]string(nil), route.AllowedAspectRatios...),
+			DefaultDurationSec:          route.DefaultDurationSec,
+			DefaultResolution:           route.DefaultResolution,
+			DefaultAspectRatio:          route.DefaultAspectRatio,
+			RequiresStartImage:          route.RequiresStartImage,
+			SupportsReferenceImage:      route.SupportsReferenceImage,
+			MaxReferenceImages:          route.MaxReferenceImages,
 		})
 	}
 	return routes

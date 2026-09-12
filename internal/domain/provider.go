@@ -89,6 +89,12 @@ const (
 // generation request. The adapter translates it into the provider's native API
 // shape. It must never contain VK- or billing-specific concerns.
 type ProviderRequest struct {
+	// Video options are normalized by the worker from the immutable route snapshot.
+	VideoAudio           bool   `json:"video_audio,omitempty"`
+	CharacterOrientation string `json:"character_orientation,omitempty"`
+	KeepOriginalSound    bool   `json:"keep_original_sound,omitempty"`
+	// ReferenceVideoURL is ephemeral and must never be persisted or logged.
+	ReferenceVideoURL string `json:"-"`
 	// JobID is the originating job, used for correlation and idempotency.
 	JobID uuid.UUID `json:"job_id"`
 	// UserID is the canonical account owner of the originating job. It is used

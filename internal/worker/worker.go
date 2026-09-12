@@ -893,6 +893,7 @@ func (e providerResultError) ProviderErrorClass() domain.ProviderErrorClass { re
 // processor holds the shared dependencies and result-handling logic used by
 // both the generation and poll workers.
 type processor struct {
+	providerReferences   ReferenceVideoSigner
 	jobs                 domain.JobRepository
 	resultReadyUOW       uow.Manager
 	tasks                domain.ProviderTaskRepository
@@ -956,7 +957,8 @@ type AssistantFacts interface {
 
 // Deps bundles the dependencies shared by the workers.
 type Deps struct {
-	Jobs domain.JobRepository
+	ProviderReferences ReferenceVideoSigner
+	Jobs               domain.JobRepository
 	// ResultReadyUOW atomically persists the result_ready status and its
 	// finalization outbox event. It is required: without it workers fail closed
 	// instead of making a result ready with no recoverable finalization task.
@@ -1093,6 +1095,7 @@ func newProcessor(d Deps) processor {
 		artifacts:            d.Artifacts,
 		artifactRepo:         d.ArtifactRepo,
 		objects:              d.Objects,
+		providerReferences:   d.ProviderReferences,
 		providers:            d.Providers,
 		streams:              d.Streams,
 		imageModel:           d.ImageModel,
@@ -1183,25 +1186,29 @@ func referenceInputError(format string, args ...any) error {
 
 // promptParams is the subset of job params the provider request needs.
 type promptParams struct {
-	ModelName              string                    `json:"model_name,omitempty"`
-	ModelID                string                    `json:"model_id,omitempty"`
-	Prompt                 string                    `json:"prompt"`
-	NegativePrompt         string                    `json:"negative_prompt"`
-	ModelCode              string                    `json:"model_code,omitempty"`
-	Provider               domain.ProviderName       `json:"provider,omitempty"`
-	Size                   string                    `json:"size,omitempty"`
-	AspectRatio            string                    `json:"aspect_ratio,omitempty"`
-	OutputCount            int                       `json:"output_count,omitempty"`
-	Resolution             string                    `json:"resolution,omitempty"`
-	ReferenceArtifactIDs   []uuid.UUID               `json:"reference_artifact_ids,omitempty"`
-	InputURLs              []string                  `json:"input_urls,omitempty"`
-	VKPlaceholderMessageID int64                     `json:"vk_placeholder_message_id,omitempty"`
-	ConversationID         string                    `json:"conversation_id,omitempty"`
-	ConversationSource     string                    `json:"conversation_source,omitempty"`
-	ExternalThreadID       string                    `json:"external_thread_id,omitempty"`
-	DurationSec            int                       `json:"duration_sec,omitempty"`
-	VideoRouteAlias        string                    `json:"video_route_alias,omitempty"`
-	ResolvedVideoRoute     domain.VideoRouteSnapshot `json:"resolved_video_route,omitempty"`
+	VideoAudio               bool                      `json:"video_audio,omitempty"`
+	ReferenceVideoArtifactID uuid.UUID                 `json:"reference_video_artifact_id,omitempty"`
+	CharacterOrientation     string                    `json:"character_orientation,omitempty"`
+	KeepOriginalSound        *bool                     `json:"keep_original_sound,omitempty"`
+	ModelName                string                    `json:"model_name,omitempty"`
+	ModelID                  string                    `json:"model_id,omitempty"`
+	Prompt                   string                    `json:"prompt"`
+	NegativePrompt           string                    `json:"negative_prompt"`
+	ModelCode                string                    `json:"model_code,omitempty"`
+	Provider                 domain.ProviderName       `json:"provider,omitempty"`
+	Size                     string                    `json:"size,omitempty"`
+	AspectRatio              string                    `json:"aspect_ratio,omitempty"`
+	OutputCount              int                       `json:"output_count,omitempty"`
+	Resolution               string                    `json:"resolution,omitempty"`
+	ReferenceArtifactIDs     []uuid.UUID               `json:"reference_artifact_ids,omitempty"`
+	InputURLs                []string                  `json:"input_urls,omitempty"`
+	VKPlaceholderMessageID   int64                     `json:"vk_placeholder_message_id,omitempty"`
+	ConversationID           string                    `json:"conversation_id,omitempty"`
+	ConversationSource       string                    `json:"conversation_source,omitempty"`
+	ExternalThreadID         string                    `json:"external_thread_id,omitempty"`
+	DurationSec              int                       `json:"duration_sec,omitempty"`
+	VideoRouteAlias          string                    `json:"video_route_alias,omitempty"`
+	ResolvedVideoRoute       domain.VideoRouteSnapshot `json:"resolved_video_route,omitempty"`
 }
 
 func videoRouteSnapshotFromJob(job *domain.Job) (domain.VideoRouteSnapshot, bool) {
@@ -1308,6 +1315,12 @@ func (p *processor) buildRequest(ctx context.Context, job *domain.Job, attempt i
 		if routeSnapshot.Valid() {
 			modelCode = routeSnapshot.ProviderModelID
 			pp.Provider = routeSnapshot.Provider
+			pp.VideoAudio = routeSnapshot.VideoAudio
+			pp.CharacterOrientation = routeSnapshot.CharacterOrientation
+			if routeSnapshot.ReferenceVideoArtifactID != "" {
+				pp.ReferenceVideoArtifactID, _ = uuid.Parse(routeSnapshot.ReferenceVideoArtifactID)
+			}
+			pp.KeepOriginalSound = &routeSnapshot.KeepOriginalSound
 		}
 		if modelCode == "" {
 			modelCode = p.videoModel
@@ -1362,10 +1375,18 @@ func (p *processor) buildRequest(ctx context.Context, job *domain.Job, attempt i
 		}
 	}
 	providerParams := safeProviderParams(job.Params)
+	referenceVideoURL, err := p.motionReferenceURL(ctx, job, pp, modelCode, durationSec)
+	if err != nil {
+		return domain.ProviderRequest{}, err
+	}
 	if job.Modality == domain.ModalityVideo {
 		providerParams = safeVideoProviderParams(durationSec, resolution, pp.AspectRatio, draft, pp.ResolvedVideoRoute)
 	}
 	return domain.ProviderRequest{
+		VideoAudio:           pp.VideoAudio,
+		CharacterOrientation: pp.CharacterOrientation,
+		KeepOriginalSound:    pp.KeepOriginalSound == nil || *pp.KeepOriginalSound,
+		ReferenceVideoURL:    referenceVideoURL,
 		JobID:                job.ID,
 		UserID:               workerJobOwnerID(job),
 		Operation:            job.OperationType,

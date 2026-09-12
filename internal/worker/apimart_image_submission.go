@@ -13,11 +13,11 @@ import (
 )
 
 func durablePaidSubmitRoute(provider domain.ProviderName, model string) bool {
-	return providermodels.IsPaidTextRoute(provider, model) || (provider == domain.ProviderAPIMart && (model == providermodels.ProviderModelMidjourneyV7 || model == providermodels.ProviderModelFlux2Pro))
+	return providermodels.IsKlingVeoVideoRoute(provider, model) || providermodels.IsOmniVideoRoute(provider, model) || providermodels.IsPaidTextRoute(provider, model) || (provider == domain.ProviderAPIMart && (model == providermodels.ProviderModelMidjourneyV7 || model == providermodels.ProviderModelFlux2Pro))
 }
 
 func isDurablePaidSubmitJob(job *domain.Job) bool {
-	if job == nil || (job.Modality != domain.ModalityImage && job.Modality != domain.ModalityText) {
+	if job == nil || (job.Modality != domain.ModalityImage && job.Modality != domain.ModalityText && job.Modality != domain.ModalityVideo) {
 		return false
 	}
 	var params struct {
@@ -36,6 +36,9 @@ func unresolvedPaidSubmitIntent(task *domain.ProviderTask) bool {
 // A retry must never allocate another attempt key for the same Job.
 func (g *GenerationWorker) claimPaidSubmit(ctx context.Context, req *domain.ProviderRequest) (*domain.ProviderTask, error) {
 	prefix := "flux_2_pro_submit:"
+	if providermodels.IsOmniVideoRoute(req.Provider, req.ModelCode) {
+		prefix = "apimart_omni_video_submit:"
+	}
 	if req.Provider == domain.ProviderKIE {
 		prefix = "kie_text_submit:"
 	} else if providermodels.IsPaidTextRoute(req.Provider, req.ModelCode) {

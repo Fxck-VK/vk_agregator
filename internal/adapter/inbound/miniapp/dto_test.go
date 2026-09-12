@@ -2,6 +2,7 @@ package miniapp
 
 import (
 	"encoding/json"
+	"net/http/httptest"
 	"strings"
 	"testing"
 
@@ -12,25 +13,28 @@ import (
 
 func TestPublicPricingDTOsSerializeOnlyContractFields(t *testing.T) {
 	catalogFields := assertJSONAllowedKeys(t, "ModelCatalogItemDTO", ModelCatalogItemDTO{
-		Type:                   "video",
-		ID:                     "video_kling_o3_standard",
-		Alias:                  "video_kling_o3_standard",
-		Name:                   "Kling O3 Standard",
-		Description:            "Public route",
-		EstimateCredits:        100,
-		Enabled:                true,
-		QualityOptions:         []string{"1K", "2K"},
-		DefaultQuality:         "1K",
-		AllowedDurationsSec:    []int{5, 10},
-		AllowedResolutions:     []string{"720p"},
-		AllowedAspectRatios:    []string{"16:9"},
-		DefaultDurationSec:     5,
-		DefaultResolution:      "720p",
-		DefaultAspectRatio:     "16:9",
-		RequiresStartImage:     true,
-		SupportsReferenceImage: true,
-		MaxReferenceImages:     1,
+		AutomaticDuration:           true,
+		AllowedReferenceImageCounts: []int{0, 1, 3},
+		Type:                        "video",
+		ID:                          "video_kling_o3_standard",
+		Alias:                       "video_kling_o3_standard",
+		Name:                        "Kling O3 Standard",
+		Description:                 "Public route",
+		EstimateCredits:             100,
+		Enabled:                     true,
+		QualityOptions:              []string{"1K", "2K"},
+		DefaultQuality:              "1K",
+		AllowedDurationsSec:         []int{5, 10},
+		AllowedResolutions:          []string{"720p"},
+		AllowedAspectRatios:         []string{"16:9"},
+		DefaultDurationSec:          5,
+		DefaultResolution:           "720p",
+		DefaultAspectRatio:          "16:9",
+		RequiresStartImage:          true,
+		SupportsReferenceImage:      true,
+		MaxReferenceImages:          1,
 	}, map[string]bool{
+		"automatic_duration": true, "allowed_reference_image_counts": true,
 		"type": true, "id": true, "alias": true, "name": true, "description": true,
 		"estimate_credits": true, "enabled": true, "quality_options": true,
 		"default_quality": true, "allowed_durations_sec": true,
@@ -58,6 +62,31 @@ func TestPublicPricingDTOsSerializeOnlyContractFields(t *testing.T) {
 	})
 	assertJSONHasKeys(t, "EstimateDTO", estimateFields, "cost_estimate", "balance_credits", "enough_credits")
 	assertNoPrivatePricingProviderKeys(t, "EstimateDTO", estimateFields)
+}
+
+func TestOmniReferenceCountValidationAndCatalogPropagation(t *testing.T) {
+	route := VideoRouteDTO{SupportsReferenceImage: true, MaxReferenceImages: 3, AllowedReferenceImageCounts: []int{0, 1, 3}}
+	for _, count := range []int{0, 1, 2, 3, 4} {
+		ids := make([]uuid.UUID, count)
+		for i := range ids {
+			ids[i] = uuid.New()
+		}
+		w := httptest.NewRecorder()
+		if got := validateVideoReferenceCount(w, route, ids); got != (count == 0 || count == 1 || count == 3) {
+			t.Fatalf("count=%d valid=%v", count, got)
+		}
+	}
+	item := modelCatalogItemFromVideo(route)
+	if len(item.AllowedReferenceImageCounts) != 3 {
+		t.Fatal("missing EXT constraints in catalog")
+	}
+	item.AllowedReferenceImageCounts[0] = 99
+	if route.AllowedReferenceImageCounts[0] != 0 {
+		t.Fatal("catalog item mutated route")
+	}
+	if !modelCatalogItemFromVideo(VideoRouteDTO{AutomaticDuration: true}).AutomaticDuration {
+		t.Fatal("automatic duration lost in catalog")
+	}
 }
 
 func TestCreateJobRequestSerializesNoClientPricingOrProviderFields(t *testing.T) {

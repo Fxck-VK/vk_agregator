@@ -32,6 +32,8 @@ type ProviderMediaContract struct {
 	AllowedDurationsSec []int    `json:"allowed_durations_sec,omitempty"`
 	AllowedAspectRatios []string `json:"allowed_aspect_ratios,omitempty"`
 	AllowedResolutions  []string `json:"allowed_resolutions,omitempty"`
+	// Output resolutions may differ when the request selects a quality mode.
+	AllowedOutputResolutions []string `json:"allowed_output_resolutions,omitempty"`
 
 	ExpectedContainer string `json:"expected_container,omitempty"`
 	ExpectedCodec     string `json:"expected_codec,omitempty"`

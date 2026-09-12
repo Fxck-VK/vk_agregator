@@ -50,6 +50,7 @@ import (
 	"vk-ai-aggregator/internal/service/pricingcatalog"
 	"vk-ai-aggregator/internal/service/productcatalog"
 	"vk-ai-aggregator/internal/service/providermodels"
+	"vk-ai-aggregator/internal/service/providerreference"
 	"vk-ai-aggregator/internal/service/resultservice"
 	"vk-ai-aggregator/internal/worker"
 )
@@ -385,7 +386,17 @@ func main() {
 		logger.Info("using openai moderation provider")
 	}
 
+	var referenceSigner worker.ReferenceVideoSigner
+	if cfg.FeatureAPIMartKling26MotionEnabled {
+		gateway, err := providerreference.New(cfg.ProviderReferenceBaseURL, cfg.ProviderReferenceSigningKey, jobs, artRepo, store)
+		if err != nil {
+			logger.Error("provider reference gateway configuration invalid")
+			os.Exit(1)
+		}
+		referenceSigner = gateway
+	}
 	deps := worker.Deps{
+		ProviderReferences:                    referenceSigner,
 		Jobs:                                  jobs,
 		ResultReadyUOW:                        postgres.NewUnitOfWork(pool),
 		Tasks:                                 tasks,

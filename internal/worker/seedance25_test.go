@@ -24,6 +24,36 @@ import (
 )
 
 func TestSeedance25AsyncLifecycle(t *testing.T) {
+	testAPIMartVideoLifecycle(t, domain.VideoRouteSeedance25, "seedance-2.5", "480p", 5, 290)
+}
+
+func TestOmniVideoAsyncLifecycle(t *testing.T) {
+	t.Run("automatic", func(t *testing.T) {
+		testAPIMartVideoLifecycle(t, domain.VideoRouteOmni11Flash, apimart.ModelOmni11Flash, "1080p", 10, 795)
+	})
+	t.Run("EXT", func(t *testing.T) {
+		testAPIMartVideoLifecycle(t, domain.VideoRouteOmni11FlashExt, apimart.ModelOmni11FlashExt, "4k", 8, 510)
+	})
+}
+
+func TestKlingVeoAsyncLifecycle(t *testing.T) {
+	for _, tc := range []struct {
+		alias      domain.VideoRouteAlias
+		model, res string
+		duration   int
+		credits    int64
+	}{
+		{domain.VideoRouteKlingV3, apimart.ModelKlingV3, "720p", 5, 205},
+		{domain.VideoRouteVeo31Fast, apimart.ModelVeo31Fast, "4k", 8, 385},
+		{domain.VideoRouteVeo31Quality, apimart.ModelVeo31Quality, "1080p", 8, 600},
+		{domain.VideoRouteVeo31Lite, apimart.ModelVeo31Lite, "720p", 8, 45},
+	} {
+		t.Run(tc.model, func(t *testing.T) { testAPIMartVideoLifecycle(t, tc.alias, tc.model, tc.res, tc.duration, tc.credits) })
+	}
+}
+
+func testAPIMartVideoLifecycle(t *testing.T, alias domain.VideoRouteAlias, model, resolution string, duration int, credits int64) {
+	t.Helper()
 	for _, scenario := range []string{"success", "output blocked", "provider rejected", "submit indeterminate"} {
 		t.Run(scenario, func(t *testing.T) {
 			ctx := context.Background()
@@ -39,8 +69,15 @@ func TestSeedance25AsyncLifecycle(t *testing.T) {
 					if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
 						t.Error(err)
 					}
-					if body["model"] != "seedance-2.5" || body["resolution"] != "480p" || body["duration"] != float64(5) {
+					if body["model"] != model || (model != apimart.ModelKlingV3 && body["resolution"] != resolution) || (model == apimart.ModelKlingV3 && body["mode"] != "std") {
 						t.Error("worker ignored immutable route")
+					}
+					if model == apimart.ModelOmni11Flash {
+						if _, ok := body["duration"]; ok {
+							t.Error("automatic duration sent upstream")
+						}
+					} else if body["duration"] != float64(duration) {
+						t.Error("incorrect duration")
 					}
 					_, _ = w.Write([]byte(`{"code":200,"data":[{"task_id":"video-task","status":"submitted"}]}`))
 					return
@@ -70,15 +107,16 @@ func TestSeedance25AsyncLifecycle(t *testing.T) {
 			if err != nil {
 				t.Fatal(err)
 			}
-			catalog, err := productcatalog.FromConfig(config.Config{FeatureVideoRouterEnabled: true, FeatureAPIMartSeedance25Enabled: true, APIMartProviderEnabled: true, APIMartAPIKey: "test", APIMartBaseURL: srv.URL}, prices)
+			catalog, err := productcatalog.FromConfig(config.Config{FeatureVideoRouterEnabled: true, FeatureAPIMartSeedance25Enabled: true, FeatureAPIMartOmni11FlashEnabled: true, FeatureAPIMartOmni11FlashExtEnabled: true, FeatureAPIMartKlingV3Enabled: true, FeatureAPIMartVeo31FastEnabled: true, FeatureAPIMartVeo31QualityEnabled: true, FeatureAPIMartVeo31LiteEnabled: true, APIMartProviderEnabled: true, APIMartAPIKey: "test", APIMartBaseURL: srv.URL}, prices)
 			if err != nil {
 				t.Fatal(err)
 			}
-			resolved, err := catalog.VideoRouteCatalog.Resolve(ctx, videorouter.Request{Operation: domain.OperationVideoGenerate, Modality: domain.ModalityVideo, Params: []byte(`{"prompt":"Synthetic video test","video_route_alias":"video_seedance_2_5","duration_sec":5,"resolution":"480p"}`)})
+			params, _ := json.Marshal(map[string]any{"prompt": "Synthetic video test", "video_route_alias": alias, "duration_sec": duration, "resolution": resolution})
+			resolved, err := catalog.VideoRouteCatalog.Resolve(ctx, videorouter.Request{Operation: domain.OperationVideoGenerate, Modality: domain.ModalityVideo, Params: params})
 			if err != nil {
 				t.Fatal(err)
 			}
-			price, err := prices.Snapshot(pricingcatalog.ProductKey{Operation: domain.OperationVideoGenerate, Modality: domain.ModalityVideo, VideoRouteAlias: domain.VideoRouteSeedance25, Resolution: "480p", DurationSec: 5})
+			price, err := prices.Snapshot(pricingcatalog.ProductKey{Operation: domain.OperationVideoGenerate, Modality: domain.ModalityVideo, VideoRouteAlias: alias, Resolution: resolution, DurationSec: duration})
 			if err != nil {
 				t.Fatal(err)
 			}
@@ -90,11 +128,11 @@ func TestSeedance25AsyncLifecycle(t *testing.T) {
 			if err := billing.Grant(ctx, owner, 1000, "seedance-fixture-grant", "test funding"); err != nil {
 				t.Fatal(err)
 			}
-			job := &domain.Job{ID: uuid.New(), UserID: owner, AccountID: owner, Source: "web", ResultMode: domain.ResultModeAccountHistory, ChannelContext: &domain.ChannelContext{Channel: domain.ChannelWeb}, OperationType: domain.OperationVideoGenerate, Modality: domain.ModalityVideo, Status: domain.JobStatusQueued, IdempotencyKey: uuid.NewString(), CostEstimate: 290, CostReserved: 290, PricingSnapshot: raw, Params: resolved.Params}
+			job := &domain.Job{ID: uuid.New(), UserID: owner, AccountID: owner, Source: "web", ResultMode: domain.ResultModeAccountHistory, ChannelContext: &domain.ChannelContext{Channel: domain.ChannelWeb}, OperationType: domain.OperationVideoGenerate, Modality: domain.ModalityVideo, Status: domain.JobStatusQueued, IdempotencyKey: uuid.NewString(), CostEstimate: credits, CostReserved: credits, PricingSnapshot: raw, Params: resolved.Params}
 			if err := h.jobs.Create(ctx, job); err != nil {
 				t.Fatal(err)
 			}
-			if _, err := billing.Reserve(ctx, owner, job.ID, 290); err != nil {
+			if _, err := billing.Reserve(ctx, owner, job.ID, credits); err != nil {
 				t.Fatal(err)
 			}
 			for i := 0; i < 2; i++ {
@@ -153,7 +191,7 @@ func TestSeedance25AsyncLifecycle(t *testing.T) {
 			}
 			job = h.reload(t, job.ID)
 			account, err := ledger.GetAccountByUser(ctx, owner, domain.CurrencyCredits)
-			if err != nil || job.Status != domain.JobStatusSucceeded || job.CostCaptured != 290 || account.BalanceCached != billingservice.DefaultStartingBalance+1000-290 {
+			if err != nil || job.Status != domain.JobStatusSucceeded || job.CostCaptured != credits || account.BalanceCached != billingservice.DefaultStartingBalance+1000-credits {
 				t.Fatal("incorrect final capture or replay changed balance")
 			}
 		})

@@ -323,16 +323,18 @@ type jobParams struct {
 }
 
 type videoModeSpec struct {
-	Mode                   dialogMode
-	ModelName              string
-	VideoRouteAlias        domain.VideoRouteAlias
-	DurationSec            int
-	AllowedDurationsSec    []int
-	Resolution             string
-	RequiresStartImage     bool
-	SupportsReferenceImage bool
-	MaxReferenceImages     int
-	AllowedAspectRatios    []string
+	AutomaticDuration           bool
+	AllowedReferenceImageCounts []int
+	Mode                        dialogMode
+	ModelName                   string
+	VideoRouteAlias             domain.VideoRouteAlias
+	DurationSec                 int
+	AllowedDurationsSec         []int
+	Resolution                  string
+	RequiresStartImage          bool
+	SupportsReferenceImage      bool
+	MaxReferenceImages          int
+	AllowedAspectRatios         []string
 }
 
 func videoModeForCommand(t domain.CommandType) (videoModeSpec, bool) {
@@ -403,6 +405,9 @@ func videoModeFromDialogMode(mode dialogMode) (videoModeSpec, bool) {
 }
 
 func videoModeFromPublicRoute(route productcatalog.VideoRoute) (videoModeSpec, bool) {
+	if route.RequiresReferenceVideo {
+		return videoModeSpec{}, false
+	}
 	alias := strings.TrimSpace(route.Alias)
 	name := strings.TrimSpace(route.Name)
 	if alias == "" || name == "" || !route.Enabled {
@@ -413,16 +418,18 @@ func videoModeFromPublicRoute(route productcatalog.VideoRoute) (videoModeSpec, b
 		durationSec = route.AllowedDurationsSec[0]
 	}
 	spec := videoModeSpec{
-		Mode:                   videoRouteDialogMode(alias),
-		ModelName:              name,
-		VideoRouteAlias:        domain.VideoRouteAlias(alias),
-		DurationSec:            durationSec,
-		AllowedDurationsSec:    append([]int(nil), route.AllowedDurationsSec...),
-		Resolution:             strings.TrimSpace(route.DefaultResolution),
-		RequiresStartImage:     route.RequiresStartImage,
-		SupportsReferenceImage: route.SupportsReferenceImage,
-		MaxReferenceImages:     route.MaxReferenceImages,
-		AllowedAspectRatios:    append([]string(nil), route.AllowedAspectRatios...),
+		AutomaticDuration:           route.AutomaticDuration,
+		AllowedReferenceImageCounts: append([]int(nil), route.AllowedReferenceImageCounts...),
+		Mode:                        videoRouteDialogMode(alias),
+		ModelName:                   name,
+		VideoRouteAlias:             domain.VideoRouteAlias(alias),
+		DurationSec:                 durationSec,
+		AllowedDurationsSec:         append([]int(nil), route.AllowedDurationsSec...),
+		Resolution:                  strings.TrimSpace(route.DefaultResolution),
+		RequiresStartImage:          route.RequiresStartImage,
+		SupportsReferenceImage:      route.SupportsReferenceImage,
+		MaxReferenceImages:          route.MaxReferenceImages,
+		AllowedAspectRatios:         append([]string(nil), route.AllowedAspectRatios...),
 	}
 	if !spec.supportsDuration(spec.DurationSec) {
 		return videoModeSpec{}, false
@@ -1320,7 +1327,7 @@ func (h *Handler) sendVideoDurationSelection(ctx context.Context, routeAlias, id
 		return h.sendControlResponse(ctx, domain.CommandMenuVideo, idemKey, 0, peerID, &domain.User{}, allowEdit)
 	}
 	h.setDialogMode(ctx, peerID, spec.Mode)
-	if len(spec.AllowedDurationsSec) == 0 {
+	if spec.AutomaticDuration || len(spec.AllowedDurationsSec) == 0 {
 		return h.sendVideoPromptInstruction(ctx, spec, idemKey, command, peerID, allowEdit)
 	}
 	msg := vkdelivery.Message{
@@ -1386,7 +1393,11 @@ func videoDurationSelectionText(spec videoModeSpec) string {
 
 func (h *Handler) videoPromptInstructionText(spec videoModeSpec) string {
 	var b strings.Builder
-	b.WriteString(fmt.Sprintf("%s · %d сек", spec.ModelName, spec.DurationSec))
+	if spec.AutomaticDuration {
+		b.WriteString(spec.ModelName + " · автоматически 3–10 секунд")
+	} else {
+		b.WriteString(fmt.Sprintf("%s · %d сек", spec.ModelName, spec.DurationSec))
+	}
 	if price, ok := h.videoDisplayEstimateCredits(spec); ok {
 		b.WriteString(fmt.Sprintf("\n\nЦена: %d ⭐️", price))
 	}
@@ -1396,6 +1407,15 @@ func (h *Handler) videoPromptInstructionText(spec videoModeSpec) string {
 		b.WriteString("\n\nНапишите описание видео обычным сообщением")
 		if spec.SupportsReferenceImage {
 			b.WriteString("\nФото-референс можно прикрепить к этому же сообщению")
+		}
+	}
+	if len(spec.AllowedReferenceImageCounts) > 0 {
+		b.WriteString("\nДопустимое количество фото: ")
+		for i, count := range spec.AllowedReferenceImageCounts {
+			if i > 0 {
+				b.WriteString(", ")
+			}
+			b.WriteString(strconv.Itoa(count))
 		}
 	}
 	return b.String()

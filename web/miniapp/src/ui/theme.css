@@ -2778,12 +2778,30 @@ body {
   max-width: 100%;
 }
 
-.create-dropzone__preview img {
+.create-dropzone__preview img,
+.create-dropzone__preview video {
   max-height: 140px;
   max-width: 100%;
   border-radius: 12px;
   object-fit: cover;
   display: block;
+}
+
+.create-toggle {
+  min-height: 40px;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-bottom: 14px;
+  color: var(--fg);
+  font-size: 13px;
+  font-weight: 700;
+}
+
+.create-toggle input {
+  width: 18px;
+  height: 18px;
+  accent-color: var(--brand-purple);
 }
 
 .create-dropzone__remove {

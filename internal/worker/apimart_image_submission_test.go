@@ -6,6 +6,7 @@ import (
 	"errors"
 	"net/http"
 	"net/http/httptest"
+	"strings"
 	"sync/atomic"
 	"testing"
 	"time"
@@ -15,6 +16,7 @@ import (
 	"vk-ai-aggregator/internal/adapter/storage/memory"
 	"vk-ai-aggregator/internal/domain"
 	"vk-ai-aggregator/internal/service/billingservice"
+	"vk-ai-aggregator/internal/service/providermodels"
 	"vk-ai-aggregator/internal/worker"
 )
 
@@ -54,6 +56,20 @@ func TestFlux2PersistsSubmitIntentBeforeNetworkAndSurvivesRestart(t *testing.T) 
 	testAPIMartImageSubmitRestart(t, "flux_2_pro", "flux-2-pro", "4MP", "/v1/images/generations", 40)
 }
 
+func TestOmniVideoPersistsSubmitIntentBeforeNetworkAndSurvivesRestart(t *testing.T) {
+	for _, model := range []string{apimart.ModelOmni11Flash, apimart.ModelOmni11FlashExt} {
+		t.Run(model, func(t *testing.T) {
+			testAPIMartImageSubmitRestart(t, "", model, "360p", "/v1/videos/generations", 180)
+		})
+	}
+}
+
+func TestKlingVeoSubmitSurvivesRestart(t *testing.T) {
+	for _, model := range []string{apimart.ModelKlingV3, apimart.ModelVeo31Fast, apimart.ModelVeo31Quality, apimart.ModelVeo31Lite} {
+		t.Run(model, func(t *testing.T) { testAPIMartImageSubmitRestart(t, "", model, "720p", "/v1/videos/generations", 600) })
+	}
+}
+
 func testAPIMartImageSubmitRestart(t *testing.T, publicModel, providerModel, resolution, endpoint string, credits int64) {
 	t.Helper()
 	for _, rejectCreate := range []bool{true, false} {
@@ -74,6 +90,11 @@ func testAPIMartImageSubmitRestart(t *testing.T, publicModel, providerModel, res
 			var deps worker.Deps
 			var tasks *interruptedAPIMartImageTasks
 			h := newHarnessWithProvider(t, apimart.New(cfg), func(d *worker.Deps) {
+				d.ProviderMediaContracts = providermodels.StaticRegistry().ProviderMediaContracts(providermodels.MediaContractRuntime{})
+				if strings.HasPrefix(providerModel, "gemini-omni-") || providermodels.IsKlingVeoVideoRoute(domain.ProviderAPIMart, providerModel) {
+					// This recovery fixture has no route snapshot, so the worker uses its runtime resolution.
+					d.VideoResolution = resolution
+				}
 				tasks = &interruptedAPIMartImageTasks{ProviderTaskRepository: d.Tasks, rejectCreate: rejectCreate}
 				d.Tasks = tasks
 				d.Releaser = billing
@@ -82,6 +103,18 @@ func testAPIMartImageSubmitRestart(t *testing.T, publicModel, providerModel, res
 			owner := uuid.New()
 			params, _ := json.Marshal(map[string]any{"prompt": "Synthetic scene", "provider": domain.ProviderAPIMart, "model_code": providerModel, "model_id": publicModel, "resolution": resolution, "image_quality": resolution, "aspect_ratio": "16:9", "output_count": 1})
 			job := &domain.Job{ID: uuid.New(), AccountID: owner, UserID: owner, Source: "web", ResultMode: domain.ResultModeAccountHistory, ChannelContext: &domain.ChannelContext{Channel: domain.ChannelWeb}, OperationType: domain.OperationImageGenerate, Modality: domain.ModalityImage, Status: domain.JobStatusQueued, IdempotencyKey: uuid.NewString(), CostEstimate: credits, CostReserved: credits, Params: params}
+			if strings.HasPrefix(providerModel, "gemini-omni-") || providermodels.IsKlingVeoVideoRoute(domain.ProviderAPIMart, providerModel) {
+				job.OperationType, job.Modality = domain.OperationVideoGenerate, domain.ModalityVideo
+				job.Params, _ = json.Marshal(map[string]any{"prompt": "Synthetic scene", "provider": domain.ProviderAPIMart, "model_code": providerModel, "resolution": resolution, "aspect_ratio": "16:9", "duration_sec": func() int {
+					if strings.HasPrefix(providerModel, "veo3.1-") {
+						return 8
+					}
+					return 10
+				}()})
+			}
+			if err := billing.Grant(ctx, owner, credits, "restart-test-funding", "test funding"); err != nil {
+				t.Fatal(err)
+			}
 			if err := h.jobs.Create(ctx, job); err != nil {
 				t.Fatal(err)
 			}
@@ -89,7 +122,8 @@ func testAPIMartImageSubmitRestart(t *testing.T, publicModel, providerModel, res
 				t.Fatal(err)
 			}
 			if err := h.gen.Process(ctx, taskFor(job)); err == nil {
-				t.Fatal("expected persistence interruption")
+				after := h.reload(t, job.ID)
+				t.Fatalf("expected persistence interruption: calls=%d status=%s class=%s message=%s", calls.Load(), after.Status, after.ErrorCode, after.ErrorMessage)
 			}
 			if rejectCreate {
 				if calls.Load() != 0 {
@@ -126,7 +160,7 @@ func testAPIMartImageSubmitRestart(t *testing.T, publicModel, providerModel, res
 			}
 			after := h.reload(t, job.ID)
 			account, err := billingRepo.GetAccountByUser(ctx, owner, domain.CurrencyCredits)
-			if calls.Load() != 1 || err != nil || after.Status != domain.JobStatusFailedTerminal || after.CostCaptured != 0 || account.BalanceCached != billingservice.DefaultStartingBalance {
+			if calls.Load() != 1 || err != nil || after.Status != domain.JobStatusFailedTerminal || after.CostCaptured != 0 || account.BalanceCached != billingservice.DefaultStartingBalance+credits {
 				t.Fatal("restart repeated or charged ambiguous submission")
 			}
 		})

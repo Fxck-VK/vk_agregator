@@ -17,6 +17,7 @@ import (
 	"github.com/joho/godotenv"
 
 	"vk-ai-aggregator/internal/domain"
+	"vk-ai-aggregator/internal/service/providerreference"
 )
 
 const (
@@ -118,6 +119,10 @@ type Config struct {
 	// S3AddressingStyle controls bucket addressing for S3-compatible storage:
 	// path, virtual-hosted or auto.
 	S3AddressingStyle string
+	// ProviderReference* exposes short-lived signed private media URLs to
+	// upstream providers for routes that need owner-bound input video.
+	ProviderReferenceBaseURL    string
+	ProviderReferenceSigningKey string
 
 	VKConfirmationToken string
 	VKSecret            string
@@ -308,23 +313,31 @@ type Config struct {
 	DeepInfraBalanceProviderEnabled bool
 	DeepInfraBalanceBaseURL         string
 
-	FeatureImageModelNanoBananaProEnabled       bool
-	FeatureImageModelGPTImage2Enabled           bool
-	FeatureAPIMartQwenImage3Enabled             bool
-	FeatureAPIMartMidjourneyV7Enabled           bool
-	FeatureAPIMartFlux2ProEnabled               bool
-	FeatureAPIMartGrokImage15Enabled            bool
-	FeatureAPIMartGrokImage20Enabled            bool
-	FeatureImageModelNanoBanana2Enabled         bool
-	FeatureImageModelSeedream45Enabled          bool
-	FeatureImageModelMockEnabled                bool
-	FeatureVideoRouterEnabled                   bool
-	FeatureVideoRouteHailuo23FastEnabled        bool
-	FeatureVideoRouteHailuo23StandardEnabled    bool
-	FeatureVideoRouteKlingO3StandardEnabled     bool
-	FeatureVideoRouteRunwayGen4TurboEnabled     bool
-	FeatureVideoRouteSeedance20FastEnabled      bool
-	FeatureAPIMartSeedance25Enabled             bool
+	FeatureImageModelNanoBananaProEnabled    bool
+	FeatureImageModelGPTImage2Enabled        bool
+	FeatureAPIMartQwenImage3Enabled          bool
+	FeatureAPIMartMidjourneyV7Enabled        bool
+	FeatureAPIMartFlux2ProEnabled            bool
+	FeatureAPIMartGrokImage15Enabled         bool
+	FeatureAPIMartGrokImage20Enabled         bool
+	FeatureImageModelNanoBanana2Enabled      bool
+	FeatureImageModelSeedream45Enabled       bool
+	FeatureImageModelMockEnabled             bool
+	FeatureVideoRouterEnabled                bool
+	FeatureVideoRouteHailuo23FastEnabled     bool
+	FeatureVideoRouteHailuo23StandardEnabled bool
+	FeatureVideoRouteKlingO3StandardEnabled  bool
+	FeatureVideoRouteRunwayGen4TurboEnabled  bool
+	FeatureVideoRouteSeedance20FastEnabled   bool
+	FeatureAPIMartSeedance25Enabled          bool
+	FeatureAPIMartOmni11FlashEnabled         bool
+	FeatureAPIMartOmni11FlashExtEnabled      bool
+	FeatureAPIMartKlingV3Enabled             bool
+	FeatureAPIMartKling26MotionEnabled       bool
+	FeatureAPIMartVeo31FastEnabled           bool
+	FeatureAPIMartVeo31QualityEnabled        bool
+	FeatureAPIMartVeo31LiteEnabled           bool
+
 	FeatureVideoRouteRunwayGen45Enabled         bool
 	FeatureVideoRouteMockTextToVideoEnabled     bool
 	FeatureVideoRouteResellerExperimentsEnabled bool
@@ -783,6 +796,9 @@ func (c Config) Validate() error {
 	if err := c.validateVideoRouteProviderConfig(); err != nil {
 		return err
 	}
+	if err := c.validateProviderReferenceConfig(); err != nil {
+		return err
+	}
 	if err := validateIPOrCIDRList("YOOKASSA_WEBHOOK_IP_ALLOWLIST", c.YooKassaWebhookIPAllowlist); err != nil {
 		return err
 	}
@@ -1222,7 +1238,9 @@ func Load() Config {
 		// path is the safest default for local MinIO and most S3-compatible
 		// providers. Set virtual-hosted or auto only when the provider DNS/TLS
 		// setup supports bucket hostnames.
-		S3AddressingStyle: envConfigToken("S3_ADDRESSING_STYLE", "path"),
+		S3AddressingStyle:           envConfigToken("S3_ADDRESSING_STYLE", "path"),
+		ProviderReferenceBaseURL:    env("PROVIDER_REFERENCE_BASE_URL", ""),
+		ProviderReferenceSigningKey: env("PROVIDER_REFERENCE_SIGNING_KEY", ""),
 
 		VKConfirmationToken: env("VK_CONFIRMATION_TOKEN", "dev-confirmation"),
 		VKSecret:            env("VK_SECRET", ""),
@@ -1397,9 +1415,17 @@ func Load() Config {
 			"FEATURE_VIDEO_ROUTE_KLING_O3_STANDARD_ENABLED",
 			envBool("FEATURE_VIDEO_ROUTE_KLING_O3_ENABLED", false),
 		),
-		FeatureVideoRouteRunwayGen4TurboEnabled:     envBool("FEATURE_VIDEO_ROUTE_RUNWAY_GEN4_TURBO_ENABLED", false),
-		FeatureVideoRouteSeedance20FastEnabled:      envBool("FEATURE_VIDEO_ROUTE_SEEDANCE_2_0_FAST_ENABLED", false),
-		FeatureAPIMartSeedance25Enabled:             envBool("FEATURE_APIMART_SEEDANCE_2_5_ENABLED", false),
+		FeatureVideoRouteRunwayGen4TurboEnabled: envBool("FEATURE_VIDEO_ROUTE_RUNWAY_GEN4_TURBO_ENABLED", false),
+		FeatureVideoRouteSeedance20FastEnabled:  envBool("FEATURE_VIDEO_ROUTE_SEEDANCE_2_0_FAST_ENABLED", false),
+		FeatureAPIMartSeedance25Enabled:         envBool("FEATURE_APIMART_SEEDANCE_2_5_ENABLED", false),
+		FeatureAPIMartOmni11FlashEnabled:        envBool("FEATURE_APIMART_OMNI_1_1_FLASH_ENABLED", false),
+		FeatureAPIMartOmni11FlashExtEnabled:     envBool("FEATURE_APIMART_OMNI_1_1_FLASH_EXT_ENABLED", false),
+		FeatureAPIMartKlingV3Enabled:            envBool("FEATURE_APIMART_KLING_V3_ENABLED", false),
+		FeatureAPIMartKling26MotionEnabled:      envBool("FEATURE_APIMART_KLING_2_6_MOTION_CONTROL_ENABLED", false),
+		FeatureAPIMartVeo31FastEnabled:          envBool("FEATURE_APIMART_VEO_3_1_FAST_ENABLED", false),
+		FeatureAPIMartVeo31QualityEnabled:       envBool("FEATURE_APIMART_VEO_3_1_QUALITY_ENABLED", false),
+		FeatureAPIMartVeo31LiteEnabled:          envBool("FEATURE_APIMART_VEO_3_1_LITE_ENABLED", false),
+
 		FeatureVideoRouteRunwayGen45Enabled:         envBool("FEATURE_VIDEO_ROUTE_RUNWAY_GEN4_5_ENABLED", false),
 		FeatureVideoRouteMockTextToVideoEnabled:     envBool("FEATURE_VIDEO_ROUTE_MOCK_TEXT_TO_VIDEO_ENABLED", false),
 		FeatureVideoRouteResellerExperimentsEnabled: envBool("FEATURE_VIDEO_ROUTE_RESELLER_EXPERIMENTS_ENABLED", false),
@@ -1908,6 +1934,26 @@ func (c Config) validateVideoRouteProviderConfig() error {
 			baseURLEnv:        "APIMART_BASE_URL",
 		},
 		{
+			enabled:           c.FeatureAPIMartOmni11FlashEnabled,
+			routeEnv:          "FEATURE_APIMART_OMNI_1_1_FLASH_ENABLED",
+			providerEnabled:   c.APIMartProviderEnabled,
+			providerSwitchEnv: "APIMART_PROVIDER_ENABLED",
+			requiredValue:     c.APIMartAPIKey,
+			requiredEnv:       "APIMART_API_KEY",
+			baseURL:           c.APIMartBaseURL,
+			baseURLEnv:        "APIMART_BASE_URL",
+		},
+		{
+			enabled:           c.FeatureAPIMartOmni11FlashExtEnabled,
+			routeEnv:          "FEATURE_APIMART_OMNI_1_1_FLASH_EXT_ENABLED",
+			providerEnabled:   c.APIMartProviderEnabled,
+			providerSwitchEnv: "APIMART_PROVIDER_ENABLED",
+			requiredValue:     c.APIMartAPIKey,
+			requiredEnv:       "APIMART_API_KEY",
+			baseURL:           c.APIMartBaseURL,
+			baseURLEnv:        "APIMART_BASE_URL",
+		},
+		{
 			enabled:           c.FeatureVideoRouteRunwayGen45Enabled,
 			routeEnv:          "FEATURE_VIDEO_ROUTE_RUNWAY_GEN4_5_ENABLED",
 			providerEnabled:   c.PoYoProviderEnabled,
@@ -1917,6 +1963,20 @@ func (c Config) validateVideoRouteProviderConfig() error {
 			baseURL:           c.PoYoBaseURL,
 			baseURLEnv:        "POYO_BASE_URL",
 		},
+	}
+	for _, feature := range []struct {
+		enabled bool
+		name    string
+	}{
+		{c.FeatureAPIMartKlingV3Enabled, "FEATURE_APIMART_KLING_V3_ENABLED"},
+		{c.FeatureAPIMartKling26MotionEnabled, "FEATURE_APIMART_KLING_2_6_MOTION_CONTROL_ENABLED"},
+		{c.FeatureAPIMartVeo31FastEnabled, "FEATURE_APIMART_VEO_3_1_FAST_ENABLED"},
+		{c.FeatureAPIMartVeo31QualityEnabled, "FEATURE_APIMART_VEO_3_1_QUALITY_ENABLED"},
+		{c.FeatureAPIMartVeo31LiteEnabled, "FEATURE_APIMART_VEO_3_1_LITE_ENABLED"},
+	} {
+		if feature.enabled && (!c.FeatureVideoRouterEnabled || !c.APIMartProviderEnabled || strings.TrimSpace(c.APIMartAPIKey) == "" || strings.TrimSpace(c.APIMartBaseURL) == "") {
+			return fmt.Errorf("config: %s requires video router and configured APIMart provider", feature.name)
+		}
 	}
 	for _, route := range routes {
 		if !route.enabled {
@@ -1948,6 +2008,25 @@ func (c Config) validateVideoRouteProviderConfig() error {
 	}
 	if c.FeatureVideoRouteResellerExperimentsEnabled && !c.FeatureVideoRouterEnabled {
 		return fmt.Errorf("config: FEATURE_VIDEO_ROUTE_RESELLER_EXPERIMENTS_ENABLED=true requires FEATURE_VIDEO_ROUTER_ENABLED=true")
+	}
+	return nil
+}
+
+func (c Config) validateProviderReferenceConfig() error {
+	if !c.FeatureAPIMartKling26MotionEnabled {
+		return nil
+	}
+	if strings.TrimSpace(c.ProviderReferenceBaseURL) == "" {
+		return fmt.Errorf("config: FEATURE_APIMART_KLING_2_6_MOTION_CONTROL_ENABLED=true requires PROVIDER_REFERENCE_BASE_URL")
+	}
+	if strings.TrimSpace(c.ProviderReferenceSigningKey) == "" {
+		return fmt.Errorf("config: FEATURE_APIMART_KLING_2_6_MOTION_CONTROL_ENABLED=true requires PROVIDER_REFERENCE_SIGNING_KEY")
+	}
+	if len([]byte(c.ProviderReferenceSigningKey)) < providerreference.MinSecretLength {
+		return fmt.Errorf("config: FEATURE_APIMART_KLING_2_6_MOTION_CONTROL_ENABLED=true requires PROVIDER_REFERENCE_SIGNING_KEY with at least %d bytes", providerreference.MinSecretLength)
+	}
+	if err := providerreference.ValidateConfig(c.ProviderReferenceBaseURL, c.ProviderReferenceSigningKey); err != nil {
+		return fmt.Errorf("config: FEATURE_APIMART_KLING_2_6_MOTION_CONTROL_ENABLED=true requires valid PROVIDER_REFERENCE_BASE_URL")
 	}
 	return nil
 }

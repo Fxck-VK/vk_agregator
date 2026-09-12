@@ -3,7 +3,7 @@ package pricingcatalog
 import "vk-ai-aggregator/internal/domain"
 
 const (
-	StaticCatalogVersion = 11
+	StaticCatalogVersion = 13
 
 	PublicImageNanoBanana2   = "nano_banana_2"
 	PublicImageNanoBananaPro = "nano_banana_pro"
@@ -136,6 +136,8 @@ func StaticProductPrices() []ProductPrice {
 			prices = append(prices, videoTariff(domain.VideoRouteSeedance25, resolution, duration, floor, FloorUnitAPIMartCredits, apimartCreditToInternal, retail))
 		}
 	}
+	prices = append(prices, omniVideoTariffs()...)
+	prices = append(prices, klingVeoTariffs()...)
 	return append(prices, textTariffs()...)
 }
 

@@ -47,6 +47,10 @@ type SubmitRequest = {
   referenceArtifactIds?: string[];
   durationSec?: number;
   videoResolution?: string;
+  videoAudio?: boolean;
+  referenceVideoArtifactId?: string;
+  characterOrientation?: "image" | "video";
+  keepOriginalSound?: boolean;
 };
 
 function tabTitle(tab: AppTab): { name: string; sub: string } {
@@ -429,6 +433,13 @@ export function ChatScreen({ user }: { user: VkUser }) {
                   ? request.durationSec
                   : undefined,
               video_resolution: operation === "video_generate" ? request?.videoResolution : undefined,
+              video_audio: operation === "video_generate" ? request?.videoAudio : undefined,
+              reference_video_artifact_id:
+                operation === "video_generate" ? request?.referenceVideoArtifactId : undefined,
+              character_orientation:
+                operation === "video_generate" ? request?.characterOrientation : undefined,
+              keep_original_sound:
+                operation === "video_generate" ? request?.keepOriginalSound : undefined,
             },
             { idempotencyKey },
           );

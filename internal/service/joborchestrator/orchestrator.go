@@ -26,6 +26,7 @@ import (
 	"vk-ai-aggregator/internal/platform/uow"
 	"vk-ai-aggregator/internal/service/outboxrelay"
 	"vk-ai-aggregator/internal/service/pricingcatalog"
+	"vk-ai-aggregator/internal/service/videoreference"
 )
 
 // ErrBackendPriceRequired means a paid non-text job reached the orchestrator
@@ -1155,6 +1156,10 @@ func equalUUIDs(left, right []uuid.UUID) bool {
 }
 
 func (o *Orchestrator) validateInputArtifacts(ctx context.Context, in CreateJobInput) error {
+	motionID, motionDuration, motionMax, err := motionInputPolicy(in)
+	if err != nil {
+		return err
+	}
 	if len(in.InputArtifactIDs) == 0 {
 		return nil
 	}
@@ -1178,7 +1183,12 @@ func (o *Orchestrator) validateInputArtifacts(ctx context.Context, in CreateJobI
 		if artifact.Kind != domain.ArtifactKindInput {
 			return fmt.Errorf("%w: kind %s", ErrInvalidInputArtifact, artifact.Kind)
 		}
-		if artifact.MediaType != domain.MediaTypeImage {
+		if id == motionID {
+			duration, err := videoreference.Validate(artifact, ownerAccountID(in.UserID, in.AccountID), motionMax)
+			if err != nil || duration != motionDuration {
+				return fmt.Errorf("%w: invalid motion reference", ErrInvalidInputArtifact)
+			}
+		} else if artifact.MediaType != domain.MediaTypeImage {
 			return fmt.Errorf("%w: media %s", ErrInvalidInputArtifact, artifact.MediaType)
 		}
 		if artifact.Status != domain.ArtifactStatusReady {

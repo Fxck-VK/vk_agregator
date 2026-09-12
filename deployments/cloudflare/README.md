@@ -31,6 +31,13 @@ https://neiirohub.ru/billing/webhooks/yookassa
 Do not route broad `/billing/*`, `/admin/*`, `/metrics`, `/debug/*` or private
 health/readiness endpoints publicly.
 
+The Mini App host also routes `/provider-references/*` to `cmd/api` for
+HMAC-signed, one-hour, job-bound video reads. The private object store stays
+unexposed. Use `https://dev-app.neiirohub.ru` for DEV
+`PROVIDER_REFERENCE_BASE_URL`; production requires its own signing key and host.
+Unsigned/expired reads must return 403. Proxy access logs are disabled on this
+path; query tokens must never be logged.
+
 ## Development Tunnel Route Map
 
 For an isolated local VK dev community, use the existing DEV dashboard-managed

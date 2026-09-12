@@ -263,6 +263,20 @@ func featureFlagValue(cfg config.Config, flag string) (bool, bool) {
 		return cfg.FeatureVideoRouteSeedance20FastEnabled, true
 	case providermodels.FeatureVideoSeedance25:
 		return cfg.FeatureAPIMartSeedance25Enabled, true
+	case providermodels.FeatureVideoKlingV3:
+		return cfg.FeatureAPIMartKlingV3Enabled, true
+	case providermodels.FeatureVideoKling26Motion:
+		return cfg.FeatureAPIMartKling26MotionEnabled, true
+	case providermodels.FeatureVideoVeo31Fast:
+		return cfg.FeatureAPIMartVeo31FastEnabled, true
+	case providermodels.FeatureVideoVeo31Quality:
+		return cfg.FeatureAPIMartVeo31QualityEnabled, true
+	case providermodels.FeatureVideoVeo31Lite:
+		return cfg.FeatureAPIMartVeo31LiteEnabled, true
+	case providermodels.FeatureVideoOmni11Flash:
+		return cfg.FeatureAPIMartOmni11FlashEnabled, true
+	case providermodels.FeatureVideoOmni11FlashExt:
+		return cfg.FeatureAPIMartOmni11FlashExtEnabled, true
 	case providermodels.FeatureVideoRunwayGen45:
 		return cfg.FeatureVideoRouteRunwayGen45Enabled, true
 	case providermodels.FeatureVideoMockTextToVideo:

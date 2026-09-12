@@ -22,12 +22,17 @@ func (r Registry) ProviderMediaContracts(runtime MediaContractRuntime) []domain.
 	routes := r.VideoRoutes()
 	contracts := make([]domain.ProviderMediaContract, 0, len(routes))
 	for _, route := range routes {
+		durations := append([]int(nil), route.Spec.AllowedDurationsSec...)
+		if route.Spec.AutomaticDuration {
+			// The request duration selects a fixed tariff; Omni chooses the output length.
+			durations = []int{3, 4, 5, 6, 7, 8, 9, 10}
+		}
 		contracts = append(contracts, domain.ProviderMediaContract{
 			Provider:                     route.Provider,
 			Model:                        route.ProviderModelID,
 			ModelClass:                   route.ModelClass,
 			Modality:                     route.MediaContract.Modality,
-			AllowedDurationsSec:          append([]int(nil), route.Spec.AllowedDurationsSec...),
+			AllowedDurationsSec:          durations,
 			AllowedAspectRatios:          append([]string(nil), route.Spec.AllowedAspectRatios...),
 			AllowedResolutions:           append([]string(nil), route.Spec.AllowedResolutions...),
 			ExpectedContainer:            route.MediaContract.ExpectedContainer,
@@ -42,6 +47,10 @@ func (r Registry) ProviderMediaContracts(runtime MediaContractRuntime) []domain.
 			MaxFallbackAttempts:          0,
 			MaxProviderCostCredits:       route.Spec.MaxProviderCostCredits,
 		})
+		if route.Spec.RequiresReferenceVideo {
+			contracts[len(contracts)-1].AllowedOutputResolutions = []string{"4k"}
+			contracts[len(contracts)-1].AllowedAspectRatios = nil
+		}
 	}
 	return contracts
 }

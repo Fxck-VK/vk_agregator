@@ -100,6 +100,13 @@ func (p *Provider) Capabilities(ctx context.Context) ([]domain.Capability, error
 		return nil, err
 	}
 	return append(textCaps, []domain.Capability{
+		{Operation: domain.OperationVideoGenerate, Modality: domain.ModalityVideo, ModelCode: ModelKlingV3, SupportsPolling: true, MaxDurationSec: 15},
+		{Operation: domain.OperationVideoGenerate, Modality: domain.ModalityVideo, ModelCode: ModelKling26Motion, SupportsPolling: true, MaxDurationSec: 30},
+		{Operation: domain.OperationVideoGenerate, Modality: domain.ModalityVideo, ModelCode: ModelVeo31Fast, SupportsPolling: true, MaxDurationSec: 8},
+		{Operation: domain.OperationVideoGenerate, Modality: domain.ModalityVideo, ModelCode: ModelVeo31Quality, SupportsPolling: true, MaxDurationSec: 8},
+		{Operation: domain.OperationVideoGenerate, Modality: domain.ModalityVideo, ModelCode: ModelVeo31Lite, SupportsPolling: true, MaxDurationSec: 8},
+		{Operation: domain.OperationVideoGenerate, Modality: domain.ModalityVideo, ModelCode: ModelOmni11Flash, SupportsPolling: true, MaxDurationSec: 10},
+		{Operation: domain.OperationVideoGenerate, Modality: domain.ModalityVideo, ModelCode: ModelOmni11FlashExt, SupportsPolling: true, MaxDurationSec: 10},
 		{Operation: domain.OperationImageGenerate, Modality: domain.ModalityImage, ModelCode: ModelMidjourneyV7, SupportsPolling: true},
 		{Operation: domain.OperationImageGenerate, Modality: domain.ModalityImage, ModelCode: ModelFlux2Pro, SupportsPolling: true},
 		{Operation: domain.OperationVideoGenerate, Modality: domain.ModalityVideo, ModelCode: ModelSeedance25, SupportsPolling: true, MaxDurationSec: 30},
@@ -144,6 +151,17 @@ func (p *Provider) Capabilities(ctx context.Context) ([]domain.Capability, error
 // and telemetry. User billing must use pricingcatalog snapshots, never adapter
 // estimates.
 func (p *Provider) Estimate(ctx context.Context, req domain.ProviderRequest) (domain.CostEstimate, error) {
+	if isKlingVeoVideo(req.ModelCode) {
+		if err := validateKlingVeoVideo(req, false); err != nil {
+			return domain.CostEstimate{}, err
+		}
+		return domain.CostEstimate{AmountCredits: klingVeoVideoCostCredits(req), Currency: "credits", Estimated: true}, nil
+	}
+	if isOmniVideo(req.ModelCode) {
+		if err := validateOmniVideo(req, false); err != nil {
+			return domain.CostEstimate{}, err
+		}
+	}
 	if req.Operation == domain.OperationTextGenerate || req.Modality == domain.ModalityText {
 		return p.text.Estimate(ctx, req)
 	}
@@ -177,7 +195,10 @@ func (p *Provider) Estimate(ctx context.Context, req domain.ProviderRequest) (do
 		if snapshot.ProviderCostCredits <= 0 {
 			return domain.CostEstimate{}, &Error{Class: domain.ProviderErrInvalidRequest, Message: "resolved route snapshot provider cost is unavailable"}
 		}
-		return domain.CostEstimate{AmountCredits: snapshot.ProviderCostCredits, Currency: "credits", Estimated: strings.TrimSpace(req.ModelCode) == ModelSeedance25}, nil
+		return domain.CostEstimate{AmountCredits: snapshot.ProviderCostCredits, Currency: "credits", Estimated: strings.TrimSpace(req.ModelCode) == ModelSeedance25 || isOmniVideo(req.ModelCode)}, nil
+	}
+	if isOmniVideo(req.ModelCode) {
+		return domain.CostEstimate{AmountCredits: omniVideoCostCredits(req), Currency: "credits", Estimated: true}, nil
 	}
 	if strings.TrimSpace(req.ModelCode) == ModelSeedance25 {
 		return domain.CostEstimate{AmountCredits: seedance25CostCredits(req), Currency: "credits", Estimated: true}, nil
@@ -194,6 +215,18 @@ func (p *Provider) Estimate(ctx context.Context, req domain.ProviderRequest) (do
 
 // Submit returns synchronous text to the worker or creates an async media task.
 func (p *Provider) Submit(ctx context.Context, req domain.ProviderRequest) (domain.ProviderTask, error) {
+	if isKlingVeoVideo(req.ModelCode) {
+		if err := validateKlingVeoVideo(req, true); err != nil {
+			return domain.ProviderTask{}, err
+		}
+		return p.submitUnversionedOnce(ctx, req, p.submitKlingVeoVideo)
+	}
+	if isOmniVideo(req.ModelCode) {
+		if err := validateOmniVideo(req, true); err != nil {
+			return domain.ProviderTask{}, err
+		}
+		return p.submitUnversionedOnce(ctx, req, p.submitOmniVideo)
+	}
 	if req.Operation == domain.OperationTextGenerate || req.Modality == domain.ModalityText {
 		return p.text.Submit(ctx, req)
 	}

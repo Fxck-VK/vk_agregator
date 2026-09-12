@@ -364,6 +364,8 @@ func TestLoadVideoRouterFlagsDefaultDisabled(t *testing.T) {
 		"FEATURE_VIDEO_ROUTE_RUNWAY_GEN4_TURBO_ENABLED",
 		"FEATURE_VIDEO_ROUTE_SEEDANCE_2_0_FAST_ENABLED",
 		"FEATURE_APIMART_SEEDANCE_2_5_ENABLED",
+		"FEATURE_APIMART_OMNI_1_1_FLASH_ENABLED",
+		"FEATURE_APIMART_OMNI_1_1_FLASH_EXT_ENABLED",
 		"FEATURE_VIDEO_ROUTE_RUNWAY_GEN4_5_ENABLED",
 		"FEATURE_VIDEO_ROUTE_MOCK_TEXT_TO_VIDEO_ENABLED",
 		"FEATURE_VIDEO_ROUTE_RESELLER_EXPERIMENTS_ENABLED",
@@ -387,6 +389,8 @@ func TestLoadVideoRouterFlagsDefaultDisabled(t *testing.T) {
 		cfg.FeatureVideoRouteRunwayGen4TurboEnabled ||
 		cfg.FeatureVideoRouteSeedance20FastEnabled ||
 		cfg.FeatureAPIMartSeedance25Enabled ||
+		cfg.FeatureAPIMartOmni11FlashEnabled ||
+		cfg.FeatureAPIMartOmni11FlashExtEnabled ||
 		cfg.FeatureVideoRouteRunwayGen45Enabled ||
 		cfg.FeatureVideoRouteMockTextToVideoEnabled ||
 		cfg.FeatureVideoRouteResellerExperimentsEnabled ||
@@ -612,6 +616,54 @@ func TestValidateVideoRouteRequiresProviderKey(t *testing.T) {
 	err := cfg.Validate()
 	if err == nil || !strings.Contains(err.Error(), "APIMART_API_KEY") {
 		t.Fatalf("expected APIMART_API_KEY validation error, got %v", err)
+	}
+}
+
+func TestValidateKlingMotionRequiresProviderReferenceConfig(t *testing.T) {
+	base := validKlingMotionConfig()
+	for _, tt := range []struct {
+		name string
+		edit func(*config.Config)
+		want string
+	}{
+		{
+			name: "missing base url",
+			edit: func(cfg *config.Config) { cfg.ProviderReferenceBaseURL = "" },
+			want: "PROVIDER_REFERENCE_BASE_URL",
+		},
+		{
+			name: "invalid base url",
+			edit: func(cfg *config.Config) { cfg.ProviderReferenceBaseURL = "http://localhost:8080" },
+			want: "PROVIDER_REFERENCE_BASE_URL",
+		},
+		{
+			name: "missing signing key",
+			edit: func(cfg *config.Config) { cfg.ProviderReferenceSigningKey = "" },
+			want: "PROVIDER_REFERENCE_SIGNING_KEY",
+		},
+		{
+			name: "short signing key",
+			edit: func(cfg *config.Config) { cfg.ProviderReferenceSigningKey = "short" },
+			want: "PROVIDER_REFERENCE_SIGNING_KEY",
+		},
+	} {
+		t.Run(tt.name, func(t *testing.T) {
+			cfg := base
+			tt.edit(&cfg)
+			err := cfg.Validate()
+			if err == nil || !strings.Contains(err.Error(), tt.want) {
+				t.Fatalf("Validate() error = %v, want %s", err, tt.want)
+			}
+			if strings.Contains(err.Error(), base.ProviderReferenceSigningKey) {
+				t.Fatalf("validation error leaked signing key: %v", err)
+			}
+		})
+	}
+}
+
+func TestValidateKlingMotionAcceptsProviderReferenceConfig(t *testing.T) {
+	if err := validKlingMotionConfig().Validate(); err != nil {
+		t.Fatalf("Validate() error = %v", err)
 	}
 }
 
@@ -2474,6 +2526,19 @@ func TestLoadMigrationTimeout(t *testing.T) {
 	}
 }
 
+func TestLoadProviderReferenceConfig(t *testing.T) {
+	t.Setenv("PROVIDER_REFERENCE_BASE_URL", "https://provider-media.example.test")
+	t.Setenv("PROVIDER_REFERENCE_SIGNING_KEY", strings.Repeat("k", 32))
+
+	cfg := config.Load()
+	if cfg.ProviderReferenceBaseURL != "https://provider-media.example.test" {
+		t.Fatalf("ProviderReferenceBaseURL = %q", cfg.ProviderReferenceBaseURL)
+	}
+	if cfg.ProviderReferenceSigningKey != strings.Repeat("k", 32) {
+		t.Fatal("ProviderReferenceSigningKey was not loaded")
+	}
+}
+
 func TestValidateWebImagePreparationPolicyRejectsNegativeValues(t *testing.T) {
 	for _, testCase := range []struct {
 		name string
@@ -2733,6 +2798,21 @@ func productionDeepInfraConfig() config.Config {
 		DeepInfraAPIKey:              "deepinfra-key",
 		ArtifactScanner:              "openai",
 		OpenAIAPIKey:                 "openai-key",
+	}
+}
+
+func validKlingMotionConfig() config.Config {
+	return config.Config{
+		Env:                                "development",
+		Provider:                           "mock",
+		ProviderChain:                      []string{"mock"},
+		FeatureVideoRouterEnabled:          true,
+		FeatureAPIMartKling26MotionEnabled: true,
+		APIMartProviderEnabled:             true,
+		APIMartAPIKey:                      "apimart-key",
+		APIMartBaseURL:                     "https://api.apimart.ai/v1",
+		ProviderReferenceBaseURL:           "https://provider-media.example.test",
+		ProviderReferenceSigningKey:        strings.Repeat("s", 32),
 	}
 }
 

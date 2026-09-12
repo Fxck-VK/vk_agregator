@@ -86,15 +86,19 @@ type ProviderReadiness struct {
 
 // Limits describes public request/media bounds for one model or route.
 type Limits struct {
-	AllowedQualities       []string
-	AllowedDurationsSec    []int
-	AllowedResolutions     []string
-	AllowedAspectRatios    []string
-	ResolutionDurationsSec map[string][]int
-	SupportsReferenceImage bool
-	RequiresStartImage     bool
-	MaxReferenceImages     int
-	MaxOutputCount         int
+	SupportsAudio               bool
+	RequiresReferenceVideo      bool
+	AutomaticDuration           bool
+	AllowedReferenceImageCounts []int
+	AllowedQualities            []string
+	AllowedDurationsSec         []int
+	AllowedResolutions          []string
+	AllowedAspectRatios         []string
+	ResolutionDurationsSec      map[string][]int
+	SupportsReferenceImage      bool
+	RequiresStartImage          bool
+	MaxReferenceImages          int
+	MaxOutputCount              int
 }
 
 // TextAlias is the public text model alias mapped to the hidden provider model.
@@ -275,7 +279,9 @@ func imageModelWithQualities(publicID, displayName string, provider domain.Provi
 }
 
 func videoRoutes() []VideoRoute {
-	return []VideoRoute{
+	return append(klingVeoRoutes(), []VideoRoute{
+		omniVideoRoute(false),
+		omniVideoRoute(true),
 		videoRoute(seedance25Spec(), FeatureVideoSeedance25, apimartReadiness(), videoPricingKeys(domain.VideoRouteSeedance25, []string{pricingcatalog.VideoResolution480p, pricingcatalog.VideoResolution720p, pricingcatalog.VideoResolution1080p}, []int{5, 10, 15, 30}), nil, false),
 		videoRoute(hailuo23FastSpec(), FeatureVideoHailuo23Fast, apimartReadiness(), nil, disabledVideoPricingKeys(domain.VideoRouteHailuo23Fast, []string{pricingcatalog.VideoResolution768p, pricingcatalog.VideoResolution1080p}, map[string][]int{
 			pricingcatalog.VideoResolution768p:  {6, 10},
@@ -290,7 +296,7 @@ func videoRoutes() []VideoRoute {
 		videoRoute(seedance20FastSpec(), FeatureVideoSeedance20Fast, poyoReadiness(), videoPricingKeys(domain.VideoRouteSeedance20Fast, []string{pricingcatalog.VideoResolution720p}, []int{5, 10}), nil, false),
 		videoRoute(runwayGen45Spec(), FeatureVideoRunwayGen45, poyoReadiness(), videoPricingKeys(domain.VideoRouteRunwayGen45, []string{pricingcatalog.VideoResolution720p, pricingcatalog.VideoResolution1080p}, []int{5, 10}), nil, false),
 		videoRoute(mockTextToVideoSpec(), FeatureVideoMockTextToVideo, mockReadiness(), nil, nil, true),
-	}
+	}...)
 }
 
 func videoRoute(spec domain.VideoRouteSpec, featureFlag string, readiness ProviderReadiness, pricingKeys, disabledPricingKeys []pricingcatalog.ProductKey, loadTestOnly bool) VideoRoute {
@@ -304,13 +310,17 @@ func videoRoute(spec domain.VideoRouteSpec, featureFlag string, readiness Provid
 		Readiness:         readiness,
 		Spec:              spec,
 		Limits: Limits{
-			AllowedDurationsSec:    append([]int(nil), spec.AllowedDurationsSec...),
-			AllowedResolutions:     append([]string(nil), spec.AllowedResolutions...),
-			AllowedAspectRatios:    append([]string(nil), spec.AllowedAspectRatios...),
-			ResolutionDurationsSec: copyResolutionDurations(spec.ResolutionDurationsSec),
-			SupportsReferenceImage: spec.SupportsReferenceImage,
-			RequiresStartImage:     spec.RequiresStartImage,
-			MaxReferenceImages:     spec.MaxReferenceImages,
+			AllowedDurationsSec:         append([]int(nil), spec.AllowedDurationsSec...),
+			SupportsAudio:               spec.SupportsAudio,
+			RequiresReferenceVideo:      spec.RequiresReferenceVideo,
+			AutomaticDuration:           spec.AutomaticDuration,
+			AllowedReferenceImageCounts: append([]int(nil), spec.AllowedReferenceImageCounts...),
+			AllowedResolutions:          append([]string(nil), spec.AllowedResolutions...),
+			AllowedAspectRatios:         append([]string(nil), spec.AllowedAspectRatios...),
+			ResolutionDurationsSec:      copyResolutionDurations(spec.ResolutionDurationsSec),
+			SupportsReferenceImage:      spec.SupportsReferenceImage,
+			RequiresStartImage:          spec.RequiresStartImage,
+			MaxReferenceImages:          spec.MaxReferenceImages,
 		},
 		MediaContract: MediaContractClass{
 			ModelClass:          spec.ModelClass,
@@ -803,6 +813,7 @@ func copyReadiness(readiness ProviderReadiness) ProviderReadiness {
 }
 
 func copyLimits(limits Limits) Limits {
+	limits.AllowedReferenceImageCounts = append([]int(nil), limits.AllowedReferenceImageCounts...)
 	limits.AllowedQualities = append([]string(nil), limits.AllowedQualities...)
 	limits.AllowedDurationsSec = append([]int(nil), limits.AllowedDurationsSec...)
 	limits.AllowedResolutions = append([]string(nil), limits.AllowedResolutions...)
@@ -812,7 +823,16 @@ func copyLimits(limits Limits) Limits {
 }
 
 func copyVideoRouteSpec(spec domain.VideoRouteSpec) domain.VideoRouteSpec {
+	if spec.ProviderCostMicrosByResolutionDuration != nil {
+		prices := make(map[string]map[int]int64, len(spec.ProviderCostMicrosByResolutionDuration))
+		for resolution, durations := range spec.ProviderCostMicrosByResolutionDuration {
+			prices[resolution] = maps.Clone(durations)
+		}
+		spec.ProviderCostMicrosByResolutionDuration = prices
+	}
+	spec.AllowedReferenceImageCounts = append([]int(nil), spec.AllowedReferenceImageCounts...)
 	spec.ProviderCostMicrosPerSecondByResolution = maps.Clone(spec.ProviderCostMicrosPerSecondByResolution)
+	spec.ProviderCostMicrosPerSecondWithAudioByResolution = maps.Clone(spec.ProviderCostMicrosPerSecondWithAudioByResolution)
 	spec.InputModes = append([]domain.VideoInputMode(nil), spec.InputModes...)
 	spec.AllowedDurationsSec = append([]int(nil), spec.AllowedDurationsSec...)
 	spec.AllowedResolutions = append([]string(nil), spec.AllowedResolutions...)

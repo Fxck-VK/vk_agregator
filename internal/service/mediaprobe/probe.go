@@ -104,6 +104,7 @@ func (p *FFProbe) ProbeVideo(ctx context.Context, data []byte, sizeBytes int64) 
 		"-print_format", "json",
 		"-show_format",
 		"-show_streams",
+		"-protocol_whitelist", "pipe",
 		"-i", "pipe:0",
 	}, data)
 	if err != nil {

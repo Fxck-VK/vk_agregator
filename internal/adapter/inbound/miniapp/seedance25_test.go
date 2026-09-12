@@ -18,7 +18,7 @@ import (
 )
 
 func TestSeedance25MiniAppQuoteAndCreateMatchResolution(t *testing.T) {
-	catalog, err := productcatalog.FromConfig(config.Config{FeatureVideoRouterEnabled: true, FeatureAPIMartSeedance25Enabled: true, APIMartProviderEnabled: true, APIMartAPIKey: "test", APIMartBaseURL: "https://example.com"}, mustStaticPricingCatalog())
+	catalog, err := productcatalog.FromConfig(config.Config{FeatureVideoRouterEnabled: true, FeatureAPIMartSeedance25Enabled: true, FeatureAPIMartOmni11FlashEnabled: true, FeatureAPIMartOmni11FlashExtEnabled: true, APIMartProviderEnabled: true, APIMartAPIKey: "test", APIMartBaseURL: "https://example.com"}, mustStaticPricingCatalog())
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -34,16 +34,19 @@ func TestSeedance25MiniAppQuoteAndCreateMatchResolution(t *testing.T) {
 	})
 	fixture.createVKUserWithCredits(t, 777, 20000)
 	for _, tc := range []struct {
+		alias      string
 		resolution string
 		duration   int
 		credits    int64
-	}{{"480p", 5, 290}, {"720p", 15, 1945}, {"1080p", 30, 6930}} {
-		t.Run(fmt.Sprintf("%s/%d", tc.resolution, tc.duration), func(t *testing.T) {
-			body := []byte(fmt.Sprintf(`{"operation":"video_generate","prompt":"Synthetic scene","video_route_alias":"video_seedance_2_5","video_resolution":"%s","duration_sec":%d}`, tc.resolution, tc.duration))
+	}{{"video_seedance_2_5", "480p", 5, 290}, {"video_seedance_2_5", "720p", 15, 1945}, {"video_seedance_2_5", "1080p", 30, 6930},
+		{"video_gemini_omni_1_1_flash", "360p", 10, 180}, {"video_gemini_omni_1_1_flash", "4k", 10, 1585},
+		{"video_gemini_omni_1_1_flash_ext", "360p", 4, 90}, {"video_gemini_omni_1_1_flash_ext", "4k", 8, 510}} {
+		t.Run(fmt.Sprintf("%s/%s/%d", tc.alias, tc.resolution, tc.duration), func(t *testing.T) {
+			body := []byte(fmt.Sprintf(`{"operation":"video_generate","prompt":"Synthetic scene","video_route_alias":"%s","video_resolution":"%s","duration_sec":%d}`, tc.alias, tc.resolution, tc.duration))
 			for _, path := range []string{"/miniapp/estimate", "/miniapp/jobs", "/miniapp/jobs"} {
 				req := httptest.NewRequest(http.MethodPost, path, bytes.NewReader(body))
 				req.Header.Set("X-Launch-Params", devLaunchParams(777))
-				req.Header.Set("X-Idempotency-Key", "seedance-"+tc.resolution)
+				req.Header.Set("X-Idempotency-Key", tc.alias+"-"+tc.resolution)
 				resp := httptest.NewRecorder()
 				fixture.handler.Routes().ServeHTTP(resp, req)
 				if resp.Code != 200 && resp.Code != 201 {

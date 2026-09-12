@@ -16,6 +16,13 @@ const (
 	VideoRouteRunwayGen4Turbo  VideoRouteAlias = "video_runway_gen4_turbo"
 	VideoRouteSeedance20Fast   VideoRouteAlias = "video_seedance_2_0_fast"
 	VideoRouteSeedance25       VideoRouteAlias = "video_seedance_2_5"
+	VideoRouteOmni11Flash      VideoRouteAlias = "video_gemini_omni_1_1_flash"
+	VideoRouteOmni11FlashExt   VideoRouteAlias = "video_gemini_omni_1_1_flash_ext"
+	VideoRouteKlingV3          VideoRouteAlias = "video_kling_v3"
+	VideoRouteKling26Motion    VideoRouteAlias = "video_kling_2_6_motion_control"
+	VideoRouteVeo31Fast        VideoRouteAlias = "video_veo_3_1_fast"
+	VideoRouteVeo31Quality     VideoRouteAlias = "video_veo_3_1_quality"
+	VideoRouteVeo31Lite        VideoRouteAlias = "video_veo_3_1_lite"
 	VideoRouteRunwayGen45      VideoRouteAlias = "video_runway_gen4_5"
 	VideoRouteMockTextToVideo  VideoRouteAlias = "video_mock_text_to_video"
 )
@@ -34,12 +41,17 @@ const (
 // VideoRouteSpec is the hidden provider route catalog entry. Frontends see
 // aliases only; provider ids stay server-side and are used later by workers.
 type VideoRouteSpec struct {
-	Alias              VideoRouteAlias  `json:"alias"`
-	Provider           ProviderName     `json:"provider"`
-	ProviderModelID    string           `json:"provider_model_id"`
-	ModelClass         string           `json:"model_class"`
-	InputModes         []VideoInputMode `json:"input_modes,omitempty"`
-	RequiresStartImage bool             `json:"requires_start_image,omitempty"`
+	SupportsAudio                                    bool             `json:"supports_audio,omitempty"`
+	RequiresReferenceVideo                           bool             `json:"requires_reference_video,omitempty"`
+	ProviderCostMicrosPerSecondWithAudioByResolution map[string]int64 `json:"provider_cost_micros_per_second_with_audio_by_resolution,omitempty"`
+	Alias                                            VideoRouteAlias  `json:"alias"`
+	Provider                                         ProviderName     `json:"provider"`
+	ProviderModelID                                  string           `json:"provider_model_id"`
+	ModelClass                                       string           `json:"model_class"`
+	InputModes                                       []VideoInputMode `json:"input_modes,omitempty"`
+	RequiresStartImage                               bool             `json:"requires_start_image,omitempty"`
+	AutomaticDuration                                bool             `json:"automatic_duration,omitempty"`
+	AllowedReferenceImageCounts                      []int            `json:"allowed_reference_image_counts,omitempty"`
 
 	AllowedDurationsSec    []int            `json:"allowed_durations_sec,omitempty"`
 	AllowedResolutions     []string         `json:"allowed_resolutions,omitempty"`
@@ -57,9 +69,10 @@ type VideoRouteSpec struct {
 	ProviderCostCreditsFixed     int64 `json:"provider_cost_credits_fixed,omitempty"`
 	ProviderCostCreditsPerSecond int64 `json:"provider_cost_credits_per_second,omitempty"`
 	// Optional exact rate by resolution, in millionths of a provider credit.
-	ProviderCostMicrosPerSecondByResolution map[string]int64 `json:"provider_cost_micros_per_second_by_resolution,omitempty"`
-	MaxProviderCostCredits                  int64            `json:"max_provider_cost_credits,omitempty"`
-	MaxInternalCostCredits                  int64            `json:"max_internal_cost_credits,omitempty"`
+	ProviderCostMicrosPerSecondByResolution map[string]int64         `json:"provider_cost_micros_per_second_by_resolution,omitempty"`
+	ProviderCostMicrosByResolutionDuration  map[string]map[int]int64 `json:"provider_cost_micros_by_resolution_duration,omitempty"`
+	MaxProviderCostCredits                  int64                    `json:"max_provider_cost_credits,omitempty"`
+	MaxInternalCostCredits                  int64                    `json:"max_internal_cost_credits,omitempty"`
 
 	// PriceMultiplier is retained only for legacy route compatibility and
 	// safety-cap math until the old route pricing path is removed.
@@ -69,18 +82,22 @@ type VideoRouteSpec struct {
 // VideoRouteSnapshot is stored on each resolved job so later route/config
 // changes cannot alter the reserved amount or provider request shape.
 type VideoRouteSnapshot struct {
-	Alias                  VideoRouteAlias `json:"alias"`
-	Provider               ProviderName    `json:"provider"`
-	ProviderModelID        string          `json:"provider_model_id"`
-	ModelClass             string          `json:"model_class"`
-	DurationSec            int             `json:"duration_sec"`
-	Resolution             string          `json:"resolution,omitempty"`
-	AspectRatio            string          `json:"aspect_ratio,omitempty"`
-	ProviderCostCredits    int64           `json:"provider_cost_credits"`
-	InternalCostCredits    int64           `json:"internal_cost_credits"`
-	PriceMultiplier        float64         `json:"price_multiplier"`
-	MaxProviderCostCredits int64           `json:"max_provider_cost_credits,omitempty"`
-	MaxInternalCostCredits int64           `json:"max_internal_cost_credits,omitempty"`
+	VideoAudio               bool            `json:"video_audio,omitempty"`
+	ReferenceVideoArtifactID string          `json:"reference_video_artifact_id,omitempty"`
+	CharacterOrientation     string          `json:"character_orientation,omitempty"`
+	KeepOriginalSound        bool            `json:"keep_original_sound"`
+	Alias                    VideoRouteAlias `json:"alias"`
+	Provider                 ProviderName    `json:"provider"`
+	ProviderModelID          string          `json:"provider_model_id"`
+	ModelClass               string          `json:"model_class"`
+	DurationSec              int             `json:"duration_sec"`
+	Resolution               string          `json:"resolution,omitempty"`
+	AspectRatio              string          `json:"aspect_ratio,omitempty"`
+	ProviderCostCredits      int64           `json:"provider_cost_credits"`
+	InternalCostCredits      int64           `json:"internal_cost_credits"`
+	PriceMultiplier          float64         `json:"price_multiplier"`
+	MaxProviderCostCredits   int64           `json:"max_provider_cost_credits,omitempty"`
+	MaxInternalCostCredits   int64           `json:"max_internal_cost_credits,omitempty"`
 }
 
 // Valid reports whether the snapshot has the minimum data needed by workers.
@@ -122,6 +139,13 @@ func (r VideoRouteSpec) Validate() error {
 	for _, resolution := range r.AllowedResolutions {
 		if len(r.ProviderCostMicrosPerSecondByResolution) > 0 && r.ProviderCostMicrosPerSecondByResolution[resolution] <= 0 {
 			return fmt.Errorf("video route %s: missing provider rate for %s", r.Alias, resolution)
+		}
+		if len(r.ProviderCostMicrosByResolutionDuration) > 0 {
+			for _, duration := range r.AllowedDurationsSec {
+				if r.ProviderCostMicrosByResolutionDuration[resolution][duration] <= 0 {
+					return fmt.Errorf("video route %s: missing provider price for %s/%d", r.Alias, resolution, duration)
+				}
+			}
 		}
 	}
 	if r.MaxProviderCostCredits < 0 {

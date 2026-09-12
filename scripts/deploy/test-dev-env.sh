@@ -114,6 +114,13 @@ run_valid_case() {
   assert_file_contains "${rendered}" "FEATURE_APIMART_QWEN_IMAGE_3_ENABLED=true"
   assert_file_contains "${rendered}" "FEATURE_APIMART_GROK_IMAGE_1_5_ENABLED=true"
   assert_file_contains "${rendered}" "FEATURE_APIMART_GROK_IMAGE_2_0_ENABLED=true"
+  assert_file_contains "${rendered}" "FEATURE_APIMART_OMNI_1_1_FLASH_ENABLED=true"
+  assert_file_contains "${rendered}" "FEATURE_APIMART_OMNI_1_1_FLASH_EXT_ENABLED=true"
+  assert_file_contains "${rendered}" "FEATURE_APIMART_KLING_V3_ENABLED=true"
+  assert_file_contains "${rendered}" "FEATURE_APIMART_KLING_2_6_MOTION_CONTROL_ENABLED=true"
+  assert_file_contains "${rendered}" "FEATURE_APIMART_VEO_3_1_FAST_ENABLED=true"
+  assert_file_contains "${rendered}" "FEATURE_APIMART_VEO_3_1_QUALITY_ENABLED=true"
+  assert_file_contains "${rendered}" "FEATURE_APIMART_VEO_3_1_LITE_ENABLED=true"
   assert_file_contains "${rendered}" "FEATURE_IMAGE_MODEL_NANO_BANANA_2_ENABLED=true"
   assert_file_contains "${rendered}" "FEATURE_IMAGE_MODEL_MOCK_ENABLED=false"
   assert_file_contains "${rendered}" "FEATURE_VIDEO_ROUTER_ENABLED=true"
@@ -142,20 +149,20 @@ done
 
 run_valid_case "mock-dev" "mock"
 
-for image_flag in FEATURE_APIMART_QWEN_IMAGE_3_ENABLED FEATURE_APIMART_GROK_IMAGE_1_5_ENABLED FEATURE_APIMART_GROK_IMAGE_2_0_ENABLED; do
-for qwen_case in disabled missing-key; do
-  qwen_raw="${tmpdir}/qwen-${qwen_case}.raw.env"
-  qwen_rendered="${tmpdir}/qwen-${qwen_case}.rendered.env"
-  write_common_dev_env "${qwen_raw}" mock
-  if [[ "${qwen_case}" == disabled ]]; then
-    printf '%s=false\n' "${image_flag}" >> "${qwen_raw}"
+for apimart_flag in FEATURE_APIMART_QWEN_IMAGE_3_ENABLED FEATURE_APIMART_GROK_IMAGE_1_5_ENABLED FEATURE_APIMART_GROK_IMAGE_2_0_ENABLED FEATURE_APIMART_OMNI_1_1_FLASH_ENABLED FEATURE_APIMART_OMNI_1_1_FLASH_EXT_ENABLED FEATURE_APIMART_KLING_V3_ENABLED FEATURE_APIMART_KLING_2_6_MOTION_CONTROL_ENABLED FEATURE_APIMART_VEO_3_1_FAST_ENABLED FEATURE_APIMART_VEO_3_1_QUALITY_ENABLED FEATURE_APIMART_VEO_3_1_LITE_ENABLED; do
+for apimart_case in disabled missing-key; do
+  apimart_raw="${tmpdir}/apimart-${apimart_case}.raw.env"
+  apimart_rendered="${tmpdir}/apimart-${apimart_case}.rendered.env"
+  write_common_dev_env "${apimart_raw}" mock
+  if [[ "${apimart_case}" == disabled ]]; then
+    printf '%s=false\n' "${apimart_flag}" >> "${apimart_raw}"
   else
-    sed -i '/^APIMART_API_KEY=/d' "${qwen_raw}"
-    printf '%s=true\n' "${image_flag}" >> "${qwen_raw}"
+    sed -i '/^APIMART_API_KEY=/d' "${apimart_raw}"
+    printf '%s=true\n' "${apimart_flag}" >> "${apimart_raw}"
   fi
-  bash "${prepare_script}" --input "${qwen_raw}" --output "${qwen_rendered}" \
+  bash "${prepare_script}" --input "${apimart_raw}" --output "${apimart_rendered}" \
     --image-tag sha-test123 --ghcr-username test-ghcr-user --ghcr-token GHCR_TEST >/dev/null
-  assert_file_contains "${qwen_rendered}" "${image_flag}=false"
+  assert_file_contains "${apimart_rendered}" "${apimart_flag}=false"
 done
 done
 run_valid_case "yookassa-dev" "yookassa"

@@ -730,13 +730,20 @@ func runtimeVideoRoutes(cfg platformconfig.Config) []RuntimeVideoRoute {
 		domain.VideoRouteRunwayGen4Turbo:  cfg.FeatureVideoRouteRunwayGen4TurboEnabled,
 		domain.VideoRouteSeedance20Fast:   cfg.FeatureVideoRouteSeedance20FastEnabled,
 		domain.VideoRouteSeedance25:       cfg.FeatureAPIMartSeedance25Enabled,
+		domain.VideoRouteOmni11Flash:      cfg.FeatureAPIMartOmni11FlashEnabled,
+		domain.VideoRouteOmni11FlashExt:   cfg.FeatureAPIMartOmni11FlashExtEnabled,
+		domain.VideoRouteKlingV3:          cfg.FeatureAPIMartKlingV3Enabled,
+		domain.VideoRouteKling26Motion:    cfg.FeatureAPIMartKling26MotionEnabled,
+		domain.VideoRouteVeo31Fast:        cfg.FeatureAPIMartVeo31FastEnabled,
+		domain.VideoRouteVeo31Quality:     cfg.FeatureAPIMartVeo31QualityEnabled,
+		domain.VideoRouteVeo31Lite:        cfg.FeatureAPIMartVeo31LiteEnabled,
 		domain.VideoRouteRunwayGen45:      cfg.FeatureVideoRouteRunwayGen45Enabled,
 		domain.VideoRouteMockTextToVideo:  cfg.FeatureVideoRouteMockTextToVideoEnabled,
 	}
 	out := make([]RuntimeVideoRoute, 0, len(enabledRoutes))
 	for _, spec := range videorouter.DefaultRouteSpecs() {
 		provider := runtimeVideoProviderReadiness(cfg, spec.Provider)
-		costConfigured := spec.ProviderCostCreditsFixed > 0 || spec.ProviderCostCreditsPerSecond > 0
+		costConfigured := videoRouteCostConfigured(spec)
 		status, reason := runtimeVideoRouteStatus(
 			cfg.FeatureVideoRouterEnabled,
 			enabledRoutes[spec.Alias],
@@ -764,6 +771,13 @@ func runtimeVideoRoutes(cfg platformconfig.Config) []RuntimeVideoRoute {
 		})
 	}
 	return out
+}
+
+func videoRouteCostConfigured(spec domain.VideoRouteSpec) bool {
+	return spec.ProviderCostCreditsFixed > 0 ||
+		spec.ProviderCostCreditsPerSecond > 0 ||
+		len(spec.ProviderCostMicrosPerSecondByResolution) > 0 ||
+		len(spec.ProviderCostMicrosByResolutionDuration) > 0
 }
 
 type runtimeVideoProviderState struct {
