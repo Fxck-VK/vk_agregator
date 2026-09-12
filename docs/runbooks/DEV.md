@@ -104,6 +104,13 @@ Status, smoke and stop:
 
 ## DEV GitHub Deploy
 
+DEV deployment pulls local Postgres, Redis and MinIO images with
+`docker compose pull --policy missing`, reusing an already installed image at
+the configured digest. A changed or absent image must still be downloaded
+successfully before startup. Application release images are pulled separately;
+their release verification and health gates remain mandatory. This applies to
+rollback as well and does not remove or replace data volumes.
+
 Migration safety checks accept reviewed constraint replacements only when the
 filename and exact SHA-256 match `scripts/deploy/migration-safety.sha256`.
 Migration `000052` adds the text pricing dimension and replaces its UNIQUE/CHECK
