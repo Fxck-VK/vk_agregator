@@ -51,6 +51,12 @@ func (r Registry) ProviderMediaContracts(runtime MediaContractRuntime) []domain.
 			contracts[len(contracts)-1].AllowedOutputResolutions = []string{"4k"}
 			contracts[len(contracts)-1].AllowedAspectRatios = nil
 		}
+		if IsTurboH3VideoRoute(route.Provider, route.ProviderModelID) {
+			// First-frame generation inherits the image's aspect ratio. The adapter
+			// validates input ratios; the output may be portrait or a non-T2V ratio.
+			contracts[len(contracts)-1].OutputMayInheritImageAspect = true
+			contracts[len(contracts)-1].AllowedOutputResolutions = []string{"2k"}
+		}
 	}
 	return contracts
 }

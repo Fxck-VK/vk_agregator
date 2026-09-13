@@ -52,6 +52,8 @@ Routes are defined in:
 
 | Public alias | Provider | Provider model id | Input shape | Duration | Resolution | Notes |
 | --- | --- | --- | --- | --- | --- | --- |
+| `video_kling_3_0_turbo` | APIMart | `kling-3.0-turbo` | text or one first-frame image | every integer 3–15s | 720p, 1080p | Default 5s / 720p; no audio toggle. |
+| `video_minimax_h3` | APIMart | `MiniMax-H3` | text, optional one first-frame image | every integer 4–15s | 2K, 768P | Default 5s / 2K; prompt always required. |
 | `video_gemini_omni_1_1_flash` | APIMart | `gemini-omni-1.1-flash` | text, optional 1–10 images | automatic 3–10s | 360p, 720p, 1080p, 4k | Native audio; 16:9 or 9:16. Fixed resolution tariff. |
 | `video_gemini_omni_1_1_flash_ext` | APIMart | `gemini-omni-1.1-flash-ext` | text, optional 1 or 3 images | 4s, 6s, 8s, 10s | 360p, 720p, 1080p, 4k | Native audio; 16:9 or 9:16. Two images are invalid. |
 | `video_seedance_2_5` | APIMart | `seedance-2.5` | text or up to 4 reference images | 5s, 10s, 15s, 30s | 480p, 720p, 1080p | MP4 with native audio. Human-face asset approval is not supported in this release. |
@@ -74,6 +76,8 @@ FEATURE_VIDEO_ROUTER_ENABLED=true
 Route flags:
 
 ```env
+FEATURE_APIMART_KLING_3_0_TURBO_ENABLED=false
+FEATURE_APIMART_MINIMAX_H3_ENABLED=false
 FEATURE_VIDEO_ROUTE_HAILUO_2_3_FAST_ENABLED=false
 FEATURE_VIDEO_ROUTE_HAILUO_2_3_STANDARD_ENABLED=false
 FEATURE_VIDEO_ROUTE_KLING_O3_STANDARD_ENABLED=false
@@ -327,3 +331,59 @@ GET/HEAD/Range. URLs are worker-created, ephemeral and never persisted or
 returned by the BFF. Disable the Motion flag to hide new requests; retain the
 signer while existing tasks finish. Delay key rotation until those tasks finish;
 early rotation invalidates outstanding URLs.
+
+## Kling 3.0 Turbo and MiniMax H3
+
+Generation contracts checked 2026-09-13:
+- https://docs.apimart.ai/ru/api-reference/videos/kling-3.0-turbo/generation
+- https://docs.apimart.ai/ru/api-reference/videos/minimax-h3/generation
+
+Both routes submit `POST /v1/videos/generations`, persist `data[0].task_id`,
+and poll `GET /v1/tasks/{id}`. A durable per-Job submit intent prevents a
+second paid call after retries or an indeterminate response. Owned video
+artifacts pass moderation before delivery/capture; failures release credits.
+
+The public scope is text-to-video and one owned first-frame image. The worker
+sanitizes the image, and APIMart receives `first_frame_image`. In particular,
+MiniMax `image_urls` means reference images, never first/last frames, so that
+field is not used. Last-frame, multimodal image/video/audio references, native
+callbacks and generation overrides are rejected. No audio toggle is exposed.
+Kling can also generate from the first frame without a prompt in Mini App;
+H3 still requires text. Image ownership and moderation checks still apply.
+Existing local moderation remains mandatory; the separately billed optional
+provider `nsfw_check` is not enabled without a verified tariff.
+
+Kling sends lowercase `720p`/`1080p`; H3 sends uppercase `768P`/`2K`.
+Both use integer durations, default 5 seconds. H3 defaults to 2K, Kling to 720p.
+Kling text ratios: 16:9, 9:16, 1:1; H3 additionally 4:3, 3:4, 21:9. For image
+input the provider derives the aspect ratio from the first frame; no aspect
+ratio is sent in that mode. Worker output validation accommodates inherited
+frame ratios and portrait output. Prompt caps: Kling 3072 characters, H3 7000;
+H3 always requires text. Input upload retains the existing 20 MiB worker cap.
+
+Pricing sources checked 2026-09-13:
+- https://apimart.ai/api/pricing/model?model=kling-3.0-turbo
+- https://apimart.ai/api/pricing/model?model=MiniMax-H3
+
+The endpoints return base USD rates and a 20% discount. Applied provider rates:
+
+| Model | Resolution | USD/output second | Internal credits / 5s |
+| --- | --- | ---: | ---: |
+| Kling 3.0 Turbo | 720p | 0.1144 | 345 |
+| Kling 3.0 Turbo | 1080p | 0.1432 | 430 |
+| MiniMax H3 | 768P | 0.05712 | 175 |
+| MiniMax H3 | 2K | 0.09144 | 275 |
+
+The first frame has no additional charge. Retail is exact provider cost x3,
+rounded up once to 5 internal credits per video. One APIMart credit is $0.10;
+one internal credit is $0.005. Static catalog version 15 adds every supported
+resolution/duration pair. Quotes and reservations use the same pricing snapshot.
+Create/replay checks bind that snapshot to the public model, resolution and
+duration. Reusing an idempotency key with a different prompt or image conflicts.
+The VK video menu uses three model buttons per row to fit all 14 currently
+priced routes and Back within six inline keyboard rows.
+
+Both feature flags default false. DEV preparation enables them when APIMart
+is configured and preserves explicit false overrides. Production activation
+still requires explicit environment configuration. No paid live generation is
+part of the automated checks.

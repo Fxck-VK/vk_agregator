@@ -7,6 +7,7 @@ import (
 	"vk-ai-aggregator/internal/domain"
 	"vk-ai-aggregator/internal/service/modelcatalog"
 	"vk-ai-aggregator/internal/service/pricingcatalog"
+	"vk-ai-aggregator/internal/service/providermodels"
 	"vk-ai-aggregator/internal/service/videorouter"
 )
 
@@ -256,6 +257,14 @@ func displayImageEstimateCredits(catalog *pricingcatalog.Catalog, modelID, quali
 	if catalog == nil {
 		return 0, false
 	}
+	if pricingcatalog.IsBoundedAPIMartImage(modelID) {
+		snapshot, err := catalog.Snapshot(pricingcatalog.ProductKey{Operation: domain.OperationImageGenerate, Modality: domain.ModalityImage, ImageModelID: modelID, Quality: quality})
+		if err != nil {
+			return 0, false
+		}
+		quote, err := pricingcatalog.QuoteAPIMartImage(snapshot, "1:1", 0)
+		return quote.InternalCredits, err == nil && quote.InternalCredits > 0
+	}
 	credits, err := catalog.DisplayEstimateCredits(pricingcatalog.ProductKey{
 		Operation:    domain.OperationImageGenerate,
 		Modality:     domain.ModalityImage,
@@ -309,6 +318,14 @@ func imageDescription(modelID string) string {
 		return "Synthetic image route for load tests without paid provider calls."
 	}
 	switch modelID {
+	case modelcatalog.MiniAppImageGPTImage25Flare:
+		return "Создание изображений и визуальных концептов с выбором детализации."
+	case modelcatalog.MiniAppImageGPTImage25Sunburst:
+		return "Детализированные изображения для товаров, рекламы и дизайна."
+	case modelcatalog.MiniAppImageSeedream50Lite:
+		return "Генерация и редактирование с референсами, 2K–4K, до 15 изображений."
+	case modelcatalog.MiniAppImageSeedream50Pro:
+		return "Генерация и редактирование с референсами, 1K–2K."
 	case modelcatalog.MiniAppImageMidjourneyV7:
 		return "Генерация по тексту и референсам. Relax, Fast и Turbo; цена за весь результат Imagine."
 	case modelcatalog.MiniAppImageNanoBanana2:
@@ -334,6 +351,12 @@ func imageDescription(modelID string) string {
 
 func imageQualityOptions(modelID string) []string {
 	switch modelID {
+	case modelcatalog.MiniAppImageGPTImage25Flare, modelcatalog.MiniAppImageGPTImage25Sunburst:
+		return providermodels.GPTImage25Qualities()
+	case modelcatalog.MiniAppImageSeedream50Lite:
+		return []string{"2K", "3K", "4K"}
+	case modelcatalog.MiniAppImageSeedream50Pro:
+		return []string{"1.5K", "1K", "2K"}
 	case modelcatalog.MiniAppImageFlux2Pro:
 		return []string{"1MP", "2MP", "3MP", "4MP"}
 	case modelcatalog.MiniAppImageMidjourneyV7:
@@ -363,6 +386,10 @@ func imageDefaultQuality(modelID string) string {
 
 func videoName(alias domain.VideoRouteAlias) string {
 	switch alias {
+	case domain.VideoRouteKling30Turbo:
+		return "Kling 3.0 Turbo"
+	case domain.VideoRouteMiniMaxH3:
+		return "MiniMax H3"
 	case domain.VideoRouteKlingV3:
 		return "Kling V3"
 	case domain.VideoRouteKling26Motion:
@@ -400,6 +427,10 @@ func videoName(alias domain.VideoRouteAlias) string {
 
 func videoDescription(alias domain.VideoRouteAlias) string {
 	switch alias {
+	case domain.VideoRouteKling30Turbo:
+		return "Видео по тексту или первому кадру на 3–15 секунд, 720p или 1080p."
+	case domain.VideoRouteMiniMaxH3:
+		return "Видео по тексту или первому кадру на 4–15 секунд, 768P или 2K."
 	case domain.VideoRouteKlingV3:
 		return "Видео на 3–15 секунд, до 4K. Можно задать первый и последний кадры и включить звук."
 	case domain.VideoRouteKling26Motion:

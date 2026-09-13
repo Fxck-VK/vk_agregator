@@ -4,6 +4,7 @@ import { useEffect, useLayoutEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 
 import { InputControlChip } from "@/components/ui/InputControlChip/InputControlChip";
+import { imageQualityLabel } from "@/features/image-generation/image-quality-labels";
 import styles from "./ImageQualitySelector.module.css";
 
 type ImageQualitySelectorProps = {
@@ -117,14 +118,14 @@ export function ImageQualitySelector({
       <InputControlChip
         aria-expanded={isOpen}
         aria-haspopup="dialog"
-        aria-label={`${label}: ${qualityLabel(value)}`}
+        aria-label={`${label}: ${imageQualityLabel(value)}`}
         className={styles.trigger}
         disabled={isDisabled}
         onClick={() => setIsOpen((current) => !current)}
         ref={triggerRef}
       >
         <TuneIcon />
-        <span>{qualityLabel(value)}</span>
+        <span>{imageQualityLabel(value)}</span>
         <ChevronIcon />
       </InputControlChip>
 
@@ -143,7 +144,7 @@ export function ImageQualitySelector({
               return (
                 <button
                   aria-checked={selected}
-                  aria-label={qualityLabel(quality)}
+                  aria-label={imageQualityLabel(quality)}
                   className={selected ? `${styles.option} ${styles.selected}` : styles.option}
                   key={quality}
                   onClick={() => {
@@ -154,7 +155,7 @@ export function ImageQualitySelector({
                   role="radio"
                   type="button"
                 >
-                  <span>{qualityLabel(quality)}</span>
+                  <span>{imageQualityLabel(quality)}</span>
                   <span aria-hidden="true" className={styles.radio} />
                 </button>
               );
@@ -169,10 +170,6 @@ export function ImageQualitySelector({
 
 function clamp(value: number, minimum: number, maximum: number): number {
   return Math.min(Math.max(value, minimum), maximum);
-}
-
-function qualityLabel(value: string): string {
-  return ({ relax: "Relax", fast: "Fast", turbo: "Turbo" } as Record<string, string>)[value] ?? value;
 }
 
 function TuneIcon() {

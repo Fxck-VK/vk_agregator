@@ -74,6 +74,7 @@ type ReferenceVideoItem = {
 
 const ESTIMATE_DEBOUNCE_MS = 450;
 const PROMPT_LIMIT = 2000;
+const GPT_IMAGE_25_PROMPT_LIMIT = 4096;
 const REFERENCE_ACCEPT = "image/jpeg,image/png";
 const REFERENCE_VIDEO_ACCEPT = "video/mp4,video/quicktime,.mov";
 const DEFAULT_VIDEO_DURATION_SEC = 5;
@@ -111,6 +112,9 @@ type CreateMode = {
   supportsAudio?: boolean;
   requiresReferenceVideo?: boolean;
   maxReferenceImages?: number;
+  maxPromptChars?: number;
+  referenceImageRole?: "reference" | "firstFrame";
+  allowsPromptlessFirstFrame?: boolean;
 };
 
 const DEFAULT_IMAGE_COPY: Omit<CreateMode, "modalityId" | "modelId" | "name"> = {
@@ -196,6 +200,27 @@ function createModeFromImageItem(model: ModelCatalogItem): CreateMode {
 }
 
 const VIDEO_ROUTE_COPY: Record<string, Omit<CreateMode, "modalityId" | "modelId" | "videoRouteAlias">> = {
+  video_kling_3_0_turbo: {
+    name: "Kling 3.0 Turbo",
+    subtitle: "Текст или первый кадр, 3-15 секунд",
+    color: "#22c55e",
+    glow: "rgba(34,197,94,0.32)",
+    placeholders: ["Опишите сцену, движение камеры и первый кадр, если он загружен..."],
+    quickIdeas: ["Product reveal", "Character motion", "City scene", "Cinematic close-up"],
+    maxPromptChars: 3072,
+    referenceImageRole: "firstFrame",
+    allowsPromptlessFirstFrame: true,
+  },
+  video_minimax_h3: {
+    name: "MiniMax H3",
+    subtitle: "Текст или первый кадр, 4-15 секунд",
+    color: "#0ea5e9",
+    glow: "rgba(14,165,233,0.32)",
+    placeholders: ["Опишите сцену, действие, движение камеры и желаемый стиль..."],
+    quickIdeas: ["Sports scene", "Storyboard shot", "Portrait motion", "Wide cinematic"],
+    maxPromptChars: 7000,
+    referenceImageRole: "firstFrame",
+  },
   video_kling_v3: {
     name: "Kling V3",
     subtitle: "Видео 3–15 секунд, до двух кадров и опциональный звук",
@@ -334,9 +359,11 @@ function createModeFromVideoItem(route: ModelCatalogItem): CreateMode {
     defaultAspectRatio: route.default_aspect_ratio ?? aspectRatios[0],
     requiresStartImage: route.requires_start_image,
     supportsReferenceImage: route.supports_reference_image,
-    supportsAudio: route.supports_audio,
+    supportsAudio: copy.referenceImageRole === "firstFrame" ? false : route.supports_audio,
     requiresReferenceVideo: route.requires_reference_video,
     maxReferenceImages: route.max_reference_images,
+    maxPromptChars: route.max_prompt_chars ?? copy.maxPromptChars,
+    referenceImageRole: copy.referenceImageRole,
   };
 }
 
@@ -369,6 +396,46 @@ function defaultImageQualityForModel(model: CreateMode): string {
   if (options.length === 0) return "";
   if (model.defaultQuality && options.includes(model.defaultQuality)) return model.defaultQuality;
   return options[0];
+}
+
+function isGPTImage25Model(model: CreateMode | undefined): boolean {
+  return model?.modelId.startsWith("gpt_image_2_5_") === true;
+}
+
+function promptLimitForModel(model: CreateMode | undefined): number {
+  if (model?.maxPromptChars && model.maxPromptChars > 0) return model.maxPromptChars;
+  return isGPTImage25Model(model) ? GPT_IMAGE_25_PROMPT_LIMIT : PROMPT_LIMIT;
+}
+
+function promptLengthForModel(model: CreateMode | undefined, value: string): number {
+  return isGPTImage25Model(model) ? utf8ByteLength(value) : value.length;
+}
+
+function promptLimitUnitForModel(model: CreateMode | undefined): string {
+  return isGPTImage25Model(model) ? " байт UTF-8" : "";
+}
+
+function utf8ByteLength(value: string): number {
+  return new TextEncoder().encode(value).length;
+}
+
+function imageQualityLabel(value: string): string {
+  const named = ({ relax: "Relax", fast: "Fast", turbo: "Turbo", standard: "Стандарт" } as Record<string, string>)[value];
+  if (named) return named;
+  const [size, tone] = value.split("-");
+  const toneLabel = ({ low: "Низкое", medium: "Среднее", high: "Высокое", xhigh: "Очень высокое", max: "Максимум" } as Record<string, string>)[tone];
+  return size && toneLabel ? `${size}·${toneLabel}` : value;
+}
+
+function videoResolutionLabel(value: string): string {
+  switch (value.toLowerCase()) {
+    case "2k":
+      return "2K";
+    case "768p":
+      return "768P";
+    default:
+      return value;
+  }
 }
 
 const HISTORY_STATUS_FILTERS = [
@@ -592,11 +659,19 @@ export function WorkflowMode({
   const allowedReferenceCounts = activeCreateModel?.allowedReferenceImageCounts;
   const referenceCountValid = !allowedReferenceCounts?.length || allowedReferenceCounts.includes(referenceArtifactIds.length);
   const trimmedPrompt = prompt.trim();
-  const promptTooLong = prompt.length > PROMPT_LIMIT;
+  const promptLimit = promptLimitForModel(activeCreateModel);
+  const promptLength = useMemo(() => promptLengthForModel(activeCreateModel, prompt), [activeCreateModel, prompt]);
+  const promptLimitUnit = promptLimitUnitForModel(activeCreateModel);
+  const promptTooLong = promptLength > promptLimit;
+  const promptlessFirstFrameReady =
+    activeCreateModel?.allowsPromptlessFirstFrame === true &&
+    activeCreateModel.referenceImageRole === "firstFrame" &&
+    referenceArtifactIds.length === 1;
+  const promptReady = Boolean(trimmedPrompt) || promptlessFirstFrameReady;
   // Submit gating must use backend /miniapp/estimate, never catalog hints.
   const hasBackendEnoughCredits = backendEstimate?.enough_credits === true;
   const canSubmit =
-    !!trimmedPrompt &&
+    promptReady &&
     !promptTooLong &&
     modelSelected &&
     referenceCountValid &&
@@ -727,7 +802,7 @@ export function WorkflowMode({
     const value = prompt.trim();
     setBackendEstimate(null);
     setBackendEstimateError(null);
-    if (!value || promptTooLong || !modelSelected || !activeCreateModel || !referenceCountValid || !referenceVideoReady) {
+    if (!promptReady || promptTooLong || !modelSelected || !activeCreateModel || !referenceCountValid || !referenceVideoReady) {
       setBackendEstimateLoading(false);
       return;
     }
@@ -772,6 +847,7 @@ export function WorkflowMode({
     isVideoModality,
     modelSelected,
     prompt,
+    promptReady,
     promptTooLong,
     referenceArtifactIds,
     referenceCountValid,
@@ -1143,13 +1219,18 @@ export function WorkflowMode({
   const promptPlaceholder =
     activeCreateModel?.placeholders[0] ?? "Выберите модель и опишите, что нужно создать...";
   const activeModelName = activeCreateModel?.name ?? "Модель не выбрана";
+  const usesFirstFrameImage = activeCreateModel?.referenceImageRole === "firstFrame";
   const referenceLimitLabel =
     maxReferenceItems === 1 ? "1 файл" : `до ${maxReferenceItems} файлов`;
   const referenceTitle = activeCreateModel?.requiresStartImage
     ? "Загрузите стартовое изображение"
+    : usesFirstFrameImage
+      ? "Добавьте первый кадр"
     : "Добавьте референс";
   const referenceMeta = activeCreateModel?.requiresStartImage
     ? `Обязательно для этой модели, ${referenceLimitLabel}, PNG/JPG до 20 MB`
+    : usesFirstFrameImage
+      ? `Опционально, ${referenceLimitLabel}, PNG/JPG до 20 MB`
     : `${referenceLimitLabel}, PNG/JPG до 20 MB`;
   const referenceVideoMeta = referenceVideoItem
     ? `${referenceVideoItem.durationSec} сек · ${referenceVideoItem.fileName}`
@@ -1303,7 +1384,7 @@ export function WorkflowMode({
                       className={"segment__btn" + (imageQuality === quality ? " is-active" : "")}
                       onClick={() => setImageQuality(quality)}
                     >
-                      {({ relax: "Relax", fast: "Fast", turbo: "Turbo" } as Record<string, string>)[quality] ?? quality}
+                      {imageQualityLabel(quality)}
                     </button>
                   ))}
                 </div>
@@ -1378,7 +1459,7 @@ export function WorkflowMode({
                       className={"segment__btn" + (videoResolution === resolution ? " is-active" : "")}
                       aria-pressed={videoResolution === resolution}
                       onClick={() => { setBackendEstimate(null); setSelectedVideoResolution(resolution); }}>
-                      {resolution}
+                      {videoResolutionLabel(resolution)}
                     </button>
                   ))}
                 </div>
@@ -1595,7 +1676,7 @@ export function WorkflowMode({
                 id="workflow-prompt"
                 className="create-prompt__input nh-placeholder"
                 value={prompt}
-                maxLength={PROMPT_LIMIT + 100}
+                maxLength={promptLimit + 100}
                 onChange={(event) => setPrompt(event.target.value)}
                 rows={3}
                 placeholder={promptPlaceholder}
@@ -1654,7 +1735,7 @@ export function WorkflowMode({
             {submitError && <div className="workflow-error">{submitError}</div>}
             {promptTooLong && (
               <p className="field-note is-warn">
-                {prompt.length.toLocaleString("ru-RU")} / {PROMPT_LIMIT.toLocaleString("ru-RU")}
+                {promptLength.toLocaleString("ru-RU")} / {promptLimit.toLocaleString("ru-RU")}{promptLimitUnit}
               </p>
             )}
 

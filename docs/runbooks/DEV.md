@@ -350,6 +350,52 @@ Jobs while keeping APIMart configured for existing tasks to finish.
 
 Provider contract: [FLUX.2 generation](https://docs.apimart.ai/ru/api-reference/images/flux-2/generation).
 
+## GPT Image 2.5 and Seedream 5 images
+
+Four APIMart flags default to false in application config:
+`FEATURE_APIMART_GPT_IMAGE_2_5_FLARE_ENABLED`,
+`FEATURE_APIMART_GPT_IMAGE_2_5_SUNBURST_ENABLED`,
+`FEATURE_APIMART_SEEDREAM_5_0_LITE_ENABLED`,
+`FEATURE_APIMART_SEEDREAM_5_0_PRO_ENABLED`.
+DEV env preparation enables them when APIMart is configured, preserving an
+explicit false. API and worker must use the same release. Disable individual
+flags to stop new Jobs while retaining provider config for pending tasks.
+
+Static catalog v14 adds public IDs `gpt_image_2_5_flare`,
+`gpt_image_2_5_sunburst`, `seedream_5_0_lite`, `seedream_5_0_pro`.
+DB-backed catalogs require these v14 tariffs through the operator workflow;
+custom floors/multipliers are hidden until their dimension pricing is supported.
+No credentials or database price rows are changed by this integration.
+
+GPT exposes explicit 1K/2K/4K and low/medium/high/xhigh/max combinations.
+It uses APIMart's published size/quality output-token table and reserves a fixed
+text budget of 4096 UTF-8 prompt bytes plus 512 overhead tokens. This is a fixed
+user quote based on an input estimate, not actual-token settlement. Account
+Standard rates checked 2026-09-13 are $4/M text input and $24/M image output.
+The text budget is charged once per batch; output-token costs scale by count
+before applying x3 and rounding up to five internal credits.
+References remain unavailable publicly because their input-token bound is not
+published. Auto quality, custom pixels and native overrides are not exposed.
+
+Lite supports 2K/3K/4K, with references + outputs <= 15. It costs 20 internal
+credits per requested output. Pro supports 1K/1.5K/2K, one output and up to ten
+references. Base prices are 20/20/40 credits; the first input is free and each
+additional input adds $0.00195 provider cost before x3 and rounding up to five.
+Web supports text-to-image; Mini App/VK also accept owned Seedream references.
+Mini App/VK produce one square image; the Web form exposes ratio/output choices.
+GPT prices vary by ratio, so the Web confirmation uses the prepared Job quote.
+
+All four use POST `/v1/images/generations`, GET `/v1/tasks/{id}` and durable
+per-Job submit claims. Uncertain submits never start a second paid call. Every
+output becomes an owned moderated Artifact before capture. An unexpected or
+incomplete output count fails without charging the user. Paid canaries were not
+run; they require explicit authorization. Sources:
+[GPT Image 2.5](https://docs.apimart.ai/ru/api-reference/images/gpt-image-2.5/generation),
+[Seedream Lite](https://docs.apimart.ai/ru/api-reference/images/seedream-5-lite/generation),
+[Seedream Pro](https://docs.apimart.ai/ru/api-reference/images/seedream-5-0-pro/generation),
+[GPT pricing table](https://apimart.ai/api/pricing/model?model=gpt-image-2.5-flare),
+[Pro pricing](https://apimart.ai/api/pricing/model?model=seedream-5-0-pro).
+
 ## DEV Env Tests
 
 Before changing DEV deploy env scripts:

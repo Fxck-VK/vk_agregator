@@ -1183,6 +1183,9 @@ func (h *Handler) process(ctx context.Context, cb callback, rawBody []byte, even
 		}
 		params, _ := json.Marshal(jp)
 		pricingSnapshot, err := h.jobPricingSnapshot(parsed.Operation, parsed.Modality, photoSelection, videoSpec)
+		if err == nil && photoTextJob {
+			pricingSnapshot, err = pricingcatalog.QuoteAPIMartImage(pricingSnapshot, jp.Size, len(imageReferenceIDs))
+		}
 		if err != nil {
 			metrics.ObserveProductEvent("vk_bot", "job", "estimate", string(parsed.Operation), string(parsed.Modality), "error")
 			return fmt.Errorf("vk pricing catalog estimate: %w", err)

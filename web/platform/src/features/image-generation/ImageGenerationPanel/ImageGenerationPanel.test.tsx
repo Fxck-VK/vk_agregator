@@ -79,6 +79,28 @@ const multipleModelsResponse: ImageModelList = {
   ],
 };
 
+const gptImage25QualityOptions = [
+  "1K-low",
+  "1K-medium",
+  "1K-high",
+  "1K-xhigh",
+  "1K-max",
+  "2K-low",
+  "2K-medium",
+  "2K-high",
+  "2K-xhigh",
+  "2K-max",
+  "4K-low",
+  "4K-medium",
+  "4K-high",
+  "4K-xhigh",
+  "4K-max",
+];
+
+const gptImage25Prices = Object.fromEntries(
+  gptImage25QualityOptions.map((quality, index) => [quality, 30 + index]),
+) as Record<string, number>;
+
 function renderReadyEditor() {
   vi.mocked(loadImageModelCatalog).mockResolvedValueOnce(modelsResponse);
   render(<ImageGenerationPanel />);
@@ -206,6 +228,71 @@ describe("ImageGenerationPanel", () => {
     fireEvent.click(getGenerateButton());
     await waitFor(() => expect(webBrowserMutation).toHaveBeenCalledWith("/web/v1/image-jobs/prepare", expect.objectContaining({
       body: JSON.stringify({ prompt: "Synthetic scene", model_id: "flux_2_pro", image_quality: "4MP", aspect_ratio: "9:21", output_count: 1 }),
+    })));
+  });
+
+  it("prepares GPT Image 2.5 composite quality and output count from the catalog", async () => {
+    vi.mocked(loadImageModelCatalog).mockResolvedValueOnce(parseImageModelList({ items: [{
+      id: "gpt_image_2_5_flare", name: "GPT Image 2.5 Flare", quality_options: gptImage25QualityOptions, default_quality: "1K-medium",
+      price_by_quality: gptImage25Prices, max_output_count: 4, max_reference_images: 0,
+      supports_reference_image: false, allowed_aspect_ratios: ["16:9", "1:1"],
+    }] }));
+    vi.mocked(webBrowserMutation).mockResolvedValueOnce(Response.json({
+      job: { ...job, model_id: "gpt_image_2_5_flare", image_quality: "4K-max", aspect_ratio: "1:1", cost_estimate: 240 }, balance: 300, can_afford: true,
+    }, { status: 201 }));
+    render(<ImageGenerationPanel />);
+    const promptInput = await screen.findByRole("textbox", { name: ru.imageGeneration.promptLabel });
+    expect(screen.getByRole("button", { name: "Разрешение: 1K·Среднее" })).toBeVisible();
+    expect(screen.getByText(ru.imageGeneration.priceDependsOnAspectRatio)).toBeVisible();
+    expect(screen.queryByLabelText(`${ru.imageGeneration.priceLabel}: 31 звезда`)).not.toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: "Разрешение: 1K·Среднее" }));
+    expect(screen.getAllByRole("radio")).toHaveLength(15);
+    expect(screen.getByRole("radio", { name: "1K·Низкое" })).toBeVisible();
+    expect(screen.getByRole("radio", { name: "2K·Максимум" })).toBeVisible();
+    fireEvent.click(screen.getByRole("radio", { name: "4K·Максимум" }));
+    fireEvent.click(screen.getByRole("button", { name: ru.imageGeneration.increaseOutputCount }));
+    fireEvent.click(screen.getByRole("button", { name: "Соотношение сторон: 16:9" }));
+    fireEvent.click(screen.getByRole("radio", { name: "1:1" }));
+    fireEvent.change(promptInput, { target: { value: "Synthetic scene" } });
+    fireEvent.click(getGenerateButton());
+    await waitFor(() => expect(webBrowserMutation).toHaveBeenCalledWith("/web/v1/image-jobs/prepare", expect.objectContaining({
+      body: JSON.stringify({ prompt: "Synthetic scene", model_id: "gpt_image_2_5_flare", image_quality: "4K-max", aspect_ratio: "1:1", output_count: 2 }),
+    })));
+  });
+
+  it("blocks GPT Image 2.5 prompts above 4096 UTF-8 bytes before prepare", async () => {
+    vi.mocked(loadImageModelCatalog).mockResolvedValueOnce(parseImageModelList({ items: [{
+      id: "gpt_image_2_5_sunburst", name: "GPT Image 2.5 Sunburst", quality_options: ["1K-medium"], default_quality: "1K-medium",
+      price_by_quality: { "1K-medium": 30 }, max_output_count: 4, max_reference_images: 0,
+      supports_reference_image: false, allowed_aspect_ratios: ["16:9"],
+    }] }));
+    render(<ImageGenerationPanel />);
+    const promptInput = await screen.findByRole("textbox", { name: ru.imageGeneration.promptLabel });
+    fireEvent.change(promptInput, { target: { value: "а".repeat(2049) } });
+
+    expect(screen.getByRole("alert")).toHaveTextContent(/4\s098 \/ 4\s096 байт UTF-8/);
+    expect(getGenerateButton()).toBeDisabled();
+    expect(webBrowserMutation).not.toHaveBeenCalled();
+  });
+
+  it("keeps Seedream 5 defaults from the backend catalog", async () => {
+    vi.mocked(loadImageModelCatalog).mockResolvedValueOnce(parseImageModelList({ items: [{
+      id: "seedream_5_0_lite", name: "Seedream 5.0 Lite", quality_options: ["2K", "3K", "4K"], default_quality: "2K",
+      price_by_quality: { "2K": 15, "3K": 20, "4K": 30 }, max_output_count: 15, max_reference_images: 14,
+      supports_reference_image: true, allowed_aspect_ratios: ["16:9"],
+    }] }));
+    vi.mocked(webBrowserMutation).mockResolvedValueOnce(Response.json({
+      job: { ...job, model_id: "seedream_5_0_lite", image_quality: "2K", cost_estimate: 30 }, balance: 300, can_afford: true,
+    }, { status: 201 }));
+    render(<ImageGenerationPanel />);
+    const promptInput = await screen.findByRole("textbox", { name: ru.imageGeneration.promptLabel });
+    expect(getQualityButton("2K")).toBeVisible();
+    expect(screen.getByText("1 / 15")).toBeVisible();
+    fireEvent.click(screen.getByRole("button", { name: ru.imageGeneration.increaseOutputCount }));
+    fireEvent.change(promptInput, { target: { value: "Synthetic scene" } });
+    fireEvent.click(getGenerateButton());
+    await waitFor(() => expect(webBrowserMutation).toHaveBeenCalledWith("/web/v1/image-jobs/prepare", expect.objectContaining({
+      body: JSON.stringify({ prompt: "Synthetic scene", model_id: "seedream_5_0_lite", image_quality: "2K", aspect_ratio: "16:9", output_count: 2 }),
     })));
   });
 

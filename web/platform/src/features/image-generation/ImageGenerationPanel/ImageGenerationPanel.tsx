@@ -44,6 +44,8 @@ type OutputCountSelection = {
   value: number;
 };
 
+const GPT_IMAGE_25_PROMPT_LIMIT = 4096;
+
 type ImageGenerationPanelProps = {
   onJobChange?: (job: ImageJob) => void;
 };
@@ -92,13 +94,18 @@ export function ImageGenerationPanel({ onJobChange }: Readonly<ImageGenerationPa
   const outputCount = selectedModel !== null && outputCountSelection.modelID === selectedModel.id
     ? Math.min(Math.max(1, outputCountSelection.value), Math.max(1, maxOutputCount))
     : 1;
-  const unitPrice = selectedModel?.price_by_quality?.[imageQuality] ?? null;
+  const isGPTImage25Model = selectedModel?.id.startsWith("gpt_image_2_5_") === true;
+  const unitPrice = isGPTImage25Model ? null : selectedModel?.price_by_quality?.[imageQuality] ?? null;
   const selectedPrice = unitPrice === null ? null : unitPrice * outputCount;
+  const promptByteLimit = isGPTImage25Model ? GPT_IMAGE_25_PROMPT_LIMIT : null;
+  const promptByteLength = useMemo(() => utf8ByteLength(prompt), [prompt]);
+  const promptTooLong = promptByteLimit !== null && promptByteLength > promptByteLimit;
   const canPrepare = stage === "editor"
     && prompt.trim() !== ""
     && selectedModel !== null
     && imageQuality !== ""
-    && selectedPrice !== null;
+    && (isGPTImage25Model || selectedPrice !== null)
+    && !promptTooLong;
 
   useEffect(() => {
     let active = true;
@@ -296,7 +303,11 @@ export function ImageGenerationPanel({ onJobChange }: Readonly<ImageGenerationPa
     setStage("editor");
   }, []);
 
-  const editorError = error === "prepare" ? ru.imageGeneration.prepareFailure : null;
+  const editorError = promptTooLong && promptByteLimit !== null
+    ? `Промпт для GPT Image 2.5: ${promptByteLength.toLocaleString("ru-RU")} / ${promptByteLimit.toLocaleString("ru-RU")} байт UTF-8`
+    : error === "prepare"
+      ? ru.imageGeneration.prepareFailure
+      : null;
   const confirmationError = error === "insufficient"
     ? ru.imageGeneration.insufficientBalance
     : error === "activation"
@@ -331,6 +342,7 @@ export function ImageGenerationPanel({ onJobChange }: Readonly<ImageGenerationPa
           onPromptChange={changePrompt}
           onSubmit={() => void prepareImage()}
           price={selectedPrice}
+          priceNote={isGPTImage25Model ? ru.imageGeneration.priceDependsOnAspectRatio : undefined}
           outputCount={outputCount}
           prompt={prompt}
           qualityOptions={selectedModel.quality_options}
@@ -371,4 +383,8 @@ function prepareIntentMatches(
     && intent.imageQuality === imageQuality
     && intent.aspectRatio === aspectRatio
     && intent.outputCount === outputCount;
+}
+
+function utf8ByteLength(value: string): number {
+  return new TextEncoder().encode(value).length;
 }

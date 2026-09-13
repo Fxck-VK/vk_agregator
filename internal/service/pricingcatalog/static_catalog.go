@@ -3,17 +3,21 @@ package pricingcatalog
 import "vk-ai-aggregator/internal/domain"
 
 const (
-	StaticCatalogVersion = 13
+	StaticCatalogVersion = 15
 
-	PublicImageNanoBanana2   = "nano_banana_2"
-	PublicImageNanoBananaPro = "nano_banana_pro"
-	PublicImageGPTImage2     = "gpt_image_2"
-	PublicImageQwenImage3    = "qwen_image_3"
-	PublicImageGrokImage15   = "grok_image_1_5"
-	PublicImageGrokImage20   = "grok_image_2_0"
-	PublicImageMidjourneyV7  = "midjourney_v7"
-	PublicImageFlux2Pro      = "flux_2_pro"
-	PublicImageSeedream45    = "seedream_4_5"
+	PublicImageNanoBanana2        = "nano_banana_2"
+	PublicImageNanoBananaPro      = "nano_banana_pro"
+	PublicImageGPTImage2          = "gpt_image_2"
+	PublicImageQwenImage3         = "qwen_image_3"
+	PublicImageGrokImage15        = "grok_image_1_5"
+	PublicImageGrokImage20        = "grok_image_2_0"
+	PublicImageMidjourneyV7       = "midjourney_v7"
+	PublicImageFlux2Pro           = "flux_2_pro"
+	PublicImageSeedream45         = "seedream_4_5"
+	PublicImageGPTImage25Flare    = "gpt_image_2_5_flare"
+	PublicImageGPTImage25Sunburst = "gpt_image_2_5_sunburst"
+	PublicImageSeedream50Lite     = "seedream_5_0_lite"
+	PublicImageSeedream50Pro      = "seedream_5_0_pro"
 
 	ImageQuality1K       = "1K"
 	ImageQuality2K       = "2K"
@@ -136,8 +140,10 @@ func StaticProductPrices() []ProductPrice {
 			prices = append(prices, videoTariff(domain.VideoRouteSeedance25, resolution, duration, floor, FloorUnitAPIMartCredits, apimartCreditToInternal, retail))
 		}
 	}
+	prices = append(prices, newAPIMartImageTariffs()...)
 	prices = append(prices, omniVideoTariffs()...)
 	prices = append(prices, klingVeoTariffs()...)
+	prices = append(prices, turboH3Tariffs()...)
 	return append(prices, textTariffs()...)
 }
 

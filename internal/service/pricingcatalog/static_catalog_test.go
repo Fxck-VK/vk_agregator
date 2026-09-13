@@ -293,17 +293,22 @@ func TestStaticCatalogImageTariffsUseRoundedQualityLadders(t *testing.T) {
 
 func TestStaticCatalogUsesOnlyBoundedAliasesAndExplicitUnits(t *testing.T) {
 	allowedImages := map[string]bool{
-		PublicImageFlux2Pro:      true,
-		PublicImageMidjourneyV7:  true,
-		PublicImageNanoBanana2:   true,
-		PublicImageNanoBananaPro: true,
-		PublicImageGPTImage2:     true,
-		PublicImageQwenImage3:    true,
-		PublicImageGrokImage15:   true,
-		PublicImageGrokImage20:   true,
-		PublicImageSeedream45:    true,
+		PublicImageGPTImage25Flare:    true,
+		PublicImageGPTImage25Sunburst: true,
+		PublicImageSeedream50Lite:     true,
+		PublicImageSeedream50Pro:      true,
+		PublicImageFlux2Pro:           true,
+		PublicImageMidjourneyV7:       true,
+		PublicImageNanoBanana2:        true,
+		PublicImageNanoBananaPro:      true,
+		PublicImageGPTImage2:          true,
+		PublicImageQwenImage3:         true,
+		PublicImageGrokImage15:        true,
+		PublicImageGrokImage20:        true,
+		PublicImageSeedream45:         true,
 	}
 	allowedVideos := map[domain.VideoRouteAlias]bool{
+		domain.VideoRouteKling30Turbo: true, domain.VideoRouteMiniMaxH3: true,
 		domain.VideoRouteKlingV3: true, domain.VideoRouteKling26Motion: true,
 		domain.VideoRouteVeo31Fast: true, domain.VideoRouteVeo31Quality: true, domain.VideoRouteVeo31Lite: true,
 		domain.VideoRouteOmni11Flash:     true,
@@ -358,8 +363,8 @@ func TestStaticCatalogUsesOnlyBoundedAliasesAndExplicitUnits(t *testing.T) {
 }
 
 func TestStaticCatalogVersionChangesWithCompetitivePrices(t *testing.T) {
-	if StaticCatalogVersion != 13 {
-		t.Fatalf("static catalog version = %d, want 13", StaticCatalogVersion)
+	if StaticCatalogVersion != 15 {
+		t.Fatalf("static catalog version = %d, want 15", StaticCatalogVersion)
 	}
 }
 

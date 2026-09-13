@@ -149,6 +149,33 @@ describe("ImageGenerationComposer", () => {
     expect(screen.getByText(ru.imageGeneration.priceUnavailable)).toBeVisible();
   });
 
+  it("shows a model-specific price note instead of an editor price", () => {
+    render(
+      <ImageGenerationComposer
+        aspectRatio="16:9"
+        canSubmit
+        errorMessage={null}
+        imageQuality="1K-medium"
+        isSubmitting={false}
+        maxOutputCount={4}
+        onAspectRatioChange={vi.fn()}
+        onImageQualityChange={vi.fn()}
+        onOutputCountChange={vi.fn()}
+        onPromptChange={vi.fn()}
+        onSubmit={vi.fn()}
+        price={null}
+        priceNote={ru.imageGeneration.priceDependsOnAspectRatio}
+        prompt="night city after rain"
+        qualityOptions={["1K-medium", "4K-max"]}
+        outputCount={1}
+      />,
+    );
+
+    expect(screen.getByText(ru.imageGeneration.priceDependsOnAspectRatio)).toBeVisible();
+    expect(screen.queryByText(ru.imageGeneration.priceUnavailable)).not.toBeInTheDocument();
+    expect(screen.queryByTestId("credit-star-icon")).not.toBeInTheDocument();
+  });
+
   it("renders workflow errors below the compact composer", () => {
     render(
       <ImageGenerationComposer

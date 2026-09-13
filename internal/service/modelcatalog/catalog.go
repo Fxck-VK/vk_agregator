@@ -14,19 +14,23 @@ const (
 	MiniAppChatModelID   = providermodels.PublicTextChatGPT
 	MiniAppChatModelName = "NeiroHub Chat"
 
-	MiniAppImageNanoBananaPro   = providermodels.PublicImageNanoBananaPro
-	MiniAppImageGPTImage2       = providermodels.PublicImageGPTImage2
-	MiniAppImageQwenImage3      = providermodels.PublicImageQwenImage3
-	MiniAppImageMidjourneyV7    = providermodels.PublicImageMidjourneyV7
-	MiniAppImageFlux2Pro        = providermodels.PublicImageFlux2Pro
-	MiniAppImageGrokImage15     = providermodels.PublicImageGrokImage15
-	MiniAppImageGrokImage20     = providermodels.PublicImageGrokImage20
-	MiniAppImageNanoBananaFlash = "nano_banana_flash"
-	MiniAppImageNanoBanana2     = providermodels.PublicImageNanoBanana2
-	MiniAppImageSeedream45      = providermodels.PublicImageSeedream45
-	MiniAppImageSDXLTurbo       = "sdxl_turbo"
-	MiniAppImageMock            = providermodels.LoadTestImageMock
-	MiniAppVideoKling           = "kling"
+	MiniAppImageNanoBananaPro      = providermodels.PublicImageNanoBananaPro
+	MiniAppImageGPTImage2          = providermodels.PublicImageGPTImage2
+	MiniAppImageGPTImage25Flare    = providermodels.PublicImageGPTImage25Flare
+	MiniAppImageGPTImage25Sunburst = providermodels.PublicImageGPTImage25Sunburst
+	MiniAppImageSeedream50Lite     = providermodels.PublicImageSeedream50Lite
+	MiniAppImageSeedream50Pro      = providermodels.PublicImageSeedream50Pro
+	MiniAppImageQwenImage3         = providermodels.PublicImageQwenImage3
+	MiniAppImageMidjourneyV7       = providermodels.PublicImageMidjourneyV7
+	MiniAppImageFlux2Pro           = providermodels.PublicImageFlux2Pro
+	MiniAppImageGrokImage15        = providermodels.PublicImageGrokImage15
+	MiniAppImageGrokImage20        = providermodels.PublicImageGrokImage20
+	MiniAppImageNanoBananaFlash    = "nano_banana_flash"
+	MiniAppImageNanoBanana2        = providermodels.PublicImageNanoBanana2
+	MiniAppImageSeedream45         = providermodels.PublicImageSeedream45
+	MiniAppImageSDXLTurbo          = "sdxl_turbo"
+	MiniAppImageMock               = providermodels.LoadTestImageMock
+	MiniAppVideoKling              = "kling"
 
 	VKVideoPrunaAI = "prunaai"
 
@@ -94,7 +98,18 @@ func MiniAppResponseModelID(model Model) string {
 }
 
 func NormalizeImageQuality(raw string) (string, bool) {
+	if resolution, quality, ok := strings.Cut(strings.TrimSpace(raw), "-"); ok {
+		resolution, quality = strings.ToUpper(resolution), strings.ToLower(quality)
+		if resolution == "1K" || resolution == "2K" || resolution == "4K" {
+			switch quality {
+			case "low", "medium", "high", "xhigh", "max":
+				return resolution + "-" + quality, true
+			}
+		}
+	}
 	switch strings.ToUpper(strings.TrimSpace(raw)) {
+	case "1.5K", "3K":
+		return strings.ToUpper(strings.TrimSpace(raw)), true
 	case "1MP", "2MP", "3MP", "4MP":
 		return strings.ToUpper(strings.TrimSpace(raw)), true
 	case "RELAX", "FAST", "TURBO":

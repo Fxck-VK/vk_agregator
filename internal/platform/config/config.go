@@ -315,11 +315,15 @@ type Config struct {
 
 	FeatureImageModelNanoBananaProEnabled    bool
 	FeatureImageModelGPTImage2Enabled        bool
+	FeatureAPIMartGPTImage25FlareEnabled     bool
+	FeatureAPIMartGPTImage25SunburstEnabled  bool
 	FeatureAPIMartQwenImage3Enabled          bool
 	FeatureAPIMartMidjourneyV7Enabled        bool
 	FeatureAPIMartFlux2ProEnabled            bool
 	FeatureAPIMartGrokImage15Enabled         bool
 	FeatureAPIMartGrokImage20Enabled         bool
+	FeatureAPIMartSeedream50LiteEnabled      bool
+	FeatureAPIMartSeedream50ProEnabled       bool
 	FeatureImageModelNanoBanana2Enabled      bool
 	FeatureImageModelSeedream45Enabled       bool
 	FeatureImageModelMockEnabled             bool
@@ -333,6 +337,8 @@ type Config struct {
 	FeatureAPIMartOmni11FlashEnabled         bool
 	FeatureAPIMartOmni11FlashExtEnabled      bool
 	FeatureAPIMartKlingV3Enabled             bool
+	FeatureAPIMartKling30TurboEnabled        bool
+	FeatureAPIMartMiniMaxH3Enabled           bool
 	FeatureAPIMartKling26MotionEnabled       bool
 	FeatureAPIMartVeo31FastEnabled           bool
 	FeatureAPIMartVeo31QualityEnabled        bool
@@ -1400,11 +1406,15 @@ func Load() Config {
 		DeepInfraBalanceBaseURL:                   env("DEEPINFRA_BALANCE_BASE_URL", "https://api.deepinfra.com"),
 		FeatureImageModelNanoBananaProEnabled:     envBool("FEATURE_IMAGE_MODEL_NANO_BANANA_PRO_ENABLED", false),
 		FeatureImageModelGPTImage2Enabled:         envBool("FEATURE_IMAGE_MODEL_GPT_IMAGE_2_ENABLED", false),
+		FeatureAPIMartGPTImage25FlareEnabled:      envBool("FEATURE_APIMART_GPT_IMAGE_2_5_FLARE_ENABLED", false),
+		FeatureAPIMartGPTImage25SunburstEnabled:   envBool("FEATURE_APIMART_GPT_IMAGE_2_5_SUNBURST_ENABLED", false),
 		FeatureAPIMartQwenImage3Enabled:           envBool("FEATURE_APIMART_QWEN_IMAGE_3_ENABLED", false),
 		FeatureAPIMartMidjourneyV7Enabled:         envBool("FEATURE_APIMART_MIDJOURNEY_V7_ENABLED", false),
 		FeatureAPIMartFlux2ProEnabled:             envBool("FEATURE_APIMART_FLUX_2_PRO_ENABLED", false),
 		FeatureAPIMartGrokImage15Enabled:          envBool("FEATURE_APIMART_GROK_IMAGE_1_5_ENABLED", false),
 		FeatureAPIMartGrokImage20Enabled:          envBool("FEATURE_APIMART_GROK_IMAGE_2_0_ENABLED", false),
+		FeatureAPIMartSeedream50LiteEnabled:       envBool("FEATURE_APIMART_SEEDREAM_5_0_LITE_ENABLED", false),
+		FeatureAPIMartSeedream50ProEnabled:        envBool("FEATURE_APIMART_SEEDREAM_5_0_PRO_ENABLED", false),
 		FeatureImageModelNanoBanana2Enabled:       envBool("FEATURE_IMAGE_MODEL_NANO_BANANA_2_ENABLED", false),
 		FeatureImageModelSeedream45Enabled:        envBool("FEATURE_IMAGE_MODEL_SEEDREAM_4_5_ENABLED", false),
 		FeatureImageModelMockEnabled:              envBool("FEATURE_IMAGE_MODEL_MOCK_ENABLED", false),
@@ -1421,6 +1431,8 @@ func Load() Config {
 		FeatureAPIMartOmni11FlashEnabled:        envBool("FEATURE_APIMART_OMNI_1_1_FLASH_ENABLED", false),
 		FeatureAPIMartOmni11FlashExtEnabled:     envBool("FEATURE_APIMART_OMNI_1_1_FLASH_EXT_ENABLED", false),
 		FeatureAPIMartKlingV3Enabled:            envBool("FEATURE_APIMART_KLING_V3_ENABLED", false),
+		FeatureAPIMartKling30TurboEnabled:       envBool("FEATURE_APIMART_KLING_3_0_TURBO_ENABLED", false),
+		FeatureAPIMartMiniMaxH3Enabled:          envBool("FEATURE_APIMART_MINIMAX_H3_ENABLED", false),
 		FeatureAPIMartKling26MotionEnabled:      envBool("FEATURE_APIMART_KLING_2_6_MOTION_CONTROL_ENABLED", false),
 		FeatureAPIMartVeo31FastEnabled:          envBool("FEATURE_APIMART_VEO_3_1_FAST_ENABLED", false),
 		FeatureAPIMartVeo31QualityEnabled:       envBool("FEATURE_APIMART_VEO_3_1_QUALITY_ENABLED", false),
@@ -1836,10 +1848,14 @@ func (c Config) validateVideoRouteProviderConfig() error {
 		enabled bool
 		flag    string
 	}{
+		{c.FeatureAPIMartGPTImage25FlareEnabled, "FEATURE_APIMART_GPT_IMAGE_2_5_FLARE_ENABLED"},
+		{c.FeatureAPIMartGPTImage25SunburstEnabled, "FEATURE_APIMART_GPT_IMAGE_2_5_SUNBURST_ENABLED"},
 		{c.FeatureAPIMartMidjourneyV7Enabled, "FEATURE_APIMART_MIDJOURNEY_V7_ENABLED"},
 		{c.FeatureAPIMartFlux2ProEnabled, "FEATURE_APIMART_FLUX_2_PRO_ENABLED"},
 		{c.FeatureAPIMartGrokImage15Enabled, "FEATURE_APIMART_GROK_IMAGE_1_5_ENABLED"},
 		{c.FeatureAPIMartGrokImage20Enabled, "FEATURE_APIMART_GROK_IMAGE_2_0_ENABLED"},
+		{c.FeatureAPIMartSeedream50LiteEnabled, "FEATURE_APIMART_SEEDREAM_5_0_LITE_ENABLED"},
+		{c.FeatureAPIMartSeedream50ProEnabled, "FEATURE_APIMART_SEEDREAM_5_0_PRO_ENABLED"},
 	} {
 		if !model.enabled {
 			continue
@@ -1969,6 +1985,8 @@ func (c Config) validateVideoRouteProviderConfig() error {
 		name    string
 	}{
 		{c.FeatureAPIMartKlingV3Enabled, "FEATURE_APIMART_KLING_V3_ENABLED"},
+		{c.FeatureAPIMartKling30TurboEnabled, "FEATURE_APIMART_KLING_3_0_TURBO_ENABLED"},
+		{c.FeatureAPIMartMiniMaxH3Enabled, "FEATURE_APIMART_MINIMAX_H3_ENABLED"},
 		{c.FeatureAPIMartKling26MotionEnabled, "FEATURE_APIMART_KLING_2_6_MOTION_CONTROL_ENABLED"},
 		{c.FeatureAPIMartVeo31FastEnabled, "FEATURE_APIMART_VEO_3_1_FAST_ENABLED"},
 		{c.FeatureAPIMartVeo31QualityEnabled, "FEATURE_APIMART_VEO_3_1_QUALITY_ENABLED"},

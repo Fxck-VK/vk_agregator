@@ -121,6 +121,7 @@ export interface ModelCatalogItem {
   default_duration_sec?: number;
   default_resolution?: string;
   default_aspect_ratio?: string;
+  max_prompt_chars?: number;
   requires_start_image: boolean;
   supports_reference_image: boolean;
   supports_audio?: boolean;

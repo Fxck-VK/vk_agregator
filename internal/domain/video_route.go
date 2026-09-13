@@ -10,6 +10,8 @@ import (
 type VideoRouteAlias string
 
 const (
+	VideoRouteKling30Turbo     VideoRouteAlias = "video_kling_3_0_turbo"
+	VideoRouteMiniMaxH3        VideoRouteAlias = "video_minimax_h3"
 	VideoRouteHailuo23Fast     VideoRouteAlias = "video_hailuo_2_3_fast"
 	VideoRouteHailuo23Standard VideoRouteAlias = "video_hailuo_2_3_standard"
 	VideoRouteKlingO3Standard  VideoRouteAlias = "video_kling_o3_standard"

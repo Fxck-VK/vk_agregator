@@ -277,6 +277,14 @@ func (p ProductPrice) Snapshot() (PricingSnapshot, error) {
 		snapshot.TextInputTokenCap = TextMaxInputTokens
 		snapshot.TextOutputTokenCap = TextMaxOutputTokens
 	}
+	if IsBoundedAPIMartImage(p.Key.ImageModelID) {
+		snapshot.ImageOutputCount = 1
+	}
+	if IsGPTImage25(p.Key.ImageModelID) {
+		snapshot.ImagePromptByteCap = domain.GPTImage25MaxPromptBytes
+		snapshot.ImageTextInputFloor = int64(domain.GPTImage25MaxPromptBytes+512) * 4
+		snapshot.ImageAspectRatio = "1:1"
+	}
 	if !snapshot.Valid() {
 		return PricingSnapshot{}, ErrInvalidSnapshot
 	}
@@ -288,6 +296,11 @@ func (p ProductPrice) Snapshot() (PricingSnapshot, error) {
 // and exact backend pricing facts, but no prompt, provider payload, private URL
 // or provider-native model id.
 type PricingSnapshot struct {
+	ImageTextInputFloor       int64          `json:"image_text_input_floor,omitempty"`
+	ImageOutputCount          int            `json:"image_output_count,omitempty"`
+	ImagePromptByteCap        int            `json:"image_prompt_byte_cap,omitempty"`
+	ImageAspectRatio          string         `json:"image_aspect_ratio,omitempty"`
+	ImageReferenceCount       int            `json:"image_reference_count,omitempty"`
 	TextInputTokenCap         int            `json:"text_input_token_cap,omitempty"`
 	TextOutputTokenCap        int            `json:"text_output_token_cap,omitempty"`
 	Version                   int            `json:"version"`
@@ -307,6 +320,12 @@ type PricingSnapshot struct {
 // Valid reports whether a snapshot has the minimum data needed to keep an old
 // job price stable after catalog changes.
 func (s PricingSnapshot) Valid() bool {
+	if IsBoundedAPIMartImage(s.Key.ImageModelID) && (s.ImageOutputCount < 1 || s.ImageOutputCount > 15) {
+		return false
+	}
+	if IsGPTImage25(s.Key.ImageModelID) && (s.ImagePromptByteCap <= 0 || s.ImagePromptByteCap > domain.GPTImage25MaxPromptBytes || s.ImageTextInputFloor <= 0 || s.ImageTextInputFloor >= s.Floor.Amount) {
+		return false
+	}
 	if s.Key.TextModelID != "" && (s.TextInputTokenCap <= 512 || s.TextInputTokenCap > TextMaxInputTokens || s.TextOutputTokenCap <= 0 || s.TextOutputTokenCap > TextMaxOutputTokens) {
 		return false
 	}

@@ -242,6 +242,9 @@ func (c *Catalog) Resolve(ctx context.Context, req Request) (Resolution, error) 
 		return Resolution{}, fmt.Errorf("%w: %s aspect %s", ErrUnsupportedAspectRatio, routeAlias, aspectRatio)
 	}
 	imageReferenceCount := imageReferenceCount(req, params)
+	if err := validateTurboH3PublicInput(routeAlias, req.Params, imageReferenceCount); err != nil {
+		return Resolution{}, err
+	}
 	if len(route.Spec.AllowedReferenceImageCounts) > 0 && !slices.Contains(route.Spec.AllowedReferenceImageCounts, imageReferenceCount) {
 		return Resolution{}, fmt.Errorf("%w: unsupported reference image count", ErrInvalidRouteRequest)
 	}
@@ -298,6 +301,12 @@ func (c *Catalog) Resolve(ctx context.Context, req Request) (Resolution, error) 
 		return Resolution{}, fmt.Errorf("%w: provider cost %d exceeds route cap %d", domain.ErrCostCapExceeded, providerCost, route.Spec.MaxProviderCostCredits)
 	}
 	internalCost := int64(math.Ceil(float64(providerCost) * route.Spec.PriceMultiplier))
+	if routeAlias == domain.VideoRouteKling30Turbo || routeAlias == domain.VideoRouteMiniMaxH3 {
+		// Retail rounds once after converting the fractional provider rate;
+		// the whole-credit provider budget above is only a safety ceiling.
+		floor := route.Spec.ProviderCostMicrosPerSecondByResolution[normalize(resolutionRaw)] * int64(durationSec)
+		internalCost = ((floor*60 + 5*1000000 - 1) / (5 * 1000000)) * 5
+	}
 	if internalCost <= 0 {
 		return Resolution{}, fmt.Errorf("%w: %s", ErrRouteCostUnavailable, routeAlias)
 	}

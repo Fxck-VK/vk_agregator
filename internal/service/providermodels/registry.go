@@ -194,6 +194,10 @@ func textAliases() []TextAlias {
 
 func imageModels() []ImageModel {
 	return []ImageModel{
+		gptImage25Model(false),
+		gptImage25Model(true),
+		seedream50LiteModel(),
+		seedream50ProModel(),
 		midjourneyV7Model(),
 		flux2ProModel(),
 		imageModel(PublicImageNanoBanana2, "Nano Banana 2", domain.ProviderPoYo, ProviderModelPoYoNanoBanana2, FeatureImageNanoBanana2, poyoReadiness(), 14),
@@ -280,6 +284,8 @@ func imageModelWithQualities(publicID, displayName string, provider domain.Provi
 
 func videoRoutes() []VideoRoute {
 	return append(klingVeoRoutes(), []VideoRoute{
+		turboH3VideoRoute(false),
+		turboH3VideoRoute(true),
 		omniVideoRoute(false),
 		omniVideoRoute(true),
 		videoRoute(seedance25Spec(), FeatureVideoSeedance25, apimartReadiness(), videoPricingKeys(domain.VideoRouteSeedance25, []string{pricingcatalog.VideoResolution480p, pricingcatalog.VideoResolution720p, pricingcatalog.VideoResolution1080p}, []int{5, 10, 15, 30}), nil, false),

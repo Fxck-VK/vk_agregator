@@ -316,6 +316,12 @@ func New(jobs domain.JobRepository, manager uow.Manager, billing Biller, maxCost
 // user cannot afford the operation the job is parked in awaiting_payment and
 // domain.ErrInsufficientCredits is returned alongside the job.
 func (o *Orchestrator) CreateJob(ctx context.Context, in CreateJobInput) (*domain.Job, error) {
+	if err := validateTurboH3Price(in); err != nil {
+		return nil, err
+	}
+	if err := validatePaidImagePrice(in); err != nil {
+		return nil, err
+	}
 	if err := validatePaidTextPrice(in); err != nil {
 		return nil, err
 	}
@@ -350,7 +356,7 @@ func (o *Orchestrator) CreateJob(ctx context.Context, in CreateJobInput) (*domai
 		// column but are not executable legacy requests. Never expose such a row
 		// through the legacy/VK/Mini App create path on a cross-surface key
 		// collision.
-		if existing.Status == domain.JobStatusPrepared || !paidTextReplayMatches(existing, in) {
+		if existing.Status == domain.JobStatusPrepared || !createJobReplayMatches(existing, in) {
 			return nil, domain.ErrConflict
 		}
 		span.SetAttributes(attribute.String("job.id", existing.ID.String()), attribute.Bool("job.idempotent", true))

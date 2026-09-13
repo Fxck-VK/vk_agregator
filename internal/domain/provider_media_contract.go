@@ -34,6 +34,9 @@ type ProviderMediaContract struct {
 	AllowedResolutions  []string `json:"allowed_resolutions,omitempty"`
 	// Output resolutions may differ when the request selects a quality mode.
 	AllowedOutputResolutions []string `json:"allowed_output_resolutions,omitempty"`
+	// Some image-to-video providers inherit any valid first-frame aspect ratio,
+	// while their text-to-video request still has a discrete ratio allowlist.
+	OutputMayInheritImageAspect bool `json:"output_may_inherit_image_aspect,omitempty"`
 
 	ExpectedContainer string `json:"expected_container,omitempty"`
 	ExpectedCodec     string `json:"expected_codec,omitempty"`

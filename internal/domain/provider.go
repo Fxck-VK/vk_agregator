@@ -13,6 +13,9 @@ import (
 const PaidTextMaxInputTokens = 8192
 const PaidTextMaxOutputTokens = 2048
 
+// GPTImage25MaxPromptBytes bounds the text input included in its fixed quote.
+const GPTImage25MaxPromptBytes = 4096
+
 type ProviderName string
 
 const (

@@ -1,10 +1,14 @@
 package worker_test
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
+	"image"
+	"image/png"
 	"net/http"
 	"net/http/httptest"
+	"strings"
 	"sync/atomic"
 	"testing"
 
@@ -16,6 +20,7 @@ import (
 	"vk-ai-aggregator/internal/service/billingservice"
 	"vk-ai-aggregator/internal/service/moderationservice"
 	"vk-ai-aggregator/internal/service/pricingcatalog"
+	"vk-ai-aggregator/internal/service/providermodels"
 	"vk-ai-aggregator/internal/service/resultservice"
 	"vk-ai-aggregator/internal/worker"
 )
@@ -56,6 +61,24 @@ func TestFlux2ProAsyncLifecycle(t *testing.T) {
 	testAPIMartImageLifecycle(t, "flux_2_pro", "flux-2-pro", "4MP", "4MP", 40, false)
 }
 
+func TestSeedream5AsyncLifecycle(t *testing.T) {
+	t.Run("lite", func(t *testing.T) {
+		testAPIMartImageLifecycle(t, "seedream_5_0_lite", "seedream-5-0-lite", "3K", "3K", 20, true)
+	})
+	t.Run("pro", func(t *testing.T) {
+		testAPIMartImageLifecycle(t, "seedream_5_0_pro", "seedream-5-0-pro", "1.5K", "1.5K", 20, true)
+	})
+}
+
+func TestGPTImage25AsyncLifecycle(t *testing.T) {
+	t.Run("flare", func(t *testing.T) {
+		testAPIMartImageLifecycle(t, "gpt_image_2_5_flare", "gpt-image-2.5-flare", "1K-medium", "1K", 20, false)
+	})
+	t.Run("sunburst", func(t *testing.T) {
+		testAPIMartImageLifecycle(t, "gpt_image_2_5_sunburst", "gpt-image-2.5-sunburst", "2K-medium", "2K", 25, false)
+	})
+}
+
 func testAPIMartImageLifecycle(t *testing.T, publicModel, providerModel, quality, resolution string, credits int64, withReference bool) {
 	t.Helper()
 	imagine := providerModel == apimart.ModelMidjourneyV7
@@ -64,11 +87,15 @@ func testAPIMartImageLifecycle(t *testing.T, publicModel, providerModel, quality
 		endpoint, outputCount = "/v1/midjourney/generations", 4
 	}
 	scenarios := []string{"allowed", "moderation blocked"}
-	if providerModel == apimart.ModelGrokImage20 || imagine || providerModel == apimart.ModelFlux2Pro {
+	newImage := providermodels.IsNewAPIMartImageRoute(domain.ProviderAPIMart, providerModel)
+	if providerModel == apimart.ModelGrokImage20 || imagine || providerModel == apimart.ModelFlux2Pro || newImage {
 		scenarios = append(scenarios, "submit indeterminate")
 	}
-	if imagine || providerModel == apimart.ModelFlux2Pro {
+	if imagine || providerModel == apimart.ModelFlux2Pro || newImage {
 		scenarios = append(scenarios, "provider failure")
+	}
+	if newImage {
+		scenarios = append(scenarios, "price mismatch", "unexpected output count")
 	}
 	for _, name := range scenarios {
 		blocked := name == "moderation blocked"
@@ -95,7 +122,11 @@ func testAPIMartImageLifecycle(t *testing.T, publicModel, providerModel, quality
 					} else if body["model"] != providerModel || body["n"] != float64(1) {
 						t.Error("wrong worker request")
 					}
-					if !imagine && (resolution == "" && body["resolution"] != nil || resolution != "" && body["resolution"] != resolution) {
+					bodyResolution := resolution
+					if providermodels.IsGPTImage25Route(domain.ProviderAPIMart, providerModel) {
+						bodyResolution = strings.ToLower(resolution)
+					}
+					if !imagine && (bodyResolution == "" && body["resolution"] != nil || bodyResolution != "" && body["resolution"] != bodyResolution) {
 						t.Error("wrong provider resolution")
 					}
 					if withReference && body["image_urls"] == nil || !withReference && body["image_urls"] != nil {
@@ -111,6 +142,10 @@ func testAPIMartImageLifecycle(t *testing.T, publicModel, providerModel, quality
 					}
 					_, _ = w.Write([]byte(`{"code":200,"data":[{"status":"submitted","task_id":"qwen-task"}]}`))
 				case r.Method == http.MethodGet && r.URL.Path == "/v1/tasks/qwen-task":
+					if name == "unexpected output count" {
+						_, _ = w.Write([]byte(`{"code":200,"data":{"status":"completed","result":{"images":[{"url":["https://example.com/1.png","https://example.com/2.png"]}]}}}`))
+						return
+					}
 					if name == "provider failure" {
 						_, _ = w.Write([]byte(`{"code":200,"data":{"status":"failed","error":{"code":503,"type":"server_error","message":"Synthetic overload"}}}`))
 						return
@@ -139,14 +174,37 @@ func testAPIMartImageLifecycle(t *testing.T, publicModel, providerModel, quality
 			if err != nil {
 				t.Fatal(err)
 			}
+			refCount := 0
+			if withReference {
+				refCount = 1
+			}
+			snapshot, err = pricingcatalog.QuoteAPIMartImage(snapshot, "1:1", refCount)
+			if err != nil {
+				t.Fatal(err)
+			}
 			raw, err := json.Marshal(snapshot)
 			if err != nil {
 				t.Fatal(err)
 			}
 			owner := uuid.New()
 			input := map[string]any{"prompt": "Synthetic test image", "provider": domain.ProviderAPIMart, "model_code": providerModel, "model_id": publicModel, "resolution": resolution, "image_quality": quality, "size": "1:1"}
+			// VK metadata must not become native provider parameters.
+			if newImage {
+				input["vk_placeholder_message_id"] = 123
+			}
+			if name == "price mismatch" {
+				input["output_count"] = 2
+			}
 			if withReference {
-				reference := h.createInputImageArtifact(t, owner, validPNGBytes(t), "image/png")
+				inputImage := validPNGBytes(t)
+				if newImage {
+					var buf bytes.Buffer
+					if err := png.Encode(&buf, image.NewNRGBA(image.Rect(0, 0, 32, 32))); err != nil {
+						t.Fatal(err)
+					}
+					inputImage = buf.Bytes()
+				}
+				reference := h.createInputImageArtifact(t, owner, inputImage, "image/png")
 				input["reference_artifact_ids"] = []string{reference.ID.String()}
 			}
 			params, err := json.Marshal(input)
@@ -165,8 +223,15 @@ func testAPIMartImageLifecycle(t *testing.T, publicModel, providerModel, quality
 					t.Fatal(err)
 				}
 			}
+			if name == "price mismatch" {
+				job = h.reload(t, job.ID)
+				if submits.Load() != 0 || moderator.calls != 0 || job.CostCaptured != 0 || job.Status != domain.JobStatusFailedTerminal {
+					t.Fatal("mismatched quote reached a paid provider")
+				}
+				return
+			}
 			if submits.Load() != 1 {
-				t.Fatal("Job replay resubmitted provider request")
+				t.Fatalf("provider submits=%d, want exactly one", submits.Load())
 			}
 			if name == "submit indeterminate" {
 				job = h.reload(t, job.ID)
@@ -189,7 +254,7 @@ func testAPIMartImageLifecycle(t *testing.T, publicModel, providerModel, quality
 				}
 			}
 			job = h.reload(t, job.ID)
-			if name == "provider failure" {
+			if name == "provider failure" || name == "unexpected output count" {
 				account, err := billingRepo.GetAccountByUser(ctx, owner, domain.CurrencyCredits)
 				if err != nil || account.BalanceCached != billingservice.DefaultStartingBalance || job.Status != domain.JobStatusFailedTerminal || job.CostCaptured != 0 || moderator.calls != 0 || len(job.OutputArtifactIDs) != 0 {
 					t.Fatal("failed provider task charged or exposed a result")

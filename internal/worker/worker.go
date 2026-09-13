@@ -36,6 +36,7 @@ import (
 	"vk-ai-aggregator/internal/service/assistantfacts"
 	"vk-ai-aggregator/internal/service/dialogcontext"
 	"vk-ai-aggregator/internal/service/moderationservice"
+	"vk-ai-aggregator/internal/service/providermodels"
 )
 
 // maxProviderAttempts caps how many times a job is re-submitted to a provider
@@ -1200,6 +1201,7 @@ type promptParams struct {
 	AspectRatio              string                    `json:"aspect_ratio,omitempty"`
 	OutputCount              int                       `json:"output_count,omitempty"`
 	Resolution               string                    `json:"resolution,omitempty"`
+	ImageQuality             string                    `json:"image_quality,omitempty"`
 	ReferenceArtifactIDs     []uuid.UUID               `json:"reference_artifact_ids,omitempty"`
 	InputURLs                []string                  `json:"input_urls,omitempty"`
 	VKPlaceholderMessageID   int64                     `json:"vk_placeholder_message_id,omitempty"`
@@ -1273,6 +1275,9 @@ func (p *processor) buildRequest(ctx context.Context, job *domain.Job, attempt i
 	}
 	textInputLimit, textOutputLimit, err := paidTextJobLimits(job, pp)
 	if err != nil {
+		return domain.ProviderRequest{}, err
+	}
+	if err := validatePaidImageJob(job, pp); err != nil {
 		return domain.ProviderRequest{}, err
 	}
 	prompt := pp.Prompt
@@ -1375,6 +1380,9 @@ func (p *processor) buildRequest(ctx context.Context, job *domain.Job, attempt i
 		}
 	}
 	providerParams := safeProviderParams(job.Params)
+	if providermodels.IsNewAPIMartImageRoute(pp.Provider, modelCode) {
+		providerParams = paidImageProviderParams(pp, size)
+	}
 	referenceVideoURL, err := p.motionReferenceURL(ctx, job, pp, modelCode, durationSec)
 	if err != nil {
 		return domain.ProviderRequest{}, err
@@ -2067,6 +2075,9 @@ func (p *processor) applyResult(ctx context.Context, job *domain.Job, pt *domain
 	switch res.Status {
 	case domain.ProviderTaskSucceeded:
 		p.recordProviderOutputs(pt, job, res)
+		if !paidImageOutputCountMatches(job, res.OutputURLs) {
+			return p.handleFailure(ctx, job, task, domain.ProviderErrInternal, safeProviderFailureMessage(domain.ProviderErrInternal))
+		}
 		if err := p.saveOutputs(ctx, job, res.OutputURLs, res.Text); err != nil {
 			failureClass := outputArtifactFailureClass(err)
 			p.recordProviderProductFailureForTask(job, pt, string(failureClass))

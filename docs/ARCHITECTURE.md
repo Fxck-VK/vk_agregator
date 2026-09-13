@@ -2981,3 +2981,26 @@ Billing duration is derived from persisted probe metadata at estimate, creation 
 worker submission. Kling audio uses a separate quality=audio price key; all new
 Kling/Veo routes use immutable pricing and durable paid-submit claims. See
 docs/VIDEO_GENERATION.md and docs/runbooks/DEV.md for contracts and deployment.
+
+## GPT Image 2.5 and Seedream 5 image contracts (2026-09-13)
+
+Four APIMart image routes reuse asynchronous Jobs, owned Artifacts, moderation,
+ledger reservations/capture and durable per-Job submit claims. Pricing v14 adds
+GPT Flare/Sunburst, Seedream Lite and Pro. Quotes bind output count, reference
+count and (for GPT) aspect ratio to immutable snapshots. Orchestrator and worker
+validate these dimensions before any paid submission; retries retain old prices.
+GPT uses the provider size/quality token table plus a fixed bounded text-input
+estimate; public GPT references remain closed pending an input-token bound.
+Pro quotes include the published extra-reference surcharge. Unexpected output
+counts fail without capture; recovery can continue from already stored artifacts.
+Provider-native params and channel metadata cannot override the priced shape.
+See [image rollout and pricing](runbooks/DEV.md#gpt-image-25-and-seedream-5-images).
+
+APIMart Kling 3.0 Turbo and MiniMax H3 use stable public video aliases and
+worker-only async submission/polling with durable per-Job submit intents.
+The public contract accepts text and at most one owned first-frame image;
+multimodal references and provider-native callbacks remain closed. Pricing
+catalog v15 covers all documented duration/resolution combinations, applying
+provider cost x3 rounded up to 5 internal credits before reservation. Output
+contracts accept inherited first-frame aspect ratios and portrait/2K media.
+See docs/VIDEO_GENERATION.md for parameter bounds, tariffs and rollout flags.

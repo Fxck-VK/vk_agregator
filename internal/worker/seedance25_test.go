@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
+	"strings"
 	"sync/atomic"
 	"testing"
 
@@ -52,6 +53,21 @@ func TestKlingVeoAsyncLifecycle(t *testing.T) {
 	}
 }
 
+func TestTurboH3AsyncLifecycle(t *testing.T) {
+	for _, tc := range []struct {
+		alias             domain.VideoRouteAlias
+		model, resolution string
+		credits           int64
+	}{
+		{domain.VideoRouteKling30Turbo, "kling-3.0-turbo", "720p", 345},
+		{domain.VideoRouteKling30Turbo, "kling-3.0-turbo", "1080p", 430},
+		{domain.VideoRouteMiniMaxH3, "MiniMax-H3", "2k", 275},
+		{domain.VideoRouteMiniMaxH3, "MiniMax-H3", "768p", 175},
+	} {
+		t.Run(tc.model+tc.resolution, func(t *testing.T) { testAPIMartVideoLifecycle(t, tc.alias, tc.model, tc.resolution, 5, tc.credits) })
+	}
+}
+
 func testAPIMartVideoLifecycle(t *testing.T, alias domain.VideoRouteAlias, model, resolution string, duration int, credits int64) {
 	t.Helper()
 	for _, scenario := range []string{"success", "output blocked", "provider rejected", "submit indeterminate"} {
@@ -69,7 +85,11 @@ func testAPIMartVideoLifecycle(t *testing.T, alias domain.VideoRouteAlias, model
 					if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
 						t.Error(err)
 					}
-					if body["model"] != model || (model != apimart.ModelKlingV3 && body["resolution"] != resolution) || (model == apimart.ModelKlingV3 && body["mode"] != "std") {
+					wireResolution := resolution
+					if model == "MiniMax-H3" {
+						wireResolution = strings.ToUpper(resolution)
+					}
+					if body["model"] != model || (model != apimart.ModelKlingV3 && body["resolution"] != wireResolution) || (model == apimart.ModelKlingV3 && body["mode"] != "std") {
 						t.Error("worker ignored immutable route")
 					}
 					if model == apimart.ModelOmni11Flash {
@@ -107,7 +127,7 @@ func testAPIMartVideoLifecycle(t *testing.T, alias domain.VideoRouteAlias, model
 			if err != nil {
 				t.Fatal(err)
 			}
-			catalog, err := productcatalog.FromConfig(config.Config{FeatureVideoRouterEnabled: true, FeatureAPIMartSeedance25Enabled: true, FeatureAPIMartOmni11FlashEnabled: true, FeatureAPIMartOmni11FlashExtEnabled: true, FeatureAPIMartKlingV3Enabled: true, FeatureAPIMartVeo31FastEnabled: true, FeatureAPIMartVeo31QualityEnabled: true, FeatureAPIMartVeo31LiteEnabled: true, APIMartProviderEnabled: true, APIMartAPIKey: "test", APIMartBaseURL: srv.URL}, prices)
+			catalog, err := productcatalog.FromConfig(config.Config{FeatureAPIMartKling30TurboEnabled: true, FeatureAPIMartMiniMaxH3Enabled: true, FeatureVideoRouterEnabled: true, FeatureAPIMartSeedance25Enabled: true, FeatureAPIMartOmni11FlashEnabled: true, FeatureAPIMartOmni11FlashExtEnabled: true, FeatureAPIMartKlingV3Enabled: true, FeatureAPIMartVeo31FastEnabled: true, FeatureAPIMartVeo31QualityEnabled: true, FeatureAPIMartVeo31LiteEnabled: true, APIMartProviderEnabled: true, APIMartAPIKey: "test", APIMartBaseURL: srv.URL}, prices)
 			if err != nil {
 				t.Fatal(err)
 			}

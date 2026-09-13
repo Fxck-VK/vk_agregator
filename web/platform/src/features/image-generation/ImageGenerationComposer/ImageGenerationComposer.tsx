@@ -25,6 +25,7 @@ type ImageGenerationComposerProps = {
   onPromptChange: (prompt: string) => void;
   onSubmit: () => void;
   price: number | null;
+  priceNote?: string;
   outputCount: number;
   prompt: string;
   qualityOptions: string[];
@@ -45,6 +46,7 @@ export function ImageGenerationComposer({
   onPromptChange,
   onSubmit,
   price,
+  priceNote,
   outputCount,
   prompt,
   qualityOptions,
@@ -85,9 +87,9 @@ export function ImageGenerationComposer({
         disabled={isSubmitting}
         label={ru.imageGeneration.promptLabel}
         mediaLabel="Загрузить медиа"
-        note={price === null
+        note={priceNote ?? (price === null
           ? ru.imageGeneration.priceUnavailable
-          : <CreditAmount prefix={isImagine ? "За запуск Imagine:" : `${ru.imageGeneration.priceLabel}:`} value={price} />}
+          : <CreditAmount prefix={isImagine ? "За запуск Imagine:" : `${ru.imageGeneration.priceLabel}:`} value={price} />)}
         onChange={(event) => onPromptChange(event.target.value)}
         onSend={onSubmit}
         placeholder={ru.imageGeneration.promptPlaceholder}

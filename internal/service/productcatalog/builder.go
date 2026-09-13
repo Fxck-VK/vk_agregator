@@ -241,6 +241,14 @@ func featureFlagValue(cfg config.Config, flag string) (bool, bool) {
 		return cfg.FeatureAPIMartMidjourneyV7Enabled, true
 	case providermodels.FeatureImageFlux2Pro:
 		return cfg.FeatureAPIMartFlux2ProEnabled, true
+	case providermodels.FeatureImageGPTImage25Flare:
+		return cfg.FeatureAPIMartGPTImage25FlareEnabled, true
+	case providermodels.FeatureImageGPTImage25Sunburst:
+		return cfg.FeatureAPIMartGPTImage25SunburstEnabled, true
+	case providermodels.FeatureImageSeedream50Lite:
+		return cfg.FeatureAPIMartSeedream50LiteEnabled, true
+	case providermodels.FeatureImageSeedream50Pro:
+		return cfg.FeatureAPIMartSeedream50ProEnabled, true
 	case providermodels.FeatureImageGrokImage15:
 		return cfg.FeatureAPIMartGrokImage15Enabled, true
 	case providermodels.FeatureImageGrokImage20:
@@ -265,6 +273,10 @@ func featureFlagValue(cfg config.Config, flag string) (bool, bool) {
 		return cfg.FeatureAPIMartSeedance25Enabled, true
 	case providermodels.FeatureVideoKlingV3:
 		return cfg.FeatureAPIMartKlingV3Enabled, true
+	case providermodels.FeatureVideoKling30Turbo:
+		return cfg.FeatureAPIMartKling30TurboEnabled, true
+	case providermodels.FeatureVideoMiniMaxH3:
+		return cfg.FeatureAPIMartMiniMaxH3Enabled, true
 	case providermodels.FeatureVideoKling26Motion:
 		return cfg.FeatureAPIMartKling26MotionEnabled, true
 	case providermodels.FeatureVideoVeo31Fast:

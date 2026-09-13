@@ -364,8 +364,14 @@ func TestLoadVideoRouterFlagsDefaultDisabled(t *testing.T) {
 		"FEATURE_VIDEO_ROUTE_RUNWAY_GEN4_TURBO_ENABLED",
 		"FEATURE_VIDEO_ROUTE_SEEDANCE_2_0_FAST_ENABLED",
 		"FEATURE_APIMART_SEEDANCE_2_5_ENABLED",
+		"FEATURE_APIMART_GPT_IMAGE_2_5_FLARE_ENABLED",
+		"FEATURE_APIMART_GPT_IMAGE_2_5_SUNBURST_ENABLED",
+		"FEATURE_APIMART_SEEDREAM_5_0_LITE_ENABLED",
+		"FEATURE_APIMART_SEEDREAM_5_0_PRO_ENABLED",
 		"FEATURE_APIMART_OMNI_1_1_FLASH_ENABLED",
 		"FEATURE_APIMART_OMNI_1_1_FLASH_EXT_ENABLED",
+		"FEATURE_APIMART_KLING_3_0_TURBO_ENABLED",
+		"FEATURE_APIMART_MINIMAX_H3_ENABLED",
 		"FEATURE_VIDEO_ROUTE_RUNWAY_GEN4_5_ENABLED",
 		"FEATURE_VIDEO_ROUTE_MOCK_TEXT_TO_VIDEO_ENABLED",
 		"FEATURE_VIDEO_ROUTE_RESELLER_EXPERIMENTS_ENABLED",
@@ -389,8 +395,14 @@ func TestLoadVideoRouterFlagsDefaultDisabled(t *testing.T) {
 		cfg.FeatureVideoRouteRunwayGen4TurboEnabled ||
 		cfg.FeatureVideoRouteSeedance20FastEnabled ||
 		cfg.FeatureAPIMartSeedance25Enabled ||
+		cfg.FeatureAPIMartGPTImage25FlareEnabled ||
+		cfg.FeatureAPIMartGPTImage25SunburstEnabled ||
+		cfg.FeatureAPIMartSeedream50LiteEnabled ||
+		cfg.FeatureAPIMartSeedream50ProEnabled ||
 		cfg.FeatureAPIMartOmni11FlashEnabled ||
 		cfg.FeatureAPIMartOmni11FlashExtEnabled ||
+		cfg.FeatureAPIMartKling30TurboEnabled ||
+		cfg.FeatureAPIMartMiniMaxH3Enabled ||
 		cfg.FeatureVideoRouteRunwayGen45Enabled ||
 		cfg.FeatureVideoRouteMockTextToVideoEnabled ||
 		cfg.FeatureVideoRouteResellerExperimentsEnabled ||
@@ -403,6 +415,28 @@ func TestLoadVideoRouterFlagsDefaultDisabled(t *testing.T) {
 		cfg.PoYoProviderEnabled ||
 		cfg.RunwayProviderEnabled {
 		t.Fatal("video router/provider flags should default to disabled")
+	}
+}
+
+func TestLoadAPIMartTurboH3VideoFlags(t *testing.T) {
+	tests := []struct {
+		env     string
+		enabled func(config.Config) bool
+	}{
+		{"FEATURE_APIMART_KLING_3_0_TURBO_ENABLED", func(cfg config.Config) bool {
+			return cfg.FeatureAPIMartKling30TurboEnabled
+		}},
+		{"FEATURE_APIMART_MINIMAX_H3_ENABLED", func(cfg config.Config) bool {
+			return cfg.FeatureAPIMartMiniMaxH3Enabled
+		}},
+	}
+	for _, tt := range tests {
+		t.Run(tt.env, func(t *testing.T) {
+			t.Setenv(tt.env, "true")
+			if !tt.enabled(config.Load()) {
+				t.Fatalf("%s=true was not loaded", tt.env)
+			}
+		})
 	}
 }
 
@@ -616,6 +650,66 @@ func TestValidateVideoRouteRequiresProviderKey(t *testing.T) {
 	err := cfg.Validate()
 	if err == nil || !strings.Contains(err.Error(), "APIMART_API_KEY") {
 		t.Fatalf("expected APIMART_API_KEY validation error, got %v", err)
+	}
+}
+
+func TestValidateAPIMartTurboH3RoutesFailClosedWithoutReadiness(t *testing.T) {
+	tests := []struct {
+		name string
+		flag string
+		set  func(*config.Config)
+	}{
+		{
+			name: "kling 3 turbo",
+			flag: "FEATURE_APIMART_KLING_3_0_TURBO_ENABLED",
+			set:  func(cfg *config.Config) { cfg.FeatureAPIMartKling30TurboEnabled = true },
+		},
+		{
+			name: "minimax h3",
+			flag: "FEATURE_APIMART_MINIMAX_H3_ENABLED",
+			set:  func(cfg *config.Config) { cfg.FeatureAPIMartMiniMaxH3Enabled = true },
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			base := config.Config{
+				Env:                       "development",
+				Provider:                  "mock",
+				ProviderChain:             []string{"mock"},
+				FeatureVideoRouterEnabled: true,
+				APIMartProviderEnabled:    true,
+				APIMartAPIKey:             "test-key",
+				APIMartBaseURL:            "https://api.apimart.ai/v1",
+			}
+			tt.set(&base)
+			if err := base.Validate(); err != nil {
+				t.Fatalf("ready APIMart %s config rejected: %v", tt.name, err)
+			}
+
+			cases := []struct {
+				name string
+				edit func(*config.Config)
+				want string
+			}{
+				{name: "router disabled", edit: func(cfg *config.Config) { cfg.FeatureVideoRouterEnabled = false }, want: tt.flag},
+				{name: "provider disabled", edit: func(cfg *config.Config) { cfg.APIMartProviderEnabled = false }, want: tt.flag},
+				{name: "api key missing", edit: func(cfg *config.Config) { cfg.APIMartAPIKey = "" }, want: "APIMART_API_KEY"},
+				{name: "base url missing", edit: func(cfg *config.Config) { cfg.APIMartBaseURL = "" }, want: "APIMART_BASE_URL"},
+			}
+			for _, tc := range cases {
+				t.Run(tc.name, func(t *testing.T) {
+					cfg := base
+					tc.edit(&cfg)
+					err := cfg.Validate()
+					if err == nil || !strings.Contains(err.Error(), tc.want) {
+						t.Fatalf("Validate() error = %v, want fail-closed %s error", err, tc.want)
+					}
+					if strings.Contains(err.Error(), base.APIMartAPIKey) {
+						t.Fatalf("validation error leaked API key: %v", err)
+					}
+				})
+			}
+		})
 	}
 }
 

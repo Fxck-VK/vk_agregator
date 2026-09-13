@@ -1,6 +1,7 @@
 import Link from "next/link";
 
 import { CreditAmount } from "@/components/ui/CreditAmount/CreditAmount";
+import { imageQualityLabel } from "@/features/image-generation/image-quality-labels";
 import { ru } from "@/i18n/ru";
 import type { ImageModel } from "@/lib/web-api/contracts";
 
@@ -31,7 +32,7 @@ export function ModelCard({ model }: ModelCardProps) {
         </div>
         <ul aria-label={ru.modelsCatalog.qualityFilterLabel} className={styles.qualities}>
           {model.quality_options.map((value) => (
-            <li key={value}>{value}</li>
+            <li key={value}>{imageQualityLabel(value)}</li>
           ))}
         </ul>
         <p className={styles.reference}>

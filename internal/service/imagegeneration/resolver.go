@@ -28,6 +28,7 @@ var (
 	ErrPriceUnavailable         = errors.New("image generation price unavailable")
 	ErrUnsupportedAspectRatio   = errors.New("image generation aspect ratio unsupported")
 	ErrUnsupportedPromptOptions = errors.New("native prompt options are unsupported")
+	ErrPromptTooLong            = errors.New("image generation prompt too long")
 )
 
 const (
@@ -145,11 +146,19 @@ func (r Resolver) Resolve(request Request) (Resolution, error) {
 	if err != nil || !snapshot.Valid() {
 		return Resolution{}, fmt.Errorf("%w: %v", ErrPriceUnavailable, err)
 	}
+	snapshot, err = pricingcatalog.QuoteAPIMartImage(snapshot, public.AspectRatio, request.ReferenceCount)
+	if err != nil {
+		return Resolution{}, ErrPriceUnavailable
+	}
 	snapshot, err = scalePricingSnapshot(snapshot, public.OutputCount)
 	if err != nil {
 		return Resolution{}, err
 	}
 
+	size := imageSizeForQuality(trustedModel.Provider, public.ImageQuality)
+	if pricingcatalog.IsBoundedAPIMartImage(trustedModel.ModelID) {
+		size = public.AspectRatio
+	}
 	return Resolution{
 		Public: public,
 		Worker: WorkerParams{
@@ -157,7 +166,7 @@ func (r Resolver) Resolve(request Request) (Resolution, error) {
 			ModelName:    trustedModel.ModelName,
 			Provider:     trustedModel.Provider,
 			ModelCode:    trustedModel.ModelCode,
-			Size:         imageSizeForQuality(trustedModel.Provider, public.ImageQuality),
+			Size:         size,
 			Resolution:   WorkerResolution(trustedModel.ModelID, public.ImageQuality),
 			ImageQuality: public.ImageQuality,
 			AspectRatio:  public.AspectRatio,
@@ -171,6 +180,9 @@ func (r Resolver) Resolve(request Request) (Resolution, error) {
 // worker contract. VK and the shared resolver must use the same mapping.
 func WorkerResolution(modelID, quality string) string {
 	switch modelID {
+	case modelcatalog.MiniAppImageGPTImage25Flare, modelcatalog.MiniAppImageGPTImage25Sunburst:
+		resolution, _, _ := strings.Cut(quality, "-")
+		return resolution
 	case modelcatalog.MiniAppImageGrokImage15:
 		return ""
 	case modelcatalog.MiniAppImageGrokImage20:
@@ -217,6 +229,9 @@ func (r Resolver) resolvePublic(request Request) (modelcatalog.Model, PublicSele
 	aspectRatio := strings.TrimSpace(request.AspectRatio)
 	if aspectRatio == "" {
 		aspectRatio = DefaultAspectRatio
+		if len(trustedModel.AllowedAspectRatios) == 1 {
+			aspectRatio = trustedModel.AllowedAspectRatios[0]
+		}
 	}
 	if len(trustedModel.AllowedAspectRatios) > 0 {
 		allowed := false
@@ -235,6 +250,12 @@ func (r Resolver) resolvePublic(request Request) (modelcatalog.Model, PublicSele
 	outputCount, err := normalizeOutputCount(publicModel, request.OutputCount)
 	if err != nil {
 		return modelcatalog.Model{}, PublicSelection{}, err
+	}
+	if trustedModel.ModelID == modelcatalog.MiniAppImageSeedream50Lite && request.ReferenceCount+outputCount > 15 {
+		return modelcatalog.Model{}, PublicSelection{}, ErrOutputCountLimit
+	}
+	if pricingcatalog.IsGPTImage25(trustedModel.ModelID) && len(request.Prompt) > domain.GPTImage25MaxPromptBytes {
+		return modelcatalog.Model{}, PublicSelection{}, ErrPromptTooLong
 	}
 
 	return trustedModel, PublicSelection{
@@ -340,8 +361,18 @@ func scalePricingSnapshot(snapshot pricingcatalog.PricingSnapshot, outputCount i
 	if outputCount == DefaultOutputCount {
 		return snapshot, nil
 	}
+	if pricingcatalog.IsGPTImage25(snapshot.Key.ImageModelID) {
+		quoted, err := pricingcatalog.ScaleGPTImage25Quote(snapshot, outputCount)
+		if err != nil {
+			return pricingcatalog.PricingSnapshot{}, ErrPriceUnavailable
+		}
+		return quoted, nil
+	}
 
 	count := int64(outputCount)
+	if snapshot.ImageOutputCount > 0 {
+		snapshot.ImageOutputCount = outputCount
+	}
 	var ok bool
 	if snapshot.Floor.Amount, ok = checkedMultiply(snapshot.Floor.Amount, count); !ok {
 		return pricingcatalog.PricingSnapshot{}, ErrPriceUnavailable

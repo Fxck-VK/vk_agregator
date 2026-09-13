@@ -128,4 +128,23 @@ describe("ModelCard", () => {
 
     expect(screen.queryByTestId("credit-star-icon")).not.toBeInTheDocument();
   });
+
+  it("formats composite quality badges for public GPT image variants", () => {
+    render(
+      <ModelCard
+        model={{
+          default_quality: "1K-medium",
+          id: "gpt_image_2_5_flare",
+          max_reference_images: 0,
+          name: "GPT Image 2.5 Flare",
+          quality_options: ["1K-medium", "4K-xhigh"],
+          supports_reference_image: false,
+        }}
+      />,
+    );
+
+    expect(screen.getByText("1K·Среднее")).toBeInTheDocument();
+    expect(screen.getByText("4K·Очень высокое")).toBeInTheDocument();
+    expect(screen.queryByText("1K-medium")).not.toBeInTheDocument();
+  });
 });

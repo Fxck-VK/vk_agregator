@@ -611,7 +611,8 @@ func (h *Handler) readJobRequest(w http.ResponseWriter, r *http.Request) (Create
 		writeError(w, http.StatusBadRequest, "invalid json")
 		return CreateJobRequest{}, "", "", miniAppModelSpec{}, false
 	}
-	if req.Prompt == "" {
+	imageOnlyKling := req.Operation == string(domain.OperationVideoGenerate) && strings.TrimSpace(req.VideoRouteAlias) == string(domain.VideoRouteKling30Turbo) && len(req.ReferenceArtifactIDs) == 1
+	if req.Prompt == "" && !imageOnlyKling {
 		writeError(w, http.StatusBadRequest, "prompt is required")
 		return CreateJobRequest{}, "", "", miniAppModelSpec{}, false
 	}
@@ -698,6 +699,7 @@ func (h *Handler) readJobRequest(w http.ResponseWriter, r *http.Request) (Create
 				Prompt:         req.Prompt,
 				ModelID:        req.ModelID,
 				Quality:        req.ImageQuality,
+				AspectRatio:    "1:1",
 				ReferenceCount: referenceCount,
 			})
 			if err != nil {
@@ -732,6 +734,8 @@ func (h *Handler) resolveImageGeneration(request imagegeneration.Request) (image
 
 func writeImageGenerationResolveError(w http.ResponseWriter, err error) {
 	switch {
+	case errors.Is(err, imagegeneration.ErrPromptTooLong):
+		writeError(w, http.StatusBadRequest, "image prompt exceeds 4096 UTF-8 bytes")
 	case errors.Is(err, imagegeneration.ErrUnsupportedPromptOptions):
 		writeError(w, http.StatusBadRequest, "native prompt options are unsupported")
 	case errors.Is(err, imagegeneration.ErrUnsupportedQuality):
@@ -834,6 +838,10 @@ func videoRouteModelSpec(route VideoRouteDTO) miniAppModelSpec {
 
 func videoRouteDisplayName(alias string) string {
 	switch alias {
+	case string(domain.VideoRouteKling30Turbo):
+		return "Kling 3.0 Turbo"
+	case string(domain.VideoRouteMiniMaxH3):
+		return "MiniMax H3"
 	case string(domain.VideoRouteOmni11Flash):
 		return "Gemini Omni 1.1 Flash"
 	case string(domain.VideoRouteOmni11FlashExt):
@@ -1254,6 +1262,7 @@ func (h *Handler) createJob(w http.ResponseWriter, r *http.Request) {
 		jobParams.ImageQuality = worker.ImageQuality
 		jobParams.Resolution = worker.Resolution
 		jobParams.Size = worker.Size
+		jobParams.AspectRatio = worker.AspectRatio
 	} else {
 		jobParams.ModelID = model.ModelID
 		jobParams.ModelName = model.ModelName
