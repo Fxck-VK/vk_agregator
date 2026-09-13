@@ -12,6 +12,7 @@ import (
 	"log/slog"
 	"net/http"
 	"net/url"
+	"slices"
 	"strconv"
 	"strings"
 	"time"
@@ -28,7 +29,10 @@ import (
 	"vk-ai-aggregator/internal/service/modelcatalog"
 	"vk-ai-aggregator/internal/service/paymentservice"
 	"vk-ai-aggregator/internal/service/pricingcatalog"
+	"vk-ai-aggregator/internal/service/providermodels"
 	"vk-ai-aggregator/internal/service/referralservice"
+	"vk-ai-aggregator/internal/service/textgeneration"
+	"vk-ai-aggregator/internal/service/videoreference"
 )
 
 type contextKey int
@@ -64,6 +68,7 @@ type ReferralService interface {
 
 // Config holds per-deployment miniapp settings.
 type Config struct {
+	TextModels []textgeneration.PublicModel
 	// AppSecret is the VK App's protected key for verifying launch-params
 	// signatures. When empty the check is skipped (dev/mock mode).
 	AppSecret string
@@ -132,20 +137,21 @@ type ObjectReader interface {
 
 // Deps are the collaborators needed by the miniapp handler.
 type Deps struct {
-	Users          domain.UserRepository
-	Identity       domain.IdentityResolver
-	Jobs           domain.JobRepository
-	Conversations  domain.ConversationRepository
-	Artifacts      domain.ArtifactRepository
-	Moderation     domain.ModerationResultRepository
-	Objects        ObjectReader
-	Billing        *billingservice.Service
-	BillingRepo    domain.BillingRepository
-	Payment        *paymentservice.Service
-	Referrals      ReferralService
-	Orchestrator   *joborchestrator.Orchestrator
-	PricingCatalog *pricingcatalog.Catalog
-	Logger         *slog.Logger
+	VideoReferenceProber videoreference.Prober
+	Users                domain.UserRepository
+	Identity             domain.IdentityResolver
+	Jobs                 domain.JobRepository
+	Conversations        domain.ConversationRepository
+	Artifacts            domain.ArtifactRepository
+	Moderation           domain.ModerationResultRepository
+	Objects              ObjectReader
+	Billing              *billingservice.Service
+	BillingRepo          domain.BillingRepository
+	Payment              *paymentservice.Service
+	Referrals            ReferralService
+	Orchestrator         *joborchestrator.Orchestrator
+	PricingCatalog       *pricingcatalog.Catalog
+	Logger               *slog.Logger
 }
 
 // Handler serves the /miniapp/* routes.
@@ -193,6 +199,7 @@ func (h *Handler) Routes() http.Handler {
 	mux.HandleFunc("POST /miniapp/jobs", h.auth(h.rateLimitMiniApp("miniapp_job", h.createJob)))
 	mux.HandleFunc("GET /miniapp/jobs", h.auth(h.listJobs))
 	mux.HandleFunc("GET /miniapp/jobs/{id}", h.auth(h.getJob))
+	mux.HandleFunc("GET /miniapp/text-models", h.auth(h.listTextModels))
 	mux.HandleFunc("GET /miniapp/model-catalog", h.auth(h.listModelCatalog))
 	mux.HandleFunc("GET /miniapp/balance", h.auth(h.getBalance))
 	mux.HandleFunc("GET /miniapp/referral", h.auth(h.getReferral))
@@ -203,6 +210,7 @@ func (h *Handler) Routes() http.Handler {
 	mux.HandleFunc("GET /miniapp/payments/{id}", h.auth(h.getPaymentIntent))
 	mux.HandleFunc("POST /miniapp/payments/{id}/cancel", h.auth(h.rateLimitMiniApp("miniapp_payment_cancel", h.cancelPaymentIntent)))
 	mux.HandleFunc("POST /miniapp/artifacts", h.auth(h.rateLimitMiniApp("miniapp_artifact", h.limitArtifactUploadConcurrency(h.createArtifact))))
+	mux.HandleFunc("POST /miniapp/video-artifacts", h.auth(h.rateLimitMiniApp("miniapp_artifact", h.limitArtifactUploadConcurrency(h.createVideoArtifact))))
 	mux.HandleFunc("GET /miniapp/artifacts/{id}", h.auth(h.getArtifact))
 	mux.HandleFunc("POST /miniapp/client-events", h.auth(h.rateLimitMiniApp("miniapp_client_events", h.clientEvent)))
 	return mux
@@ -484,6 +492,7 @@ func safeClientRoute(value string) string {
 		"/miniapp/payments/intents",
 		"/miniapp/payments",
 		"/miniapp/artifacts",
+		"/miniapp/video-artifacts",
 		"/miniapp/client-events":
 		return route
 	case "/miniapp/jobs/:id",
@@ -602,7 +611,8 @@ func (h *Handler) readJobRequest(w http.ResponseWriter, r *http.Request) (Create
 		writeError(w, http.StatusBadRequest, "invalid json")
 		return CreateJobRequest{}, "", "", miniAppModelSpec{}, false
 	}
-	if req.Prompt == "" {
+	imageOnlyKling := req.Operation == string(domain.OperationVideoGenerate) && strings.TrimSpace(req.VideoRouteAlias) == string(domain.VideoRouteKling30Turbo) && len(req.ReferenceArtifactIDs) == 1
+	if req.Prompt == "" && !imageOnlyKling {
 		writeError(w, http.StatusBadRequest, "prompt is required")
 		return CreateJobRequest{}, "", "", miniAppModelSpec{}, false
 	}
@@ -616,11 +626,19 @@ func (h *Handler) readJobRequest(w http.ResponseWriter, r *http.Request) (Create
 		writeError(w, http.StatusBadRequest, "duration_sec is only supported for video_generate")
 		return CreateJobRequest{}, "", "", miniAppModelSpec{}, false
 	}
+	if strings.TrimSpace(req.VideoResolution) != "" && opType != domain.OperationVideoGenerate {
+		writeError(w, http.StatusBadRequest, "video_resolution is only supported for video_generate")
+		return CreateJobRequest{}, "", "", miniAppModelSpec{}, false
+	}
 	if strings.TrimSpace(req.ImageQuality) != "" && opType != domain.OperationImageGenerate {
 		writeError(w, http.StatusBadRequest, "image_quality is only supported for image_generate")
 		return CreateJobRequest{}, "", "", miniAppModelSpec{}, false
 	}
 	var model miniAppModelSpec
+	if opType != domain.OperationVideoGenerate && (req.VideoAudio || req.ReferenceVideoArtifactID != uuid.Nil || req.CharacterOrientation != "" || req.KeepOriginalSound != nil) {
+		writeError(w, http.StatusBadRequest, "video options require video_generate")
+		return CreateJobRequest{}, "", "", miniAppModelSpec{}, false
+	}
 	if opType == domain.OperationVideoGenerate {
 		if strings.TrimSpace(req.ModelID) != "" {
 			writeError(w, http.StatusBadRequest, "unsupported model")
@@ -632,7 +650,17 @@ func (h *Handler) readJobRequest(w http.ResponseWriter, r *http.Request) (Create
 			return CreateJobRequest{}, "", "", miniAppModelSpec{}, false
 		}
 		req.VideoRouteAlias = route.Alias
+		if !validateVideoOptions(w, route, &req) {
+			return CreateJobRequest{}, "", "", miniAppModelSpec{}, false
+		}
 		req.Resolution = route.DefaultResolution
+		if resolution := strings.ToLower(strings.TrimSpace(req.VideoResolution)); resolution != "" {
+			if !slices.Contains(route.AllowedResolutions, resolution) {
+				writeError(w, http.StatusBadRequest, "invalid video resolution")
+				return CreateJobRequest{}, "", "", miniAppModelSpec{}, false
+			}
+			req.Resolution = resolution
+		}
 		duration, ok := normalizeVideoDurationSec(req.DurationSec, route)
 		if !ok {
 			writeError(w, http.StatusBadRequest, "invalid video duration")
@@ -641,7 +669,9 @@ func (h *Handler) readJobRequest(w http.ResponseWriter, r *http.Request) (Create
 		if !validateVideoReferenceCount(w, route, req.ReferenceArtifactIDs) {
 			return CreateJobRequest{}, "", "", miniAppModelSpec{}, false
 		}
-		req.DurationSec = duration
+		if !route.RequiresReferenceVideo {
+			req.DurationSec = duration
+		}
 		model = videoRouteModelSpec(route)
 	} else {
 		if strings.TrimSpace(req.VideoRouteAlias) != "" {
@@ -654,14 +684,22 @@ func (h *Handler) readJobRequest(w http.ResponseWriter, r *http.Request) (Create
 			writeError(w, http.StatusBadRequest, "unsupported model")
 			return CreateJobRequest{}, "", "", miniAppModelSpec{}, false
 		}
+		if opType == domain.OperationTextGenerate && providermodels.IsPaidTextRoute(model.Provider, model.ModelCode) {
+			if _, _, err := textgeneration.Resolve(req.ModelID, req.Prompt, h.cfg.TextModels, h.deps.PricingCatalog); err != nil || len(req.ReferenceArtifactIDs) > 0 {
+				writeError(w, http.StatusBadRequest, "text model unavailable")
+				return CreateJobRequest{}, "", "", miniAppModelSpec{}, false
+			}
+		}
 		if opType == domain.OperationImageGenerate {
 			referenceCount, ok := uniqueImageReferenceCount(w, req.ReferenceArtifactIDs)
 			if !ok {
 				return CreateJobRequest{}, "", "", miniAppModelSpec{}, false
 			}
 			resolution, err := h.resolveImageGeneration(imagegeneration.Request{
+				Prompt:         req.Prompt,
 				ModelID:        req.ModelID,
 				Quality:        req.ImageQuality,
+				AspectRatio:    "1:1",
 				ReferenceCount: referenceCount,
 			})
 			if err != nil {
@@ -696,6 +734,10 @@ func (h *Handler) resolveImageGeneration(request imagegeneration.Request) (image
 
 func writeImageGenerationResolveError(w http.ResponseWriter, err error) {
 	switch {
+	case errors.Is(err, imagegeneration.ErrPromptTooLong):
+		writeError(w, http.StatusBadRequest, "image prompt exceeds 4096 UTF-8 bytes")
+	case errors.Is(err, imagegeneration.ErrUnsupportedPromptOptions):
+		writeError(w, http.StatusBadRequest, "native prompt options are unsupported")
 	case errors.Is(err, imagegeneration.ErrUnsupportedQuality):
 		writeError(w, http.StatusBadRequest, "unsupported image quality")
 	case errors.Is(err, imagegeneration.ErrReferenceUnsupported):
@@ -763,6 +805,10 @@ func validateVideoReferenceCount(w http.ResponseWriter, route VideoRouteDTO, ids
 		seen[id] = struct{}{}
 	}
 	count := len(seen)
+	if len(route.AllowedReferenceImageCounts) > 0 && !slices.Contains(route.AllowedReferenceImageCounts, count) {
+		writeError(w, http.StatusBadRequest, "invalid reference artifact count")
+		return false
+	}
 	if count > 0 && !route.SupportsReferenceImage {
 		writeError(w, http.StatusBadRequest, "reference_artifacts_unsupported")
 		return false
@@ -792,6 +838,16 @@ func videoRouteModelSpec(route VideoRouteDTO) miniAppModelSpec {
 
 func videoRouteDisplayName(alias string) string {
 	switch alias {
+	case string(domain.VideoRouteKling30Turbo):
+		return "Kling 3.0 Turbo"
+	case string(domain.VideoRouteMiniMaxH3):
+		return "MiniMax H3"
+	case string(domain.VideoRouteOmni11Flash):
+		return "Gemini Omni 1.1 Flash"
+	case string(domain.VideoRouteOmni11FlashExt):
+		return "Gemini Omni 1.1 Flash EXT"
+	case string(domain.VideoRouteSeedance25):
+		return "Seedance 2.5"
 	case string(domain.VideoRouteHailuo23Fast):
 		return "Hailuo 2.3 Fast"
 	case string(domain.VideoRouteHailuo23Standard):
@@ -812,6 +868,7 @@ func videoRouteDisplayName(alias string) string {
 }
 
 func copyVideoRouteDTO(route VideoRouteDTO) VideoRouteDTO {
+	route.AllowedReferenceImageCounts = append([]int(nil), route.AllowedReferenceImageCounts...)
 	route.AllowedDurationsSec = append([]int(nil), route.AllowedDurationsSec...)
 	route.AllowedResolutions = append([]string(nil), route.AllowedResolutions...)
 	route.AllowedAspectRatios = append([]string(nil), route.AllowedAspectRatios...)
@@ -854,22 +911,26 @@ func (h *Handler) modelCatalogItemFromImage(model ImageModelDTO) (ModelCatalogIt
 
 func modelCatalogItemFromVideo(route VideoRouteDTO) ModelCatalogItemDTO {
 	return ModelCatalogItemDTO{
-		Type:                   "video",
-		ID:                     route.Alias,
-		Alias:                  route.Alias,
-		Name:                   route.Name,
-		Description:            route.Description,
-		EstimateCredits:        route.EstimateCredits,
-		Enabled:                route.Enabled,
-		AllowedDurationsSec:    append([]int(nil), route.AllowedDurationsSec...),
-		AllowedResolutions:     append([]string(nil), route.AllowedResolutions...),
-		AllowedAspectRatios:    append([]string(nil), route.AllowedAspectRatios...),
-		DefaultDurationSec:     route.DefaultDurationSec,
-		DefaultResolution:      route.DefaultResolution,
-		DefaultAspectRatio:     route.DefaultAspectRatio,
-		RequiresStartImage:     route.RequiresStartImage,
-		SupportsReferenceImage: route.SupportsReferenceImage,
-		MaxReferenceImages:     route.MaxReferenceImages,
+		SupportsAudio:               route.SupportsAudio,
+		RequiresReferenceVideo:      route.RequiresReferenceVideo,
+		AutomaticDuration:           route.AutomaticDuration,
+		AllowedReferenceImageCounts: append([]int(nil), route.AllowedReferenceImageCounts...),
+		Type:                        "video",
+		ID:                          route.Alias,
+		Alias:                       route.Alias,
+		Name:                        route.Name,
+		Description:                 route.Description,
+		EstimateCredits:             route.EstimateCredits,
+		Enabled:                     route.Enabled,
+		AllowedDurationsSec:         append([]int(nil), route.AllowedDurationsSec...),
+		AllowedResolutions:          append([]string(nil), route.AllowedResolutions...),
+		AllowedAspectRatios:         append([]string(nil), route.AllowedAspectRatios...),
+		DefaultDurationSec:          route.DefaultDurationSec,
+		DefaultResolution:           route.DefaultResolution,
+		DefaultAspectRatio:          route.DefaultAspectRatio,
+		RequiresStartImage:          route.RequiresStartImage,
+		SupportsReferenceImage:      route.SupportsReferenceImage,
+		MaxReferenceImages:          route.MaxReferenceImages,
 	}
 }
 
@@ -975,6 +1036,9 @@ func (h *Handler) estimateJob(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	estimateAccountID := user.EffectiveAccountID()
+	if !h.resolveMotionReference(w, r, estimateAccountID, &req) {
+		return
+	}
 	if len(req.ReferenceArtifactIDs) > 0 {
 		if !h.validateReferenceArtifacts(w, r, estimateAccountID, opType, req.ReferenceArtifactIDs) {
 			return
@@ -1032,6 +1096,10 @@ func (h *Handler) estimateJob(w http.ResponseWriter, r *http.Request) {
 
 func (h *Handler) estimateRequestCost(ctx context.Context, userID uuid.UUID, opType domain.OperationType, modality domain.Modality, model miniAppModelSpec, req CreateJobRequest) (int64, error) {
 	if opType == domain.OperationTextGenerate {
+		if providermodels.IsPaidTextRoute(model.Provider, model.ModelCode) {
+			_, snapshot, err := textgeneration.Resolve(req.ModelID, req.Prompt, h.cfg.TextModels, h.deps.PricingCatalog)
+			return snapshot.InternalCredits, err
+		}
 		return h.deps.Billing.Estimate(opType)
 	}
 	if model.imageResolution != nil {
@@ -1060,13 +1128,17 @@ func (h *Handler) pricingSnapshotForRequest(ctx context.Context, userID uuid.UUI
 	}
 	if opType == domain.OperationVideoGenerate {
 		params, _ := json.Marshal(miniAppJobParams{
-			Prompt:               req.Prompt,
-			ModelName:            model.ModelName,
-			VideoRouteAlias:      strings.TrimSpace(req.VideoRouteAlias),
-			ReferenceArtifactIDs: req.ReferenceArtifactIDs,
-			DurationSec:          req.DurationSec,
-			Resolution:           req.Resolution,
-			AspectRatio:          req.AspectRatio,
+			VideoAudio:               req.VideoAudio,
+			ReferenceVideoArtifactID: req.ReferenceVideoArtifactID,
+			CharacterOrientation:     req.CharacterOrientation,
+			KeepOriginalSound:        req.KeepOriginalSound,
+			Prompt:                   req.Prompt,
+			ModelName:                model.ModelName,
+			VideoRouteAlias:          strings.TrimSpace(req.VideoRouteAlias),
+			ReferenceArtifactIDs:     req.ReferenceArtifactIDs,
+			DurationSec:              req.DurationSec,
+			Resolution:               req.Resolution,
+			AspectRatio:              req.AspectRatio,
 		})
 		resolution, err := h.cfg.VideoRouteResolver.ResolveVideoRoute(ctx, joborchestrator.VideoRouteCheckInput{
 			UserID:           userID,
@@ -1075,7 +1147,7 @@ func (h *Handler) pricingSnapshotForRequest(ctx context.Context, userID uuid.UUI
 			Operation:        opType,
 			Modality:         modality,
 			Params:           params,
-			InputArtifactIDs: req.ReferenceArtifactIDs,
+			InputArtifactIDs: videoInputArtifactIDs(req),
 		})
 		if err != nil {
 			return pricingcatalog.PricingSnapshot{}, err
@@ -1104,6 +1176,9 @@ func (h *Handler) pricingProductKey(opType domain.OperationType, modality domain
 			DurationSec:     req.DurationSec,
 		}
 		key = key.Normalize()
+		if req.VideoAudio {
+			key.Quality = pricingcatalog.VideoQualityAudio
+		}
 		return key, key.Valid()
 	default:
 		return pricingcatalog.ProductKey{}, false
@@ -1137,6 +1212,9 @@ func (h *Handler) createJob(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	accountID := user.EffectiveAccountID()
+	if !h.resolveMotionReference(w, r, accountID, &req) {
+		return
+	}
 	if len(req.ReferenceArtifactIDs) > 0 {
 		if !h.validateReferenceArtifacts(w, r, accountID, opType, req.ReferenceArtifactIDs) {
 			return
@@ -1162,8 +1240,12 @@ func (h *Handler) createJob(w http.ResponseWriter, r *http.Request) {
 	correlationID := fmt.Sprintf("miniapp:%d:%s", vkUserID, clientKey)
 
 	jobParams := miniAppJobParams{
-		Prompt:               req.Prompt,
-		ReferenceArtifactIDs: req.ReferenceArtifactIDs,
+		VideoAudio:               req.VideoAudio,
+		ReferenceVideoArtifactID: req.ReferenceVideoArtifactID,
+		CharacterOrientation:     req.CharacterOrientation,
+		KeepOriginalSound:        req.KeepOriginalSound,
+		Prompt:                   req.Prompt,
+		ReferenceArtifactIDs:     req.ReferenceArtifactIDs,
 	}
 	if opType == domain.OperationVideoGenerate {
 		jobParams.ModelName = model.ModelName
@@ -1180,6 +1262,7 @@ func (h *Handler) createJob(w http.ResponseWriter, r *http.Request) {
 		jobParams.ImageQuality = worker.ImageQuality
 		jobParams.Resolution = worker.Resolution
 		jobParams.Size = worker.Size
+		jobParams.AspectRatio = worker.AspectRatio
 	} else {
 		jobParams.ModelID = model.ModelID
 		jobParams.ModelName = model.ModelName
@@ -1190,7 +1273,10 @@ func (h *Handler) createJob(w http.ResponseWriter, r *http.Request) {
 	metrics.ObserveProductPromptLength("miniapp", string(opType), string(modality), req.Prompt)
 	var pricingSnapshot pricingcatalog.PricingSnapshot
 	var costEstimate int64
-	if opType == domain.OperationTextGenerate {
+	if opType == domain.OperationTextGenerate && providermodels.IsPaidTextRoute(model.Provider, model.ModelCode) {
+		_, pricingSnapshot, err = textgeneration.Resolve(req.ModelID, req.Prompt, h.cfg.TextModels, h.deps.PricingCatalog)
+		costEstimate = pricingSnapshot.InternalCredits
+	} else if opType == domain.OperationTextGenerate {
 		costEstimate, err = h.deps.Billing.Estimate(opType)
 	} else if model.imageResolution != nil {
 		pricingSnapshot = model.imageResolution.PricingSnapshot
@@ -1219,7 +1305,7 @@ func (h *Handler) createJob(w http.ResponseWriter, r *http.Request) {
 		Modality:            modality,
 		IdempotencyKey:      idemKey,
 		CorrelationID:       correlationID,
-		InputArtifactIDs:    req.ReferenceArtifactIDs,
+		InputArtifactIDs:    videoInputArtifactIDs(req),
 		Params:              params,
 		CostEstimateCredits: costEstimate,
 		PricingSnapshot:     pricingSnapshot,
@@ -1289,8 +1375,8 @@ func (h *Handler) createChatMessage(w http.ResponseWriter, r *http.Request) {
 	idemKey := fmt.Sprintf("miniapp_chat:%d:%s", vkUserID, clientKey)
 	correlationID := fmt.Sprintf("miniapp-chat:%d:%s", vkUserID, clientKey)
 
-	model, ok := resolveMiniAppModel(domain.OperationTextGenerate, "")
-	if !ok {
+	model, snapshot, resolveErr := textgeneration.Resolve(req.ModelID, req.Prompt, h.cfg.TextModels, h.deps.PricingCatalog)
+	if resolveErr != nil {
 		h.logger.Error("miniapp: chat model catalog missing")
 		writeError(w, http.StatusInternalServerError, "internal error")
 		return
@@ -1308,20 +1394,23 @@ func (h *Handler) createChatMessage(w http.ResponseWriter, r *http.Request) {
 	metrics.ObserveProductPromptLength("miniapp", string(domain.OperationTextGenerate), string(domain.ModalityText), req.Prompt)
 
 	job, err := h.deps.Orchestrator.CreateJob(r.Context(), joborchestrator.CreateJobInput{
-		UserID:         user.ID,
-		AccountID:      accountID,
-		Source:         "miniapp",
-		ChannelContext: &domain.ChannelContext{Channel: domain.ChannelVKMiniApp},
-		ResultMode:     domain.ResultModeAccountHistory,
-		VKPeerID:       vkUserID,
-		CommandID:      uuid.Nil,
-		Operation:      domain.OperationTextGenerate,
-		Modality:       domain.ModalityText,
-		IdempotencyKey: idemKey,
-		CorrelationID:  correlationID,
-		Params:         params,
+		UserID:          user.ID,
+		AccountID:       accountID,
+		Source:          "miniapp",
+		ChannelContext:  &domain.ChannelContext{Channel: domain.ChannelVKMiniApp},
+		ResultMode:      domain.ResultModeAccountHistory,
+		VKPeerID:        vkUserID,
+		CommandID:       uuid.Nil,
+		Operation:       domain.OperationTextGenerate,
+		Modality:        domain.ModalityText,
+		IdempotencyKey:  idemKey,
+		CorrelationID:   correlationID,
+		Params:          params,
+		PricingSnapshot: snapshot,
 	})
 	switch {
+	case errors.Is(err, domain.ErrConflict):
+		writeError(w, http.StatusConflict, "idempotency key belongs to another message")
 	case err == nil:
 		writeJSON(w, http.StatusCreated, newChatJobDTO(job))
 	case errors.Is(err, domain.ErrInsufficientCredits):
@@ -2047,4 +2136,15 @@ func writeJSON(w http.ResponseWriter, status int, body any) {
 
 func writeError(w http.ResponseWriter, status int, message string) {
 	writeJSON(w, status, map[string]string{"error": message})
+}
+
+func (h *Handler) listTextModels(w http.ResponseWriter, r *http.Request) {
+	w.Header().Set("Cache-Control", "no-store")
+	var ids []string
+	for _, m := range h.cfg.TextModels {
+		if m.ID != "chatgpt" {
+			ids = append(ids, m.ID)
+		}
+	}
+	writeJSON(w, http.StatusOK, map[string]any{"items": textgeneration.Models(ids, h.deps.PricingCatalog)})
 }

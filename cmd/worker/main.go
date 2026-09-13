@@ -23,6 +23,7 @@ import (
 	vkdelivery "vk-ai-aggregator/internal/adapter/delivery/vk"
 	"vk-ai-aggregator/internal/adapter/provider/apimart"
 	"vk-ai-aggregator/internal/adapter/provider/deepinfra"
+	"vk-ai-aggregator/internal/adapter/provider/kie"
 	"vk-ai-aggregator/internal/adapter/provider/mock"
 	"vk-ai-aggregator/internal/adapter/provider/openai"
 	"vk-ai-aggregator/internal/adapter/provider/poyo"
@@ -49,6 +50,7 @@ import (
 	"vk-ai-aggregator/internal/service/pricingcatalog"
 	"vk-ai-aggregator/internal/service/productcatalog"
 	"vk-ai-aggregator/internal/service/providermodels"
+	"vk-ai-aggregator/internal/service/providerreference"
 	"vk-ai-aggregator/internal/service/resultservice"
 	"vk-ai-aggregator/internal/worker"
 )
@@ -226,8 +228,9 @@ func main() {
 				continue
 			}
 			providerList = append(providerList, apimart.New(apimart.Config{
-				APIKey:  cfg.APIMartAPIKey,
-				BaseURL: cfg.APIMartBaseURL,
+				APIKey:            cfg.APIMartAPIKey,
+				BaseURL:           cfg.APIMartBaseURL,
+				EnabledTextModels: cfg.APIMartTextModels(),
 			}))
 			logger.Info("registered apimart provider")
 		case "poyo":
@@ -284,6 +287,12 @@ func main() {
 		providerList = append(providerList, mock.New())
 		hasMockProvider = true
 		logger.Warn("provider chain empty; using mock provider")
+	}
+	if models := cfg.APIMartTextModels(); len(models) > 0 && !containsProvider(providerNames, string(domain.ProviderAPIMart)) {
+		providerList = append(providerList, apimart.New(apimart.Config{APIKey: cfg.APIMartAPIKey, BaseURL: cfg.APIMartBaseURL, EnabledTextModels: models}))
+	}
+	if models := cfg.KIETextModels(); len(models) > 0 {
+		providerList = append(providerList, kie.New(kie.Config{APIKey: cfg.KIEAPIKey, BaseURL: cfg.KIEBaseURL, EnabledModels: models}))
 	}
 	if hasMockProvider {
 		// The mock provider emits synthetic mock:// output URLs, so use a matching
@@ -377,7 +386,17 @@ func main() {
 		logger.Info("using openai moderation provider")
 	}
 
+	var referenceSigner worker.ReferenceVideoSigner
+	if cfg.FeatureAPIMartKling26MotionEnabled {
+		gateway, err := providerreference.New(cfg.ProviderReferenceBaseURL, cfg.ProviderReferenceSigningKey, jobs, artRepo, store)
+		if err != nil {
+			logger.Error("provider reference gateway configuration invalid")
+			os.Exit(1)
+		}
+		referenceSigner = gateway
+	}
 	deps := worker.Deps{
+		ProviderReferences:                    referenceSigner,
 		Jobs:                                  jobs,
 		ResultReadyUOW:                        postgres.NewUnitOfWork(pool),
 		Tasks:                                 tasks,

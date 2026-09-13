@@ -87,7 +87,7 @@ describe("InspirationGallery styles", () => {
 
   it("keeps the desktop dialog and its three regions at stable viewport-based sizes", () => {
     const dialogRule = stylesheet.match(/\.dialog\s*\{([^}]*)\}/s)?.[1] ?? "";
-    const previewRule = stylesheet.match(/\.preview\s*\{([^}]*)\}/s)?.[1] ?? "";
+    const previewRule = stylesheet.match(/^\.preview\s*\{([^}]*)\}/ms)?.[1] ?? "";
     const previewStageRule = stylesheet.match(/\.previewStage\s*\{([^}]*)\}/s)?.[1] ?? "";
     const previewSurfaceRule = stylesheet.match(/\.previewSurface\s*\{([^}]*)\}/s)?.[1] ?? "";
     const previewMediaRule = stylesheet.match(/\.previewMedia\s*\{([^}]*)\}/s)?.[1] ?? "";
@@ -147,7 +147,7 @@ describe("InspirationGallery styles", () => {
     )?.[1] ?? "";
     const closeButtonRule = modalCloseButtonStylesheet.match(/\.button\s*\{([^}]*)\}/s)?.[1] ?? "";
     const thumbnailRailRule = stylesheet.match(/\.thumbnailRail\s*\{([^}]*)\}/s)?.[1] ?? "";
-    const previewRule = stylesheet.match(/\.preview\s*\{([^}]*)\}/s)?.[1] ?? "";
+    const previewRule = stylesheet.match(/^\.preview\s*\{([^}]*)\}/ms)?.[1] ?? "";
     const infoPanelRule = stylesheet.match(/\.infoPanel\s*\{([^}]*)\}/s)?.[1] ?? "";
 
     expect(closeButtonPlacementRule).toContain("position: relative");
@@ -241,7 +241,7 @@ describe("InspirationGallery styles", () => {
   });
 
   it("reserves space beside the preview for previous and next controls", () => {
-    const previewRule = stylesheet.match(/\.preview\s*\{([^}]*)\}/s)?.[1] ?? "";
+    const previewRule = stylesheet.match(/^\.preview\s*\{([^}]*)\}/ms)?.[1] ?? "";
     const previewStageRule = stylesheet.match(/\.previewStage\s*\{([^}]*)\}/s)?.[1] ?? "";
     const navigationRule = stylesheet.match(/\.previewNavigation\s*\{([^}]*)\}/s)?.[1] ?? "";
 

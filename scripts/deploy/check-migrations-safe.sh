@@ -75,7 +75,34 @@ is_true_value() {
 }
 
 destructive_regex='(^|[[:space:];])(DROP[[:space:]]+(TABLE|DATABASE|SCHEMA|TYPE)|TRUNCATE[[:space:]]+|DELETE[[:space:]]+FROM|ALTER[[:space:]]+TABLE[[:space:]][^;]*[[:space:]]DROP[[:space:]]+(COLUMN|CONSTRAINT))'
-matches="$(grep -REin "${destructive_regex}" "${migrations_dir}"/*.up.sql 2>/dev/null || true)"
+declare -A reviewed_migrations=()
+review_file="${script_dir}/migration-safety.sha256"
+if [[ -f "${review_file}" ]]; then
+  while read -r digest name extra || [[ -n "${digest}" ]]; do
+    [[ -z "${digest}" || "${digest}" == \#* ]] && continue
+    if [[ ! "${digest}" =~ ^[0-9a-f]{64}$ || ! "${name}" =~ ^[0-9]{6}_[a-z0-9_]+\.up\.sql$ || -n "${extra}" || -v "reviewed_migrations[${name}]" ]]; then
+      echo "Invalid or duplicate migration review entry" >&2
+      exit 1
+    fi
+    reviewed_migrations["${name}"]="${digest}"
+  done < "${review_file}"
+fi
+
+matches=""
+for file in "${migrations_dir}"/*.up.sql; do
+  [[ -f "${file}" ]] || continue
+  file_matches="$(grep -HEin "${destructive_regex}" "${file}" || true)"
+  [[ -n "${file_matches}" ]] || continue
+  name="${file##*/}"
+  if [[ -v "reviewed_migrations[${name}]" ]]; then
+    digest="$(sha256sum "${file}")"
+    if [[ "${digest%% *}" == "${reviewed_migrations[${name}]}" ]]; then
+      echo "Reviewed constraint migration matched SHA256: ${name}"
+      continue
+    fi
+  fi
+  matches+="${matches:+$'\n'}${file_matches}"
+done
 
 if [[ -n "${matches}" ]]; then
   if is_true_value "$(get_value MIGRATION_ALLOW_DESTRUCTIVE false)" && [[ "$(get_value MIGRATION_DESTRUCTIVE_CONFIRM "")" == "I_UNDERSTAND_DESTRUCTIVE_MIGRATIONS" ]]; then

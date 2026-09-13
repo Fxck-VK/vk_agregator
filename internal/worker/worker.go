@@ -36,6 +36,7 @@ import (
 	"vk-ai-aggregator/internal/service/assistantfacts"
 	"vk-ai-aggregator/internal/service/dialogcontext"
 	"vk-ai-aggregator/internal/service/moderationservice"
+	"vk-ai-aggregator/internal/service/providermodels"
 )
 
 // maxProviderAttempts caps how many times a job is re-submitted to a provider
@@ -893,6 +894,7 @@ func (e providerResultError) ProviderErrorClass() domain.ProviderErrorClass { re
 // processor holds the shared dependencies and result-handling logic used by
 // both the generation and poll workers.
 type processor struct {
+	providerReferences   ReferenceVideoSigner
 	jobs                 domain.JobRepository
 	resultReadyUOW       uow.Manager
 	tasks                domain.ProviderTaskRepository
@@ -956,7 +958,8 @@ type AssistantFacts interface {
 
 // Deps bundles the dependencies shared by the workers.
 type Deps struct {
-	Jobs domain.JobRepository
+	ProviderReferences ReferenceVideoSigner
+	Jobs               domain.JobRepository
 	// ResultReadyUOW atomically persists the result_ready status and its
 	// finalization outbox event. It is required: without it workers fail closed
 	// instead of making a result ready with no recoverable finalization task.
@@ -1093,6 +1096,7 @@ func newProcessor(d Deps) processor {
 		artifacts:            d.Artifacts,
 		artifactRepo:         d.ArtifactRepo,
 		objects:              d.Objects,
+		providerReferences:   d.ProviderReferences,
 		providers:            d.Providers,
 		streams:              d.Streams,
 		imageModel:           d.ImageModel,
@@ -1183,23 +1187,30 @@ func referenceInputError(format string, args ...any) error {
 
 // promptParams is the subset of job params the provider request needs.
 type promptParams struct {
-	Prompt                 string                    `json:"prompt"`
-	NegativePrompt         string                    `json:"negative_prompt"`
-	ModelCode              string                    `json:"model_code,omitempty"`
-	Provider               domain.ProviderName       `json:"provider,omitempty"`
-	Size                   string                    `json:"size,omitempty"`
-	AspectRatio            string                    `json:"aspect_ratio,omitempty"`
-	OutputCount            int                       `json:"output_count,omitempty"`
-	Resolution             string                    `json:"resolution,omitempty"`
-	ReferenceArtifactIDs   []uuid.UUID               `json:"reference_artifact_ids,omitempty"`
-	InputURLs              []string                  `json:"input_urls,omitempty"`
-	VKPlaceholderMessageID int64                     `json:"vk_placeholder_message_id,omitempty"`
-	ConversationID         string                    `json:"conversation_id,omitempty"`
-	ConversationSource     string                    `json:"conversation_source,omitempty"`
-	ExternalThreadID       string                    `json:"external_thread_id,omitempty"`
-	DurationSec            int                       `json:"duration_sec,omitempty"`
-	VideoRouteAlias        string                    `json:"video_route_alias,omitempty"`
-	ResolvedVideoRoute     domain.VideoRouteSnapshot `json:"resolved_video_route,omitempty"`
+	VideoAudio               bool                      `json:"video_audio,omitempty"`
+	ReferenceVideoArtifactID uuid.UUID                 `json:"reference_video_artifact_id,omitempty"`
+	CharacterOrientation     string                    `json:"character_orientation,omitempty"`
+	KeepOriginalSound        *bool                     `json:"keep_original_sound,omitempty"`
+	ModelName                string                    `json:"model_name,omitempty"`
+	ModelID                  string                    `json:"model_id,omitempty"`
+	Prompt                   string                    `json:"prompt"`
+	NegativePrompt           string                    `json:"negative_prompt"`
+	ModelCode                string                    `json:"model_code,omitempty"`
+	Provider                 domain.ProviderName       `json:"provider,omitempty"`
+	Size                     string                    `json:"size,omitempty"`
+	AspectRatio              string                    `json:"aspect_ratio,omitempty"`
+	OutputCount              int                       `json:"output_count,omitempty"`
+	Resolution               string                    `json:"resolution,omitempty"`
+	ImageQuality             string                    `json:"image_quality,omitempty"`
+	ReferenceArtifactIDs     []uuid.UUID               `json:"reference_artifact_ids,omitempty"`
+	InputURLs                []string                  `json:"input_urls,omitempty"`
+	VKPlaceholderMessageID   int64                     `json:"vk_placeholder_message_id,omitempty"`
+	ConversationID           string                    `json:"conversation_id,omitempty"`
+	ConversationSource       string                    `json:"conversation_source,omitempty"`
+	ExternalThreadID         string                    `json:"external_thread_id,omitempty"`
+	DurationSec              int                       `json:"duration_sec,omitempty"`
+	VideoRouteAlias          string                    `json:"video_route_alias,omitempty"`
+	ResolvedVideoRoute       domain.VideoRouteSnapshot `json:"resolved_video_route,omitempty"`
 }
 
 func videoRouteSnapshotFromJob(job *domain.Job) (domain.VideoRouteSnapshot, bool) {
@@ -1262,6 +1273,13 @@ func (p *processor) buildRequest(ctx context.Context, job *domain.Job, attempt i
 	if len(job.Params) > 0 {
 		_ = json.Unmarshal(job.Params, &pp)
 	}
+	textInputLimit, textOutputLimit, err := paidTextJobLimits(job, pp)
+	if err != nil {
+		return domain.ProviderRequest{}, err
+	}
+	if err := validatePaidImageJob(job, pp); err != nil {
+		return domain.ProviderRequest{}, err
+	}
 	prompt := pp.Prompt
 	modelCode := pp.ModelCode
 	size := pp.Size
@@ -1302,6 +1320,12 @@ func (p *processor) buildRequest(ctx context.Context, job *domain.Job, attempt i
 		if routeSnapshot.Valid() {
 			modelCode = routeSnapshot.ProviderModelID
 			pp.Provider = routeSnapshot.Provider
+			pp.VideoAudio = routeSnapshot.VideoAudio
+			pp.CharacterOrientation = routeSnapshot.CharacterOrientation
+			if routeSnapshot.ReferenceVideoArtifactID != "" {
+				pp.ReferenceVideoArtifactID, _ = uuid.Parse(routeSnapshot.ReferenceVideoArtifactID)
+			}
+			pp.KeepOriginalSound = &routeSnapshot.KeepOriginalSound
 		}
 		if modelCode == "" {
 			modelCode = p.videoModel
@@ -1344,6 +1368,9 @@ func (p *processor) buildRequest(ctx context.Context, job *domain.Job, attempt i
 			}
 		}
 	}
+	if textOutputLimit > 0 {
+		maxOutputTokens = textOutputLimit
+	}
 	var inputURLs []string
 	if (job.Modality == domain.ModalityImage || job.Modality == domain.ModalityVideo) && len(pp.ReferenceArtifactIDs) > 0 {
 		var err error
@@ -1353,10 +1380,21 @@ func (p *processor) buildRequest(ctx context.Context, job *domain.Job, attempt i
 		}
 	}
 	providerParams := safeProviderParams(job.Params)
+	if providermodels.IsNewAPIMartImageRoute(pp.Provider, modelCode) {
+		providerParams = paidImageProviderParams(pp, size)
+	}
+	referenceVideoURL, err := p.motionReferenceURL(ctx, job, pp, modelCode, durationSec)
+	if err != nil {
+		return domain.ProviderRequest{}, err
+	}
 	if job.Modality == domain.ModalityVideo {
 		providerParams = safeVideoProviderParams(durationSec, resolution, pp.AspectRatio, draft, pp.ResolvedVideoRoute)
 	}
 	return domain.ProviderRequest{
+		VideoAudio:           pp.VideoAudio,
+		CharacterOrientation: pp.CharacterOrientation,
+		KeepOriginalSound:    pp.KeepOriginalSound == nil || *pp.KeepOriginalSound,
+		ReferenceVideoURL:    referenceVideoURL,
 		JobID:                job.ID,
 		UserID:               workerJobOwnerID(job),
 		Operation:            job.OperationType,
@@ -1376,6 +1414,7 @@ func (p *processor) buildRequest(ctx context.Context, job *domain.Job, attempt i
 		InputURLs:            inputURLs,
 		Params:               providerParams,
 		MaxOutputTokens:      maxOutputTokens,
+		MaxInputTokens:       textInputLimit,
 		IdempotencyKey:       fmt.Sprintf("provider_submit:%s:%d", job.ID, attempt),
 		AttemptNo:            attempt,
 	}, nil
@@ -1909,6 +1948,9 @@ func (p *processor) activeTask(ctx context.Context, jobID uuid.UUID) (*domain.Pr
 		return nil, err
 	}
 	for i := len(tasks) - 1; i >= 0; i-- {
+		if unresolvedPaidSubmitIntent(tasks[i]) {
+			return tasks[i], nil
+		}
 		switch tasks[i].Status {
 		case domain.ProviderTaskPending, domain.ProviderTaskProcessing, domain.ProviderTaskSucceeded:
 			return tasks[i], nil
@@ -2033,6 +2075,9 @@ func (p *processor) applyResult(ctx context.Context, job *domain.Job, pt *domain
 	switch res.Status {
 	case domain.ProviderTaskSucceeded:
 		p.recordProviderOutputs(pt, job, res)
+		if !paidImageOutputCountMatches(job, res.OutputURLs) {
+			return p.handleFailure(ctx, job, task, domain.ProviderErrInternal, safeProviderFailureMessage(domain.ProviderErrInternal))
+		}
 		if err := p.saveOutputs(ctx, job, res.OutputURLs, res.Text); err != nil {
 			failureClass := outputArtifactFailureClass(err)
 			p.recordProviderProductFailureForTask(job, pt, string(failureClass))
@@ -2642,7 +2687,7 @@ func (p *processor) handleFailure(ctx context.Context, job *domain.Job, task que
 		attempts = task.Attempt + 1
 	}
 
-	if isRetryable(class) && attempts < p.maxAttempts {
+	if isRetryable(class) && attempts < p.maxAttempts && !isDurablePaidSubmitJob(job) {
 		if err := p.setStatus(ctx, job, domain.JobStatusFailedRetryable, code, msg); err != nil {
 			return err
 		}
@@ -2696,6 +2741,8 @@ func safeTerminalFailure(job *domain.Job, class domain.ProviderErrorClass) (stri
 
 func safeProviderFailureMessage(class domain.ProviderErrorClass) string {
 	switch class {
+	case domain.ProviderErrSubmitIndeterminate:
+		return "generation submission could not be confirmed; automatic retries stopped; credits were not charged"
 	case domain.ProviderErrRateLimited, domain.ProviderErrOverloaded, domain.ProviderErrTimeout:
 		return "provider is temporarily unavailable; credits were not charged"
 	case domain.ProviderErrContentRejected:

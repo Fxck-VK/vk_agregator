@@ -14,20 +14,30 @@ const (
 	MiniAppChatModelID   = providermodels.PublicTextChatGPT
 	MiniAppChatModelName = "NeiroHub Chat"
 
-	MiniAppImageNanoBananaPro   = providermodels.PublicImageNanoBananaPro
-	MiniAppImageGPTImage2       = providermodels.PublicImageGPTImage2
-	MiniAppImageNanoBananaFlash = "nano_banana_flash"
-	MiniAppImageNanoBanana2     = providermodels.PublicImageNanoBanana2
-	MiniAppImageSeedream45      = providermodels.PublicImageSeedream45
-	MiniAppImageSDXLTurbo       = "sdxl_turbo"
-	MiniAppImageMock            = providermodels.LoadTestImageMock
-	MiniAppVideoKling           = "kling"
+	MiniAppImageNanoBananaPro      = providermodels.PublicImageNanoBananaPro
+	MiniAppImageGPTImage2          = providermodels.PublicImageGPTImage2
+	MiniAppImageGPTImage25Flare    = providermodels.PublicImageGPTImage25Flare
+	MiniAppImageGPTImage25Sunburst = providermodels.PublicImageGPTImage25Sunburst
+	MiniAppImageSeedream50Lite     = providermodels.PublicImageSeedream50Lite
+	MiniAppImageSeedream50Pro      = providermodels.PublicImageSeedream50Pro
+	MiniAppImageQwenImage3         = providermodels.PublicImageQwenImage3
+	MiniAppImageMidjourneyV7       = providermodels.PublicImageMidjourneyV7
+	MiniAppImageFlux2Pro           = providermodels.PublicImageFlux2Pro
+	MiniAppImageGrokImage15        = providermodels.PublicImageGrokImage15
+	MiniAppImageGrokImage20        = providermodels.PublicImageGrokImage20
+	MiniAppImageNanoBananaFlash    = "nano_banana_flash"
+	MiniAppImageNanoBanana2        = providermodels.PublicImageNanoBanana2
+	MiniAppImageSeedream45         = providermodels.PublicImageSeedream45
+	MiniAppImageSDXLTurbo          = "sdxl_turbo"
+	MiniAppImageMock               = providermodels.LoadTestImageMock
+	MiniAppVideoKling              = "kling"
 
 	VKVideoPrunaAI = "prunaai"
 
 	ModelCodePoYoNanoBanana2 = providermodels.ProviderModelPoYoNanoBanana2
 	ModelCodeGemini3ProImage = providermodels.ProviderModelGemini3ProImage
 	ModelCodeGPTImage2       = providermodels.ProviderModelGPTImage2
+	ModelCodeQwenImage3      = providermodels.ProviderModelQwenImage3
 	ModelCodeSeedream45      = "ByteDance/Seedream-4.5"
 	ModelCodeSDXLTurbo       = "stabilityai/sdxl-turbo"
 	ModelCodeMockImage       = providermodels.ProviderModelMockImage
@@ -50,6 +60,7 @@ type Model struct {
 	SupportsReferenceImage bool
 	MaxReferenceImages     int
 	MaxOutputCount         int
+	AllowedAspectRatios    []string
 }
 
 var miniAppDefaultModel = map[domain.OperationType]string{
@@ -87,7 +98,24 @@ func MiniAppResponseModelID(model Model) string {
 }
 
 func NormalizeImageQuality(raw string) (string, bool) {
+	if resolution, quality, ok := strings.Cut(strings.TrimSpace(raw), "-"); ok {
+		resolution, quality = strings.ToUpper(resolution), strings.ToLower(quality)
+		if resolution == "1K" || resolution == "2K" || resolution == "4K" {
+			switch quality {
+			case "low", "medium", "high", "xhigh", "max":
+				return resolution + "-" + quality, true
+			}
+		}
+	}
 	switch strings.ToUpper(strings.TrimSpace(raw)) {
+	case "1.5K", "3K":
+		return strings.ToUpper(strings.TrimSpace(raw)), true
+	case "1MP", "2MP", "3MP", "4MP":
+		return strings.ToUpper(strings.TrimSpace(raw)), true
+	case "RELAX", "FAST", "TURBO":
+		return strings.ToLower(strings.TrimSpace(raw)), true
+	case "STANDARD":
+		return "standard", true
 	case ImageQuality1K:
 		return ImageQuality1K, true
 	case ImageQuality2K:
@@ -178,6 +206,11 @@ func miniAppTextModels() map[string]Model {
 			ModelName: alias.DisplayName,
 		}
 		models[alias.PublicID] = model
+		if providermodels.IsPaidTextRoute(alias.Provider, alias.ProviderModelID) {
+			model.Provider, model.ModelCode, model.ExposeID = alias.Provider, alias.ProviderModelID, true
+			models[alias.PublicID] = model
+			continue
+		}
 		models[alias.DisplayName] = model
 		models[alias.ProviderModelID] = model
 	}
@@ -214,5 +247,6 @@ func modelFromRegistryImage(registryModel providermodels.ImageModel) Model {
 		SupportsReferenceImage: registryModel.Limits.SupportsReferenceImage,
 		MaxReferenceImages:     registryModel.Limits.MaxReferenceImages,
 		MaxOutputCount:         registryModel.Limits.MaxOutputCount,
+		AllowedAspectRatios:    append([]string(nil), registryModel.Limits.AllowedAspectRatios...),
 	}
 }

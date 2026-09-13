@@ -27,7 +27,7 @@ const modalBackdropStylesheet = readFileSync(
 describe("WorkspaceHeader styles", () => {
   it("floats interactive controls over workspace content without drawing a header strip", () => {
     const headerZIndex = Number(headerStylesheet.match(/\.header\s*\{[^}]*z-index:\s*(\d+);/s)?.[1]);
-    const sidebarZIndex = Number(appShellStylesheet.match(/\.sidebar\s*\{[^}]*z-index:\s*(\d+);/s)?.[1]);
+
 
     expect(headerStylesheet).toMatch(/\.header\s*\{[^}]*position:\s*absolute;/s);
     expect(headerStylesheet).toMatch(/\.header\s*\{[^}]*inset-block-start:\s*0;/s);
@@ -39,7 +39,8 @@ describe("WorkspaceHeader styles", () => {
       /\.leading,\s*\.trailing\s*\{[^}]*pointer-events:\s*auto;/s,
     );
     expect(headerStylesheet).not.toMatch(/\.leading,\s*\.trailing\s*\{[^}]*position:\s*absolute;/s);
-    expect(headerZIndex).toBeLessThan(sidebarZIndex);
+    expect(headerZIndex).toBeGreaterThan(0);
+    expect(appShellStylesheet).not.toMatch(/\.sidebar\s*\{[^}]*z-index:/s);
   });
 
   it("styles the tariff action with the NeiroHub brand gradient", () => {

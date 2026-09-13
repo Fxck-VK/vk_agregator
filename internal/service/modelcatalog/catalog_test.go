@@ -1,11 +1,28 @@
 package modelcatalog
 
 import (
+	"reflect"
 	"testing"
 
 	"vk-ai-aggregator/internal/domain"
 	"vk-ai-aggregator/internal/service/providermodels"
 )
+
+func TestPaidTextModelsKeepExactRoutesAndRejectPrivateAliases(t *testing.T) {
+	for _, alias := range providermodels.PaidTextModels() {
+		t.Run(alias.PublicID, func(t *testing.T) {
+			model, ok := ResolveMiniAppModel(domain.OperationTextGenerate, alias.PublicID)
+			if !ok || model.Provider != alias.Provider || model.ModelCode != alias.ProviderModelID || !model.ExposeID {
+				t.Fatalf("paid model route = %+v/%v", model, ok)
+			}
+			for _, privateID := range []string{alias.DisplayName, alias.ProviderModelID} {
+				if _, ok := ResolveMiniAppModel(domain.OperationTextGenerate, privateID); ok {
+					t.Fatalf("private alias accepted: %s", privateID)
+				}
+			}
+		})
+	}
+}
 
 func TestMiniAppSeedream45PublicIDComesFromProviderRegistry(t *testing.T) {
 	if MiniAppImageSeedream45 != providermodels.PublicImageSeedream45 {
@@ -69,7 +86,7 @@ func TestResolveMiniAppMockImageModel(t *testing.T) {
 func TestResolvePublicModelKeepsLegacyMiniAppResolutionCompatible(t *testing.T) {
 	legacy, legacyOK := ResolveMiniAppModel(domain.OperationImageGenerate, MiniAppImageNanoBanana2)
 	public, publicOK := ResolvePublicModel(domain.OperationImageGenerate, MiniAppImageNanoBanana2)
-	if !legacyOK || !publicOK || public != legacy {
+	if !legacyOK || !publicOK || !reflect.DeepEqual(public, legacy) {
 		t.Fatalf("public resolver = %+v/%v, legacy resolver = %+v/%v", public, publicOK, legacy, legacyOK)
 	}
 }

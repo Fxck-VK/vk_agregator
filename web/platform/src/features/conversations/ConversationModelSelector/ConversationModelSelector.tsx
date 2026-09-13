@@ -70,7 +70,9 @@ export function ConversationModelSelector({ disabled, selection }: Readonly<Conv
       models={(selection.catalog?.items ?? []).map((model) => ({
         ...model,
         category: "text",
-        description: "Ответы на вопросы и работа с текстом в текущем диалоге",
+        description: (model.estimate_credits ?? 0) > 0
+          ? `${model.estimate_credits} токенов за ответ · до ${model.max_output_tokens} токенов ответа`
+          : "Ответы на вопросы и работа с текстом в текущем диалоге",
       }))}
       onSelect={(model) => selection.selectModel(model.id)}
       renderInPortal

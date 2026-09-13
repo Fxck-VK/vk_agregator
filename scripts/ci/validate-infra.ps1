@@ -1683,6 +1683,8 @@ if (Test-Path -LiteralPath "docker-compose.prod.yml") {
 }
 
 Assert-Migrations
+& pwsh -NoProfile -File (Join-Path $PSScriptRoot "test-migration-safety.ps1")
+if ($LASTEXITCODE -ne 0) { throw "Migration safety regression tests failed" }
 Assert-ImageDependencySecurityFloor
 Assert-NoTrackedEnvFiles
 Assert-NoActiveEnvExampleReferences

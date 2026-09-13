@@ -23,13 +23,14 @@ const ASPECT_RATIO_ICON_PATHS = {
 } as const;
 
 type ImageAspectRatioSelectorProps = {
+  options?: readonly string[];
   disabled: boolean;
   onChange: (ratio: string) => void;
   portalLayer?: number;
   value: string;
 };
 
-export function ImageAspectRatioSelector({ disabled, onChange, portalLayer, value }: Readonly<ImageAspectRatioSelectorProps>) {
+export function ImageAspectRatioSelector({ disabled, onChange, portalLayer, value, options = IMAGE_ASPECT_RATIOS }: Readonly<ImageAspectRatioSelectorProps>) {
   const [isOpen, setIsOpen] = useState(false);
   const triggerRef = useRef<HTMLButtonElement>(null);
 
@@ -58,7 +59,7 @@ export function ImageAspectRatioSelector({ disabled, onChange, portalLayer, valu
       >
         <p className={styles.title}>Соотношение сторон</p>
         <div className={styles.options} role="radiogroup">
-          {IMAGE_ASPECT_RATIOS.map((ratio) => {
+          {options.map((ratio) => {
             const selected = ratio === value;
             return (
               <PopoverOption

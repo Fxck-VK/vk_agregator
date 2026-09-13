@@ -25,11 +25,14 @@ describe("palette surface roles", () => {
     expect(rule(read(path), selector)).toContain(`background: var(${surface})`);
   });
 
-  it("keeps neutral hover and elevated states on the raised surface", () => {
+  it("keeps selectable cards transparent and shares their brand outline", () => {
     const selector = read("src/features/models/ModelCard/ModelCard.module.css");
 
-    expect(selector).toMatch(
-      /\.selectorCard:hover,[\s\S]*?\.selectorSelected\s*\{[^}]*background:\s*var\(--color-surface-raised\)/,
-    );
+    const shared = read("src/components/ui/selectable-control.module.css");
+    const source = read("src/features/models/ModelCard/ModelCard.tsx");
+    expect(source).toContain("selectableStyles.control");
+    expect(shared).toContain("background: transparent");
+    expect(shared).toContain("border-color: var(--color-accent)");
+    expect(selector).not.toMatch(/\.selectorCard:hover/);
   });
 });

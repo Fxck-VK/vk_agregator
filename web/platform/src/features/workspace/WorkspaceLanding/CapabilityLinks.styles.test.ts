@@ -24,12 +24,9 @@ describe("CapabilityLinks layout", () => {
     expect(linkRule).toContain("border-radius: var(--radius-pill)");
     expect(iconRule).toContain("inline-size: 1.125rem");
     expect(iconRule).toContain("block-size: 1.125rem");
-    expect(iconRule).toContain(
-      'background-image: url("/assets/images/models/chip-silhouette.svg")',
-    );
-    expect(stylesheet).toMatch(
-      /:global\(:root\[data-theme="light"\]\) \.icon\s*\{[^}]*background-image:\s*url\("\/assets\/images\/models\/chip-silhouette-dark\.svg"\);/s,
-    );
+    expect(iconRule).toContain("background-color: currentColor");
+    expect(iconRule).toContain("mask: var(--capability-icon) center / contain no-repeat");
+    expect(stylesheet).not.toContain("chip-silhouette-dark.svg");
   });
 
   it("collapses the pill grid without horizontal overflow on narrow screens", () => {

@@ -7,6 +7,8 @@ import { ImageTemplatePicker } from "@/features/image-generation/ImageTemplatePi
 import { ru } from "@/i18n/ru";
 
 export type ImageGenerationControlsProps = {
+  modelID?: string;
+  allowedAspectRatios?: string[];
   aspectRatio: string;
   imageQuality: string;
   isSubmitting: boolean;
@@ -20,23 +22,24 @@ export type ImageGenerationControlsProps = {
 };
 
 export function ImageGenerationControls(props: Readonly<ImageGenerationControlsProps>) {
+  const isImagine = props.modelID === "midjourney_v7";
   return (
     <>
       <ImageTemplatePicker disabled={props.isSubmitting} onSelect={(template) => props.onPromptChange(template.prompt)} />
-      <ImageAspectRatioSelector disabled={props.isSubmitting} onChange={props.onAspectRatioChange} value={props.aspectRatio} />
-      <ImageQualitySelector
+      <ImageAspectRatioSelector disabled={props.isSubmitting} onChange={props.onAspectRatioChange} value={props.aspectRatio} options={props.allowedAspectRatios} />
+      {props.qualityOptions.length > 1 ? <ImageQualitySelector
         disabled={props.isSubmitting}
-        label={ru.imageGeneration.resolutionLabel}
+        label={isImagine ? "Режим" : ru.imageGeneration.resolutionLabel}
         onChange={props.onImageQualityChange}
         options={props.qualityOptions}
         value={props.imageQuality}
-      />
-      <ImageOutputCountSelector
+      /> : null}
+      {!isImagine ? <ImageOutputCountSelector
         disabled={props.isSubmitting}
         max={props.maxOutputCount}
         onChange={props.onOutputCountChange}
         value={props.outputCount}
-      />
+      /> : null}
     </>
   );
 }

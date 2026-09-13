@@ -59,6 +59,9 @@ export const chatModelListSchema = z.object({
   items: z.array(z.object({
     id: z.string().trim().min(1),
     name: z.string().trim().min(1),
+    estimate_credits: z.number().int().nonnegative().optional(),
+    max_prompt_bytes: z.number().int().positive().optional(),
+    max_output_tokens: z.number().int().positive().optional(),
   }).strict()).min(1),
   default_model_id: z.string().trim().min(1),
 }).strict().refine((catalog) => (
@@ -67,6 +70,7 @@ export const chatModelListSchema = z.object({
 ), { message: "Chat model catalogue must contain a valid default and unique models." });
 
 export type ChatModelList = z.infer<typeof chatModelListSchema>;
+export type ChatModel = ChatModelList["items"][number];
 
 export function parseChatModelList(payload: unknown): ChatModelList {
   return chatModelListSchema.parse(payload);
@@ -82,6 +86,7 @@ export const imageModelSchema = z
     supports_reference_image: z.boolean(),
     max_reference_images: z.number().int().nonnegative(),
     max_output_count: z.number().int().positive().optional(),
+    allowed_aspect_ratios: z.array(z.string().trim().min(1)).min(1).optional(),
   })
   .strict();
 

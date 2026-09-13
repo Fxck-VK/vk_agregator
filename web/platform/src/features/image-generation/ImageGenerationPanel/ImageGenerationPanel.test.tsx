@@ -17,7 +17,7 @@ vi.mock("@/features/models/image-model-catalog-cache", () => ({
 
 import { ru } from "@/i18n/ru";
 import { webBrowserFetch, webBrowserMutation } from "@/lib/web-api/browser";
-import type { ImageModelList } from "@/lib/web-api/contracts";
+import { parseImageModelList, type ImageModelList } from "@/lib/web-api/contracts";
 import { useSearchParams } from "next/navigation";
 
 import { loadImageModelCatalog } from "@/features/models/image-model-catalog-cache";
@@ -80,6 +80,28 @@ const multipleModelsResponse: ImageModelList = {
   ],
 };
 
+const gptImage25QualityOptions = [
+  "1K-low",
+  "1K-medium",
+  "1K-high",
+  "1K-xhigh",
+  "1K-max",
+  "2K-low",
+  "2K-medium",
+  "2K-high",
+  "2K-xhigh",
+  "2K-max",
+  "4K-low",
+  "4K-medium",
+  "4K-high",
+  "4K-xhigh",
+  "4K-max",
+];
+
+const gptImage25Prices = Object.fromEntries(
+  gptImage25QualityOptions.map((quality, index) => [quality, 30 + index]),
+) as Record<string, number>;
+
 function renderReadyEditor() {
   vi.mocked(loadImageModelCatalog).mockResolvedValueOnce(modelsResponse);
   render(<ImageGenerationPanel />);
@@ -99,13 +121,13 @@ function selectQuality(value: string) {
   fireEvent.click(screen.getByRole("radio", { name: value }));
 }
 
-function WorkspaceModelSelectionProbe() {
+function WorkspaceModelSelectionProbe({ nextModelID = "nano-banana-2" }: { nextModelID?: string }) {
   const selection = useWorkspaceModelSelection();
 
   return (
     <>
       <output>{selection?.selectedModelId ?? "none"}</output>
-      <button onClick={() => selection?.setSelectedModelId("nano-banana-2")} type="button">
+      <button onClick={() => selection?.setSelectedModelId(nextModelID)} type="button">
         Выбрать Nano Banana 2
       </button>
     </>
@@ -135,6 +157,165 @@ describe("ImageGenerationPanel", () => {
     expect(screen.queryByRole("combobox", { name: ru.imageGeneration.modelLabel })).not.toBeInTheDocument();
     expect(getQualityButton("1K")).toBeVisible();
     expect(loadImageModelCatalog).toHaveBeenCalledTimes(1);
+  });
+
+  it.each(["grok_image_1_5", "grok_image_2_0"])("prepares %s at the server price with only supported settings", async (modelID) => {
+    const ratios = modelID === "grok_image_1_5"
+      ? ["16:9", "1:1", "2:3", "3:2", "9:16"]
+      : ["16:9", "1:1", "2:3", "3:2", "3:4", "4:3", "9:16"];
+    vi.mocked(loadImageModelCatalog).mockResolvedValueOnce(parseImageModelList({ items: [{
+      id: modelID, name: "Grok Imagine", quality_options: ["standard"], default_quality: "standard",
+      price_by_quality: { standard: 10 }, max_output_count: 1, max_reference_images: 0,
+      supports_reference_image: false, allowed_aspect_ratios: ratios,
+    }] }));
+    vi.mocked(webBrowserMutation).mockResolvedValueOnce(Response.json({
+      job: { ...job, model_id: modelID, image_quality: "standard", cost_estimate: 10 }, balance: 104, can_afford: true,
+    }, { status: 201 }));
+    render(<ImageGenerationPanel />);
+    const promptInput = await screen.findByRole("textbox", { name: ru.imageGeneration.promptLabel });
+    expect(screen.queryByRole("button", { name: /^Разрешение:/ })).not.toBeInTheDocument();
+    expect(screen.getByLabelText(`${ru.imageGeneration.priceLabel}: 10 звёзд`)).toBeVisible();
+    fireEvent.click(screen.getByRole("button", { name: "Соотношение сторон: 16:9" }));
+    expect(screen.getAllByRole("radio").map((option) => option.getAttribute("aria-label"))).toEqual(ratios);
+    fireEvent.click(screen.getByRole("radio", { name: "1:1" }));
+    fireEvent.change(promptInput, { target: { value: "Synthetic test image" } });
+    fireEvent.click(getGenerateButton());
+    await waitFor(() => expect(webBrowserMutation).toHaveBeenCalledWith("/web/v1/image-jobs/prepare", {
+      method: "POST",
+      headers: { "Content-Type": "application/json", "X-Idempotency-Key": "11111111-1111-4111-8111-111111111111" },
+      body: JSON.stringify({ prompt: "Synthetic test image", model_id: modelID, image_quality: "standard", aspect_ratio: "1:1", output_count: 1 }),
+    }));
+  });
+
+  it("quotes Midjourney Fast and prepares exactly one Imagine call", async () => {
+    vi.mocked(loadImageModelCatalog).mockResolvedValueOnce(parseImageModelList({ items: [{
+      id: "midjourney_v7", name: "Midjourney V7", quality_options: ["relax", "fast", "turbo"], default_quality: "relax",
+      price_by_quality: { relax: 30, fast: 35, turbo: 60 }, max_output_count: 1, max_reference_images: 4,
+      supports_reference_image: true, allowed_aspect_ratios: ["16:9", "1:1"],
+    }] }));
+    vi.mocked(webBrowserMutation).mockResolvedValueOnce(Response.json({
+      job: { ...job, model_id: "midjourney_v7", image_quality: "fast", cost_estimate: 35 }, balance: 104, can_afford: true,
+    }, { status: 201 }));
+    render(<ImageGenerationPanel />);
+    const promptInput = await screen.findByRole("textbox", { name: ru.imageGeneration.promptLabel });
+    fireEvent.click(screen.getByRole("button", { name: "Режим: Relax" }));
+    fireEvent.click(screen.getByRole("radio", { name: "Fast" }));
+    expect(screen.getByLabelText("За запуск Imagine: 35 звёзд")).toBeVisible();
+    expect(screen.queryByRole("group", { name: "Количество изображений" })).not.toBeInTheDocument();
+    fireEvent.change(promptInput, { target: { value: "Synthetic scene" } });
+    fireEvent.click(getGenerateButton());
+    await waitFor(() => expect(webBrowserMutation).toHaveBeenCalledWith("/web/v1/image-jobs/prepare", expect.objectContaining({
+      body: JSON.stringify({ prompt: "Synthetic scene", model_id: "midjourney_v7", image_quality: "fast", aspect_ratio: "16:9", output_count: 1 }),
+    })));
+  });
+
+  it("quotes FLUX.2 MP tiers and prepares one 4MP image with its supported portrait ratio", async () => {
+    vi.mocked(loadImageModelCatalog).mockResolvedValueOnce(parseImageModelList({ items: [{
+      id: "flux_2_pro", name: "FLUX.2 Pro", quality_options: ["1MP", "2MP", "3MP", "4MP"], default_quality: "1MP",
+      price_by_quality: { "1MP": 15, "2MP": 25, "3MP": 30, "4MP": 40 }, max_output_count: 1, max_reference_images: 0,
+      supports_reference_image: false, allowed_aspect_ratios: ["16:9", "1:1", "9:21"],
+    }] }));
+    vi.mocked(webBrowserMutation).mockResolvedValueOnce(Response.json({
+      job: { ...job, model_id: "flux_2_pro", image_quality: "4MP", aspect_ratio: "9:21", cost_estimate: 40 }, balance: 104, can_afford: true,
+    }, { status: 201 }));
+    render(<ImageGenerationPanel />);
+    const promptInput = await screen.findByRole("textbox", { name: ru.imageGeneration.promptLabel });
+    expect(screen.getByLabelText(`${ru.imageGeneration.priceLabel}: 15 звёзд`)).toBeVisible();
+    selectQuality("4MP");
+    expect(screen.getByLabelText(`${ru.imageGeneration.priceLabel}: 40 звёзд`)).toBeVisible();
+    fireEvent.click(screen.getByRole("button", { name: "Соотношение сторон: 16:9" }));
+    fireEvent.click(screen.getByRole("radio", { name: "9:21" }));
+    fireEvent.change(promptInput, { target: { value: "Synthetic scene" } });
+    fireEvent.click(getGenerateButton());
+    await waitFor(() => expect(webBrowserMutation).toHaveBeenCalledWith("/web/v1/image-jobs/prepare", expect.objectContaining({
+      body: JSON.stringify({ prompt: "Synthetic scene", model_id: "flux_2_pro", image_quality: "4MP", aspect_ratio: "9:21", output_count: 1 }),
+    })));
+  });
+
+  it("prepares GPT Image 2.5 composite quality and output count from the catalog", async () => {
+    vi.mocked(loadImageModelCatalog).mockResolvedValueOnce(parseImageModelList({ items: [{
+      id: "gpt_image_2_5_flare", name: "GPT Image 2.5 Flare", quality_options: gptImage25QualityOptions, default_quality: "1K-medium",
+      price_by_quality: gptImage25Prices, max_output_count: 4, max_reference_images: 0,
+      supports_reference_image: false, allowed_aspect_ratios: ["16:9", "1:1"],
+    }] }));
+    vi.mocked(webBrowserMutation).mockResolvedValueOnce(Response.json({
+      job: { ...job, model_id: "gpt_image_2_5_flare", image_quality: "4K-max", aspect_ratio: "1:1", cost_estimate: 240 }, balance: 300, can_afford: true,
+    }, { status: 201 }));
+    render(<ImageGenerationPanel />);
+    const promptInput = await screen.findByRole("textbox", { name: ru.imageGeneration.promptLabel });
+    expect(screen.getByRole("button", { name: "Разрешение: 1K·Среднее" })).toBeVisible();
+    expect(screen.getByText(ru.imageGeneration.priceDependsOnAspectRatio)).toBeVisible();
+    expect(screen.queryByLabelText(`${ru.imageGeneration.priceLabel}: 31 звезда`)).not.toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: "Разрешение: 1K·Среднее" }));
+    expect(screen.getAllByRole("radio")).toHaveLength(15);
+    expect(screen.getByRole("radio", { name: "1K·Низкое" })).toBeVisible();
+    expect(screen.getByRole("radio", { name: "2K·Максимум" })).toBeVisible();
+    fireEvent.click(screen.getByRole("radio", { name: "4K·Максимум" }));
+    fireEvent.click(screen.getByRole("button", { name: ru.imageGeneration.increaseOutputCount }));
+    fireEvent.click(screen.getByRole("button", { name: "Соотношение сторон: 16:9" }));
+    fireEvent.click(screen.getByRole("radio", { name: "1:1" }));
+    fireEvent.change(promptInput, { target: { value: "Synthetic scene" } });
+    fireEvent.click(getGenerateButton());
+    await waitFor(() => expect(webBrowserMutation).toHaveBeenCalledWith("/web/v1/image-jobs/prepare", expect.objectContaining({
+      body: JSON.stringify({ prompt: "Synthetic scene", model_id: "gpt_image_2_5_flare", image_quality: "4K-max", aspect_ratio: "1:1", output_count: 2 }),
+    })));
+  });
+
+  it("blocks GPT Image 2.5 prompts above 4096 UTF-8 bytes before prepare", async () => {
+    vi.mocked(loadImageModelCatalog).mockResolvedValueOnce(parseImageModelList({ items: [{
+      id: "gpt_image_2_5_sunburst", name: "GPT Image 2.5 Sunburst", quality_options: ["1K-medium"], default_quality: "1K-medium",
+      price_by_quality: { "1K-medium": 30 }, max_output_count: 4, max_reference_images: 0,
+      supports_reference_image: false, allowed_aspect_ratios: ["16:9"],
+    }] }));
+    render(<ImageGenerationPanel />);
+    const promptInput = await screen.findByRole("textbox", { name: ru.imageGeneration.promptLabel });
+    fireEvent.change(promptInput, { target: { value: "а".repeat(2049) } });
+
+    expect(screen.getByRole("alert")).toHaveTextContent(/4\s098 \/ 4\s096 байт UTF-8/);
+    expect(getGenerateButton()).toBeDisabled();
+    expect(webBrowserMutation).not.toHaveBeenCalled();
+  });
+
+  it("keeps Seedream 5 defaults from the backend catalog", async () => {
+    vi.mocked(loadImageModelCatalog).mockResolvedValueOnce(parseImageModelList({ items: [{
+      id: "seedream_5_0_lite", name: "Seedream 5.0 Lite", quality_options: ["2K", "3K", "4K"], default_quality: "2K",
+      price_by_quality: { "2K": 15, "3K": 20, "4K": 30 }, max_output_count: 15, max_reference_images: 14,
+      supports_reference_image: true, allowed_aspect_ratios: ["16:9"],
+    }] }));
+    vi.mocked(webBrowserMutation).mockResolvedValueOnce(Response.json({
+      job: { ...job, model_id: "seedream_5_0_lite", image_quality: "2K", cost_estimate: 30 }, balance: 300, can_afford: true,
+    }, { status: 201 }));
+    render(<ImageGenerationPanel />);
+    const promptInput = await screen.findByRole("textbox", { name: ru.imageGeneration.promptLabel });
+    expect(getQualityButton("2K")).toBeVisible();
+    expect(screen.getByText("1 / 15")).toBeVisible();
+    fireEvent.click(screen.getByRole("button", { name: ru.imageGeneration.increaseOutputCount }));
+    fireEvent.change(promptInput, { target: { value: "Synthetic scene" } });
+    fireEvent.click(getGenerateButton());
+    await waitFor(() => expect(webBrowserMutation).toHaveBeenCalledWith("/web/v1/image-jobs/prepare", expect.objectContaining({
+      body: JSON.stringify({ prompt: "Synthetic scene", model_id: "seedream_5_0_lite", image_quality: "2K", aspect_ratio: "16:9", output_count: 2 }),
+    })));
+  });
+
+  it("replaces an unsupported aspect ratio when switching to Grok", async () => {
+    const grok = {
+      id: "grok_image_1_5", name: "Grok Imagine 1.5", quality_options: ["standard"], default_quality: "standard",
+      price_by_quality: { standard: 10 }, max_output_count: 1, max_reference_images: 1,
+      supports_reference_image: true, allowed_aspect_ratios: ["16:9", "1:1", "2:3", "3:2", "9:16"],
+    };
+    vi.mocked(loadImageModelCatalog).mockResolvedValueOnce({ items: [...modelsResponse.items, grok] });
+    render(<WorkspaceModelSelectionProvider>
+      <ImageGenerationPanel />
+      <WorkspaceModelSelectionProbe nextModelID={grok.id} />
+    </WorkspaceModelSelectionProvider>);
+    await screen.findByRole("textbox", { name: ru.imageGeneration.promptLabel });
+    fireEvent.click(screen.getByRole("button", { name: "Соотношение сторон: 16:9" }));
+    fireEvent.click(screen.getByRole("radio", { name: "4:3" }));
+    expect(screen.getByRole("button", { name: "Соотношение сторон: 4:3" })).toBeVisible();
+    fireEvent.click(screen.getByRole("button", { name: "Выбрать Nano Banana 2" }));
+    expect(await screen.findByRole("button", { name: "Соотношение сторон: 16:9" })).toBeVisible();
+    expect(screen.queryByRole("button", { name: /^Разрешение:/ })).not.toBeInTheDocument();
+    expect(screen.getByLabelText(`${ru.imageGeneration.priceLabel}: 10 звёзд`)).toBeVisible();
   });
 
   it("shows the selected model and quality price immediately without preparing a job", async () => {

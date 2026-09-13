@@ -57,6 +57,9 @@ func (h *Handler) validateReferenceArtifacts(w http.ResponseWriter, r *http.Requ
 }
 
 func (h *Handler) videoAspectRatioFromReferenceArtifacts(ctx context.Context, accountID uuid.UUID, route VideoRouteDTO, ids []uuid.UUID) string {
+	if route.RequiresReferenceVideo {
+		return ""
+	}
 	if h.deps.Artifacts == nil || len(ids) == 0 || len(route.AllowedAspectRatios) == 0 {
 		return ""
 	}

@@ -28,6 +28,8 @@ export interface Job {
 }
 
 /** Public CreateJobRequest: no price/cost/provider/provider_cost/multiplier fields. */
+export type VideoCharacterOrientation = "image" | "video";
+
 export interface CreateJobInput {
   operation: string;
   prompt: string;
@@ -37,9 +39,15 @@ export interface CreateJobInput {
   reference_artifact_ids?: string[];
   /** video_generate only: backend route-specific allowed durations */
   duration_sec?: number;
+  video_resolution?: string;
+  video_audio?: boolean;
+  reference_video_artifact_id?: string;
+  character_orientation?: VideoCharacterOrientation;
+  keep_original_sound?: boolean;
 }
 
 export interface CreateChatMessageInput {
+  model_id?: string;
   prompt: string;
 }
 
@@ -74,6 +82,11 @@ export interface EstimateInput {
   image_quality?: string;
   reference_artifact_ids?: string[];
   duration_sec?: number;
+  video_resolution?: string;
+  video_audio?: boolean;
+  reference_video_artifact_id?: string;
+  character_orientation?: VideoCharacterOrientation;
+  keep_original_sound?: boolean;
 }
 
 export interface EstimateResponse {
@@ -101,13 +114,18 @@ export interface ModelCatalogItem {
   quality_options?: string[];
   default_quality?: string;
   allowed_durations_sec?: number[];
+  automatic_duration?: boolean;
+  allowed_reference_image_counts?: number[];
   allowed_resolutions?: string[];
   allowed_aspect_ratios?: string[];
   default_duration_sec?: number;
   default_resolution?: string;
   default_aspect_ratio?: string;
+  max_prompt_chars?: number;
   requires_start_image: boolean;
   supports_reference_image: boolean;
+  supports_audio?: boolean;
+  requires_reference_video?: boolean;
   max_reference_images?: number;
 }
 
@@ -225,6 +243,12 @@ export interface AccountLinkRequestResult {
 
 export interface ArtifactUploadResponse {
   artifact_id: string;
+  duration_sec?: number;
+}
+
+export interface VideoArtifactUploadResponse {
+  artifact_id: string;
+  duration_sec: number;
 }
 
 export interface JobListResponse {
@@ -571,8 +595,10 @@ const VIDEO_ROUTE_ALIAS_RE = /^video_[a-z0-9_]+$/;
 
 export const MAX_REFERENCE_ARTIFACTS = 4;
 export const MAX_UPLOAD_BYTES = 20 << 20;
+export const MAX_VIDEO_UPLOAD_BYTES = 100 << 20;
 
 const ALLOWED_UPLOAD_MIME_TYPES = new Set(["image/jpeg", "image/png"]);
+const ALLOWED_VIDEO_UPLOAD_MIME_TYPES = new Set(["video/mp4", "video/quicktime"]);
 
 function safeString(value: unknown): string | undefined {
   return typeof value === "string" && value.length > 0 ? value : undefined;
@@ -630,9 +656,9 @@ function apiErrorMessageForCode(code: ApiErrorCode): string {
     case "media_upload_invalid":
       return "Не удалось прочитать файл. Загрузите JPG или PNG";
     case "media_upload_too_large":
-      return "Файл слишком большой. Выберите изображение меньшего размера";
+      return "Файл слишком большой. Выберите файл меньшего размера";
     case "media_upload_unsupported":
-      return "Формат не поддерживается. Загрузите JPG или PNG";
+      return "Формат не поддерживается. Загрузите поддерживаемый файл";
     case "media_provider_output_invalid":
       return "Медиафайл не прошёл безопасную проверку. ⭐️ не списаны";
     case "media_processing_unavailable":
@@ -694,6 +720,15 @@ function validateReferenceArtifactIDs(ids?: string[]): void {
   }
 }
 
+function validateReferenceVideoArtifactID(id?: string): void {
+  if (!id) return;
+  if (!ARTIFACT_ID_RE.test(id)) {
+    throw new ApiError(400, "validation_error", {
+      backendError: "invalid reference video artifact id",
+    });
+  }
+}
+
 function validateUploadFile(file: File): void {
   if (!ALLOWED_UPLOAD_MIME_TYPES.has(file.type)) {
     throw new ApiError(400, "validation_error", {
@@ -703,6 +738,20 @@ function validateUploadFile(file: File): void {
   if (file.size > MAX_UPLOAD_BYTES) {
     throw new ApiError(400, "validation_error", {
       backendError: "artifact too large",
+    });
+  }
+}
+
+function validateVideoUploadFile(file: File): void {
+  const nameAllowed = /\.(mp4|mov)$/i.test(file.name);
+  if (!ALLOWED_VIDEO_UPLOAD_MIME_TYPES.has(file.type) && !nameAllowed) {
+    throw new ApiError(400, "validation_error", {
+      backendError: "unsupported video artifact mime type",
+    });
+  }
+  if (file.size > MAX_VIDEO_UPLOAD_BYTES) {
+    throw new ApiError(400, "validation_error", {
+      backendError: "video artifact too large",
     });
   }
 }
@@ -895,6 +944,7 @@ export async function getJob(id: string): Promise<Job> {
 
 export async function createJob(input: CreateJobInput, options: CreateJobOptions): Promise<Job> {
   validateReferenceArtifactIDs(input.reference_artifact_ids);
+  validateReferenceVideoArtifactID(input.reference_video_artifact_id);
   validateVideoRouteAlias(input.video_route_alias);
   return request<Job>("/miniapp/jobs", {
     method: "POST",
@@ -939,13 +989,47 @@ export async function uploadArtifact(file: File): Promise<string> {
   return data.artifact_id;
 }
 
+export async function uploadVideoArtifact(file: File): Promise<VideoArtifactUploadResponse> {
+  validateVideoUploadFile(file);
+
+  const body = new FormData();
+  body.append("file", file);
+
+  let res: Response;
+  try {
+    const rawLaunchParams = await launchParams();
+    res = await fetch("/miniapp/video-artifacts", {
+      method: "POST",
+      headers: {
+        "X-Launch-Params": rawLaunchParams,
+        "X-Idempotency-Key": createIdempotencyKey(),
+      },
+      body,
+    });
+  } catch {
+    throw new ApiError(0, "network_error");
+  }
+
+  if (!res.ok) {
+    throw await apiErrorFromResponse(res);
+  }
+
+  const data = (await res.json()) as VideoArtifactUploadResponse;
+  if (!ARTIFACT_ID_RE.test(data.artifact_id) || !Number.isFinite(data.duration_sec) || data.duration_sec < 3 || data.duration_sec > 30) {
+    throw new ApiError(500, "service_unavailable", {
+      backendError: "invalid video artifact response",
+    });
+  }
+  return data;
+}
+
 export async function createChatMessage(input: CreateChatMessageInput, options: CreateJobOptions): Promise<Job> {
   return request<Job>("/miniapp/chat/messages", {
     method: "POST",
     headers: {
       "X-Idempotency-Key": options.idempotencyKey,
     },
-    body: JSON.stringify({ prompt: input.prompt }),
+    body: JSON.stringify({ prompt: input.prompt, ...(input.model_id ? {model_id: input.model_id} : {}) }),
   });
 }
 
@@ -956,6 +1040,7 @@ export async function listChatMessages(): Promise<ChatConversationMessage[]> {
 
 export async function estimateJob(input: EstimateInput): Promise<EstimateResponse> {
   validateReferenceArtifactIDs(input.reference_artifact_ids);
+  validateReferenceVideoArtifactID(input.reference_video_artifact_id);
   validateVideoRouteAlias(input.video_route_alias);
   return request<EstimateResponse>("/miniapp/estimate", {
     method: "POST",
@@ -972,6 +1057,11 @@ function serializeGenerationRequest(input: CreateJobInput | EstimateInput): stri
     image_quality: input.image_quality,
     reference_artifact_ids: input.reference_artifact_ids,
     duration_sec: input.duration_sec,
+    video_resolution: input.operation === "video_generate" ? input.video_resolution : undefined,
+    video_audio: input.operation === "video_generate" ? input.video_audio : undefined,
+    reference_video_artifact_id: input.operation === "video_generate" ? input.reference_video_artifact_id : undefined,
+    character_orientation: input.operation === "video_generate" ? input.character_orientation : undefined,
+    keep_original_sound: input.operation === "video_generate" ? input.keep_original_sound : undefined,
   });
 }
 
@@ -1110,4 +1200,13 @@ export async function resolveBotText(job: Job): Promise<string | undefined> {
     if (text) return text;
   }
   return undefined;
+}
+
+export interface TextModel { id: string; name: string; estimate_credits: number; max_prompt_bytes?: number; max_output_tokens?: number }
+export async function listTextModels(): Promise<TextModel[]> {
+  const data = await request<{items: TextModel[]}>("/miniapp/text-models");
+  if (!Array.isArray(data.items) || data.items.length > 12 || data.items.some(m =>
+    !["chatgpt", "gpt_5_5", "claude_opus_4_7", "gemini_3_1_pro", "claude_opus_4_8", "gpt_5_6_terra", "gpt_6_astra", "claude_opus_5", "gemini_3_7_flash", "claude_fable_5_1", "claude_fable_5", "gemini_3_6_flash"].includes(m.id) || typeof m.name !== "string" || !Number.isSafeInteger(m.estimate_credits) || m.estimate_credits < 0
+  )) throw new ApiError(500,"service_unavailable");
+  return data.items;
 }

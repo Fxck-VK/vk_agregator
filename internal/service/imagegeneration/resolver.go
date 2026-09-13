@@ -18,15 +18,17 @@ import (
 )
 
 var (
-	ErrPublicModelUnavailable = errors.New("image generation public model unavailable")
-	ErrUnsupportedQuality     = errors.New("image generation quality unsupported")
-	ErrReferenceUnsupported   = errors.New("image generation references unsupported")
-	ErrReferenceLimit         = errors.New("image generation reference limit exceeded")
-	ErrInvalidReferenceCount  = errors.New("image generation reference count invalid")
-	ErrInvalidOutputCount     = errors.New("image generation output count invalid")
-	ErrOutputCountLimit       = errors.New("image generation output count limit exceeded")
-	ErrPriceUnavailable       = errors.New("image generation price unavailable")
-	ErrUnsupportedAspectRatio = errors.New("image generation aspect ratio unsupported")
+	ErrPublicModelUnavailable   = errors.New("image generation public model unavailable")
+	ErrUnsupportedQuality       = errors.New("image generation quality unsupported")
+	ErrReferenceUnsupported     = errors.New("image generation references unsupported")
+	ErrReferenceLimit           = errors.New("image generation reference limit exceeded")
+	ErrInvalidReferenceCount    = errors.New("image generation reference count invalid")
+	ErrInvalidOutputCount       = errors.New("image generation output count invalid")
+	ErrOutputCountLimit         = errors.New("image generation output count limit exceeded")
+	ErrPriceUnavailable         = errors.New("image generation price unavailable")
+	ErrUnsupportedAspectRatio   = errors.New("image generation aspect ratio unsupported")
+	ErrUnsupportedPromptOptions = errors.New("native prompt options are unsupported")
+	ErrPromptTooLong            = errors.New("image generation prompt too long")
 )
 
 const (
@@ -52,11 +54,13 @@ type PublicModel struct {
 	SupportsReferenceImage bool
 	MaxReferenceImages     int
 	MaxOutputCount         int
+	AllowedAspectRatios    []string
 }
 
 // Request contains only public product dimensions. It intentionally accepts no
 // client-owned provider choice, model code, price, or pricing snapshot.
 type Request struct {
+	Prompt         string
 	ModelID        string
 	Quality        string
 	AspectRatio    string
@@ -114,6 +118,7 @@ func NewResolver(publicModels []PublicModel, pricing SnapshotCatalog) Resolver {
 	models := make([]PublicModel, 0, len(publicModels))
 	for _, model := range publicModels {
 		model.QualityOptions = append([]string(nil), model.QualityOptions...)
+		model.AllowedAspectRatios = append([]string(nil), model.AllowedAspectRatios...)
 		models = append(models, model)
 	}
 	return Resolver{publicModels: models, pricing: pricing}
@@ -141,11 +146,19 @@ func (r Resolver) Resolve(request Request) (Resolution, error) {
 	if err != nil || !snapshot.Valid() {
 		return Resolution{}, fmt.Errorf("%w: %v", ErrPriceUnavailable, err)
 	}
+	snapshot, err = pricingcatalog.QuoteAPIMartImage(snapshot, public.AspectRatio, request.ReferenceCount)
+	if err != nil {
+		return Resolution{}, ErrPriceUnavailable
+	}
 	snapshot, err = scalePricingSnapshot(snapshot, public.OutputCount)
 	if err != nil {
 		return Resolution{}, err
 	}
 
+	size := imageSizeForQuality(trustedModel.Provider, public.ImageQuality)
+	if pricingcatalog.IsBoundedAPIMartImage(trustedModel.ModelID) {
+		size = public.AspectRatio
+	}
 	return Resolution{
 		Public: public,
 		Worker: WorkerParams{
@@ -153,14 +166,30 @@ func (r Resolver) Resolve(request Request) (Resolution, error) {
 			ModelName:    trustedModel.ModelName,
 			Provider:     trustedModel.Provider,
 			ModelCode:    trustedModel.ModelCode,
-			Size:         imageSizeForQuality(trustedModel.Provider, public.ImageQuality),
-			Resolution:   public.ImageQuality,
+			Size:         size,
+			Resolution:   WorkerResolution(trustedModel.ModelID, public.ImageQuality),
 			ImageQuality: public.ImageQuality,
 			AspectRatio:  public.AspectRatio,
 			OutputCount:  public.OutputCount,
 		},
 		PricingSnapshot: snapshot,
 	}, nil
+}
+
+// WorkerResolution maps a validated public model/quality selection to the
+// worker contract. VK and the shared resolver must use the same mapping.
+func WorkerResolution(modelID, quality string) string {
+	switch modelID {
+	case modelcatalog.MiniAppImageGPTImage25Flare, modelcatalog.MiniAppImageGPTImage25Sunburst:
+		resolution, _, _ := strings.Cut(quality, "-")
+		return resolution
+	case modelcatalog.MiniAppImageGrokImage15:
+		return ""
+	case modelcatalog.MiniAppImageGrokImage20:
+		return "quality"
+	default:
+		return quality
+	}
 }
 
 // ResolvePublic validates and normalizes only the public image intent. It
@@ -181,6 +210,9 @@ func (r Resolver) resolvePublic(request Request) (modelcatalog.Model, PublicSele
 	}
 
 	requestedModelID := strings.TrimSpace(request.ModelID)
+	if requestedModelID == modelcatalog.MiniAppImageMidjourneyV7 && (strings.Contains(request.Prompt, "--") || strings.ContainsAny(request.Prompt, "{}")) {
+		return modelcatalog.Model{}, PublicSelection{}, ErrUnsupportedPromptOptions
+	}
 	trustedModel, ok := modelcatalog.ResolvePublicModel(domain.OperationImageGenerate, requestedModelID)
 	if !ok || !trustedModel.ExposeID || (requestedModelID != "" && requestedModelID != trustedModel.ModelID) {
 		return modelcatalog.Model{}, PublicSelection{}, ErrPublicModelUnavailable
@@ -194,8 +226,22 @@ func (r Resolver) resolvePublic(request Request) (modelcatalog.Model, PublicSele
 	if err != nil {
 		return modelcatalog.Model{}, PublicSelection{}, err
 	}
-	aspectRatio, err := NormalizeAspectRatio(request.AspectRatio)
-	if err != nil {
+	aspectRatio := strings.TrimSpace(request.AspectRatio)
+	if aspectRatio == "" {
+		aspectRatio = DefaultAspectRatio
+		if len(trustedModel.AllowedAspectRatios) == 1 {
+			aspectRatio = trustedModel.AllowedAspectRatios[0]
+		}
+	}
+	if len(trustedModel.AllowedAspectRatios) > 0 {
+		allowed := false
+		for _, ratio := range trustedModel.AllowedAspectRatios {
+			allowed = allowed || ratio == aspectRatio
+		}
+		if !allowed {
+			return modelcatalog.Model{}, PublicSelection{}, ErrUnsupportedAspectRatio
+		}
+	} else if _, err := NormalizeAspectRatio(aspectRatio); err != nil {
 		return modelcatalog.Model{}, PublicSelection{}, err
 	}
 	if err := validateReferenceCount(publicModel, request.ReferenceCount); err != nil {
@@ -204,6 +250,12 @@ func (r Resolver) resolvePublic(request Request) (modelcatalog.Model, PublicSele
 	outputCount, err := normalizeOutputCount(publicModel, request.OutputCount)
 	if err != nil {
 		return modelcatalog.Model{}, PublicSelection{}, err
+	}
+	if trustedModel.ModelID == modelcatalog.MiniAppImageSeedream50Lite && request.ReferenceCount+outputCount > 15 {
+		return modelcatalog.Model{}, PublicSelection{}, ErrOutputCountLimit
+	}
+	if pricingcatalog.IsGPTImage25(trustedModel.ModelID) && len(request.Prompt) > domain.GPTImage25MaxPromptBytes {
+		return modelcatalog.Model{}, PublicSelection{}, ErrPromptTooLong
 	}
 
 	return trustedModel, PublicSelection{
@@ -237,6 +289,7 @@ func (r Resolver) publicModelFor(trusted modelcatalog.Model) (PublicModel, bool)
 			return PublicModel{}, false
 		}
 		model.QualityOptions = append([]string(nil), model.QualityOptions...)
+		model.AllowedAspectRatios = append([]string(nil), model.AllowedAspectRatios...)
 		return model, true
 	}
 	return PublicModel{}, false
@@ -308,8 +361,18 @@ func scalePricingSnapshot(snapshot pricingcatalog.PricingSnapshot, outputCount i
 	if outputCount == DefaultOutputCount {
 		return snapshot, nil
 	}
+	if pricingcatalog.IsGPTImage25(snapshot.Key.ImageModelID) {
+		quoted, err := pricingcatalog.ScaleGPTImage25Quote(snapshot, outputCount)
+		if err != nil {
+			return pricingcatalog.PricingSnapshot{}, ErrPriceUnavailable
+		}
+		return quoted, nil
+	}
 
 	count := int64(outputCount)
+	if snapshot.ImageOutputCount > 0 {
+		snapshot.ImageOutputCount = outputCount
+	}
 	var ok bool
 	if snapshot.Floor.Amount, ok = checkedMultiply(snapshot.Floor.Amount, count); !ok {
 		return pricingcatalog.PricingSnapshot{}, ErrPriceUnavailable

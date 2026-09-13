@@ -14,7 +14,9 @@ import {
   type EstimateResponse,
   type Job,
   type ModelCatalogItem,
+  type VideoCharacterOrientation,
   uploadArtifact,
+  uploadVideoArtifact,
 } from "../api/client";
 import { ResultCard } from "../components/ResultCard";
 import {
@@ -48,6 +50,11 @@ type WorkflowModeProps = {
       imageQuality?: string;
       referenceArtifactIds?: string[];
       durationSec?: number;
+      videoResolution?: string;
+      videoAudio?: boolean;
+      referenceVideoArtifactId?: string;
+      characterOrientation?: VideoCharacterOrientation;
+      keepOriginalSound?: boolean;
     },
   ) => Promise<Job | null>;
 };
@@ -58,11 +65,19 @@ type ReferenceItem = {
   previewUrl: string;
 };
 
+type ReferenceVideoItem = {
+  artifactId: string;
+  previewUrl: string;
+  durationSec: number;
+  fileName: string;
+};
+
 const ESTIMATE_DEBOUNCE_MS = 450;
 const PROMPT_LIMIT = 2000;
+const GPT_IMAGE_25_PROMPT_LIMIT = 4096;
 const REFERENCE_ACCEPT = "image/jpeg,image/png";
+const REFERENCE_VIDEO_ACCEPT = "video/mp4,video/quicktime,.mov";
 const DEFAULT_VIDEO_DURATION_SEC = 5;
-const PREFERRED_VIDEO_DURATION_OPTIONS = [3, 5, 10];
 
 function createLocalReferenceId(): string {
   if (globalThis.crypto?.randomUUID) return globalThis.crypto.randomUUID();
@@ -85,12 +100,21 @@ type CreateMode = {
   qualityOptions?: string[];
   defaultQuality?: string;
   durationOptions?: number[];
+  automaticDuration?: boolean;
+  allowedReferenceImageCounts?: number[];
   defaultDurationSec?: number;
+  resolutionOptions?: string[];
+  defaultResolution?: string;
   aspectRatioOptions?: string[];
   defaultAspectRatio?: string;
   requiresStartImage?: boolean;
   supportsReferenceImage?: boolean;
+  supportsAudio?: boolean;
+  requiresReferenceVideo?: boolean;
   maxReferenceImages?: number;
+  maxPromptChars?: number;
+  referenceImageRole?: "reference" | "firstFrame";
+  allowsPromptlessFirstFrame?: boolean;
 };
 
 const DEFAULT_IMAGE_COPY: Omit<CreateMode, "modalityId" | "modelId" | "name"> = {
@@ -170,12 +194,97 @@ function createModeFromImageItem(model: ModelCatalogItem): CreateMode {
     catalogEstimateCredits: model.estimate_credits,
     qualityOptions: model.quality_options?.filter(Boolean),
     defaultQuality: model.default_quality,
-    supportsReferenceImage: model.supports_reference_image || copy.supportsReferenceImage,
+    supportsReferenceImage: model.supports_reference_image,
     maxReferenceImages: model.max_reference_images ?? copy.maxReferenceImages,
   };
 }
 
 const VIDEO_ROUTE_COPY: Record<string, Omit<CreateMode, "modalityId" | "modelId" | "videoRouteAlias">> = {
+  video_kling_3_0_turbo: {
+    name: "Kling 3.0 Turbo",
+    subtitle: "Текст или первый кадр, 3-15 секунд",
+    color: "#22c55e",
+    glow: "rgba(34,197,94,0.32)",
+    placeholders: ["Опишите сцену, движение камеры и первый кадр, если он загружен..."],
+    quickIdeas: ["Product reveal", "Character motion", "City scene", "Cinematic close-up"],
+    maxPromptChars: 3072,
+    referenceImageRole: "firstFrame",
+    allowsPromptlessFirstFrame: true,
+  },
+  video_minimax_h3: {
+    name: "MiniMax H3",
+    subtitle: "Текст или первый кадр, 4-15 секунд",
+    color: "#0ea5e9",
+    glow: "rgba(14,165,233,0.32)",
+    placeholders: ["Опишите сцену, действие, движение камеры и желаемый стиль..."],
+    quickIdeas: ["Sports scene", "Storyboard shot", "Portrait motion", "Wide cinematic"],
+    maxPromptChars: 7000,
+    referenceImageRole: "firstFrame",
+  },
+  video_kling_v3: {
+    name: "Kling V3",
+    subtitle: "Видео 3–15 секунд, до двух кадров и опциональный звук",
+    color: "#22c55e",
+    glow: "rgba(34,197,94,0.32)",
+    placeholders: ["Опишите сцену, движение камеры и нужен ли естественный звук..."],
+    quickIdeas: ["Product launch", "Fashion walk", "Food close-up", "Travel scene"],
+  },
+  video_kling_2_6_motion_control: {
+    name: "Kling 2.6 Motion Control",
+    subtitle: "Motion control по изображению и исходному видео",
+    color: "#14b8a6",
+    glow: "rgba(20,184,166,0.32)",
+    placeholders: ["Опишите, как перенести движение исходного видео на персонажа..."],
+    quickIdeas: ["Character move", "Dance transfer", "Gesture control", "Camera match"],
+  },
+  video_veo_3_1_fast: {
+    name: "Veo 3.1 Fast",
+    subtitle: "Быстрое 8-секундное видео, до трех референсов",
+    color: "#f59e0b",
+    glow: "rgba(245,158,11,0.32)",
+    placeholders: ["Опишите 8-секундную сцену с ясным действием и камерой..."],
+    quickIdeas: ["Ad shot", "City flythrough", "Hero product", "Storyboard frame"],
+  },
+  video_veo_3_1_quality: {
+    name: "Veo 3.1 Quality",
+    subtitle: "Качественное 8-секундное видео, до двух кадров",
+    color: "#f43f5e",
+    glow: "rgba(244,63,94,0.34)",
+    placeholders: ["Опишите детальную сцену, свет, движение и настроение..."],
+    quickIdeas: ["Luxury scene", "Film trailer", "Fashion campaign", "Cinematic reveal"],
+  },
+  video_veo_3_1_lite: {
+    name: "Veo 3.1 Lite",
+    subtitle: "Текстовое 8-секундное видео без референсов",
+    color: "#8b5cf6",
+    glow: "rgba(139,92,246,0.34)",
+    placeholders: ["Опишите короткую 8-секундную сцену без изображений..."],
+    quickIdeas: ["Simple ad", "Nature shot", "Explainer scene", "Mood clip"],
+  },
+  video_gemini_omni_1_1_flash: {
+    name: "Gemini Omni 1.1 Flash",
+    subtitle: "Видео со звуком, автоматическая длительность 3–10 секунд",
+    color: "#4285f4",
+    glow: "rgba(66,133,244,0.32)",
+    placeholders: ["Опишите сцену, движение камеры и звук..."],
+    quickIdeas: ["Реклама продукта", "Морской закат", "Фантастический город", "Анимация иллюстрации"],
+  },
+  video_gemini_omni_1_1_flash_ext: {
+    name: "Gemini Omni 1.1 Flash EXT",
+    subtitle: "Видео со звуком от 4 до 10 секунд; одно или три изображения",
+    color: "#4285f4",
+    glow: "rgba(66,133,244,0.32)",
+    placeholders: ["Опишите сцену, движение камеры и звук..."],
+    quickIdeas: ["Реклама продукта", "Морской закат", "Фантастический город", "Анимация иллюстрации"],
+  },
+  video_seedance_2_5: {
+    name: "Seedance 2.5",
+    subtitle: "Видео со звуком до 30 секунд",
+    color: "#06b6d4",
+    glow: "rgba(6,182,212,0.32)",
+    placeholders: ["Опишите сцену, движение камеры и звук..."],
+    quickIdeas: ["Реклама продукта", "Морской закат", "Фантастический город", "Анимация иллюстрации"],
+  },
   video_hailuo_2_3_fast: {
     name: "Hailuo 2.3 Fast",
     subtitle: "Image-to-video",
@@ -241,12 +350,20 @@ function createModeFromVideoItem(route: ModelCatalogItem): CreateMode {
     description: route.description,
     catalogEstimateCredits: route.estimate_credits,
     durationOptions: durations,
+    automaticDuration: route.automatic_duration,
+    allowedReferenceImageCounts: route.allowed_reference_image_counts,
+    resolutionOptions: route.allowed_resolutions?.filter(Boolean) ?? [],
+    defaultResolution: route.default_resolution,
     defaultDurationSec: route.default_duration_sec ?? durations[0] ?? DEFAULT_VIDEO_DURATION_SEC,
     aspectRatioOptions: aspectRatios,
     defaultAspectRatio: route.default_aspect_ratio ?? aspectRatios[0],
     requiresStartImage: route.requires_start_image,
     supportsReferenceImage: route.supports_reference_image,
+    supportsAudio: copy.referenceImageRole === "firstFrame" ? false : route.supports_audio,
+    requiresReferenceVideo: route.requires_reference_video,
     maxReferenceImages: route.max_reference_images,
+    maxPromptChars: route.max_prompt_chars ?? copy.maxPromptChars,
+    referenceImageRole: copy.referenceImageRole,
   };
 }
 
@@ -263,8 +380,7 @@ function durationButtonOptions(model: CreateMode): number[] {
   if (allowed.length === 0) {
     return [model.defaultDurationSec ?? DEFAULT_VIDEO_DURATION_SEC];
   }
-  const preferred = PREFERRED_VIDEO_DURATION_OPTIONS.filter((value) => allowed.includes(value));
-  return preferred.length >= 2 ? preferred : allowed;
+  return allowed;
 }
 
 function defaultDurationForModel(model: CreateMode): number {
@@ -280,6 +396,46 @@ function defaultImageQualityForModel(model: CreateMode): string {
   if (options.length === 0) return "";
   if (model.defaultQuality && options.includes(model.defaultQuality)) return model.defaultQuality;
   return options[0];
+}
+
+function isGPTImage25Model(model: CreateMode | undefined): boolean {
+  return model?.modelId.startsWith("gpt_image_2_5_") === true;
+}
+
+function promptLimitForModel(model: CreateMode | undefined): number {
+  if (model?.maxPromptChars && model.maxPromptChars > 0) return model.maxPromptChars;
+  return isGPTImage25Model(model) ? GPT_IMAGE_25_PROMPT_LIMIT : PROMPT_LIMIT;
+}
+
+function promptLengthForModel(model: CreateMode | undefined, value: string): number {
+  return isGPTImage25Model(model) ? utf8ByteLength(value) : value.length;
+}
+
+function promptLimitUnitForModel(model: CreateMode | undefined): string {
+  return isGPTImage25Model(model) ? " байт UTF-8" : "";
+}
+
+function utf8ByteLength(value: string): number {
+  return new TextEncoder().encode(value).length;
+}
+
+function imageQualityLabel(value: string): string {
+  const named = ({ relax: "Relax", fast: "Fast", turbo: "Turbo", standard: "Стандарт" } as Record<string, string>)[value];
+  if (named) return named;
+  const [size, tone] = value.split("-");
+  const toneLabel = ({ low: "Низкое", medium: "Среднее", high: "Высокое", xhigh: "Очень высокое", max: "Максимум" } as Record<string, string>)[tone];
+  return size && toneLabel ? `${size}·${toneLabel}` : value;
+}
+
+function videoResolutionLabel(value: string): string {
+  switch (value.toLowerCase()) {
+    case "2k":
+      return "2K";
+    case "768p":
+      return "768P";
+    default:
+      return value;
+  }
 }
 
 const HISTORY_STATUS_FILTERS = [
@@ -423,12 +579,21 @@ export function WorkflowMode({
   const [referenceItems, setReferenceItems] = useState<ReferenceItem[]>([]);
   const [referenceUploading, setReferenceUploading] = useState(false);
   const [referenceError, setReferenceError] = useState<string | null>(null);
+  const [referenceVideoItem, setReferenceVideoItem] = useState<ReferenceVideoItem | null>(null);
+  const [referenceVideoUploading, setReferenceVideoUploading] = useState(false);
+  const [referenceVideoError, setReferenceVideoError] = useState<string | null>(null);
   const [videoDurationSec, setVideoDurationSec] = useState(DEFAULT_VIDEO_DURATION_SEC);
+  const [selectedVideoResolution, setSelectedVideoResolution] = useState("");
+  const [videoAudio, setVideoAudio] = useState(false);
+  const [characterOrientation, setCharacterOrientation] = useState<VideoCharacterOrientation>("image");
+  const [keepOriginalSound, setKeepOriginalSound] = useState(true);
   const [isDragging, setIsDragging] = useState(false);
   const [resultMediaSrc, setResultMediaSrc] = useState<string | null | undefined>(undefined);
   const [resultPreparing, setResultPreparing] = useState(false);
   const referenceInputRef = useRef<HTMLInputElement>(null);
+  const referenceVideoInputRef = useRef<HTMLInputElement>(null);
   const referenceItemsRef = useRef<ReferenceItem[]>([]);
+  const referenceVideoItemRef = useRef<ReferenceVideoItem | null>(null);
   const flowReturnScreenRef = useRef<WorkflowScreen>("home");
 
   const recentJobs = useMemo(() => sortedJobs(jobs), [jobs]);
@@ -451,9 +616,15 @@ export function WorkflowMode({
     visibleCreateModes.find((item) => item.modelId === modelId) ?? visibleCreateModes[0];
   const isImageModality = modalityId === "image";
   const isVideoModality = modalityId === "video";
+  const videoResolutionOptions = activeCreateModel?.resolutionOptions ?? [];
+  const videoResolution = videoResolutionOptions.includes(selectedVideoResolution)
+    ? selectedVideoResolution
+    : activeCreateModel?.defaultResolution ?? videoResolutionOptions[0];
   const acceptsImageReferences =
     Boolean(activeCreateModel) &&
-    (isImageModality || (isVideoModality && activeCreateModel.supportsReferenceImage === true));
+    (isImageModality || isVideoModality) && activeCreateModel.supportsReferenceImage === true;
+  const supportsVideoAudio = isVideoModality && activeCreateModel?.supportsAudio === true;
+  const requiresReferenceVideo = isVideoModality && activeCreateModel?.requiresReferenceVideo === true;
   const maxReferenceItems = Math.max(1, activeCreateModel?.maxReferenceImages ?? MAX_REFERENCE_ARTIFACTS);
   const videoDurationOptions = useMemo(
     () => (activeCreateModel ? durationButtonOptions(activeCreateModel) : []),
@@ -471,18 +642,44 @@ export function WorkflowMode({
     () => (acceptsImageReferences ? referenceItems.map((item) => item.artifactId) : []),
     [acceptsImageReferences, referenceItems],
   );
+  const referenceVideoArtifactId = requiresReferenceVideo ? referenceVideoItem?.artifactId : undefined;
+  const videoDurationForRequest = requiresReferenceVideo ? referenceVideoItem?.durationSec : videoDurationSec;
+  const referenceVideoDurationAllowed =
+    !requiresReferenceVideo ||
+    !referenceVideoItem ||
+    characterOrientation === "video" ||
+    referenceVideoItem.durationSec <= 10;
+  const referenceVideoReady =
+    !requiresReferenceVideo || (Boolean(referenceVideoArtifactId) && referenceVideoDurationAllowed);
+  const usesVideoQualitySelector =
+    isVideoModality &&
+    videoResolutionOptions.length > 0 &&
+    videoResolutionOptions.every((value) => value === "std" || value === "pro");
   const modelSelected = Boolean(activeCreateModel && activeCreateModel.modalityId === modalityId);
+  const allowedReferenceCounts = activeCreateModel?.allowedReferenceImageCounts;
+  const referenceCountValid = !allowedReferenceCounts?.length || allowedReferenceCounts.includes(referenceArtifactIds.length);
   const trimmedPrompt = prompt.trim();
-  const promptTooLong = prompt.length > PROMPT_LIMIT;
+  const promptLimit = promptLimitForModel(activeCreateModel);
+  const promptLength = useMemo(() => promptLengthForModel(activeCreateModel, prompt), [activeCreateModel, prompt]);
+  const promptLimitUnit = promptLimitUnitForModel(activeCreateModel);
+  const promptTooLong = promptLength > promptLimit;
+  const promptlessFirstFrameReady =
+    activeCreateModel?.allowsPromptlessFirstFrame === true &&
+    activeCreateModel.referenceImageRole === "firstFrame" &&
+    referenceArtifactIds.length === 1;
+  const promptReady = Boolean(trimmedPrompt) || promptlessFirstFrameReady;
   // Submit gating must use backend /miniapp/estimate, never catalog hints.
   const hasBackendEnoughCredits = backendEstimate?.enough_credits === true;
   const canSubmit =
-    !!trimmedPrompt &&
+    promptReady &&
     !promptTooLong &&
     modelSelected &&
+    referenceCountValid &&
+    referenceVideoReady &&
     (!activeCreateModel?.requiresStartImage || referenceArtifactIds.length > 0) &&
     hasBackendEnoughCredits &&
     !referenceUploading &&
+    !referenceVideoUploading &&
     !submitting;
 
   useEffect(() => {
@@ -490,8 +687,14 @@ export function WorkflowMode({
   }, [referenceItems]);
 
   useEffect(() => {
+    referenceVideoItemRef.current = referenceVideoItem;
+  }, [referenceVideoItem]);
+
+  useEffect(() => {
     return () => {
       referenceItemsRef.current.forEach((item) => URL.revokeObjectURL(item.previewUrl));
+      const item = referenceVideoItemRef.current;
+      if (item) URL.revokeObjectURL(item.previewUrl);
     };
   }, []);
 
@@ -522,6 +725,14 @@ export function WorkflowMode({
     setReferenceError(null);
   }, []);
 
+  const clearReferenceVideoItem = useCallback(() => {
+    setReferenceVideoItem((prev) => {
+      if (prev) URL.revokeObjectURL(prev.previewUrl);
+      return null;
+    });
+    setReferenceVideoError(null);
+  }, []);
+
   useEffect(() => {
     const current = createModes.find(
       (item) => item.modalityId === modalityId && item.modelId === modelId,
@@ -548,6 +759,12 @@ export function WorkflowMode({
     if (isVideoModality && !videoDurationOptions.includes(videoDurationSec)) {
       setVideoDurationSec(defaultDurationForModel(activeCreateModel));
     }
+    if (!supportsVideoAudio && videoAudio) {
+      setVideoAudio(false);
+    }
+    if (!requiresReferenceVideo && referenceVideoItem) {
+      clearReferenceVideoItem();
+    }
     if (isImageModality) {
       const nextQuality = defaultImageQualityForModel(activeCreateModel);
       if (nextQuality !== imageQuality && (!imageQuality || !imageQualityOptions.includes(imageQuality))) {
@@ -560,8 +777,13 @@ export function WorkflowMode({
     imageQualityOptions,
     isImageModality,
     isVideoModality,
+    clearReferenceVideoItem,
     videoDurationOptions,
     videoDurationSec,
+    supportsVideoAudio,
+    videoAudio,
+    requiresReferenceVideo,
+    referenceVideoItem,
   ]);
 
   useEffect(() => {
@@ -580,7 +802,7 @@ export function WorkflowMode({
     const value = prompt.trim();
     setBackendEstimate(null);
     setBackendEstimateError(null);
-    if (!value || promptTooLong || !modelSelected || !activeCreateModel) {
+    if (!promptReady || promptTooLong || !modelSelected || !activeCreateModel || !referenceCountValid || !referenceVideoReady) {
       setBackendEstimateLoading(false);
       return;
     }
@@ -594,7 +816,12 @@ export function WorkflowMode({
         video_route_alias: isVideoModality ? activeCreateModel.videoRouteAlias : undefined,
         image_quality: isImageModality && imageQuality ? imageQuality : undefined,
         reference_artifact_ids: referenceArtifactIds.length > 0 ? referenceArtifactIds : undefined,
-        duration_sec: isVideoModality ? videoDurationSec : undefined,
+        duration_sec: isVideoModality ? videoDurationForRequest : undefined,
+        video_resolution: isVideoModality ? videoResolution : undefined,
+        video_audio: supportsVideoAudio ? videoAudio : undefined,
+        reference_video_artifact_id: isVideoModality ? referenceVideoArtifactId : undefined,
+        character_orientation: requiresReferenceVideo ? characterOrientation : undefined,
+        keep_original_sound: requiresReferenceVideo ? keepOriginalSound : undefined,
       })
         .then((data) => {
           if (cancelled) return;
@@ -620,9 +847,19 @@ export function WorkflowMode({
     isVideoModality,
     modelSelected,
     prompt,
+    promptReady,
     promptTooLong,
     referenceArtifactIds,
-    videoDurationSec,
+    referenceCountValid,
+    referenceVideoArtifactId,
+    referenceVideoReady,
+    videoDurationForRequest,
+    videoResolution,
+    supportsVideoAudio,
+    videoAudio,
+    requiresReferenceVideo,
+    characterOrientation,
+    keepOriginalSound,
   ]);
 
   useEffect(() => {
@@ -729,33 +966,70 @@ export function WorkflowMode({
     void addReferenceFiles(Array.from(event.dataTransfer.files));
   }
 
+  async function addReferenceVideoFile(file: File | undefined) {
+    if (!requiresReferenceVideo || referenceVideoUploading || !file) return;
+    setReferenceVideoError(null);
+    setReferenceVideoUploading(true);
+    const previewUrl = URL.createObjectURL(file);
+    try {
+      const uploaded = await uploadVideoArtifact(file);
+      setReferenceVideoItem((prev) => {
+        if (prev) URL.revokeObjectURL(prev.previewUrl);
+        return {
+          artifactId: uploaded.artifact_id,
+          durationSec: uploaded.duration_sec,
+          fileName: file.name,
+          previewUrl,
+        };
+      });
+      setBackendEstimate(null);
+    } catch (error) {
+      URL.revokeObjectURL(previewUrl);
+      setReferenceVideoError(apiUserMessage(error));
+    } finally {
+      setReferenceVideoUploading(false);
+    }
+  }
+
+  function handleReferenceVideoInput(event: ChangeEvent<HTMLInputElement>) {
+    const [file] = Array.from(event.currentTarget.files ?? []);
+    event.currentTarget.value = "";
+    void addReferenceVideoFile(file);
+  }
+
   const changeModality = useCallback((id: ModalityId) => {
     const createModel = createModes.find((item) => item.modalityId === id);
-    if (!createModel?.supportsReferenceImage && id !== "image") {
-      clearReferenceItems();
-    }
+    clearReferenceItems();
+    clearReferenceVideoItem();
+    setVideoAudio(false);
+    setCharacterOrientation("image");
+    setKeepOriginalSound(true);
     setModalityId(id);
     setModelId(createModel?.modelId ?? "");
     setModelDropdownOpen(false);
     if (createModel?.modalityId === "video") {
       setVideoDurationSec(defaultDurationForModel(createModel));
+      setSelectedVideoResolution(createModel.defaultResolution ?? createModel.resolutionOptions?.[0] ?? "");
     }
     if (createModel?.modalityId === "image") {
       setImageQuality(defaultImageQualityForModel(createModel));
     }
     setBackendEstimate(null);
     setBackendEstimateError(null);
-  }, [clearReferenceItems, createModes]);
+  }, [clearReferenceItems, clearReferenceVideoItem, createModes]);
 
   function selectCreateModel(mode: CreateMode) {
-    if (!mode.supportsReferenceImage && mode.modalityId !== "image") {
-      clearReferenceItems();
-    }
+    clearReferenceItems();
+    clearReferenceVideoItem();
+    setVideoAudio(false);
+    setCharacterOrientation("image");
+    setKeepOriginalSound(true);
     setModalityId(mode.modalityId);
     setModelId(mode.modelId);
     setModelDropdownOpen(false);
     if (mode.modalityId === "video") {
       setVideoDurationSec(defaultDurationForModel(mode));
+      setSelectedVideoResolution(mode.defaultResolution ?? mode.resolutionOptions?.[0] ?? "");
     }
     if (mode.modalityId === "image") {
       setImageQuality(defaultImageQualityForModel(mode));
@@ -818,6 +1092,7 @@ export function WorkflowMode({
     setModelId(mode?.modelId ?? "");
     if (mode?.modalityId === "video") {
       setVideoDurationSec(defaultDurationForModel(mode));
+      setSelectedVideoResolution(mode.defaultResolution ?? mode.resolutionOptions?.[0] ?? "");
     }
     if (mode?.modalityId === "image") {
       const restoredQuality =
@@ -827,6 +1102,10 @@ export function WorkflowMode({
       setImageQuality(restoredQuality);
     }
     clearReferenceItems();
+    clearReferenceVideoItem();
+    setVideoAudio(false);
+    setCharacterOrientation("image");
+    setKeepOriginalSound(true);
     clearResultMedia();
     setPrompt("");
     setSubmitError(null);
@@ -847,7 +1126,12 @@ export function WorkflowMode({
         videoRouteAlias: isVideoModality ? activeCreateModel.videoRouteAlias : undefined,
         imageQuality: isImageModality && imageQuality ? imageQuality : undefined,
         referenceArtifactIds: referenceArtifactIds.length > 0 ? referenceArtifactIds : undefined,
-        durationSec: isVideoModality ? videoDurationSec : undefined,
+        durationSec: isVideoModality ? videoDurationForRequest : undefined,
+        videoResolution: isVideoModality ? videoResolution : undefined,
+        videoAudio: supportsVideoAudio ? videoAudio : undefined,
+        referenceVideoArtifactId: isVideoModality ? referenceVideoArtifactId : undefined,
+        characterOrientation: requiresReferenceVideo ? characterOrientation : undefined,
+        keepOriginalSound: requiresReferenceVideo ? keepOriginalSound : undefined,
       });
       if (!job) {
         setSubmitError("Не удалось запустить генерацию");
@@ -935,14 +1219,26 @@ export function WorkflowMode({
   const promptPlaceholder =
     activeCreateModel?.placeholders[0] ?? "Выберите модель и опишите, что нужно создать...";
   const activeModelName = activeCreateModel?.name ?? "Модель не выбрана";
+  const usesFirstFrameImage = activeCreateModel?.referenceImageRole === "firstFrame";
   const referenceLimitLabel =
     maxReferenceItems === 1 ? "1 файл" : `до ${maxReferenceItems} файлов`;
   const referenceTitle = activeCreateModel?.requiresStartImage
     ? "Загрузите стартовое изображение"
+    : usesFirstFrameImage
+      ? "Добавьте первый кадр"
     : "Добавьте референс";
   const referenceMeta = activeCreateModel?.requiresStartImage
     ? `Обязательно для этой модели, ${referenceLimitLabel}, PNG/JPG до 20 MB`
+    : usesFirstFrameImage
+      ? `Опционально, ${referenceLimitLabel}, PNG/JPG до 20 MB`
     : `${referenceLimitLabel}, PNG/JPG до 20 MB`;
+  const referenceVideoMeta = referenceVideoItem
+    ? `${referenceVideoItem.durationSec} сек · ${referenceVideoItem.fileName}`
+    : "MP4/MOV до 100 MB, 3–30 сек";
+  const referenceVideoDurationWarning =
+    requiresReferenceVideo && referenceVideoItem && !referenceVideoDurationAllowed
+      ? "Для режима по изображению исходное видео должно быть до 10 секунд. Выберите ориентацию по видео или загрузите короткий файл."
+      : "";
 
   return (
     <main className="workflow">
@@ -1078,8 +1374,8 @@ export function WorkflowMode({
             )}
 
             {activeCreateModel && isImageModality && imageQualityOptions.length > 0 && (
-              <div className="create-setting" role="group" aria-label="Качество изображения">
-                <span className="create-control-label">Качество</span>
+              <div className="create-setting" role="group" aria-label={activeCreateModel.modelId === "midjourney_v7" ? "Режим генерации" : "Качество изображения"}>
+                <span className="create-control-label">{activeCreateModel.modelId === "midjourney_v7" ? "Режим" : "Качество"}</span>
                 <div className="segment create-setting__segment">
                   {imageQualityOptions.map((quality) => (
                     <button
@@ -1088,14 +1384,22 @@ export function WorkflowMode({
                       className={"segment__btn" + (imageQuality === quality ? " is-active" : "")}
                       onClick={() => setImageQuality(quality)}
                     >
-                      {quality}
+                      {imageQualityLabel(quality)}
                     </button>
                   ))}
                 </div>
               </div>
             )}
 
-            {activeCreateModel && isVideoModality && videoDurationOptions.length > 0 && (
+            {requiresReferenceVideo && (
+              <p className="field-note">
+                Длительность берём из исходного видео после загрузки.
+              </p>
+            )}
+            {activeCreateModel?.automaticDuration && isVideoModality && !requiresReferenceVideo && (
+              <p className="field-note">Автоматически: 3–10 секунд. Цена фиксирована для выбранного разрешения.</p>
+            )}
+            {activeCreateModel && !activeCreateModel.automaticDuration && isVideoModality && !requiresReferenceVideo && videoDurationOptions.length > 0 && (
               <div className="create-setting" role="group" aria-label="Длительность видео">
                 <span className="create-control-label">Длительность</span>
                 <div className="segment create-setting__segment">
@@ -1114,13 +1418,99 @@ export function WorkflowMode({
                               }
                             : undefined
                         }
-                        onClick={() => setVideoDurationSec(seconds)}
+                        onClick={() => { setBackendEstimate(null); setVideoDurationSec(seconds); }}
                       >
                         {seconds} сек
                       </button>
                     );
                   })}
                 </div>
+              </div>
+            )}
+
+            {activeCreateModel && isVideoModality && usesVideoQualitySelector && (
+              <div className="create-setting" role="group" aria-label="Качество видео">
+                <span className="create-control-label">Качество</span>
+                <div className="model-select workflow-select">
+                  <NativeSelect
+                    value={videoResolution}
+                    aria-label="Качество видео"
+                    onChange={(event) => {
+                      setBackendEstimate(null);
+                      setSelectedVideoResolution(event.target.value);
+                    }}
+                  >
+                    {videoResolutionOptions.map((resolution) => (
+                      <option key={resolution} value={resolution}>
+                        {resolution === "std" ? "Standard" : "Pro"}
+                      </option>
+                    ))}
+                  </NativeSelect>
+                </div>
+              </div>
+            )}
+
+            {activeCreateModel && isVideoModality && !usesVideoQualitySelector && videoResolutionOptions.length > 0 && (
+              <div className="create-setting" role="group" aria-label="Разрешение видео">
+                <span className="create-control-label">Разрешение</span>
+                <div className="segment create-setting__segment">
+                  {videoResolutionOptions.map((resolution) => (
+                    <button key={resolution} type="button"
+                      className={"segment__btn" + (videoResolution === resolution ? " is-active" : "")}
+                      aria-pressed={videoResolution === resolution}
+                      onClick={() => { setBackendEstimate(null); setSelectedVideoResolution(resolution); }}>
+                      {videoResolutionLabel(resolution)}
+                    </button>
+                  ))}
+                </div>
+              </div>
+            )}
+
+            {supportsVideoAudio && (
+              <label className="create-toggle">
+                <input
+                  type="checkbox"
+                  aria-label="Добавить звук"
+                  checked={videoAudio}
+                  onChange={(event) => {
+                    setBackendEstimate(null);
+                    setVideoAudio(event.currentTarget.checked);
+                  }}
+                />
+                <span>Добавить звук</span>
+              </label>
+            )}
+
+            {requiresReferenceVideo && (
+              <div className="create-setting" role="group" aria-label="Параметры motion control">
+                <span className="create-control-label">Движение</span>
+                <div className="segment create-setting__segment">
+                  {(["image", "video"] as const).map((orientation) => (
+                    <button
+                      key={orientation}
+                      type="button"
+                      className={"segment__btn" + (characterOrientation === orientation ? " is-active" : "")}
+                      onClick={() => {
+                        setBackendEstimate(null);
+                        setCharacterOrientation(orientation);
+                      }}
+                    >
+                      {orientation === "image" ? "По изображению" : "По видео"}
+                    </button>
+                  ))}
+                </div>
+                <label className="create-toggle">
+                  <input
+                    type="checkbox"
+                    aria-label="Сохранить звук исходного видео"
+                    checked={keepOriginalSound}
+                    onChange={(event) => {
+                      setBackendEstimate(null);
+                      setKeepOriginalSound(event.currentTarget.checked);
+                    }}
+                  />
+                  <span>Сохранить звук</span>
+                </label>
               </div>
             )}
 
@@ -1221,6 +1611,55 @@ export function WorkflowMode({
             )}
             {referenceUploading && <p className="create-dropzone__status">Загружаем референс...</p>}
             {referenceError && <p className="field-note is-warn">{referenceError}</p>}
+            {!referenceCountValid && <p className="field-note is-warn">Для этой модели допустимо изображений: {allowedReferenceCounts?.join(", ")}. Добавьте или удалите референс.</p>}
+
+            {requiresReferenceVideo && activeCreateModel && (
+              <div
+                className="create-dropzone"
+                onClick={() => referenceVideoInputRef.current?.click()}
+              >
+                <input
+                  ref={referenceVideoInputRef}
+                  id="workflow-reference-video-input"
+                  type="file"
+                  accept={REFERENCE_VIDEO_ACCEPT}
+                  onChange={handleReferenceVideoInput}
+                  hidden
+                />
+                {referenceVideoItem ? (
+                  <div className="create-dropzone__preview">
+                    <video src={referenceVideoItem.previewUrl} muted playsInline />
+                    <button
+                      type="button"
+                      className="create-dropzone__remove"
+                      aria-label="Удалить видео-референс"
+                      onClick={(event) => {
+                        event.stopPropagation();
+                        clearReferenceVideoItem();
+                      }}
+                    >
+                      ×
+                    </button>
+                    <p className="create-dropzone__hint">{referenceVideoMeta}</p>
+                  </div>
+                ) : (
+                  <>
+                    <div className="create-dropzone__icon" aria-hidden="true">
+                      <svg width="22" height="22" viewBox="0 0 24 24" fill="none">
+                        <path d="M4 6h16v12H4z M10 9l5 3-5 3V9Z" stroke="#14b8a6" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" />
+                      </svg>
+                    </div>
+                    <p className="create-dropzone__title">
+                      Загрузите исходное видео <span style={{ color: activeColor }}>+</span>
+                    </p>
+                    <p className="create-dropzone__meta">{referenceVideoMeta}</p>
+                  </>
+                )}
+              </div>
+            )}
+            {referenceVideoUploading && <p className="create-dropzone__status">Загружаем видео...</p>}
+            {referenceVideoError && <p className="field-note is-warn">{referenceVideoError}</p>}
+            {referenceVideoDurationWarning && <p className="field-note is-warn">{referenceVideoDurationWarning}</p>}
 
             <div
               className={"create-prompt" + (trimmedPrompt ? " is-focused" : "")}
@@ -1237,7 +1676,7 @@ export function WorkflowMode({
                 id="workflow-prompt"
                 className="create-prompt__input nh-placeholder"
                 value={prompt}
-                maxLength={PROMPT_LIMIT + 100}
+                maxLength={promptLimit + 100}
                 onChange={(event) => setPrompt(event.target.value)}
                 rows={3}
                 placeholder={promptPlaceholder}
@@ -1296,7 +1735,7 @@ export function WorkflowMode({
             {submitError && <div className="workflow-error">{submitError}</div>}
             {promptTooLong && (
               <p className="field-note is-warn">
-                {prompt.length.toLocaleString("ru-RU")} / {PROMPT_LIMIT.toLocaleString("ru-RU")}
+                {promptLength.toLocaleString("ru-RU")} / {promptLimit.toLocaleString("ru-RU")}{promptLimitUnit}
               </p>
             )}
 

@@ -11,6 +11,7 @@ import {
   getAccountProfile,
   launchParamsFromLocation,
   listChatMessages,
+  listTextModels,
   normalizeRawParams,
   referralCodeFromRaw,
   requestAccountEmailCode,
@@ -29,6 +30,18 @@ afterEach(() => {
   vi.restoreAllMocks();
   resetLaunchParamsCacheForTest();
   window.history.replaceState({}, "", "/");
+});
+
+test("text catalog accepts every supported model and keeps the server quote", async () => {
+  const ids = ["chatgpt", "gpt_5_5", "claude_opus_4_7", "gemini_3_1_pro", "claude_opus_4_8", "gpt_5_6_terra", "gpt_6_astra", "claude_opus_5", "gemini_3_7_flash", "claude_fable_5_1", "claude_fable_5", "gemini_3_6_flash"];
+  const items = ids.map((id) => ({ id, name: id, estimate_credits: id === "claude_fable_5_1" ? 90 : 5 }));
+  vi.spyOn(globalThis, "fetch").mockResolvedValueOnce(jsonResponse({ items }));
+  expect(await listTextModels()).toEqual(items);
+});
+
+test("text catalog rejects private provider IDs", async () => {
+  vi.spyOn(globalThis, "fetch").mockResolvedValueOnce(jsonResponse({ items: [{ id: "claude-fable-5.1", name: "Synthetic", estimate_credits: 90 }] }));
+  await expect(listTextModels()).rejects.toMatchObject({ status: 500 });
 });
 
 describe("telemetry safety helpers", () => {
@@ -232,6 +245,7 @@ describe("generation request pricing contract", () => {
         operation: "video_generate",
         prompt: "public video prompt",
         video_route_alias: "video_kling_o3_standard",
+        video_resolution: "1080p",
         duration_sec: 5,
       }) as EstimateInput,
     );
@@ -244,8 +258,9 @@ describe("generation request pricing contract", () => {
       ["image_quality", "model_id", "operation", "prompt", "reference_artifact_ids"].sort(),
     );
     expect(Object.keys(bodies[1]).sort()).toEqual(
-      ["duration_sec", "operation", "prompt", "video_route_alias"].sort(),
+      ["duration_sec", "operation", "prompt", "video_route_alias", "video_resolution"].sort(),
     );
+	 expect(bodies[1].video_resolution).toBe("1080p");
     for (const body of bodies) {
       expect(body).not.toHaveProperty("price");
       expect(body).not.toHaveProperty("cost");

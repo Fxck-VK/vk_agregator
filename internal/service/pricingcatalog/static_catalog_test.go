@@ -293,16 +293,37 @@ func TestStaticCatalogImageTariffsUseRoundedQualityLadders(t *testing.T) {
 
 func TestStaticCatalogUsesOnlyBoundedAliasesAndExplicitUnits(t *testing.T) {
 	allowedImages := map[string]bool{
-		PublicImageNanoBanana2:   true,
-		PublicImageNanoBananaPro: true,
-		PublicImageGPTImage2:     true,
-		PublicImageSeedream45:    true,
+		PublicImageGPTImage25Flare:    true,
+		PublicImageGPTImage25Sunburst: true,
+		PublicImageSeedream50Lite:     true,
+		PublicImageSeedream50Pro:      true,
+		PublicImageFlux2Pro:           true,
+		PublicImageMidjourneyV7:       true,
+		PublicImageNanoBanana2:        true,
+		PublicImageNanoBananaPro:      true,
+		PublicImageGPTImage2:          true,
+		PublicImageQwenImage3:         true,
+		PublicImageGrokImage15:        true,
+		PublicImageGrokImage20:        true,
+		PublicImageSeedream45:         true,
 	}
 	allowedVideos := map[domain.VideoRouteAlias]bool{
+		domain.VideoRouteKling30Turbo: true, domain.VideoRouteMiniMaxH3: true,
+		domain.VideoRouteKlingV3: true, domain.VideoRouteKling26Motion: true,
+		domain.VideoRouteVeo31Fast: true, domain.VideoRouteVeo31Quality: true, domain.VideoRouteVeo31Lite: true,
+		domain.VideoRouteOmni11Flash:     true,
+		domain.VideoRouteOmni11FlashExt:  true,
 		domain.VideoRouteKlingO3Standard: true,
 		domain.VideoRouteRunwayGen4Turbo: true,
 		domain.VideoRouteSeedance20Fast:  true,
+		domain.VideoRouteSeedance25:      true,
 		domain.VideoRouteRunwayGen45:     true,
+	}
+	allowedText := map[string]bool{
+		"gpt_5_5": true, "claude_opus_4_7": true, "gemini_3_1_pro": true,
+		"claude_opus_4_8": true, "gpt_5_6_terra": true, "gpt_6_astra": true,
+		"claude_opus_5": true, "gemini_3_7_flash": true, "claude_fable_5_1": true,
+		"claude_fable_5": true, "gemini_3_6_flash": true,
 	}
 
 	for _, price := range StaticProductPrices() {
@@ -323,6 +344,10 @@ func TestStaticCatalogUsesOnlyBoundedAliasesAndExplicitUnits(t *testing.T) {
 			t.Fatalf("static price cap = %d, want exact price %d: %+v", price.Caps.InternalCreditCap, credits, price.Key)
 		}
 		switch price.Key.Modality {
+		case domain.ModalityText:
+			if !allowedText[price.Key.TextModelID] {
+				t.Fatal("unexpected text model")
+			}
 		case domain.ModalityImage:
 			if !allowedImages[price.Key.ImageModelID] {
 				t.Fatalf("unexpected image alias in static catalog: %+v", price.Key)
@@ -338,8 +363,8 @@ func TestStaticCatalogUsesOnlyBoundedAliasesAndExplicitUnits(t *testing.T) {
 }
 
 func TestStaticCatalogVersionChangesWithCompetitivePrices(t *testing.T) {
-	if StaticCatalogVersion != 4 {
-		t.Fatalf("static catalog version = %d, want 4", StaticCatalogVersion)
+	if StaticCatalogVersion != 15 {
+		t.Fatalf("static catalog version = %d, want 15", StaticCatalogVersion)
 	}
 }
 

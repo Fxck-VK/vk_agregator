@@ -397,7 +397,12 @@ if ! is_placeholder_value "${ghcr_username}" && ! is_placeholder_value "${ghcr_t
     --username "${ghcr_username}"
 fi
 
-image_pull_services=("${stateful_services[@]}" platform reverse-proxy)
+# Reuse installed data-service images pinned by digest. A registry outage must
+# not block an application rollout or rollback when that exact image exists.
+if [[ ${#stateful_services[@]} -gt 0 ]]; then
+  run_compose_pull --policy missing "${stateful_services[@]}"
+fi
+image_pull_services=(platform reverse-proxy)
 if [[ "${build_on_vps}" != "true" ]]; then
   image_pull_services+=(api worker maintenance-worker provider-webhook miniapp migrate)
   if [[ "${provider_balance_bot_enabled}" == "true" ]]; then

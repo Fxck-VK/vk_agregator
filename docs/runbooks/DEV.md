@@ -3,6 +3,58 @@
 The DEV contour mirrors production architecture with separate secrets, domains,
 VK community, YooKassa/test settings and Cloudflare tunnel.
 
+## Grok Imagine image configuration
+
+`grok_image_1_5` and `grok_image_2_0` use the existing APIMart worker with
+`FEATURE_APIMART_GROK_IMAGE_1_5_ENABLED` and
+`FEATURE_APIMART_GROK_IMAGE_2_0_ENABLED`. Both application defaults are false.
+The DEV renderer enables them when APIMart is configured with a key, preserving
+an explicit false for each flag. Missing credentials keep both disabled.
+
+Static pricing version 6 provides one `standard` quality at 10 internal credits
+per image for each model. A DB-backed catalog needs that exact enabled price key
+before exposure. No DB price rows are changed by this implementation.
+Grok 2.0 uses the public $0.015 price selected by the user despite the API docs
+listing $0.08; check actual provider cost during the authorized live test.
+
+Deploy API and worker together. In the DEV VK bot, open "Create photo" and check
+that the existing models and both Groks are present. The model buttons use two
+columns to fit VK's six-row inline keyboard limit, including Back. Select each
+Grok and its standard quality: the displayed price must be 10. During an
+authorized live generation, verify photo delivery and one ledger capture.
+The shared worker-resolution mapping omits resolution for Grok 1.5 and uses
+`quality` for 2.0; the public billing quality remains `standard`.
+To hide new selections, set the corresponding model flag to false while keeping
+the adapter available to poll existing tasks. An indeterminate Grok 2.0 submit
+stops automatic retries and releases the user reservation; investigate the original
+server-side intent before creating another.
+
+## Qwen Image 3.0 configuration
+
+The public `qwen_image_3` route uses APIMart `qwen-image-3.0` through the existing
+worker. `FEATURE_APIMART_QWEN_IMAGE_3_ENABLED` defaults to `false`; readiness also
+requires `APIMART_PROVIDER_ENABLED`, `APIMART_API_KEY` and `APIMART_BASE_URL`.
+Use the existing APIMart worker registration and provider-chain configuration.
+API and worker must run code that supports this model before exposing it.
+
+The DEV deploy profile enables Qwen when APIMart is configured with a key.
+An explicit `FEATURE_APIMART_QWEN_IMAGE_3_ENABLED=false` in the assembled DEV env
+keeps it disabled. Missing provider credentials keep it disabled even if requested.
+The application default and the production deploy profile remain unchanged.
+
+The static catalog supplies 1K/2K at 15 internal credits per image. The recorded
+public floor is 0.205712 APIMart credits for either quality (checked 2026-09-08).
+For runtime DB pricing, each exposed `qwen_image_3` quality needs its own enabled
+key. Missing prices hide that quality; no priced quality hides the model. No DB prices or env
+values are changed by the implementation. Confirm the intended retail price and
+key-group cost when enabling in a contour.
+
+Disabling the model flag hides it from new public jobs; existing jobs retain their
+route and price snapshots and can finish while APIMart remains configured.
+The shared image UI lists the model from the backend catalog. This release adds no
+Web reference-upload controls. Paid canary and deployed UI verification are separate
+from local tests; see [Qwen architecture](../../docs/ARCHITECTURE.md#qwen-image-30-image-route-2026-09-08).
+
 ## DEV Domains
 
 | Surface | URL |
@@ -14,6 +66,10 @@ VK community, YooKassa/test settings and Cloudflare tunnel.
 | YooKassa webhook | `https://dev.neiirohub.ru/billing/webhooks/yookassa` |
 
 ## Local DEV Start
+
+APIMart model metadata and price-source checks use the read-only
+[APIMart preflight runbook](../../docs/runbooks/APIMART_PREFLIGHT.md). This operator tool does not
+submit generations, change runtime flags or verify personal billing by itself.
 
 Create local env:
 
@@ -47,6 +103,22 @@ Status, smoke and stop:
 ```
 
 ## DEV GitHub Deploy
+
+DEV deployment pulls local Postgres, Redis and MinIO images with
+`docker compose pull --policy missing`, reusing an already installed image at
+the configured digest. A changed or absent image must still be downloaded
+successfully before startup. Application release images are pulled separately;
+their release verification and health gates remain mandatory. This applies to
+rollback as well and does not remove or replace data volumes.
+
+Migration safety checks accept reviewed constraint replacements only when the
+filename and exact SHA-256 match `scripts/deploy/migration-safety.sha256`.
+Migration `000052` adds the text pricing dimension and replaces its UNIQUE/CHECK
+constraints in one transaction without deleting rows or activating prices.
+SQL files use LF line endings so the review digest is identical on Windows and
+Linux. Any SQL change requires a fresh review and database regression test before
+updating the digest. Unreviewed destructive operations remain blocked; do not
+enable `MIGRATION_ALLOW_DESTRUCTIVE` to work around a digest mismatch.
 
 Pushing `dev-deploy` first triggers the `Docker Images` workflow. After all
 GHCR images for the pushed SHA are built successfully, GitHub Actions triggers
@@ -188,6 +260,142 @@ Review `rg` matches manually. Env var names, placeholders and fake test
 literals are acceptable; real secret values, prompt text, raw provider payloads
 and private media URLs are not.
 
+## Gemini Omni video configuration
+
+`FEATURE_APIMART_OMNI_1_1_FLASH_ENABLED` and
+`FEATURE_APIMART_OMNI_1_1_FLASH_EXT_ENABLED` default to false and can be enabled
+independently. Each requires `FEATURE_VIDEO_ROUTER_ENABLED=true`,
+`APIMART_PROVIDER_ENABLED=true`, the existing APIMart key and
+`APIMART_BASE_URL=https://api.apimart.ai/v1`. API and worker must use the same
+release. Application defaults remain off; the DEV deployment profile enables
+configured APIMart routes as described under Additional APIMart video rollout.
+
+Static pricing version 12 adds four Flash keys (resolution × internal duration
+10) and sixteen EXT keys (resolution × 4/6/8/10). DB pricing requires these exact
+enabled keys in the active price version; static fallback does not override a
+DB catalog. Missing prices keep the route hidden. See the
+[contract and tariffs](../../docs/VIDEO_GENERATION.md#gemini-omni-11-flash-and-flash-ext).
+
+Local tests cover wire examples, validation, quote/reserve/capture, moderation,
+4K media checks and crash recovery. Before rollout, verify account model access
+and perform an explicitly authorized paid canary for MP4 playback/audio and
+actual upstream charge. Mini App and the shared VK catalog support these
+routes; standalone Web video UI is separate work. Disable the corresponding
+flag to hide new requests, leaving APIMart configured to finish accepted tasks.
+Reconcile an indeterminate outcome before any manual resubmission.
+
+## Seedance 2.5 configuration
+
+`FEATURE_APIMART_SEEDANCE_2_5_ENABLED` defaults to false. Enable it with
+`FEATURE_VIDEO_ROUTER_ENABLED=true`, `APIMART_PROVIDER_ENABLED=true` and the
+existing APIMart key/base URL (`https://api.apimart.ai/v1`). API and worker must
+both run the new code. Provider registration and chain remain shared; environment
+files and deploy profiles are not edited by this implementation.
+
+Static catalog version 7 supplies twelve `video_seedance_2_5` keys:
+480p/720p/1080p x 5/10/15/30 seconds, estimate x3 rounded up to five credits.
+A DB-backed catalog needs those enabled keys before exposure. No DB price rows
+are changed automatically. See [video prices and limits](../../docs/VIDEO_GENERATION.md#seedance-25).
+
+Before exposing real users, verify key access to `seedance-2.5` and perform an
+explicitly authorized paid canary, checking token-settled cost and MP4 playback/audio.
+Local HTTP-fixture tests verify the pipeline, not live availability or quality.
+Mini App and the shared VK catalog are supported; standalone Web video UI is
+separate work. Human-face references require a separate provider asset workflow.
+
+Disable the model flag to hide new requests; keep APIMart configured so accepted
+tasks finish. Reconcile an indeterminate provider outcome before manually
+resubmitting. APIMart token settlement may differ from preauthorization, while
+the user's accepted quote stays fixed.
+
+## Midjourney V7 configuration
+
+`FEATURE_APIMART_MIDJOURNEY_V7_ENABLED` defaults to false. It requires the
+existing `APIMART_PROVIDER_ENABLED`, API key/base URL and all enabled runtime
+prices for `midjourney_v7`. API and worker must run the updated code.
+Static catalog version 8 provides `relax` / `fast` / `turbo` at 30 / 35 / 60
+internal credits per Imagine call. DB-backed catalogs need the corresponding
+keys added through the normal operator workflow; no DB rows are changed here.
+
+The public `image_quality` field selects speed for this model. Web supports
+text-to-image; Mini App also supports up to four owned reference images.
+Each returned tile is stored and moderated, with one ledger capture per Job.
+Native prompt flags and permutations are rejected before Job creation.
+
+Before enabling for users, verify account access and live per-call billing,
+and run an explicitly authorized paid canary. The worker persists a unique
+per-Job submission claim before calling APIMart; a restart cannot issue the
+paid call again. An unresolved claim waits the provider call timeout plus one
+minute before failing closed and releasing the reservation. Uncertain submits are terminal and
+must be reconciled before a manual retry. Disable the model flag to stop new
+Jobs; keep APIMart configured for accepted tasks to finish polling.
+
+Provider contract: [Midjourney Imagine](https://docs.apimart.ai/ru/api-reference/images/midjourney/imagine).
+
+## FLUX.2 Pro configuration
+
+`FEATURE_APIMART_FLUX_2_PRO_ENABLED` defaults to false. It requires the existing
+APIMart provider, key/base URL and enabled runtime tariffs for `flux_2_pro`.
+Static catalog version 9 adds `1MP` / `2MP` / `3MP` / `4MP` at 15 / 25 / 30 / 40
+internal credits. DB-backed pricing needs those keys added through the normal
+operator workflow. No environment files or DB rows are changed automatically.
+
+API and worker must run the updated code. Web and Mini App support text-to-image,
+one output, with MP selection. References and custom pixel sizes remain closed.
+Verify account access, current pricing and an explicitly authorized paid canary
+before rollout. Both FLUX.2 and Midjourney now use the durable per-Job submit
+claim described above; Midjourney keys remain unchanged. Unknown submit outcomes
+require reconciliation before a manual retry. Disable the model flag to hide new
+Jobs while keeping APIMart configured for existing tasks to finish.
+
+Provider contract: [FLUX.2 generation](https://docs.apimart.ai/ru/api-reference/images/flux-2/generation).
+
+## GPT Image 2.5 and Seedream 5 images
+
+Four APIMart flags default to false in application config:
+`FEATURE_APIMART_GPT_IMAGE_2_5_FLARE_ENABLED`,
+`FEATURE_APIMART_GPT_IMAGE_2_5_SUNBURST_ENABLED`,
+`FEATURE_APIMART_SEEDREAM_5_0_LITE_ENABLED`,
+`FEATURE_APIMART_SEEDREAM_5_0_PRO_ENABLED`.
+DEV env preparation enables them when APIMart is configured, preserving an
+explicit false. API and worker must use the same release. Disable individual
+flags to stop new Jobs while retaining provider config for pending tasks.
+
+Static catalog v14 adds public IDs `gpt_image_2_5_flare`,
+`gpt_image_2_5_sunburst`, `seedream_5_0_lite`, `seedream_5_0_pro`.
+DB-backed catalogs require these v14 tariffs through the operator workflow;
+custom floors/multipliers are hidden until their dimension pricing is supported.
+No credentials or database price rows are changed by this integration.
+
+GPT exposes explicit 1K/2K/4K and low/medium/high/xhigh/max combinations.
+It uses APIMart's published size/quality output-token table and reserves a fixed
+text budget of 4096 UTF-8 prompt bytes plus 512 overhead tokens. This is a fixed
+user quote based on an input estimate, not actual-token settlement. Account
+Standard rates checked 2026-09-13 are $4/M text input and $24/M image output.
+The text budget is charged once per batch; output-token costs scale by count
+before applying x3 and rounding up to five internal credits.
+References remain unavailable publicly because their input-token bound is not
+published. Auto quality, custom pixels and native overrides are not exposed.
+
+Lite supports 2K/3K/4K, with references + outputs <= 15. It costs 20 internal
+credits per requested output. Pro supports 1K/1.5K/2K, one output and up to ten
+references. Base prices are 20/20/40 credits; the first input is free and each
+additional input adds $0.00195 provider cost before x3 and rounding up to five.
+Web supports text-to-image; Mini App/VK also accept owned Seedream references.
+Mini App/VK produce one square image; the Web form exposes ratio/output choices.
+GPT prices vary by ratio, so the Web confirmation uses the prepared Job quote.
+
+All four use POST `/v1/images/generations`, GET `/v1/tasks/{id}` and durable
+per-Job submit claims. Uncertain submits never start a second paid call. Every
+output becomes an owned moderated Artifact before capture. An unexpected or
+incomplete output count fails without charging the user. Paid canaries were not
+run; they require explicit authorization. Sources:
+[GPT Image 2.5](https://docs.apimart.ai/ru/api-reference/images/gpt-image-2.5/generation),
+[Seedream Lite](https://docs.apimart.ai/ru/api-reference/images/seedream-5-lite/generation),
+[Seedream Pro](https://docs.apimart.ai/ru/api-reference/images/seedream-5-0-pro/generation),
+[GPT pricing table](https://apimart.ai/api/pricing/model?model=gpt-image-2.5-flare),
+[Pro pricing](https://apimart.ai/api/pricing/model?model=seedream-5-0-pro).
+
 ## DEV Env Tests
 
 Before changing DEV deploy env scripts:
@@ -198,3 +406,38 @@ bash scripts/deploy/test-dev-env.sh
 
 This validates shell syntax, mock DEV env, YooKassa DEV env, production URL
 rejection and log-safe output.
+
+
+## KIE and APIMart text models (2026-09-09)
+
+Eleven paid text models have separate opt-in routes: ten through KIE and
+Claude Fable 5.1 through APIMart. Each provider has an independent text-limit
+verification gate; individual model flags default to false.
+See [Text models](../../docs/runbooks/KIE_TEXT_MODELS.md) for verified prices, native contracts,
+required output-limit verification, environment flags and migration 000052.
+No provider-chain change is needed. Keep all new flags off until contract
+verification and an authorized paid canary have passed.
+
+## Additional APIMart video rollout
+
+DEV preparation enables Omni Flash/EXT, Kling V3, Motion 2.6, Veo 3.1
+Lite/Fast/Quality when APIMart is configured (explicit false still overrides).
+All model flags retain false application defaults. New flag names:
+`FEATURE_APIMART_KLING_V3_ENABLED`,
+`FEATURE_APIMART_KLING_2_6_MOTION_CONTROL_ENABLED`,
+`FEATURE_APIMART_VEO_3_1_LITE_ENABLED`,
+`FEATURE_APIMART_VEO_3_1_FAST_ENABLED`,
+`FEATURE_APIMART_VEO_3_1_QUALITY_ENABLED`.
+
+Motion requires `PROVIDER_REFERENCE_BASE_URL=https://dev-app.neiirohub.ru` and
+`PROVIDER_REFERENCE_SIGNING_KEY` (dedicated random secret, at least 32 bytes),
+owned by the DEV secret env part. API now needs ffprobe, included in its image.
+Nginx forwards signed provider reads and permits 101 MiB multipart requests on
+`/miniapp/video-artifacts`; API limits the video itself to 100 MiB.
+
+Before promoting the same code and flags to production, configure its own base
+URL/signing secret. Never reuse DEV credentials. DB-backed pricing must contain
+static v13 keys before exposing routes; publish through the operator workflow.
+Smoke checks should verify flags/catalog visibility, unsigned relay rejection,
+unauthenticated upload rejection and runtime health. A real generation is paid
+and requires separate explicit authorization.

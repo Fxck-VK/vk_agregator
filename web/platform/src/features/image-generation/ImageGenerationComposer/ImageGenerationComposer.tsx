@@ -14,11 +14,14 @@ type ImageGenerationComposerProps = ImageGenerationControlsProps & {
   errorMessage: string | null;
   onSubmit: () => void;
   price: number | null;
+  priceNote?: string;
   prompt: string;
 };
 
 export function ImageGenerationComposer({
   access = "authenticated",
+  modelID,
+  allowedAspectRatios,
   aspectRatio,
   canSubmit,
   errorMessage,
@@ -31,6 +34,7 @@ export function ImageGenerationComposer({
   onPromptChange,
   onSubmit,
   price,
+  priceNote,
   outputCount,
   prompt,
   qualityOptions,
@@ -46,6 +50,8 @@ export function ImageGenerationComposer({
       <ChatComposer
         leadingControls={(
           <ImageGenerationControls
+            modelID={modelID}
+            allowedAspectRatios={allowedAspectRatios}
             aspectRatio={aspectRatio}
             imageQuality={imageQuality}
             isSubmitting={isSubmitting}
@@ -65,9 +71,9 @@ export function ImageGenerationComposer({
         mediaLibraryEnabled={access === "authenticated"}
         generatedMediaHref={access === "guest" ? "/login" : undefined}
         uploadedMediaHref={access === "guest" ? "/login" : undefined}
-        note={price === null
+        note={priceNote ?? (price === null
           ? ru.imageGeneration.priceUnavailable
-          : <CreditAmount prefix={`${ru.imageGeneration.priceLabel}:`} value={price} />}
+          : <CreditAmount prefix={modelID === "midjourney_v7" ? "За запуск Imagine:" : `${ru.imageGeneration.priceLabel}:`} value={price} />)}
         onChange={(event) => onPromptChange(event.target.value)}
         onSend={onSubmit}
         placeholder={ru.imageGeneration.promptPlaceholder}

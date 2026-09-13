@@ -16,16 +16,27 @@ import (
 	"sync"
 	"time"
 
+	"vk-ai-aggregator/internal/adapter/provider/textapi"
 	"vk-ai-aggregator/internal/domain"
 )
 
 const (
 	DefaultBaseURL = "https://api.apimart.ai/v1"
 
-	ModelHailuo23Standard = "MiniMax-Hailuo-2.3"
-	ModelHailuo23Fast     = "MiniMax-Hailuo-2.3-Fast"
-	ModelGemini3ProImage  = "gemini-3-pro-image-preview"
-	ModelGPTImage2        = "gpt-image-2"
+	ModelHailuo23Standard   = "MiniMax-Hailuo-2.3"
+	ModelHailuo23Fast       = "MiniMax-Hailuo-2.3-Fast"
+	ModelGemini3ProImage    = "gemini-3-pro-image-preview"
+	ModelGPTImage2          = "gpt-image-2"
+	ModelQwenImage3         = "qwen-image-3.0"
+	ModelGrokImage15        = "grok-imagine-1.5-apimart"
+	ModelGrokImage20        = "grok-imagine-2.0-ext"
+	ModelMidjourneyV7       = "midjourney"
+	ModelFlux2Pro           = "flux-2-pro"
+	ModelSeedance25         = "seedance-2.5"
+	ModelGPTImage25Flare    = "gpt-image-2.5-flare"
+	ModelGPTImage25Sunburst = "gpt-image-2.5-sunburst"
+	ModelSeedream50Lite     = "seedream-5-0-lite"
+	ModelSeedream50Pro      = "seedream-5-0-pro"
 
 	defaultVideoProviderCostCredits = 1
 	defaultImageProviderCostCredits = 1
@@ -40,19 +51,22 @@ const (
 
 // Config holds APIMart connection settings.
 type Config struct {
-	APIKey       string
-	BaseURL      string
-	TaskLanguage string
-	HTTPClient   *http.Client
+	EnabledTextModels []string
+	APIKey            string
+	BaseURL           string
+	TaskLanguage      string
+	HTTPClient        *http.Client
 }
 
 // Provider is the APIMart domain.Provider adapter.
 type Provider struct {
-	cfg        Config
-	http       *http.Client
-	mu         sync.Mutex
-	idempotent map[string]domain.ProviderTask
-	now        func() time.Time
+	text               *textapi.Provider
+	cfg                Config
+	http               *http.Client
+	mu                 sync.Mutex
+	idempotent         map[string]domain.ProviderTask
+	unversionedSubmits map[string]*unversionedSubmission
+	now                func() time.Time
 }
 
 // New builds an APIMart provider adapter.
@@ -69,10 +83,12 @@ func New(cfg Config) *Provider {
 		httpClient = &http.Client{Timeout: 120 * time.Second}
 	}
 	return &Provider{
-		cfg:        cfg,
-		http:       httpClient,
-		idempotent: map[string]domain.ProviderTask{},
-		now:        time.Now,
+		text:               textapi.New(textapi.Config{Provider: domain.ProviderAPIMart, APIKey: cfg.APIKey, BaseURL: cfg.BaseURL, EnabledModels: cfg.EnabledTextModels, HTTPClient: httpClient}),
+		cfg:                cfg,
+		http:               httpClient,
+		idempotent:         map[string]domain.ProviderTask{},
+		unversionedSubmits: map[string]*unversionedSubmission{},
+		now:                time.Now,
 	}
 }
 
@@ -81,9 +97,31 @@ var _ domain.Provider = (*Provider)(nil)
 // Name returns the APIMart provider identifier.
 func (p *Provider) Name() domain.ProviderName { return domain.ProviderAPIMart }
 
-// Capabilities reports supported APIMart media routes.
-func (p *Provider) Capabilities(context.Context) ([]domain.Capability, error) {
-	return []domain.Capability{
+// Capabilities reports enabled text models and supported media routes.
+func (p *Provider) Capabilities(ctx context.Context) ([]domain.Capability, error) {
+	textCaps, err := p.text.Capabilities(ctx)
+	if err != nil {
+		return nil, err
+	}
+	return append(textCaps, []domain.Capability{
+		{Operation: domain.OperationVideoGenerate, Modality: domain.ModalityVideo, ModelCode: ModelKlingV3, SupportsPolling: true, MaxDurationSec: 15},
+		{Operation: domain.OperationVideoGenerate, Modality: domain.ModalityVideo, ModelCode: ModelKling26Motion, SupportsPolling: true, MaxDurationSec: 30},
+		{Operation: domain.OperationVideoGenerate, Modality: domain.ModalityVideo, ModelCode: ModelVeo31Fast, SupportsPolling: true, MaxDurationSec: 8},
+		{Operation: domain.OperationVideoGenerate, Modality: domain.ModalityVideo, ModelCode: ModelVeo31Quality, SupportsPolling: true, MaxDurationSec: 8},
+		{Operation: domain.OperationVideoGenerate, Modality: domain.ModalityVideo, ModelCode: ModelVeo31Lite, SupportsPolling: true, MaxDurationSec: 8},
+		{Operation: domain.OperationVideoGenerate, Modality: domain.ModalityVideo, ModelCode: ModelOmni11Flash, SupportsPolling: true, MaxDurationSec: 10},
+		{Operation: domain.OperationVideoGenerate, Modality: domain.ModalityVideo, ModelCode: ModelOmni11FlashExt, SupportsPolling: true, MaxDurationSec: 10},
+		{Operation: domain.OperationVideoGenerate, Modality: domain.ModalityVideo, ModelCode: ModelKling30Turbo, SupportsPolling: true, MaxDurationSec: 15},
+		{Operation: domain.OperationVideoGenerate, Modality: domain.ModalityVideo, ModelCode: ModelMiniMaxH3, SupportsPolling: true, MaxDurationSec: 15},
+		{Operation: domain.OperationImageGenerate, Modality: domain.ModalityImage, ModelCode: ModelMidjourneyV7, SupportsPolling: true},
+		{Operation: domain.OperationImageGenerate, Modality: domain.ModalityImage, ModelCode: ModelFlux2Pro, SupportsPolling: true},
+		{Operation: domain.OperationImageGenerate, Modality: domain.ModalityImage, ModelCode: ModelGPTImage25Flare, SupportsPolling: true},
+		{Operation: domain.OperationImageGenerate, Modality: domain.ModalityImage, ModelCode: ModelGPTImage25Sunburst, SupportsPolling: true},
+		{Operation: domain.OperationImageGenerate, Modality: domain.ModalityImage, ModelCode: ModelSeedream50Lite, SupportsPolling: true},
+		{Operation: domain.OperationImageGenerate, Modality: domain.ModalityImage, ModelCode: ModelSeedream50Pro, SupportsPolling: true},
+		{Operation: domain.OperationVideoGenerate, Modality: domain.ModalityVideo, ModelCode: ModelSeedance25, SupportsPolling: true, MaxDurationSec: 30},
+		{Operation: domain.OperationImageGenerate, Modality: domain.ModalityImage, ModelCode: ModelGrokImage15, SupportsPolling: true},
+		{Operation: domain.OperationImageGenerate, Modality: domain.ModalityImage, ModelCode: ModelGrokImage20, SupportsPolling: true},
 		{
 			Operation:       domain.OperationImageGenerate,
 			Modality:        domain.ModalityImage,
@@ -94,6 +132,12 @@ func (p *Provider) Capabilities(context.Context) ([]domain.Capability, error) {
 			Operation:       domain.OperationImageGenerate,
 			Modality:        domain.ModalityImage,
 			ModelCode:       ModelGPTImage2,
+			SupportsPolling: true,
+		},
+		{
+			Operation:       domain.OperationImageGenerate,
+			Modality:        domain.ModalityImage,
+			ModelCode:       ModelQwenImage3,
 			SupportsPolling: true,
 		},
 		{
@@ -110,13 +154,48 @@ func (p *Provider) Capabilities(context.Context) ([]domain.Capability, error) {
 			SupportsPolling: true,
 			MaxDurationSec:  10,
 		},
-	}, nil
+	}...), nil
 }
 
 // Estimate reports provider-side credits for worker routing, media safety caps
 // and telemetry. User billing must use pricingcatalog snapshots, never adapter
 // estimates.
-func (p *Provider) Estimate(_ context.Context, req domain.ProviderRequest) (domain.CostEstimate, error) {
+func (p *Provider) Estimate(ctx context.Context, req domain.ProviderRequest) (domain.CostEstimate, error) {
+	if isKlingVeoVideo(req.ModelCode) {
+		if err := validateKlingVeoVideo(req, false); err != nil {
+			return domain.CostEstimate{}, err
+		}
+		return domain.CostEstimate{AmountCredits: klingVeoVideoCostCredits(req), Currency: "credits", Estimated: true}, nil
+	}
+	if isOmniVideo(req.ModelCode) {
+		if err := validateOmniVideo(req, false); err != nil {
+			return domain.CostEstimate{}, err
+		}
+	}
+	if isTurboH3Video(req.ModelCode) {
+		if err := validateTurboH3Video(req, false); err != nil {
+			return domain.CostEstimate{}, err
+		}
+		snapshot, hasSnapshot, err := resolvedRouteSnapshot(req.Params)
+		if err != nil {
+			return domain.CostEstimate{}, err
+		}
+		if hasSnapshot {
+			if snapshot.ProviderCostCredits <= 0 {
+				return domain.CostEstimate{}, &Error{Class: domain.ProviderErrInvalidRequest, Message: "resolved route snapshot provider cost is unavailable"}
+			}
+			return domain.CostEstimate{AmountCredits: snapshot.ProviderCostCredits, Currency: "credits", Estimated: true}, nil
+		}
+		return domain.CostEstimate{AmountCredits: turboH3VideoCostCredits(req), Currency: "credits", Estimated: true}, nil
+	}
+	if req.Operation == domain.OperationTextGenerate || req.Modality == domain.ModalityText {
+		return p.text.Estimate(ctx, req)
+	}
+	if strings.TrimSpace(req.ModelCode) == ModelSeedance25 {
+		if err := validateSeedance25(req, false); err != nil {
+			return domain.CostEstimate{}, err
+		}
+	}
 	if req.Operation == domain.OperationImageGenerate || req.Modality == domain.ModalityImage {
 		if err := validateImageShape(req, false); err != nil {
 			return domain.CostEstimate{}, err
@@ -142,7 +221,13 @@ func (p *Provider) Estimate(_ context.Context, req domain.ProviderRequest) (doma
 		if snapshot.ProviderCostCredits <= 0 {
 			return domain.CostEstimate{}, &Error{Class: domain.ProviderErrInvalidRequest, Message: "resolved route snapshot provider cost is unavailable"}
 		}
-		return domain.CostEstimate{AmountCredits: snapshot.ProviderCostCredits, Currency: "credits", Estimated: false}, nil
+		return domain.CostEstimate{AmountCredits: snapshot.ProviderCostCredits, Currency: "credits", Estimated: strings.TrimSpace(req.ModelCode) == ModelSeedance25 || isOmniVideo(req.ModelCode)}, nil
+	}
+	if isOmniVideo(req.ModelCode) {
+		return domain.CostEstimate{AmountCredits: omniVideoCostCredits(req), Currency: "credits", Estimated: true}, nil
+	}
+	if strings.TrimSpace(req.ModelCode) == ModelSeedance25 {
+		return domain.CostEstimate{AmountCredits: seedance25CostCredits(req), Currency: "credits", Estimated: true}, nil
 	}
 	if err := validateVideoShape(req, false); err != nil {
 		return domain.CostEstimate{}, err
@@ -154,8 +239,56 @@ func (p *Provider) Estimate(_ context.Context, req domain.ProviderRequest) (doma
 	}, nil
 }
 
-// Submit creates an async APIMart media task.
+// Submit returns synchronous text to the worker or creates an async media task.
 func (p *Provider) Submit(ctx context.Context, req domain.ProviderRequest) (domain.ProviderTask, error) {
+	if isKlingVeoVideo(req.ModelCode) {
+		if err := validateKlingVeoVideo(req, true); err != nil {
+			return domain.ProviderTask{}, err
+		}
+		return p.submitUnversionedOnce(ctx, req, p.submitKlingVeoVideo)
+	}
+	if isOmniVideo(req.ModelCode) {
+		if err := validateOmniVideo(req, true); err != nil {
+			return domain.ProviderTask{}, err
+		}
+		return p.submitUnversionedOnce(ctx, req, p.submitOmniVideo)
+	}
+	if isTurboH3Video(req.ModelCode) {
+		if err := validateTurboH3Video(req, true); err != nil {
+			return domain.ProviderTask{}, err
+		}
+		return p.submitUnversionedOnce(ctx, req, p.submitTurboH3Video)
+	}
+	if req.Operation == domain.OperationTextGenerate || req.Modality == domain.ModalityText {
+		return p.text.Submit(ctx, req)
+	}
+	if strings.TrimSpace(req.ModelCode) == ModelFlux2Pro {
+		if err := validateImageShape(req, true); err != nil {
+			return domain.ProviderTask{}, err
+		}
+		return p.submitUnversionedOnce(ctx, req, p.submitFlux2Pro)
+	}
+	if strings.TrimSpace(req.ModelCode) == ModelMidjourneyV7 {
+		if err := validateImageShape(req, true); err != nil {
+			return domain.ProviderTask{}, err
+		}
+		return p.submitUnversionedOnce(ctx, req, p.submitMidjourneyV7)
+	}
+	if isGPTImage25Model(req.ModelCode) {
+		if err := validateImageShape(req, true); err != nil {
+			return domain.ProviderTask{}, err
+		}
+		return p.submitUnversionedOnce(ctx, req, p.submitGPTImage25)
+	}
+	if isSeedream50ImageModel(req.ModelCode) {
+		if err := validateImageShape(req, true); err != nil {
+			return domain.ProviderTask{}, err
+		}
+		return p.submitUnversionedOnce(ctx, req, p.submitSeedream50Image)
+	}
+	if strings.TrimSpace(req.ModelCode) == ModelSeedance25 {
+		return p.submitSeedance25Once(ctx, req)
+	}
 	if req.IdempotencyKey != "" {
 		if task, ok := p.idempotentTask(req.IdempotencyKey); ok {
 			return task, nil
@@ -237,6 +370,9 @@ func (p *Provider) submitImage(ctx context.Context, req domain.ProviderRequest) 
 	if err := validateImageShape(req, true); err != nil {
 		return domain.ProviderTask{}, err
 	}
+	if isGrokImageModel(req.ModelCode) {
+		return p.submitGrokImage(ctx, req)
+	}
 	body := imageGenerationRequest{
 		Model:            req.ModelCode,
 		Prompt:           strings.TrimSpace(req.Prompt),
@@ -245,6 +381,11 @@ func (p *Provider) submitImage(ctx context.Context, req domain.ProviderRequest) 
 		Resolution:       effectiveImageResolution(req),
 		OfficialFallback: false,
 		ImageURLs:        cleanInputURLs(req.InputURLs),
+	}
+	if strings.TrimSpace(req.ModelCode) == ModelQwenImage3 {
+		body.NegativePrompt = strings.TrimSpace(req.NegativePrompt)
+		promptExtend := false
+		body.PromptExtend = &promptExtend
 	}
 	var decoded submitResponse
 	if err := p.postJSON(ctx, "/images/generations", body, &decoded, req.IdempotencyKey); err != nil {
@@ -284,6 +425,9 @@ func (p *Provider) submitImage(ctx context.Context, req domain.ProviderRequest) 
 // when the task has completed. The worker stores those URLs as our artifacts
 // before the job can become successful.
 func (p *Provider) Poll(ctx context.Context, ref domain.ProviderTaskRef) (domain.ProviderTaskResult, error) {
+	if strings.HasPrefix(ref.ExternalID, "text:") {
+		return p.text.Poll(ctx, ref)
+	}
 	taskID := strings.TrimSpace(ref.ExternalID)
 	if taskID == "" {
 		return domain.ProviderTaskResult{
@@ -381,6 +525,8 @@ type imageGenerationRequest struct {
 	Resolution       string   `json:"resolution,omitempty"`
 	OfficialFallback bool     `json:"official_fallback,omitempty"`
 	ImageURLs        []string `json:"image_urls,omitempty"`
+	NegativePrompt   string   `json:"negative_prompt,omitempty"`
+	PromptExtend     *bool    `json:"prompt_extend,omitempty"`
 }
 
 type submitResponse struct {
@@ -400,6 +546,41 @@ type taskStatusResponse struct {
 	Data    taskData      `json:"data"`
 	Message string        `json:"message,omitempty"`
 	Error   providerError `json:"error,omitempty"`
+}
+
+func (r *taskStatusResponse) UnmarshalJSON(data []byte) error {
+	var keys map[string]json.RawMessage
+	if err := json.Unmarshal(data, &keys); err != nil {
+		return err
+	}
+	var envelope struct {
+		Code    *int          `json:"code"`
+		Data    taskData      `json:"data"`
+		Message string        `json:"message,omitempty"`
+		Error   providerError `json:"error,omitempty"`
+	}
+	if err := json.Unmarshal(data, &envelope); err != nil {
+		return err
+	}
+	_, hasData := keys["data"]
+	_, hasStatus := keys["status"]
+	_, hasError := keys["error"]
+	if envelope.Code != nil || hasData || (hasError && !hasStatus) {
+		if envelope.Code != nil {
+			r.Code = *envelope.Code
+		}
+		r.Data = envelope.Data
+		r.Message = envelope.Message
+		r.Error = envelope.Error
+		return nil
+	}
+	var flat taskData
+	if err := json.Unmarshal(data, &flat); err != nil {
+		return err
+	}
+	r.Code = 200
+	r.Data = flat
+	return nil
 }
 
 type taskData struct {
@@ -529,6 +710,18 @@ func imageProviderCostCredits(req domain.ProviderRequest) (int64, error) {
 	// so known public variants use a conservative one-credit ceiling.
 	resolution := strings.ToUpper(effectiveImageResolution(req))
 	switch strings.TrimSpace(req.ModelCode) {
+	case ModelFlux2Pro, ModelMidjourneyV7, ModelGrokImage15, ModelGrokImage20:
+		return defaultImageProviderCostCredits, nil
+	case ModelGPTImage25Flare, ModelGPTImage25Sunburst:
+		return gptImage25ProviderCostCredits(req)
+	case ModelSeedream50Lite:
+		return seedream50LiteProviderCostCredits(req), nil
+	case ModelSeedream50Pro:
+		return seedream50ProProviderCostCredits(req), nil
+	case ModelQwenImage3:
+		if resolution == "1K" || resolution == "2K" {
+			return defaultImageProviderCostCredits, nil
+		}
 	case ModelGPTImage2:
 		if resolution == "1K" || resolution == "2K" || resolution == "4K" {
 			return defaultImageProviderCostCredits, nil
@@ -585,6 +778,26 @@ func validateImageShape(req domain.ProviderRequest, requirePrompt bool) error {
 	if !isSupportedImageModel(model) {
 		return &Error{Class: domain.ProviderErrUnsupportedCapab, Message: "unsupported APIMart image model"}
 	}
+	if model == ModelFlux2Pro {
+		return validateFlux2Pro(req, requirePrompt)
+	}
+	if model == ModelMidjourneyV7 {
+		return validateMidjourneyV7(req, requirePrompt)
+	}
+	if isGrokImageModel(model) {
+		return validateGrokImageRequest(req, requirePrompt)
+	}
+	if isGPTImage25Model(model) {
+		return validateGPTImage25(req, requirePrompt)
+	}
+	if isSeedream50ImageModel(model) {
+		return validateSeedream50Image(req, requirePrompt)
+	}
+	if model == ModelQwenImage3 {
+		if err := validateQwenImageOptions(req); err != nil {
+			return err
+		}
+	}
 	if requirePrompt {
 		prompt := strings.TrimSpace(req.Prompt)
 		if prompt == "" {
@@ -632,7 +845,8 @@ func isSupportedVideoModel(model string) bool {
 
 func isSupportedImageModel(model string) bool {
 	switch strings.TrimSpace(model) {
-	case ModelGemini3ProImage, ModelGPTImage2:
+	case ModelFlux2Pro, ModelMidjourneyV7, ModelGemini3ProImage, ModelGPTImage2, ModelQwenImage3, ModelGrokImage15, ModelGrokImage20,
+		ModelGPTImage25Flare, ModelGPTImage25Sunburst, ModelSeedream50Lite, ModelSeedream50Pro:
 		return true
 	default:
 		return false
@@ -641,8 +855,22 @@ func isSupportedImageModel(model string) bool {
 
 func isSupportedImageSize(model, value string) bool {
 	value = strings.ToLower(strings.TrimSpace(value))
+	if model == ModelFlux2Pro {
+		for _, ratio := range flux2AspectRatios {
+			if ratio == value {
+				return true
+			}
+		}
+		return false
+	}
 	if value == "" {
 		return false
+	}
+	if isGrokImageModel(model) {
+		return isGrokImageSize(model, value)
+	}
+	if model == ModelQwenImage3 {
+		return isQwenImageSize(value)
 	}
 	if model == ModelGPTImage2 && isImagePixelSize(value) {
 		return true
@@ -719,6 +947,9 @@ func effectiveImageResolution(req domain.ProviderRequest) string {
 	if isSupportedImageResolution(req.Size) {
 		return normalizeImageResolution(req.Size, lowercase)
 	}
+	if strings.TrimSpace(req.ModelCode) == ModelQwenImage3 && qwenImagePixelArea(effectiveImageSize(req)) > 2_250_000 {
+		return "2K"
+	}
 	return normalizeImageResolution("1K", lowercase)
 }
 
@@ -732,6 +963,8 @@ func normalizeImageResolution(value string, lowercase bool) string {
 
 func maxImageReferenceImages(model string) int {
 	switch strings.TrimSpace(model) {
+	case ModelQwenImage3:
+		return 3
 	case ModelGPTImage2:
 		return maxGPTImage2ReferenceImages
 	default:
@@ -1085,6 +1318,9 @@ func apiEnvelopeError(code int, errValue providerError, message string) error {
 }
 
 func classifyAPIMartError(status int, code, typ, msg string) domain.ProviderErrorClass {
+	if strings.EqualFold(strings.TrimSpace(code), "content_rejected") {
+		return domain.ProviderErrContentRejected
+	}
 	lower := strings.ToLower(strings.Join([]string{code, typ, msg}, " "))
 	switch {
 	case strings.Contains(lower, "balance") || strings.Contains(lower, "insufficient") || strings.Contains(lower, "quota"):

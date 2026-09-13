@@ -5,6 +5,7 @@ import { useState, type ChangeEvent, type FormEvent, type ReactNode } from "reac
 import { ChatComposer } from "@/components/chat/ChatComposer/ChatComposer";
 import { ChatScrollToBottom } from "@/components/chat/ChatScrollToBottom/ChatScrollToBottom";
 import { ru } from "@/i18n/ru";
+import type { ChatModel } from "@/lib/web-api/contracts";
 
 import styles from "./ConversationComposer.module.css";
 
@@ -15,6 +16,7 @@ type ConversationComposerProps = {
   initialDraft?: string;
   isAwaitingResponse?: boolean;
   modelSelector?: ReactNode;
+  selectedModel?: ChatModel;
   onSubmit: (prompt: string) => void;
   scrollContainer: HTMLElement | null;
 };
@@ -26,19 +28,22 @@ export function ConversationComposer({
   initialDraft = "",
   isAwaitingResponse = false,
   modelSelector,
+  selectedModel,
   onSubmit,
   scrollContainer,
 }: ConversationComposerProps) {
   const [draft, setDraft] = useState(initialDraft);
   const normalizedDraft = draft.trim();
-  const canSubmit = normalizedDraft !== "" && !disabled;
+  const tooLong = selectedModel?.max_prompt_bytes !== undefined
+    && new TextEncoder().encode(normalizedDraft).length > selectedModel.max_prompt_bytes;
+  const canSubmit = normalizedDraft !== "" && !disabled && !tooLong;
 
   const changeDraft = (event: ChangeEvent<HTMLTextAreaElement>) => {
     setDraft(event.target.value);
   };
 
   const submit = () => {
-    if (disabled || normalizedDraft === "") {
+    if (!canSubmit) {
       return;
     }
 
@@ -72,7 +77,9 @@ export function ConversationComposer({
           menu: ru.conversations.composerMediaMenu,
           uploadFile: ru.conversations.composerMediaUploadFile,
         }}
-        note={ru.conversations.composerDisclaimer}
+        note={(selectedModel?.estimate_credits ?? 0) > 0
+          ? `${selectedModel!.estimate_credits} токенов за ответ · до ${selectedModel!.max_output_tokens} токенов ответа. При длинном диалоге может потребоваться новый чат.`
+          : ru.conversations.composerDisclaimer}
         onChange={changeDraft}
         onSend={submit}
         placeholder={ru.conversations.composerPlaceholder}
@@ -80,6 +87,7 @@ export function ConversationComposer({
         value={draft}
         variant="conversation"
       />
+      {tooLong ? <p role="alert">Сообщение слишком длинное для выбранной модели.</p> : null}
     </form>
   );
 }

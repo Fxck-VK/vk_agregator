@@ -44,6 +44,9 @@ func (w *PollWorker) Process(ctx context.Context, task queue.Task) error {
 		// Nothing to poll; the generation worker has not submitted yet.
 		return nil
 	}
+	if unresolvedPaidSubmitIntent(pt) {
+		return w.resumePaidSubmit(ctx, job, pt, task)
+	}
 	if pt.Status.IsTerminal() {
 		if res, ok := durableProviderTaskResultForJob(pt, job); ok {
 			return w.applyResult(ctx, job, pt, res, task)

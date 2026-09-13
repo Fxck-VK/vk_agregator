@@ -7,6 +7,7 @@ import { assetPaths } from "@/assets/asset-paths";
 import { InputControlChip } from "@/components/ui/InputControlChip/InputControlChip";
 import { PopoverOption } from "@/components/ui/PopoverOption/PopoverOption";
 import { PopoverPanel } from "@/components/ui/PopoverPanel/PopoverPanel";
+import { imageQualityLabel } from "@/features/image-generation/image-quality-labels";
 import styles from "./ImageQualitySelector.module.css";
 
 type ImageQualitySelectorProps = {
@@ -36,14 +37,14 @@ export function ImageQualitySelector({
       <InputControlChip
         aria-expanded={isOpen}
         aria-haspopup="dialog"
-        aria-label={`${label}: ${value}`}
+        aria-label={`${label}: ${imageQualityLabel(value)}`}
         className={styles.trigger}
         disabled={isDisabled}
         onClick={() => setIsOpen((current) => !current)}
         ref={triggerRef}
       >
         <TuneIcon />
-        <span>{value}</span>
+        <span>{imageQualityLabel(value)}</span>
         <ChevronIcon />
       </InputControlChip>
 
@@ -62,7 +63,7 @@ export function ImageQualitySelector({
             const selected = quality === value;
             return (
               <PopoverOption
-                aria-label={quality}
+                aria-label={imageQualityLabel(quality)}
                 className={styles.option}
                 key={quality}
                 onClick={() => {
@@ -72,7 +73,7 @@ export function ImageQualitySelector({
                 }}
                 selected={selected}
               >
-                {quality}
+                {imageQualityLabel(quality)}
               </PopoverOption>
             );
           })}

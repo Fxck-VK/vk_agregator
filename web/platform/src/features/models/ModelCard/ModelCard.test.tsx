@@ -219,4 +219,23 @@ describe("ModelCard", () => {
 
     expect(screen.queryByTestId("credit-star-icon")).not.toBeInTheDocument();
   });
+
+  it("opens the new GPT image variants using the shared catalogue card", () => {
+    render(
+      <ModelCard
+        model={{
+          default_quality: "1K-medium",
+          id: "gpt_image_2_5_flare",
+          max_reference_images: 0,
+          name: "GPT Image 2.5 Flare",
+          quality_options: ["1K-medium", "4K-xhigh"],
+          supports_reference_image: false,
+        }}
+      />,
+    );
+
+    expect(screen.getByRole("link")).toHaveAttribute("href", "/app/image?model=gpt_image_2_5_flare");
+    expect(screen.getByRole("heading", { name: "GPT Image 2.5 Flare" })).toBeVisible();
+    expect(screen.queryByText("1K-medium")).not.toBeInTheDocument();
+  });
 });

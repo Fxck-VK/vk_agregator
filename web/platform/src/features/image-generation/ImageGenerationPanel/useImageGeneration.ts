@@ -70,7 +70,7 @@ export function useImageGeneration({ access = "authenticated", model, promptValu
     setLocalPrompt(value);
     onPromptChange?.(value);
   }, [onPromptChange]);
-  const [aspectRatio, setAspectRatio] = useState("16:9");
+  const [requestedAspectRatio, setAspectRatio] = useState("16:9");
   const [outputCountSelection, setOutputCountSelection] = useState<OutputCountSelection>({ modelID: "", value: 1 });
   const [prepareIntent, setPrepareIntent] = useState<PrepareIntent | null>(null);
   const [preparation, setPreparation] = useState<ImageJobPreparation | null>(null);
@@ -91,16 +91,25 @@ export function useImageGeneration({ access = "authenticated", model, promptValu
       ? qualitySelection.value
       : selectedModel.default_quality;
   const maxOutputCount = selectedModel?.max_output_count ?? 1;
+  const allowedAspectRatios = selectedModel?.allowed_aspect_ratios;
+  const aspectRatio = allowedAspectRatios?.length && !allowedAspectRatios.includes(requestedAspectRatio)
+    ? allowedAspectRatios[0]
+    : requestedAspectRatio;
   const outputCount = selectedModel !== null && outputCountSelection.modelID === selectedModel.id
     ? Math.min(Math.max(1, outputCountSelection.value), Math.max(1, maxOutputCount))
     : 1;
-  const unitPrice = selectedModel?.price_by_quality?.[imageQuality] ?? null;
+  const isGPTImage25Model = selectedModel?.id.startsWith("gpt_image_2_5_") === true;
+  const unitPrice = isGPTImage25Model ? null : selectedModel?.price_by_quality?.[imageQuality] ?? null;
   const selectedPrice = unitPrice === null ? null : unitPrice * outputCount;
+  const promptByteLimit = isGPTImage25Model ? 4096 : null;
+  const promptByteLength = useMemo(() => new TextEncoder().encode(prompt).length, [prompt]);
+  const promptTooLong = promptByteLimit !== null && promptByteLength > promptByteLimit;
   const canPrepare = stage === "editor"
     && prompt.trim() !== ""
     && selectedModel !== null
     && imageQuality !== ""
-    && selectedPrice !== null;
+    && (isGPTImage25Model || selectedPrice !== null)
+    && !promptTooLong;
 
   const busy = stage === "preparing" || stage === "confirmation" || stage === "activating" || stage === "tracking";
   useEffect(() => {
@@ -311,7 +320,9 @@ export function useImageGeneration({ access = "authenticated", model, promptValu
     setStage("editor");
   }, [setPrompt]);
 
-  const editorError = error === "prepare" ? ru.imageGeneration.prepareFailure : null;
+  const editorError = promptTooLong && promptByteLimit !== null
+    ? `Промпт для GPT Image 2.5: ${promptByteLength.toLocaleString("ru-RU")} / ${promptByteLimit.toLocaleString("ru-RU")} байт UTF-8`
+    : error === "prepare" ? ru.imageGeneration.prepareFailure : null;
   const confirmationError = error === "insufficient"
     ? ru.imageGeneration.insufficientBalance
     : error === "activation"
@@ -338,6 +349,8 @@ export function useImageGeneration({ access = "authenticated", model, promptValu
     retryModelCatalog, prepareImage, activateImage, handleJobUpdate, showResult, createAnother, changePrompt, reset,
     composerProps: {
       access,
+      modelID: selectedModel?.id,
+      allowedAspectRatios,
       aspectRatio,
       canSubmit: canPrepare,
       errorMessage: editorError,
@@ -350,6 +363,7 @@ export function useImageGeneration({ access = "authenticated", model, promptValu
       onPromptChange: changePrompt,
       onSubmit: () => void prepareImage(),
       price: selectedPrice,
+      priceNote: isGPTImage25Model ? ru.imageGeneration.priceDependsOnAspectRatio : undefined,
       outputCount,
       prompt,
       qualityOptions: selectedModel?.quality_options ?? [],

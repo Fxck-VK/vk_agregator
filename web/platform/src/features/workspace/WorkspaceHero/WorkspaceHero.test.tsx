@@ -78,7 +78,8 @@ describe("WorkspaceHero model selection", () => {
     fireEvent.click(screen.getByRole("button", { name: "Выбрать модель: Nano Banana 2" }));
     expect(container.querySelector('[data-state="exiting"]')).toBeNull();
     act(() => vi.advanceTimersByTime(120));
-    expect(screen.getByRole("button", { name: "Разрешение: 1K" })).toBeVisible();
+    expect(screen.getByRole("button", { name: "Соотношение сторон: 16:9" })).toBeVisible();
+    expect(screen.queryByRole("button", { name: "Разрешение: 1K" })).toBeNull();
     fireEvent.click(screen.getByRole("button", { name: "Выбрать модель: NeiroHub Chat" }));
     act(() => vi.advanceTimersByTime(219));
     expect(container.querySelector('[data-state="exiting"]')).not.toBeNull();
@@ -129,7 +130,8 @@ describe("WorkspaceHero model selection", () => {
     fireEvent.click(screen.getByRole("button", { name: "Разрешение: 2K" }));
     fireEvent.click(screen.getByRole("radio", { name: "4K" }));
     await selectModel("Nano Banana 2");
-    expect(screen.getByRole("button", { name: "Разрешение: 1K" })).toBeVisible();
+    expect(screen.getByRole("button", { name: "Соотношение сторон: 16:9" })).toBeVisible();
+    expect(screen.queryByRole("button", { name: "Разрешение: 1K" })).toBeNull();
     expect(screen.queryByRole("button", { name: "Разрешение: 4K" })).toBeNull();
     fireEvent.change(screen.getByRole("textbox"), { target: { value: "Новый черновик" } });
     await selectModel("NeiroHub Chat");

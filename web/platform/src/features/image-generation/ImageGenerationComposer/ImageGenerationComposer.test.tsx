@@ -13,6 +13,20 @@ describe("ImageGenerationComposer", () => {
     cleanup();
   });
 
+  it("selects an Imagine speed without offering multiple paid calls", () => {
+    const onChange = vi.fn();
+    render(<ImageGenerationComposer modelID="midjourney_v7" aspectRatio="16:9" canSubmit errorMessage={null}
+      imageQuality="relax" isSubmitting={false} maxOutputCount={1}
+      onAspectRatioChange={vi.fn()} onImageQualityChange={onChange}
+      onOutputCountChange={vi.fn()} onPromptChange={vi.fn()} onSubmit={vi.fn()}
+      price={30} prompt="Synthetic scene" qualityOptions={["relax", "fast", "turbo"]} outputCount={1} />);
+    fireEvent.click(screen.getByRole("button", { name: "Режим: Relax" }));
+    fireEvent.click(screen.getByRole("radio", { name: "Fast" }));
+    expect(onChange).toHaveBeenCalledWith("fast");
+    expect(screen.queryByRole("button", { name: /Разрешение:/ })).not.toBeInTheDocument();
+    expect(screen.queryByRole("group", { name: "Количество изображений" })).not.toBeInTheDocument();
+  });
+
   it("edits the prompt, changes quality, and submits through the shared composer", () => {
     const onImageQualityChange = vi.fn();
     const onPromptChange = vi.fn();
@@ -136,6 +150,33 @@ describe("ImageGenerationComposer", () => {
     expect(screen.getByRole("button", { name: "Соотношение сторон: 16:9" })).toBeDisabled();
     expect(screen.getByRole("button", { name: ru.imageGeneration.preparing })).toBeDisabled();
     expect(screen.getByText(ru.imageGeneration.priceUnavailable)).toBeVisible();
+  });
+
+  it("shows a model-specific price note instead of an editor price", () => {
+    render(
+      <ImageGenerationComposer
+        aspectRatio="16:9"
+        canSubmit
+        errorMessage={null}
+        imageQuality="1K-medium"
+        isSubmitting={false}
+        maxOutputCount={4}
+        onAspectRatioChange={vi.fn()}
+        onImageQualityChange={vi.fn()}
+        onOutputCountChange={vi.fn()}
+        onPromptChange={vi.fn()}
+        onSubmit={vi.fn()}
+        price={null}
+        priceNote={ru.imageGeneration.priceDependsOnAspectRatio}
+        prompt="night city after rain"
+        qualityOptions={["1K-medium", "4K-max"]}
+        outputCount={1}
+      />,
+    );
+
+    expect(screen.getByText(ru.imageGeneration.priceDependsOnAspectRatio)).toBeVisible();
+    expect(screen.queryByText(ru.imageGeneration.priceUnavailable)).not.toBeInTheDocument();
+    expect(screen.queryByTestId("credit-star-icon")).not.toBeInTheDocument();
   });
 
   it("renders workflow errors below the compact composer", () => {

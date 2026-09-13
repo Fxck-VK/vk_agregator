@@ -46,6 +46,10 @@ export const MODALITIES: ModalityDef[] = [
       { id: "nano_banana_2", label: "Nano Banana 2" },
       { id: "nano_banana_pro", label: "Nano Banana Pro" },
       { id: "gpt_image_2", label: "GPT Image 2" },
+      { id: "gpt_image_2_5_flare", label: "GPT Image 2.5 Flare" },
+      { id: "gpt_image_2_5_sunburst", label: "GPT Image 2.5 Sunburst" },
+      { id: "seedream_5_0_lite", label: "Seedream 5.0 Lite" },
+      { id: "seedream_5_0_pro", label: "Seedream 5.0 Pro" },
     ],
   },
   {

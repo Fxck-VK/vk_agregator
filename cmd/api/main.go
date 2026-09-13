@@ -47,6 +47,7 @@ import (
 	"vk-ai-aggregator/internal/service/preparedjobexpiry"
 	"vk-ai-aggregator/internal/service/pricingcatalog"
 	"vk-ai-aggregator/internal/service/productcatalog"
+	"vk-ai-aggregator/internal/service/providerreference"
 	"vk-ai-aggregator/internal/service/resultservice"
 	"vk-ai-aggregator/internal/service/videorouter"
 )
@@ -326,6 +327,7 @@ func main() {
 	webImagePreparedExpiry := preparedjobexpiry.New(postgres.NewPreparedWebImageExpiryRepository(pool))
 	web := websession.NewHandler(websession.Config{
 		WebOrigin:                   cfg.WebOrigin,
+		TextModels:                  runtimeCatalog.TextModels,
 		ImageModels:                 webImageModelsFromRuntimeCatalog(runtimeCatalog.ImageModels()),
 		ImageArtifactRedirectPolicy: webArtifactRedirectPolicy,
 	}, websession.Deps{
@@ -373,6 +375,11 @@ func main() {
 	// Per-IP rate limiting protects the webhook intake from flooding/abuse
 	// (audit S3).
 	webhookLimiter := ratelimit.New(cfg.WebhookRateLimitRPS, cfg.WebhookRateLimitBurst)
+	providerReferenceGateway, err := newProviderReferenceGateway(ctx, cfg, core)
+	if err != nil {
+		logger.Error("provider reference gateway wiring failed", logging.ErrorAttr(err))
+		os.Exit(1)
+	}
 
 	mux := http.NewServeMux()
 	mux.Handle("/webhooks/vk", webhookLimiter.Middleware(metrics.Middleware("webhook", vkHandler)))
@@ -382,6 +389,9 @@ func main() {
 	mux.Handle("/account/", metrics.Middleware("account", account.Routes()))
 	mux.Handle("/web/v1/", metrics.Middleware("websession", web.Routes()))
 	mux.Handle("/miniapp/", metrics.Middleware("miniapp", miniapp.Routes()))
+	if providerReferenceGateway != nil {
+		mux.Handle("/provider-references/", metrics.Middleware("provider_reference", providerReferenceGateway))
+	}
 	mux.Handle("GET /metrics", metrics.PrivateHandler())
 	mux.HandleFunc("GET /health", healthHandler(pool, rdb))
 	apiReadyHandler := readinessHandler(pool, rdb, cfg.MigrationsDir)
@@ -506,6 +516,7 @@ func webImageModelsFromRuntimeCatalog(runtimeModels []productcatalog.ImageModel)
 			SupportsReferenceImage: model.SupportsReferenceImage,
 			MaxReferenceImages:     model.MaxReferenceImages,
 			MaxOutputCount:         model.MaxOutputCount,
+			AllowedAspectRatios:    append([]string(nil), model.AllowedAspectRatios...),
 		})
 	}
 	return models
@@ -551,6 +562,47 @@ func newWebImageArtifactRedirectPolicy(cfg config.Config, logger *slog.Logger) w
 		return websession.ImageArtifactRedirectPolicy{}
 	}
 	return policy
+}
+
+func newProviderReferenceGateway(ctx context.Context, cfg config.Config, core apiapp.SharedCore) (http.Handler, error) {
+	if !cfg.FeatureAPIMartKling26MotionEnabled {
+		return nil, nil
+	}
+	store, err := s3store.New(ctx, s3store.Config{
+		Endpoint:        cfg.S3Endpoint,
+		AccessKey:       cfg.S3AccessKey,
+		SecretKey:       cfg.S3SecretKey,
+		UseSSL:          cfg.S3UseSSL,
+		Region:          cfg.S3Region,
+		AddressingStyle: cfg.S3AddressingStyle,
+	})
+	if err != nil {
+		return nil, err
+	}
+	return newProviderReferenceGatewayWithObjects(cfg, core, store)
+}
+
+func newProviderReferenceGatewayWithObjects(cfg config.Config, core apiapp.SharedCore, objects providerreference.ObjectStore) (http.Handler, error) {
+	if !cfg.FeatureAPIMartKling26MotionEnabled {
+		return nil, nil
+	}
+	gateway, err := providerreference.New(cfg.ProviderReferenceBaseURL, cfg.ProviderReferenceSigningKey, core.Jobs, core.Artifacts, objects)
+	if err != nil {
+		return nil, err
+	}
+	return limitProviderReferenceConcurrency(ratelimit.NewConcurrencyLimiter(cfg.MediaMaxConcurrentUploads), gateway), nil
+}
+
+func limitProviderReferenceConcurrency(limiter *ratelimit.ConcurrencyLimiter, next http.Handler) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		release, ok := limiter.TryAcquire()
+		if !ok {
+			http.Error(w, http.StatusText(http.StatusTooManyRequests), http.StatusTooManyRequests)
+			return
+		}
+		defer release()
+		next.ServeHTTP(w, r)
+	})
 }
 
 func mediaCapacityGuard(queueGuard *redisqueue.BackpressureGuard) joborchestrator.CapacityGuard {

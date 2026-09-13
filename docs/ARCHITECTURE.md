@@ -189,7 +189,9 @@ webhook/reconciliation plus ledger top-up can complete a payment.
 Current durable shared chat context:
 
 - Web chat exposes its safe public text-model catalogue at authenticated
-  GET /web/v1/chat-models (items: [{id, name}], default_model_id, no-store).
+  GET /web/v1/chat-models (public items with server price/input/output limits,
+  default_model_id, no-store). It shares textgeneration.Models with /text-models;
+  only enabled paid models with valid pricing are exposed.
   POST /web/v1/conversations/{conversationID}/messages accepts optional model_id
   alongside prompt. Omission retains the server default; explicit IDs must
   match a canonical public text-model ID from modelcatalog. Display names,
@@ -2839,3 +2841,180 @@ Operator/admin referral view живЄт только под защищЄнным `/admin/referrals/*`.
 [10]: https://kling.ai/document-api/apiReference/model/textToVideo?utm_source=chatgpt.com "Text-to-Video API"
 [11]: https://developers.openai.com/codex/learn/best-practices "Best practices Ц Codex | OpenAI Developers"
 [12]: https://developers.openai.com/codex/guides/agents-md "Custom instructions with AGENTS.md Ц Codex | OpenAI Developers"
+
+## Qwen Image 3.0 image route (2026-09-08)
+
+The public `qwen_image_3` model maps to APIMart `qwen-image-3.0` through the
+existing image resolver, trusted Job snapshot and worker adapter. Its independent
+`FEATURE_APIMART_QWEN_IMAGE_3_ENABLED` flag defaults to false. Provider readiness
+and an exact active tariff are required before public catalog exposure.
+
+The initial public route generates one image at 1K or 2K, with up to three
+backend reference artifacts and no prompt rewriting. The standard model is never
+replaced with Pro. The shared artifact storage, output moderation, owner checks,
+account history and append-only reserve/capture/release lifecycle apply unchanged.
+Static pricing version 5 adds two exact Qwen keys at 15 internal credits each;
+existing Jobs keep their stored price and route snapshots. Runtime pricing rows
+and environment values are not mutated by this implementation.
+
+This route reuses existing APIMart submit/poll recovery. Durable pre-submit intents
+and recovery of a process crash between upstream acceptance and saving task_id
+remain separate work; the new model does not establish that guarantee.
+See [Qwen DEV configuration](runbooks/DEV.md#qwen-image-30-configuration).
+
+## Grok Imagine image routes (2026-09-08)
+
+The public `grok_image_1_5` and `grok_image_2_0` routes use the existing resolver,
+Job snapshot, APIMart worker and moderated Artifact pipeline. Independent feature
+flags and exact enabled tariffs gate exposure. Static pricing version 6 adds one
+`standard` key at 10 internal credits per model. For Grok 2.0 the user selected
+public pricing at $0.015 despite the API documentation listing $0.08; actual
+provider cost remains unverified. Existing Job pricing snapshots are retained.
+
+Both routes generate one image. Grok 1.5 accepts up to one backend reference;
+2.0 accepts text only. Model-specific aspect ratios travel in safe catalog DTOs
+and are enforced against the trusted registry. Public `standard` is not a pixel
+resolution: the worker omits resolution for 1.5 and sends `quality` for 2.0.
+
+Grok 2.0 uses versioned HTTP 202/data.id submission. Its adapter replays transient
+or in-progress submits with identical body/key/version and respects Retry-After
+within a bounded window. An unresolved outcome maps to the non-retryable
+`provider_submit_indeterminate` class, preventing automatic fresh paid attempts.
+This does not close the process-crash window before saving the provider task;
+durable pre-submit intents remain separate B2 work.
+
+See [Grok DEV configuration](runbooks/DEV.md#grok-imagine-image-configuration).
+
+## Gemini Omni video routes (2026-09-12)
+
+`video_gemini_omni_1_1_flash` and `video_gemini_omni_1_1_flash_ext` map to separate
+APIMart native model ids through the existing asynchronous video pipeline.
+Flash omits upstream duration, while its immutable 10-second pricing dimension
+selects a fixed retail estimate; output contracts accept provider-selected
+3-10s. EXT accepts 4/6/8/10s and only 0/1/3 reference images. Public metadata
+includes automatic duration and allowed reference counts; provider costs stay
+server-side. Video probes accept both orientations of 4K output.
+
+Both routes use the durable paid-submit intent before network I/O, extending
+the existing image/text claim to video. An unknown acceptance outcome cannot
+trigger another paid submit after restart. Successful tasks retain owner-only
+artifacts, moderation, ledger reserve/capture and normal delivery boundaries.
+No provider calls move into API or client surfaces. Independent default-off
+flags and exact active tariffs gate exposure. Static pricing version 12 adds
+20 cost x3 tariffs, rounded up to five internal credits. There is no schema
+change or automated production activation. See
+[video contracts and pricing](VIDEO_GENERATION.md#gemini-omni-11-flash-and-flash-ext)
+and [activation](runbooks/DEV.md#gemini-omni-video-configuration).
+
+## Seedance 2.5 video route (2026-09-09)
+
+`video_seedance_2_5` maps to APIMart `seedance-2.5` through the existing
+Job/worker/Artifact pipeline. An independent opt-in flag and provider/key/pricing
+readiness gate catalog exposure. The first release supports 5/10/15/30-second MP4
+with native audio, 480p/720p/1080p, and up to four owned image references.
+Multimodal roles and human-face asset approval are not exposed. Mini App validates
+its public `video_resolution` option before quote/reservation; workers consume
+immutable snapshots. Static catalog version 7 adds twelve x3 tariffs rounded up
+to five internal credits. Actual APIMart token settlement can differ from the
+preauthorization estimate, while user capture stays at the reserved price.
+
+Seedance coalesces same-key submissions within the adapter process. Ambiguous
+outcomes stop automatic fresh submits with `provider_submit_indeterminate`.
+Accepted task IDs use durable worker polling; crash recovery before task ID
+persistence remains the shared durable-intent gap. Auth, owner checks, output
+moderation and ledger semantics remain shared.
+See [video contract and prices](VIDEO_GENERATION.md#seedance-25) and
+[DEV configuration](runbooks/DEV.md#seedance-25-configuration).
+## Midjourney V7 Imagine contract (2026-09-09)
+
+Public model `midjourney_v7` maps to APIMart Imagine through the existing image
+Job pipeline. Worker submits `/v1/midjourney/generations` with version `7`,
+quality `1`, a validated aspect ratio and speed `relax`/`fast`/`turbo`; the public
+`image_quality` pricing dimension carries speed for this model. No provider-native
+fields or prompt flags may override the trusted billing dimensions.
+
+An Imagine invocation is one Job and one immutable price snapshot/capture.
+All returned images are stored as owned Artifacts and moderated before delivery.
+Poll stays on `/v1/tasks/{id}`. Mini App supports four owned reference images;
+the existing standalone Web form supports text input. Other Midjourney actions
+require separately priced Jobs and are not exposed.
+
+The route is disabled by default. The APIMart submit helper shared with Seedance
+coalesces requests in-process and stops ambiguous paid resubmissions. Midjourney
+also claims a durable per-Job provider_tasks row before network I/O; only the
+unique-key inserter submits. The accepted external ID updates that same row.
+An unresolved claim after restart never triggers a second paid call: recovery
+waits the call timeout plus one minute, then fails terminal and releases credits.
+A provider-accepted outcome with no saved ID needs operator reconciliation.
+Midjourney never allocates a second paid attempt inside the same Job. Other
+provider retry policies and the database schema are unchanged.
+See [Midjourney DEV configuration](runbooks/DEV.md#midjourney-v7-configuration).
+### FLUX.2 Pro APIMart image route (2026-09-09)
+
+Public `flux_2_pro` resolves to APIMart `flux-2-pro` behind
+`FEATURE_APIMART_FLUX_2_PRO_ENABLED=false` by default. The first release is
+text-to-image with one output and explicit 1MP/2MP/3MP/4MP tiers. Legacy K aliases,
+references and arbitrary pixel dimensions are rejected. Static pricing catalog
+version 9 adds 15/25/30/40 internal credits, provider cost x3 rounded up to five.
+Web and Mini App use the same backend-owned quote and immutable Job snapshot.
+
+The worker calls POST /v1/images/generations and polls GET /v1/tasks/{task_id}.
+All output artifacts pass moderation before visibility and ledger capture.
+The existing Midjourney durable submit claim is shared with FLUX.2: a unique
+provider_tasks row precedes the network call; accepted task IDs update that row.
+No schema migration is required. Midjourney idempotency keys remain unchanged.
+An unresolved claim never starts another paid request after restart; after the
+call deadline plus one minute it fails terminally and releases the reservation.
+Operator reconciliation is required before manually retrying unknown outcomes.
+
+Model-specific aspect ratio allowlists now govern image validation; FLUX.2 adds
+9:21 without widening other models. Prepared Web replay compares the previously
+validated public ratio and stored price. Mini App reference upload respects the
+backend model capability and clears references on unsupported model selection.
+
+See [FLUX.2 DEV configuration](runbooks/DEV.md#flux2-pro-configuration).
+
+
+## Paid synchronous text models (2026-09-09)
+
+Eleven paid text models use worker-only, explicitly pinned routes: ten through KIE and Claude Fable 5.1 through APIMart. A shared textapi adapter implements Responses, Messages, Gemini Chat Completions and APIMart Chat Completions; media adapters keep their existing contracts. Public catalogs and resolvers expose model IDs and fixed bounded reply prices. Pricing snapshots include TextModelID plus immutable input/output token caps; migration 000052 adds the text dimension to runtime pricing. The configured default chat and conversation-title route stay on their existing provider.
+
+A unique provider_tasks submit intent precedes paid HTTP. ImmediateResult is transient; the worker saves text as a private Artifact and attaches it to the Job before checkpointing a terminal provider task. Recovery uses the saved artifact, repeats output moderation and delegates capture to the existing account-history delivery. An ambiguous response without a persisted artifact releases the reservation and never automatically starts a fresh paid submit. No raw response or inline text is stored in provider_tasks.
+
+Model flags, provider credentials, exact prices and the matching KIE_TEXT_LIMITS_VERIFIED or APIMART_TEXT_LIMITS_VERIFIED gate must all be ready. Verification gates are independent; all new model flags default to false. Static pricing version 11 adds the eight new models with cost times three rounded up to five credits. Unconfirmed native output-limit semantics keep rollout disabled. See docs/runbooks/KIE_TEXT_MODELS.md for contracts, prices, tests and rollout gates.
+
+
+## Signed video references for APIMart Motion Control
+
+Mini App video uploads are authenticated and probed in cmd/api before private input
+artifact storage. Worker-owned providerreference URLs expire after one hour and
+are bound to the active Job, owning account and reference artifact. A dedicated
+HMAC key authenticates GET/HEAD/Range at /provider-references/ on the Mini App
+host; object storage remains private. API serves bytes without calling AI providers.
+Billing duration is derived from persisted probe metadata at estimate, creation and
+worker submission. Kling audio uses a separate quality=audio price key; all new
+Kling/Veo routes use immutable pricing and durable paid-submit claims. See
+docs/VIDEO_GENERATION.md and docs/runbooks/DEV.md for contracts and deployment.
+
+## GPT Image 2.5 and Seedream 5 image contracts (2026-09-13)
+
+Four APIMart image routes reuse asynchronous Jobs, owned Artifacts, moderation,
+ledger reservations/capture and durable per-Job submit claims. Pricing v14 adds
+GPT Flare/Sunburst, Seedream Lite and Pro. Quotes bind output count, reference
+count and (for GPT) aspect ratio to immutable snapshots. Orchestrator and worker
+validate these dimensions before any paid submission; retries retain old prices.
+GPT uses the provider size/quality token table plus a fixed bounded text-input
+estimate; public GPT references remain closed pending an input-token bound.
+Pro quotes include the published extra-reference surcharge. Unexpected output
+counts fail without capture; recovery can continue from already stored artifacts.
+Provider-native params and channel metadata cannot override the priced shape.
+See [image rollout and pricing](runbooks/DEV.md#gpt-image-25-and-seedream-5-images).
+
+APIMart Kling 3.0 Turbo and MiniMax H3 use stable public video aliases and
+worker-only async submission/polling with durable per-Job submit intents.
+The public contract accepts text and at most one owned first-frame image;
+multimodal references and provider-native callbacks remain closed. Pricing
+catalog v15 covers all documented duration/resolution combinations, applying
+provider cost x3 rounded up to 5 internal credits before reservation. Output
+contracts accept inherited first-frame aspect ratios and portrait/2K media.
+See docs/VIDEO_GENERATION.md for parameter bounds, tariffs and rollout flags.

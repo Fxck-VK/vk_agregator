@@ -7,6 +7,7 @@ import (
 	"vk-ai-aggregator/internal/domain"
 	"vk-ai-aggregator/internal/service/modelcatalog"
 	"vk-ai-aggregator/internal/service/pricingcatalog"
+	"vk-ai-aggregator/internal/service/providermodels"
 	"vk-ai-aggregator/internal/service/videorouter"
 )
 
@@ -45,13 +46,18 @@ type ImageModel struct {
 	SupportsReferenceImage bool     `json:"supports_reference_image"`
 	MaxReferenceImages     int      `json:"max_reference_images,omitempty"`
 	MaxOutputCount         int      `json:"max_output_count"`
+	AllowedAspectRatios    []string `json:"allowed_aspect_ratios,omitempty"`
 }
 
 type VideoRoute struct {
-	Type        string `json:"type"`
-	Alias       string `json:"alias"`
-	Name        string `json:"name"`
-	Description string `json:"description,omitempty"`
+	SupportsAudio               bool   `json:"supports_audio,omitempty"`
+	RequiresReferenceVideo      bool   `json:"requires_reference_video,omitempty"`
+	AutomaticDuration           bool   `json:"automatic_duration,omitempty"`
+	AllowedReferenceImageCounts []int  `json:"allowed_reference_image_counts,omitempty"`
+	Type                        string `json:"type"`
+	Alias                       string `json:"alias"`
+	Name                        string `json:"name"`
+	Description                 string `json:"description,omitempty"`
 	// EstimateCredits is a backend-computed display hint for catalog UI only.
 	// Clients must call the estimate endpoint before paid submission.
 	EstimateCredits        int64    `json:"estimate_credits,omitempty"`
@@ -68,11 +74,15 @@ type VideoRoute struct {
 }
 
 type Item struct {
-	Type        string `json:"type"`
-	ID          string `json:"id"`
-	Alias       string `json:"alias,omitempty"`
-	Name        string `json:"name"`
-	Description string `json:"description,omitempty"`
+	SupportsAudio               bool   `json:"supports_audio,omitempty"`
+	RequiresReferenceVideo      bool   `json:"requires_reference_video,omitempty"`
+	AutomaticDuration           bool   `json:"automatic_duration,omitempty"`
+	AllowedReferenceImageCounts []int  `json:"allowed_reference_image_counts,omitempty"`
+	Type                        string `json:"type"`
+	ID                          string `json:"id"`
+	Alias                       string `json:"alias,omitempty"`
+	Name                        string `json:"name"`
+	Description                 string `json:"description,omitempty"`
 	// EstimateCredits is the only generation price hint exposed in the public
 	// catalog. Provider cost, floors, multipliers and provider-native ids stay
 	// out of this DTO.
@@ -177,6 +187,7 @@ func imageModels(cfg Config) []ImageModel {
 			SupportsReferenceImage: model.SupportsReferenceImage,
 			MaxReferenceImages:     model.MaxReferenceImages,
 			MaxOutputCount:         model.MaxOutputCount,
+			AllowedAspectRatios:    append([]string(nil), model.AllowedAspectRatios...),
 		})
 	}
 	return out
@@ -196,21 +207,25 @@ func videoRoutes(routes []videorouter.PublicRoute, pricingCatalog *pricingcatalo
 			continue
 		}
 		out = append(out, VideoRoute{
-			Type:                   TypeVideo,
-			Alias:                  string(route.Alias),
-			Name:                   videoName(route.Alias),
-			Description:            videoDescription(route.Alias),
-			EstimateCredits:        estimateCredits,
-			Enabled:                true,
-			AllowedDurationsSec:    pricedDurations,
-			AllowedResolutions:     append([]string(nil), route.AllowedResolutions...),
-			AllowedAspectRatios:    append([]string(nil), route.AllowedAspectRatios...),
-			DefaultDurationSec:     defaultDuration,
-			DefaultResolution:      defaultResolution,
-			DefaultAspectRatio:     route.DefaultAspectRatio,
-			RequiresStartImage:     route.RequiresStartImage,
-			SupportsReferenceImage: route.SupportsReferenceImage,
-			MaxReferenceImages:     route.MaxReferenceImages,
+			Type:                        TypeVideo,
+			Alias:                       string(route.Alias),
+			Name:                        videoName(route.Alias),
+			Description:                 videoDescription(route.Alias),
+			EstimateCredits:             estimateCredits,
+			Enabled:                     true,
+			AllowedDurationsSec:         pricedDurations,
+			SupportsAudio:               route.SupportsAudio,
+			RequiresReferenceVideo:      route.RequiresReferenceVideo,
+			AutomaticDuration:           route.AutomaticDuration,
+			AllowedReferenceImageCounts: append([]int(nil), route.AllowedReferenceImageCounts...),
+			AllowedResolutions:          append([]string(nil), route.AllowedResolutions...),
+			AllowedAspectRatios:         append([]string(nil), route.AllowedAspectRatios...),
+			DefaultDurationSec:          defaultDuration,
+			DefaultResolution:           defaultResolution,
+			DefaultAspectRatio:          route.DefaultAspectRatio,
+			RequiresStartImage:          route.RequiresStartImage,
+			SupportsReferenceImage:      route.SupportsReferenceImage,
+			MaxReferenceImages:          route.MaxReferenceImages,
 		})
 	}
 	return out
@@ -241,6 +256,14 @@ func pricedImageDefaultQuality(catalog *pricingcatalog.Catalog, modelID, configu
 func displayImageEstimateCredits(catalog *pricingcatalog.Catalog, modelID, quality string) (int64, bool) {
 	if catalog == nil {
 		return 0, false
+	}
+	if pricingcatalog.IsBoundedAPIMartImage(modelID) {
+		snapshot, err := catalog.Snapshot(pricingcatalog.ProductKey{Operation: domain.OperationImageGenerate, Modality: domain.ModalityImage, ImageModelID: modelID, Quality: quality})
+		if err != nil {
+			return 0, false
+		}
+		quote, err := pricingcatalog.QuoteAPIMartImage(snapshot, "1:1", 0)
+		return quote.InternalCredits, err == nil && quote.InternalCredits > 0
 	}
 	credits, err := catalog.DisplayEstimateCredits(pricingcatalog.ProductKey{
 		Operation:    domain.OperationImageGenerate,
@@ -288,16 +311,35 @@ func displayVideoEstimateCredits(catalog *pricingcatalog.Catalog, alias domain.V
 }
 
 func imageDescription(modelID string) string {
+	if modelID == modelcatalog.MiniAppImageFlux2Pro {
+		return "Генерация по тексту. Разрешение 1–4 МП, одно изображение за запрос."
+	}
 	if modelID == modelcatalog.MiniAppImageMock {
 		return "Synthetic image route for load tests without paid provider calls."
 	}
 	switch modelID {
+	case modelcatalog.MiniAppImageGPTImage25Flare:
+		return "Создание изображений и визуальных концептов с выбором детализации."
+	case modelcatalog.MiniAppImageGPTImage25Sunburst:
+		return "Детализированные изображения для товаров, рекламы и дизайна."
+	case modelcatalog.MiniAppImageSeedream50Lite:
+		return "Генерация и редактирование с референсами, 2K–4K, до 15 изображений."
+	case modelcatalog.MiniAppImageSeedream50Pro:
+		return "Генерация и редактирование с референсами, 1K–2K."
+	case modelcatalog.MiniAppImageMidjourneyV7:
+		return "Генерация по тексту и референсам. Relax, Fast и Turbo; цена за весь результат Imagine."
 	case modelcatalog.MiniAppImageNanoBanana2:
 		return "Быстрая генерация и редактирование изображений с референсами."
 	case modelcatalog.MiniAppImageNanoBananaPro:
 		return "Премиальная генерация изображений с сильной детализацией и референсами."
 	case modelcatalog.MiniAppImageGPTImage2:
 		return "Качественная генерация и редактирование изображений с надежной композицией."
+	case modelcatalog.MiniAppImageQwenImage3:
+		return "Генерация и редактирование изображений с текстом, 1K и 2K."
+	case modelcatalog.MiniAppImageGrokImage15:
+		return "Генерация изображений по тексту и редактирование с одним референсом."
+	case modelcatalog.MiniAppImageGrokImage20:
+		return "Генерация изображений по тексту с выбором формата кадра."
 	case modelcatalog.MiniAppImageSeedream45:
 		return "Быстрая эстетичная генерация изображений для концептов и визуалов."
 	case modelcatalog.MiniAppImageSDXLTurbo:
@@ -309,12 +351,26 @@ func imageDescription(modelID string) string {
 
 func imageQualityOptions(modelID string) []string {
 	switch modelID {
+	case modelcatalog.MiniAppImageGPTImage25Flare, modelcatalog.MiniAppImageGPTImage25Sunburst:
+		return providermodels.GPTImage25Qualities()
+	case modelcatalog.MiniAppImageSeedream50Lite:
+		return []string{"2K", "3K", "4K"}
+	case modelcatalog.MiniAppImageSeedream50Pro:
+		return []string{"1.5K", "1K", "2K"}
+	case modelcatalog.MiniAppImageFlux2Pro:
+		return []string{"1MP", "2MP", "3MP", "4MP"}
+	case modelcatalog.MiniAppImageMidjourneyV7:
+		return []string{"relax", "fast", "turbo"}
+	case modelcatalog.MiniAppImageGrokImage15, modelcatalog.MiniAppImageGrokImage20:
+		return []string{pricingcatalog.ImageQualityStandard}
 	case modelcatalog.MiniAppImageNanoBanana2,
 		modelcatalog.MiniAppImageNanoBananaPro,
 		modelcatalog.MiniAppImageGPTImage2:
 		return []string{modelcatalog.ImageQuality1K, modelcatalog.ImageQuality2K, modelcatalog.ImageQuality4K}
 	case modelcatalog.MiniAppImageSeedream45:
 		return []string{modelcatalog.ImageQuality2K, modelcatalog.ImageQuality4K}
+	case modelcatalog.MiniAppImageQwenImage3:
+		return []string{modelcatalog.ImageQuality1K, modelcatalog.ImageQuality2K}
 	default:
 		return nil
 	}
@@ -330,6 +386,26 @@ func imageDefaultQuality(modelID string) string {
 
 func videoName(alias domain.VideoRouteAlias) string {
 	switch alias {
+	case domain.VideoRouteKling30Turbo:
+		return "Kling 3.0 Turbo"
+	case domain.VideoRouteMiniMaxH3:
+		return "MiniMax H3"
+	case domain.VideoRouteKlingV3:
+		return "Kling V3"
+	case domain.VideoRouteKling26Motion:
+		return "Kling 2.6 Motion Control"
+	case domain.VideoRouteVeo31Fast:
+		return "Veo 3.1 Fast"
+	case domain.VideoRouteVeo31Quality:
+		return "Veo 3.1 Quality"
+	case domain.VideoRouteVeo31Lite:
+		return "Veo 3.1 Lite"
+	case domain.VideoRouteOmni11Flash:
+		return "Gemini Omni 1.1 Flash"
+	case domain.VideoRouteOmni11FlashExt:
+		return "Gemini Omni 1.1 Flash EXT"
+	case domain.VideoRouteSeedance25:
+		return "Seedance 2.5"
 	case domain.VideoRouteHailuo23Fast:
 		return "Hailuo 2.3 Fast"
 	case domain.VideoRouteHailuo23Standard:
@@ -351,6 +427,26 @@ func videoName(alias domain.VideoRouteAlias) string {
 
 func videoDescription(alias domain.VideoRouteAlias) string {
 	switch alias {
+	case domain.VideoRouteKling30Turbo:
+		return "Видео по тексту или первому кадру на 3–15 секунд, 720p или 1080p."
+	case domain.VideoRouteMiniMaxH3:
+		return "Видео по тексту или первому кадру на 4–15 секунд, 768P или 2K."
+	case domain.VideoRouteKlingV3:
+		return "Видео на 3–15 секунд, до 4K. Можно задать первый и последний кадры и включить звук."
+	case domain.VideoRouteKling26Motion:
+		return "Перенос движений из видео на персонажа с фотографии. Загрузите фото и ролик на 3–30 секунд в Mini App."
+	case domain.VideoRouteVeo31Fast:
+		return "Быстрая генерация видео на 8 секунд, до 4K, по тексту или до трём изображениям."
+	case domain.VideoRouteVeo31Quality:
+		return "Видео на 8 секунд с высоким качеством, до 4K. Поддерживает первый и последний кадры."
+	case domain.VideoRouteVeo31Lite:
+		return "Доступная генерация видео по тексту на 8 секунд, до 4K."
+	case domain.VideoRouteOmni11Flash:
+		return "Видео со звуком по тексту и до 10 изображениям. Длительность автоматически: 3–10 секунд. Фиксированная цена за генерацию."
+	case domain.VideoRouteOmni11FlashExt:
+		return "Видео со звуком на 4, 6, 8 или 10 секунд. По тексту, одному или трём изображениям; до 4K."
+	case domain.VideoRouteSeedance25:
+		return "Видео со звуком по тексту и изображениям: до 30 секунд, 480p–1080p. Фото реальных людей требуют отдельной проверки у провайдера и пока не поддерживаются."
 	case domain.VideoRouteHailuo23Fast:
 		return "Быстрое image-to-video. Требуется стартовое изображение."
 	case domain.VideoRouteHailuo23Standard:
@@ -381,36 +477,43 @@ func itemFromImage(model ImageModel) Item {
 		SupportsReferenceImage: model.SupportsReferenceImage,
 		MaxReferenceImages:     model.MaxReferenceImages,
 		MaxOutputCount:         model.MaxOutputCount,
+		AllowedAspectRatios:    append([]string(nil), model.AllowedAspectRatios...),
 	}
 }
 
 func itemFromVideo(route VideoRoute) Item {
 	return Item{
-		Type:                   TypeVideo,
-		ID:                     route.Alias,
-		Alias:                  route.Alias,
-		Name:                   route.Name,
-		Description:            route.Description,
-		EstimateCredits:        route.EstimateCredits,
-		Enabled:                route.Enabled,
-		AllowedDurationsSec:    append([]int(nil), route.AllowedDurationsSec...),
-		AllowedResolutions:     append([]string(nil), route.AllowedResolutions...),
-		AllowedAspectRatios:    append([]string(nil), route.AllowedAspectRatios...),
-		DefaultDurationSec:     route.DefaultDurationSec,
-		DefaultResolution:      route.DefaultResolution,
-		DefaultAspectRatio:     route.DefaultAspectRatio,
-		RequiresStartImage:     route.RequiresStartImage,
-		SupportsReferenceImage: route.SupportsReferenceImage,
-		MaxReferenceImages:     route.MaxReferenceImages,
+		SupportsAudio:               route.SupportsAudio,
+		RequiresReferenceVideo:      route.RequiresReferenceVideo,
+		AutomaticDuration:           route.AutomaticDuration,
+		AllowedReferenceImageCounts: append([]int(nil), route.AllowedReferenceImageCounts...),
+		Type:                        TypeVideo,
+		ID:                          route.Alias,
+		Alias:                       route.Alias,
+		Name:                        route.Name,
+		Description:                 route.Description,
+		EstimateCredits:             route.EstimateCredits,
+		Enabled:                     route.Enabled,
+		AllowedDurationsSec:         append([]int(nil), route.AllowedDurationsSec...),
+		AllowedResolutions:          append([]string(nil), route.AllowedResolutions...),
+		AllowedAspectRatios:         append([]string(nil), route.AllowedAspectRatios...),
+		DefaultDurationSec:          route.DefaultDurationSec,
+		DefaultResolution:           route.DefaultResolution,
+		DefaultAspectRatio:          route.DefaultAspectRatio,
+		RequiresStartImage:          route.RequiresStartImage,
+		SupportsReferenceImage:      route.SupportsReferenceImage,
+		MaxReferenceImages:          route.MaxReferenceImages,
 	}
 }
 
 func copyImageModel(model ImageModel) ImageModel {
 	model.QualityOptions = append([]string(nil), model.QualityOptions...)
+	model.AllowedAspectRatios = append([]string(nil), model.AllowedAspectRatios...)
 	return model
 }
 
 func copyVideoRoute(route VideoRoute) VideoRoute {
+	route.AllowedReferenceImageCounts = append([]int(nil), route.AllowedReferenceImageCounts...)
 	route.AllowedDurationsSec = append([]int(nil), route.AllowedDurationsSec...)
 	route.AllowedResolutions = append([]string(nil), route.AllowedResolutions...)
 	route.AllowedAspectRatios = append([]string(nil), route.AllowedAspectRatios...)
@@ -418,6 +521,7 @@ func copyVideoRoute(route VideoRoute) VideoRoute {
 }
 
 func copyItem(item Item) Item {
+	item.AllowedReferenceImageCounts = append([]int(nil), item.AllowedReferenceImageCounts...)
 	item.QualityOptions = append([]string(nil), item.QualityOptions...)
 	item.AllowedDurationsSec = append([]int(nil), item.AllowedDurationsSec...)
 	item.AllowedResolutions = append([]string(nil), item.AllowedResolutions...)

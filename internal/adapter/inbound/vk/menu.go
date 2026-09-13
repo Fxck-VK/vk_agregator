@@ -1261,14 +1261,20 @@ func videoModelKeyboard() *vkdelivery.Keyboard {
 }
 
 func (h *Handler) videoModelKeyboard() *vkdelivery.Keyboard {
-	rows := make([][]vkdelivery.KeyboardButton, 0, len(h.cfg.VideoRoutes)+1)
+	rows := make([][]vkdelivery.KeyboardButton, 0, 6)
+	row := make([]vkdelivery.KeyboardButton, 0, 3)
 	for _, route := range h.cfg.VideoRoutes {
 		if !route.Enabled || strings.TrimSpace(route.Alias) == "" || strings.TrimSpace(route.Name) == "" {
 			continue
 		}
-		rows = append(rows, []vkdelivery.KeyboardButton{
-			videoRouteButton(route.Name, route.Alias, "primary"),
-		})
+		row = append(row, videoRouteButton(route.Name, route.Alias, "primary"))
+		if len(row) == 3 {
+			rows = append(rows, row)
+			row = make([]vkdelivery.KeyboardButton, 0, 3)
+		}
+	}
+	if len(row) > 0 {
+		rows = append(rows, row)
 	}
 	rows = append(rows, []vkdelivery.KeyboardButton{
 		button("⬅️ Назад", domain.CommandShowMenu, "secondary"),
@@ -1454,13 +1460,18 @@ func photoModeKeyboard() *vkdelivery.Keyboard {
 
 func (h *Handler) photoModeKeyboard() *vkdelivery.Keyboard {
 	rows := make([][]vkdelivery.KeyboardButton, 0, len(h.cfg.ImageModels)+1)
+	// VK inline keyboards allow at most six rows. Three models per row
+	// leave space for the back button as the catalog grows.
+	modelCount := 0
 	for _, model := range h.cfg.ImageModels {
 		if !model.Enabled || strings.TrimSpace(model.ID) == "" || strings.TrimSpace(model.Name) == "" {
 			continue
 		}
-		rows = append(rows, []vkdelivery.KeyboardButton{
-			photoModelButton(model.Name, model.ID, "primary"),
-		})
+		if modelCount%3 == 0 {
+			rows = append(rows, []vkdelivery.KeyboardButton{})
+		}
+		rows[len(rows)-1] = append(rows[len(rows)-1], photoModelButton(model.Name, model.ID, "primary"))
+		modelCount++
 	}
 	rows = append(rows, []vkdelivery.KeyboardButton{
 		button("⬅️ Назад", domain.CommandShowMenu, "secondary"),
@@ -1482,11 +1493,16 @@ type photoQualityOption struct {
 
 func photoQualityKeyboard(options []photoQualityOption) *vkdelivery.Keyboard {
 	rows := make([][]vkdelivery.KeyboardButton, 0, len(options)+1)
-	for _, option := range options {
+	columns := 1
+	if len(options) > 5 {
+		columns = 3
+	}
+	for index, option := range options {
 		label := fmt.Sprintf("%s · %d ⭐️", option.Label, option.Price)
-		rows = append(rows, []vkdelivery.KeyboardButton{
-			photoQualityButton(label, option.ModelID, option.Quality, "primary"),
-		})
+		if index%columns == 0 {
+			rows = append(rows, []vkdelivery.KeyboardButton{})
+		}
+		rows[len(rows)-1] = append(rows[len(rows)-1], photoQualityButton(label, option.ModelID, option.Quality, "primary"))
 	}
 	rows = append(rows, []vkdelivery.KeyboardButton{
 		button("⬅️ Назад к фото", domain.CommandMenuImage, "secondary"),

@@ -26,6 +26,7 @@ import (
 	"vk-ai-aggregator/internal/platform/uow"
 	"vk-ai-aggregator/internal/service/outboxrelay"
 	"vk-ai-aggregator/internal/service/pricingcatalog"
+	"vk-ai-aggregator/internal/service/videoreference"
 )
 
 // ErrBackendPriceRequired means a paid non-text job reached the orchestrator
@@ -315,6 +316,15 @@ func New(jobs domain.JobRepository, manager uow.Manager, billing Biller, maxCost
 // user cannot afford the operation the job is parked in awaiting_payment and
 // domain.ErrInsufficientCredits is returned alongside the job.
 func (o *Orchestrator) CreateJob(ctx context.Context, in CreateJobInput) (*domain.Job, error) {
+	if err := validateTurboH3Price(in); err != nil {
+		return nil, err
+	}
+	if err := validatePaidImagePrice(in); err != nil {
+		return nil, err
+	}
+	if err := validatePaidTextPrice(in); err != nil {
+		return nil, err
+	}
 	ctx, span := tracing.Start(ctx, "job.create",
 		attribute.String("operation", string(in.Operation)),
 		attribute.String("modality", string(in.Modality)),
@@ -346,7 +356,7 @@ func (o *Orchestrator) CreateJob(ctx context.Context, in CreateJobInput) (*domai
 		// column but are not executable legacy requests. Never expose such a row
 		// through the legacy/VK/Mini App create path on a cross-surface key
 		// collision.
-		if existing.Status == domain.JobStatusPrepared {
+		if existing.Status == domain.JobStatusPrepared || !createJobReplayMatches(existing, in) {
 			return nil, domain.ErrConflict
 		}
 		span.SetAttributes(attribute.String("job.id", existing.ID.String()), attribute.Bool("job.idempotent", true))
@@ -1152,6 +1162,10 @@ func equalUUIDs(left, right []uuid.UUID) bool {
 }
 
 func (o *Orchestrator) validateInputArtifacts(ctx context.Context, in CreateJobInput) error {
+	motionID, motionDuration, motionMax, err := motionInputPolicy(in)
+	if err != nil {
+		return err
+	}
 	if len(in.InputArtifactIDs) == 0 {
 		return nil
 	}
@@ -1175,7 +1189,12 @@ func (o *Orchestrator) validateInputArtifacts(ctx context.Context, in CreateJobI
 		if artifact.Kind != domain.ArtifactKindInput {
 			return fmt.Errorf("%w: kind %s", ErrInvalidInputArtifact, artifact.Kind)
 		}
-		if artifact.MediaType != domain.MediaTypeImage {
+		if id == motionID {
+			duration, err := videoreference.Validate(artifact, ownerAccountID(in.UserID, in.AccountID), motionMax)
+			if err != nil || duration != motionDuration {
+				return fmt.Errorf("%w: invalid motion reference", ErrInvalidInputArtifact)
+			}
+		} else if artifact.MediaType != domain.MediaTypeImage {
 			return fmt.Errorf("%w: media %s", ErrInvalidInputArtifact, artifact.MediaType)
 		}
 		if artifact.Status != domain.ArtifactStatusReady {

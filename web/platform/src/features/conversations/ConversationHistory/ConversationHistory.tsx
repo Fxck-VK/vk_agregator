@@ -471,6 +471,7 @@ function ConversationHistoryReady({
         )}
       </div>
       <ConversationComposer
+        selectedModel={modelSelection.catalog?.items.find((model) => model.id === modelSelection.selectedModelId)}
         contentVersion={contentVersion}
         disabled={pendingTurn !== null || activeRefreshID !== null}
         forceScrollRequest={forceScrollRequest}

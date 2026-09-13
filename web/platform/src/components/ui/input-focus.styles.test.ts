@@ -8,13 +8,11 @@ function readStylesheet(path: string) {
 }
 
 const globalStylesheet = readStylesheet("src/app/globals.css");
-const composerStylesheet = readStylesheet("src/components/chat/ChatComposer/ChatComposer.module.css");
+const inputSurfaceStylesheet = readStylesheet("src/components/ui/InputSurface/InputSurface.module.css");
 const modelSelectorStylesheet = readStylesheet(
   "src/features/models/WorkspaceModelSelector/WorkspaceModelSelector.module.css",
 );
-const catalogToolbarStylesheet = readStylesheet(
-  "src/features/models/ModelCatalogToolbar/ModelCatalogToolbar.module.css",
-);
+
 const filesToolbarStylesheet = readStylesheet(
   "src/features/files/FilesToolbar/FilesToolbar.module.css",
 );
@@ -42,9 +40,9 @@ describe("shared input focus styles", () => {
   });
 
   it.each([
-    { name: "composer", stylesheet: composerStylesheet, selector: ".surface:focus-within" },
+    { name: "composer", stylesheet: inputSurfaceStylesheet, selector: '.surface:has(:is(input, textarea, [contenteditable="true"]):focus)' },
     { name: "model selector", stylesheet: modelSelectorStylesheet, selector: ".searchRow:focus-within" },
-    { name: "model catalog", stylesheet: catalogToolbarStylesheet, selector: ".searchField:focus-within" },
+    { name: "model catalog", stylesheet: inputSurfaceStylesheet, selector: '.surface:has(:is(input, textarea, [contenteditable="true"]):focus)' },
     { name: "files toolbar", stylesheet: filesToolbarStylesheet, selector: ".search input:focus-visible" },
   ])("applies the shared purple focus treatment to $name", ({ stylesheet, selector }) => {
     const escapedSelector = selector.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");

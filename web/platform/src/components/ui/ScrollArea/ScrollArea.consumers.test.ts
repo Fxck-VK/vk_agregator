@@ -70,8 +70,15 @@ describe("ScrollArea consumer contract", () => {
   it.each(consumers)("uses the shared floating scrollbar in %s", (sourcePath) => {
     const source = readFileSync(resolve(process.cwd(), sourcePath), "utf8");
 
-    expect(source).toContain('from "@/components/ui/ScrollArea/ScrollArea"');
-    expect(source).toContain("<ScrollArea");
+    if (source.includes("<ScrollArea")) {
+      expect(source).toContain('from "@/components/ui/ScrollArea/ScrollArea"');
+    } else {
+      const wrapper = source.includes("<PopoverPanel") ? "PopoverPanel" : "ModeSwitchPanel";
+      expect(source).toContain(`<${wrapper}`);
+      expect(source).toContain(`from "@/components/ui/${wrapper}/${wrapper}"`);
+      const shared = readFileSync(resolve(process.cwd(), `src/components/ui/${wrapper}/${wrapper}.tsx`), "utf8");
+      expect(shared).toContain("<ScrollArea");
+    }
   });
 
   it.each(consumers)("removes local scrollbar visuals from %s", (_sourcePath, stylesheetPath) => {
