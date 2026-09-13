@@ -7,19 +7,40 @@ const stylesheet = readFileSync(
   resolve(process.cwd(), "src/components/layout/AppShell/AppShell.module.css"),
   "utf8",
 );
+const globalStylesheet = readFileSync(
+  resolve(process.cwd(), "src/app/globals.css"),
+  "utf8",
+);
 
 describe("AppShell floating panel gaps", () => {
-  it("uses a reduced edge gap without a contrasting scroller inset", () => {
+  it("uses the sidebar itself as the lower layer beneath the rounded workspace", () => {
+    expect(stylesheet).not.toMatch(/\.shell::before\s*\{/);
     expect(stylesheet).toMatch(
-      /\.shell\s*\{[^}]*--app-shell-edge-gap:\s*0\.125rem;/s,
+      /\.workspace\s*\{[^}]*position:\s*relative;[^}]*margin-inline-start:\s*var\(--sidebar-width\);/s,
     );
     expect(stylesheet).toMatch(
-      /\.sidebar\s*\{[^}]*padding:\s*var\(--app-shell-edge-gap\);/s,
+      /\.sidebar\s*\{[^}]*position:\s*absolute;[^}]*inline-size:\s*calc\(var\(--sidebar-width\) \+ var\(--radius-lg\)\);[^}]*padding:\s*0;[^}]*padding-inline-end:\s*var\(--radius-lg\);[^}]*background:\s*var\(--color-panel\);/s,
     );
     expect(stylesheet).toMatch(
-      /\.workspace\s*\{[^}]*block-size:\s*calc\(100dvh - var\(--app-shell-edge-gap\) - var\(--app-shell-edge-gap\)\);[^}]*margin-block:\s*var\(--app-shell-edge-gap\);[^}]*margin-inline-end:\s*var\(--app-shell-edge-gap\);/s,
+      /\.shell\[data-desktop-sidebar-collapsed="true"\] \.sidebar\s*\{[^}]*inline-size:\s*calc\(var\(--sidebar-collapsed-rail-width\) \+ var\(--radius-lg\)\);/s,
+    );
+  });
+
+  it("keeps the workspace flush vertically and uses the global gap only at its trailing edge", () => {
+    expect(globalStylesheet).toMatch(
+      /:root\s*\{[^}]*--app-workspace-edge-gap:\s*0\.125rem;/s,
+    );
+    expect(stylesheet).toMatch(
+      /\.shell\s*\{[^}]*--app-shell-edge-gap:\s*var\(--app-workspace-edge-gap\);/s,
+    );
+    expect(stylesheet).toMatch(
+      /\.workspace\s*\{[^}]*block-size:\s*100dvh;[^}]*margin-block:\s*0;[^}]*margin-inline-end:\s*var\(--app-shell-edge-gap\);[^}]*border-radius:\s*var\(--radius-lg\) 0 0 var\(--radius-lg\);/s,
     );
     expect(stylesheet).toMatch(/\.workspaceScroller\s*\{[^}]*background:\s*var\(--color-background\);/s);
     expect(stylesheet).not.toMatch(/\.workspaceScroller\s*\{[^}]*margin-inline-end:/s);
+    expect(stylesheet).toMatch(
+      /@media \(width < 48rem\)\s*\{[\s\S]*?\.workspace\s*\{[^}]*margin:\s*0;/s,
+    );
   });
+
 });

@@ -45,7 +45,7 @@ function mockNarrowViewport() {
 
 function mockWideViewport() {
   vi.stubGlobal("matchMedia", (query: string): MediaQueryList => ({
-    matches: true,
+    matches: query === "(min-width: 48rem)",
     media: query,
     onchange: null,
     addEventListener: vi.fn(),
@@ -114,6 +114,7 @@ async function expectPendingConversation(title: string) {
 describe("Sidebar", () => {
   afterEach(() => {
     cleanup();
+    vi.useRealTimers();
     vi.clearAllMocks();
     vi.unstubAllGlobals();
   });
@@ -844,20 +845,54 @@ describe("Sidebar", () => {
     expect(conversationsSlot).toHaveClass(sidebarStyles.conversationsSlot);
   });
 
-  it("calls the desktop sidebar toggle from its dedicated control", () => {
+  it("fades the current desktop sidebar content before starting the layout transition", () => {
+    vi.useFakeTimers();
     mockWideViewport();
     const onDesktopToggle = vi.fn();
 
     render(<Sidebar isDesktopCollapsed={false} onDesktopToggle={onDesktopToggle} />);
 
     const control = screen.getByRole("button", { name: ru.navigation.collapseSidebarLabel });
+    const collapseIcon = control.querySelector('img[src="/assets/icons/ui/faq-arrow.svg"]');
 
     expect(control).toHaveAttribute("aria-controls", "sidebar-panel");
     expect(control).toHaveAttribute("aria-expanded", "true");
+    expect(collapseIcon).toHaveAttribute("width", "14");
+    expect(collapseIcon).toHaveAttribute("height", "8");
 
     fireEvent.click(control);
 
+    expect(screen.getByTestId("sidebar-panel")).toHaveAttribute("data-desktop-transition", "out");
+    expect(onDesktopToggle).not.toHaveBeenCalled();
+
+    act(() => vi.advanceTimersByTime(100));
+
     expect(onDesktopToggle).toHaveBeenCalledTimes(1);
+    expect(screen.getByTestId("sidebar-panel")).toHaveAttribute("data-desktop-transition", "in");
+
+    act(() => vi.advanceTimersByTime(400));
+
+    expect(screen.getByTestId("sidebar-panel")).not.toHaveAttribute("data-desktop-transition");
+  });
+
+  it("toggles immediately when reduced motion is preferred", () => {
+    vi.stubGlobal("matchMedia", (query: string): MediaQueryList => ({
+      matches: query === "(min-width: 48rem)" || query === "(prefers-reduced-motion: reduce)",
+      media: query,
+      onchange: null,
+      addEventListener: vi.fn(),
+      removeEventListener: vi.fn(),
+      dispatchEvent: vi.fn(),
+      addListener: vi.fn(),
+      removeListener: vi.fn(),
+    }));
+    const onDesktopToggle = vi.fn();
+
+    render(<Sidebar isDesktopCollapsed={false} onDesktopToggle={onDesktopToggle} />);
+    fireEvent.click(screen.getByRole("button", { name: ru.navigation.collapseSidebarLabel }));
+
+    expect(onDesktopToggle).toHaveBeenCalledTimes(1);
+    expect(screen.getByTestId("sidebar-panel")).not.toHaveAttribute("data-desktop-transition");
   });
 
   it("does not render a no-op desktop toggle when no toggle handler is supplied", () => {
@@ -887,6 +922,7 @@ describe("Sidebar", () => {
   });
 
   it("keeps the collapsed desktop rail accessible with labelled icon controls", () => {
+    vi.useFakeTimers();
     mockWideViewport();
     const onDesktopToggle = vi.fn();
 
@@ -900,11 +936,14 @@ describe("Sidebar", () => {
     );
 
     const expandControl = screen.getByRole("button", { name: ru.navigation.expandSidebarLabel });
+    const expandIcon = expandControl.querySelector('img[src="/assets/icons/ui/faq-arrow.svg"]');
     const panel = screen.getByTestId("sidebar-panel");
     const chatsLink = screen.getByRole("link", { name: ru.navigation.chats });
     const conversationLink = screen.getByRole("link", { name: "Recent chat 1" });
 
     expect(expandControl).toHaveAttribute("aria-expanded", "false");
+    expect(expandIcon).toHaveAttribute("width", "14");
+    expect(expandIcon).toHaveAttribute("height", "8");
     expect(within(expandControl).getByTestId("neirohub-brand-chip")).toHaveAttribute(
       "src",
       expect.stringContaining("neirohub-chip.png"),
@@ -920,10 +959,16 @@ describe("Sidebar", () => {
 
     fireEvent.mouseOver(conversationLink);
     expect(screen.getByRole("tooltip")).toHaveTextContent("Recent chat 1");
+    expect(screen.getByRole("tooltip")).toHaveAttribute("data-ui", "tooltip-bubble");
     fireEvent.mouseOut(conversationLink);
     expect(screen.queryByRole("tooltip")).not.toBeInTheDocument();
 
     fireEvent.click(expandControl);
+
+    expect(onDesktopToggle).not.toHaveBeenCalled();
+
+    act(() => vi.advanceTimersByTime(100));
+
     expect(onDesktopToggle).toHaveBeenCalledTimes(1);
   });
 

@@ -1,13 +1,17 @@
 "use client";
 
 import type { ImageJob, ImageJobResult } from "@/lib/web-api/contracts";
+import { MasonryGrid } from "@/components/ui/MasonryGrid/MasonryGrid";
 
 import { FileCard, type FileResultState } from "../FileCard/FileCard";
 
-import styles from "./FilesGrid.module.css";
-
 type FilesGridProps = {
   jobs: ImageJob[];
+  onOpenPreview: (
+    job: ImageJob,
+    artifact: ImageJobResult["artifacts"][number],
+    trigger: HTMLButtonElement,
+  ) => void;
   onRetryJob: (job: ImageJob) => void;
   onRequestResult: (job: ImageJob) => void;
   retryingJobIDs: ReadonlySet<string>;
@@ -15,14 +19,15 @@ type FilesGridProps = {
   resultStatesByJobID: Record<string, FileResultState>;
 };
 
-export function FilesGrid({ jobs, onRequestResult, onRetryJob, resultsByJobID, resultStatesByJobID, retryingJobIDs }: Readonly<FilesGridProps>) {
+export function FilesGrid({ jobs, onOpenPreview, onRequestResult, onRetryJob, resultsByJobID, resultStatesByJobID, retryingJobIDs }: Readonly<FilesGridProps>) {
   return (
-    <ol className={styles.grid}>
+    <MasonryGrid>
       {jobs.map((job) => (
         <li key={job.id}>
           <FileCard
             isRetrying={retryingJobIDs.has(job.id)}
             job={job}
+            onOpenPreview={onOpenPreview}
             onRequestResult={onRequestResult}
             onRetryJob={onRetryJob}
             result={resultsByJobID[job.id] ?? null}
@@ -30,6 +35,6 @@ export function FilesGrid({ jobs, onRequestResult, onRetryJob, resultsByJobID, r
           />
         </li>
       ))}
-    </ol>
+    </MasonryGrid>
   );
 }

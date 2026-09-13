@@ -26,7 +26,11 @@ describe("ChatMediaMenu", () => {
     );
     fireEvent.click(trigger);
 
-    expect(screen.getByRole("menu", { name: labels.menu })).toBeVisible();
+    const menu = screen.getByRole("menu", { name: labels.menu });
+    expect(menu).toBeVisible();
+    expect(menu.parentElement).toBe(document.body);
+    expect(trigger).toHaveAttribute("aria-controls", menu.id);
+    expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
     expect(screen.getByRole("menuitem", { name: labels.uploadFile })).toBeVisible();
     expect(screen.getByRole("menuitem", { name: labels.chooseUploaded })).toHaveAttribute(
       "href",
@@ -85,9 +89,10 @@ describe("ChatMediaMenu", () => {
     fireEvent.click(screen.getByRole("button", { name: labels.trigger }));
     fireEvent.keyDown(document, { key: "Escape" });
     expect(screen.queryByRole("menu", { name: labels.menu })).not.toBeInTheDocument();
+    expect(screen.getByRole("button", { name: labels.trigger })).toHaveFocus();
 
     fireEvent.click(screen.getByRole("button", { name: labels.trigger }));
-    fireEvent.pointerDown(screen.getByRole("button", { name: "Снаружи" }));
+    fireEvent.mouseDown(screen.getByRole("button", { name: "Снаружи" }));
     expect(screen.queryByRole("menu", { name: labels.menu })).not.toBeInTheDocument();
   });
 });

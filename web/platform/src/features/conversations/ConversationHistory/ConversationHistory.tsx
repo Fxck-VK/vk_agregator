@@ -3,7 +3,7 @@
 import { useCallback, useEffect, useLayoutEffect, useRef, useState } from "react";
 
 import { AssistantTypingIndicator } from "@/components/chat/AssistantTypingIndicator/AssistantTypingIndicator";
-import { AssistantMessageContent } from "@/components/chat/AssistantMessageContent/AssistantMessageContent";
+import { ConversationAssistantMessage, ConversationImageGallery } from "@/features/conversations/ConversationImageGallery/ConversationImageGallery";
 import { Button } from "@/components/ui/Button/Button";
 import {
   conversationHistoryPageLimit,
@@ -11,6 +11,7 @@ import {
 } from "@/features/conversations/conversation-history-contract";
 import { ConversationComposer } from "@/features/conversations/ConversationComposer/ConversationComposer";
 import { ConversationMessageActions } from "@/features/conversations/ConversationMessageActions/ConversationMessageActions";
+import { ConversationModelSelector, useConversationModelSelection } from "@/features/conversations/ConversationModelSelector/ConversationModelSelector";
 import { ConversationTitleSync } from "@/features/conversations/ConversationTitleSync/ConversationTitleSync";
 import {
   clearPendingConversationPrompt,
@@ -48,6 +49,7 @@ type PollRequest = {
 
 type PendingTurn = PollRequest & {
   idempotencyKey: string | null;
+  modelId: string;
   prompt: string;
   status: "sending" | "accepted" | "failed";
 };
@@ -91,6 +93,7 @@ function ConversationHistoryReady({
   initialRefresh: boolean;
 }>) {
   const workspaceConversationList = useOptionalWorkspaceConversationList();
+  const modelSelection = useConversationModelSelection(history.conversationId);
   const replaceConversation = workspaceConversationList?.replaceConversation;
   const updateConversationTitle = workspaceConversationList?.updateConversationTitle;
   const initialRefreshBaselineSeq = history.messages.at(-1)?.seq ?? 0;
@@ -190,7 +193,7 @@ function ConversationHistoryReady({
           "Content-Type": "application/json",
           "X-Idempotency-Key": turn.idempotencyKey,
         },
-        body: JSON.stringify({ prompt: turn.prompt }),
+        body: JSON.stringify({ prompt: turn.prompt, ...(turn.modelId ? { model_id: turn.modelId } : {}) }),
       });
       if (response.status !== 200 && response.status !== 201) {
         throw new Error("Unable to complete the request.");
@@ -230,6 +233,7 @@ function ConversationHistoryReady({
     void submitPendingTurn({
       ...request,
       idempotencyKey: crypto.randomUUID(),
+      modelId: modelSelection.selectedModelId,
       prompt,
       status: "sending",
     });
@@ -269,6 +273,7 @@ function ConversationHistoryReady({
           id: activeRefreshID,
           baselineSeq: initialRefreshBaselineSeq,
           idempotencyKey: null,
+          modelId: "",
           prompt,
           status: "accepted",
         });
@@ -391,6 +396,7 @@ function ConversationHistoryReady({
 
   return (
     <section aria-label={ru.conversations.historyTitle} className={styles.content}>
+      <ConversationImageGallery conversationID={history.conversationId} hasMoreBefore={hasMoreBefore} messages={messages}>
       {titleSyncFallback !== null ? (
         <ConversationTitleSync
           conversationId={history.conversationId}
@@ -432,7 +438,7 @@ function ConversationHistoryReady({
                   {message.role === "user" ? (
                     <p>{message.text}</p>
                   ) : (
-                    <AssistantMessageContent markdown={message.text} />
+                    <ConversationAssistantMessage message={message} />
                   )}
                   {message.role === "user" ? (
                     <ConversationMessageActions kind="user" messageText={message.text} onRecreate={recreateMessage} />
@@ -470,10 +476,17 @@ function ConversationHistoryReady({
         forceScrollRequest={forceScrollRequest}
         initialDraft={composerDraftRequest?.text}
         isAwaitingResponse={isAwaitingResponse}
+        modelSelector={hasVisibleMessages ? (
+          <ConversationModelSelector
+            disabled={pendingTurn !== null || activeRefreshID !== null}
+            selection={modelSelection}
+          />
+        ) : undefined}
         key={`composer:${composerDraftRequest?.id ?? 0}`}
         onSubmit={beginMessageSubmission}
         scrollContainer={workspaceScrollRegion}
       />
+      </ConversationImageGallery>
     </section>
   );
 }

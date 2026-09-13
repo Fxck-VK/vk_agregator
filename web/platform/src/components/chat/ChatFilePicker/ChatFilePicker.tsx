@@ -7,9 +7,10 @@ import {
   useRef,
   useState,
   type ChangeEvent,
-  type MouseEvent,
 } from "react";
 
+import { ModalBackdrop } from "@/components/ui/ModalBackdrop/ModalBackdrop";
+import { ScrollArea } from "@/components/ui/ScrollArea/ScrollArea";
 import {
   createImageFilePreviewQueue,
   fetchImageFileResult,
@@ -59,30 +60,13 @@ export function ChatFilePicker({ initialSource, onClose, onSelect }: Readonly<Ch
   const [loadFailed, setLoadFailed] = useState(false);
   const inputRef = useRef<HTMLInputElement>(null);
   const closeButtonRef = useRef<HTMLButtonElement>(null);
-  const previousBodyOverflowRef = useRef("");
 
   const requestClose = () => {
-    document.body.style.overflow = previousBodyOverflowRef.current;
     onClose();
   };
 
   useEffect(() => {
-    previousBodyOverflowRef.current = document.body.style.overflow;
-    document.body.style.overflow = "hidden";
     closeButtonRef.current?.focus();
-
-    const closeOnEscape = (event: KeyboardEvent) => {
-      if (event.key === "Escape") {
-        requestClose();
-      }
-    };
-    document.addEventListener("keydown", closeOnEscape);
-    return () => {
-      document.removeEventListener("keydown", closeOnEscape);
-      document.body.style.overflow = previousBodyOverflowRef.current;
-    };
-    // The modal owns one close callback for its mounted lifetime.
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   useEffect(() => {
@@ -138,11 +122,6 @@ export function ChatFilePicker({ initialSource, onClose, onSelect }: Readonly<Ch
     }
     event.target.value = "";
   };
-  const closeFromBackdrop = (event: MouseEvent<HTMLDivElement>) => {
-    if (event.currentTarget === event.target) {
-      requestClose();
-    }
-  };
   const selectSource = (nextSource: ChatFileSource) => {
     if (nextSource !== "uploaded") {
       setIsLoading(jobs.length === 0);
@@ -154,14 +133,14 @@ export function ChatFilePicker({ initialSource, onClose, onSelect }: Readonly<Ch
   const generatedJobs = jobs.filter((job) => job.status === "succeeded");
   const showGenerated = source === "all" || source === "generated";
   const content = (
-    <div className={styles.backdrop} onMouseDown={closeFromBackdrop}>
-      <section aria-labelledby="chat-file-picker-title" aria-modal="true" className={styles.dialog} role="dialog">
+    <ModalBackdrop onClose={requestClose}>
+      {(requestAnimatedClose) => <section aria-labelledby="chat-file-picker-title" aria-modal="true" className={styles.dialog} role="dialog">
         <header className={styles.header}>
           <h2 id="chat-file-picker-title">{ru.conversations.mediaLibraryTitle}</h2>
           <button
             aria-label={ru.conversations.mediaLibraryClose}
             className={styles.close}
-            onClick={requestClose}
+            onClick={requestAnimatedClose}
             ref={closeButtonRef}
             type="button"
           >
@@ -171,7 +150,15 @@ export function ChatFilePicker({ initialSource, onClose, onSelect }: Readonly<Ch
           </button>
         </header>
 
-        <div aria-label={ru.conversations.mediaLibraryTabs} className={styles.tabs} role="tablist">
+        <ScrollArea
+          className={styles.tabsScroll}
+          orientation="horizontal"
+          viewportClassName={styles.tabs}
+          viewportProps={{
+            "aria-label": ru.conversations.mediaLibraryTabs,
+            role: "tablist",
+          }}
+        >
           {(["all", "generated", "uploaded"] as const).map((tab) => (
             <button
               aria-controls="chat-file-picker-panel"
@@ -189,9 +176,9 @@ export function ChatFilePicker({ initialSource, onClose, onSelect }: Readonly<Ch
                   : ru.conversations.mediaLibraryUploaded}
             </button>
           ))}
-        </div>
+        </ScrollArea>
 
-        <div className={styles.panel} id="chat-file-picker-panel" role="tabpanel">
+        <ScrollArea className={styles.panel} id="chat-file-picker-panel" role="tabpanel">
           {showGenerated && isLoading ? <p className={styles.state} role="status">{ru.files.loading}</p> : null}
           {showGenerated && loadFailed ? <p className={styles.state} role="alert">{ru.files.loadFailure}</p> : null}
           {showGenerated && !isLoading && !loadFailed && generatedJobs.length === 0 ? (
@@ -242,7 +229,7 @@ export function ChatFilePicker({ initialSource, onClose, onSelect }: Readonly<Ch
           {source === "uploaded" ? (
             <p className={styles.state}>{ru.conversations.mediaLibraryEmptyUploaded}</p>
           ) : null}
-        </div>
+        </ScrollArea>
 
         <footer className={styles.footer}>
           <button className={styles.upload} onClick={() => inputRef.current?.click()} type="button">
@@ -261,8 +248,8 @@ export function ChatFilePicker({ initialSource, onClose, onSelect }: Readonly<Ch
             type="file"
           />
         </footer>
-      </section>
-    </div>
+      </section>}
+    </ModalBackdrop>
   );
 
   return content;

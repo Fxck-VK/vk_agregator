@@ -1,5 +1,6 @@
 import type { ReactNode } from "react";
 
+import { ScrollArea } from "@/components/ui/ScrollArea/ScrollArea";
 import { ru } from "@/i18n/ru";
 
 import styles from "./AppShell.module.css";
@@ -27,10 +28,14 @@ export function AppShell({ sidebar, header, children, isDesktopSidebarCollapsed 
         {sidebar}
       </aside>
       <div className={styles.workspace}>
-        <main className={styles.workspaceScroller} data-testid="workspace-scroll-region" tabIndex={-1}>
-          {header}
+        {header}
+        <ScrollArea
+          className={styles.workspaceScroller}
+          viewportAs="main"
+          viewportProps={{ "data-testid": "workspace-scroll-region", tabIndex: -1 }}
+        >
           {children}
-        </main>
+        </ScrollArea>
       </div>
     </div>
   );

@@ -1,9 +1,8 @@
 .workspace {
   display: grid;
-  inline-size: min(100%, 78rem);
+  inline-size: 100%;
   gap: var(--space-5);
-  margin-inline: auto;
-  padding: clamp(var(--space-6), 5vw, 4rem) clamp(var(--space-4), 6vw, 5rem);
+  padding-block-end: clamp(var(--space-6), 5vw, 4rem);
 }
 
 .header {
@@ -13,8 +12,7 @@
 .header h1,
 .state,
 .failure p,
-.inlineFailure,
-.scopeNotice {
+.inlineFailure {
   margin: 0;
 }
 
@@ -25,17 +23,12 @@
   line-height: var(--line-height-display);
 }
 
-.scopeNotice,
 .state {
   color: var(--color-text-muted);
 }
 
 .panel {
   min-inline-size: 0;
-}
-
-.scopeNotice {
-  font-size: 0.875rem;
 }
 
 .state,

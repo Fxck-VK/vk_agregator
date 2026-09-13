@@ -63,21 +63,9 @@
   flex: 0 0 auto;
   inline-size: 1.125rem;
   block-size: 1.125rem;
-  border-radius: 0.25rem;
-  background-image: url("/assets/images/models/chip-silhouette.svg");
-  background-position: center;
-  background-repeat: no-repeat;
-  background-size: contain;
-}
-
-:global(:root[data-theme="light"]) .icon {
-  background-image: url("/assets/images/models/chip-silhouette-dark.svg");
-}
-
-@media (prefers-color-scheme: light) {
-  :global(:root[data-theme="system"]) .icon {
-    background-image: url("/assets/images/models/chip-silhouette-dark.svg");
-  }
+  background-color: currentColor;
+  -webkit-mask: var(--capability-icon) center / contain no-repeat;
+  mask: var(--capability-icon) center / contain no-repeat;
 }
 
 @media (width < 48rem) {

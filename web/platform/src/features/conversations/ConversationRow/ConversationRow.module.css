@@ -54,7 +54,6 @@
 
 .link:focus-visible,
 .actions button:focus-visible,
-.floatingPanel button:focus-visible,
 .inlineRenameInput:focus-visible,
 .deleteDialog button:focus-visible {
   outline: 0.125rem solid var(--color-focus);
@@ -63,8 +62,7 @@
 
 .actions { display: contents; }
 
-.actionToggle,
-.menu button {
+.actionToggle {
   border: 0;
   border-radius: var(--radius-sm);
   background: transparent;
@@ -81,6 +79,10 @@
   padding: var(--space-1);
 }
 
+.inlineRetryButton:hover {
+  background: var(--color-surface-raised);
+}
+
 .actionToggle svg {
   inline-size: 1.25rem;
   block-size: 1.25rem;
@@ -88,20 +90,11 @@
 
 .actionToggleRenaming { visibility: hidden; }
 
-.menu button:hover,
-.inlineRetryButton:hover { background: var(--color-surface-raised); }
-
 .floatingPanel {
   position: fixed;
   z-index: 140;
-  display: grid;
-  gap: var(--space-1);
   inline-size: min(15rem, calc(100vw - 1.5rem));
-  padding: var(--space-2);
-  border: 0.0625rem solid var(--color-border);
-  border-radius: var(--radius-lg);
-  background: color-mix(in srgb, var(--color-surface-raised) 98%, transparent);
-  box-shadow: var(--shadow-overlay);
+  max-block-size: calc(100dvh - 1.5rem);
 }
 
 .menu { display: grid; gap: var(--space-1); }
@@ -110,6 +103,7 @@
   min-block-size: 2.75rem;
   padding-inline: var(--space-2);
   text-align: start;
+  cursor: pointer;
 }
 
 .menu button {
@@ -130,7 +124,9 @@
   stroke-width: 1.7;
 }
 
-.menu .deleteMenuItem { color: var(--color-danger); }
+.menu button.deleteMenuItem:where(:not(:disabled):hover, :focus-visible) {
+  color: var(--color-danger);
+}
 
 .inlineRenameForm,
 .inlineRenameLabel {
@@ -174,17 +170,6 @@
 }
 .error { margin: 0; font-size: 0.8125rem; }
 .error { color: var(--color-text-muted); }
-
-.dialogBackdrop {
-  position: fixed;
-  z-index: 160;
-  inset: 0;
-  display: grid;
-  place-items: center;
-  padding: var(--space-4);
-  background: rgb(0 0 0 / 0.66);
-  backdrop-filter: blur(0.2rem);
-}
 
 .deleteDialog {
   inline-size: min(35rem, 100%);
@@ -231,7 +216,7 @@
   border: 0.0625rem solid var(--color-border);
   border-radius: var(--radius-pill);
   font: inherit;
-  font-weight: 700;
+  font-weight: var(--font-weight-semibold);
   cursor: pointer;
 }
 
@@ -240,7 +225,9 @@
   background: transparent;
 }
 
-.dialogCancel:hover { background: var(--color-surface); }
+.dialogCancel:hover {
+  background: var(--color-surface);
+}
 
 .dialogDelete {
   border-color: transparent !important;
@@ -274,8 +261,4 @@
 
 @media (width < 30rem) {
   .dialogActions button { flex: 1 1 8rem; text-align: center; }
-}
-
-@media (prefers-reduced-motion: reduce) {
-  .dialogBackdrop { backdrop-filter: none; }
 }

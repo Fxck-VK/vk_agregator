@@ -1,13 +1,13 @@
 .content {
-  inline-size: min(100%, 72rem);
+  inline-size: min(100%, var(--workspace-page-shell-width));
   margin-inline: auto;
-  padding: clamp(5rem, 10vw, 8rem) clamp(var(--space-4), 6vw, 5rem);
+  padding-block: clamp(5rem, 10vw, 8rem);
+  padding-inline: var(--workspace-page-inline-gutter);
 }
 
 .startScreen {
   display: grid;
   gap: var(--space-6);
-  max-inline-size: 58rem;
   min-block-size: min(100%, 48rem);
   align-content: center;
 }
@@ -17,7 +17,6 @@
 }
 
 .newChatScreen {
-  max-inline-size: 54rem;
   min-block-size: calc(100dvh - 4.5rem);
 }
 
@@ -25,6 +24,7 @@
   display: grid;
   gap: var(--space-6);
   inline-size: 100%;
+  max-inline-size: 58rem;
   margin-inline: auto;
 }
 
@@ -32,7 +32,7 @@
   margin: 0 0 var(--space-2);
   color: var(--color-accent);
   font-size: 0.875rem;
-  font-weight: 700;
+  font-weight: var(--font-weight-semibold);
   letter-spacing: 0.08em;
   text-transform: uppercase;
 }
@@ -89,13 +89,8 @@
   text-decoration: none;
 }
 
-.quickAction:hover {
-  border-color: var(--color-accent);
-  background: color-mix(in srgb, var(--color-surface) 90%, var(--color-accent));
-}
-
 .quickAction span {
-  font-weight: 700;
+  font-weight: var(--font-weight-semibold);
 }
 
 .quickAction small {
@@ -103,9 +98,20 @@
   line-height: 1.4;
 }
 
+.quickAction:hover {
+  border-color: var(--color-accent);
+  background: color-mix(in srgb, var(--color-surface) 90%, var(--color-accent));
+}
+
+@media (48rem <= width < 82rem) {
+  .content {
+    padding-inline-end: var(--space-4);
+  }
+}
+
 @media (width < 40rem) {
   .content {
-    padding: clamp(var(--space-6), 9vw, var(--space-8)) var(--space-4);
+    padding-block: clamp(var(--space-6), 9vw, var(--space-8));
   }
 
   .newChatScreen {

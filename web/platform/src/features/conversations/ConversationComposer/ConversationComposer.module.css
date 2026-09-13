@@ -5,7 +5,7 @@
   inline-size: 100%;
   padding: var(--space-4) clamp(var(--space-4), 6vw, 5rem) max(var(--space-4), env(safe-area-inset-bottom));
   border: 0;
-  background: var(--color-background);
+  background: transparent;
 }
 
 @media (width < 40rem) {

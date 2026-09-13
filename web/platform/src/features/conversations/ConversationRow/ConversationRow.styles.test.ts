@@ -6,13 +6,17 @@ const stylesheet = readFileSync(
   resolve(process.cwd(), "src/features/conversations/ConversationRow/ConversationRow.module.css"),
   "utf8",
 );
+const modalBackdropStylesheet = readFileSync(
+  resolve(process.cwd(), "src/components/ui/ModalBackdrop/ModalBackdrop.module.css"),
+  "utf8",
+);
 
 describe("ConversationRow styles", () => {
   it("keeps action panels and delete confirmation above the sidebar layout", () => {
     expect(stylesheet).toMatch(/\.floatingPanel\s*\{[^}]*position:\s*fixed;/s);
     expect(stylesheet).toMatch(/\.floatingPanel\s*\{[^}]*z-index:\s*140;/s);
-    expect(stylesheet).toMatch(/\.dialogBackdrop\s*\{[^}]*position:\s*fixed;/s);
-    expect(stylesheet).toMatch(/\.dialogBackdrop\s*\{[^}]*z-index:\s*160;/s);
+    expect(modalBackdropStylesheet).toMatch(/\.backdrop\s*\{[^}]*position:\s*fixed;/s);
+    expect(modalBackdropStylesheet).toMatch(/\.backdrop\s*\{[^}]*z-index:\s*160;/s);
     expect(stylesheet).toMatch(/\.menu\s*\{\s*display:\s*grid;/s);
   });
 

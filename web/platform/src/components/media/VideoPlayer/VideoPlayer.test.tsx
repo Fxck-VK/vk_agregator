@@ -1,4 +1,4 @@
-import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
+import { cleanup, createEvent, fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
 import { VideoPlayer } from "./VideoPlayer";
@@ -32,6 +32,7 @@ describe("VideoPlayer", () => {
     const posterOverlay = screen.getByTestId("video-poster-overlay");
 
     expect(playButton).toBeVisible();
+    expect(playButton).toBe(posterOverlay);
     expect(posterOverlay).toHaveStyle({
       "--video-player-poster": 'url("/assets/images/video/how-it-works-poster.webp")',
     });
@@ -67,6 +68,91 @@ describe("VideoPlayer", () => {
       expect(screen.getByRole("button", { name: "Воспроизвести: Как работает NeiroHub" })).toBeVisible();
     });
     expect(screen.getByLabelText("Как работает NeiroHub")).not.toHaveAttribute("controls");
+  });
+
+  it("shows the centered play control over the current frame while paused", async () => {
+    const play = vi.spyOn(HTMLMediaElement.prototype, "play").mockResolvedValue();
+    render(
+      <VideoPlayer
+        poster="/assets/images/video/how-it-works-poster.webp"
+        source={{ src: "https://cdn.neirohub.ru/video/how-it-works.mp4", type: "video/mp4" }}
+        title="Как работает NeiroHub"
+      />,
+    );
+
+    fireEvent.click(screen.getByRole("button", { name: "Воспроизвести: Как работает NeiroHub" }));
+    const video = screen.getByLabelText("Как работает NeiroHub");
+    fireEvent.play(video);
+    fireEvent.pause(video);
+
+    const resumeButton = screen.getByRole("button", { name: "Продолжить: Как работает NeiroHub" });
+    expect(resumeButton).toBeVisible();
+    expect(screen.getByTestId("video-pause-overlay")).toBeVisible();
+    expect(screen.queryByTestId("video-poster-overlay")).not.toBeInTheDocument();
+
+    fireEvent.click(resumeButton);
+    await waitFor(() => expect(play).toHaveBeenCalledTimes(2));
+    expect(screen.queryByRole("button", { name: "Продолжить: Как работает NeiroHub" })).toBeNull();
+  });
+
+  it("pauses with Space only while the video is playing", async () => {
+    vi.spyOn(HTMLMediaElement.prototype, "play").mockResolvedValue();
+    const pause = vi.spyOn(HTMLMediaElement.prototype, "pause").mockImplementation(() => undefined);
+    render(
+      <VideoPlayer
+        source={{ src: "https://cdn.neirohub.ru/video/how-it-works.mp4", type: "video/mp4" }}
+        title="Как работает NeiroHub"
+      />,
+    );
+
+    fireEvent.keyDown(window, { code: "Space", key: " " });
+    expect(pause).not.toHaveBeenCalled();
+
+    fireEvent.click(screen.getByRole("button", { name: "Воспроизвести: Как работает NeiroHub" }));
+    const video = screen.getByLabelText("Как работает NeiroHub");
+    Object.defineProperty(video, "paused", { configurable: true, value: false, writable: true });
+    fireEvent.play(video);
+    fireEvent.keyDown(window, { code: "Space", key: " " });
+    expect(pause).toHaveBeenCalledOnce();
+
+    fireEvent.pause(video);
+    Object.defineProperty(video, "paused", { configurable: true, value: true, writable: true });
+    const repeatedKeyDown = createEvent.keyDown(window, { code: "Space", key: " ", repeat: true });
+    fireEvent(window, repeatedKeyDown);
+    expect(repeatedKeyDown.defaultPrevented).toBe(true);
+
+    const keyUp = createEvent.keyUp(window, { code: "Space", key: " " });
+    fireEvent(window, keyUp);
+    expect(keyUp.defaultPrevented).toBe(true);
+    expect(pause).toHaveBeenCalledOnce();
+
+    const pausedKeyDown = createEvent.keyDown(window, { code: "Space", key: " " });
+    fireEvent(window, pausedKeyDown);
+    expect(pausedKeyDown.defaultPrevented).toBe(false);
+
+    await waitFor(() => {
+      expect(screen.getByRole("button", { name: "Продолжить: Как работает NeiroHub" })).toBeVisible();
+    });
+  });
+
+  it("uses the video's real playback state after seeking with native controls", () => {
+    vi.spyOn(HTMLMediaElement.prototype, "play").mockResolvedValue();
+    const pause = vi.spyOn(HTMLMediaElement.prototype, "pause").mockImplementation(() => undefined);
+    render(
+      <VideoPlayer
+        source={{ src: "https://cdn.neirohub.ru/video/how-it-works.mp4", type: "video/mp4" }}
+        title="Как работает NeiroHub"
+      />,
+    );
+
+    fireEvent.click(screen.getByRole("button", { name: "Воспроизвести: Как работает NeiroHub" }));
+    const video = screen.getByLabelText("Как работает NeiroHub");
+    fireEvent.play(video);
+    fireEvent.pause(video);
+    Object.defineProperty(video, "paused", { configurable: true, value: false });
+
+    fireEvent.keyDown(video, { code: "Space", key: " " });
+    expect(pause).toHaveBeenCalledOnce();
   });
 
   it("shows a neutral error state when playback fails", () => {

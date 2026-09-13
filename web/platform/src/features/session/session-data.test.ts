@@ -59,6 +59,7 @@ describe("loadWorkspaceSession", () => {
       },
       balance: 1000,
       conversations: [
+        { title: "Журавль на облаке" },
         { title: "Подготовить макет" },
         { title: "Идеи для проекта" },
         { title: "Тексты для сайта" },

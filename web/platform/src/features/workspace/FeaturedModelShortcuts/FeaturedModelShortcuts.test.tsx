@@ -1,4 +1,4 @@
-import { cleanup, render, screen, waitFor, within } from "@testing-library/react";
+import { cleanup, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
 vi.mock("@/features/models/image-model-catalog-cache", () => ({
@@ -60,9 +60,10 @@ afterEach(() => {
 });
 
 describe("FeaturedModelShortcuts", () => {
-  it("links the first four available models and uses the shared fallback artwork", async () => {
+  it("selects the first four available models without links and uses the shared fallback artwork", async () => {
     vi.mocked(loadImageModelCatalog).mockResolvedValue(catalogue);
-    render(<FeaturedModelShortcuts />);
+    const onSelect = vi.fn();
+    render(<FeaturedModelShortcuts onSelect={onSelect} selectedModelId={catalogue.items[0].id} />);
 
     const shortcuts = await screen.findAllByTestId("featured-model-shortcut");
 
@@ -74,29 +75,20 @@ describe("FeaturedModelShortcuts", () => {
       "Fourth Model",
     ]);
     expect(screen.queryByText("Fifth Model")).toBeNull();
-    expect(screen.getByRole("link", { name: "Открыть генератор: Nano / Banana" })).toHaveAttribute(
-      "href",
-      "/app/image?model=nano%20%2F%20banana",
-    );
+    const button = screen.getByRole("button", { name: "Выбрать модель: Nano / Banana" });
+    expect(button).not.toHaveAttribute("href");
+    expect(button).toHaveAttribute("aria-pressed", "true");
+    fireEvent.click(button);
+    expect(onSelect).toHaveBeenCalledWith(catalogue.items[0]);
+    fireEvent.click(screen.getByRole("button", { name: "Выбрать модель: NeiroHub Chat" }));
+    expect(onSelect).toHaveBeenLastCalledWith(null);
     expect(within(shortcuts[0]).getByTestId("model-icon-fallback")).toBeInTheDocument();
     expect(within(shortcuts[0]).queryByTestId("model-icon")).not.toBeInTheDocument();
   });
 
-  it("uses supplied artwork for a matching model id", async () => {
-    vi.mocked(loadImageModelCatalog).mockResolvedValue(catalogue);
-    render(<FeaturedModelShortcuts artworkByModelId={{ "nano / banana": "/assets/images/models/custom.png" }} />);
-
-    const shortcut = await screen.findByRole("link", { name: "Открыть генератор: Nano / Banana" });
-
-    expect(within(shortcut).getByTestId("model-icon")).toHaveAttribute(
-      "src",
-      expect.stringContaining("custom.png"),
-    );
-  });
-
   it("renders four inert placeholders while the catalogue is loading", () => {
     vi.mocked(loadImageModelCatalog).mockReturnValue(new Promise(() => {}));
-    render(<FeaturedModelShortcuts />);
+    render(<FeaturedModelShortcuts onSelect={vi.fn()} selectedModelId={null} />);
 
     expect(screen.getAllByTestId("featured-model-shortcut-skeleton")).toHaveLength(4);
     expect(screen.queryByTestId("featured-model-shortcut")).toBeNull();
@@ -107,7 +99,7 @@ describe("FeaturedModelShortcuts", () => {
     ["an empty catalogue", () => Promise.resolve({ items: [] })],
   ])("renders no fake model shortcuts for %s", async (_caseName, load) => {
     vi.mocked(loadImageModelCatalog).mockImplementationOnce(load);
-    render(<FeaturedModelShortcuts />);
+    render(<FeaturedModelShortcuts onSelect={vi.fn()} selectedModelId={null} />);
 
     await waitFor(() => expect(screen.queryAllByTestId("featured-model-shortcut-skeleton")).toHaveLength(0));
     expect(screen.queryByTestId("featured-model-shortcut")).toBeNull();

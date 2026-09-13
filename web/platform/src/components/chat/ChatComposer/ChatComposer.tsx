@@ -11,8 +11,9 @@ import {
   type ChatMediaAttachment,
 } from "@/components/chat/ChatFilePicker/ChatFilePicker";
 import { ChatMediaMenu, type ChatMediaMenuLabels } from "@/components/chat/ChatMediaMenu/ChatMediaMenu";
+import { ChatSubmitButton } from "@/components/chat/ChatSubmitButton/ChatSubmitButton";
 import { ChatTextInput } from "@/components/chat/ChatTextInput/ChatTextInput";
-
+import { InputSurface } from "@/components/ui/InputSurface/InputSurface";
 import styles from "./ChatComposer.module.css";
 
 export type ChatComposerVariant = "conversation" | "hero" | "newChat" | "workspace";
@@ -38,6 +39,7 @@ type ChatComposerProps = {
   uploadedMediaHref?: string;
   value: string;
   variant: ChatComposerVariant;
+  wrapLeadingControls?: boolean;
 };
 
 const expandedVariants = new Set<ChatComposerVariant>(["hero", "workspace"]);
@@ -63,7 +65,9 @@ export function ChatComposer({
   uploadedMediaHref,
   value,
   variant,
+  wrapLeadingControls = false,
 }: ChatComposerProps) {
+  const isLandingComposer = variant === "hero" || variant === "newChat";
   const isExpanded = expandedVariants.has(variant);
   const [attachment, setAttachment] = useState<ChatMediaAttachment | null>(null);
   const [pickerSource, setPickerSource] = useState<Exclude<ChatFileSource, "all"> | null>(null);
@@ -85,7 +89,7 @@ export function ChatComposer({
 
   return (
     <>
-      <div className={`${styles.surface} ${styles[variant]}`}>
+      <InputSurface className={`${styles.surface} ${styles[variant]}`} data-wrap-leading-controls={wrapLeadingControls || undefined}>
         <label className={styles.field}>
           <span>{label}</span>
           <ChatTextInput
@@ -94,8 +98,8 @@ export function ChatComposer({
             onChange={onChange}
             onSend={onSend}
             placeholder={placeholder}
-            rows={isExpanded ? 4 : 2}
-            size={isExpanded ? "expanded" : "compact"}
+            rows={isLandingComposer ? 1 : isExpanded ? 4 : 2}
+            size={isLandingComposer ? "compact" : isExpanded ? "expanded" : "compact"}
             value={value}
           />
         </label>
@@ -137,20 +141,14 @@ export function ChatComposer({
           </div>
           <div className={styles.trailingControls}>
             {additionalControls}
-            <button
-              aria-label={submitLabel}
-              className={styles.submit}
+            <ChatSubmitButton
               disabled={!canSubmit || disabled}
-              title={submitLabel}
+              label={submitLabel}
               type="submit"
-            >
-              <svg aria-hidden="true" focusable="false" viewBox="0 0 24 24">
-                <path d="M12 19V5m0 0-6 6m6-6 6 6" fill="none" stroke="currentColor" strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" />
-              </svg>
-            </button>
+            />
           </div>
         </div>
-      </div>
+      </InputSurface>
       {note === undefined ? null : <p className={styles.note}>{note}</p>}
       {pickerSource === null ? null : (
         <ChatFilePicker

@@ -16,6 +16,10 @@ Every agent should use this order before making decisions:
 Use `docs/INDEX.md` only as the documentation map when you need to choose the
 right task-specific document.
 
+For `web/platform` UI tasks, including text-only proposals, follow
+`web/platform/AGENTS.md` and start with `web/platform/docs/ui-index.md`.
+This route is task-scoped; the UI catalog and examples are not global default context.
+
 Use `docs/HANDOFF_CURRENT.md` only when the task is explicitly a current
 handoff. Completed handoffs belong under `docs/archive/handoffs/`.
 

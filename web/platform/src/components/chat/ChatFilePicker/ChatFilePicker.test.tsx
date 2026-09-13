@@ -100,8 +100,11 @@ describe("ChatFilePicker", () => {
     render(<ChatFilePicker initialSource="generated" onClose={onClose} onSelect={vi.fn()} />);
 
     expect(document.body.style.overflow).toBe("hidden");
+    const backdrop = screen.getByRole("dialog").closest("[data-state]")!;
     fireEvent.keyDown(document, { key: "Escape" });
 
+    expect(onClose).not.toHaveBeenCalled();
+    fireEvent.animationEnd(backdrop, { animationName: "modalBackdropOut" });
     expect(onClose).toHaveBeenCalledTimes(1);
     await waitFor(() => expect(document.body.style.overflow).toBe(""));
   });

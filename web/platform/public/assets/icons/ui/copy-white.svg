@@ -1,0 +1,8 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1254" height="1254" viewBox="44 72 1180 1180" fill="none">
+  <title>Копировать</title>
+  <g stroke="#FFFFFF" stroke-width="48" stroke-linecap="round" stroke-linejoin="round">
+    <path d="M332 872H324C294.18 872 270 847.82 270 818V280C270 242.44 300.44 212 338 212H732C758.51 212 780 233.49 780 260V288"/>
+    <path d="M818 363H471C438.97 363 413 388.97 413 421V1053C413 1085.59 439.41 1112 472 1112H938C971.14 1112 998 1085.14 998 1052V543L818 363Z"/>
+    <path d="M818 363V502C818 524.64 836.36 543 859 543H998"/>
+  </g>
+</svg>

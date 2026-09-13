@@ -242,6 +242,10 @@ func TestCreateWebConversationMessageRejectsInvalidJSONBeforeDependencies(t *tes
 	}{
 		{name: "empty prompt", body: `{"prompt":"   "}`},
 		{name: "unknown field", body: `{"prompt":"hello","provider":"attacker"}`},
+		{name: "unknown model", body: `{"prompt":"hello","model_id":"unknown"}`},
+		{name: "image model", body: `{"prompt":"hello","model_id":"nano-banana-2"}`},
+		{name: "private model code", body: `{"prompt":"hello","model_id":"deepseek-ai/DeepSeek-V4-Flash"}`},
+		{name: "display name", body: `{"prompt":"hello","model_id":"NeiroHub Chat"}`},
 		{name: "trailing object", body: `{"prompt":"hello"}{}`},
 		{name: "oversized", body: `{"prompt":"` + strings.Repeat("x", maxRequestBytes) + `"}`},
 	} {

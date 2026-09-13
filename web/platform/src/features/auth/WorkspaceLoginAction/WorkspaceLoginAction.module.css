@@ -9,7 +9,7 @@
   background: var(--color-accent);
   color: var(--color-text-on-accent);
   font: inherit;
-  font-weight: 700;
+  font-weight: var(--font-weight-semibold);
   cursor: pointer;
   text-decoration: none;
   transition: background-color var(--motion-fast), transform var(--motion-fast);

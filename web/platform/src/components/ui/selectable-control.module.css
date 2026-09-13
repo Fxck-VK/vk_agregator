@@ -1,0 +1,30 @@
+.control {
+  border: 0.0625rem solid transparent;
+  border-radius: var(--radius-sm);
+  background: transparent;
+  color: var(--color-text-muted);
+  transition: border-color var(--motion-fast), color var(--motion-fast);
+}
+
+.control:where(:not(:disabled):hover, :focus-visible, :has(> input[type="radio"]:focus-visible)) {
+  border-color: var(--color-accent);
+}
+
+.actionItems .control:where(:not(:disabled):hover, :focus-visible) {
+  color: var(--color-text);
+}
+
+.control:is([aria-checked="true"], [aria-pressed="true"], [aria-selected="true"], :has(> input[type="radio"]:checked)) {
+  border-color: var(--selectable-active-border-color, var(--color-accent));
+  color: var(--color-text);
+}
+
+.control:focus-visible {
+  outline: none;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .control {
+    transition: none;
+  }
+}

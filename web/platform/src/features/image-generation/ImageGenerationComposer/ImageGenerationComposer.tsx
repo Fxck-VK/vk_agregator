@@ -2,33 +2,23 @@
 
 import { ChatComposer } from "@/components/chat/ChatComposer/ChatComposer";
 import { CreditAmount } from "@/components/ui/CreditAmount/CreditAmount";
-import { ImageAspectRatioSelector } from "@/features/image-generation/ImageAspectRatioSelector/ImageAspectRatioSelector";
-import { ImageQualitySelector } from "@/features/image-generation/ImageQualitySelector/ImageQualitySelector";
-import { ImageOutputCountSelector } from "@/features/image-generation/ImageOutputCountSelector/ImageOutputCountSelector";
-import { ImageTemplatePicker } from "@/features/image-generation/ImageTemplatePicker/ImageTemplatePicker";
 import { ru } from "@/i18n/ru";
+
+import { ImageGenerationControls, type ImageGenerationControlsProps } from "./ImageGenerationControls";
 
 import styles from "./ImageGenerationComposer.module.css";
 
-type ImageGenerationComposerProps = {
-  aspectRatio: string;
+type ImageGenerationComposerProps = ImageGenerationControlsProps & {
+  access?: "authenticated" | "guest";
   canSubmit: boolean;
   errorMessage: string | null;
-  imageQuality: string;
-  isSubmitting: boolean;
-  maxOutputCount: number;
-  onAspectRatioChange: (ratio: string) => void;
-  onImageQualityChange: (quality: string) => void;
-  onOutputCountChange: (count: number) => void;
-  onPromptChange: (prompt: string) => void;
   onSubmit: () => void;
   price: number | null;
-  outputCount: number;
   prompt: string;
-  qualityOptions: string[];
 };
 
 export function ImageGenerationComposer({
+  access = "authenticated",
   aspectRatio,
   canSubmit,
   errorMessage,
@@ -55,31 +45,26 @@ export function ImageGenerationComposer({
     >
       <ChatComposer
         leadingControls={(
-          <>
-            <ImageTemplatePicker
-              disabled={isSubmitting}
-              onSelect={(template) => onPromptChange(template.prompt)}
-            />
-            <ImageAspectRatioSelector disabled={isSubmitting} onChange={onAspectRatioChange} value={aspectRatio} />
-            <ImageQualitySelector
-              disabled={isSubmitting}
-              label={ru.imageGeneration.resolutionLabel}
-              onChange={onImageQualityChange}
-              options={qualityOptions}
-              value={imageQuality}
-            />
-            <ImageOutputCountSelector
-              disabled={isSubmitting}
-              max={maxOutputCount}
-              onChange={onOutputCountChange}
-              value={outputCount}
-            />
-          </>
+          <ImageGenerationControls
+            aspectRatio={aspectRatio}
+            imageQuality={imageQuality}
+            isSubmitting={isSubmitting}
+            maxOutputCount={maxOutputCount}
+            onAspectRatioChange={onAspectRatioChange}
+            onImageQualityChange={onImageQualityChange}
+            onOutputCountChange={onOutputCountChange}
+            onPromptChange={onPromptChange}
+            outputCount={outputCount}
+            qualityOptions={qualityOptions}
+          />
         )}
         canSubmit={canSubmit}
         disabled={isSubmitting}
         label={ru.imageGeneration.promptLabel}
         mediaLabel="Загрузить медиа"
+        mediaLibraryEnabled={access === "authenticated"}
+        generatedMediaHref={access === "guest" ? "/login" : undefined}
+        uploadedMediaHref={access === "guest" ? "/login" : undefined}
         note={price === null
           ? ru.imageGeneration.priceUnavailable
           : <CreditAmount prefix={`${ru.imageGeneration.priceLabel}:`} value={price} />}
@@ -89,6 +74,7 @@ export function ImageGenerationComposer({
         submitLabel={isSubmitting ? ru.imageGeneration.preparing : ru.imageGeneration.generate}
         value={prompt}
         variant="hero"
+        wrapLeadingControls
       />
       {errorMessage === null ? null : (
         <p className={styles.error} role="alert">{errorMessage}</p>

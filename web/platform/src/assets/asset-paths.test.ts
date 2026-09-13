@@ -32,9 +32,30 @@ describe("assetPaths", () => {
     );
   });
 
+  it("exposes the shared send-message icon URL", () => {
+    expect(assetPaths.icons.ui.sendMessage).toBe(
+      "/assets/icons/ui/send-message-white.svg",
+    );
+  });
+
+  it("exposes the image-composer control icon URLs", () => {
+    expect(assetPaths.icons.ui.templateSelect).toBe(
+      "/assets/icons/ui/template-select-white.svg",
+    );
+    expect(assetPaths.icons.ui.resolution).toBe(
+      "/assets/icons/ui/resolution-white.svg",
+    );
+  });
+
   it("exposes a stable inspiration image URL without eager imports", () => {
     expect(assetPaths.images.inspiration.paperCraneCloud).toBe(
       "/assets/images/inspiration/paper-crane-cloud.png",
+    );
+  });
+
+  it("exposes the files empty-state illustration URL", () => {
+    expect(assetPaths.illustrations.filesEmptyFolder).toBe(
+      "/assets/illustrations/files-empty-folder.png",
     );
   });
 

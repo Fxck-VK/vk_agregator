@@ -8,19 +8,19 @@
 }
 
 .fallback {
-  background-image: var(--model-icon-fallback-dark);
+  background-image: url("/assets/images/models/chip-silhouette.svg");
   background-position: center;
   background-repeat: no-repeat;
   background-size: contain;
 }
 
 :global(:root[data-theme="light"]) .fallback {
-  background-image: var(--model-icon-fallback-light);
+  background-image: url("/assets/images/models/chip-silhouette-dark.svg");
 }
 
 @media (prefers-color-scheme: light) {
   :global(:root[data-theme="system"]) .fallback {
-    background-image: var(--model-icon-fallback-light);
+    background-image: url("/assets/images/models/chip-silhouette-dark.svg");
   }
 }
 

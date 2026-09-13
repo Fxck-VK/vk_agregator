@@ -1,13 +1,19 @@
 "use client";
 
 import Image from "next/image";
-import { useEffect, useMemo, useRef, useState, type MouseEvent } from "react";
+import { useEffect, useRef, useState } from "react";
 
+import { assetPaths } from "@/assets/asset-paths";
 import { InputControlChip } from "@/components/ui/InputControlChip/InputControlChip";
+import { MasonryGrid } from "@/components/ui/MasonryGrid/MasonryGrid";
+import { ModalBackdrop } from "@/components/ui/ModalBackdrop/ModalBackdrop";
+import { ModalCloseButton } from "@/components/ui/ModalCloseButton/ModalCloseButton";
+import { ScrollArea } from "@/components/ui/ScrollArea/ScrollArea";
 import {
-  inspirationExamples,
+  selectInspirationExamples,
   type InspirationExample,
 } from "@/features/inspiration/inspiration-examples";
+import { InspirationExampleMedia } from "@/features/inspiration/InspirationExampleMedia/InspirationExampleMedia";
 import { ru } from "@/i18n/ru";
 
 import styles from "./ImageTemplatePicker.module.css";
@@ -17,41 +23,27 @@ type ImageTemplatePickerProps = {
   onSelect: (template: InspirationExample) => void;
 };
 
+const imageTemplates = selectInspirationExamples(null, Number.POSITIVE_INFINITY, "image");
+
 function TemplateIcon() {
   return (
-    <svg aria-hidden="true" className={styles.triggerIcon} viewBox="0 0 24 24">
-      <path
-        d="M4.75 3.75v16.5M4.75 19.5h14.5M8 17l3.25-3.5 2.5 2.5 4.5-5"
-        fill="none"
-        stroke="currentColor"
-        strokeLinecap="round"
-        strokeLinejoin="round"
-        strokeWidth="1.7"
-      />
-      <path d="M8.25 3.75h11v7.5" fill="none" stroke="currentColor" strokeLinecap="round" strokeWidth="1.7" />
-    </svg>
+    <Image
+      alt=""
+      aria-hidden="true"
+      className={styles.triggerIcon}
+      height={24}
+      src={assetPaths.icons.ui.templateSelect}
+      unoptimized
+      width={24}
+    />
   );
 }
 
 export function ImageTemplatePicker({ disabled = false, onSelect }: Readonly<ImageTemplatePickerProps>) {
   const [isOpen, setIsOpen] = useState(false);
-  const [query, setQuery] = useState("");
   const triggerRef = useRef<HTMLButtonElement>(null);
-  const searchRef = useRef<HTMLInputElement>(null);
+  const closeButtonRef = useRef<HTMLButtonElement>(null);
   const wasOpenRef = useRef(false);
-
-  const filteredTemplates = useMemo(() => {
-    const normalizedQuery = query.trim().toLocaleLowerCase("ru-RU");
-    if (normalizedQuery === "") {
-      return inspirationExamples;
-    }
-
-    return inspirationExamples.filter((template) => (
-      `${template.title} ${template.modelName} ${template.prompt}`
-        .toLocaleLowerCase("ru-RU")
-        .includes(normalizedQuery)
-    ));
-  }, [query]);
 
   useEffect(() => {
     if (!isOpen) {
@@ -63,33 +55,12 @@ export function ImageTemplatePicker({ disabled = false, onSelect }: Readonly<Ima
     }
 
     wasOpenRef.current = true;
-    const previousBodyOverflow = document.body.style.overflow;
-    document.body.style.overflow = "hidden";
-    searchRef.current?.focus();
-
-    const closeOnEscape = (event: KeyboardEvent) => {
-      if (event.key === "Escape") {
-        setIsOpen(false);
-      }
-    };
-
-    document.addEventListener("keydown", closeOnEscape);
-    return () => {
-      document.removeEventListener("keydown", closeOnEscape);
-      document.body.style.overflow = previousBodyOverflow;
-    };
+    closeButtonRef.current?.focus();
   }, [isOpen]);
 
-  const closeFromBackdrop = (event: MouseEvent<HTMLDivElement>) => {
-    if (event.currentTarget === event.target) {
-      setIsOpen(false);
-    }
-  };
-
-  const chooseTemplate = (template: InspirationExample) => {
+  const chooseTemplate = (template: InspirationExample, requestClose: () => void) => {
     onSelect(template);
-    setIsOpen(false);
-    setQuery("");
+    requestClose();
   };
 
   return (
@@ -106,8 +77,8 @@ export function ImageTemplatePicker({ disabled = false, onSelect }: Readonly<Ima
       </InputControlChip>
 
       {isOpen ? (
-        <div className={styles.backdrop} onMouseDown={closeFromBackdrop}>
-          <section
+        <ModalBackdrop onClose={() => setIsOpen(false)}>
+          {(requestClose) => <section
             aria-labelledby="image-template-picker-title"
             aria-modal="true"
             className={styles.dialog}
@@ -115,53 +86,30 @@ export function ImageTemplatePicker({ disabled = false, onSelect }: Readonly<Ima
           >
             <header className={styles.header}>
               <h2 id="image-template-picker-title">{ru.imageGeneration.templatePicker.title}</h2>
-              <button
+              <ModalCloseButton
                 aria-label={ru.imageGeneration.templatePicker.close}
-                className={styles.closeButton}
-                onClick={() => setIsOpen(false)}
-                type="button"
-              >
-                <svg aria-hidden="true" viewBox="0 0 24 24">
-                  <path d="m6 6 12 12M18 6 6 18" fill="none" stroke="currentColor" strokeLinecap="round" strokeWidth="1.8" />
-                </svg>
-              </button>
+                className={styles.closeButtonPlacement}
+                onClick={requestClose}
+                ref={closeButtonRef}
+              />
             </header>
 
-            <label className={styles.search}>
-              <svg aria-hidden="true" viewBox="0 0 24 24">
-                <circle cx="11" cy="11" fill="none" r="6.5" stroke="currentColor" strokeWidth="1.6" />
-                <path d="m16 16 4 4" fill="none" stroke="currentColor" strokeLinecap="round" strokeWidth="1.6" />
-              </svg>
-              <span className={styles.visuallyHidden}>{ru.imageGeneration.templatePicker.searchLabel}</span>
-              <input
-                aria-label={ru.imageGeneration.templatePicker.searchLabel}
-                onChange={(event) => setQuery(event.target.value)}
-                placeholder={ru.imageGeneration.templatePicker.searchPlaceholder}
-                ref={searchRef}
-                type="search"
-                value={query}
-              />
-            </label>
-
-            <div className={styles.content}>
-              {filteredTemplates.length === 0 ? (
+            <ScrollArea className={styles.content} trackPlacement="outside">
+              {imageTemplates.length === 0 ? (
                 <p className={styles.empty}>{ru.imageGeneration.templatePicker.empty}</p>
               ) : (
-                <ol className={styles.grid}>
-                  {filteredTemplates.map((template) => (
+                <MasonryGrid>
+                  {imageTemplates.map((template) => (
                     <li key={template.id}>
                       <button
                         aria-label={`${ru.imageGeneration.templatePicker.select} ${template.title}`}
                         className={styles.card}
-                        onClick={() => chooseTemplate(template)}
+                        onClick={() => chooseTemplate(template, requestClose)}
                         type="button"
                       >
-                        <Image
-                          alt={template.imageAlt}
+                        <InspirationExampleMedia
                           className={styles.cardImage}
-                          fill
-                          sizes="(max-width: 32rem) 100vw, (max-width: 64rem) 50vw, 33vw"
-                          src={template.imagePath}
+                          example={template}
                         />
                         <span className={styles.cardShade} />
                         <span className={styles.cardMeta}>
@@ -172,11 +120,11 @@ export function ImageTemplatePicker({ disabled = false, onSelect }: Readonly<Ima
                       </button>
                     </li>
                   ))}
-                </ol>
+                </MasonryGrid>
               )}
-            </div>
-          </section>
-        </div>
+            </ScrollArea>
+          </section>}
+        </ModalBackdrop>
       ) : null}
     </>
   );

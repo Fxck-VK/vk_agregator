@@ -1,16 +1,9 @@
 "use client";
 
 import Image from "next/image";
-import { type CSSProperties, useState } from "react";
-
-import { assetPaths } from "@/assets/asset-paths";
+import { useState } from "react";
 
 import styles from "./ModelIcon.module.css";
-
-const defaultArtworkStyle = {
-  "--model-icon-fallback-dark": `url("${assetPaths.images.models.fallback.darkTheme}")`,
-  "--model-icon-fallback-light": `url("${assetPaths.images.models.fallback.lightTheme}")`,
-} as CSSProperties;
 
 type ModelIconProps = {
   className?: string;
@@ -23,7 +16,6 @@ function DefaultModelArtwork({ classNames }: Readonly<{ classNames: string }>) {
       aria-hidden="true"
       className={`${classNames} ${styles.fallback}`}
       data-testid="model-icon-fallback"
-      style={defaultArtworkStyle}
     />
   );
 }

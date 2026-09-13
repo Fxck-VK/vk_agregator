@@ -1,19 +1,43 @@
+.root {
+  --chat-text-input-scrollbar-gutter: 1.25rem;
+  --chat-text-input-action-gutter: 2.75rem;
+  --chat-text-input-expand-control-size: 2rem;
+  --chat-text-input-max-auto-rows: 9;
+
+  position: relative;
+  inline-size: 100%;
+}
+
+.scrollArea {
+  --chat-text-input-min-height: 3rem;
+  --scroll-area-vertical-track-inline-end: calc(var(--chat-text-input-expand-control-size) + 0.75rem);
+
+  inline-size: 100%;
+  block-size: var(--chat-text-input-height, var(--chat-text-input-min-height));
+  transition: block-size var(--chat-text-input-manual-transition-duration, 0ms) cubic-bezier(0.22, 1, 0.36, 1);
+}
+
+.root[data-manually-expanded="true"] .scrollArea {
+  block-size: clamp(18rem, 60vh, 40rem);
+}
+
+.root[data-manual-transitioning="true"] {
+  --chat-text-input-manual-transition-duration: 360ms;
+}
+
 .input {
   inline-size: 100%;
+  block-size: 100%;
   resize: none;
   border: 0.0625rem solid var(--color-border);
   border-radius: var(--radius-sm);
   padding: var(--space-3);
+  padding-inline-end: calc(var(--space-3) + var(--chat-text-input-scrollbar-gutter) + var(--chat-text-input-action-gutter));
   color: var(--color-text);
   font: inherit;
   font-size: var(--font-size-body);
   font-weight: var(--font-weight-regular);
   line-height: var(--line-height-body);
-}
-
-.input:focus-visible {
-  outline: 0.1875rem solid color-mix(in srgb, var(--color-accent) 45%, transparent);
-  outline-offset: 0.125rem;
 }
 
 .inset {
@@ -25,25 +49,117 @@
 }
 
 .compact {
-  block-size: 5rem;
+  --chat-text-input-min-height: 3rem;
 }
 
 .expanded {
-  block-size: 8rem;
+  --chat-text-input-min-height: 4.8rem;
+}
+
+.input:focus-visible {
+  outline: 0.1875rem solid color-mix(in srgb, var(--color-accent) 45%, transparent);
+  outline-offset: 0.125rem;
 }
 
 .composer {
-  block-size: 3.25rem;
+  block-size: 100%;
   padding: 0;
+  padding-inline-end: calc(var(--chat-text-input-scrollbar-gutter) + var(--chat-text-input-action-gutter));
   border: 0;
   border-radius: 0;
   background: transparent;
 }
 
-.composer.expanded {
-  block-size: 6rem;
-}
-
 .composer:focus-visible {
   outline: 0;
+}
+
+.scrollArea[data-appearance="composer"] {
+  --chat-text-input-min-height: 1.95rem;
+}
+
+.scrollArea[data-appearance="composer"].expanded {
+  --chat-text-input-min-height: 3.6rem;
+}
+
+.expandButton {
+  position: absolute;
+  z-index: 6;
+  inset-block-start: 0.5rem;
+  inset-inline-end: calc((var(--input-control-size, 2.5rem) - var(--chat-text-input-expand-control-size)) / 2);
+  display: inline-grid;
+  place-items: center;
+  inline-size: var(--chat-text-input-expand-control-size);
+  block-size: var(--chat-text-input-expand-control-size);
+  padding: 0;
+  border: 0.0625rem solid transparent;
+  border-radius: var(--radius-sm);
+  color: var(--color-text-muted);
+  background: transparent;
+  cursor: pointer;
+  transition:
+    border-color var(--motion-fast),
+    color var(--motion-fast),
+    transform var(--motion-fast);
+}
+
+.expandIcon {
+  inline-size: 1rem;
+  block-size: 1rem;
+  fill: none;
+  stroke: currentColor;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+  stroke-width: 1.75;
+}
+
+.expandIcon path {
+  transform-box: fill-box;
+  transform-origin: center;
+  transition:
+    opacity 220ms ease,
+    transform 360ms cubic-bezier(0.22, 1, 0.36, 1);
+}
+
+.expandGlyph {
+  opacity: 1;
+  transform: scale(1) rotate(0deg);
+}
+
+.collapseGlyph {
+  opacity: 0;
+  transform: scale(0.72) rotate(-18deg);
+}
+
+.expandButton[data-state="expanded"] .expandGlyph {
+  opacity: 0;
+  transform: scale(0.72) rotate(18deg);
+}
+
+.expandButton[data-state="expanded"] .collapseGlyph {
+  opacity: 1;
+  transform: scale(1) rotate(0deg);
+}
+
+.expandButton:hover,
+.expandButton:focus-visible {
+  border-color: var(--color-accent);
+  color: var(--color-text);
+  outline: 0;
+  transform: translateY(-0.0625rem);
+}
+
+.expandButton:disabled {
+  color: var(--color-text-muted);
+  cursor: not-allowed;
+  opacity: 0.45;
+  transform: none;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .scrollArea,
+  .expandButton,
+  .expandIcon path {
+    transition: none;
+  }
 }

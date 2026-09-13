@@ -32,11 +32,30 @@
   inset: 0;
   display: grid;
   place-items: center;
+  border: 0;
+  padding: 0;
   background:
     var(--video-player-poster) center / cover no-repeat,
     radial-gradient(circle at 72% 34%, rgb(36 150 255 / 0.14), transparent 28%),
     radial-gradient(circle at 24% 74%, rgb(116 87 255 / 0.12), transparent 32%),
     var(--color-surface);
+  color: inherit;
+  font: inherit;
+  cursor: pointer;
+}
+
+.pauseOverlay {
+  position: absolute;
+  z-index: 2;
+  inset: 0;
+  display: grid;
+  place-items: center;
+  background: rgb(0 0 0 / 0.12);
+  pointer-events: none;
+}
+
+.pauseOverlay .playButton {
+  pointer-events: auto;
 }
 
 .playButton {
@@ -62,12 +81,18 @@
   padding-inline-start: 0.15em;
 }
 
-.playButton:hover {
+.playButton:hover,
+.frame:hover .playButton {
   border-color: var(--color-accent);
   translate: 0 -0.1rem;
 }
 
-.playButton:focus-visible {
+.posterOverlay:focus-visible {
+  outline: none;
+}
+
+.playButton:focus-visible,
+.posterOverlay:focus-visible .playButton {
   outline: 0.125rem solid var(--color-focus);
   outline-offset: 0.1875rem;
 }
@@ -88,7 +113,7 @@
 
 .placeholder {
   font-size: clamp(0.95rem, 2vw, 1.125rem);
-  font-weight: 650;
+  font-weight: var(--font-weight-medium);
 }
 
 @media (width < 32rem) {

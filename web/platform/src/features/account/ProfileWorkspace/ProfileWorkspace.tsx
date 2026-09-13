@@ -2,6 +2,7 @@
 
 import { type KeyboardEvent, useRef, useState } from "react";
 
+import { ScrollArea } from "@/components/ui/ScrollArea/ScrollArea";
 import { ProfileBalanceCard } from "@/features/account/ProfileBalanceCard/ProfileBalanceCard";
 import { ProfileIdentityCard } from "@/features/account/ProfileIdentityCard/ProfileIdentityCard";
 import { ProfileLoginMethods } from "@/features/account/ProfileLoginMethods/ProfileLoginMethods";
@@ -73,7 +74,12 @@ export function ProfileWorkspace() {
         identityLabel={primaryIdentity.label}
       />
 
-      <div aria-label={ru.profile.tabsLabel} className={styles.tabs} role="tablist">
+      <ScrollArea
+        className={styles.tabsScroll}
+        orientation="horizontal"
+        viewportClassName={styles.tabs}
+        viewportProps={{ "aria-label": ru.profile.tabsLabel, role: "tablist" }}
+      >
         <button
           aria-controls={profilePanelId}
           aria-selected={activeTab === "overview"}
@@ -106,7 +112,7 @@ export function ProfileWorkspace() {
         >
           {ru.profile.referralTabLabel}
         </button>
-      </div>
+      </ScrollArea>
 
       <div
         aria-labelledby={activeTab === "overview" ? overviewTabId : referralTabId}

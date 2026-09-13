@@ -1,0 +1,78 @@
+.root {
+  z-index: 2;
+  inline-size: fit-content;
+  max-inline-size: 100%;
+}
+
+.viewport {
+  position: relative;
+  display: flex;
+  justify-content: safe center;
+  padding: 0.25rem;
+  border: var(--panel-surface-border);
+  border-radius: var(--radius-md);
+  background: var(--panel-surface-background);
+}
+
+.indicator {
+  position: absolute;
+  z-index: 0;
+  inset-block: 0.25rem;
+  inset-inline-start: 0;
+  inline-size: 0;
+  border: 0.0625rem solid var(--color-accent);
+  border-radius: var(--radius-sm);
+  background: transparent;
+  opacity: 0;
+  pointer-events: none;
+  transform: translate3d(0, 0, 0);
+  transform-origin: left center;
+  transition:
+    transform 520ms cubic-bezier(0.45, 0, 0.55, 1),
+    inline-size 520ms cubic-bezier(0.45, 0, 0.55, 1),
+    opacity var(--motion-fast);
+  will-change: transform, inline-size;
+}
+
+.indicator[data-ready="true"] {
+  opacity: 1;
+}
+
+.viewport button {
+  /* The moving indicator draws the selected button's border. */
+  --selectable-active-border-color: transparent;
+  position: relative;
+  z-index: 1;
+  display: inline-flex;
+  min-block-size: 2.75rem;
+  flex: 0 0 auto;
+  align-items: center;
+  justify-content: center;
+  gap: 0.45rem;
+  padding: 0.65rem 0.9rem;
+  font: inherit;
+  font-size: var(--font-size-ui);
+  font-weight: var(--font-weight-medium);
+  text-align: center;
+  white-space: nowrap;
+}
+
+.icon,
+.icon > * {
+  display: block;
+  inline-size: 1.25rem;
+  block-size: 1.25rem;
+  flex: 0 0 auto;
+}
+
+.root[data-icon-only="true"] .viewport button {
+  min-inline-size: 2.75rem;
+  flex: 1 0 0;
+  padding-inline: 0.65rem;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .indicator {
+    transition: none;
+  }
+}

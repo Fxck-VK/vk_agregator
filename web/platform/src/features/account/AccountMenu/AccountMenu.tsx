@@ -10,6 +10,9 @@ import { MoonIcon } from "@/components/icons/MoonIcon";
 import { ProfileIcon } from "@/components/icons/ProfileIcon";
 import { SunIcon } from "@/components/icons/SunIcon";
 import { SupportIcon } from "@/components/icons/SupportIcon";
+import { ModeSwitchPanel, type ModeSwitchPanelItem } from "@/components/ui/ModeSwitchPanel/ModeSwitchPanel";
+import { PopoverSurface } from "@/components/ui/PopoverPanel/PopoverPanel";
+import selectableStyles from "@/components/ui/selectable-control.module.css";
 import { AccountUpdatesPanel } from "@/features/account/AccountUpdatesPanel/AccountUpdatesPanel";
 import {
   applyThemePreference,
@@ -30,6 +33,12 @@ type AccountMenuProps = {
 const menuId = "account-menu";
 const updatesPanelId = "account-updates-panel";
 
+const themeOptions: readonly ModeSwitchPanelItem<ThemePreference>[] = [
+  { id: "system", label: ru.account.systemThemeLabel, icon: <MonitorIcon /> },
+  { id: "light", label: ru.account.lightThemeLabel, icon: <SunIcon /> },
+  { id: "dark", label: ru.account.darkThemeLabel, icon: <MoonIcon /> },
+];
+
 function AccountIcon({ children }: { children: ReactNode }) {
   return (
     <svg aria-hidden="true" viewBox="0 0 24 24">
@@ -44,7 +53,7 @@ export function AccountMenu({ identityLabel, isLogoutPending, logoutFailure, onL
   const [themePreference, setThemePreference] = useState<ThemePreference>(() =>
     typeof window === "undefined" ? "system" : readThemePreference(),
   );
-  const menuRef = useRef<HTMLElement>(null);
+  const menuRef = useRef<HTMLDivElement>(null);
   const rootRef = useRef<HTMLDivElement>(null);
   const triggerRef = useRef<HTMLButtonElement>(null);
 
@@ -94,7 +103,7 @@ export function AccountMenu({ identityLabel, isLogoutPending, logoutFailure, onL
   return (
     <div className={styles.root} ref={rootRef}>
       {isOpen ? (
-        <section
+        <PopoverSurface
           aria-label={ru.account.menuLabel}
           className={styles.menu}
           id={menuId}
@@ -109,13 +118,13 @@ export function AccountMenu({ identityLabel, isLogoutPending, logoutFailure, onL
           role="region"
           tabIndex={-1}
         >
-          <div className={styles.menuList}>
-            <Link className={styles.menuAction} href="/app/profile" onClick={closeMenu}>
+          <div className={`${selectableStyles.actionItems} ${styles.menuList}`}>
+            <Link className={`${selectableStyles.control} ${styles.menuAction}`} href="/app/profile" onClick={closeMenu}>
               <ProfileIcon />
               <span>{ru.account.profileLabel}</span>
             </Link>
             <a
-              className={styles.menuAction}
+              className={`${selectableStyles.control} ${styles.menuAction}`}
               href="https://vk.me/neirohub_help"
               onClick={closeMenu}
               rel="noopener noreferrer"
@@ -127,7 +136,7 @@ export function AccountMenu({ identityLabel, isLogoutPending, logoutFailure, onL
             <button
               aria-controls={updatesPanelId}
               aria-expanded={isUpdatesOpen}
-              className={styles.menuAction}
+              className={`${selectableStyles.control} ${styles.menuAction}`}
               onClick={() => setIsUpdatesOpen((open) => !open)}
               type="button"
             >
@@ -137,44 +146,18 @@ export function AccountMenu({ identityLabel, isLogoutPending, logoutFailure, onL
           </div>
 
           <div className={styles.themeSection}>
-            <div
-              aria-label={ru.account.themeLabel}
+            <ModeSwitchPanel
+              activeID={themePreference}
+              ariaLabel={ru.account.themeLabel}
               className={styles.themeSwitcher}
-              data-theme-preference={themePreference}
-              role="group"
-            >
-              <button
-                aria-label={ru.account.systemThemeLabel}
-                aria-pressed={themePreference === "system"}
-                className={`${styles.themeOption} ${themePreference === "system" ? styles.themeSelected : ""}`}
-                onClick={() => selectTheme("system")}
-                type="button"
-              >
-                <MonitorIcon />
-              </button>
-              <button
-                aria-label={ru.account.lightThemeLabel}
-                aria-pressed={themePreference === "light"}
-                className={`${styles.themeOption} ${themePreference === "light" ? styles.themeSelected : ""}`}
-                onClick={() => selectTheme("light")}
-                type="button"
-              >
-                <SunIcon />
-              </button>
-              <button
-                aria-label={ru.account.darkThemeLabel}
-                aria-pressed={themePreference === "dark"}
-                className={`${styles.themeOption} ${themePreference === "dark" ? styles.themeSelected : ""}`}
-                onClick={() => selectTheme("dark")}
-                type="button"
-              >
-                <MoonIcon />
-              </button>
-            </div>
+              iconOnly
+              items={themeOptions}
+              onChange={selectTheme}
+            />
           </div>
 
-          <div className={styles.logoutSection}>
-            <button className={styles.logoutAction} disabled={isLogoutPending} onClick={onLogout} type="button">
+          <div className={`${selectableStyles.actionItems} ${styles.logoutSection}`}>
+            <button className={`${selectableStyles.control} ${styles.logoutAction}`} disabled={isLogoutPending} onClick={onLogout} type="button">
               <LogoutIcon />
               <span>{isLogoutPending ? ru.account.logoutPending : ru.account.logoutLabel}</span>
             </button>
@@ -184,7 +167,7 @@ export function AccountMenu({ identityLabel, isLogoutPending, logoutFailure, onL
               </p>
             ) : null}
           </div>
-        </section>
+        </PopoverSurface>
       ) : null}
 
       {isOpen && isUpdatesOpen ? <AccountUpdatesPanel id={updatesPanelId} /> : null}

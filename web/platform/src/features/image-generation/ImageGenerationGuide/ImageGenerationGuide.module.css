@@ -4,16 +4,14 @@
   margin-block-start: clamp(3rem, 7vw, 5.5rem);
 }
 
+.tabsScroll {
+  max-inline-size: 100%;
+  border-block-end: 0.0625rem solid color-mix(in srgb, var(--color-border) 72%, transparent);
+}
+
 .tabs {
   display: flex;
   gap: var(--space-5);
-  overflow-x: auto;
-  border-block-end: 0.0625rem solid color-mix(in srgb, var(--color-border) 72%, transparent);
-  scrollbar-width: none;
-}
-
-.tabs::-webkit-scrollbar {
-  display: none;
 }
 
 .tab {
@@ -73,17 +71,17 @@
 .visual {
   position: relative;
   display: grid;
+  place-items: stretch;
   min-block-size: 14rem;
   overflow: hidden;
+}
+
+.resultVisual {
+  padding: var(--space-3);
   border: 0.0625rem solid color-mix(in srgb, var(--color-border) 88%, transparent);
   border-radius: var(--radius-lg);
   background:
     linear-gradient(145deg, color-mix(in srgb, var(--color-surface-raised) 92%, transparent), var(--color-surface));
-}
-
-.visual {
-  place-items: stretch;
-  padding: var(--space-3);
 }
 
 .promptPreview {
@@ -92,9 +90,6 @@
   justify-content: space-between;
   min-block-size: 100%;
   padding: var(--space-4);
-  border: 0.0625rem solid var(--color-border);
-  border-radius: calc(var(--radius-lg) - var(--space-2));
-  background: color-mix(in srgb, var(--color-background) 72%, transparent);
 }
 
 .promptPreview p {
@@ -211,12 +206,6 @@
   line-height: var(--line-height-body);
 }
 
-.examples {
-  display: grid;
-  grid-template-columns: repeat(3, minmax(0, 1fr));
-  gap: clamp(var(--space-4), 3vw, var(--space-6));
-}
-
 .examplesFooter {
   display: flex;
   justify-content: center;
@@ -226,27 +215,16 @@
 .viewMoreExamples {
   display: inline-flex;
   align-items: center;
-  gap: var(--space-2);
   min-block-size: 2.75rem;
-  border: 0.0625rem solid var(--color-border);
-  border-radius: 999rem;
   padding-inline: var(--space-5);
-  color: var(--color-text);
   font-size: var(--font-size-navigation);
   font-weight: var(--font-weight-semibold);
   line-height: var(--line-height-navigation);
   text-decoration: none;
-  transition: border-color var(--motion-fast), background var(--motion-fast);
-}
-
-.viewMoreExamples:hover {
-  border-color: color-mix(in srgb, var(--color-text) 35%, var(--color-border));
-  background: color-mix(in srgb, var(--color-surface-raised) 78%, transparent);
 }
 
 @media (max-width: 62rem) {
-  .steps,
-  .examples {
+  .steps {
     grid-template-columns: 1fr;
   }
 

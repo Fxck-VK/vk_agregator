@@ -18,7 +18,11 @@ describe("ImageQualitySelector", () => {
       />,
     );
 
-    fireEvent.click(screen.getByRole("button", { name: "Разрешение: 1K" }));
+    const trigger = screen.getByRole("button", { name: "Разрешение: 1K" });
+    expect(trigger.querySelector(
+      'img[src="/assets/icons/ui/resolution-white.svg"]',
+    )).toBeInTheDocument();
+    fireEvent.click(trigger);
 
     expect(screen.getByRole("dialog", { name: "Разрешение" })).toBeVisible();
     expect(screen.getByRole("radio", { name: "1K" })).toHaveAttribute("aria-checked", "true");

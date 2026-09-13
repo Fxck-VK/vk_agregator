@@ -10,8 +10,6 @@ const shellRule = stylesheet.match(/\.shell \{([\s\S]*?)\n\}/)?.[1];
 const sidebarRule = stylesheet.match(/\.sidebar \{([\s\S]*?)\n\}/)?.[1];
 const workspaceRule = stylesheet.match(/\.workspace \{([\s\S]*?)\n\}/)?.[1];
 const workspaceScrollerRule = stylesheet.match(/\.workspaceScroller \{([\s\S]*?)\n\}/)?.[1];
-const trackRule = stylesheet.match(/\.workspaceScroller::-webkit-scrollbar-track \{([\s\S]*?)\n\}/)?.[1];
-const thumbRule = stylesheet.match(/\.workspaceScroller::-webkit-scrollbar-thumb \{([\s\S]*?)\n\}/)?.[1];
 
 describe("AppShell workspace scrollbar", () => {
   it("locks document scrolling only while the app shell is mounted", () => {
@@ -23,47 +21,41 @@ describe("AppShell workspace scrollbar", () => {
     );
   });
 
-  it("keeps the native workspace scroller as the only scroll owner", () => {
+  it("anchors the app shell to the viewport when the root document is restored to a stale scroll position", () => {
+    expect(shellRule).toContain("position: fixed");
+    expect(shellRule).toContain("inset: 0");
+    expect(shellRule).toContain("inline-size: 100%");
+  });
+
+  it("keeps the shared workspace scroller as the only scroll owner", () => {
+    expect(component).toContain('from "@/components/ui/ScrollArea/ScrollArea"');
+    expect(component).toContain("<ScrollArea");
     expect(component).toContain("className={styles.workspaceScroller}");
+    expect(component).toContain('viewportAs="main"');
+    expect(workspaceRule).toContain("position: relative");
     expect(workspaceRule).toContain("overflow: hidden");
-    expect(workspaceScrollerRule).toContain("overflow-y: auto");
     expect(workspaceScrollerRule).toContain("background: var(--color-background)");
     expect(workspaceScrollerRule).not.toContain("margin-inline-end");
   });
 
-  it("uses a rounded floating thumb with transparent tracks and no native arrow buttons", () => {
-    expect(workspaceScrollerRule).toContain("overflow-y: auto");
-    expect(stylesheet).toMatch(
-      /@supports \(-moz-appearance: none\) \{[\s\S]*\.workspaceScroller \{[\s\S]*scrollbar-width: thin;[\s\S]*scrollbar-color: var\(--color-border\) transparent;/,
-    );
-    expect(stylesheet).toContain(".workspaceScroller::-webkit-scrollbar");
-    expect(stylesheet).toContain(".workspaceScroller::-webkit-scrollbar-track");
-    expect(stylesheet).toContain(".workspaceScroller::-webkit-scrollbar-button");
-    expect(stylesheet).toContain(".workspaceScroller::-webkit-scrollbar-thumb");
-    expect(stylesheet).toContain("inline-size: 0.75rem");
-    expect(stylesheet).toContain("display: none");
-    expect(trackRule).toContain("margin-block-start: calc(var(--space-8) + var(--space-3))");
-    expect(trackRule).toContain("background: transparent");
-    expect(thumbRule).toContain("border-radius: 999px");
-    expect(thumbRule).toContain("background-color: var(--color-border)");
-    expect(thumbRule).toContain("background-clip: content-box");
-    expect(stylesheet).not.toContain("var(--color-text-muted)");
+  it("does not duplicate scrollbar rendering in the shell stylesheet", () => {
+    expect(stylesheet).not.toContain("scrollbar-width:");
+    expect(stylesheet).not.toContain("scrollbar-color:");
+    expect(stylesheet).not.toContain("::-webkit-scrollbar");
   });
 });
 
 describe("AppShell workspace surface", () => {
-  it("uses the approved graphite canvas behind both floating panels", () => {
+  it("uses the panel surface for the sidebar layer and graphite behind the workspace", () => {
     expect(shellRule).toContain("--app-shell-canvas: var(--color-background)");
     expect(shellRule).toContain("background: var(--app-shell-canvas)");
-    expect(sidebarRule).toContain("background: var(--app-shell-canvas)");
+    expect(sidebarRule).toContain("background: var(--color-panel)");
   });
 
-  it("renders the desktop workspace as a floating panel matching the sidebar", () => {
-    expect(shellRule).toContain("--app-shell-edge-gap: 0.125rem");
-    expect(workspaceRule).toContain(
-      "block-size: calc(100dvh - var(--app-shell-edge-gap) - var(--app-shell-edge-gap))",
-    );
-    expect(workspaceRule).toContain("margin-block: var(--app-shell-edge-gap)");
+  it("renders the desktop workspace flush with the vertical viewport edges", () => {
+    expect(shellRule).toContain("--app-shell-edge-gap: var(--app-workspace-edge-gap)");
+    expect(workspaceRule).toContain("block-size: 100dvh");
+    expect(workspaceRule).toContain("margin-block: 0");
     expect(workspaceRule).toContain("margin-inline-end: var(--app-shell-edge-gap)");
     expect(workspaceRule).toContain("border-radius: var(--radius-lg)");
     expect(workspaceRule).toContain("background: var(--color-workspace)");

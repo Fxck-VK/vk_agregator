@@ -14,17 +14,22 @@ import {
   useState,
 } from "react";
 
+import { assetPaths } from "@/assets/asset-paths";
 import { EditIcon } from "@/components/icons/EditIcon";
 import { FileIcon } from "@/components/icons/FileIcon";
 import { GridIcon } from "@/components/icons/GridIcon";
 import { ImageIcon } from "@/components/icons/ImageIcon";
 import { Button } from "@/components/ui/Button/Button";
+import { TooltipBubble } from "@/components/ui/Tooltip/Tooltip";
 import { SidebarConversationsActivityProvider } from "@/features/conversations/SidebarConversations/SidebarConversationsActivity";
 import { ru } from "@/i18n/ru";
 
 import styles from "./Sidebar.module.css";
 
 const desktopViewportQuery = "(min-width: 48rem)";
+const reducedMotionQuery = "(prefers-reduced-motion: reduce)";
+const desktopSidebarContentFadeDurationMs = 100;
+const desktopSidebarMotionDurationMs = 400;
 const brandChipPath = "/assets/brand/marks/neirohub-chip.png";
 
 function BrandChip() {
@@ -66,9 +71,11 @@ export function Sidebar({ account, conversations, isDesktopCollapsed = false, on
   const pathname = usePathname();
   const [isNarrowViewport, setIsNarrowViewport] = useState<boolean | null>(null);
   const [isOpen, setIsOpen] = useState(false);
-  const [railTooltip, setRailTooltip] = useState<{ label: string; top: number } | null>(null);
+  const [desktopTransition, setDesktopTransition] = useState<"in" | "out" | null>(null);
+  const [railTooltip, setRailTooltip] = useState<{ label: string; top: number; left?: number } | null>(null);
   const [conversationPanelSession, setConversationPanelSession] = useState(0);
   const firstLinkRef = useRef<HTMLAnchorElement>(null);
+  const desktopTransitionTimerRef = useRef<number | null>(null);
   const hasObservedPathnameRef = useRef(false);
   const panelRef = useRef<HTMLDivElement>(null);
   const previousPathnameRef = useRef(pathname);
@@ -128,6 +135,14 @@ export function Sidebar({ account, conversations, isDesktopCollapsed = false, on
 
     visiblePanel.closePanel();
     return true;
+  }, []);
+
+  useEffect(() => {
+    return () => {
+      if (desktopTransitionTimerRef.current !== null) {
+        window.clearTimeout(desktopTransitionTimerRef.current);
+      }
+    };
   }, []);
 
   useEffect(() => {
@@ -251,20 +266,41 @@ export function Sidebar({ account, conversations, isDesktopCollapsed = false, on
 
   const toggleDesktopSidebar = () => {
     setRailTooltip(null);
-    onDesktopToggle?.();
+    if (!onDesktopToggle || desktopTransition !== null) return;
+
+    if (window.matchMedia(reducedMotionQuery).matches) {
+      onDesktopToggle();
+
+      return;
+    }
+
+    setDesktopTransition("out");
+    desktopTransitionTimerRef.current = window.setTimeout(() => {
+      onDesktopToggle();
+      setDesktopTransition("in");
+      desktopTransitionTimerRef.current = window.setTimeout(() => {
+        setDesktopTransition(null);
+        desktopTransitionTimerRef.current = null;
+      }, desktopSidebarMotionDurationMs);
+    }, desktopSidebarContentFadeDurationMs);
   };
 
   const getTooltipTarget = (target: EventTarget | null) =>
     target instanceof Element ? target.closest<HTMLElement>("[data-sidebar-tooltip]") : null;
 
   const showRailTooltip = (target: EventTarget | null) => {
-    if (!isDesktopCollapsed || isNarrowViewport !== false) return;
+    if (isNarrowViewport !== false) return;
     const tooltipTarget = getTooltipTarget(target);
     if (!tooltipTarget || !panelRef.current?.contains(tooltipTarget)) return;
+    if (!isDesktopCollapsed && !tooltipTarget.hasAttribute("data-sidebar-tooltip-always")) return;
     const label = tooltipTarget.dataset.sidebarTooltip?.trim();
     if (!label) return;
     const bounds = tooltipTarget.getBoundingClientRect();
-    setRailTooltip({ label, top: bounds.top + bounds.height / 2 });
+    setRailTooltip({
+      label,
+      top: bounds.top + bounds.height / 2,
+      left: isDesktopCollapsed ? undefined : bounds.right + 8,
+    });
   };
 
   const hideRailTooltip = (currentTarget: EventTarget | null, nextTarget: EventTarget | null) => {
@@ -321,6 +357,7 @@ export function Sidebar({ account, conversations, isDesktopCollapsed = false, on
         aria-modal={isNarrowViewport && isOpen ? true : undefined}
         className={styles.panel}
         data-desktop-collapsed={isDesktopCollapsed}
+        data-desktop-transition={desktopTransition ?? undefined}
         data-open={panelIsVisible}
         data-testid="sidebar-panel"
         id="sidebar-panel"
@@ -340,12 +377,19 @@ export function Sidebar({ account, conversations, isDesktopCollapsed = false, on
               aria-label={ru.navigation.expandSidebarLabel}
               className={`${styles.desktopTrigger} ${styles.collapsedBrandControl}`}
               data-sidebar-tooltip={ru.navigation.expandSidebarLabel}
+              disabled={desktopTransition !== null}
               onClick={toggleDesktopSidebar}
             >
               <BrandChip />
-              <svg aria-hidden="true" className={styles.expandMark} viewBox="0 0 24 24">
-                <path d="M4 5h16v14H4V5Zm5 0v14m4-10 4 3-4 3" fill="none" stroke="currentColor" strokeLinecap="round" strokeLinejoin="round" strokeWidth="1.8" />
-              </svg>
+              <Image
+                alt=""
+                aria-hidden="true"
+                className={`${styles.desktopChevron} ${styles.expandMark}`}
+                height={8}
+                src={assetPaths.icons.ui.faqArrow}
+                unoptimized
+                width={14}
+              />
             </Button>
           ) : (
             <Link
@@ -366,11 +410,20 @@ export function Sidebar({ account, conversations, isDesktopCollapsed = false, on
               aria-expanded="true"
               aria-label={ru.navigation.collapseSidebarLabel}
               className={styles.desktopTrigger}
+              data-sidebar-tooltip={ru.navigation.collapseSidebarTooltip}
+              data-sidebar-tooltip-always="true"
+              disabled={desktopTransition !== null}
               onClick={toggleDesktopSidebar}
             >
-              <svg aria-hidden="true" viewBox="0 0 24 24">
-                <path d="m14 6-6 6 6 6" fill="none" stroke="currentColor" strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" />
-              </svg>
+              <Image
+                alt=""
+                aria-hidden="true"
+                className={`${styles.desktopChevron} ${styles.collapseMark}`}
+                height={8}
+                src={assetPaths.icons.ui.faqArrow}
+                unoptimized
+                width={14}
+              />
             </Button>
           ) : null}
         </div>
@@ -414,9 +467,9 @@ export function Sidebar({ account, conversations, isDesktopCollapsed = false, on
         {account ? <div className={styles.accountSlot}>{account}</div> : null}
       </div>
       {railTooltip ? (
-        <div className={styles.railTooltip} role="tooltip" style={{ top: railTooltip.top }}>
+        <TooltipBubble className={styles.railTooltip} style={{ left: railTooltip.left, top: railTooltip.top }}>
           {railTooltip.label}
-        </div>
+        </TooltipBubble>
       ) : null}
     </>
   );

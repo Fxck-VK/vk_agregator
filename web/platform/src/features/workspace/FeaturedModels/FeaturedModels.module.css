@@ -18,15 +18,15 @@
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  min-block-size: 2.75rem;
+  min-block-size: 3.25rem;
   border: 0;
   border-radius: 999px;
-  padding: var(--space-2) var(--space-5);
+  padding: var(--space-3) var(--space-8);
   overflow: hidden;
   background: transparent;
   color: #f5f5f7;
   font: inherit;
-  font-weight: 700;
+  font-weight: var(--font-weight-semibold);
   text-shadow: 0 0.0625rem 0.2rem rgb(0 0 0 / 45%);
   text-decoration: none;
   cursor: pointer;
@@ -53,60 +53,19 @@
 .catalogActionLabel {
   position: relative;
   z-index: 1;
+  translate: 0 -0.1rem;
 }
 
-.card {
-  display: grid;
-  grid-template-rows: auto 1fr;
-  gap: var(--space-3);
-  min-block-size: 11.5rem;
-  border: 0.0625rem solid var(--color-border);
-  border-radius: 1.25rem;
-  padding: clamp(var(--space-5), 3vw, var(--space-6));
-  background: var(--color-surface);
-  color: var(--color-text);
-  text-decoration: none;
-  transition: border-color var(--motion-fast), background-color var(--motion-fast), translate var(--motion-fast);
+.revealedCatalogAction {
+  animation: featured-model-action-reveal 280ms 160ms cubic-bezier(0.22, 1, 0.36, 1) both;
 }
 
-.card:hover {
-  translate: 0 -0.15rem;
-  border-color: color-mix(in srgb, var(--color-text-muted) 60%, var(--color-border));
-  background: var(--color-surface-raised);
+.revealedCard {
+  animation: featured-model-card-reveal 420ms cubic-bezier(0.22, 1, 0.36, 1) both;
 }
 
-.cardTop {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: var(--space-3);
-}
-
-.price {
-  color: var(--color-text);
-  font-size: var(--font-size-ui);
-  font-weight: var(--font-weight-semibold);
-  line-height: var(--line-height-ui);
-  white-space: nowrap;
-}
-
-.copy {
-  display: grid;
-  align-content: start;
-  gap: var(--space-2);
-}
-
-.copy strong {
-  font-size: var(--font-size-ui);
-  font-weight: var(--font-weight-semibold);
-  line-height: var(--line-height-caption);
-}
-
-.copy > span {
-  color: var(--color-text-muted);
-  font-size: var(--font-size-body);
-  font-weight: var(--font-weight-regular);
-  line-height: var(--line-height-body);
+.revealedCard:nth-child(6) {
+  animation-delay: 90ms;
 }
 
 .empty {
@@ -119,12 +78,16 @@
   background: var(--color-surface);
 }
 
-.skeleton {
+.skeletonCard {
   position: relative;
+  min-block-size: 11.5rem;
+  border: 0.0625rem solid var(--color-border);
+  border-radius: 1.25rem;
   overflow: hidden;
+  background: var(--color-surface);
 }
 
-.skeleton::after {
+.skeletonCard::after {
   position: absolute;
   inset: 0;
   background: linear-gradient(
@@ -144,6 +107,30 @@
   }
 }
 
+@keyframes featured-model-card-reveal {
+  from {
+    opacity: 0;
+    transform: translateY(0.75rem) scale(0.985);
+  }
+
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+@keyframes featured-model-action-reveal {
+  from {
+    opacity: 0;
+    transform: translateY(0.35rem);
+  }
+
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+
 @media (max-width: 48rem) {
   .grid {
     grid-template-columns: 1fr;
@@ -151,7 +138,12 @@
 }
 
 @media (prefers-reduced-motion: reduce) {
-  .skeleton::after {
+  .skeletonCard::after {
+    animation: none;
+  }
+
+  .revealedCard,
+  .revealedCatalogAction {
     animation: none;
   }
 }

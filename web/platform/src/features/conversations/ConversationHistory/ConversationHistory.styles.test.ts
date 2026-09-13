@@ -26,6 +26,11 @@ describe("ConversationHistory message surfaces", () => {
     expect(userMessage).toContain("justify-self: end");
     expect(userMessage).toContain("inline-size: fit-content");
     expect(userMessage).toContain("max-inline-size:");
+    expect(userMessage).toContain("background: transparent");
+    expect(userMessage).not.toContain("background: var(--color-accent)");
+    expect(stylesheet).toMatch(
+      /\.userMessage,\s*\.empty\s*\{[^}]*border:\s*0\.0625rem solid var\(--color-border\);/s,
+    );
     expect(assistantMessage).toContain("border: 0");
     expect(assistantMessage).toContain("padding: 0");
     expect(assistantMessage).toContain("background: transparent");

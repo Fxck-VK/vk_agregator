@@ -1,0 +1,128 @@
+.root {
+  min-inline-size: 0;
+  min-block-size: 0;
+  overflow: hidden;
+}
+
+.frame {
+  position: relative;
+  inline-size: 100%;
+  block-size: 100%;
+  min-inline-size: 0;
+  min-block-size: 0;
+  max-block-size: inherit;
+  overflow: hidden;
+}
+
+.viewport {
+  inline-size: 100%;
+  block-size: 100%;
+  min-inline-size: 0;
+  min-block-size: 0;
+  max-block-size: inherit;
+  overflow: auto;
+  overscroll-behavior: contain;
+  scrollbar-width: none;
+}
+
+.viewport::-webkit-scrollbar {
+  display: none;
+  inline-size: 0;
+  block-size: 0;
+}
+
+.root[data-scrollable="false"] > .frame > .viewport {
+  overscroll-behavior: auto;
+}
+
+.track {
+  position: absolute;
+  z-index: 5;
+  border-radius: 999px;
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity var(--motion-fast);
+}
+
+.root[data-orientation="vertical"] > .frame > .track {
+  inset-block: 0.375rem;
+  inset-inline-end: var(--scroll-area-vertical-track-inline-end, 0.25rem);
+  inline-size: 0.375rem;
+}
+
+.root[data-orientation="horizontal"] > .frame > .track {
+  inset-inline: 0.375rem;
+  inset-block-end: 0.125rem;
+  block-size: 0.25rem;
+}
+
+.root[data-orientation="horizontal"][data-scrollable="true"] > .frame {
+  padding-block-end: 0.75rem;
+}
+
+.root[data-orientation="horizontal"][data-track-placement="outside"] {
+  overflow: visible;
+}
+
+.root[data-orientation="horizontal"][data-track-placement="outside"] > .frame {
+  overflow: visible;
+  padding-block-end: 0;
+}
+
+.root[data-orientation="horizontal"][data-track-placement="outside"] > .frame > .track {
+  inset-block-end: -0.625rem;
+}
+
+.root[data-orientation="vertical"][data-track-placement="outside"] > .frame {
+  overflow: visible;
+}
+
+.root[data-orientation="vertical"][data-track-placement="outside"] > .frame > .track {
+  inset-inline-end: -0.75rem;
+}
+
+.root[data-scrollable="false"] > .frame > .track {
+  display: none;
+}
+
+.root[data-scrollable="true"]:hover > .frame > .track,
+.root[data-scrollable="true"]:focus-within > .frame > .track,
+.root[data-scrolling="true"] > .frame > .track,
+.root[data-dragging="true"] > .frame > .track {
+  opacity: 1;
+  pointer-events: auto;
+}
+
+.thumb {
+  position: absolute;
+  border: 0.0625rem solid color-mix(in srgb, var(--color-text) 10%, transparent);
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--color-accent) 58%, var(--color-border));
+  box-shadow: 0 0.125rem 0.5rem rgb(0 0 0 / 24%);
+  cursor: grab;
+  touch-action: none;
+}
+
+.root[data-orientation="vertical"] > .frame > .track > .thumb {
+  inset-block-start: 0;
+  inset-inline: 0;
+  block-size: var(--scroll-area-thumb-size, 0px);
+  transform: translateY(var(--scroll-area-thumb-offset, 0px));
+}
+
+.root[data-orientation="horizontal"] > .frame > .track > .thumb {
+  inset-block: 0;
+  inset-inline-start: 0;
+  inline-size: var(--scroll-area-thumb-size, 0px);
+  transform: translateX(var(--scroll-area-thumb-offset, 0px));
+}
+
+.thumb:active {
+  cursor: grabbing;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .track {
+    transition: none;
+  }
+}

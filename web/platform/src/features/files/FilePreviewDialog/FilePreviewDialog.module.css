@@ -1,0 +1,124 @@
+.thumbnailPlaceholderMark {
+  display: grid;
+  inline-size: 100%;
+  block-size: 100%;
+  place-items: center;
+  font-size: 1.25rem;
+  line-height: 1;
+}
+
+.toolRail {
+  inline-size: 100%;
+  box-shadow: var(--panel-surface-shadow);
+}
+
+.modelHeader {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  min-block-size: 3.25rem;
+  color: var(--color-text);
+  font-size: var(--font-size-heading-sm);
+}
+
+.modelHeader strong {
+  font-weight: var(--font-weight-medium);
+}
+
+.modelIcon {
+  inline-size: 2.5rem;
+  block-size: 2.5rem;
+  flex: 0 0 auto;
+}
+
+.promptBody {
+  position: relative;
+  margin-block-start: var(--space-4);
+}
+
+.promptCollapsed,
+.promptExpanded {
+  margin: 0;
+  color: var(--color-text);
+  font-size: 1rem;
+  font-weight: var(--font-weight-medium);
+  line-height: 1.55;
+}
+
+.promptCollapsed {
+  display: -webkit-box;
+  overflow: hidden;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 5;
+}
+
+.promptToggle {
+  border: 0;
+  padding: 0;
+  background: transparent;
+  color: var(--color-accent);
+  font: inherit;
+  font-size: 0.875rem;
+  cursor: pointer;
+}
+
+.promptToggleCollapsed {
+  position: absolute;
+  inset-inline-end: 0;
+  inset-block-end: 0;
+  padding-inline-start: 2rem;
+  background: linear-gradient(90deg, transparent 0, var(--panel-surface-background) 2rem);
+}
+
+.promptToggleExpanded {
+  position: static;
+  margin-block-start: var(--space-2);
+}
+
+.promptToggle:hover {
+  color: var(--color-accent-strong);
+}
+
+.metadata {
+  display: grid;
+  gap: var(--space-3);
+  margin: var(--space-6) 0 0;
+  padding-block-start: var(--space-5);
+  border-block-start: 0.0625rem solid rgb(255 255 255 / 10%);
+}
+
+.metadata div {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: var(--space-4);
+}
+
+.metadata dt,
+.metadata dd {
+  margin: 0;
+  font-size: var(--font-size-ui);
+}
+
+.metadata dt {
+  color: var(--color-text-muted);
+}
+
+.metadata dd {
+  color: var(--color-text);
+  font-weight: var(--font-weight-medium);
+  text-align: end;
+}
+
+.feedback {
+  min-block-size: 1.25rem;
+  margin: 0;
+  color: var(--color-text-muted);
+  font-size: var(--font-size-ui);
+  text-align: center;
+}
+
+.promptToggle:focus-visible {
+  border-color: var(--input-focus-border-color);
+  outline: none;
+}

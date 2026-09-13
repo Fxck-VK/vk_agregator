@@ -2,7 +2,6 @@
 
 import {
   type JSX,
-  type MouseEvent,
   type RefObject,
   useEffect,
   useId,
@@ -10,6 +9,7 @@ import {
 } from "react";
 import { createPortal } from "react-dom";
 
+import { ModalBackdrop } from "@/components/ui/ModalBackdrop/ModalBackdrop";
 import { ru } from "@/i18n/ru";
 
 import styles from "./ConversationRow.module.css";
@@ -37,22 +37,9 @@ export function ConversationDeleteDialog({
   const dialogRef = useRef<HTMLElement>(null);
 
   useEffect(() => {
-    const previousOverflow = document.body.style.overflow;
-    document.body.style.overflow = "hidden";
-    return () => {
-      document.body.style.overflow = previousOverflow;
-    };
-  }, []);
-
-  useEffect(() => {
     if (isPending) return;
 
     const handleKeyDown = (event: KeyboardEvent) => {
-      if (event.key === "Escape") {
-        event.stopPropagation();
-        onCancel();
-        return;
-      }
       if (event.key !== "Tab") return;
 
       const focusable = Array.from(dialogRef.current?.querySelectorAll<HTMLButtonElement>("button:not(:disabled)") ?? []);
@@ -70,17 +57,13 @@ export function ConversationDeleteDialog({
 
     document.addEventListener("keydown", handleKeyDown);
     return () => document.removeEventListener("keydown", handleKeyDown);
-  }, [isPending, onCancel]);
+  }, [isPending]);
 
   if (typeof document === "undefined") return null;
 
-  const closeFromBackdrop = (event: MouseEvent<HTMLDivElement>) => {
-    if (!isPending && event.currentTarget === event.target) onCancel();
-  };
-
   return createPortal(
-    <div className={styles.dialogBackdrop} onMouseDown={closeFromBackdrop}>
-      <section
+    <ModalBackdrop closeOnBackdropClick={!isPending} closeOnEscape={!isPending} onClose={onCancel}>
+      {(requestClose) => <section
         aria-describedby={`${leadID} ${descriptionID}`}
         aria-labelledby={titleID}
         aria-modal="true"
@@ -93,7 +76,7 @@ export function ConversationDeleteDialog({
         <p className={styles.dialogDescription} id={descriptionID}>{ru.conversations.archiveConfirmation}</p>
         {errorMessage === undefined ? null : <p className={styles.dialogError} role="alert">{errorMessage}</p>}
         <div className={styles.dialogActions}>
-          <button className={styles.dialogCancel} disabled={isPending} onClick={onCancel} type="button">
+          <button className={styles.dialogCancel} disabled={isPending} onClick={requestClose} type="button">
             {ru.conversations.cancelLabel}
           </button>
           <button
@@ -107,8 +90,8 @@ export function ConversationDeleteDialog({
             {isPending ? ru.conversations.archivePending : ru.conversations.archiveConfirmLabel}
           </button>
         </div>
-      </section>
-    </div>,
+      </section>}
+    </ModalBackdrop>,
     document.body,
   );
 }

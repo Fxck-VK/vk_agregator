@@ -33,7 +33,10 @@ describe("ConversationComposer", () => {
     const submitButton = screen.getByRole("button", { name: ru.conversations.composerSubmit });
 
     expect(mediaButton).toBeEnabled();
-    expect(submitButton.querySelector("svg")).not.toBeNull();
+    expect(submitButton.querySelector("img")).toHaveAttribute(
+      "src",
+      "/assets/icons/ui/send-message-white.svg",
+    );
     expect(screen.getByText("Стоимость зависит от выбранной нейросети. Нейросеть может ошибаться")).toBeVisible();
   });
 

@@ -7,6 +7,7 @@ vi.mock("@/lib/web-api/browser", () => ({
 }));
 
 vi.mock("next/navigation", () => ({
+  useRouter: vi.fn(() => ({ push: vi.fn() })),
   useSearchParams: vi.fn(),
 }));
 

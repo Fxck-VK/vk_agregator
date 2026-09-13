@@ -1,38 +1,35 @@
 .cardLink {
   display: block;
   min-inline-size: 0;
+  block-size: 100%;
   color: inherit;
   text-decoration: none;
 }
 
 .card {
-  position: relative;
   display: grid;
-  grid-template-areas:
-    "spark heading price"
-    ". qualities qualities"
-    ". reference reference";
-  grid-template-columns: 3.5rem minmax(0, 1fr) auto;
-  grid-template-rows: auto auto 1fr;
+  grid-template-rows: auto 1fr;
+  gap: var(--space-3);
   min-inline-size: 0;
-  min-block-size: 17.75rem;
-  align-content: start;
-  gap: var(--space-5) var(--space-4);
-  padding: var(--space-6);
+  min-block-size: 11.5rem;
+  block-size: 100%;
   border: 0.0625rem solid var(--color-border);
-  border-radius: var(--radius-lg);
-  background: var(--color-surface);
+  border-radius: 1.25rem;
+  padding: clamp(var(--space-5), 3vw, var(--space-6));
+  background: var(--color-panel);
   cursor: pointer;
   transition:
     border-color var(--motion-fast),
-    background-color var(--motion-fast),
     transform var(--motion-fast);
 }
 
-.cardLink:hover .card {
-  border-color: var(--color-focus);
-  background: var(--color-surface-raised);
-  transform: translateY(-0.0625rem);
+.cardLink:not(.placeholder):hover .card {
+  border-color: var(--color-accent);
+  transform: translateY(-0.15rem);
+}
+
+.placeholder .card {
+  cursor: default;
 }
 
 .cardLink:focus-visible {
@@ -44,47 +41,14 @@
   outline-offset: 0.1875rem;
 }
 
-.modelIcon {
-  grid-area: spark;
-}
-
-.heading h3,
-.type,
-.price,
-.reference,
-.qualities {
-  margin: 0;
-}
-
-.heading {
-  grid-area: heading;
-  display: grid;
-  min-inline-size: 0;
-  align-content: start;
-  gap: var(--space-1);
-}
-
-.heading h3 {
-  overflow-wrap: anywhere;
-  font-size: var(--font-size-ui);
-  font-weight: var(--font-weight-semibold);
-  line-height: var(--line-height-caption);
-}
-
-.type,
-.reference {
-  color: var(--color-text-muted);
-}
-
-.type {
-  font-size: var(--font-size-ui);
-  font-weight: var(--font-weight-semibold);
-  line-height: var(--line-height-ui);
+.cardTop {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-3);
 }
 
 .price {
-  grid-area: price;
-  justify-self: end;
   color: var(--color-text);
   font-size: var(--font-size-ui);
   font-weight: var(--font-weight-semibold);
@@ -92,45 +56,67 @@
   white-space: nowrap;
 }
 
-.qualities {
-  grid-area: qualities;
-  display: flex;
-  flex-wrap: wrap;
+.copy {
+  display: grid;
+  align-content: start;
   gap: var(--space-2);
-  padding: 0;
-  list-style: none;
 }
 
-.qualities li {
-  border: 0.0625rem solid var(--color-border);
-  border-radius: var(--radius-lg);
-  padding: var(--space-1) var(--space-3);
-  color: var(--color-text-muted);
+.copy h3,
+.copy p {
+  margin: 0;
+}
+
+.copy h3 {
+  overflow-wrap: anywhere;
   font-size: var(--font-size-ui);
-  line-height: var(--line-height-ui);
+  font-weight: var(--font-weight-semibold);
+  line-height: var(--line-height-caption);
 }
 
-.reference {
-  grid-area: reference;
+.copy p {
+  color: var(--color-text-muted);
   font-size: var(--font-size-body);
+  font-weight: var(--font-weight-regular);
   line-height: var(--line-height-body);
   overflow-wrap: anywhere;
 }
 
-@media (max-width: 42rem) {
-  .card {
-    grid-template-areas:
-      "spark price"
-      "heading heading"
-      "qualities qualities"
-      "reference reference";
-    grid-template-columns: minmax(0, 1fr) auto;
-    grid-template-rows: auto auto auto 1fr;
-    min-block-size: 20rem;
-    padding: var(--space-5);
-  }
+.selectorCard {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  align-items: center;
+  gap: var(--space-3);
+  inline-size: 100%;
+  padding: var(--space-3);
+  text-align: start;
+}
 
-  .price {
-    align-self: center;
-  }
+.selectorIcon {
+  flex: 0 0 auto;
+  inline-size: 2rem;
+  block-size: 2rem;
+  border-radius: 50%;
+}
+
+.selectorCopy {
+  display: grid;
+  gap: var(--space-1);
+  min-inline-size: 0;
+}
+
+.selectorTitle {
+  overflow: hidden;
+  font-size: var(--font-size-ui);
+  font-weight: var(--font-weight-semibold);
+  line-height: var(--line-height-caption);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.selectorDescription {
+  color: var(--color-text-muted);
+  font-size: var(--font-size-ui);
+  font-weight: var(--font-weight-regular);
+  line-height: var(--line-height-ui);
 }

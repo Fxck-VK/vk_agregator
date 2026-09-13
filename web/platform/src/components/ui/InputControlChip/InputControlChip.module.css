@@ -2,20 +2,18 @@
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  gap: var(--space-2);
-  min-block-size: 3.25rem;
-  padding-inline: var(--space-4);
+  gap: var(--input-control-gap, var(--space-2));
+  min-block-size: var(--input-control-size, 3.25rem);
+  padding-inline: var(--input-control-padding-inline, var(--space-4));
   border: 0.0625rem solid var(--color-border);
   border-radius: 999px;
   color: var(--color-text);
   background: transparent;
   font: inherit;
-  font-weight: 700;
+  font-size: var(--input-control-font-size, inherit);
+  font-weight: var(--font-weight-medium);
   white-space: nowrap;
-  transition:
-    border-color var(--motion-fast),
-    background-color var(--motion-fast),
-    color var(--motion-fast);
+  transition: border-color var(--motion-fast);
 }
 
 .button {
@@ -23,9 +21,12 @@
 }
 
 .button:not(:disabled):hover,
+.group:hover {
+  border-color: var(--color-accent);
+}
+
 .button[aria-expanded="true"] {
-  border-color: color-mix(in srgb, var(--color-text-muted) 65%, var(--color-border));
-  background: color-mix(in srgb, var(--color-surface-raised) 78%, transparent);
+  border-color: var(--color-accent);
 }
 
 .button:focus-visible {
@@ -40,12 +41,12 @@
 }
 
 .group {
-  gap: 0.35rem;
-  padding-inline: 0.45rem;
+  gap: var(--input-control-group-gap, 0.35rem);
+  padding-inline: var(--input-control-group-padding-inline, 0.45rem);
 }
 
 @media (width < 40rem) {
   .chip {
-    min-block-size: 3rem;
+    min-block-size: var(--input-control-size, 3rem);
   }
 }

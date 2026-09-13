@@ -8,7 +8,7 @@
   padding: var(--space-2) var(--space-5);
   background: transparent;
   color: var(--color-text);
-  font-weight: 700;
+  font-weight: var(--font-weight-semibold);
   text-decoration: none;
   transition: border-color var(--motion-fast), background-color var(--motion-fast), translate var(--motion-fast);
 }

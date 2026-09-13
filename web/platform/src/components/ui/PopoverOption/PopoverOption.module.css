@@ -1,0 +1,9 @@
+.option {
+  font: inherit;
+  font-weight: var(--font-weight-semibold);
+  cursor: pointer;
+}
+
+.option:disabled {
+  cursor: not-allowed;
+}

@@ -1,3 +1,4 @@
+import { ScrollArea } from "@/components/ui/ScrollArea/ScrollArea";
 import { ru } from "@/i18n/ru";
 
 import styles from "./AccountUpdatesPanel.module.css";
@@ -11,7 +12,7 @@ export function AccountUpdatesPanel({ id }: AccountUpdatesPanelProps) {
     <section aria-label={ru.account.updatesPanelLabel} className={styles.panel} id={id} role="region">
       <h2 className={styles.heading}>{ru.account.updatesPanelTitle}</h2>
 
-      <div className={styles.feed}>
+      <ScrollArea className={styles.feed}>
         <article className={styles.updateCard}>
           <h3 className={styles.updateTitle}>{ru.account.updatesIdeaTitle}</h3>
           <p className={styles.updateDescription}>{ru.account.updatesIdeaDescription}</p>
@@ -19,7 +20,7 @@ export function AccountUpdatesPanel({ id }: AccountUpdatesPanelProps) {
             {ru.account.updatesIdeaAction}
           </button>
         </article>
-      </div>
+      </ScrollArea>
     </section>
   );
 }

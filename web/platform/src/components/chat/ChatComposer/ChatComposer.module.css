@@ -1,16 +1,24 @@
 .surface {
+  --input-control-chevron-size: 0.75rem;
+  --input-control-font-size: 0.9375rem;
+  --input-control-gap: 0.375rem;
+  --input-control-group-gap: 0.25rem;
+  --input-control-group-padding-inline: 0.35rem;
+  --input-control-icon-size: 1.125rem;
+  --input-control-padding-inline: var(--space-3);
+  --input-control-row-gap: var(--space-2);
+  --input-control-size: 2.5rem;
+  --input-control-step-font-size: 1.25rem;
+  --input-control-step-size: 1.75rem;
+  --input-control-value-width: 2.75rem;
   display: grid;
+  grid-template-areas:
+    "field"
+    "attachment"
+    "controls";
   gap: var(--space-2);
   inline-size: 100%;
   padding: var(--space-3) var(--space-4);
-  border: 0.0625rem solid var(--color-border);
-  border-radius: 1.5rem;
-  background: var(--color-surface);
-}
-
-.surface:focus-within {
-  border-color: color-mix(in srgb, var(--color-accent) 70%, var(--color-border));
-  box-shadow: 0 0 0 0.1875rem color-mix(in srgb, var(--color-accent) 20%, transparent);
 }
 
 .conversation,
@@ -20,14 +28,15 @@
 }
 
 .hero {
-  padding: var(--space-4);
+  grid-template-areas: "field" "controls" "attachment";
+  padding: var(--space-4) var(--space-4) var(--space-3);
   border-color: color-mix(in srgb, var(--color-border) 75%, var(--color-text-muted));
-  background: var(--color-surface);
   box-shadow: 0 1.75rem 5rem rgb(0 0 0 / 0.18);
 }
 
-.hero textarea {
-  block-size: 3.75rem;
+.newChat {
+  grid-template-areas: "field" "controls" "attachment";
+  padding: var(--space-4) var(--space-4) var(--space-3);
 }
 
 .workspace {
@@ -36,6 +45,8 @@
 }
 
 .field {
+  grid-area: field;
+  min-inline-size: 0;
   display: block;
 }
 
@@ -50,6 +61,7 @@
 }
 
 .controls {
+  grid-area: controls;
   display: flex;
   align-items: center;
   justify-content: space-between;
@@ -60,7 +72,7 @@
 .trailingControls {
   display: flex;
   align-items: center;
-  gap: var(--space-3);
+  gap: var(--input-control-row-gap, var(--space-3));
 }
 
 .leadingControls {
@@ -74,6 +86,7 @@
 }
 
 .attachment {
+  grid-area: attachment;
   display: grid;
   grid-template-columns: 2.5rem minmax(0, 1fr) 2rem;
   align-items: center;
@@ -123,40 +136,8 @@
   background: var(--color-surface);
 }
 
-.submit {
-  font: inherit;
-}
-
-.submit {
-  display: inline-grid;
-  place-items: center;
-  inline-size: 3.25rem;
-  block-size: 3.25rem;
-  padding: 0;
-  border: 0.0625rem solid var(--color-accent);
-  border-radius: 50%;
-  color: var(--color-text-on-accent);
-  background: var(--color-accent);
-}
-
-.submit:disabled {
-  border-color: var(--color-border);
-  color: var(--color-text-muted);
-  background: var(--color-surface-raised);
-}
-
-.submit:not(:disabled):hover {
-  filter: brightness(1.08);
-}
-
-.submit:focus-visible {
-  outline: 0.1875rem solid color-mix(in srgb, var(--color-accent) 45%, transparent);
-  outline-offset: 0.125rem;
-}
-
-.submit svg {
-  inline-size: 1.5rem;
-  block-size: 1.5rem;
+.surface [data-ui="input-control-chip"] {
+  border-radius: var(--radius-sm);
 }
 
 .note {
@@ -169,15 +150,22 @@
   text-align: center;
 }
 
+.surface[data-wrap-leading-controls] {
+  grid-template-columns: minmax(0, 1fr);
+}
+
+.surface[data-wrap-leading-controls] .controls {
+  min-inline-size: 0;
+  align-items: flex-end;
+}
+
+.surface[data-wrap-leading-controls] .leadingControls {
+  flex-wrap: wrap;
+}
+
 @media (width < 40rem) {
   .surface {
     padding-inline: var(--space-3);
-    border-radius: var(--radius-lg);
-  }
-
-  .submit {
-    inline-size: 3rem;
-    block-size: 3rem;
   }
 
   .controls,
@@ -188,5 +176,11 @@
 
   .leadingControls {
     flex: 1 1 auto;
+  }
+
+  .hero .controls,
+  .hero .leadingControls,
+  .hero .trailingControls {
+    flex-wrap: nowrap;
   }
 }

@@ -2,11 +2,15 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 
+import { WorkspacePageFrame } from "@/components/layout/WorkspacePageFrame/WorkspacePageFrame";
 import { Button } from "@/components/ui/Button/Button";
 import { type FileResultState } from "@/features/files/FileCard/FileCard";
+import {
+  FilePreviewDialog,
+  type FilePreviewItem,
+} from "@/features/files/FilePreviewDialog/FilePreviewDialog";
 import { FilesEmptyState } from "@/features/files/FilesEmptyState/FilesEmptyState";
 import { FilesGrid } from "@/features/files/FilesGrid/FilesGrid";
-import { FilesToolbar, type FileStatusFilter } from "@/features/files/FilesToolbar/FilesToolbar";
 import { FileTypeTabs, type FileCategory } from "@/features/files/FileTypeTabs/FileTypeTabs";
 import { useWorkspaceDataCache } from "@/features/workspace/WorkspaceDataCache/WorkspaceDataCache";
 import { recordWorkspaceDataLoad } from "@/features/workspace/WorkspaceNavigationMetrics/workspace-navigation-metrics";
@@ -145,16 +149,6 @@ function reconcileRetryReplacements(
   }
 
   return { jobs: [...missingRetryChildren, ...jobs].slice(0, imageFilesPageLimit), updatedReplacements };
-}
-
-function matchesStatusFilter(job: ImageJob, filter: FileStatusFilter): boolean {
-  if (filter === "all") {
-    return true;
-  }
-  if (filter === "ready") {
-    return job.status === "succeeded";
-  }
-  return job.status !== "succeeded";
 }
 
 function shouldTrackRetryJob(job: ImageJob): boolean {
@@ -298,10 +292,10 @@ export function FilesWorkspace({ initialCategory = "all" }: Readonly<FilesWorksp
   const [isLoadingMore, setIsLoadingMore] = useState(false);
   const [loadFailed, setLoadFailed] = useState(false);
   const [fileCategory, setFileCategory] = useState<FileCategory>(initialCategory);
-  const [query, setQuery] = useState("");
-  const [statusFilter, setStatusFilter] = useState<FileStatusFilter>("all");
   const [resultsByJobID, setResultsByJobID] = useState<Record<string, ImageJobResult>>({});
   const [resultStatesByJobID, setResultStatesByJobID] = useState<Record<string, FileResultState>>({});
+  const [selectedPreviewArtifactID, setSelectedPreviewArtifactID] = useState<string | null>(null);
+  const [previewTrigger, setPreviewTrigger] = useState<HTMLButtonElement | null>(null);
   const [retryMutationJobIDs, setRetryMutationJobIDs] = useState<ReadonlySet<string>>(() => new Set());
   const [trackedRetryJobIDs, setTrackedRetryJobIDs] = useState<ReadonlySet<string>>(() => new Set(
     cachedRetryReplacements
@@ -601,92 +595,110 @@ export function FilesWorkspace({ initialCategory = "all" }: Readonly<FilesWorksp
     ...trackedRetryJobIDs,
   ]), [retryMutationJobIDs, trackedRetryJobIDs]);
 
-  const visibleJobs = useMemo(() => {
-    const normalizedQuery = query.trim().toLocaleLowerCase();
-    return jobs.filter((job) => {
-      if (!matchesStatusFilter(job, statusFilter)) {
-        return false;
+  const readyJobs = useMemo(() => jobs.filter((job) => job.status === "succeeded"), [jobs]);
+  const openPreview = useCallback((
+    _job: ImageJob,
+    artifact: ImageJobResult["artifacts"][number],
+    trigger: HTMLButtonElement,
+  ) => {
+    setPreviewTrigger(trigger);
+    setSelectedPreviewArtifactID(artifact.id);
+    for (const readyJob of readyJobs) {
+      requestResult(readyJob);
+    }
+  }, [readyJobs, requestResult]);
+  const previewItems = useMemo<FilePreviewItem[]>(() => {
+    const items: FilePreviewItem[] = [];
+    for (const job of readyJobs) {
+      const result = resultsByJobID[job.id];
+      if (result !== undefined) {
+        items.push(...result.artifacts.map((artifact): FilePreviewItem => ({ artifact, job })));
+        continue;
       }
-      if (normalizedQuery === "") {
-        return true;
-      }
-      return `${job.prompt} ${job.model_name}`.toLocaleLowerCase().includes(normalizedQuery);
-    });
-  }, [jobs, query, statusFilter]);
 
+      items.push({
+        job,
+        state: resultStatesByJobID[job.id] === "error" ? "unavailable" : "loading",
+      });
+    }
+    return items;
+  }, [readyJobs, resultsByJobID, resultStatesByJobID]);
+  const selectedPreviewIndex = selectedPreviewArtifactID === null
+    ? -1
+    : previewItems.findIndex((item) => "artifact" in item && item.artifact.id === selectedPreviewArtifactID);
   const hasImageCategory = isImageCategory(fileCategory);
-  const hasImageJobs = jobs.length > 0;
-  const hasActiveImageFilters = query.trim() !== "" || statusFilter !== "all";
-  const shouldShowToolbar = hasImageCategory && hasImageJobs;
+  const hasImageJobs = readyJobs.length > 0;
 
   return (
-    <section aria-labelledby="files-title" className={styles.workspace}>
-      {[...trackedRetryJobIDs].map((jobID) => (
-        <RetryJobPoller jobID={jobID} key={jobID} onJobUpdate={handleTrackedRetryJobUpdate} />
-      ))}
-      <header className={styles.header}>
-        <h1 id="files-title">{ru.files.title}</h1>
-      </header>
+    <WorkspacePageFrame>
+      <section aria-labelledby="files-title" className={styles.workspace}>
+        {[...trackedRetryJobIDs].map((jobID) => (
+          <RetryJobPoller jobID={jobID} key={jobID} onJobUpdate={handleTrackedRetryJobUpdate} />
+        ))}
+        <header className={styles.header}>
+          <h1 id="files-title">{ru.files.title}</h1>
+        </header>
 
-      <FileTypeTabs onValueChange={setFileCategory} value={fileCategory} />
+        <FileTypeTabs onValueChange={setFileCategory} value={fileCategory} />
 
-      <section
-        aria-labelledby={`files-tab-${fileCategory}`}
-        className={styles.panel}
-        id="files-panel"
-        role="tabpanel"
-      >
-        {!hasImageCategory ? (
-          <FilesEmptyState
-            description={futureCategoryDescription(fileCategory)}
-            title={ru.files.emptyLibraryTitle}
-          />
-        ) : null}
-
-        {hasImageCategory && isLoading && !hasLoaded ? <p className={styles.state} role="status">{ru.files.loading}</p> : null}
-        {hasImageCategory && loadFailed && !hasLoaded ? (
-          <div className={styles.failure}>
-            <p role="alert">{ru.files.loadFailure}</p>
-            <Button disabled={isLoading} onClick={() => void loadPage()}>{ru.files.retry}</Button>
-          </div>
-        ) : null}
-
-        {shouldShowToolbar ? (
-          <>
-            <FilesToolbar
-              onQueryChange={setQuery}
-              onStatusChange={setStatusFilter}
-              query={query}
-              status={statusFilter}
+        <section
+          aria-labelledby={`files-tab-${fileCategory}`}
+          className={styles.panel}
+          id="files-panel"
+          role="tabpanel"
+        >
+          {!hasImageCategory ? (
+            <FilesEmptyState
+              description={futureCategoryDescription(fileCategory)}
+              title={ru.files.emptyLibraryTitle}
             />
-            <p className={styles.scopeNotice}>{ru.files.loadedScopeNotice}</p>
-          </>
-        ) : null}
+          ) : null}
 
-        {hasImageCategory && hasLoaded && !hasImageJobs ? (
-          <FilesEmptyState description={ru.files.emptyAllDescription} title={ru.files.emptyLibraryTitle} />
-        ) : null}
-        {hasImageCategory && hasLoaded && hasImageJobs && visibleJobs.length === 0 && hasActiveImageFilters ? (
-          <p className={styles.state} role="status">{ru.files.empty}</p>
-        ) : null}
-        {hasImageCategory && hasLoaded && visibleJobs.length > 0 ? (
-          <FilesGrid
-            jobs={visibleJobs}
-            onRequestResult={requestResult}
-            onRetryJob={(job) => void retryJob(job)}
-            resultsByJobID={resultsByJobID}
-            resultStatesByJobID={resultStatesByJobID}
-            retryingJobIDs={busyRetryJobIDs}
-          />
-        ) : null}
+          {hasImageCategory && isLoading && !hasLoaded ? <p className={styles.state} role="status">{ru.files.loading}</p> : null}
+          {hasImageCategory && loadFailed && !hasLoaded ? (
+            <div className={styles.failure}>
+              <p role="alert">{ru.files.loadFailure}</p>
+              <Button disabled={isLoading} onClick={() => void loadPage()}>{ru.files.retry}</Button>
+            </div>
+          ) : null}
 
-        {hasImageCategory && loadFailed && hasLoaded ? <p className={styles.inlineFailure} role="alert">{ru.files.loadFailure}</p> : null}
-        {hasImageCategory && nextCursor !== null ? (
-          <Button disabled={isLoadingMore} onClick={() => void loadPage(nextCursor)}>
-            {isLoadingMore ? ru.files.loadingMore : ru.files.loadMore}
-          </Button>
-        ) : null}
+          {hasImageCategory && hasLoaded && !hasImageJobs ? (
+            <FilesEmptyState description={ru.files.emptyAllDescription} title={ru.files.emptyLibraryTitle} />
+          ) : null}
+          {hasImageCategory && hasLoaded && hasImageJobs ? (
+            <FilesGrid
+              jobs={readyJobs}
+              onOpenPreview={openPreview}
+              onRequestResult={requestResult}
+              onRetryJob={(job) => void retryJob(job)}
+              resultsByJobID={resultsByJobID}
+              resultStatesByJobID={resultStatesByJobID}
+              retryingJobIDs={busyRetryJobIDs}
+            />
+          ) : null}
+
+          {hasImageCategory && loadFailed && hasLoaded ? <p className={styles.inlineFailure} role="alert">{ru.files.loadFailure}</p> : null}
+          {hasImageCategory && nextCursor !== null ? (
+            <Button disabled={isLoadingMore} onClick={() => void loadPage(nextCursor)}>
+              {isLoadingMore ? ru.files.loadingMore : ru.files.loadMore}
+            </Button>
+          ) : null}
+        </section>
       </section>
-    </section>
+      {selectedPreviewIndex >= 0 ? (
+        <FilePreviewDialog
+          items={previewItems}
+          onClose={() => setSelectedPreviewArtifactID(null)}
+          onSelect={(index) => {
+            const item = previewItems[index];
+            if (item !== undefined && "artifact" in item) {
+              setSelectedPreviewArtifactID(item.artifact.id);
+            }
+          }}
+          returnFocusTo={previewTrigger}
+          selectedIndex={selectedPreviewIndex}
+        />
+      ) : null}
+    </WorkspacePageFrame>
   );
 }

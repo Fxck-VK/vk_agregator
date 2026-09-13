@@ -5,8 +5,7 @@ import Link from "next/link";
 import { useEffect, useState } from "react";
 
 import { assetPaths } from "@/assets/asset-paths";
-import { CreditAmount } from "@/components/ui/CreditAmount/CreditAmount";
-import { ModelIcon } from "@/features/models/ModelIcon/ModelIcon";
+import { ModelCard } from "@/features/models/ModelCard/ModelCard";
 import { loadImageModelCatalog } from "@/features/models/image-model-catalog-cache";
 import type { ImageModel } from "@/lib/web-api/contracts";
 
@@ -15,23 +14,7 @@ import styles from "./FeaturedModels.module.css";
 const collapsedModelLimit = 4;
 const expandedModelLimit = 6;
 
-const featuredModelDescriptions: Readonly<Record<string, string>> = {
-  "Nano Banana 2": "Быстрая генерация и редактирование изображений для повседневных задач",
-  "Nano Banana Pro": "Детализированные изображения для сложных творческих и рабочих задач",
-  "GPT Image 2": "Точное создание изображений по описанию с хорошей передачей текста",
-  "Seedream 4.5": "Фотореалистичные изображения с высокой детализацией и выразительным стилем",
-};
-
 type LoadState = "loading" | "ready" | "failed";
-
-function getMinimumPrice(model: ImageModel): number | null {
-  const prices = Object.values(model.price_by_quality ?? {});
-  return prices.length > 0 ? Math.min(...prices) : null;
-}
-
-function getModelDescription(model: ImageModel): string {
-  return featuredModelDescriptions[model.name] ?? `${model.name} для создания изображений по вашему описанию`;
-}
 
 function CatalogActionContent({ label }: { label: string }) {
   return (
@@ -76,7 +59,7 @@ export function FeaturedModels() {
     return (
       <div aria-hidden="true" className={styles.grid}>
         {Array.from({ length: collapsedModelLimit }, (_, index) => (
-          <div className={`${styles.card} ${styles.skeleton}`} key={index} />
+          <div className={styles.skeletonCard} key={index} />
         ))}
       </div>
     );
@@ -92,26 +75,17 @@ export function FeaturedModels() {
   return (
     <>
       <div className={styles.grid} id="featured-models-grid">
-        {visibleModels.map((model) => {
-          const minimumPrice = getMinimumPrice(model);
+        {visibleModels.map((model, index) => {
+          const isNewlyRevealed = expanded && index >= collapsedModelLimit;
 
           return (
-            <Link
-              className={styles.card}
-              data-testid="featured-model-card"
-              href={`/app/image?model=${encodeURIComponent(model.id)}`}
+            <ModelCard
+              className={isNewlyRevealed ? styles.revealedCard : undefined}
               key={model.id}
-              prefetch={false}
-            >
-              <span className={styles.cardTop}>
-                <ModelIcon />
-                {minimumPrice !== null ? <CreditAmount className={styles.price} value={minimumPrice} /> : null}
-              </span>
-              <span className={styles.copy}>
-                <strong>{model.name}</strong>
-                <span>{getModelDescription(model)}</span>
-              </span>
-            </Link>
+              model={model}
+              revealed={isNewlyRevealed}
+              testId="featured-model-card"
+            />
           );
         })}
       </div>
@@ -128,7 +102,11 @@ export function FeaturedModels() {
             <CatalogActionContent label="Показать ещё" />
           </button>
         ) : (
-          <Link className={styles.catalogAction} href="/app/models">
+          <Link
+            className={`${styles.catalogAction} ${expanded ? styles.revealedCatalogAction : ""}`}
+            data-revealed={expanded || undefined}
+            href="/app/models"
+          >
             <CatalogActionContent label="Все нейросети" />
           </Link>
         )}

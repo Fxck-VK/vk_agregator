@@ -52,6 +52,13 @@ test("keeps the upload-media icon transparent and uses the approved artwork", ()
   assert.match(icon, /M111 35V65/);
 });
 
+test("uses the approved left-aligned play mark for the animate icon", () => {
+  const icon = readFileSync(new URL("../public/assets/icons/ui/animate-white.svg", import.meta.url), "utf8");
+
+  assert.match(icon, /M8\.83 8\.8/);
+  assert.doesNotMatch(icon, /M10 8\.8/);
+});
+
 test("provides square favicon assets at the declared browser sizes", () => {
   const assets = [
     ["../public/assets/brand/favicons/neirohub-favicon-32.png", 32],

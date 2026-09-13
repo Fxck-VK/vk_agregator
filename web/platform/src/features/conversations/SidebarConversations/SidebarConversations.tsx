@@ -3,6 +3,7 @@
 import { usePathname } from "next/navigation";
 import { useLayoutEffect, useRef, useState } from "react";
 
+import { ScrollArea } from "@/components/ui/ScrollArea/ScrollArea";
 import { ConversationRow } from "@/features/conversations/ConversationRow/ConversationRow";
 import {
   type WorkspaceConversationItem,
@@ -75,7 +76,12 @@ export function SidebarConversations({ conversations }: SidebarConversationsProp
       {visibleConversations.length === 0 ? (
         <p className={styles.empty}>{ru.conversations.empty}</p>
       ) : (
-        <ul className={styles.list} data-sidebar-conversation-list="true">
+        <ScrollArea
+          className={styles.listScrollArea}
+          viewportAs="ul"
+          viewportClassName={styles.list}
+          viewportProps={{ "data-sidebar-conversation-list": "true" }}
+        >
           {visibleConversations.map((conversation) => {
             const isActive = pathname === "/app/chat/" + conversation.id;
 
@@ -105,7 +111,7 @@ export function SidebarConversations({ conversations }: SidebarConversationsProp
               </li>
             );
           })}
-        </ul>
+        </ScrollArea>
       )}
     </section>
   );

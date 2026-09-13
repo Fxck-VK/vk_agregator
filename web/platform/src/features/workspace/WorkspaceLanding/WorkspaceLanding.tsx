@@ -2,13 +2,13 @@ import Image from "next/image";
 import Link from "next/link";
 
 import { assetPaths } from "@/assets/asset-paths";
+import { SubscriptionPlansButton } from "@/components/layout/WorkspaceHeader/SubscriptionPlansButton";
 import { VideoPlayer } from "@/components/media/VideoPlayer/VideoPlayer";
 import { InspirationExampleCard } from "@/features/inspiration/InspirationExampleCard/InspirationExampleCard";
 import { inspirationExamples } from "@/features/inspiration/inspiration-examples";
 
-import { FeaturedModelShortcuts } from "../FeaturedModelShortcuts/FeaturedModelShortcuts";
 import { FeaturedModels } from "../FeaturedModels/FeaturedModels";
-import { WorkspacePrompt } from "../WorkspacePrompt/WorkspacePrompt";
+import { WorkspaceHero } from "../WorkspaceHero/WorkspaceHero";
 
 import { CapabilityLinks } from "./CapabilityLinks";
 import { frequentlyAskedQuestions } from "./workspace-home-content";
@@ -35,10 +35,7 @@ export function WorkspaceLanding({ access = "authenticated" }: WorkspaceLandingP
             <p>Диалоги, генерация изображений и полезные AI-инструменты в одном рабочем пространстве.</p>
           </div>
 
-          <WorkspacePrompt access={access} variant="hero" />
-
-          <nav aria-label="Основные возможности" className={styles.toolRail}>
-            <FeaturedModelShortcuts />
+          <WorkspaceHero access={access} modelLinksClassName={styles.toolRail} allModelsLink={(
             <Link className={styles.allToolsShortcut} href="/app/models">
               <span aria-hidden="true" className={styles.arrowIcon}>
                 <Image
@@ -52,7 +49,7 @@ export function WorkspaceLanding({ access = "authenticated" }: WorkspaceLandingP
               </span>
               <span>Все нейросети</span>
             </Link>
-          </nav>
+          )} />
         </section>
 
         <section
@@ -91,27 +88,38 @@ export function WorkspaceLanding({ access = "authenticated" }: WorkspaceLandingP
           </div>
           <div className={styles.capabilityMosaic}>
             <Link className={`${styles.capabilityCard} ${styles.capabilityLarge}`} href="/app/image">
-              <Image
-                alt="Бумажный журавлик среди облаков"
-                className={styles.capabilityImage}
-                fill
-                sizes="(max-width: 48rem) 100vw, 45vw"
-                src={assetPaths.images.inspiration.paperCraneCloud}
-              />
-              <span className={styles.capabilityOverlay}>
+              <span className={styles.capabilityVisual}>
+                <Image
+                  alt="Бумажный журавлик среди облаков"
+                  className={styles.capabilityImage}
+                  fill
+                  sizes="(max-width: 48rem) 100vw, 23rem"
+                  src={assetPaths.images.inspiration.paperCraneCloud}
+                />
+              </span>
+              <span className={styles.capabilityCopy}>
                 <strong>Создавайте изображения</strong>
                 <small>От идеи к результату по текстовому описанию</small>
               </span>
             </Link>
-            <Link className={`${styles.capabilityCard} ${styles.capabilityText}`} href="/app/chats">
-              <span aria-hidden="true">Aa</span>
-              <strong>Работайте с текстом</strong>
-              <small>Вопросы, планы, идеи и продолжительные диалоги</small>
+            <Link className={styles.capabilityCard} href="/app/chats">
+              <span aria-hidden="true" className={`${styles.capabilityVisual} ${styles.capabilityTextVisual}`}>
+                <span className={styles.textPreviewInput} />
+                <span className={styles.textPreviewAction}>Создать</span>
+              </span>
+              <span className={styles.capabilityCopy}>
+                <strong>Работайте с текстом</strong>
+                <small>Вопросы, планы, идеи и продолжительные диалоги</small>
+              </span>
             </Link>
-            <Link className={`${styles.capabilityCard} ${styles.capabilityFiles}`} href="/app/files">
-              <span aria-hidden="true">⌁</span>
-              <strong>Храните результаты</strong>
-              <small>Созданные и загруженные материалы в одном месте</small>
+            <Link className={styles.capabilityCard} href="/app/files">
+              <span aria-hidden="true" className={`${styles.capabilityVisual} ${styles.capabilityFilesVisual}`}>
+                <span className={styles.filePreview} />
+              </span>
+              <span className={styles.capabilityCopy}>
+                <strong>Храните результаты</strong>
+                <small>Созданные и загруженные материалы в одном месте</small>
+              </span>
             </Link>
           </div>
           <CapabilityLinks />
@@ -119,16 +127,62 @@ export function WorkspaceLanding({ access = "authenticated" }: WorkspaceLandingP
 
         <section aria-labelledby="workspace-plan-title" className={`${styles.section} ${styles.contentFrame}`}>
           <div className={styles.planCard}>
-            <div className={styles.planIntro}>
-              <p className={styles.kicker}>Аккаунт и баланс</p>
-              <h2 id="workspace-plan-title">Ваш план</h2>
-              <p>Проверяйте баланс, способы входа и историю операций в профиле.</p>
-              <Link className={styles.lightButton} href="/app/profile">Открыть профиль</Link>
+            <div className={styles.planOffer}>
+              <div className={styles.planHeading}>
+                <h2 id="workspace-plan-title">Lite</h2>
+                <span aria-hidden="true" className={styles.planDivider} />
+                <span className={styles.planBalance}>
+                  <Image
+                    alt=""
+                    height={24}
+                    src={assetPaths.images.credits.star}
+                    width={24}
+                  />
+                  400
+                </span>
+              </div>
+              <p className={styles.planPrice}>
+                199 <span>₽/нед</span>
+              </p>
+              <SubscriptionPlansButton className={styles.planButton} />
             </div>
             <ul className={styles.planBenefits}>
-              <li>История диалогов привязана к аккаунту</li>
-              <li>Стоимость задачи видна до запуска</li>
-              <li>Результаты доступны в разделе «Мои файлы»</li>
+              <li>
+                <span aria-hidden="true" className={styles.planBenefitIcon}>
+                  <Image
+                    alt=""
+                    height={20}
+                    src="/assets/icons/ui/image-generations-white.svg"
+                    unoptimized
+                    width={20}
+                  />
+                </span>
+                <span><strong>до 13 генераций изображений:</strong> Nano Banana, Генератор изображений и GPT Image 2</span>
+              </li>
+              <li>
+                <span aria-hidden="true" className={styles.planBenefitIcon}>
+                  <Image
+                    alt=""
+                    height={20}
+                    src="/assets/icons/ui/video-generations-white.svg"
+                    unoptimized
+                    width={20}
+                  />
+                </span>
+                <span><strong>до 2 генераций видео:</strong> генератор видео и инструменты анимации</span>
+              </li>
+              <li>
+                <span aria-hidden="true" className={styles.planBenefitIcon}>
+                  <Image
+                    alt=""
+                    height={20}
+                    src="/assets/icons/ui/ai-access-white.svg"
+                    unoptimized
+                    width={20}
+                  />
+                </span>
+                <span><strong>Доступ к популярным нейросетям:</strong> ChatGPT, Gemini, Claude и другим</span>
+              </li>
             </ul>
           </div>
         </section>
@@ -145,7 +199,6 @@ export function WorkspaceLanding({ access = "authenticated" }: WorkspaceLandingP
               <InspirationExampleCard
                 example={promptExample}
                 priority
-                sizes="(max-width: 36rem) 100vw, 25rem"
               />
             </div>
           ) : null}
@@ -160,7 +213,16 @@ export function WorkspaceLanding({ access = "authenticated" }: WorkspaceLandingP
           <div className={styles.faqList}>
             {frequentlyAskedQuestions.map((item) => (
               <details key={item.question}>
-                <summary>{item.question}<span aria-hidden="true">⌄</span></summary>
+                <summary>
+                  {item.question}
+                  <Image
+                    alt=""
+                    className={styles.faqArrow}
+                    height={10}
+                    src={assetPaths.icons.ui.faqArrow}
+                    width={18}
+                  />
+                </summary>
                 <p>{item.answer}</p>
               </details>
             ))}
@@ -169,19 +231,45 @@ export function WorkspaceLanding({ access = "authenticated" }: WorkspaceLandingP
 
         <section aria-labelledby="workspace-community-title" className={`${styles.section} ${styles.communitySection} ${styles.contentFrame}`}>
           <div className={styles.communityCard}>
-            <div>
-              <p className={styles.kicker}>Идеи и примеры</p>
-              <h2 id="workspace-community-title">Сообщество NeiroHub</h2>
-              <p>Исследуйте удачные запросы и возвращайтесь к своим результатам в рабочем пространстве.</p>
-              <div className={styles.communityActions}>
-                <Link className={styles.lightButton} href="/app/inspiration">Перейти во вдохновение</Link>
-                <Link className={styles.outlineLightButton} href="/app/files">Открыть мои файлы</Link>
+            <div className={styles.communityCopy}>
+              <h2 id="workspace-community-title">Следи за нами в Telegram и VK</h2>
+              <p>Будь в тренде и работай с AI быстрее</p>
+              <div aria-label="Социальные сети NeiroHub" className={styles.communityActions}>
+                <span aria-disabled="true" className={styles.communityButton}>Telegram</span>
+                <a
+                  className={styles.communityButton}
+                  href="https://vk.me/neirohub_help"
+                  rel="noopener noreferrer"
+                  target="_blank"
+                >
+                  ВКонтакте
+                </a>
               </div>
             </div>
-            <div aria-hidden="true" className={styles.communityArt}>
-              <span>NH</span>
-              <span>AI</span>
-              <span>✦</span>
+            <div aria-hidden="true" className={styles.communityVisual}>
+              <span className={`${styles.communityPreview} ${styles.communityPreviewLeft}`}>
+                <Image
+                  alt=""
+                  fill
+                  sizes="8rem"
+                  src={assetPaths.images.inspiration.paperCraneCloud}
+                />
+              </span>
+              <span className={styles.socialPhone}>
+                <span className={styles.phoneSpeaker} />
+                <span className={styles.qrPlaceholder}>
+                  <span className={styles.qrMarker} />
+                </span>
+                <span className={styles.phoneLabel}>NeiroHub</span>
+              </span>
+              <span className={`${styles.communityPreview} ${styles.communityPreviewRight}`}>
+                <Image
+                  alt=""
+                  fill
+                  sizes="8rem"
+                  src={assetPaths.images.workspace.howItWorksPoster}
+                />
+              </span>
             </div>
           </div>
         </section>
@@ -189,27 +277,61 @@ export function WorkspaceLanding({ access = "authenticated" }: WorkspaceLandingP
 
       <footer className={styles.footer}>
         <div className={styles.footerInner}>
-          <div className={styles.footerBrand}>
-            <span className={styles.brandMark}>NH</span>
-            <div>
-              <strong>NeiroHub</strong>
-              <small>Нейросети в одном рабочем пространстве</small>
+          <div className={styles.footerTop}>
+            <div className={styles.footerBrandGroup}>
+              <Link className={styles.footerBrand} href="/app">
+                <span className={styles.brandMark}>NH</span>
+                <strong>NeiroHub</strong>
+              </Link>
+              <div aria-label="Социальные сети" className={styles.footerSocials}>
+                <a href="https://vk.me/neirohub_help" rel="noopener noreferrer" target="_blank">VK</a>
+              </div>
             </div>
+            <div className={styles.footerSupport}>
+              <a
+                className={styles.footerSupportButton}
+                href="https://vk.me/neirohub_help"
+                rel="noopener noreferrer"
+                target="_blank"
+              >
+                Служба поддержки <span>VK</span>
+              </a>
+              <span>с 10:00 до 19:00 каждый день</span>
+            </div>
+            <span className={styles.footerAgreement}>Пользовательское соглашение</span>
           </div>
-          <nav aria-label="Разделы платформы" className={styles.footerLinks}>
-            <div>
-              <strong>Инструменты</strong>
-              <Link href="/app/chats">Новый чат</Link>
-              <Link href="/app/image">Генерация изображений</Link>
+
+          <nav aria-label="Разделы платформы" className={styles.footerColumns}>
+            <div className={styles.footerColumn}>
+              <strong>Нейросети</strong>
+              <Link href="/app/image?model=nano-banana-2">Nano Banana 2</Link>
+              <Link href="/app/image?model=nano-banana-pro">Nano Banana Pro</Link>
+              <Link href="/app/image?model=gpt-image-2">GPT Image 2</Link>
+              <Link href="/app/image?model=seedream-4-5">Seedream 4.5</Link>
               <Link href="/app/models">Все нейросети</Link>
             </div>
-            <div>
-              <strong>Рабочая область</strong>
+            <div className={styles.footerColumn}>
+              <strong>Инструменты NeiroHub</strong>
+              <Link href="/app/chats">Новый чат</Link>
+              <Link href="/app/image">Генерация изображений</Link>
               <Link href="/app/files">Мои файлы</Link>
               <Link href="/app/inspiration">Вдохновение</Link>
               <Link href="/app/profile">Профиль</Link>
             </div>
+            <div className={styles.footerColumn}>
+              <strong>О платформе</strong>
+              <Link href="/app">Рабочее пространство</Link>
+              <Link href="/app/models">Каталог моделей</Link>
+              <Link href="#workspace-prompts-title">Библиотека промптов</Link>
+              <Link href="#workspace-faq-title">Частые вопросы</Link>
+              <a href="https://vk.me/neirohub_help" rel="noopener noreferrer" target="_blank">Поддержка</a>
+            </div>
           </nav>
+
+          <div className={styles.footerMeta}>
+            <span>© 2026 NeiroHub. Все права защищены.</span>
+            <span>Нейросети в одном рабочем пространстве</span>
+          </div>
         </div>
       </footer>
     </div>

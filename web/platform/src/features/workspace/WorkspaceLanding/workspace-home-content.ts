@@ -1,15 +1,17 @@
+import { assetPaths } from "@/assets/asset-paths";
+
 export type WorkspaceHomeFaq = {
   answer: string;
   question: string;
 };
 
 export const capabilityLinks = [
-  { href: "/app/chats", label: "Ответы на вопросы" },
-  { href: "/app/image", label: "Генерация изображений" },
-  { href: "/app/image", label: "Работа с референсами" },
-  { href: "/app/files", label: "Библиотека файлов" },
-  { href: "/app/models", label: "Выбор нейросети" },
-  { href: "/app/inspiration", label: "Идеи для промптов" },
+  { href: "/app/chats", label: "Ответы на вопросы", icon: assetPaths.icons.features.answers },
+  { href: "/app/image", label: "Генерация изображений", icon: assetPaths.icons.features.generateImage },
+  { href: "/app/image", label: "Работа с референсами", icon: assetPaths.icons.features.references },
+  { href: "/app/files", label: "Библиотека файлов", icon: assetPaths.icons.features.fileLibrary },
+  { href: "/app/models", label: "Выбор нейросети", icon: assetPaths.icons.features.selectAi },
+  { href: "/app/inspiration", label: "Идеи для промптов", icon: assetPaths.icons.features.promptIdeas },
 ] as const;
 
 export const frequentlyAskedQuestions: WorkspaceHomeFaq[] = [
@@ -19,23 +21,23 @@ export const frequentlyAskedQuestions: WorkspaceHomeFaq[] = [
       "NeiroHub — единое рабочее пространство для диалогов с нейросетями, генерации изображений и хранения результатов.",
   },
   {
-    question: "Где сохраняются мои диалоги?",
+    question: "Что такое собственные нейросети NeiroHub?",
     answer:
-      "Диалоги текущего аккаунта появляются в боковой панели. Откройте любой из них, чтобы продолжить работу с сохранённым контекстом.",
+      "Так мы называем модели, доступные через единый интерфейс NeiroHub. Для каждой модели показаны её возможности, параметры и актуальная стоимость запуска.",
   },
   {
-    question: "Как рассчитывается стоимость генерации?",
+    question: "Что такое токены и подписка?",
     answer:
-      "Актуальная стоимость показывается перед запуском задачи и зависит от выбранной модели и параметров. Списание происходит только через серверный контур.",
+      "В NeiroHub звёзды используются как единицы баланса для запуска нейросетей. Отдельная подписка для базовой работы с платформой сейчас не требуется.",
   },
   {
-    question: "Где найти созданные изображения?",
+    question: "Как купить подписку?",
     answer:
-      "Готовые результаты и загруженные материалы доступны в разделе «Мои файлы» после подтверждения сервером.",
+      "Сейчас подписка не продаётся. Для платных запусков достаточно пополнить баланс в профиле и выбрать подходящую модель.",
   },
   {
-    question: "Можно ли пользоваться с телефона?",
+    question: "Есть ли бесплатный доступ?",
     answer:
-      "Да. Рабочая область, навигация и основные сценарии адаптированы для мобильных экранов.",
+      "Открывать рабочее пространство и изучать каталог можно бесплатно. Для запуска платных моделей потребуется достаточный баланс.",
   },
 ];

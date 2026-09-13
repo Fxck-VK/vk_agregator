@@ -73,7 +73,7 @@
 .jobHeader > span {
   flex: 0 0 auto;
   font-size: 0.875rem;
-  font-weight: 700;
+  font-weight: var(--font-weight-semibold);
 }
 
 .metadata {
@@ -90,7 +90,7 @@
 
 .metadata dd {
   margin: 0;
-  font-weight: 700;
+  font-weight: var(--font-weight-semibold);
 }
 
 .result {

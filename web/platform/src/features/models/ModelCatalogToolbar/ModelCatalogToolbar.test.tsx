@@ -53,7 +53,16 @@ describe("ModelCatalogToolbar", () => {
       />,
     );
 
-    fireEvent.change(screen.getByRole("searchbox", { name: ru.modelsCatalog.searchLabel }), {
+    const searchbox = screen.getByRole("searchbox", { name: ru.modelsCatalog.searchLabel });
+    const searchIcon = searchbox.parentElement?.querySelector(
+      'img[src="/assets/icons/ui/search.svg"]',
+    );
+
+    expect(searchIcon).toBeInTheDocument();
+    expect(searchbox.parentElement).not.toHaveTextContent("⌕");
+    expect(searchbox.closest('[data-ui="input-surface"]')).not.toBeNull();
+
+    fireEvent.change(searchbox, {
       target: { value: "banana" },
     });
     fireEvent.click(screen.getByRole("tab", { name: "Текст" }));
@@ -78,7 +87,13 @@ describe("ModelCatalogToolbar", () => {
       />,
     );
 
-    expect(screen.getByRole("tablist")).toHaveAccessibleName("Категории нейросетей");
+    const tablist = screen.getByRole("tablist");
+    expect(tablist).toHaveAccessibleName("Категории нейросетей");
+    expect(tablist).toHaveAttribute("data-scroll-area-viewport", "true");
+    expect(tablist.closest('[data-mode-switch-panel="true"]')?.className).toContain(
+      "categoryPanel",
+    );
+    expect(tablist.closest('[data-orientation="horizontal"]')).not.toBeNull();
     for (const category of categories) {
       expect(screen.getByRole("tab", { name: category.label })).toHaveAttribute("id", `model-category-tab-${category.id}`);
       expect(screen.getByRole("tab", { name: category.label })).toHaveAttribute("aria-controls", "models-panel");

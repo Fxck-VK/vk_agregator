@@ -6,66 +6,45 @@
 
 .shell {
   --sidebar-collapsed-rail-width: 5.5rem;
+  --sidebar-motion-duration: 400ms;
+  --sidebar-motion-easing: cubic-bezier(0.4, 0, 0.2, 1);
   --app-shell-canvas: var(--color-background);
-  --app-shell-edge-gap: 0.125rem;
+  --app-shell-edge-gap: var(--app-workspace-edge-gap);
+  position: fixed;
+  inset: 0;
+  inline-size: 100%;
   block-size: 100dvh;
   background: var(--app-shell-canvas);
   overflow: hidden;
 }
 
 .sidebar {
-  position: fixed;
-  z-index: 20;
+  position: absolute;
   inset: 0 auto 0 0;
-  inline-size: var(--sidebar-width);
+  inline-size: calc(var(--sidebar-width) + var(--radius-lg));
   block-size: 100dvh;
-  padding: var(--app-shell-edge-gap);
-  background: var(--app-shell-canvas);
+  padding: 0;
+  padding-inline-end: var(--radius-lg);
+  background: var(--color-panel);
+  transition: inline-size var(--sidebar-motion-duration) var(--sidebar-motion-easing);
 }
 
 .workspace {
-  block-size: calc(100dvh - var(--app-shell-edge-gap) - var(--app-shell-edge-gap));
-  margin-block: var(--app-shell-edge-gap);
+  position: relative;
+  block-size: 100dvh;
+  margin-block: 0;
   margin-inline-start: var(--sidebar-width);
   margin-inline-end: var(--app-shell-edge-gap);
-  border-radius: var(--radius-lg);
+  border-radius: var(--radius-lg) 0 0 var(--radius-lg);
   background: var(--color-workspace);
   box-shadow: var(--shadow-card);
   overflow: hidden;
+  transition: margin-inline-start var(--sidebar-motion-duration) var(--sidebar-motion-easing);
 }
 
 .workspaceScroller {
   block-size: 100%;
   background: var(--color-background);
-  overflow-x: hidden;
-  overflow-y: auto;
-}
-
-@supports (-moz-appearance: none) {
-  .workspaceScroller {
-    scrollbar-width: thin;
-    scrollbar-color: var(--color-border) transparent;
-  }
-}
-
-.workspaceScroller::-webkit-scrollbar {
-  inline-size: 0.75rem;
-}
-
-.workspaceScroller::-webkit-scrollbar-track {
-  margin-block-start: calc(var(--space-8) + var(--space-3));
-  background: transparent;
-}
-
-.workspaceScroller::-webkit-scrollbar-button {
-  display: none;
-}
-
-.workspaceScroller::-webkit-scrollbar-thumb {
-  border: 0.125rem solid transparent;
-  border-radius: 999px;
-  background-clip: content-box;
-  background-color: var(--color-border);
 }
 
 @media (width < 48rem) {
@@ -85,10 +64,17 @@
 
 @media (min-width: 48rem) {
   .shell[data-desktop-sidebar-collapsed="true"] .sidebar {
-    inline-size: var(--sidebar-collapsed-rail-width);
+    inline-size: calc(var(--sidebar-collapsed-rail-width) + var(--radius-lg));
   }
 
   .shell[data-desktop-sidebar-collapsed="true"] .workspace {
     margin-inline-start: var(--sidebar-collapsed-rail-width);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .sidebar,
+  .workspace {
+    transition: none;
   }
 }

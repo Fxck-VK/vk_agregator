@@ -27,7 +27,10 @@ export function FilesToolbar({ onQueryChange, onStatusChange, query, status }: R
       </label>
       <label className={styles.filter}>
         <span>{ru.files.statusFilterLabel}</span>
-        <select onChange={(event) => onStatusChange(event.target.value as FileStatusFilter)} value={status}>
+        <select
+          onChange={(event) => onStatusChange(event.target.value as FileStatusFilter)}
+          value={status}
+        >
           <option value="all">{ru.files.statusFilterAll}</option>
           <option value="ready">{ru.files.statusFilterReady}</option>
           <option value="in_progress">{ru.files.statusFilterInProgress}</option>

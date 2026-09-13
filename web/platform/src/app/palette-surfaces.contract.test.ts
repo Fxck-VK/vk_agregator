@@ -17,22 +17,19 @@ function rule(stylesheet: string, selector: string) {
 
 describe("palette surface roles", () => {
   it.each([
-    ["src/features/models/ModelCard/ModelCard.module.css", "\\.card"],
-    ["src/features/files/FileCard/FileCard.module.css", "\\.card"],
-    ["src/features/workspace/FeaturedModels/FeaturedModels.module.css", "\\.card"],
-    ["src/features/account/ProfileBalanceCard/ProfileBalanceCard.module.css", "\\.card"],
-    ["src/features/account/ProfileIdentityCard/ProfileIdentityCard.module.css", "\\.card"],
-  ])("uses the card surface in %s", (path, selector) => {
-    expect(rule(read(path), selector)).toContain("background: var(--color-surface)");
+    ["src/features/models/ModelCard/ModelCard.module.css", "\\.card", "--color-panel"],
+    ["src/features/files/FileCard/FileCard.module.css", "\\.card", "--color-surface"],
+    ["src/features/account/ProfileBalanceCard/ProfileBalanceCard.module.css", "\\.card", "--color-surface"],
+    ["src/features/account/ProfileIdentityCard/ProfileIdentityCard.module.css", "\\.card", "--color-surface"],
+  ])("uses the assigned surface in %s", (path, selector, surface) => {
+    expect(rule(read(path), selector)).toContain(`background: var(${surface})`);
   });
 
   it("keeps neutral hover and elevated states on the raised surface", () => {
-    const selector = read(
-      "src/features/models/WorkspaceModelSelector/WorkspaceModelSelector.module.css",
-    );
+    const selector = read("src/features/models/ModelCard/ModelCard.module.css");
 
     expect(selector).toMatch(
-      /\.option:hover,[\s\S]*?\.optionSelected\s*\{[^}]*background:\s*var\(--color-surface-raised\)/,
+      /\.selectorCard:hover,[\s\S]*?\.selectorSelected\s*\{[^}]*background:\s*var\(--color-surface-raised\)/,
     );
   });
 });

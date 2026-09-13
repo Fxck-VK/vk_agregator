@@ -315,16 +315,22 @@ describe("ConversationRow", () => {
       return screen.getByRole("dialog", { name: ru.conversations.archiveDialogTitle });
     };
 
-    openDialog();
+    const cancelDialog = openDialog();
+    const cancelBackdrop = cancelDialog.closest("[data-state]")!;
     fireEvent.click(screen.getByRole("button", { name: ru.conversations.cancelLabel }));
+    fireEvent.animationEnd(cancelBackdrop, { animationName: "modalBackdropOut" });
     expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
 
     const backdropDialog = openDialog();
-    fireEvent.mouseDown(backdropDialog.parentElement!);
+    const clickedBackdrop = backdropDialog.closest("[data-state]")!;
+    fireEvent.mouseDown(clickedBackdrop);
+    fireEvent.animationEnd(clickedBackdrop, { animationName: "modalBackdropOut" });
     expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
 
     const escapeDialog = openDialog();
+    const escapeBackdrop = escapeDialog.closest("[data-state]")!;
     fireEvent.keyDown(escapeDialog, { key: "Escape" });
+    fireEvent.animationEnd(escapeBackdrop, { animationName: "modalBackdropOut" });
     expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
     expect(webBrowserMutation).not.toHaveBeenCalled();
   });
@@ -612,6 +618,7 @@ describe("ConversationRow", () => {
     expect(archiveConfirm).toHaveFocus();
 
     fireEvent.click(screen.getByRole("button", { name: ru.conversations.cancelLabel }));
+    fireEvent.animationEnd(archiveConfirm.closest('[data-state="closing"]')!, { animationName: "modalBackdropOut" });
     expect(actions).toHaveFocus();
   });
 

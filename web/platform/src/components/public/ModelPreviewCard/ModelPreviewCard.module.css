@@ -60,6 +60,6 @@
 .action {
   justify-self: start;
   color: var(--color-accent);
-  font-weight: 700;
+  font-weight: var(--font-weight-semibold);
   text-decoration: none;
 }

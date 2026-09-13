@@ -7,6 +7,10 @@ const stylesheet = readFileSync(
   resolve(process.cwd(), "src/features/account/AccountMenu/AccountMenu.module.css"),
   "utf8",
 );
+const component = readFileSync(
+  resolve(process.cwd(), "src/features/account/AccountMenu/AccountMenu.tsx"),
+  "utf8",
+);
 
 const menuRule = stylesheet.match(/\.menu \{([\s\S]*?)\n\}/)?.[1];
 const triggerRule = stylesheet.match(/\.trigger \{([\s\S]*?)\n\}/)?.[1];
@@ -15,34 +19,22 @@ describe("AccountMenu styles", () => {
   it("keeps an upward-opening menu reachable on short viewports", () => {
     expect(menuRule).toContain("inset-block-end: calc(100% + var(--space-2))");
     expect(menuRule).toContain("max-block-size: calc(100dvh - 6rem)");
-    expect(menuRule).toContain("overflow-y: auto");
-    expect(menuRule).toContain("overscroll-behavior: contain");
+    expect(component).toContain('from "@/components/ui/PopoverPanel/PopoverPanel"');
+    expect(component).toContain("<PopoverSurface");
   });
 
   it("uses the same translucent overlay surface as conversation action panels", () => {
-    expect(menuRule).toContain("background: color-mix(in srgb, var(--color-surface-raised) 98%, transparent)");
-    expect(menuRule).toContain("box-shadow: var(--shadow-overlay)");
-    expect(menuRule).toContain("backdrop-filter: blur(1rem)");
+    expect(component).toContain("<PopoverSurface");
+    expect(menuRule).not.toMatch(/background:|box-shadow:|backdrop-filter:|border-radius:/);
     expect(stylesheet).toMatch(
       /\.themeSection\s*\{[^}]*border-block:\s*0\.0625rem solid color-mix\(in srgb, var\(--color-border\) 60%, transparent\);/s,
     );
   });
 
-  it("uses the NeiroHub scrollbar without native arrow buttons", () => {
-    expect(stylesheet).toMatch(
-      /@supports \(-moz-appearance: none\)\s*\{[\s\S]*?\.menu\s*\{[^}]*scrollbar-width:\s*thin;[^}]*scrollbar-color:\s*var\(--color-border\) transparent;/s,
-    );
-    expect(stylesheet).toMatch(/\.menu::-webkit-scrollbar\s*\{[^}]*inline-size:\s*0\.625rem;/s);
-    expect(stylesheet).toMatch(/\.menu::-webkit-scrollbar-track\s*\{[^}]*background:\s*transparent;/s);
-    expect(stylesheet).toMatch(
-      /\.menu::-webkit-scrollbar-button\s*\{[^}]*display:\s*none;[^}]*inline-size:\s*0;[^}]*block-size:\s*0;/s,
-    );
-    expect(stylesheet).toMatch(
-      /\.menu::-webkit-scrollbar-thumb\s*\{[^}]*border-radius:\s*999px;[^}]*background-color:\s*var\(--color-border\);/s,
-    );
-    expect(stylesheet).toMatch(
-      /\.menu:hover::-webkit-scrollbar-thumb,\s*\.menu:focus-within::-webkit-scrollbar-thumb\s*\{[^}]*background-color:\s*var\(--color-text-muted\);/s,
-    );
+  it("delegates scrollbar visuals to the shared component", () => {
+    expect(stylesheet).not.toContain("scrollbar-width:");
+    expect(stylesheet).not.toContain("scrollbar-color:");
+    expect(stylesheet).not.toContain("::-webkit-scrollbar");
   });
 
   it("keeps the rectangular account trigger transparent until interaction", () => {
@@ -61,24 +53,15 @@ describe("AccountMenu styles", () => {
   });
 
   it("highlights every account-menu row on hover without shifting its layout", () => {
-    expect(stylesheet).toMatch(
-      /\.menuAction,\s*\.logoutAction\s*\{[^}]*transition:\s*background-color var\(--motion-fast\),/s,
-    );
-    expect(stylesheet).toMatch(
-      /\.menuAction:hover,\s*\.menuAction:focus-visible,\s*\.logoutAction:hover:not\(:disabled\),\s*\.logoutAction:focus-visible\s*\{[^}]*background:\s*color-mix\(in srgb, var\(--color-text\) 8%, transparent\);/s,
-    );
-    expect(stylesheet).not.toContain(".menuAction:hover:not(:disabled)");
+    expect(component).toContain('import selectableStyles from "@/components/ui/selectable-control.module.css"');
+    expect(component).toContain("${selectableStyles.control} ${styles.menuAction}");
+    expect(component).toContain("${selectableStyles.control} ${styles.logoutAction}");
+    expect(stylesheet).not.toMatch(/\.(menuAction|logoutAction):hover/);
   });
 
-  it("slides one shared selected-theme surface between the three stationary icons", () => {
-    expect(stylesheet).toMatch(/\.themeSwitcher\s*\{[^}]*position:\s*relative;/s);
-    expect(stylesheet).toMatch(/\.themeSwitcher::before\s*\{[^}]*transition:\s*transform var\(--motion-normal\),/s);
-    expect(stylesheet).toMatch(
-      /\.themeSwitcher\[data-theme-preference="light"\]::before\s*\{[^}]*transform:\s*translateX\(calc\(100% \+ var\(--space-1\)\)\);/s,
-    );
-    expect(stylesheet).toMatch(
-      /\.themeSwitcher\[data-theme-preference="dark"\]::before\s*\{[^}]*transform:\s*translateX\(calc\(200% \+ \(2 \* var\(--space-1\)\)\)\);/s,
-    );
-    expect(stylesheet).toMatch(/\.themeOption\s*\{[^}]*position:\s*relative;[^}]*z-index:\s*1;/s);
+  it("delegates theme icons and the moving outline to the shared mode switch panel", () => {
+    expect(component).toMatch(/<ModeSwitchPanel\s[^>]*iconOnly\s[^>]*items=\{themeOptions\}/s);
+    expect(stylesheet).not.toContain(".themeSwitcher::before");
+    expect(stylesheet).not.toContain(".themeOption");
   });
 });

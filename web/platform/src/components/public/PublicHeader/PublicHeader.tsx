@@ -1,5 +1,6 @@
 import Link from "next/link";
 
+import { ScrollArea } from "@/components/ui/ScrollArea/ScrollArea";
 import type { PublicDictionary } from "@/i18n/public/dictionary";
 
 import { PageContainer } from "../PageContainer/PageContainer";
@@ -27,11 +28,17 @@ export function PublicHeader({ dictionary, navigationItems = [] }: PublicHeaderP
         </Link>
 
         {navigationItems.length > 0 ? (
-          <nav aria-label={dictionary.accessibility.primaryNavigation} className={styles.navigation}>
+          <ScrollArea
+            className={styles.navigationScroll}
+            orientation="horizontal"
+            viewportAs="nav"
+            viewportClassName={styles.navigation}
+            viewportProps={{ "aria-label": dictionary.accessibility.primaryNavigation }}
+          >
             {navigationItems.map((item) => (
               <Link href={item.href} key={item.href}>{item.label}</Link>
             ))}
-          </nav>
+          </ScrollArea>
         ) : <span className={styles.spacer} />}
 
         <div className={styles.actions}>

@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, type ChangeEvent, type FormEvent } from "react";
+import { useState, type ChangeEvent, type FormEvent, type ReactNode } from "react";
 
 import { ChatComposer } from "@/components/chat/ChatComposer/ChatComposer";
 import { ChatScrollToBottom } from "@/components/chat/ChatScrollToBottom/ChatScrollToBottom";
@@ -14,6 +14,7 @@ type ConversationComposerProps = {
   forceScrollRequest: number;
   initialDraft?: string;
   isAwaitingResponse?: boolean;
+  modelSelector?: ReactNode;
   onSubmit: (prompt: string) => void;
   scrollContainer: HTMLElement | null;
 };
@@ -24,6 +25,7 @@ export function ConversationComposer({
   forceScrollRequest,
   initialDraft = "",
   isAwaitingResponse = false,
+  modelSelector,
   onSubmit,
   scrollContainer,
 }: ConversationComposerProps) {
@@ -59,6 +61,7 @@ export function ConversationComposer({
         scrollContainer={scrollContainer}
       />
       <ChatComposer
+        additionalControls={modelSelector}
         canSubmit={canSubmit}
         disabled={disabled}
         label={ru.conversations.composerLabel}

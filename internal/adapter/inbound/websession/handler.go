@@ -348,6 +348,7 @@ func (h *Handler) Routes() http.Handler {
 	mux.HandleFunc("GET /web/v1/conversations/{conversationID}", h.requirePrincipal(h.getConversation))
 	mux.HandleFunc("GET /web/v1/conversations/{conversationID}/messages", h.requirePrincipal(h.listConversationMessages))
 	mux.HandleFunc("GET /web/v1/image-models", h.requirePrincipal(h.listImageModels))
+	mux.HandleFunc("GET /web/v1/chat-models", h.requirePrincipal(h.listChatModels))
 	mux.HandleFunc("GET /web/v1/image-jobs", h.requirePrincipal(h.listImageJobs))
 	mux.HandleFunc("GET /web/v1/image-jobs/{jobID}", h.requirePrincipal(h.getImageJob))
 	mux.HandleFunc("GET /web/v1/image-jobs/{jobID}/result", h.requirePrincipal(h.getImageJobResult))
@@ -1380,7 +1381,8 @@ func (h *Handler) createConversationMessage(w http.ResponseWriter, r *http.Reque
 		return
 	}
 	var req struct {
-		Prompt string `json:"prompt"`
+		Prompt  string `json:"prompt"`
+		ModelID string `json:"model_id"`
 	}
 	if !decodeJSON(w, r, &req) {
 		return
@@ -1388,6 +1390,12 @@ func (h *Handler) createConversationMessage(w http.ResponseWriter, r *http.Reque
 	req.Prompt = strings.TrimSpace(req.Prompt)
 	if req.Prompt == "" {
 		writeError(w, http.StatusBadRequest, "invalid chat message request")
+		return
+	}
+	req.ModelID = strings.TrimSpace(req.ModelID)
+	model, ok := modelcatalog.ResolvePublicModel(domain.OperationTextGenerate, req.ModelID)
+	if !ok || (req.ModelID != "" && req.ModelID != model.ModelID) {
+		writeError(w, http.StatusBadRequest, "invalid chat model")
 		return
 	}
 	idempotencyKey, err := uuid.Parse(strings.TrimSpace(r.Header.Get("X-Idempotency-Key")))
@@ -1415,11 +1423,6 @@ func (h *Handler) createConversationMessage(w http.ResponseWriter, r *http.Reque
 	}
 	if !allowed {
 		writeError(w, http.StatusTooManyRequests, "chat message rate limited")
-		return
-	}
-	model, ok := modelcatalog.ResolvePublicModel(domain.OperationTextGenerate, "")
-	if !ok {
-		writeError(w, http.StatusServiceUnavailable, "chat message unavailable")
 		return
 	}
 	orchestrationKey := "web-chat:" + principal.AccountID.String() + ":" + idempotencyKey.String()

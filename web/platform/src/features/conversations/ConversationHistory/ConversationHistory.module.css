@@ -6,9 +6,10 @@
 
 .history {
   flex: 1;
-  inline-size: min(100%, 58rem);
+  inline-size: min(100%, var(--workspace-page-shell-width));
   margin-inline: auto;
-  padding: clamp(3rem, 7vw, 6rem) clamp(var(--space-4), 6vw, 5rem);
+  padding-block: clamp(3rem, 7vw, 6rem);
+  padding-inline: var(--workspace-page-inline-gutter);
   padding-block-end: var(--space-8);
 }
 
@@ -52,7 +53,7 @@
   justify-self: end;
   inline-size: fit-content;
   max-inline-size: min(80%, 48rem);
-  background: var(--color-accent);
+  background: transparent;
   color: var(--color-text);
   overflow-wrap: anywhere;
 }
@@ -80,7 +81,7 @@
 }
 
 .pendingTurnFailure > span {
-  font-weight: 600;
+  font-weight: var(--font-weight-semibold);
 }
 
 .empty {
@@ -88,9 +89,10 @@
 }
 
 .state {
-  inline-size: min(100%, 58rem);
+  inline-size: min(100%, var(--workspace-page-shell-width));
   margin-inline: auto;
-  padding: clamp(3rem, 7vw, 6rem) clamp(var(--space-4), 6vw, 5rem);
+  padding-block: clamp(3rem, 7vw, 6rem);
+  padding-inline: var(--workspace-page-inline-gutter);
 }
 
 .stateSurface {
@@ -106,4 +108,11 @@
 
 .stateSurface > p {
   margin: 0;
+}
+
+@media (48rem <= width < 82rem) {
+  .history,
+  .state {
+    padding-inline-end: var(--space-4);
+  }
 }

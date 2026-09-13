@@ -34,6 +34,35 @@ data store.
 
 ## Implementation Gate
 
-There is no framework scaffold in this directory yet. Add dependencies and
-runtime code only with an approved first web feature, including lint,
-typecheck, tests, build, Docker packaging, and CI coverage in the same change.
+The app scaffold and shared components already exist. Reuse the current package
+configuration and scripts. New dependencies or runtime surfaces must belong to
+the user-authorized feature and include the relevant lint, typecheck, tests,
+build, packaging and CI checks for that change.
+
+## UI Reuse Workflow
+
+For UI changes and text-only UI proposals within `web/platform`, use this order:
+
+1. Find the task in [the short UI index](docs/ui-index.md). If it is already in
+   the current task context, reuse it; reread affected entries only as needed.
+2. Read only the linked section of [the catalog](docs/ui-catalog.md) and, when
+   needed, the matching [example](docs/ui-catalog-examples.md). Do not load the
+   entire catalog, all examples or the archived inventory by default.
+3. Check the actual component export, props, shared styles and one current
+   consumer before recommending or changing it. The catalog is a navigation
+   aid; current code determines implemented behavior and the user's request
+   determines intended behavior. Do not present an unfinished action as working.
+4. Reuse the existing component/style, or extend it when the intended behavior
+   fits its purpose. Check other affected consumers when extending a shared
+   contract. If no indexed solution fits, search the relevant source directories
+   before adding a new component; briefly explain why a separate one is needed.
+5. In the same change, update the corresponding catalog entry and any affected
+   index row/example when props, behavior, defaults, paths, limitations or reuse
+   recommendations change. Keep still-accurate entries as they are; do not
+   regenerate the archived inventory for routine work. Check changed links and
+   TypeScript examples when their code changes.
+
+When relevant, tell the user which existing component or style already covers
+their request. Keep implementation within the requested scope: a text-only
+proposal remains text-only, and UI-only documentation is not needed for unrelated
+backend work. These instructions add no separate approval step.

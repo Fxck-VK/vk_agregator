@@ -188,6 +188,18 @@ webhook/reconciliation plus ledger top-up can complete a payment.
 
 Current durable shared chat context:
 
+- Web chat exposes its safe public text-model catalogue at authenticated
+  GET /web/v1/chat-models (items: [{id, name}], default_model_id, no-store).
+  POST /web/v1/conversations/{conversationID}/messages accepts optional model_id
+  alongside prompt. Omission retains the server default; explicit IDs must
+  match a canonical public text-model ID from modelcatalog. Display names,
+  private provider codes and image-model IDs are rejected. Model routing,
+  pricing and provider execution remain server/worker responsibilities.
+- The web composer displays its model selector after the first submitted turn
+  and in existing conversations. Changing it keeps the same conversation and
+  draft. The public selection is a per-conversation sessionStorage preference;
+  retries retain the model captured in the original pending turn with the same
+  idempotency key. No provider details or message contents enter this preference.
 - VK bot and Mini App text chat both use the same Postgres-backed conversation
   core: `conversations`, `conversation_messages`, `conversation_summaries` and
   `internal/service/dialogcontext`.

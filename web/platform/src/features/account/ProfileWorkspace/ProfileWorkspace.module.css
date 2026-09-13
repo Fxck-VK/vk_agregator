@@ -1,9 +1,10 @@
 .workspace {
   display: grid;
-  inline-size: min(100%, 62rem);
+  inline-size: min(100%, var(--workspace-page-shell-width));
   gap: var(--space-6);
   margin-inline: auto;
-  padding: clamp(var(--space-5), 5vw, 4rem) clamp(var(--space-4), 6vw, 5rem);
+  padding-block: clamp(var(--space-5), 5vw, 4rem);
+  padding-inline: var(--workspace-page-inline-gutter);
 }
 
 .screenReaderOnly {
@@ -16,11 +17,14 @@
   white-space: nowrap;
 }
 
+.tabsScroll {
+  max-inline-size: 100%;
+  border-block-end: 0.0625rem solid var(--color-border);
+}
+
 .tabs {
   display: flex;
   gap: var(--space-4);
-  overflow-x: auto;
-  border-block-end: 0.0625rem solid var(--color-border);
 }
 
 .tab {
@@ -97,6 +101,12 @@
 .placeholderCard button:disabled {
   cursor: default;
   opacity: 1;
+}
+
+@media (48rem <= width < 82rem) {
+  .workspace {
+    padding-inline-end: var(--space-4);
+  }
 }
 
 @media (width < 36rem) {

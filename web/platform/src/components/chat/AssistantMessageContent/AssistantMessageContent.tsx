@@ -1,10 +1,15 @@
 import Markdown from "react-markdown";
 
+import { ScrollArea } from "@/components/ui/ScrollArea/ScrollArea";
+
 import styles from "./AssistantMessageContent.module.css";
 
 type AssistantMessageContentProps = {
   markdown: string;
+  omitImageArtifactIDs?: readonly string[];
 };
+
+const imageArtifactPathPattern = /^\/web\/v1\/image-artifacts\/[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
 const allowedElements = [
   "p",
@@ -23,9 +28,11 @@ const allowedElements = [
   "a",
   "hr",
   "br",
+  "img",
 ];
 
-export function AssistantMessageContent({ markdown }: Readonly<AssistantMessageContentProps>) {
+export function AssistantMessageContent({ markdown, omitImageArtifactIDs = [] }: Readonly<AssistantMessageContentProps>) {
+  const omittedPaths = new Set(omitImageArtifactIDs.map((id) => `/web/v1/image-artifacts/${id}`));
   const safeMarkdown = markdown
     .replace(/<script\b[^>]*>[\s\S]*?<\/script\s*>/gi, "")
     .replace(/<style\b[^>]*>[\s\S]*?<\/style\s*>/gi, "");
@@ -35,9 +42,31 @@ export function AssistantMessageContent({ markdown }: Readonly<AssistantMessageC
       <Markdown
         allowedElements={allowedElements}
         components={{
-          a({ node, ...props }) {
+          a({ node, href, ...props }) {
             void node;
-            return <a {...props} rel="noopener noreferrer" target="_blank" />;
+            if (href && omittedPaths.has(href)) return null;
+            const isImageDownload = typeof href === "string" && imageArtifactPathPattern.test(href);
+            return <a {...props} download={isImageDownload || undefined} href={href} rel="noopener noreferrer" target={isImageDownload ? undefined : "_blank"} />;
+          },
+          img({ src, alt }) {
+            if (typeof src !== "string" || !imageArtifactPathPattern.test(src)) return null;
+            if (omittedPaths.has(src)) return null;
+            return (
+              // eslint-disable-next-line @next/next/no-img-element
+              <img alt={alt || "Сгенерированное изображение"} className={styles.image} decoding="async" loading="lazy" src={src} />
+            );
+          },
+          pre({ children }) {
+            return (
+              <ScrollArea
+                className={styles.codeScroll}
+                orientation="horizontal"
+                viewportAs="pre"
+                viewportClassName={styles.codeBlock}
+              >
+                {children}
+              </ScrollArea>
+            );
           },
         }}
         skipHtml

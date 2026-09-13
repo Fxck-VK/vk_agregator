@@ -47,28 +47,6 @@ export const conversationListSchema = z
 export type ConversationItem = z.infer<typeof conversationItemSchema>;
 export type ConversationList = z.infer<typeof conversationListSchema>;
 
-export const conversationMessageSchema = z
-  .object({
-    id: z.string().uuid(),
-    seq: z.number().int().positive(),
-    role: z.enum(["user", "assistant"]),
-    text: z.string(),
-    rating: z.enum(["like", "dislike"]).nullable().optional().default(null),
-    created_at: z.string().datetime({ offset: true }),
-  })
-  .strict();
-
-export const conversationMessageListSchema = z
-  .object({
-    items: z.array(conversationMessageSchema),
-    has_more_before: z.boolean().optional().default(false),
-  })
-  .strict();
-
-export type ConversationMessage = z.infer<typeof conversationMessageSchema>;
-export type ConversationMessageList = z.infer<typeof conversationMessageListSchema>;
-export type ConversationMessageRating = ConversationMessage["rating"];
-
 export const conversationMessageRatingResponseSchema = z
   .object({
     rating: z.enum(["like", "dislike"]).nullable(),
@@ -76,6 +54,23 @@ export const conversationMessageRatingResponseSchema = z
   .strict();
 
 export type ConversationMessageRatingResponse = z.infer<typeof conversationMessageRatingResponseSchema>;
+
+export const chatModelListSchema = z.object({
+  items: z.array(z.object({
+    id: z.string().trim().min(1),
+    name: z.string().trim().min(1),
+  }).strict()).min(1),
+  default_model_id: z.string().trim().min(1),
+}).strict().refine((catalog) => (
+  catalog.items.some((model) => model.id === catalog.default_model_id)
+  && new Set(catalog.items.map((model) => model.id)).size === catalog.items.length
+), { message: "Chat model catalogue must contain a valid default and unique models." });
+
+export type ChatModelList = z.infer<typeof chatModelListSchema>;
+
+export function parseChatModelList(payload: unknown): ChatModelList {
+  return chatModelListSchema.parse(payload);
+}
 
 export const imageModelSchema = z
   .object({
@@ -194,6 +189,31 @@ export type ImageJobList = z.infer<typeof imageJobListSchema>;
 export type ImageArtifactMetadata = z.infer<typeof imageArtifactMetadataSchema>;
 export type ImageJobResult = z.infer<typeof imageJobResultSchema>;
 export type WebChatJob = z.infer<typeof webChatJobSchema>;
+
+export const conversationImageSchema = z.object({
+  job: imageJobSchema.refine((job) => job.status === "succeeded"),
+  artifact: imageArtifactMetadataSchema,
+}).strict();
+
+export const conversationMessageSchema = z.object({
+  id: z.string().uuid(),
+  seq: z.number().int().positive(),
+  role: z.enum(["user", "assistant"]),
+  text: z.string(),
+  rating: z.enum(["like", "dislike"]).nullable().optional().default(null),
+  created_at: z.string().datetime({ offset: true }),
+  images: z.array(conversationImageSchema).optional(),
+}).strict();
+
+export const conversationMessageListSchema = z.object({
+  items: z.array(conversationMessageSchema),
+  has_more_before: z.boolean().optional().default(false),
+}).strict();
+
+export type ConversationImage = z.infer<typeof conversationImageSchema>;
+export type ConversationMessage = z.infer<typeof conversationMessageSchema>;
+export type ConversationMessageList = z.infer<typeof conversationMessageListSchema>;
+export type ConversationMessageRating = ConversationMessage["rating"];
 
 const safeWebChatReplayStatuses = new Set<WebChatJob["status"]>([
   "received",

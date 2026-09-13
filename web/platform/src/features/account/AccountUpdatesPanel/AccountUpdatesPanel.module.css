@@ -26,11 +26,7 @@
 
 .feed {
   min-block-size: 0;
-  overflow-y: auto;
-  overscroll-behavior: contain;
   padding: var(--space-2) var(--space-4) var(--space-4);
-  scrollbar-width: thin;
-  scrollbar-color: color-mix(in srgb, var(--color-text-muted) 45%, transparent) transparent;
 }
 
 .updateCard {
@@ -60,7 +56,7 @@
   background: var(--color-accent);
   color: var(--color-text-on-accent, #fff);
   font: inherit;
-  font-weight: 700;
+  font-weight: var(--font-weight-semibold);
 }
 
 .updateAction:disabled {

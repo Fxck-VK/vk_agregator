@@ -1,4 +1,4 @@
-import { cleanup, fireEvent, render, screen } from "@testing-library/react";
+import { cleanup, fireEvent, render, screen, within } from "@testing-library/react";
 import { afterEach, describe, expect, it } from "vitest";
 
 import { ru } from "@/i18n/ru";
@@ -32,7 +32,9 @@ describe("ImageGenerationGuide", () => {
       "aria-selected",
       "true",
     );
-    expect(screen.getByRole("tabpanel", { name: ru.imageGeneration.guide.examplesTab })).toBeInTheDocument();
+    const examplesPanel = screen.getByRole("tabpanel", { name: ru.imageGeneration.guide.examplesTab });
+    expect(within(examplesPanel).getAllByRole("listitem")).toHaveLength(6);
+    expect(within(examplesPanel).getAllByRole("img")).toHaveLength(6);
     expect(screen.getByRole("button", { name: ru.inspiration.openExample })).toBeInTheDocument();
     expect(screen.queryByTestId("image-generation-example-placeholder")).not.toBeInTheDocument();
     expect(screen.getByRole("link", { name: ru.imageGeneration.guide.viewMoreExamples })).toHaveAttribute(

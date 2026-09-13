@@ -2,10 +2,12 @@
 
 import Image from "next/image";
 import Link from "next/link";
-import { useEffect, useId, useRef, useState, type ChangeEvent } from "react";
+import { useId, useRef, useState, type ChangeEvent } from "react";
 
 import { assetPaths } from "@/assets/asset-paths";
 import { InputControlChip } from "@/components/ui/InputControlChip/InputControlChip";
+import { PopoverPanel } from "@/components/ui/PopoverPanel/PopoverPanel";
+import selectableStyles from "@/components/ui/selectable-control.module.css";
 import styles from "./ChatMediaMenu.module.css";
 
 export type ChatMediaMenuLabels = {
@@ -27,6 +29,7 @@ type ChatMediaMenuProps = {
 };
 
 const acceptedMediaTypes = "image/*,video/*,audio/*,application/pdf";
+const menuItemClassName = `${selectableStyles.control} ${styles.item}`;
 
 export function ChatMediaMenu({
   disabled = false,
@@ -39,32 +42,8 @@ export function ChatMediaMenu({
 }: Readonly<ChatMediaMenuProps>) {
   const [isOpen, setIsOpen] = useState(false);
   const menuID = useId();
-  const rootRef = useRef<HTMLDivElement>(null);
+  const triggerRef = useRef<HTMLButtonElement>(null);
   const inputRef = useRef<HTMLInputElement>(null);
-
-  useEffect(() => {
-    if (!isOpen) {
-      return;
-    }
-
-    const closeOnEscape = (event: KeyboardEvent) => {
-      if (event.key === "Escape") {
-        setIsOpen(false);
-      }
-    };
-    const closeOnOutsidePointer = (event: PointerEvent) => {
-      if (!rootRef.current?.contains(event.target as Node)) {
-        setIsOpen(false);
-      }
-    };
-
-    document.addEventListener("keydown", closeOnEscape);
-    document.addEventListener("pointerdown", closeOnOutsidePointer);
-    return () => {
-      document.removeEventListener("keydown", closeOnEscape);
-      document.removeEventListener("pointerdown", closeOnOutsidePointer);
-    };
-  }, [isOpen]);
 
   const chooseFile = () => {
     setIsOpen(false);
@@ -87,7 +66,7 @@ export function ChatMediaMenu({
   };
 
   return (
-    <div className={styles.root} ref={rootRef}>
+    <div className={styles.root}>
       <InputControlChip
         aria-controls={isOpen ? menuID : undefined}
         aria-expanded={isOpen}
@@ -96,6 +75,7 @@ export function ChatMediaMenu({
         className={styles.trigger}
         disabled={disabled}
         onClick={() => setIsOpen((current) => !current)}
+        ref={triggerRef}
       >
         <Image alt="" aria-hidden="true" height={24} src={assetPaths.icons.ui.uploadMedia} unoptimized width={24} />
         <span>{labels.trigger}</span>
@@ -111,31 +91,40 @@ export function ChatMediaMenu({
         type="file"
       />
 
-      {isOpen ? (
-        <div aria-label={labels.menu} className={styles.menu} id={menuID} role="menu">
-          <button className={styles.item} onClick={chooseFile} role="menuitem" type="button">
+      <PopoverPanel
+        anchorRef={triggerRef}
+        id={menuID}
+        isOpen={isOpen}
+        itemVariant="action"
+        label={labels.menu}
+        onClose={() => setIsOpen(false)}
+        role="menu"
+        width={320}
+      >
+        <div className={styles.menu}>
+          <button className={menuItemClassName} onClick={chooseFile} role="menuitem" type="button">
             {labels.uploadFile}
           </button>
           {onChooseUploaded === undefined ? (
-            <Link className={styles.item} href={uploadedHref} onClick={() => setIsOpen(false)} role="menuitem">
+            <Link className={menuItemClassName} href={uploadedHref} onClick={() => setIsOpen(false)} role="menuitem">
               {labels.chooseUploaded}
             </Link>
           ) : (
-            <button className={styles.item} onClick={chooseUploaded} role="menuitem" type="button">
+            <button className={menuItemClassName} onClick={chooseUploaded} role="menuitem" type="button">
               {labels.chooseUploaded}
             </button>
           )}
           {onChooseGenerated === undefined ? (
-            <Link className={styles.item} href={generatedHref} onClick={() => setIsOpen(false)} role="menuitem">
+            <Link className={menuItemClassName} href={generatedHref} onClick={() => setIsOpen(false)} role="menuitem">
               {labels.chooseGenerated}
             </Link>
           ) : (
-            <button className={styles.item} onClick={chooseGenerated} role="menuitem" type="button">
+            <button className={menuItemClassName} onClick={chooseGenerated} role="menuitem" type="button">
               {labels.chooseGenerated}
             </button>
           )}
         </div>
-      ) : null}
+      </PopoverPanel>
     </div>
   );
 }

@@ -11,6 +11,8 @@ import {
 } from "react";
 import { createPortal } from "react-dom";
 
+import { PopoverSurface } from "@/components/ui/PopoverPanel/PopoverPanel";
+
 import { resolveFloatingPosition } from "./floating-position";
 
 type FloatingConversationPanelProps = {
@@ -94,9 +96,16 @@ export function FloatingConversationPanel({
     : { left: position.left, top: position.top };
 
   return createPortal(
-    <div aria-label={ariaLabel} className={className} ref={panelRef} role={role} style={style}>
+    <PopoverSurface
+      aria-label={ariaLabel}
+      className={className}
+      itemVariant="action"
+      ref={panelRef}
+      role={role}
+      style={style}
+    >
       {children}
-    </div>,
+    </PopoverSurface>,
     document.body,
   );
 }

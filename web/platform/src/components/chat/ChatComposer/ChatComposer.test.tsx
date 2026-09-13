@@ -24,9 +24,19 @@ describe("ChatComposer", () => {
       />,
     );
 
-    expect(screen.getByLabelText("Задайте вопрос NeiroHub")).toHaveAttribute("placeholder", "Напишите вопрос");
+    const textarea = screen.getByLabelText("Задайте вопрос NeiroHub");
+
+    expect(textarea).toHaveAttribute("placeholder", "Напишите вопрос");
+    expect(textarea.closest('[data-ui="input-surface"]')).not.toBeNull();
     expect(screen.getByRole("button", { name: "Загрузить медиа" })).toBeEnabled();
-    expect(screen.getByRole("button", { name: "Отправить" })).toBeDisabled();
+    const submitButton = screen.getByRole("button", { name: "Отправить" });
+    expect(submitButton).toBeDisabled();
+    expect(submitButton).toHaveAttribute("data-ui", "chat-submit-button");
+    expect(submitButton).not.toHaveAttribute("title");
+    expect(screen.getByText("Отправить", { selector: '[role="tooltip"]' })).toHaveAttribute(
+      "data-ui",
+      "tooltip-bubble",
+    );
   });
 
   it("keeps Enter submission in every visual variant", () => {
@@ -49,6 +59,25 @@ describe("ChatComposer", () => {
     fireEvent.keyDown(screen.getByLabelText("Новый чат"), { key: "Enter" });
 
     expect(onSend).toHaveBeenCalledTimes(1);
+  });
+
+  it.each(["hero", "newChat"] as const)("uses a one-row textarea in the %s composer", (variant) => {
+    render(
+      <ChatComposer
+        canSubmit={false}
+        disabled={false}
+        label="Главный запрос"
+        mediaLabel="Загрузить медиа"
+        onChange={vi.fn()}
+        onSend={vi.fn()}
+        placeholder="Спросите NeiroHub"
+        submitLabel="Отправить"
+        value=""
+        variant={variant}
+      />,
+    );
+
+    expect(screen.getByLabelText("Главный запрос")).toHaveAttribute("rows", "1");
   });
 
   it("renders an optional note outside the composer surface", () => {
@@ -100,6 +129,25 @@ describe("ChatComposer", () => {
     expect(screen.getByRole("group", { name: "Медиа и настройки" })).not.toContainElement(
       screen.getByRole("button", { name: "Сгенерировать" }),
     );
+  });
+
+  it("keeps shared control styling component-owned without a radius variant", () => {
+    const { container } = render(
+      <ChatComposer
+        canSubmit
+        disabled={false}
+        label="Генерация изображения"
+        mediaLabel="Загрузить медиа"
+        onChange={vi.fn()}
+        onSend={vi.fn()}
+        placeholder="Опишите изображение"
+        submitLabel="Сгенерировать"
+        value="Город после дождя"
+        variant="hero"
+      />,
+    );
+
+    expect(container.querySelector("[data-control-radius]")).not.toBeInTheDocument();
   });
 
   it("shows a selected local file in the composer and lets the user remove it", () => {

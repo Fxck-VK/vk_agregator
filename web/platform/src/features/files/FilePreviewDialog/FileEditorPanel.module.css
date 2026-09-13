@@ -1,0 +1,658 @@
+.panel {
+  display: grid;
+  block-size: 100%;
+  min-block-size: 0;
+  grid-template-rows: auto minmax(0, 1fr) auto;
+  gap: var(--space-4);
+  animation: editorPanelIn 280ms cubic-bezier(0.22, 1, 0.36, 1) both;
+}
+
+.bodyScroll {
+  block-size: 100%;
+  min-block-size: 0;
+  margin-inline-end: calc(-1 * var(--space-4));
+}
+
+.bodyViewport {
+  padding-inline-end: var(--space-4);
+}
+
+.bodyContent {
+  display: grid;
+  gap: var(--space-5);
+  padding-block-end: var(--space-2);
+}
+
+.title {
+  display: flex;
+  min-block-size: 2.5rem;
+  align-items: center;
+  justify-content: center;
+  gap: var(--space-2);
+}
+
+.title img {
+  inline-size: 1.25rem;
+  block-size: 1.25rem;
+}
+
+.title h2,
+.controlSection h3,
+.howItWorks h3 {
+  margin: 0;
+  color: var(--color-text);
+  font-weight: var(--font-weight-semibold);
+}
+
+.title h2 {
+  font-size: var(--font-size-body);
+}
+
+.historyBar,
+.historyActions,
+.selectionModes,
+.generationSettings,
+.modelSelector,
+.modelOption,
+.modelCost,
+.submitButton,
+.zoomActions {
+  display: flex;
+  align-items: center;
+}
+
+.historyBar {
+  justify-content: space-between;
+  gap: var(--space-3);
+}
+
+.historyActions {
+  gap: var(--space-2);
+}
+
+.iconButton,
+.clearButton,
+.selectionModes button,
+.modelSelector {
+  border: 0.0625rem solid rgb(255 255 255 / 16%);
+  border-radius: var(--radius-sm);
+  background: transparent;
+  color: var(--color-text);
+  font: inherit;
+  transition: border-color var(--motion-fast), color var(--motion-fast), opacity var(--motion-fast);
+}
+
+.iconButton {
+  display: grid;
+  inline-size: 2.75rem;
+  block-size: 2.75rem;
+  flex: 0 0 auto;
+  place-items: center;
+}
+
+.clearButton {
+  min-block-size: 2.75rem;
+  padding-inline: var(--space-4);
+  font-size: var(--font-size-ui);
+  font-weight: var(--font-weight-semibold);
+}
+
+.iconButton:hover:not(:disabled),
+.iconButton:focus-visible:not(:disabled),
+.clearButton:hover:not(:disabled),
+.clearButton:focus-visible:not(:disabled),
+.selectionModes button:hover,
+.selectionModes button:focus-visible,
+.modelSelector:hover,
+.modelSelector:focus-visible {
+  border-color: var(--color-accent);
+  outline: none;
+}
+
+.iconButton[data-active="true"] {
+  border-color: var(--color-accent);
+  color: #fff;
+}
+
+.iconButton:disabled,
+.clearButton:disabled {
+  opacity: 0.34;
+  cursor: default;
+}
+
+.controlIcon {
+  inline-size: 1.2rem;
+  block-size: 1.2rem;
+  fill: none;
+  stroke: currentColor;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+  stroke-width: 1.7;
+}
+
+.selectionToolIcon {
+  display: block;
+  inline-size: 1.2rem;
+  block-size: 1.2rem;
+  flex: 0 0 auto;
+  background: currentColor;
+  -webkit-mask: var(--selection-tool-icon) center / contain no-repeat;
+  mask: var(--selection-tool-icon) center / contain no-repeat;
+}
+
+.brushIcon {
+  --selection-tool-icon: url("/assets/icons/ui/brush-white.svg");
+}
+
+.lassoIcon {
+  --selection-tool-icon: url("/assets/icons/ui/lasso-white.svg");
+}
+
+.controlSection,
+.field,
+.howItWorks {
+  display: grid;
+  gap: var(--space-2);
+}
+
+.howItWorks {
+  align-self: start;
+}
+
+.controlSection h3,
+.field > span,
+.howItWorks h3 {
+  color: var(--color-text-muted);
+  font-size: var(--font-size-ui);
+  font-weight: var(--font-weight-semibold);
+}
+
+.selectionModes {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: var(--space-2);
+}
+
+.brushSizeReveal {
+  display: grid;
+  grid-template-rows: 0fr;
+  margin-block-end: 0;
+  opacity: 0;
+  visibility: hidden;
+  transition:
+    grid-template-rows 240ms ease,
+    margin-block-end 240ms ease,
+    opacity 180ms ease,
+    visibility 0s linear 240ms;
+}
+
+.brushSizeReveal[data-open="true"] {
+  grid-template-rows: 1fr;
+  margin-block-end: -0.75rem;
+  opacity: 1;
+  visibility: visible;
+  transition-delay: 0s;
+}
+
+.brushSizeClip {
+  min-block-size: 0;
+  overflow: hidden;
+}
+
+.brushSizeField {
+  padding-block-start: var(--space-5);
+  /* Keep room for the slider thumb's shadow inside the animated clip. */
+  padding-block-end: 0.75rem;
+}
+
+.selectionModes button {
+  display: inline-flex;
+  min-block-size: 2.75rem;
+  align-items: center;
+  justify-content: center;
+  gap: var(--space-2);
+  font-weight: var(--font-weight-semibold);
+}
+
+.selectionModes button[data-active="true"] {
+  border-color: var(--color-accent);
+  color: #fff;
+  box-shadow: 0 0 0 0.0625rem color-mix(in srgb, var(--color-accent) 15%, transparent);
+}
+
+.iconButton[data-active="false"],
+.selectionModes button[data-active="false"] {
+  color: var(--color-text-muted);
+}
+
+.iconButton[data-active="false"]:hover,
+.selectionModes button[data-active="false"]:hover {
+  border-color: rgb(255 255 255 / 16%);
+  color: #fff;
+  box-shadow: none;
+}
+
+.field textarea {
+  min-block-size: 6.5rem;
+  resize: none;
+  border: 0;
+  padding: var(--space-4);
+  background: transparent;
+  color: var(--color-text);
+  font: inherit;
+  line-height: 1.4;
+}
+
+.promptSurface {
+  min-block-size: 6.5rem;
+  overflow: hidden;
+  background: transparent;
+}
+
+.promptScroll {
+  min-block-size: 6.5rem;
+  border-radius: inherit;
+}
+
+.field textarea::placeholder {
+  color: var(--color-text-muted);
+}
+
+.field textarea:focus {
+  outline: none;
+}
+
+.modelSelector {
+  display: grid;
+  grid-template-columns: 2.25rem minmax(0, 1fr) 1rem;
+  gap: var(--space-3);
+  inline-size: 100%;
+  min-block-size: 3.5rem;
+  align-items: center;
+  padding: 0.55rem 0.75rem;
+  background: color-mix(in srgb, var(--color-surface) 86%, transparent);
+  text-align: start;
+}
+
+.modelField {
+  position: relative;
+}
+
+.modelSelector strong {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.modelMark {
+  display: grid;
+  inline-size: 2.25rem;
+  block-size: 2.25rem;
+  flex: 0 0 auto;
+  place-items: center;
+  border-radius: 50%;
+  background: var(--gradient-brand);
+}
+
+.modelMark img {
+  inline-size: 1.125rem;
+  block-size: 1.125rem;
+}
+
+.chevron {
+  inline-size: 0.875rem;
+  block-size: auto;
+  justify-self: end;
+  transition: transform var(--motion-fast);
+}
+
+.chevron[data-open="true"] {
+  transform: rotate(180deg);
+}
+
+.modelOption {
+  position: absolute;
+  z-index: 6;
+  inset-inline: 0;
+  inline-size: 100%;
+  gap: var(--space-3);
+  min-block-size: 3.5rem;
+  border: 0.0625rem solid rgb(255 255 255 / 12%);
+  border-radius: 1rem;
+  padding: var(--space-2) var(--space-3);
+  background: rgb(5 6 9 / 78%);
+  cursor: pointer;
+}
+
+.modelOption[data-placement="top"] {
+  inset-block-end: calc(100% + var(--space-2));
+}
+
+.modelOption[data-placement="bottom"] {
+  inset-block-start: calc(100% + var(--space-2));
+}
+
+.modelOption input {
+  position: absolute;
+  inline-size: 0.0625rem;
+  block-size: 0.0625rem;
+  opacity: 0;
+}
+
+.modelCost {
+  gap: 0.2rem;
+  margin-inline-start: auto;
+  font-weight: var(--font-weight-semibold);
+}
+
+.creditStar {
+  inline-size: 1rem;
+  block-size: 1rem;
+  object-fit: contain;
+}
+
+.generationSettings {
+  --input-control-size: 2.75rem;
+
+  flex-wrap: wrap;
+  gap: var(--space-3);
+}
+
+.generationSettings [data-ui="input-control-chip"] {
+  min-inline-size: 6rem;
+  border-radius: var(--radius-sm);
+}
+
+.howCard {
+  display: grid;
+  gap: var(--space-2);
+}
+
+.howCard img {
+  display: block;
+  inline-size: 100%;
+  block-size: auto;
+  aspect-ratio: 16 / 9;
+  border-radius: var(--radius-lg);
+  object-fit: cover;
+}
+
+.howCardCopy {
+  display: grid;
+  gap: var(--space-1);
+}
+
+.howCardCopy strong {
+  color: var(--color-text);
+  font-size: var(--font-size-body);
+  font-weight: var(--font-weight-semibold);
+}
+
+.howCardCopy p {
+  margin: 0;
+  color: var(--color-text-muted);
+  font-size: var(--font-size-ui);
+  line-height: 1.4;
+}
+
+.submitButton {
+  z-index: 2;
+  min-block-size: 3.75rem;
+  inline-size: 100%;
+  flex: 0 0 auto;
+  justify-content: center;
+  gap: var(--space-2);
+  border: 0;
+  border-radius: 1rem;
+  padding: 0.8rem 1.25rem;
+  background: var(--gradient-brand);
+  color: #fff;
+  box-shadow: 0 0.5rem 1.25rem color-mix(in srgb, var(--color-accent) 24%, transparent);
+  font: inherit;
+  font-weight: var(--font-weight-semibold);
+}
+
+.submitButton:hover,
+.submitButton:focus-visible {
+  filter: brightness(1.06);
+  outline: none;
+}
+
+.editSurface {
+  position: relative;
+  display: grid;
+  inline-size: 100%;
+  block-size: 100%;
+  overflow: clip;
+  place-items: center;
+  border: 0.125rem dashed var(--color-accent);
+  border-radius: inherit;
+  container-name: edit-preview;
+  container-type: inline-size;
+  cursor: crosshair;
+  touch-action: none;
+}
+
+.editSurface[data-tool="brush"],
+.editSurface[data-tool="eraser"] {
+  cursor: none;
+}
+
+.editSurface[data-tool="none"] {
+  cursor: default;
+}
+
+.editSurface[data-tool="pan"] {
+  cursor: grab;
+}
+
+.editSurface[data-panning="true"] {
+  cursor: grabbing;
+}
+
+.editCanvas {
+  position: absolute;
+  inset: 0;
+  display: grid;
+  place-items: center;
+  transition: transform var(--motion-fast);
+}
+
+.editImage {
+  inline-size: 100%;
+  block-size: 100%;
+  object-fit: contain;
+  user-select: none;
+  -webkit-user-drag: none;
+}
+
+.editSurface[data-panning="true"] .editCanvas {
+  transition: none;
+}
+
+.editMask {
+  position: absolute;
+  inset: 0;
+  inline-size: 100%;
+  block-size: 100%;
+  pointer-events: none;
+}
+
+.toolCursor {
+  position: absolute;
+  z-index: 2;
+  border: 0.125rem solid var(--color-accent);
+  border-radius: 50%;
+  background: transparent;
+  box-shadow: none;
+  opacity: 0;
+  pointer-events: none;
+  transform: translate(-50%, -50%);
+  transition: opacity var(--motion-fast);
+}
+
+.toolCursor[data-visible="true"] {
+  opacity: 1;
+}
+
+.brushSizePreview {
+  transition:
+    width var(--motion-fast),
+    height var(--motion-fast),
+    opacity var(--motion-fast);
+}
+
+.zoomControls {
+  --zoom-pan-size: 1.75rem;
+  --zoom-pan-gap: 0.25rem;
+  --zoom-controls-padding: 0.2rem;
+
+  position: absolute;
+  z-index: 3;
+  inset-inline-start: 50%;
+  inset-inline-end: auto;
+  inset-block-end: var(--space-2);
+  display: grid;
+  inline-size: 9.5rem;
+  max-inline-size: calc(100% - var(--space-2));
+  place-items: center;
+  border: var(--panel-surface-border);
+  border-radius: 0.5rem;
+  padding: var(--zoom-controls-padding);
+  background: var(--panel-surface-background);
+  color: #fff;
+  box-shadow: var(--panel-surface-shadow);
+  transform: translateX(-50%);
+}
+
+.zoomActions {
+  inline-size: calc(100% - var(--zoom-pan-size) - var(--zoom-pan-gap));
+  min-inline-size: 0;
+  justify-content: center;
+  gap: 0.15rem;
+  transform: translateX(0);
+  transition: transform 280ms cubic-bezier(0.22, 1, 0.36, 1);
+}
+
+.zoomControls[data-zoomed="true"] .zoomActions {
+  transform: translateX(calc((var(--zoom-pan-size) + var(--zoom-pan-gap)) / 2));
+}
+
+.zoomControls button {
+  display: grid;
+  inline-size: 1.75rem;
+  block-size: 1.75rem;
+  place-items: center;
+  border: 0.0625rem solid transparent;
+  border-radius: 0.5rem;
+  padding: 0;
+  background: transparent;
+  color: inherit;
+  font: inherit;
+  font-size: 1.1rem;
+}
+
+.zoomControls button:hover:not(:disabled),
+.zoomControls button:focus-visible:not(:disabled) {
+  border-color: var(--color-accent);
+  outline: none;
+}
+
+.zoomActions button:disabled {
+  opacity: 0.32;
+}
+
+.zoomControls .zoomPanButton {
+  position: absolute;
+  inset-inline-start: var(--zoom-controls-padding);
+  inline-size: var(--zoom-pan-size);
+  block-size: 1.75rem;
+  border: 0.0625rem solid transparent;
+  border-radius: var(--radius-sm);
+  background: transparent;
+  opacity: 0;
+  visibility: hidden;
+  pointer-events: none;
+  transform: translateX(0.25rem);
+  transition:
+    opacity 280ms ease,
+    transform 280ms cubic-bezier(0.22, 1, 0.36, 1),
+    visibility 0s linear 280ms,
+    border-color var(--motion-fast);
+}
+
+.zoomControls[data-zoomed="true"] .zoomPanButton {
+  opacity: 1;
+  visibility: visible;
+  pointer-events: auto;
+  transform: translateX(0);
+  transition-delay: 0s;
+}
+
+.zoomControls .zoomPanButton[aria-pressed="true"],
+.zoomControls .zoomPanButton:hover:not(:disabled),
+.zoomControls .zoomPanButton:focus-visible {
+  border-color: var(--color-accent);
+  background: transparent;
+}
+
+.zoomControls output {
+  min-inline-size: 2.75rem;
+  font-size: 0.75rem;
+  text-align: center;
+}
+
+@container edit-preview (inline-size < 10rem) {
+  .zoomControls {
+    --zoom-pan-size: 1.25rem;
+    --zoom-pan-gap: 0.125rem;
+    --zoom-controls-padding: 0.125rem;
+  }
+
+  .zoomActions {
+    gap: 0;
+  }
+
+  .zoomControls button {
+    inline-size: 1.5rem;
+    block-size: 1.5rem;
+    min-inline-size: 0;
+    flex: 0 1 1.5rem;
+  }
+
+  .zoomControls .controlIcon {
+    inline-size: min(1.2rem, 100%);
+  }
+
+  .zoomControls output {
+    min-inline-size: 0;
+    flex: 0 1 2.25rem;
+    font-size: 0.6875rem;
+  }
+}
+
+@keyframes editorPanelIn {
+  from {
+    opacity: 0;
+    transform: translateX(0.5rem);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .panel,
+  .editCanvas,
+  .chevron,
+  .iconButton,
+  .clearButton,
+  .brushSizeReveal,
+  .selectionModes button,
+  .modelSelector {
+    animation: none;
+    transition: none;
+  }
+
+  .zoomActions,
+  .zoomControls .zoomPanButton {
+    transition: none;
+  }
+}

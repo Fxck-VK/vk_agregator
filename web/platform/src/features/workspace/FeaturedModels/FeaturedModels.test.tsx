@@ -41,11 +41,22 @@ describe("FeaturedModels", () => {
 
     fireEvent.click(screen.getByRole("button", { name: "Показать ещё" }));
 
-    expect(screen.getAllByTestId("featured-model-card")).toHaveLength(6);
+    const expandedCards = screen.getAllByTestId("featured-model-card");
+    expect(expandedCards).toHaveLength(6);
+    expect(expandedCards[0]).not.toHaveAttribute("data-revealed");
+    expect(expandedCards[1]).not.toHaveAttribute("data-revealed");
+    expect(expandedCards[2]).not.toHaveAttribute("data-revealed");
+    expect(expandedCards[3]).not.toHaveAttribute("data-revealed");
+    expect(expandedCards[4]).toHaveAttribute("data-revealed", "true");
+    expect(expandedCards[5]).toHaveAttribute("data-revealed", "true");
     expect(screen.queryByRole("button", { name: "Показать ещё" })).toBeNull();
     expect(screen.getByRole("link", { name: "Все нейросети" })).toHaveAttribute(
       "href",
       "/app/models",
+    );
+    expect(screen.getByRole("link", { name: "Все нейросети" })).toHaveAttribute(
+      "data-revealed",
+      "true",
     );
   });
 

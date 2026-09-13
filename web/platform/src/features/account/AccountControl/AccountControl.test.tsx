@@ -133,12 +133,13 @@ describe("AccountControl", () => {
     const systemTheme = screen.getByRole("button", { name: ru.account.systemThemeLabel });
     const lightTheme = screen.getByRole("button", { name: ru.account.lightThemeLabel });
     const darkTheme = screen.getByRole("button", { name: ru.account.darkThemeLabel });
-    const themeSwitcher = screen.getByRole("group", { name: ru.account.themeLabel });
+    const themeSwitcher = screen.getByRole("toolbar", { name: ru.account.themeLabel });
 
     expect(systemTheme).toBeEnabled();
     expect(lightTheme).toBeEnabled();
     expect(darkTheme).toBeEnabled();
-    expect(themeSwitcher).toHaveAttribute("data-theme-preference", "system");
+    expect(themeSwitcher).toContainElement(systemTheme);
+    expect(systemTheme).toHaveAttribute("aria-pressed", "true");
 
     fireEvent.click(lightTheme);
 
@@ -147,11 +148,12 @@ describe("AccountControl", () => {
     expect(darkTheme).toHaveAttribute("aria-pressed", "false");
     expect(document.documentElement).toHaveAttribute("data-theme", "light");
     expect(localStorage.getItem("neirohub.theme")).toBe("light");
-    expect(themeSwitcher).toHaveAttribute("data-theme-preference", "light");
+    fireEvent.keyDown(lightTheme, { key: "ArrowRight" });
 
-    fireEvent.click(darkTheme);
-
-    expect(themeSwitcher).toHaveAttribute("data-theme-preference", "dark");
+    expect(darkTheme).toHaveFocus();
+    expect(darkTheme).toHaveAttribute("aria-pressed", "true");
+    expect(document.documentElement).toHaveAttribute("data-theme", "dark");
+    expect(localStorage.getItem("neirohub.theme")).toBe("dark");
     expect(screen.getByRole("region", { name: ru.account.menuLabel })).toBeInTheDocument();
   });
 

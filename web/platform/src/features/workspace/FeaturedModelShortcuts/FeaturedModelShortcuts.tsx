@@ -1,11 +1,10 @@
 "use client";
 
-import Link from "next/link";
 import { useEffect, useState } from "react";
 
 import { loadImageModelCatalog } from "@/features/models/image-model-catalog-cache";
+import { getModelPresentation } from "@/features/models/ModelCard/model-card-content";
 import { ModelIcon } from "@/features/models/ModelIcon/ModelIcon";
-import { ru } from "@/i18n/ru";
 import type { ImageModel } from "@/lib/web-api/contracts";
 
 import styles from "./FeaturedModelShortcuts.module.css";
@@ -15,10 +14,12 @@ const featuredModelShortcutLimit = 4;
 type LoadState = "loading" | "ready" | "failed";
 
 type FeaturedModelShortcutsProps = {
-  artworkByModelId?: Readonly<Record<string, string>>;
+  selectedModelId: string | null;
+  onSelect: (model: ImageModel | null) => void;
+  disabled?: boolean;
 };
 
-export function FeaturedModelShortcuts({ artworkByModelId = {} }: FeaturedModelShortcutsProps) {
+export function FeaturedModelShortcuts({ selectedModelId, onSelect, disabled = false }: FeaturedModelShortcutsProps) {
   const [models, setModels] = useState<ImageModel[]>([]);
   const [loadState, setLoadState] = useState<LoadState>("loading");
 
@@ -41,32 +42,43 @@ export function FeaturedModelShortcuts({ artworkByModelId = {} }: FeaturedModelS
     };
   }, []);
 
-  if (loadState === "loading") {
-    return Array.from({ length: featuredModelShortcutLimit }, (_, index) => (
+  return <>
+    <button
+      aria-label="Выбрать модель: NeiroHub Chat"
+      aria-pressed={selectedModelId === null}
+      className={styles.shortcut}
+      disabled={disabled}
+      onClick={() => onSelect(null)}
+      type="button"
+    >
+      <ModelIcon className={styles.icon} />
+      <span>NeiroHub Chat</span>
+    </button>
+    {loadState === "loading" ? Array.from({ length: featuredModelShortcutLimit }, (_, index) => (
       <span
         aria-hidden="true"
         className={styles.skeleton}
         data-testid="featured-model-shortcut-skeleton"
         key={index}
       />
-    ));
-  }
+    )) : models.map((model) => {
+    const presentation = getModelPresentation(model);
 
-  if (loadState === "failed" || models.length === 0) {
-    return null;
-  }
-
-  return models.map((model) => (
-    <Link
-      aria-label={`${ru.modelsCatalog.openGeneratorLabel}: ${model.name}`}
-      className={styles.shortcut}
-      data-testid="featured-model-shortcut"
-      href={`/app/image?model=${encodeURIComponent(model.id)}`}
-      key={model.id}
-      prefetch={false}
-    >
-      <ModelIcon className={styles.icon} src={artworkByModelId[model.id]} />
-      <span>{model.name}</span>
-    </Link>
-  ));
+    return (
+      <button
+        aria-label={`Выбрать модель: ${model.name}`}
+        aria-pressed={selectedModelId === model.id}
+        className={styles.shortcut}
+        data-testid="featured-model-shortcut"
+        disabled={disabled}
+        key={model.id}
+        onClick={() => onSelect(model)}
+        type="button"
+      >
+        <ModelIcon className={styles.icon} src={presentation.artworkSrc} />
+        <span>{model.name}</span>
+      </button>
+    );
+  })}
+  </>;
 }

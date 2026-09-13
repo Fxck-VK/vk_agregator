@@ -129,4 +129,11 @@ describe("global theme tokens", () => {
     expect(stylesheet).toContain("@media (prefers-reduced-motion: reduce)");
     expect(stylesheet).toContain("transition-duration: 0.01ms !important");
   });
+
+  it("uses the brand accent for text selection across the application", () => {
+    const selectionRule = stylesheet.match(/::selection\s*\{([^}]*)\}/s)?.[1] ?? "";
+
+    expect(selectionRule).toContain("background: var(--color-accent)");
+    expect(selectionRule).toContain("color: #fff");
+  });
 });

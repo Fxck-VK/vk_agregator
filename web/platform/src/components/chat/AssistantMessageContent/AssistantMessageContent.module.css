@@ -17,6 +17,20 @@
   margin: 0 0 var(--space-4);
 }
 
+.content p:empty {
+  display: none;
+}
+
+.image {
+  display: block;
+  inline-size: auto;
+  block-size: auto;
+  max-inline-size: min(100%, 30rem);
+  max-block-size: 32rem;
+  border-radius: var(--radius-sm);
+  object-fit: contain;
+}
+
 .content h1,
 .content h2,
 .content h3,
@@ -66,7 +80,7 @@
 }
 
 .content strong {
-  font-weight: 750;
+  font-weight: var(--font-weight-semibold);
 }
 
 .content blockquote {
@@ -101,11 +115,14 @@
   border-radius: 0.3rem;
 }
 
-.content pre {
+.codeScroll {
   max-inline-size: 100%;
   margin: var(--space-5) 0;
+}
+
+.codeBlock {
+  margin: 0;
   padding: var(--space-4);
-  overflow-x: auto;
   background: var(--color-surface-raised);
   border: 0.0625rem solid var(--color-border);
   border-radius: var(--radius-md);
@@ -130,7 +147,7 @@
   }
 
   .content blockquote,
-  .content pre {
+  .codeBlock {
     padding: var(--space-4);
   }
 }

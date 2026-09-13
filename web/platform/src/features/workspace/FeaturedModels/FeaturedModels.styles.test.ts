@@ -7,16 +7,28 @@ const stylesheet = readFileSync(
   resolve(process.cwd(), "src/features/workspace/FeaturedModels/FeaturedModels.module.css"),
   "utf8",
 );
+const source = readFileSync(
+  resolve(process.cwd(), "src/features/workspace/FeaturedModels/FeaturedModels.tsx"),
+  "utf8",
+);
+const modelCardStylesheet = readFileSync(
+  resolve(process.cwd(), "src/features/models/ModelCard/ModelCard.module.css"),
+  "utf8",
+);
 const catalogActionRule = stylesheet.match(/\.catalogAction\s*\{([^}]*)\}/s)?.[1] ?? "";
 
 describe("FeaturedModels card geometry", () => {
-  it("centers a narrower grid and keeps the cards compact", () => {
+  it("centers a narrower grid and delegates every card to ModelCard", () => {
     expect(stylesheet).toMatch(
       /\.grid\s*\{[^}]*inline-size:\s*min\(100%,\s*58rem\)[^}]*margin-inline:\s*auto/s,
     );
-    expect(stylesheet).toMatch(
+    expect(modelCardStylesheet).toMatch(
       /\.card\s*\{[^}]*grid-template-rows:\s*auto\s+1fr[^}]*gap:\s*var\(--space-3\)[^}]*min-block-size:\s*11\.5rem/s,
     );
+    expect(source).toContain("<ModelCard");
+    expect(source).not.toContain("<ModelIcon");
+    expect(stylesheet).not.toMatch(/(?:^|\n)\.card\s*\{/);
+    expect(stylesheet).not.toMatch(/(?:^|\n)\.copy\s*\{/);
   });
 
   it("uses a light catalogue action label with enough definition over the glossy background", () => {

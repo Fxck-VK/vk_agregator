@@ -1,0 +1,44 @@
+.button {
+  display: grid;
+  inline-size: 3rem;
+  block-size: 3rem;
+  place-items: center;
+  border: 0.0625rem solid rgb(255 255 255 / 20%);
+  border-radius: 0.875rem;
+  background: rgb(11 12 15 / 70%);
+  color: #fff;
+  transition: border-color var(--motion-fast);
+}
+
+.button:hover,
+.button:focus-visible {
+  border-color: var(--input-focus-border-color);
+  outline: none;
+}
+
+.icon {
+  position: relative;
+  inline-size: 1.5rem;
+  block-size: 1.5rem;
+}
+
+.icon::before,
+.icon::after {
+  position: absolute;
+  inset-block-start: 50%;
+  inset-inline-start: 50%;
+  inline-size: 1.35rem;
+  block-size: 0.125rem;
+  border-radius: 999px;
+  background: currentColor;
+  content: "";
+  transform-origin: center;
+}
+
+.icon::before {
+  transform: translate(-50%, -50%) rotate(45deg);
+}
+
+.icon::after {
+  transform: translate(-50%, -50%) rotate(-45deg);
+}

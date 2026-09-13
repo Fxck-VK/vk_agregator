@@ -91,15 +91,18 @@ describe("ImageGenerationComposer", () => {
     render(<StatefulComposer />);
 
     fireEvent.click(screen.getByRole("button", { name: ru.imageGeneration.templatePicker.open }));
-    expect(
-      screen.getByRole("dialog", { name: ru.imageGeneration.templatePicker.title }),
-    ).toBeVisible();
+    const dialog = screen.getByRole("dialog", {
+      name: ru.imageGeneration.templatePicker.title,
+    });
+    const backdrop = dialog.closest("[data-state]")!;
+    expect(dialog).toBeVisible();
 
     fireEvent.click(
       screen.getByRole("button", {
         name: `${ru.imageGeneration.templatePicker.select} ${inspirationExamples[0].title}`,
       }),
     );
+    fireEvent.animationEnd(backdrop, { animationName: "modalBackdropOut" });
 
     expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
     expect(screen.getByRole("textbox", { name: ru.imageGeneration.promptLabel })).toHaveValue(

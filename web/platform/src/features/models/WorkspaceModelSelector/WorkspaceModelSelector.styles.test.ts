@@ -11,24 +11,103 @@ const headerStylesheet = readFileSync(
   resolve(process.cwd(), "src/components/layout/WorkspaceHeader/WorkspaceHeader.module.css"),
   "utf8",
 );
+const modelCardStylesheet = readFileSync(
+  resolve(process.cwd(), "src/features/models/ModelCard/ModelCard.module.css"),
+  "utf8",
+);
+const component = readFileSync(
+  resolve(process.cwd(), "src/features/models/WorkspaceModelSelector/ModelSelector.tsx"),
+  "utf8",
+);
 
 describe("WorkspaceModelSelector layout", () => {
-  it("keeps the floating trigger compact beside the landing content", () => {
+  it("gives the panel variant a full-width outline and a wrapping model name", () => {
+    const panelRootRule = stylesheet.match(
+      /\.root\[data-variant="panel"\]\s*\{[^}]*\}/s,
+    )?.[0] ?? "";
+    const panelTriggerRule = stylesheet.match(
+      /\.root\[data-variant="panel"\] \.trigger\s*\{[^}]*\}/s,
+    )?.[0] ?? "";
+    const panelTextRule = stylesheet.match(
+      /\.root\[data-variant="panel"\] \.triggerText\s*\{[^}]*\}/s,
+    )?.[0] ?? "";
+    const panelHoverRule = stylesheet.match(
+      /\.root\[data-variant="panel"\] \.trigger:hover\s*\{[^}]*\}/s,
+    )?.[0] ?? "";
+
+    expect(panelRootRule).toContain("inline-size: 100%");
+    expect(panelTriggerRule).toContain("display: grid");
+    expect(panelTriggerRule).toContain("grid-template-columns: auto minmax(0, 1fr) auto");
+    expect(panelTriggerRule).toContain("inline-size: 100%");
+    expect(panelTriggerRule).toContain("max-inline-size: none");
+    expect(panelTriggerRule).toContain("border-color: rgb(255 255 255 / 18%)");
+    expect(panelTriggerRule).toContain("border-radius: var(--radius-sm)");
+    expect(panelTriggerRule).toContain("background: transparent");
+    expect(panelTextRule).toContain("overflow: visible");
+    expect(panelTextRule).toContain("overflow-wrap: anywhere");
+    expect(panelTextRule).toContain("text-overflow: clip");
+    expect(panelTextRule).toContain("white-space: normal");
+    expect(panelHoverRule).toContain("border-color: rgb(255 255 255 / 18%)");
+    expect(panelHoverRule).toContain("background: transparent");
+    expect(panelHoverRule).toContain("box-shadow: none");
+  });
+
+  it("sizes the floating trigger to the full model name and wraps only when space is limited", () => {
     const triggerRule = stylesheet.match(/\.trigger\s*\{[^}]*\}/s)?.[0] ?? "";
+    const triggerTextRule = stylesheet.match(/\.triggerText\s*\{[^}]*\}/s)?.[0] ?? "";
     const modelIconRule = stylesheet.match(/\.modelIcon\s*\{[^}]*\}/s)?.[0] ?? "";
 
     expect(triggerRule).toContain("gap: var(--space-1)");
-    expect(triggerRule).toContain("max-inline-size: min(11.5rem, 42vw)");
+    expect(triggerRule).toContain("inline-size: max-content");
+    expect(triggerRule).toContain("max-inline-size: 100%");
+    expect(triggerTextRule).toContain("white-space: normal");
+    expect(triggerTextRule).toContain("overflow-wrap: anywhere");
+    expect(triggerTextRule).not.toContain("overflow: hidden");
+    expect(triggerTextRule).not.toContain("text-overflow: ellipsis");
+    expect(stylesheet).not.toContain("max-inline-size: min(11.5rem");
     expect(triggerRule).toContain("padding: var(--space-2)");
     expect(modelIconRule).toContain("inline-size: 1.5rem");
     expect(modelIconRule).toContain("block-size: 1.5rem");
+    expect(modelIconRule).toContain("transform: translateY(-0.0625rem)");
+  });
+
+  it("keeps the wide chevron compact and separated from the model name", () => {
+    const chevronRule = stylesheet.match(/\.chevron\s*\{[^}]*\}/s)?.[0] ?? "";
+    const chevronImageRule = stylesheet.match(/\.chevron img\s*\{[^}]*\}/s)?.[0] ?? "";
+
+    expect(chevronRule).toContain("inline-size: 0.75rem");
+    expect(chevronRule).toContain("block-size: 0.75rem");
+    expect(chevronRule).toContain("margin-inline-start: var(--space-1)");
+    expect(chevronImageRule).toContain("inline-size: 100%");
+    expect(chevronImageRule).toContain("block-size: auto");
+    expect(chevronImageRule).not.toContain("translateY");
   });
 
   it("keeps search and footer fixed while only the model list scrolls", () => {
     expect(stylesheet).toMatch(
       /\.popover\s*\{[^}]*grid-template-rows:\s*auto minmax\(0,\s*1fr\) auto;[^}]*overflow:\s*hidden;/s,
     );
-    expect(stylesheet).toMatch(/\.scrollArea\s*\{[^}]*min-block-size:\s*0;[^}]*overflow-y:\s*auto;/s);
+    expect(stylesheet).toMatch(/\.scrollArea\s*\{[^}]*min-block-size:\s*0;/s);
+    expect(component).toContain('from "@/components/ui/ScrollArea/ScrollArea"');
+    expect(component).toContain(
+      "<ScrollArea className={styles.scrollArea} viewportClassName={styles.scrollViewport}>",
+    );
+    expect(stylesheet).not.toMatch(/overflow-y:\s*(?:auto|scroll)/);
+  });
+
+  it("reserves room for the floating scrollbar outside model cards", () => {
+    expect(stylesheet).toMatch(
+      /\.scrollViewport\s*\{[^}]*padding-inline-end:\s*var\(--space-4\);/s,
+    );
+  });
+
+  it("stacks model sections with compact muted empty states", () => {
+    expect(stylesheet).toMatch(
+      /\.modelSections\s*\{[^}]*display:\s*grid;[^}]*gap:\s*var\(--space-4\);/s,
+    );
+    expect(stylesheet).toMatch(
+      /\.sectionEmpty\s*\{[^}]*color:\s*var\(--color-text-muted\);[^}]*font-size:\s*var\(--font-size-caption\);[^}]*line-height:\s*var\(--line-height-caption\);/s,
+    );
   });
 
   it("constrains the popover to the mobile viewport", () => {
@@ -44,9 +123,63 @@ describe("WorkspaceModelSelector layout", () => {
     );
   });
 
-  it("keeps a visible keyboard focus indicator on the search", () => {
+  it("uses the shared purple focus treatment on the search surface", () => {
     expect(stylesheet).toMatch(
-      /\.search:focus-visible\s*\{[^}]*outline:\s*0\.125rem solid var\(--color-focus\);/s,
+      /\.searchRow:focus-within\s*\{[^}]*border-color:\s*var\(--input-focus-border-color\);[^}]*box-shadow:\s*var\(--input-focus-ring\);/s,
     );
+  });
+
+  it("insets the search surface so the complete focus ring remains visible", () => {
+    expect(stylesheet).toMatch(
+      /\.searchRow\s*\{[^}]*margin:\s*var\(--space-3\) var\(--space-3\) 0;[^}]*border:\s*0\.0625rem solid var\(--color-border\);[^}]*border-radius:\s*var\(--radius-md\);/s,
+    );
+  });
+
+  it("leaves selection visuals to the shared control style without a separate mark or fill", () => {
+    const optionRule = modelCardStylesheet.match(/\.selectorCard\s*\{[^}]*\}/s)?.[0] ?? "";
+    expect(optionRule).not.toMatch(/(?:background|border|border-radius|transition):/);
+    expect(modelCardStylesheet).not.toMatch(/\.(?:selectionMark|selectorSelected)\b/);
+    expect(modelCardStylesheet).not.toMatch(/\.selectorCard:(?:hover|focus-visible)/);
+  });
+
+  it("uses price-free model rows with only an icon and description", () => {
+    const optionRule = modelCardStylesheet.match(/\.selectorCard\s*\{[^}]*\}/s)?.[0] ?? "";
+
+    expect(optionRule).toContain("grid-template-columns: auto minmax(0, 1fr);");
+    expect(optionRule).not.toContain("price");
+    expect(component).not.toContain("getMinimumPrice");
+    expect(component).not.toContain("styles.price");
+    expect(stylesheet).not.toMatch(/\.(?:option|optionSelected|optionIcon|optionCopy|optionTitle|optionDescription|selectionMark)\s*\{/);
+  });
+
+  it("reveals downward and closes upward without scaling its contents", () => {
+    expect(component).toContain('type PopoverState = "closed" | "open" | "closing"');
+    expect(component).toContain("data-state={popoverState}");
+    expect(component).toContain('popover.addEventListener("animationend", closeAfterAnimation)');
+    expect(stylesheet).toMatch(
+      /\.popover\[data-state="open"\]\s*\{[^}]*animation:\s*workspaceModelSelectorOpen var\(--motion-normal\) both;/s,
+    );
+    expect(stylesheet).toMatch(
+      /\.popover\[data-state="closing"\]\s*\{[^}]*pointer-events:\s*none;[^}]*animation:\s*workspaceModelSelectorClose var\(--motion-normal\) both;/s,
+    );
+    expect(stylesheet).toMatch(
+      /@keyframes workspaceModelSelectorOpen\s*\{\s*from\s*\{[^}]*clip-path:\s*inset\(0 0 100% 0\);[^}]*opacity:\s*0;/s,
+    );
+    expect(stylesheet).toMatch(
+      /@keyframes workspaceModelSelectorClose\s*\{[\s\S]*?to\s*\{[^}]*clip-path:\s*inset\(0 0 100% 0\);[^}]*opacity:\s*0;/,
+    );
+    expect(stylesheet).not.toMatch(/scaleY\(/);
+    expect(stylesheet).toMatch(
+      /@media \(prefers-reduced-motion: reduce\)\s*\{[^}]*\.popover\s*\{[^}]*animation-duration:\s*1ms;/s,
+    );
+  });
+
+  it("uses an inset hover surface for the catalogue link without a divider", () => {
+    const catalogueLinkRule = stylesheet.match(/\.catalogueLink\s*\{[^}]*\}/s)?.[0] ?? "";
+
+    expect(catalogueLinkRule).toContain("background: transparent");
+    expect(catalogueLinkRule).not.toContain("border-block-start");
+    expect(stylesheet).toMatch(/\.catalogueLink::before\s*\{[^}]*inset:\s*var\(--space-2\) var\(--space-3\);/s);
+    expect(stylesheet).toMatch(/\.catalogueLink:hover::before\s*\{[^}]*background:\s*var\(--color-surface-raised\);/s);
   });
 });

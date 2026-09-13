@@ -66,17 +66,19 @@ describe("RootLayout", () => {
   });
 
   it("bootstraps the persisted theme in the head before page content with the request CSP nonce", async () => {
-    const markup = renderToStaticMarkup(
-      await RootLayout({
-        children: <main>Theme content</main>,
-      }),
-    );
+    const layout = await RootLayout({
+      children: <main>Theme content</main>,
+    });
+    const markup = renderToStaticMarkup(layout);
     const document = new DOMParser().parseFromString(markup, "text/html");
     const bootstrapScript = document.querySelector("head script");
+    const head = layout.props.children[0];
+    const bootstrapScriptElement = head.props.children;
 
     expect(document.documentElement.getAttribute("data-theme")).toBe("system");
     expect(bootstrapScript?.textContent).toContain("neirohub.theme");
     expect(bootstrapScript?.getAttribute("nonce")).toBe("test-theme-nonce");
+    expect(bootstrapScriptElement.props.suppressHydrationWarning).toBe(true);
     expect(markup.indexOf("<script")).toBeLessThan(markup.indexOf("<body"));
   });
 });

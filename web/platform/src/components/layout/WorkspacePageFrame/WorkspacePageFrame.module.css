@@ -1,0 +1,21 @@
+.frame {
+  inline-size: min(100%, var(--workspace-page-shell-width));
+  margin-inline: auto;
+  padding-inline: var(--workspace-page-inline-gutter);
+  padding-block-start: 5rem;
+}
+
+.content {
+  inline-size: min(100%, var(--workspace-content-frame-width));
+  margin-inline: auto;
+}
+
+@media (48rem <= width < 82rem) {
+  .frame {
+    padding-inline-end: var(--space-4);
+  }
+
+  .content {
+    margin-inline-end: 0;
+  }
+}

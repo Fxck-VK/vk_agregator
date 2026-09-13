@@ -2,6 +2,7 @@
 
 import { useRef } from "react";
 
+import { ScrollArea } from "@/components/ui/ScrollArea/ScrollArea";
 import { ru } from "@/i18n/ru";
 
 import styles from "./FileTypeTabs.module.css";
@@ -35,7 +36,15 @@ export function FileTypeTabs({ onValueChange, value }: Readonly<FileTypeTabsProp
   const tabRefs = useRef<Array<HTMLButtonElement | null>>([]);
 
   return (
-    <div aria-label={ru.files.categoryTabsLabel} className={styles.tabList} role="tablist">
+    <ScrollArea
+      className={styles.tabScroll}
+      orientation="horizontal"
+      viewportClassName={styles.tabList}
+      viewportProps={{
+        "aria-label": ru.files.categoryTabsLabel,
+        role: "tablist",
+      }}
+    >
       {fileCategories.map((category, index) => {
         const isSelected = category === value;
         return (
@@ -68,6 +77,6 @@ export function FileTypeTabs({ onValueChange, value }: Readonly<FileTypeTabsProp
           </button>
         );
       })}
-    </div>
+    </ScrollArea>
   );
 }

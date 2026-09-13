@@ -50,10 +50,48 @@ describe("WorkspaceHome", () => {
     expect(markup).toContain('type="video/mp4"');
     expect(markup).toContain('aria-label="Воспроизвести: Как работает NeiroHub"');
     expect(markup).toContain("Откройте новые возможности");
-    expect(markup).toContain("Ваш план");
+    expect(markup).toContain("Lite");
+    expect(markup).toContain("400");
+    expect(markup).toContain("199");
+    expect(markup).toContain("₽/нед");
+    expect(markup).toContain("Выбрать тариф");
+    expect(markup).toContain("до 13 генераций изображений");
+    expect(markup).toContain("до 2 генераций видео");
+    expect(markup).toContain("Доступ к популярным нейросетям");
+    expect(markup).toContain('src="/assets/icons/ui/image-generations-white.svg"');
+    expect(markup).toContain('src="/assets/icons/ui/video-generations-white.svg"');
+    expect(markup).toContain('src="/assets/icons/ui/ai-access-white.svg"');
+    expect(markup).not.toContain("Ваш план");
+    expect(markup).not.toContain("Открыть профиль");
     expect(markup).toContain("Библиотека промптов");
     expect(markup).toContain("Частые вопросы");
-    expect(markup).toContain("Сообщество NeiroHub");
+    expect(markup.match(/<details/g)).toHaveLength(5);
+    for (const question of [
+      "Что такое NeiroHub?",
+      "Что такое собственные нейросети NeiroHub?",
+      "Что такое токены и подписка?",
+      "Как купить подписку?",
+      "Есть ли бесплатный доступ?",
+    ]) {
+      expect(text).toContain(question);
+    }
+    for (const removedQuestion of [
+      "Где сохраняются мои диалоги?",
+      "Как рассчитывается стоимость генерации?",
+      "Где найти созданные изображения?",
+      "Можно ли пользоваться с телефона?",
+    ]) {
+      expect(text).not.toContain(removedQuestion);
+    }
+    expect(markup).toContain("Следи за нами в Telegram и VK");
+    expect(markup).toContain("Будь в тренде и работай с AI быстрее");
+    expect(markup).toContain('aria-disabled="true"');
+    expect(markup).toContain(">Telegram</span>");
+    expect(markup).toContain('href="https://vk.me/neirohub_help"');
+    expect(markup).toContain(">ВКонтакте</a>");
+    expect(markup).not.toContain("Сообщество NeiroHub");
+    expect(markup).not.toContain("Перейти во вдохновение");
+    expect(markup).not.toContain("Открыть мои файлы");
     expect(markup).toContain('href="/app/image"');
     expect(markup).toContain('href="/app/models"');
     expect(markup).toContain('href="/app/inspiration"');
@@ -63,7 +101,7 @@ describe("WorkspaceHome", () => {
     expect(markup).not.toContain("image-job-history-title");
   });
 
-  it("omits the four editorial kicker labels while preserving the remaining section labels", () => {
+  it("omits the editorial kicker labels", () => {
     const markup = renderToStaticMarkup(
       <WorkspaceConversationListProvider accountId="workspace-kickers-test-account" initialConversations={[]}>
         <WorkspaceHome />
@@ -75,11 +113,11 @@ describe("WorkspaceHome", () => {
       "Не только обычный чат",
       "Начните с готовой идеи",
       "Помощь по платформе",
+      "Идеи и примеры",
+      "Аккаунт и баланс",
     ]) {
       expect(markup).not.toContain(removedLabel);
     }
-    expect(markup).toContain("Аккаунт и баланс");
-    expect(markup).toContain("Идеи и примеры");
   });
 
   it("renders one shared prompt-library card and opens its existing dialog", () => {
@@ -108,7 +146,22 @@ describe("WorkspaceHome", () => {
     expect(screen.getByRole("dialog", { name: ru.inspiration.dialogLabel })).toBeInTheDocument();
   });
 
-  it("renders four compact model cards from truthful catalogue data", async () => {
+  it("opens the subscription plans dialog from the landing plan card without navigating", () => {
+    render(
+      <WorkspaceConversationListProvider accountId="landing-plan-test-account" initialConversations={[]}>
+        <WorkspaceHome />
+      </WorkspaceConversationListProvider>,
+    );
+
+    const tariffButton = screen.getByRole("button", { name: "Выбрать тариф" });
+
+    expect(tariffButton).toHaveAttribute("type", "button");
+    expect(tariffButton).not.toHaveAttribute("href");
+    fireEvent.click(tariffButton);
+    expect(screen.getByRole("dialog", { name: "С подпиской — максимум возможностей" })).toBeInTheDocument();
+  });
+
+  it("reveals two additional compact model cards before linking to the catalogue", async () => {
     vi.mocked(loadImageModelCatalog).mockResolvedValue({
       items: [
         {
@@ -156,6 +209,15 @@ describe("WorkspaceHome", () => {
           supports_reference_image: false,
           max_reference_images: 0,
         },
+        {
+          id: "hidden-sixth-model",
+          name: "Шестая модель",
+          quality_options: ["1K"],
+          price_by_quality: { "1K": 109 },
+          default_quality: "1K",
+          supports_reference_image: false,
+          max_reference_images: 0,
+        },
       ],
     });
 
@@ -166,7 +228,7 @@ describe("WorkspaceHome", () => {
     );
 
     const region = await screen.findByRole("region", { name: "Популярные нейросети" });
-    const cards = within(region).getAllByTestId("featured-model-card");
+    let cards = within(region).getAllByTestId("featured-model-card");
     const shortcutsNavigation = screen.getByRole("navigation", { name: "Основные возможности" });
     const shortcuts = within(shortcutsNavigation).getAllByTestId("featured-model-shortcut");
     const shortcutLinks = within(shortcutsNavigation).getAllByRole("link");
@@ -180,13 +242,23 @@ describe("WorkspaceHome", () => {
     expect(cards[1]).toHaveTextContent("Детализированные изображения для сложных творческих и рабочих задач");
     expect(cards[2]).toHaveTextContent("Точное создание изображений по описанию с хорошей передачей текста");
     expect(cards[3]).toHaveTextContent("Фотореалистичные изображения с высокой детализацией и выразительным стилем");
+    expect(within(region).queryByText("Пятая модель")).toBeNull();
+    expect(within(region).queryByText("Шестая модель")).toBeNull();
+    expect(within(region).queryByRole("link", { name: "Все нейросети" })).toBeNull();
+
+    fireEvent.click(within(region).getByRole("button", { name: "Показать ещё" }));
+
+    cards = within(region).getAllByTestId("featured-model-card");
+    expect(cards).toHaveLength(6);
+    expect(cards[4]).toHaveTextContent("Пятая модель");
+    expect(cards[5]).toHaveTextContent("Шестая модель");
+    expect(within(region).getByRole("link", { name: "Все нейросети" })).toHaveAttribute("href", "/app/models");
     expect(region).not.toHaveTextContent("1K");
     expect(region).not.toHaveTextContent("2K");
     expect(region).not.toHaveTextContent("4K");
     expect(region).not.toHaveTextContent("Поддерживает референсы");
     expect(region).not.toHaveTextContent("По текстовому запросу");
-    expect(within(region).queryByText("Пятая модель")).toBeNull();
-    expect(within(region).getAllByTestId("model-icon-fallback")).toHaveLength(4);
+    expect(within(region).getAllByTestId("model-icon-fallback")).toHaveLength(6);
     expect(within(region).queryByTestId("model-icon-placeholder")).toBeNull();
     expect(region).not.toHaveTextContent("Открыть");
     expect(region).not.toHaveTextContent("рейтинг");
@@ -198,8 +270,8 @@ describe("WorkspaceHome", () => {
       "GPT Image 2",
       "Seedream 4.5",
     ]);
-    expect(shortcuts[0]).toHaveAttribute("href", "/app/image?model=nano-banana-2");
-    expect(shortcutsNavigation).not.toHaveTextContent("NeiroHub Chat");
+    expect(shortcuts[0]).not.toHaveAttribute("href");
+    expect(within(shortcutsNavigation).getByRole("button", { name: "Выбрать модель: NeiroHub Chat" })).toHaveAttribute("aria-pressed", "true");
     expect(shortcutsNavigation).not.toHaveTextContent("Генератор изображений");
     expect(shortcutsNavigation).not.toHaveTextContent("Каталог нейросетей");
     expect(shortcutsNavigation).not.toHaveTextContent("Вдохновение");

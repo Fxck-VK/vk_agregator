@@ -74,7 +74,7 @@ describe("ModelsCatalog", () => {
     expect(screen.getByRole("heading", { name: ru.modelsCatalog.title })).toBeInTheDocument();
   });
 
-  it("loads catalog data, exposes truthful DTO card facts, and links to the selected generator", async () => {
+  it("loads catalog data, renders the shared card presentation, and links to the selected generator", async () => {
     vi.mocked(loadImageModelCatalog).mockResolvedValue(modelsResponse);
     render(<ModelsCatalog />);
 
@@ -93,17 +93,33 @@ describe("ModelsCatalog", () => {
     );
     const nanoCard = screen.getByText("Nano Banana").closest("article")!;
     const otherCard = screen.getByText("Other Model").closest("article")!;
-    expect(within(nanoCard).getByText(ru.modelsCatalog.imageTypeLabel)).toBeInTheDocument();
-    expect(within(nanoCard).getByText("1K")).toBeInTheDocument();
-    expect(within(nanoCard).getByText("2K")).toBeInTheDocument();
-    expect(within(nanoCard).getByText(ru.modelsCatalog.referenceSupportedLabel)).toBeInTheDocument();
-    expect(within(otherCard).getByText(ru.modelsCatalog.referenceUnsupportedLabel)).toBeInTheDocument();
-    expect(within(nanoCard).getByLabelText("От 16 звёзд")).toBeInTheDocument();
+    expect(within(nanoCard).getByText("Nano Banana для создания изображений по вашему описанию")).toBeInTheDocument();
+    expect(within(otherCard).getByText("Other Model для создания изображений по вашему описанию")).toBeInTheDocument();
+    expect(within(nanoCard).queryByRole("list", { name: ru.modelsCatalog.qualityFilterLabel })).toBeNull();
+    expect(within(nanoCard).queryByText(ru.modelsCatalog.referenceSupportedLabel)).toBeNull();
+    expect(within(nanoCard).getByLabelText("16 звёзд")).toBeInTheDocument();
 
     fireEvent.change(screen.getByRole("searchbox", { name: ru.modelsCatalog.searchLabel }), {
       target: { value: "banana" },
     });
     expect(screen.queryByText("Other Model")).not.toBeInTheDocument();
+  });
+
+  it("adds four searchable non-interactive cards when local placeholders are enabled", async () => {
+    vi.mocked(loadImageModelCatalog).mockResolvedValue(modelsResponse);
+    render(<ModelsCatalog includePlaceholders />);
+
+    for (const name of ["Recraft V3", "Ideogram 3", "Stable Diffusion 3.5", "Leonardo Phoenix"]) {
+      expect(await screen.findByRole("heading", { name })).toBeInTheDocument();
+      expect(screen.queryByRole("link", { name: `${ru.modelsCatalog.openGeneratorLabel}: ${name}` })).toBeNull();
+    }
+
+    fireEvent.change(screen.getByRole("searchbox", { name: ru.modelsCatalog.searchLabel }), {
+      target: { value: "recraft" },
+    });
+
+    expect(screen.getByRole("heading", { name: "Recraft V3" })).toBeInTheDocument();
+    expect(screen.queryByRole("heading", { name: "Ideogram 3" })).toBeNull();
   });
 
   it("asks the shared loader on every catalogue mount", async () => {

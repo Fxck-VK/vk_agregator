@@ -1,9 +1,16 @@
 .workspace {
-  inline-size: min(100%, 72rem);
+  inline-size: min(100%, var(--workspace-page-shell-width));
   margin-inline: auto;
-  padding: clamp(5rem, 10vw, 8rem) clamp(var(--space-4), 6vw, 5rem);
+  padding-block: clamp(5rem, 10vw, 8rem);
+  padding-inline: var(--workspace-page-inline-gutter);
 }
 
 .workspace > :first-child {
   margin-block-start: 0;
+}
+
+@media (48rem <= width < 82rem) {
+  .workspace {
+    padding-inline-end: var(--space-4);
+  }
 }

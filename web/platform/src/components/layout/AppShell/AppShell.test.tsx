@@ -21,14 +21,18 @@ describe("AppShell", () => {
     expect(screen.getByTestId("workspace-scroll-region")).toHaveTextContent("Workspace");
   });
 
-  it("keeps an optional workspace header inside the right scroll region", () => {
+  it("keeps an optional workspace header outside the scroll region", () => {
     render(
       <AppShell header={<header data-testid="workspace-header">Section</header>} sidebar={<nav>Navigation</nav>}>
         <h1>Workspace</h1>
       </AppShell>,
     );
 
-    expect(screen.getByTestId("workspace-scroll-region")).toContainElement(screen.getByTestId("workspace-header"));
+    const scrollRegion = screen.getByTestId("workspace-scroll-region");
+    const workspaceHeader = screen.getByTestId("workspace-header");
+
+    expect(scrollRegion).not.toContainElement(workspaceHeader);
+    expect(workspaceHeader.parentElement).toContainElement(scrollRegion);
   });
 
   it("removes the desktop sidebar layout offset when the sidebar is collapsed", () => {

@@ -12,10 +12,23 @@
   padding: 0;
 }
 
-.desktopTrigger svg {
-  inline-size: 1.25rem;
-  block-size: 1.25rem;
-  transition: transform var(--motion-fast);
+.desktopTrigger[aria-expanded],
+.desktopTrigger[aria-expanded]:hover:not(:disabled) {
+  background: transparent;
+}
+
+.desktopTrigger[aria-expanded]:hover:not(:disabled) {
+  box-shadow: inset 0 0 0 0.0625rem var(--color-accent);
+}
+
+.desktopChevron {
+  display: block;
+  inline-size: 0.875rem;
+  block-size: auto;
+}
+
+.collapseMark {
+  transform: rotate(90deg);
 }
 
 .panel {
@@ -24,11 +37,14 @@
   block-size: 100%;
   inline-size: 100%;
   padding: var(--space-4);
-  border-radius: var(--radius-lg);
+  border-radius: 0;
   background: var(--color-panel);
   box-shadow: var(--shadow-card);
   overflow: hidden;
-  transition: inline-size var(--motion-normal), padding var(--motion-normal), border-radius var(--motion-normal);
+  transition:
+    inline-size var(--sidebar-motion-duration) var(--sidebar-motion-easing),
+    padding var(--sidebar-motion-duration) var(--sidebar-motion-easing),
+    border-radius var(--sidebar-motion-duration) var(--sidebar-motion-easing);
 }
 
 .brandRow {
@@ -70,26 +86,26 @@
 }
 
 .collapsedBrandControl {
+  flex: 0 0 3.5rem;
   inline-size: 3.5rem;
   block-size: 3.5rem;
   border-radius: var(--radius-sm);
   background: transparent;
+  contain: paint;
+  overflow: hidden;
 }
 
 .collapsedBrandControl .brandChip,
 .collapsedBrandControl .expandMark {
   position: absolute;
-  transition: opacity var(--motion-fast), transform var(--motion-fast);
+  inset: 0;
+  margin: auto;
+  transition: opacity var(--motion-fast);
 }
 
 .collapsedBrandControl .expandMark {
   opacity: 0;
-  transform: scale(0.85);
-}
-
-.collapsedBrandControl:hover,
-.collapsedBrandControl:focus-visible {
-  background: var(--color-surface-raised);
+  transform: rotate(-90deg);
 }
 
 .collapsedBrandControl:hover .brandChip,
@@ -100,7 +116,6 @@
 .collapsedBrandControl:hover .expandMark,
 .collapsedBrandControl:focus-visible .expandMark {
   opacity: 1;
-  transform: scale(1);
 }
 
 .navigationList {
@@ -161,6 +176,44 @@
   padding-block-start: var(--space-4);
 }
 
+.panel[data-desktop-transition="out"] .brandRow,
+.panel[data-desktop-transition="out"] .scrollArea,
+.panel[data-desktop-transition="out"] .accountSlot {
+  pointer-events: none;
+  animation: sidebarContentOut 100ms ease-in both;
+}
+
+.panel[data-desktop-transition="in"] .brandRow,
+.panel[data-desktop-transition="in"] .scrollArea,
+.panel[data-desktop-transition="in"] .accountSlot {
+  pointer-events: none;
+  animation: sidebarContentIn var(--sidebar-motion-duration) var(--sidebar-motion-easing) both;
+}
+
+@keyframes sidebarContentOut {
+  from {
+    opacity: 1;
+    transform: scale(1);
+  }
+
+  to {
+    opacity: 0;
+    transform: scale(0.985);
+  }
+}
+
+@keyframes sidebarContentIn {
+  from {
+    opacity: 0;
+    transform: scale(0.985);
+  }
+
+  to {
+    opacity: 1;
+    transform: scale(1);
+  }
+}
+
 .backdrop {
   display: none;
 }
@@ -170,18 +223,7 @@
   z-index: 80;
   inset-inline-start: calc(var(--sidebar-collapsed-rail-width) + var(--space-2));
   max-inline-size: min(20rem, calc(100vw - var(--sidebar-collapsed-rail-width) - var(--space-5)));
-  padding: var(--space-2) var(--space-3);
-  border: 0.0625rem solid color-mix(in srgb, var(--color-border) 70%, transparent);
-  border-radius: var(--radius-sm);
-  background: color-mix(in srgb, var(--color-surface-raised) 96%, transparent);
-  color: var(--color-text);
-  box-shadow: var(--shadow-overlay);
-  font-size: var(--font-size-ui);
-  font-weight: var(--font-weight-semibold);
-  line-height: var(--line-height-ui);
-  pointer-events: none;
   transform: translateY(-50%);
-  backdrop-filter: blur(0.75rem);
 }
 
 @media (width < 48rem) {
@@ -213,7 +255,7 @@
     pointer-events: none;
     box-shadow: 0 0.75rem 2rem rgb(0 0 0 / 35%);
     transform: translateX(-105%);
-    transition: transform var(--motion-normal);
+    transition: transform var(--sidebar-motion-duration) var(--sidebar-motion-easing);
   }
 
   .panel[data-open="true"] {
@@ -229,6 +271,18 @@
     display: block;
     border: 0;
     background: rgb(0 0 0 / 45%);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .panel {
+    transition: none;
+  }
+
+  .panel[data-desktop-transition] .brandRow,
+  .panel[data-desktop-transition] .scrollArea,
+  .panel[data-desktop-transition] .accountSlot {
+    animation: none;
   }
 }
 
@@ -285,7 +339,6 @@
   .panel[data-desktop-collapsed="true"] [data-sidebar-conversation-list="true"] {
     inline-size: 100%;
     padding: 0;
-    scrollbar-gutter: stable both-edges;
   }
 
   .panel[data-desktop-collapsed="true"] [data-sidebar-conversation-row="true"] {

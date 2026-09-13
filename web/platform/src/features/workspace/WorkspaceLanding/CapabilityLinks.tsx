@@ -1,5 +1,5 @@
 import Link from "next/link";
-
+import type { CSSProperties } from "react";
 import { capabilityLinks } from "./workspace-home-content";
 import styles from "./CapabilityLinks.module.css";
 
@@ -17,7 +17,12 @@ export function CapabilityLinks() {
             href={item.href}
             key={item.label}
           >
-            <span aria-hidden="true" className={styles.icon} data-testid="workspace-capability-icon" />
+            <span
+              aria-hidden="true"
+              className={styles.icon}
+              data-testid="workspace-capability-icon"
+              style={{ "--capability-icon": `url("${item.icon}")` } as CSSProperties}
+            />
             <span>{item.label}</span>
           </Link>
         ))}

@@ -7,7 +7,12 @@ vi.mock("@/lib/web-api/browser", () => ({
   webBrowserMutation: vi.fn(),
 }));
 
+vi.mock("@/features/conversations/ConversationModelSelector/chat-model-catalog", () => ({
+  loadChatModelCatalog: vi.fn(() => new Promise(() => {})),
+}));
+
 import { ru } from "@/i18n/ru";
+import { loadChatModelCatalog } from "@/features/conversations/ConversationModelSelector/chat-model-catalog";
 import { savePendingConversationPrompt } from "@/features/conversations/pending-conversation-prompt";
 import { savePendingConversationTitleSync } from "@/features/conversations/pending-conversation-title-sync";
 import { WorkspaceConversationListProvider, useWorkspaceConversationList } from "@/features/conversations/WorkspaceConversationList/WorkspaceConversationList";
@@ -19,6 +24,14 @@ const conversationId = "d7c979f5-24e5-4f88-924b-a592d6e5a906";
 const queuedJob = {
   job_id: "a2a006fc-4457-4bb5-bc4d-4f553d51766b",
   status: "queued",
+};
+
+const chatModels = {
+  default_model_id: "chatgpt",
+  items: [
+    { id: "chatgpt", name: "NeiroHub Chat" },
+    { id: "test-chat", name: "Тестовая модель" },
+  ],
 };
 
 function WorkspaceConversationTitleProbe() {
@@ -57,6 +70,64 @@ describe("ConversationHistory", () => {
     vi.useRealTimers();
     vi.clearAllMocks();
     vi.unstubAllGlobals();
+  });
+
+  it("reveals the model control after the first submission, not while drafting", async () => {
+    vi.mocked(loadChatModelCatalog).mockResolvedValueOnce(chatModels);
+    vi.mocked(webBrowserMutation).mockReturnValueOnce(new Promise(() => {}));
+    render(<ConversationHistory history={{ ...initialHistory, messages: [], hasMoreBefore: false }} />);
+    await act(async () => {});
+    const modelLabel = /Выбрана нейросеть NeiroHub Chat/;
+    expect(screen.queryByRole("button", { name: modelLabel })).not.toBeInTheDocument();
+    const input = screen.getByLabelText(ru.conversations.composerLabel);
+    fireEvent.change(input, { target: { value: "Первое сообщение" } });
+    expect(screen.queryByRole("button", { name: modelLabel })).not.toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: ru.conversations.composerSubmit }));
+    expect(screen.getByRole("button", { name: modelLabel })).toBeDisabled();
+  });
+
+  it("places the existing selector before send and captures its model on retries without losing the dialogue or draft", async () => {
+    vi.mocked(loadChatModelCatalog).mockResolvedValueOnce(chatModels);
+    vi.mocked(webBrowserMutation)
+      .mockRejectedValueOnce(new Error("network"))
+      .mockReturnValueOnce(new Promise(() => {}));
+    render(<ConversationHistory history={initialHistory as never} />);
+    const trigger = await screen.findByRole("button", { name: /Выбрана нейросеть NeiroHub Chat/ });
+    const submit = screen.getByRole("button", { name: ru.conversations.composerSubmit });
+    expect(trigger.closest('[data-variant="composer"]')?.nextElementSibling?.contains(submit)).toBe(true);
+    const input = screen.getByLabelText(ru.conversations.composerLabel);
+    fireEvent.change(input, { target: { value: "Сохрани черновик" } });
+    const currentURL = window.location.href;
+    fireEvent.click(trigger);
+    const picker = screen.getByRole("dialog", { name: "Выбор модели для диалога" });
+    expect(within(picker).getByRole("searchbox", { name: "Поиск нейросети" })).toHaveFocus();
+    expect(within(picker).queryByText("Скоро появятся")).not.toBeInTheDocument();
+    fireEvent.click(within(picker).getByRole("button", { name: /Тестовая модель/ }));
+    expect(input).toHaveValue("Сохрани черновик");
+    expect(window.location.href).toBe(currentURL);
+    expect(screen.getByText("message 103")).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: /Выбрана нейросеть Тестовая модель/ })).toBeEnabled();
+    fireEvent.click(submit);
+    const retry = await screen.findByRole("button", { name: ru.conversations.messageRetryLabel });
+    fireEvent.click(retry);
+    await vi.waitFor(() => expect(webBrowserMutation).toHaveBeenCalledTimes(2));
+    const calls = vi.mocked(webBrowserMutation).mock.calls;
+    for (const [path, init] of calls) {
+      expect(path).toBe(`/web/v1/conversations/${conversationId}/messages`);
+      expect(JSON.parse(init.body as string)).toEqual({ prompt: "Сохрани черновик", model_id: "test-chat" });
+    }
+    expect(new Headers(calls[0][1].headers).get("X-Idempotency-Key"))
+      .toBe(new Headers(calls[1][1].headers).get("X-Idempotency-Key"));
+  });
+
+  it("restores only this conversation's available public model preference", async () => {
+    window.sessionStorage.setItem(`neirohub:conversation-model:${conversationId}`, "test-chat");
+    vi.mocked(loadChatModelCatalog).mockResolvedValueOnce(chatModels);
+    const view = render(<ConversationHistory history={initialHistory as never} />);
+    expect(await screen.findByRole("button", { name: /Выбрана нейросеть Тестовая модель/ })).toBeEnabled();
+    vi.mocked(loadChatModelCatalog).mockResolvedValueOnce(chatModels);
+    view.rerender(<ConversationHistory history={{ ...initialHistory, conversationId: "another-conversation" } as never} />);
+    expect(await screen.findByRole("button", { name: /Выбрана нейросеть NeiroHub Chat/ })).toBeEnabled();
   });
 
   it("renders conversation messages without visible role labels", () => {

@@ -5,6 +5,10 @@ vi.mock("@/lib/web-api/browser", () => ({
   webBrowserFetch: vi.fn(),
 }));
 
+vi.mock("@/features/conversations/ConversationModelSelector/chat-model-catalog", () => ({
+  loadChatModelCatalog: vi.fn(() => new Promise(() => {})),
+}));
+
 import {
   useWorkspaceDataCache,
   WorkspaceDataCacheProvider,

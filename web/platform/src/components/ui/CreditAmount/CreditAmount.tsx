@@ -30,6 +30,10 @@ function getCreditUnit(value: number): string {
   return "звёзд";
 }
 
+export function getCreditAmountLabel(value: number, prefix?: string): string {
+  return [prefix, value, getCreditUnit(value)].filter(Boolean).join(" ");
+}
+
 export function CreditAmount({
   "aria-label": ariaLabel,
   className,
@@ -37,7 +41,7 @@ export function CreditAmount({
   value,
   ...props
 }: Readonly<CreditAmountProps>) {
-  const accessibleLabel = [prefix, value, getCreditUnit(value)].filter(Boolean).join(" ");
+  const accessibleLabel = getCreditAmountLabel(value, prefix);
   const classes = [styles.amount, className].filter(Boolean).join(" ");
 
   return (

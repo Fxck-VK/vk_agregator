@@ -1,0 +1,378 @@
+.dialog {
+  color-scheme: dark;
+  display: grid;
+  grid-template-rows: auto minmax(0, 1fr);
+  inline-size: min(88rem, 100%);
+  max-block-size: calc(100dvh - 2rem);
+  overflow: hidden;
+  border: var(--panel-surface-border);
+  border-radius: var(--radius-2xl);
+  background: var(--panel-surface-background);
+  box-shadow: var(--panel-surface-shadow);
+  color: var(--panel-surface-text);
+  animation: dialogIn 280ms cubic-bezier(0.2, 0.8, 0.2, 1) both;
+}
+
+.dialogHeader {
+  position: relative;
+  display: grid;
+  justify-items: center;
+  gap: var(--space-4);
+  padding: clamp(var(--space-5), 3vw, var(--space-8)) clamp(var(--space-8), 5vw, 5rem) var(--space-5);
+  text-align: center;
+}
+
+.dialogHeader h2 {
+  margin: 0;
+  font-size: clamp(1.75rem, 3.2vw, 3.25rem);
+  font-weight: var(--font-weight-semibold);
+  line-height: 1.08;
+  letter-spacing: var(--letter-spacing-display);
+}
+
+.dialogHeader p {
+  margin: var(--space-2) 0 0;
+  color: var(--panel-surface-text-muted);
+  font-size: var(--font-size-body);
+}
+
+.closeButton {
+  position: absolute;
+  inset-block-start: var(--space-4);
+  inset-inline-end: var(--space-4);
+  display: grid;
+  place-items: center;
+  inline-size: 2.75rem;
+  block-size: 2.75rem;
+  border: 0.0625rem solid transparent;
+  border-radius: var(--radius-pill);
+  background: transparent;
+  color: var(--panel-surface-text-muted);
+  cursor: pointer;
+  transition: background-color var(--motion-fast), color var(--motion-fast), rotate var(--motion-fast);
+}
+
+.closeButton:hover {
+  rotate: 4deg;
+}
+
+.closeButton svg {
+  inline-size: 1.5rem;
+  block-size: 1.5rem;
+}
+
+.promoButton,
+.dialogFooter button {
+  min-block-size: 2.75rem;
+  border: 0.0625rem solid var(--color-border);
+  border-radius: var(--radius-pill);
+  padding: var(--space-2) var(--space-5);
+  background: color-mix(in srgb, var(--color-surface) 88%, transparent);
+  color: var(--color-text);
+  font: inherit;
+  font-weight: var(--font-weight-semibold);
+  cursor: pointer;
+  transition: border-color var(--motion-fast), background-color var(--motion-fast), translate var(--motion-fast);
+}
+
+.promoButton:hover,
+.dialogFooter button:hover {
+  translate: 0 -0.1rem;
+}
+
+.scrollArea {
+  min-block-size: 0;
+}
+
+.scrollViewport {
+  padding: 0 clamp(var(--space-4), 2.5vw, var(--space-8)) var(--space-6);
+}
+
+.planGrid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: var(--space-4);
+}
+
+.planCard {
+  color: var(--color-text);
+  position: relative;
+  display: flex;
+  min-inline-size: 0;
+  min-block-size: 31rem;
+  overflow: hidden;
+  border: 0.0625rem solid var(--color-border);
+  border-radius: var(--radius-xl);
+  padding: var(--space-3);
+  flex-direction: column;
+  background: color-mix(in srgb, var(--color-surface) 72%, var(--color-background));
+}
+
+.planSummary {
+  display: flex;
+  gap: var(--space-2);
+  border: 0.0625rem solid color-mix(in srgb, var(--color-border) 78%, transparent);
+  border-radius: var(--radius-lg);
+  padding: var(--space-4);
+  flex-direction: column;
+  background: color-mix(in srgb, var(--color-surface-raised) 75%, transparent);
+}
+
+.planSummary h3 {
+  margin: 0;
+  font-size: var(--font-size-subsection);
+  line-height: var(--line-height-subsection);
+}
+
+.price {
+  display: flex;
+  align-items: baseline;
+  gap: var(--space-1);
+  margin: 0;
+  white-space: nowrap;
+}
+
+.price strong {
+  font-size: 2.25rem;
+  line-height: 1;
+}
+
+.price span {
+  font-weight: var(--font-weight-semibold);
+}
+
+.price del {
+  margin-inline-start: var(--space-1);
+  color: var(--color-text-muted);
+  font-size: var(--font-size-supporting);
+}
+
+.description {
+  min-block-size: 2.5rem;
+  margin: 0;
+  color: var(--color-text-muted);
+  line-height: 1.35;
+}
+
+.subscribeButton,
+.managerButton {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-block-size: 3rem;
+  margin-block-start: var(--space-2);
+  border: 0;
+  border-radius: var(--radius-pill);
+  padding: var(--space-2) var(--space-4);
+  background: var(--color-text);
+  color: var(--color-background);
+  font: inherit;
+  font-weight: var(--font-weight-semibold);
+  cursor: pointer;
+  transition: filter var(--motion-fast), translate var(--motion-fast);
+}
+
+.subscribeButton:hover,
+.managerButton:hover {
+  filter: brightness(0.94);
+  translate: 0 -0.1rem;
+}
+
+.creditRow {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-3);
+  margin: 0 var(--space-3);
+  border-block-end: 0.0625rem solid var(--color-border);
+  padding: var(--space-5) 0 var(--space-4);
+  font-size: var(--font-size-body);
+  font-weight: var(--font-weight-semibold);
+}
+
+.creditRow strong {
+  font-size: var(--font-size-supporting);
+}
+
+.creditRow strong span {
+  color: var(--color-brand-pink);
+}
+
+.featureList,
+.teamFeatureList {
+  display: grid;
+  gap: var(--space-4);
+  margin: 0;
+  padding: var(--space-5) var(--space-3);
+  list-style: none;
+}
+
+.featureList li,
+.teamFeatureList li {
+  display: grid;
+  grid-template-columns: 1.25rem minmax(0, 1fr);
+  gap: var(--space-2);
+  font-size: var(--font-size-ui);
+  line-height: 1.45;
+}
+
+.featureList li > span:first-child,
+.teamFeatureList li > span:first-child {
+  color: var(--color-brand-violet);
+}
+
+.discount {
+  position: absolute;
+  z-index: 1;
+  inset-block-start: var(--space-3);
+  inset-inline-end: var(--space-3);
+  border-radius: 0 var(--radius-lg) 0 var(--radius-lg);
+  padding: var(--space-2) var(--space-3);
+  background: var(--gradient-brand);
+  color: #fff;
+  font-weight: var(--font-weight-semibold);
+}
+
+.popularPlan {
+  border-color: color-mix(in srgb, var(--color-brand-pink) 70%, var(--color-brand-blue));
+  box-shadow: 0 0 1.75rem color-mix(in srgb, var(--color-accent) 18%, transparent);
+}
+
+.popularPlan::before {
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(145deg, color-mix(in srgb, var(--color-brand-pink) 9%, transparent), transparent 45%);
+  content: "";
+  pointer-events: none;
+}
+
+.popularLabel {
+  position: relative;
+  z-index: 1;
+  margin: calc(var(--space-3) * -1) calc(var(--space-3) * -1) var(--space-3);
+  padding: var(--space-2);
+  background: var(--gradient-brand);
+  color: #fff;
+  font-size: var(--font-size-ui);
+  font-weight: var(--font-weight-semibold);
+  text-align: center;
+}
+
+.popularPlan .discount {
+  inset-block-start: 2.5rem;
+}
+
+.popularPlan .subscribeButton {
+  background: var(--gradient-brand);
+  color: #fff;
+}
+
+.teamPlan {
+  border-color: color-mix(in srgb, var(--color-brand-blue) 70%, var(--color-brand-pink));
+  background: linear-gradient(150deg, color-mix(in srgb, var(--color-brand-blue) 10%, var(--color-surface)), var(--color-background));
+}
+
+.teamPlan h3 {
+  background: var(--gradient-brand);
+  background-clip: text;
+  color: transparent;
+}
+
+.managerButton {
+  border: 0.0625rem solid color-mix(in srgb, var(--color-accent) 65%, var(--color-border));
+  background: transparent;
+  color: var(--color-text);
+}
+
+.teamFeatureList li {
+  border-radius: var(--radius-md);
+  padding: var(--space-3);
+  background: var(--color-surface);
+}
+
+.teamFeatureList strong,
+.teamFeatureList small {
+  display: block;
+}
+
+.teamFeatureList small {
+  margin-block-start: var(--space-1);
+  color: var(--color-text-muted);
+  font-size: var(--font-size-caption);
+}
+
+.dialogFooter {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: var(--space-4);
+  padding: var(--space-6) 0 var(--space-2);
+  flex-wrap: wrap;
+  color: var(--panel-surface-text-muted);
+  font-size: var(--font-size-caption);
+  text-align: center;
+}
+
+.dialogFooter p {
+  margin: 0;
+}
+
+@keyframes dialogIn {
+  from {
+    opacity: 0;
+    transform: translateY(1rem) scale(0.985);
+  }
+}
+
+@media (width < 64rem) {
+  .planGrid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+@media (width < 44rem) {
+  .dialog {
+    max-block-size: calc(100dvh - 1rem);
+    border-radius: var(--radius-xl);
+  }
+
+  .dialogHeader {
+    justify-items: start;
+    padding: var(--space-5) 3.75rem var(--space-4) var(--space-4);
+    text-align: start;
+  }
+
+  .dialogHeader h2 {
+    font-size: 1.65rem;
+  }
+
+  .promoButton {
+    justify-self: start;
+  }
+
+  .scrollViewport {
+    padding-inline: var(--space-3);
+  }
+
+  .planGrid {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .planCard {
+    min-block-size: auto;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .dialog {
+    animation: none;
+  }
+
+  .closeButton,
+  .promoButton,
+  .dialogFooter button,
+  .subscribeButton,
+  .managerButton {
+    transition: none;
+  }
+}

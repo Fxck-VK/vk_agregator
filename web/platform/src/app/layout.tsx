@@ -47,7 +47,11 @@ export default async function RootLayout({ children }: Readonly<{ children: Reac
   return (
     <html className={geistSans.variable} data-theme="system" lang="ru" suppressHydrationWarning>
       <head>
-        <script dangerouslySetInnerHTML={{ __html: themeBootstrapScript }} nonce={nonce} />
+        <script
+          dangerouslySetInnerHTML={{ __html: themeBootstrapScript }}
+          nonce={nonce}
+          suppressHydrationWarning
+        />
       </head>
       <body>{children}</body>
     </html>

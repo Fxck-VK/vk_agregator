@@ -1,0 +1,271 @@
+.dialog {
+  color-scheme: dark;
+  display: grid;
+  grid-template-rows: auto minmax(0, 1fr) auto;
+  gap: var(--space-5);
+  inline-size: min(34rem, 100%);
+  block-size: min(50.75rem, calc(100dvh - 2rem));
+  min-block-size: 37rem;
+  overflow: hidden;
+  border: var(--panel-surface-border);
+  border-radius: var(--radius-2xl);
+  padding: clamp(var(--space-5), 4vw, var(--space-7));
+  background: var(--panel-surface-background);
+  box-shadow: var(--panel-surface-shadow);
+  color: var(--panel-surface-text);
+  animation: dialogIn 280ms cubic-bezier(0.2, 0.8, 0.2, 1) both;
+}
+
+.header {
+  position: relative;
+  padding-inline-end: 2.75rem;
+}
+
+.header h2 {
+  margin: 0;
+  font-size: clamp(1.5rem, 3vw, 2rem);
+  font-weight: var(--font-weight-semibold);
+  line-height: 1.15;
+}
+
+.header p {
+  margin: var(--space-2) 0 0;
+  color: var(--panel-surface-text-muted);
+  font-size: var(--font-size-body);
+}
+
+.closeButton {
+  position: absolute;
+  inset-block-start: -0.5rem;
+  inset-inline-end: -0.5rem;
+  display: grid;
+  place-items: center;
+  inline-size: 2.5rem;
+  block-size: 2.5rem;
+  border: 0.0625rem solid transparent;
+  border-radius: var(--radius-pill);
+  background: transparent;
+  color: var(--panel-surface-text-muted);
+  cursor: pointer;
+  transition: border-color var(--motion-fast), color var(--motion-fast);
+}
+
+.closeButton:hover,
+.closeButton:focus-visible {
+  border-color: var(--color-accent);
+  color: var(--panel-surface-text);
+}
+
+.closeButton svg {
+  inline-size: 1.5rem;
+  block-size: 1.5rem;
+}
+
+.packageList {
+  display: grid;
+  grid-template-rows: repeat(5, minmax(0, 1fr));
+  gap: var(--space-3);
+  min-block-size: 0;
+  min-inline-size: 0;
+  margin: 0;
+  border: 0;
+  padding: 0;
+}
+
+.packageCard {
+  --color-text: var(--panel-surface-text);
+  --color-text-muted: var(--panel-surface-text);
+
+  position: relative;
+  display: grid;
+  grid-template-columns: 3rem minmax(0, 1fr);
+  align-items: center;
+  gap: var(--space-4);
+  min-block-size: 0;
+  padding: var(--space-3) var(--space-4);
+  cursor: pointer;
+}
+
+.radioInput {
+  position: absolute;
+  inline-size: 0.0625rem;
+  block-size: 0.0625rem;
+  opacity: 0;
+  pointer-events: none;
+}
+
+.packageMark {
+  position: relative;
+  display: block;
+  inline-size: 3rem;
+  block-size: 3rem;
+}
+
+.packageMark span {
+  position: absolute;
+  display: block;
+  inline-size: 1.75rem;
+  block-size: 1.75rem;
+  background: var(--gradient-brand);
+  mask: url("/assets/icons/ui/star-white.svg") center / contain no-repeat;
+}
+
+.packageMark span:first-child {
+  inset: 0.65rem auto auto 0.65rem;
+}
+
+.packageMark span:nth-child(2) {
+  inset: 0.05rem 0.1rem auto auto;
+  inline-size: 1rem;
+  block-size: 1rem;
+}
+
+.packageMark span:nth-child(3) {
+  inset: auto auto 0.1rem 0.05rem;
+  inline-size: 0.85rem;
+  block-size: 0.85rem;
+}
+
+.packageMark[data-size="1"] span:nth-child(3),
+.packageMark[data-size="2"] span:nth-child(2),
+.packageMark[data-size="3"] span:nth-child(2),
+.packageMark[data-size="3"] span:nth-child(3),
+.packageMark[data-size="4"] span:nth-child(2),
+.packageMark[data-size="4"] span:nth-child(3) {
+  display: none;
+}
+
+.packageMark[data-size="2"] span:first-child {
+  inline-size: 2.1rem;
+  block-size: 2.1rem;
+}
+
+.packageMark[data-size="3"] span:first-child {
+  inline-size: 1.7rem;
+  block-size: 1.7rem;
+}
+
+.packageMark[data-size="4"] span:first-child {
+  inline-size: 1.45rem;
+  block-size: 1.45rem;
+}
+
+.packageDetails,
+.tokenLine,
+.priceLine {
+  display: flex;
+  align-items: baseline;
+}
+
+.packageDetails {
+  min-inline-size: 0;
+  flex-direction: column;
+  gap: 0.2rem;
+}
+
+.tokenLine {
+  gap: var(--space-2);
+}
+
+.tokenLine strong {
+  font-size: clamp(1.75rem, 4vw, 2.25rem);
+  font-variant-numeric: tabular-nums;
+  line-height: 1;
+}
+
+.tokenLine em {
+  font-size: var(--font-size-ui);
+  font-weight: var(--font-weight-semibold);
+  text-transform: uppercase;
+}
+
+.priceLine {
+  flex-wrap: wrap;
+  gap: var(--space-2);
+  color: inherit;
+  font-size: var(--font-size-ui);
+  font-weight: var(--font-weight-semibold);
+}
+
+.priceLine s {
+  opacity: 0.68;
+}
+
+.priceLine mark {
+  display: inline-flex;
+  align-items: center;
+  min-block-size: 1.75rem;
+  border-radius: var(--radius-sm);
+  padding: 0 var(--space-2);
+  background: var(--gradient-brand);
+  color: white;
+  transform: rotate(-7deg);
+}
+
+.purchaseButton {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-block-size: 4rem;
+  border: 0;
+  border-radius: var(--radius-pill);
+  padding: var(--space-3) var(--space-5);
+  background: var(--gradient-brand);
+  color: white;
+  box-shadow: 0 0.5rem 1.25rem color-mix(in srgb, var(--color-accent) 24%, transparent);
+  font: inherit;
+  font-size: var(--font-size-body);
+  font-weight: var(--font-weight-medium);
+  cursor: pointer;
+  transition: filter var(--motion-fast), translate var(--motion-fast);
+}
+
+.purchaseButton:hover {
+  filter: brightness(1.06);
+  translate: 0 -0.0625rem;
+}
+
+.purchaseButton:active {
+  filter: none;
+  translate: 0;
+}
+
+@keyframes dialogIn {
+  from {
+    opacity: 0;
+    transform: translateY(0.75rem) scale(0.985);
+  }
+}
+
+@media (width < 40rem) {
+  .dialog {
+    align-self: stretch;
+    inline-size: 100%;
+    block-size: auto;
+    min-block-size: 100dvh;
+    overflow: visible;
+    border: 0;
+    border-radius: 0;
+    padding: var(--space-5) var(--space-4);
+  }
+
+  .packageCard {
+    grid-template-columns: 2.5rem minmax(0, 1fr);
+    gap: var(--space-3);
+    min-block-size: 5.5rem;
+    padding-inline: var(--space-3);
+  }
+
+  .packageMark {
+    inline-size: 2.5rem;
+    block-size: 2.5rem;
+    transform: scale(0.86);
+    transform-origin: center;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .dialog {
+    animation: none;
+  }
+}

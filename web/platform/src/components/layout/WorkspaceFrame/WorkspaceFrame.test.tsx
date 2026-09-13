@@ -226,13 +226,11 @@ describe("WorkspaceFrame", () => {
     const header = screen.getByTestId("workspace-header");
     expect(header).toHaveAccessibleName(expectedTitle);
     if (pathname === "/app/inspiration") {
-      expect(header).toHaveTextContent(expectedTitle);
-      expect(screen.queryByRole("button", { name: "Model selector" })).toBeNull();
-    } else {
-      expect(screen.getByRole("button", { name: "Model selector" })).toBeInTheDocument();
+      expect(header).not.toHaveTextContent(expectedTitle);
     }
+    expect(screen.getByRole("button", { name: "Model selector" })).toBeInTheDocument();
     expect(within(header).getByLabelText("42 звезды")).toBeInTheDocument();
-    expect(screen.queryByRole("button", { name: "Выбрать тариф" })).toBeNull();
+    expect(within(header).getByRole("button", { name: "Выбрать тариф" })).toHaveAttribute("type", "button");
   });
 
   it("shows a neutral balance state instead of a made-up zero while the value is unavailable", () => {

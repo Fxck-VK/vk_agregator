@@ -45,9 +45,90 @@ describe("WorkspacePrompt", () => {
 
   afterEach(() => {
     cleanup();
+    vi.useRealTimers();
     vi.clearAllMocks();
     vi.unstubAllGlobals();
     window.sessionStorage.clear();
+  });
+
+  it("keeps the animated hero prompt visible on focus and hides it only after typing", () => {
+    vi.useFakeTimers();
+    vi.stubGlobal("matchMedia", vi.fn(() => ({
+      matches: false,
+      addEventListener: vi.fn(),
+      removeEventListener: vi.fn(),
+    })));
+    render(<WorkspacePrompt access="guest" variant="hero" />);
+
+    const textarea = screen.getByLabelText("Задайте вопрос NeiroHub");
+    expect(textarea).toHaveAttribute("placeholder", "Спросите NeiroHub или ");
+
+    fireEvent.focus(textarea);
+    expect(textarea).toHaveAttribute("placeholder", "Спросите NeiroHub или ");
+
+    act(() => vi.advanceTimersByTime(80));
+    expect(textarea).toHaveAttribute("placeholder", "Спросите NeiroHub или с");
+
+    fireEvent.change(textarea, { target: { value: "Мой вопрос" } });
+    expect(textarea).toHaveAttribute("placeholder", "");
+
+    fireEvent.change(textarea, { target: { value: "" } });
+    expect(textarea).toHaveAttribute("placeholder", "Спросите NeiroHub или ");
+  });
+
+  it("shows a static complete hero suggestion when reduced motion is requested", () => {
+    vi.useFakeTimers();
+    vi.stubGlobal("matchMedia", vi.fn(() => ({
+      matches: true,
+      addEventListener: vi.fn(),
+      removeEventListener: vi.fn(),
+    })));
+    render(<WorkspacePrompt access="guest" variant="hero" />);
+
+    const textarea = screen.getByLabelText("Задайте вопрос NeiroHub");
+    expect(textarea).toHaveAttribute(
+      "placeholder",
+      "Спросите NeiroHub или составьте план проекта",
+    );
+
+    act(() => vi.advanceTimersByTime(10_000));
+    expect(textarea).toHaveAttribute(
+      "placeholder",
+      "Спросите NeiroHub или составьте план проекта",
+    );
+  });
+
+  it("deletes the completed suggestion and types the next one", () => {
+    vi.useFakeTimers();
+    vi.stubGlobal("matchMedia", vi.fn(() => ({
+      matches: false,
+      addEventListener: vi.fn(),
+      removeEventListener: vi.fn(),
+    })));
+    render(<WorkspacePrompt access="guest" variant="hero" />);
+
+    const textarea = screen.getByLabelText("Задайте вопрос NeiroHub");
+    const prefix = "Спросите NeiroHub или ";
+    const firstSuggestion = "составьте план проекта";
+
+    for (let index = 0; index < firstSuggestion.length; index += 1) {
+      act(() => vi.advanceTimersByTime(80));
+    }
+    expect(textarea).toHaveAttribute("placeholder", `${prefix}${firstSuggestion}`);
+
+    act(() => vi.advanceTimersByTime(1_600));
+    act(() => vi.advanceTimersByTime(45));
+    expect(textarea).toHaveAttribute(
+      "placeholder",
+      `${prefix}${firstSuggestion.slice(0, -1)}`,
+    );
+
+    for (let index = 1; index < firstSuggestion.length; index += 1) {
+      act(() => vi.advanceTimersByTime(45));
+    }
+    act(() => vi.advanceTimersByTime(350));
+    act(() => vi.advanceTimersByTime(80));
+    expect(textarea).toHaveAttribute("placeholder", `${prefix}п`);
   });
 
   it("keeps the dedicated new-chat copy", () => {
@@ -58,7 +139,10 @@ describe("WorkspacePrompt", () => {
       ru.conversations.composerPlaceholder,
     );
     expect(screen.getByRole("button", { name: ru.conversations.composerMediaUpload })).toBeEnabled();
-    expect(screen.getByRole("button", { name: ru.workspace.promptSubmit }).querySelector("svg")).not.toBeNull();
+    expect(screen.getByRole("button", { name: ru.workspace.promptSubmit }).querySelector("img")).toHaveAttribute(
+      "src",
+      "/assets/icons/ui/send-message-white.svg",
+    );
   });
 
   it("routes a guest prompt to login without creating private data", () => {

@@ -15,10 +15,16 @@ function createNonce(): string {
 }
 
 function createContentSecurityPolicy(nonce: string): string {
+  const developmentScriptSource = process.env.NODE_ENV === "development" ? " 'unsafe-eval'" : "";
+  const developmentStyleElements =
+    process.env.NODE_ENV === "development" ? "style-src-elem 'self' 'unsafe-inline'" : null;
+
   return [
     "default-src 'self'",
-    `script-src 'self' 'nonce-${nonce}' 'strict-dynamic'`,
+    `script-src 'self' 'nonce-${nonce}' 'strict-dynamic'${developmentScriptSource}`,
     `style-src 'self' 'nonce-${nonce}'`,
+    "style-src-attr 'unsafe-inline'",
+    developmentStyleElements,
     "img-src 'self' data: blob:",
     "font-src 'self'",
     "connect-src 'self'",
@@ -29,7 +35,9 @@ function createContentSecurityPolicy(nonce: string): string {
     "frame-src 'none'",
     "frame-ancestors 'none'",
     "upgrade-insecure-requests",
-  ].join("; ");
+  ]
+    .filter((directive): directive is string => directive !== null)
+    .join("; ");
 }
 
 export function proxy(request: NextRequest): NextResponse {

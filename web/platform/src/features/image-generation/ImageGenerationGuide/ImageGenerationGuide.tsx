@@ -3,6 +3,10 @@
 import Link from "next/link";
 import { useState } from "react";
 
+import { InputSurface } from "@/components/ui/InputSurface/InputSurface";
+import { MasonryGrid } from "@/components/ui/MasonryGrid/MasonryGrid";
+import { ScrollArea } from "@/components/ui/ScrollArea/ScrollArea";
+import selectableStyles from "@/components/ui/selectable-control.module.css";
 import { InspirationExampleCard } from "@/features/inspiration/InspirationExampleCard/InspirationExampleCard";
 import { selectInspirationExamples } from "@/features/inspiration/inspiration-examples";
 import { useWorkspaceModelSelection } from "@/features/models/WorkspaceModelSelection/WorkspaceModelSelection";
@@ -32,7 +36,7 @@ function AspectIcon() {
 
 function PromptPreview({ compact = false }: { compact?: boolean }) {
   return (
-    <div className={`${styles.promptPreview} ${compact ? styles.promptPreviewCompact : ""}`}>
+    <InputSurface className={`${styles.promptPreview} ${compact ? styles.promptPreviewCompact : ""}`}>
       <p>{compact ? ru.imageGeneration.guide.promptExampleShort : ru.imageGeneration.guide.promptExampleLong}</p>
       {compact ? (
         <div className={styles.previewControls}>
@@ -46,7 +50,7 @@ function PromptPreview({ compact = false }: { compact?: boolean }) {
           </span>
         </div>
       ) : null}
-    </div>
+    </InputSurface>
   );
 }
 
@@ -66,11 +70,21 @@ export function ImageGenerationGuide() {
   const [activeTab, setActiveTab] = useState<GuideTab>("guide");
   const workspaceModelSelection = useWorkspaceModelSelection();
   const guide = ru.imageGeneration.guide;
-  const examples = selectInspirationExamples(workspaceModelSelection?.selectedModelId);
+  const examples = selectInspirationExamples(
+    workspaceModelSelection?.selectedModelId,
+    6,
+    "image",
+    { fillFromCollection: true },
+  );
 
   return (
     <section aria-label={guide.tabsLabel} className={styles.root}>
-      <div aria-label={guide.tabsLabel} className={styles.tabs} role="tablist">
+      <ScrollArea
+        className={styles.tabsScroll}
+        orientation="horizontal"
+        viewportClassName={styles.tabs}
+        viewportProps={{ "aria-label": guide.tabsLabel, role: "tablist" }}
+      >
         <button
           aria-controls="image-generation-guide-panel"
           aria-selected={activeTab === "guide"}
@@ -93,7 +107,7 @@ export function ImageGenerationGuide() {
         >
           {guide.examplesTab}
         </button>
-      </div>
+      </ScrollArea>
 
       {activeTab === "guide" ? (
         <div
@@ -105,7 +119,7 @@ export function ImageGenerationGuide() {
           <ol className={styles.steps}>
             {guide.steps.map((step, index) => (
               <li className={styles.step} data-testid="image-generation-guide-step" key={step.number}>
-                <div className={styles.visual}>
+                <div className={`${styles.visual} ${index === 2 ? styles.resultVisual : ""}`}>
                   {index === 0 ? <PromptPreview /> : null}
                   {index === 1 ? <PromptPreview compact /> : null}
                   {index === 2 ? <ResultPreview /> : null}
@@ -124,19 +138,16 @@ export function ImageGenerationGuide() {
           id="image-generation-examples-panel"
           role="tabpanel"
         >
-          <div className={styles.examples}>
+          <MasonryGrid>
             {examples.map((example) => (
-              <InspirationExampleCard
-                example={example}
-                key={example.id}
-                sizes="(max-width: 62rem) 92vw, 22rem"
-              />
+              <li key={example.id}>
+                <InspirationExampleCard example={example} />
+              </li>
             ))}
-          </div>
-          <div className={styles.examplesFooter}>
-            <Link className={styles.viewMoreExamples} href="/app/inspiration">
+          </MasonryGrid>
+          <div className={`${selectableStyles.actionItems} ${styles.examplesFooter}`}>
+            <Link className={`${selectableStyles.control} ${styles.viewMoreExamples}`} href="/app/inspiration">
               {guide.viewMoreExamples}
-              <span aria-hidden="true">→</span>
             </Link>
           </div>
         </div>

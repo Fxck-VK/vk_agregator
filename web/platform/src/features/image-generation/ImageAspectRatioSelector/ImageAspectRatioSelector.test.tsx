@@ -24,6 +24,26 @@ describe("ImageAspectRatioSelector", () => {
     expect(screen.getByRole("radio", { name: "16:9" })).toHaveAttribute("aria-checked", "true");
   });
 
+  it("uses the supplied SVG masks for the trigger and every ratio option", () => {
+    const ratios = ["16:9", "1:1", "21:9", "2:3", "3:2", "3:4", "4:3", "4:5", "5:4", "9:16"];
+    render(
+      <ImageAspectRatioSelector disabled={false} onChange={vi.fn()} value="16:9" />,
+    );
+
+    const trigger = screen.getByRole("button", { name: "Соотношение сторон: 16:9" });
+    expect(trigger.querySelector('[aria-hidden="true"]')).toHaveStyle({
+      "--ratio-icon": 'url("/assets/icons/ui/aspect-ratios/aspect-16x9-white.svg")',
+    });
+
+    fireEvent.click(trigger);
+    for (const ratio of ratios) {
+      const option = screen.getByRole("radio", { name: ratio });
+      expect(option.querySelector('[aria-hidden="true"]')).toHaveStyle({
+        "--ratio-icon": `url("/assets/icons/ui/aspect-ratios/aspect-${ratio.replace(":", "x")}-white.svg")`,
+      });
+    }
+  });
+
   it("commits a selected ratio and closes the panel", () => {
     const onChange = vi.fn();
     render(
@@ -92,10 +112,10 @@ describe("ImageAspectRatioSelector", () => {
     const panel = screen.getByRole("dialog", { name: "Соотношение сторон" });
     expect(panel.parentElement).toBe(document.body);
     expect(panel).toHaveStyle({
-      left: "16px",
+      left: "22px",
       maxHeight: "420px",
       top: "16px",
-      width: "550px",
+      width: "544px",
     });
   });
 });

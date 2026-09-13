@@ -1,11 +1,10 @@
 .catalog {
   display: grid;
-  inline-size: min(100%, 64rem);
+  inline-size: 100%;
   container-name: models-catalog;
   container-type: inline-size;
   gap: var(--space-8);
-  margin-inline: auto;
-  padding: var(--space-8);
+  padding-block-end: var(--space-8);
 }
 
 .header {
@@ -76,7 +75,7 @@
   color: var(--color-danger);
 }
 
-@container models-catalog (max-width: 52rem) {
+@container models-catalog (max-width: 42rem) {
   .grid {
     grid-template-columns: minmax(0, 1fr);
   }
@@ -85,6 +84,6 @@
 @media (max-width: 42rem) {
   .catalog {
     gap: var(--space-6);
-    padding: var(--space-4);
+    padding-block-end: var(--space-4);
   }
 }

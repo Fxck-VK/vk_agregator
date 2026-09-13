@@ -6,6 +6,160 @@
   background: var(--color-surface);
 }
 
+.mediaCard {
+  position: relative;
+  display: block;
+}
+
+.mediaItem {
+  position: relative;
+}
+
+.mediaLink {
+  position: relative;
+  display: block;
+  inline-size: 100%;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: inherit;
+  cursor: pointer;
+  font: inherit;
+}
+
+.mediaLink:focus-visible {
+  outline: 0.1875rem solid var(--color-focus);
+  outline-offset: -0.1875rem;
+}
+
+.mediaFigure {
+  inline-size: 100%;
+  margin: 0;
+}
+
+.media {
+  display: block;
+  inline-size: var(--file-card-media-inline-size, 100%);
+  max-inline-size: 100%;
+  block-size: auto;
+  max-block-size: var(--file-card-media-max-block-size, none);
+  object-fit: cover;
+}
+
+.mediaOverlay {
+  position: absolute;
+  z-index: 1;
+  inset: 0;
+  display: block;
+  opacity: 0;
+  background: linear-gradient(180deg, rgb(8 8 12 / 0.08) 30%, rgb(8 8 12 / 0.76) 100%);
+  pointer-events: none;
+  transition: opacity 160ms ease;
+}
+
+.downloadLabel {
+  position: absolute;
+  z-index: 2;
+  inset-block-end: var(--space-4);
+  inset-inline-start: var(--space-4);
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-2);
+  color: #fff;
+  font-size: var(--font-size-ui);
+  font-weight: var(--font-weight-semibold);
+  line-height: 1;
+  text-shadow: 0 0.0625rem 0.25rem rgb(0 0 0 / 0.48);
+  opacity: 0;
+  pointer-events: auto;
+  text-decoration: none;
+  transition: opacity 160ms ease;
+}
+
+.downloadLabel:hover {
+  opacity: 0.7;
+}
+
+.deleteControl {
+  position: absolute;
+  z-index: 2;
+  inset-block-start: var(--space-3);
+  inset-inline-end: var(--space-3);
+  display: grid;
+  inline-size: 2.75rem;
+  block-size: 2.75rem;
+  padding: 0;
+  place-items: center;
+  opacity: 0;
+  border: 0;
+  border-radius: var(--radius-sm);
+  background: rgb(8 8 12 / 0.56);
+  color: #fff;
+  cursor: not-allowed;
+  transform: translateY(-0.25rem);
+  transition: opacity 160ms ease, transform 160ms ease, background-color 160ms ease;
+}
+
+.actionIcon {
+  inline-size: 1.75rem;
+  block-size: 1.75rem;
+  flex: 0 0 auto;
+}
+
+.mediaCard:hover .mediaOverlay,
+.mediaCard:focus-within .mediaOverlay {
+  opacity: 1;
+}
+
+.mediaCard:hover .downloadLabel,
+.mediaCard:focus-within .downloadLabel {
+  opacity: 1;
+}
+
+.mediaCard:hover .downloadLabel:hover,
+.mediaCard:focus-within .downloadLabel:hover {
+  opacity: 0.7;
+}
+
+.mediaCard:hover .deleteControl,
+.mediaCard:focus-within .deleteControl {
+  opacity: 1;
+  transform: translateY(0);
+}
+
+@media (hover: none) {
+  .mediaOverlay,
+  .downloadLabel,
+  .deleteControl {
+    opacity: 1;
+  }
+
+  .deleteControl {
+    transform: translateY(0);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .mediaOverlay,
+  .downloadLabel,
+  .deleteControl {
+    transition: none;
+  }
+}
+
+.accessibleMetadata {
+  position: absolute;
+  inline-size: 1px;
+  block-size: 1px;
+  margin: -1px;
+  padding: 0;
+  overflow: hidden;
+  clip: rect(0 0 0 0);
+  clip-path: inset(50%);
+  border: 0;
+  white-space: nowrap;
+}
+
 .preview {
   display: grid;
   min-block-size: 12rem;
@@ -14,25 +168,6 @@
   background: var(--color-background);
   color: var(--color-text-muted);
   text-align: center;
-}
-
-.preview figure {
-  display: grid;
-  gap: var(--space-2);
-  inline-size: 100%;
-  margin: 0;
-}
-
-.preview img {
-  inline-size: 100%;
-  max-block-size: 24rem;
-  border-radius: var(--radius-sm);
-  object-fit: cover;
-}
-
-.preview figcaption a {
-  color: var(--color-primary);
-  font-weight: 700;
 }
 
 .previewFailure {

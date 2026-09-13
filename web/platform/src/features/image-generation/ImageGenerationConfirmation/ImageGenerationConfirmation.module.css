@@ -30,7 +30,7 @@
 
 .confirmation dd {
   margin: 0;
-  font-weight: 700;
+  font-weight: var(--font-weight-semibold);
 }
 
 .confirmation button {

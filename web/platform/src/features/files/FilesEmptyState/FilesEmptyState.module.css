@@ -8,18 +8,11 @@
 }
 
 .folder {
-  inline-size: 7rem;
-  block-size: auto;
+  inline-size: 8rem;
+  block-size: 5.5rem;
   justify-self: center;
-  filter: drop-shadow(0 0.75rem 1rem rgb(255 193 61 / 0.18));
-}
-
-.folder path:first-child {
-  fill: #ffbd36;
-}
-
-.folder path:last-child {
-  fill: #ffd268;
+  object-fit: cover;
+  object-position: center;
 }
 
 .emptyState div {

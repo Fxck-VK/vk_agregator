@@ -1,10 +1,22 @@
-import { readFileSync } from "node:fs";
-import { resolve } from "node:path";
+import { readFileSync, readdirSync } from "node:fs";
+import { join, relative, resolve } from "node:path";
 
 import { describe, expect, it } from "vitest";
 
 function stylesheet(path: string): string {
   return readFileSync(resolve(process.cwd(), path), "utf8");
+}
+
+function cssFiles(directory: string): string[] {
+  return readdirSync(directory, { withFileTypes: true }).flatMap((entry) => {
+    const path = join(directory, entry.name);
+
+    if (entry.isDirectory()) {
+      return cssFiles(path);
+    }
+
+    return entry.isFile() && entry.name.endsWith(".css") ? [path] : [];
+  });
 }
 
 function escapeRegExp(value: string): string {
@@ -19,6 +31,32 @@ function rule(path: string, selector: string): string {
 }
 
 describe("primary interface typography", () => {
+  it("uses shared typography tokens instead of local interface weights", () => {
+    const sourceDirectory = resolve(process.cwd(), "src");
+    const hardcodedWeights = cssFiles(sourceDirectory).flatMap((path) => {
+      if (path.endsWith("globals.css")) {
+        return [];
+      }
+
+      const matches = Array.from(
+        stylesheet(relative(process.cwd(), path)).matchAll(/font-weight:\s*(500|600|650|700|750)\s*;/g),
+      );
+
+      return matches.map((match) => `${relative(process.cwd(), path)}: ${match[0]}`);
+    });
+
+    expect(hardcodedWeights).toEqual([]);
+  });
+
+  it("maps semantic bold text to the shared semibold weight", () => {
+    const semanticBoldRule = rule(
+      "src/app/globals.css",
+      ":where(h1, h2, h3, h4, h5, h6, strong, b)",
+    );
+
+    expect(semanticBoldRule).toContain("font-weight: var(--font-weight-semibold)");
+  });
+
   it.each([
     ["src/features/workspace/WorkspaceLanding/WorkspaceLanding.module.css", ".heroCopy h1"],
     ["src/features/workspace/WorkspaceHome/WorkspaceHome.module.css", ".content h1"],
@@ -92,6 +130,16 @@ describe("primary interface typography", () => {
 });
 
 describe("workspace control typography", () => {
+  it("uses the medium weight for shared input-control chips", () => {
+    const chipRule = rule(
+      "src/components/ui/InputControlChip/InputControlChip.module.css",
+      ".chip",
+    );
+
+    expect(chipRule).toContain("font-weight: var(--font-weight-medium)");
+    expect(chipRule).not.toContain("font-weight: 700");
+  });
+
   it.each([
     [
       "src/components/layout/Sidebar/Sidebar.module.css",
@@ -160,9 +208,15 @@ describe("workspace control typography", () => {
 });
 
 describe("card and secondary surface typography", () => {
+  it("keeps plan-benefit emphasis at the same medium weight as its line", () => {
+    const path = "src/features/workspace/WorkspaceLanding/WorkspaceLanding.module.css";
+
+    expect(rule(path, ".planBenefits li")).toContain("font-weight: var(--font-weight-medium)");
+    expect(rule(path, ".planBenefits strong")).toContain("font-weight: inherit");
+  });
+
   it.each([
-    ["src/features/models/ModelCard/ModelCard.module.css", ".heading h3"],
-    ["src/features/workspace/FeaturedModels/FeaturedModels.module.css", ".copy strong"],
+    ["src/features/models/ModelCard/ModelCard.module.css", ".copy h3"],
     ["src/features/workspace/FeaturedModelShortcuts/FeaturedModelShortcuts.module.css", ".shortcut"],
     ["src/features/files/FileCard/FileCard.module.css", ".content h2"],
     ["src/components/public/ModelPreviewCard/ModelPreviewCard.module.css", ".copy h3"],

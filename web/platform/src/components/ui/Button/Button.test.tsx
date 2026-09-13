@@ -10,7 +10,8 @@ describe("Button", () => {
 
     render(<Button ref={ref}>Focusable button</Button>);
 
-    expect(ref.current).toBe(screen.getByRole("button", { name: "Focusable button" }));
+    const button = screen.getByRole("button", { name: "Focusable button" });
+    expect(ref.current).toBe(button);
   });
 
   it("does not call its handler when disabled", () => {

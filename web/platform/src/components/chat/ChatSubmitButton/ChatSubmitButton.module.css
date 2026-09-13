@@ -1,0 +1,46 @@
+.button {
+  display: inline-grid;
+  place-items: center;
+  inline-size: var(--input-control-size, 3.25rem);
+  block-size: var(--input-control-size, 3.25rem);
+  padding: 0;
+  border: 0.0625rem solid transparent;
+  border-radius: var(--radius-sm);
+  color: var(--color-text-on-accent);
+  background: transparent;
+  font: inherit;
+  transition: border-color 160ms ease;
+}
+
+.button:focus-visible {
+  outline: 0.1875rem solid color-mix(in srgb, var(--color-accent) 45%, transparent);
+  outline-offset: 0.125rem;
+}
+
+.button:disabled {
+  border-color: transparent;
+  color: var(--color-text-muted);
+  background: transparent;
+}
+
+.button:not(:disabled) {
+  border-color: var(--color-accent);
+}
+
+.button img {
+  inline-size: var(--input-control-icon-size, 1.5rem);
+  block-size: var(--input-control-icon-size, 1.5rem);
+  opacity: 0.55;
+  transition: opacity 160ms ease;
+}
+
+.button:not(:disabled):hover img {
+  opacity: 1;
+}
+
+@media (width < 40rem) {
+  .button {
+    inline-size: var(--input-control-size, 3rem);
+    block-size: var(--input-control-size, 3rem);
+  }
+}

@@ -1,0 +1,476 @@
+.dialog {
+  position: relative;
+  display: grid;
+  grid-template-columns: 6rem minmax(0, 1fr) clamp(25rem, 30vw, 32rem) 3rem;
+  grid-template-rows: minmax(0, 1fr);
+  gap: clamp(1rem, 2vw, 2rem);
+  inline-size: min(100rem, calc(100vw - 3rem));
+  block-size: min(60rem, calc(100dvh - 3rem));
+  overflow: hidden;
+  border: 0.0625rem solid rgb(255 255 255 / 10%);
+  border-radius: 1.5rem;
+  padding: clamp(1rem, 2vw, 2rem);
+  background:
+    radial-gradient(circle at 36% 28%, rgb(169 105 45 / 32%), transparent 42%),
+    linear-gradient(135deg, #21160d, #111318 58%);
+  box-shadow: 0 1.5rem 6rem rgb(0 0 0 / 55%);
+}
+
+.closeButtonPlacement {
+  position: relative;
+  z-index: 4;
+  grid-column: 4;
+  grid-row: 1;
+  align-self: start;
+  justify-self: end;
+}
+
+@media (width >= 60rem) {
+  .dialog[data-single-item="true"] .preview {
+    grid-column: 1 / 3;
+  }
+}
+
+.thumbnailRailViewport {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: var(--space-3);
+  padding-block-start: 0;
+  padding-inline-end: 1rem;
+}
+
+.thumbnailRail {
+  grid-column: 1;
+  grid-row: 1;
+  block-size: 100%;
+  min-block-size: 0;
+}
+
+.thumbnail {
+  flex: 0 0 auto;
+  overflow: hidden;
+  inline-size: 4.5rem;
+  aspect-ratio: 1;
+  border: 0.125rem solid rgb(255 255 255 / 12%);
+  border-radius: 0.875rem;
+  padding: 0;
+  background: #111;
+}
+
+.thumbnail[aria-current="true"] {
+  border-color: var(--color-accent);
+}
+
+.thumbnail:focus-visible {
+  border-color: var(--input-focus-border-color);
+  outline: none;
+}
+
+.thumbnail:disabled {
+  border-color: rgb(255 255 255 / 8%);
+  background: rgb(255 255 255 / 5%);
+  color: var(--color-text-muted);
+  cursor: default;
+}
+
+.thumbnailMedia {
+  display: block;
+  inline-size: 100%;
+  block-size: 100%;
+  object-fit: cover;
+}
+
+.preview {
+  --preview-stage-bottom: 1rem;
+
+  position: relative;
+  display: grid;
+  grid-column: 2;
+  grid-row: 1;
+  inline-size: 100%;
+  block-size: 100%;
+  min-inline-size: 0;
+  min-block-size: 0;
+  overflow: hidden;
+  place-items: center;
+}
+
+.previewWithFooter {
+  --preview-stage-bottom: 5.25rem;
+
+  overflow: visible;
+}
+
+.previewStage {
+  position: absolute;
+  inset-block: 0 var(--preview-stage-bottom);
+  inset-inline: 3.5rem;
+  display: grid;
+  min-inline-size: 0;
+  min-block-size: 0;
+  overflow: hidden;
+  place-items: start center;
+  container-type: size;
+}
+
+.previewFooter {
+  position: absolute;
+  z-index: 2;
+  inset-block-end: 0;
+  inset-inline: 0.25rem;
+  display: flex;
+  min-inline-size: 0;
+  justify-content: center;
+}
+
+.previewNavigation {
+  position: absolute;
+  z-index: 2;
+  inset-block-start: calc((100% - var(--preview-stage-bottom)) / 2);
+  display: grid;
+  inline-size: 3rem;
+  block-size: 3rem;
+  place-items: center;
+  border: var(--panel-surface-border);
+  border-radius: 0.5rem;
+  background: var(--panel-surface-background);
+  box-shadow: var(--panel-surface-shadow);
+  color: #fff;
+  transform: translateY(-50%);
+  transition:
+    border-color var(--motion-fast),
+    opacity var(--motion-fast);
+}
+
+.previewNavigation:hover,
+.previewNavigation:focus-visible {
+  border-color: var(--input-focus-border-color);
+  outline: none;
+}
+
+.navigationIcon {
+  display: block;
+  inline-size: 0.875rem;
+  block-size: auto;
+}
+
+.previousButton {
+  inset-inline-start: 0.25rem;
+}
+
+.previousButton .navigationIcon {
+  transform: rotate(90deg);
+}
+
+.nextButton {
+  inset-inline-end: 0.25rem;
+}
+
+.nextButton .navigationIcon {
+  transform: rotate(-90deg);
+}
+
+.previewSurface {
+  position: relative;
+  display: grid;
+  inline-size: min(100%, calc(100cqh * var(--media-aspect)));
+  max-inline-size: 100%;
+  max-block-size: 100%;
+  overflow: hidden;
+  border-radius: 1rem;
+  aspect-ratio: var(--media-aspect);
+  place-items: center;
+}
+
+.previewSurface[data-landscape="true"] {
+  align-self: center;
+}
+
+.previewMedia {
+  display: block;
+  inline-size: auto;
+  max-inline-size: 100%;
+  max-block-size: 100%;
+  block-size: auto;
+  border-radius: inherit;
+  object-fit: contain;
+}
+
+.infoPanel {
+  grid-column: 3;
+  grid-row: 1;
+  align-self: stretch;
+  block-size: 100%;
+  min-block-size: 0;
+  overflow: hidden;
+  border: var(--panel-surface-border);
+  border-radius: 1.5rem;
+  background: var(--panel-surface-background);
+  box-shadow: var(--panel-surface-shadow);
+  color: #f5f7fa;
+}
+
+.infoPanelViewport {
+  display: flex;
+  block-size: 100%;
+  min-block-size: 0;
+  flex-direction: column;
+  padding: clamp(1.25rem, 2vw, 1.75rem);
+}
+
+.promptHeader {
+  display: flex;
+  flex-wrap: nowrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-2);
+  margin-block-start: var(--space-7);
+}
+
+.promptHeader h2 {
+  margin: 0;
+  font-size: 1.125rem;
+  font-weight: var(--font-weight-semibold);
+  white-space: nowrap;
+}
+
+.copyButton {
+  display: inline-flex;
+  flex: 0 0 auto;
+  align-items: center;
+  justify-content: center;
+  gap: var(--space-2);
+  min-block-size: 2.5rem;
+  border: 0.0625rem solid rgb(255 255 255 / 18%);
+  border-radius: var(--radius-sm);
+  padding: 0.5rem 0.625rem;
+  background: transparent;
+  color: #f5f7fa;
+  font: inherit;
+  font-size: 0.875rem;
+  font-weight: var(--font-weight-semibold);
+  transition: border-color var(--motion-fast);
+  white-space: nowrap;
+}
+
+.copyButton:hover {
+  border-color: var(--color-accent);
+}
+
+.copyButton:focus-visible {
+  border-color: var(--input-focus-border-color);
+  outline: none;
+}
+
+.copyIcon {
+  flex: 0 0 auto;
+  inline-size: 1.5rem;
+  block-size: 1.5rem;
+  object-fit: contain;
+}
+
+.copySuccessIcon {
+  fill: none;
+  stroke: currentColor;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+  stroke-width: 2.25;
+}
+
+.previewActions {
+  display: grid;
+  gap: var(--space-3);
+  margin-block-start: auto;
+  padding-block-start: var(--space-6);
+}
+
+.primaryAction,
+.secondaryAction {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: var(--space-2);
+  border-radius: var(--radius-sm);
+  color: #fff;
+  font: inherit;
+  font-weight: var(--font-weight-semibold);
+  text-decoration: none;
+  transition:
+    border-color var(--motion-fast),
+    background-color var(--motion-fast);
+}
+
+.primaryAction {
+  min-block-size: 3.5rem;
+  border: 0;
+  padding: 0.8rem 1.25rem;
+  background: var(--color-accent);
+}
+
+.primaryAction:hover {
+  background: var(--color-accent-strong);
+}
+
+.secondaryActions {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: var(--space-3);
+}
+
+.secondaryAction {
+  min-block-size: 3.25rem;
+  border: 0.0625rem solid rgb(255 255 255 / 18%);
+  padding: 0.7rem 1rem;
+  background: transparent;
+}
+
+.secondaryAction:hover {
+  border-color: var(--color-accent);
+}
+
+.primaryAction:focus-visible,
+.secondaryAction:focus-visible {
+  border-color: var(--input-focus-border-color);
+  outline: none;
+}
+
+.previewActionIcon {
+  flex: 0 0 auto;
+  inline-size: 1.5rem;
+  block-size: 1.5rem;
+  object-fit: contain;
+}
+
+@media (width < 60rem) {
+  .dialog {
+    grid-template-columns: minmax(0, 1fr);
+    grid-template-rows: 5.5rem clamp(12rem, 30dvh, 19rem) minmax(0, 1fr);
+    gap: var(--space-4);
+    inline-size: calc(100vw - 3rem);
+    block-size: calc(100dvh - 3rem);
+    max-block-size: none;
+    padding: var(--space-4);
+  }
+
+  .closeButtonPlacement {
+    position: relative;
+    grid-column: 1;
+    grid-row: 3;
+    align-self: start;
+    justify-self: end;
+    margin-block-start: 0.5rem;
+    margin-inline-end: var(--space-4);
+  }
+
+  .thumbnailRail {
+    grid-column: 1;
+    grid-row: 1;
+    inline-size: 100%;
+    block-size: 5.5rem;
+    min-inline-size: 0;
+  }
+
+  .thumbnailRailViewport {
+    flex-direction: row;
+    align-items: center;
+    justify-content: flex-start;
+    padding-block: 0 0.75rem;
+    padding-inline-end: 0;
+  }
+
+  .preview {
+    --preview-stage-bottom: 0rem;
+
+    grid-column: 1;
+    grid-row: 2;
+  }
+
+  .previewStage {
+    inset-inline: 3.25rem;
+    place-items: center;
+  }
+
+  .previewWithFooter {
+    --preview-stage-bottom: 4.5rem;
+  }
+
+  .previewMedia {
+    max-block-size: 100%;
+  }
+
+  .infoPanel {
+    grid-column: 1;
+    grid-row: 3;
+    block-size: 100%;
+    min-block-size: 0;
+  }
+
+  .infoPanelViewport {
+    padding: var(--space-4);
+  }
+
+  .promptHeader {
+    margin-block-start: var(--space-6);
+  }
+
+  .previewActions {
+    order: 2;
+    margin-block-start: 0;
+    padding-block-start: var(--space-5);
+  }
+}
+
+@media (width < 40rem) {
+  .dialog {
+    grid-template-rows: 5.25rem clamp(11rem, 28dvh, 17rem) minmax(0, 1fr);
+    inline-size: 100vw;
+    block-size: 100dvh;
+    border: 0;
+    border-radius: 0;
+    padding: 0.75rem;
+  }
+
+  .thumbnailRail {
+    block-size: 5.25rem;
+  }
+
+  .thumbnail {
+    inline-size: 4rem;
+  }
+
+  .previewStage {
+    inset-inline: 2.75rem;
+  }
+
+  .previewNavigation {
+    inline-size: 2.5rem;
+    block-size: 2.5rem;
+  }
+
+  .secondaryActions {
+    grid-template-columns: 1fr;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .primaryAction,
+  .secondaryAction {
+    transition: none;
+  }
+}
+
+@media (width < 60rem) {
+  .dialog[data-single-item="true"] {
+    grid-template-rows: clamp(12rem, 35dvh, 22rem) minmax(0, 1fr);
+  }
+
+  .dialog[data-single-item="true"] .preview {
+    grid-row: 1;
+  }
+
+  .dialog[data-single-item="true"] .infoPanel,
+  .dialog[data-single-item="true"] .closeButtonPlacement {
+    grid-row: 2;
+  }
+}

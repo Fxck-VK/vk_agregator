@@ -1,5 +1,5 @@
 import { NextRequest } from "next/server";
-import { describe, expect, it } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 
 import { config, proxy } from "./proxy";
 
@@ -7,6 +7,10 @@ const returnCookieName = "__Host-nh-return-to";
 const privatePath = "/app/chat/d7c979f5-24e5-4f88-924b-a592d6e5a906";
 
 describe("platform return-path proxy", () => {
+  afterEach(() => {
+    vi.unstubAllEnvs();
+  });
+
   it("matches rendered UI requests and leaves BFF and health routes alone", () => {
     expect(config).toEqual({ matcher: ["/", "/login", "/app/:path*"] });
   });
@@ -31,9 +35,19 @@ describe("platform return-path proxy", () => {
     expect(csp).toContain("frame-src 'none'");
     expect(csp).toContain("frame-ancestors 'none'");
     expect(csp).toContain("upgrade-insecure-requests");
-    expect(csp).not.toContain("unsafe-inline");
+    expect(csp).toContain("style-src-attr 'unsafe-inline'");
     expect(csp).not.toContain("unsafe-eval");
     expect(response.headers.get("x-middleware-request-content-security-policy")).toBe(csp);
+  });
+
+  it("allows only the development style elements and eval required by React and Next.js Dev Tools", () => {
+    vi.stubEnv("NODE_ENV", "development");
+
+    const response = proxy(new NextRequest("https://platform.example/app/files"));
+    const csp = response.headers.get("Content-Security-Policy");
+
+    expect(csp).toMatch(/script-src [^;]*'unsafe-eval'/);
+    expect(csp).toContain("style-src-elem 'self' 'unsafe-inline'");
   });
 
   it("generates a different nonce for each rendered UI response", () => {
