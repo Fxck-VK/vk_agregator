@@ -98,9 +98,11 @@ function Get-MarkdownRefs {
     param([Parameter(Mandatory = $true)][string]$Path)
 
     $content = Get-Content -LiteralPath $Path -Raw
-    $pattern = "((docs|\.agents)/[A-Za-z0-9._/-]+\.md|[A-Z][A-Z0-9_/-]*\.md)"
+    # Preserve package prefixes (web/platform/docs, web/platform/AGENTS.md)
+    # and the leading dot in .agents instead of checking a truncated root path.
+    $pattern = "((?:[A-Za-z0-9_-]+/)*(docs|\.agents)/[A-Za-z0-9._/-]+\.md|(?:[A-Za-z0-9_-]+/)*[A-Z][A-Z0-9_-]*\.md)"
     [regex]::Matches($content, $pattern) |
-        ForEach-Object { $_.Value.TrimStart("./") } |
+        ForEach-Object { $_.Value } |
         Sort-Object -Unique
 }
 
