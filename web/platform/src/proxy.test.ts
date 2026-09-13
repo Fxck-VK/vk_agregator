@@ -50,6 +50,23 @@ describe("platform return-path proxy", () => {
     expect(csp).toContain("style-src-elem 'self' 'unsafe-inline'");
   });
 
+  it.each(["production", "test"])("keeps executable CSP directives strict in %s", (environment) => {
+    vi.stubEnv("NODE_ENV", environment);
+
+    const response = proxy(new NextRequest("https://platform.example/app/files"));
+    const csp = response.headers.get("Content-Security-Policy")!;
+    const directives = csp.split(";").map((directive) => directive.trim());
+    const attributeStyles = directives.filter((directive) => directive.startsWith("style-src-attr "));
+
+    expect(attributeStyles).toEqual(["style-src-attr 'unsafe-inline'"]);
+    for (const directive of directives.filter((directive) => !directive.startsWith("style-src-attr "))) {
+      expect(directive).not.toMatch(/unsafe-inline|unsafe-eval/);
+    }
+    expect(directives).not.toContain("style-src-elem 'self' 'unsafe-inline'");
+    expect(directives.find((directive) => directive.startsWith("script-src "))).toMatch(/'nonce-[^']+' 'strict-dynamic'$/);
+    expect(directives.find((directive) => directive.startsWith("style-src "))).toMatch(/'nonce-[^']+'$/);
+  });
+
   it("generates a different nonce for each rendered UI response", () => {
     const first = proxy(new NextRequest("https://platform.example/login"));
     const second = proxy(new NextRequest("https://platform.example/login"));

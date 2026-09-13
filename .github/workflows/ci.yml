@@ -260,7 +260,9 @@ jobs:
 
       - name: Validate infrastructure
         shell: pwsh
-        run: ./scripts/ci/validate-infra.ps1
+        run: |
+          ./scripts/ci/test-platform-csp.ps1
+          ./scripts/ci/validate-infra.ps1
 
       - name: Test deploy env scripts
         shell: bash

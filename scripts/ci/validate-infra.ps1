@@ -8,6 +8,7 @@ Set-StrictMode -Version Latest
 
 $repoRoot = Resolve-Path (Join-Path $PSScriptRoot "..\..")
 Import-Module (Join-Path $PSScriptRoot "NextRouteDiscovery.psm1") -Force
+Import-Module (Join-Path $PSScriptRoot "PlatformCspValidation.psm1") -Force
 Set-Location $repoRoot
 
 function Invoke-Step {
@@ -335,9 +336,7 @@ function Assert-ReverseProxyConfig {
             throw "platform nonce proxy is missing required snippet: $snippet"
         }
     }
-    if ($platformProxy -match "unsafe-inline|unsafe-eval") {
-        throw "platform nonce proxy must not allow unsafe inline/eval execution"
-    }
+    Assert-PlatformCspSource -Source $platformProxy
     if ($platformProxy.Contains('response.headers.set("x-nonce", nonce)')) {
         throw "platform nonce proxy must keep the nonce in request headers and CSP, not expose a redundant response header"
     }
