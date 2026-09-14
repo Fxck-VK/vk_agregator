@@ -26,6 +26,7 @@ import (
 	"vk-ai-aggregator/internal/service/joborchestrator"
 	"vk-ai-aggregator/internal/service/preparedjobexpiry"
 	"vk-ai-aggregator/internal/service/pricingcatalog"
+	"vk-ai-aggregator/internal/service/providermodels"
 	"vk-ai-aggregator/internal/service/resultservice"
 	"vk-ai-aggregator/internal/service/textgeneration"
 )
@@ -1846,15 +1847,16 @@ type safeImageModelList struct {
 }
 
 type safeImageModel struct {
-	ID                     string           `json:"id"`
-	Name                   string           `json:"name"`
-	QualityOptions         []string         `json:"quality_options"`
-	PriceByQuality         map[string]int64 `json:"price_by_quality"`
-	DefaultQuality         string           `json:"default_quality"`
-	SupportsReferenceImage bool             `json:"supports_reference_image"`
-	MaxReferenceImages     int              `json:"max_reference_images"`
-	MaxOutputCount         int              `json:"max_output_count"`
-	AllowedAspectRatios    []string         `json:"allowed_aspect_ratios,omitempty"`
+	Capabilities           *providermodels.ModelCapabilities `json:"capabilities,omitempty"`
+	ID                     string                            `json:"id"`
+	Name                   string                            `json:"name"`
+	QualityOptions         []string                          `json:"quality_options"`
+	PriceByQuality         map[string]int64                  `json:"price_by_quality"`
+	DefaultQuality         string                            `json:"default_quality"`
+	SupportsReferenceImage bool                              `json:"supports_reference_image"`
+	MaxReferenceImages     int                               `json:"max_reference_images"`
+	MaxOutputCount         int                               `json:"max_output_count"`
+	AllowedAspectRatios    []string                          `json:"allowed_aspect_ratios,omitempty"`
 }
 
 // webImageJobParams is stored with the job for the worker. It is deliberately
@@ -1980,13 +1982,14 @@ func newSafeImageModel(model imagegeneration.PublicModel, resolver imagegenerati
 		}
 	}
 	return safeImageModel{
+		Capabilities:           providermodels.ImageCapabilitiesForSurface(model.ID, "web", qualityOptions),
 		ID:                     model.ID,
 		Name:                   model.Name,
 		QualityOptions:         qualityOptions,
 		PriceByQuality:         priceByQuality,
 		DefaultQuality:         defaultQuality,
-		SupportsReferenceImage: model.SupportsReferenceImage,
-		MaxReferenceImages:     model.MaxReferenceImages,
+		SupportsReferenceImage: false, // The web prepare request has no reference artifact input yet.
+		MaxReferenceImages:     0,
 		MaxOutputCount:         max(model.MaxOutputCount, imagegeneration.DefaultOutputCount),
 		AllowedAspectRatios:    append([]string(nil), model.AllowedAspectRatios...),
 	}, true

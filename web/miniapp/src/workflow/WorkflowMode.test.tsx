@@ -577,3 +577,68 @@ test("Seedance exposes every duration and estimates the selected resolution befo
     await act(async()=>{root.unmount();});container.remove();
   }
 });
+
+test("capabilities metadata overrides stale legacy video duration, reference and audio flags", async () => {
+  vi.useFakeTimers();
+  Object.assign(globalThis, { IS_REACT_ACT_ENVIRONMENT: true, React });
+  vi.mocked(listModelCatalog).mockResolvedValue([{
+    type: "video", id: "video_seedance_2_5", alias: "video_seedance_2_5", name: "Seedance 2.5", enabled: true,
+    allowed_durations_sec: [5, 10], default_duration_sec: 10,
+    allowed_resolutions: ["720p", "1080p"], default_resolution: "1080p",
+    allowed_aspect_ratios: ["16:9"], supports_reference_image: true, requires_start_image: false, max_reference_images: 4,
+    allowed_reference_image_counts: [4], supports_audio: true,
+    capabilities: {
+      schema_version: 1,
+      api: {
+        video: {
+          images: { support: "supported", extensions: [], max_count: 10 },
+          videos: { support: "unknown", extensions: [], max_count: null },
+          allowed_image_counts: [0, 10],
+          duration: { mode: "selected", min_seconds: 5, max_seconds: 10, allowed_seconds: [5, 10], by_resolution: { "720p": [5, 10], "1080p": [5] } },
+          resolutions: ["720p", "1080p"],
+          quality_modes: null,
+          aspect_ratios: ["16:9"],
+          audio: { mode: "optional", selectable: true },
+          start_frame: "optional",
+          end_frame: "unsupported",
+        },
+      },
+      application: {
+        video: {
+          images: { support: "supported", extensions: [], max_count: 10 },
+          videos: { support: "unsupported", extensions: [], max_count: 0 },
+          allowed_image_counts: [0, 10],
+          duration: { mode: "selected", min_seconds: 5, max_seconds: 10, allowed_seconds: [5, 10], by_resolution: { "720p": [5, 10], "1080p": [5] } },
+          resolutions: ["720p", "1080p"],
+          quality_modes: null,
+          aspect_ratios: ["16:9"],
+          audio: { mode: "silent", selectable: false },
+          start_frame: "optional",
+          end_frame: "unsupported",
+        },
+      },
+    },
+  }]);
+  vi.mocked(estimateJob).mockResolvedValue({operation:"video_generate",cost_estimate:100,balance_credits:1000,enough_credits:true});
+  const container=document.createElement("div");document.body.append(container);
+  const root=createRoot(container);
+  try {
+    await act(async()=>{root.render(<WorkflowMode user={{name:"Test",firstName:"Test",avatar:null}} jobs={[]} chats={[]} loading={false} submitting={false} openJobRequest={null} onOpenJobRequestHandled={()=>{}} onCreateJob={vi.fn()}/>);});
+    const buttons=()=>Array.from(container.querySelectorAll("button"));
+    expect(container.textContent).toContain("до 10 файлов");
+    expect(container.querySelector<HTMLInputElement>('input[aria-label="Добавить звук"]')).toBeNull();
+    expect(buttons().some(button=>button.textContent?.trim()==="5 сек")).toBe(true);
+    expect(buttons().some(button=>button.textContent?.trim()==="10 сек")).toBe(false);
+    await act(async()=>{
+      const prompt=container.querySelector("textarea")!;
+      Object.getOwnPropertyDescriptor(HTMLTextAreaElement.prototype,"value")!.set!.call(prompt,"Synthetic scene");
+      prompt.dispatchEvent(new Event("input",{bubbles:true}));
+    });
+    await act(async()=>{await vi.advanceTimersByTimeAsync(500);});
+    expect(estimateJob).toHaveBeenLastCalledWith(expect.objectContaining({video_route_alias:"video_seedance_2_5",duration_sec:5,video_resolution:"1080p"}));
+    const estimateCalls = vi.mocked(estimateJob).mock.calls;
+    expect(estimateCalls[estimateCalls.length - 1]?.[0].video_audio).toBeUndefined();
+  } finally {
+    await act(async()=>{root.unmount();});container.remove();
+  }
+});

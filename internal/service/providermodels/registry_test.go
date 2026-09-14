@@ -1,12 +1,14 @@
 package providermodels_test
 
 import (
+	"errors"
 	"fmt"
 	"reflect"
 	"strings"
 	"testing"
 
 	"vk-ai-aggregator/internal/domain"
+	"vk-ai-aggregator/internal/service/imagegeneration"
 	"vk-ai-aggregator/internal/service/modelcatalog"
 	"vk-ai-aggregator/internal/service/pricingcatalog"
 	"vk-ai-aggregator/internal/service/providermodels"
@@ -233,6 +235,48 @@ func TestRegistrySeedream45UsesPoyoSourceContract(t *testing.T) {
 	}
 }
 
+func TestRegistryImageAspectRatiosFailClosedBeforePricing(t *testing.T) {
+	registry := providermodels.StaticRegistry()
+	tests := []struct {
+		name        string
+		publicID    string
+		quality     string
+		aspectRatio string
+	}{
+		{
+			name:        "qwen rejects generic panoramic ratio",
+			publicID:    modelcatalog.MiniAppImageQwenImage3,
+			quality:     pricingcatalog.ImageQuality1K,
+			aspectRatio: "21:9",
+		},
+		{
+			name:        "seedream 4.5 rejects generic portrait crop",
+			publicID:    modelcatalog.MiniAppImageSeedream45,
+			quality:     pricingcatalog.ImageQuality2K,
+			aspectRatio: "4:5",
+		},
+	}
+
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			model, ok := registry.PublicImageModel(test.publicID)
+			if !ok {
+				t.Fatalf("public image model %s missing", test.publicID)
+			}
+			resolver := imagegeneration.NewResolver([]imagegeneration.PublicModel{publicImageModelForResolver(model)}, nil)
+
+			_, err := resolver.Resolve(imagegeneration.Request{
+				ModelID:     test.publicID,
+				Quality:     test.quality,
+				AspectRatio: test.aspectRatio,
+			})
+			if !errors.Is(err, imagegeneration.ErrUnsupportedAspectRatio) {
+				t.Fatalf("resolve invalid aspect error = %v, want ErrUnsupportedAspectRatio before pricing", err)
+			}
+		})
+	}
+}
+
 func TestRegistryVideoRoutesMatchCurrentRouterSpecs(t *testing.T) {
 	registry := providermodels.StaticRegistry()
 	routes := registry.VideoRoutes()
@@ -385,5 +429,24 @@ func TestRegistryValidationReportsMissingPricingKeys(t *testing.T) {
 	err := registry.Validate()
 	if err == nil || !strings.Contains(fmt.Sprint(err), "pricing") {
 		t.Fatalf("expected missing pricing keys error, got %v", err)
+	}
+}
+
+func publicImageModelForResolver(model providermodels.ImageModel) imagegeneration.PublicModel {
+	defaultQuality := ""
+	if len(model.Limits.AllowedQualities) > 0 {
+		defaultQuality = model.Limits.AllowedQualities[0]
+	}
+	return imagegeneration.PublicModel{
+		ID:                     model.PublicID,
+		Name:                   model.DisplayName,
+		Enabled:                true,
+		Ready:                  true,
+		QualityOptions:         append([]string(nil), model.Limits.AllowedQualities...),
+		DefaultQuality:         defaultQuality,
+		SupportsReferenceImage: model.Limits.SupportsReferenceImage,
+		MaxReferenceImages:     model.Limits.MaxReferenceImages,
+		MaxOutputCount:         model.Limits.MaxOutputCount,
+		AllowedAspectRatios:    append([]string(nil), model.Limits.AllowedAspectRatios...),
 	}
 }

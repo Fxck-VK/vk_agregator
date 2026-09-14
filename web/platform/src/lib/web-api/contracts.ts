@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { modelCapabilitiesSchema } from "./model-capabilities-schema";
 
 const safeIdentityRefSchema = z
   .object({
@@ -82,6 +83,7 @@ export const imageModelSchema = z
     id: z.string().trim().min(1),
     name: z.string().trim().min(1),
     quality_options: z.array(z.string().trim().min(1)),
+	capabilities: modelCapabilitiesSchema.optional(),
     price_by_quality: z.record(z.string().trim().min(1), z.number().int().positive()).optional(),
     default_quality: z.string().trim().min(1),
     supports_reference_image: z.boolean(),

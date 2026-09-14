@@ -3004,3 +3004,28 @@ catalog v15 covers all documented duration/resolution combinations, applying
 provider cost x3 rounded up to 5 internal credits before reservation. Output
 contracts accept inherited first-frame aspect ratios and portrait/2K media.
 See docs/VIDEO_GENERATION.md for parameter bounds, tariffs and rollout flags.
+## Typed model capabilities (2026-09-14)
+
+The provider registry is split by purpose into registry_text.go,
+registry_image.go, registry_video.go and registry_audio.go. ImageLimits and
+VideoLimits are distinct types; the audio catalog is explicitly empty until
+real audio products have pricing and worker support.
+
+Capabilities expose two independent profiles: api (verified provider contract
+subset, with unknown fields preserved) and application (implemented request
+contract). Input support uses supported/unsupported/unknown; null bounds mean
+unverified, never unlimited. Image aspect ratio, resolution, detail and speed
+are separate. Video duration mode, duration/resolution restrictions, audio,
+first/last frame roles and accepted media are explicit.
+
+The registry remains the source for request limits. Public API projections add
+capabilities without exposing native identifiers, readiness configuration,
+provider credentials or costs. Projections narrow application options to their
+interface and current pricing: Mini App image requests produce one square image;
+web image requests currently accept no references. API metadata never enables
+an unimplemented input or bypasses feature flags, pricing, artifact ownership,
+moderation, reservations, worker dispatch or idempotency.
+
+The inventory command cmd/model-catalog produces JSON or the task-scoped
+MODEL_CAPABILITIES.md report from the same registry. It performs no network or
+provider calls. Source evidence is kept beside the capability definitions.

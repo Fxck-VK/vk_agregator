@@ -66,6 +66,7 @@ export function ConversationComposer({
       <TextModelSelector disabled={disabled} onChange={setModel} />
       {tooLong && <p role="alert">Сообщение слишком длинное для выбранной модели.</p>}
       <ChatComposer
+        attachmentsEnabled={false}
         canSubmit={canSubmit}
         disabled={disabled}
         label={ru.conversations.composerLabel}

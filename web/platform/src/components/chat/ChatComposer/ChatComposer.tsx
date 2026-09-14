@@ -18,6 +18,7 @@ import styles from "./ChatComposer.module.css";
 export type ChatComposerVariant = "conversation" | "hero" | "newChat" | "workspace";
 
 type ChatComposerProps = {
+  attachmentsEnabled?: boolean;
   additionalControls?: ReactNode;
   canSubmit: boolean;
   disabled: boolean;
@@ -43,6 +44,7 @@ type ChatComposerProps = {
 const expandedVariants = new Set<ChatComposerVariant>(["hero", "workspace"]);
 
 export function ChatComposer({
+  attachmentsEnabled = true,
   additionalControls,
   canSubmit,
   disabled,
@@ -118,7 +120,7 @@ export function ChatComposer({
         )}
         <div className={styles.controls}>
           <div aria-label="Медиа и настройки" className={styles.leadingControls} role="group">
-            <ChatMediaMenu
+            {attachmentsEnabled && <ChatMediaMenu
               disabled={disabled}
               generatedHref={generatedMediaHref}
               labels={{
@@ -132,7 +134,7 @@ export function ChatComposer({
               onChooseUploaded={mediaLibraryEnabled ? openUploadedPicker : onChooseUploadedMedia}
               onFilesSelected={selectNativeFile}
               uploadedHref={uploadedMediaHref}
-            />
+            />}
             {leadingControls}
           </div>
           <div className={styles.trailingControls}>

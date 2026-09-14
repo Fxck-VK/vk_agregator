@@ -882,6 +882,7 @@ func copyImageModelDTO(model ImageModelDTO) ImageModelDTO {
 
 func modelCatalogItemFromImage(model ImageModelDTO) ModelCatalogItemDTO {
 	return ModelCatalogItemDTO{
+		Capabilities:           miniAppImageCapabilities(model),
 		Type:                   "image",
 		ID:                     model.ID,
 		Name:                   model.Name,
@@ -911,6 +912,7 @@ func (h *Handler) modelCatalogItemFromImage(model ImageModelDTO) (ModelCatalogIt
 
 func modelCatalogItemFromVideo(route VideoRouteDTO) ModelCatalogItemDTO {
 	return ModelCatalogItemDTO{
+		Capabilities:                miniAppVideoCapabilities(route),
 		SupportsAudio:               route.SupportsAudio,
 		RequiresReferenceVideo:      route.RequiresReferenceVideo,
 		AutomaticDuration:           route.AutomaticDuration,

@@ -422,7 +422,7 @@ func TestWebImageModelsReturnsOnlyServerSafeCatalog(t *testing.T) {
 	if len(response.Items) != 1 || response.Items[0].ID != modelcatalog.MiniAppImageNanoBanana2 || response.Items[0].Name != "Nano Banana 2" || response.Items[0].DefaultQuality != modelcatalog.ImageQuality1K {
 		t.Fatalf("catalog = %+v", response.Items)
 	}
-	if response.Items[0].MaxReferenceImages != 4 || !response.Items[0].SupportsReferenceImage || response.Items[0].MaxOutputCount != 4 {
+	if response.Items[0].MaxReferenceImages != 0 || response.Items[0].SupportsReferenceImage || response.Items[0].MaxOutputCount != 4 {
 		t.Fatalf("reference support = %+v", response.Items[0])
 	}
 	if got := response.Items[0].PriceByQuality; !reflect.DeepEqual(got, map[string]int64{

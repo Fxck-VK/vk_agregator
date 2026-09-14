@@ -4,6 +4,8 @@ import { useEffect, useState } from "react";
 import { z } from "zod";
 import styles from "./TextModelSelector.module.css";
 import { webBrowserFetch } from "@/lib/web-api/browser";
+import { modelCapabilitiesSchema } from "@/lib/web-api/model-capabilities-schema";
+import { ModelCapabilitiesDetails } from "@/components/models/ModelCapabilitiesDetails";
 
 const modelSchema = z.object({
   id: z.enum(["chatgpt", "gpt_5_5", "claude_opus_4_7", "gemini_3_1_pro", "claude_opus_4_8", "gpt_5_6_terra", "gpt_6_astra", "claude_opus_5", "gemini_3_7_flash", "claude_fable_5_1", "claude_fable_5", "gemini_3_6_flash"]),
@@ -11,6 +13,7 @@ const modelSchema = z.object({
   estimate_credits: z.number().int().nonnegative(),
   max_prompt_bytes: z.number().int().positive().optional(),
   max_output_tokens: z.number().int().positive().optional(),
+  capabilities: modelCapabilitiesSchema.optional(),
 }).strict();
 export type TextModel = z.infer<typeof modelSchema>;
 
@@ -40,5 +43,6 @@ export function TextModelSelector({ disabled, onChange }: { disabled: boolean; o
     </select></label>
     {current && current.estimate_credits > 0 && <p>{current.estimate_credits} кредитов за ответ · до {current.max_output_tokens} токенов ответа. При длинном диалоге может потребоваться новый чат.</p>}
     {failed && <small>Каталог дополнительных моделей временно недоступен.</small>}
+    <ModelCapabilitiesDetails capabilities={current?.capabilities} />
   </div>;
 }

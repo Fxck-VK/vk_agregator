@@ -1,0 +1,167 @@
+{
+  "checked_date": "2026-09-14",
+  "scope": "Native API input evidence for text model capability metadata. Application support is encoded separately and remains text-prompt only.",
+  "context7": [
+    {
+      "provider": "KIE",
+      "library_id": "/websites/kie_ai",
+      "commands": [
+        "npx ctx7@latest library KIE <query>",
+        "npx ctx7@latest docs /websites/kie_ai <query>"
+      ]
+    },
+    {
+      "provider": "APIMart",
+      "library_id": "/websites/apimart_ai_cn",
+      "commands": [
+        "npx ctx7@latest library APIMart <query>",
+        "npx ctx7@latest docs /websites/apimart_ai_cn <query>"
+      ]
+    }
+  ],
+  "models": [
+    {
+      "public_id": "chatgpt",
+      "upstream_model": "deepseek-ai/DeepSeek-V4-Flash",
+      "source_status": "not_checked_for_kie_apimart_scope",
+      "native_inputs": {
+        "images": "unknown",
+        "videos": "unknown",
+        "files": "unknown"
+      },
+      "notes": "Default chat is not one of the KIE/APIMart text routes researched here; keep native inputs unknown."
+    },
+    {
+      "public_id": "gpt_5_5",
+      "upstream_model": "gpt-5-5",
+      "provider": "KIE",
+      "url": "https://docs.kie.ai/cn/market/chat/gpt-5-5",
+      "native_inputs": {
+        "images": "supported",
+        "videos": "unknown",
+        "files": "supported"
+      },
+      "notes": "Exact model page states mixed text, image, and file inputs; no exact extensions, counts, sizes, or video support were listed."
+    },
+    {
+      "public_id": "claude_opus_4_7",
+      "upstream_model": "claude-opus-4-7",
+      "provider": "KIE",
+      "url": "https://docs.kie.ai/market/claude/claude-opus-4-7",
+      "native_inputs": {
+        "images": "unknown",
+        "videos": "unknown",
+        "files": "unknown"
+      },
+      "notes": "Exact model page shows standard messages and tool fields; no model-specific media input contract was found. Unknown is preserved instead of marking unsupported."
+    },
+    {
+      "public_id": "gemini_3_1_pro",
+      "upstream_model": "gemini-3.1-pro",
+      "provider": "KIE",
+      "url": "https://docs.kie.ai/cn/market/gemini/gemini-3-1-pro",
+      "native_inputs": {
+        "images": "supported",
+        "videos": "supported",
+        "files": "supported"
+      },
+      "notes": "Exact model page states text/image input and a unified media URL shape for images, videos, audio, PDF, and other documents; no exact extensions, counts, or sizes were listed."
+    },
+    {
+      "public_id": "claude_opus_4_8",
+      "upstream_model": "claude-opus-4-8",
+      "provider": "KIE",
+      "url": "https://docs.kie.ai/market/claude/claude-opus-4-8",
+      "native_inputs": {
+        "images": "unknown",
+        "videos": "unknown",
+        "files": "unknown"
+      },
+      "notes": "Exact model page shows standard messages and tool fields; no model-specific media input contract was found. Unknown is preserved instead of marking unsupported."
+    },
+    {
+      "public_id": "gpt_5_6_terra",
+      "upstream_model": "gpt-5-6-terra",
+      "provider": "KIE",
+      "url": "https://docs.kie.ai/cn/market/chat/gpt-5-6-terra",
+      "native_inputs": {
+        "images": "supported",
+        "videos": "unknown",
+        "files": "supported"
+      },
+      "notes": "Exact model page states mixed text, image, and file inputs; no exact extensions, counts, sizes, or video support were listed."
+    },
+    {
+      "public_id": "gpt_6_astra",
+      "upstream_model": "gpt-6-astra",
+      "provider": "KIE",
+      "url": "https://docs.kie.ai/cn/market/chat/gpt-6-astra",
+      "native_inputs": {
+        "images": "supported",
+        "videos": "unknown",
+        "files": "supported"
+      },
+      "notes": "Exact model page states mixed text, image, and file inputs; no exact extensions, counts, sizes, or video support were listed."
+    },
+    {
+      "public_id": "claude_opus_5",
+      "upstream_model": "claude-opus-5",
+      "provider": "KIE",
+      "url": "https://docs.kie.ai/market/claude/claude-opus-5",
+      "native_inputs": {
+        "images": "unknown",
+        "videos": "unknown",
+        "files": "unknown"
+      },
+      "notes": "Exact model page shows standard messages and tool fields; no model-specific media input contract was found. Unknown is preserved instead of marking unsupported."
+    },
+    {
+      "public_id": "gemini_3_7_flash",
+      "upstream_model": "gemini-3-7-flash-openai",
+      "provider": "KIE",
+      "url": "https://docs.kie.ai/cn/market/gemini/gemini-3-7-flash-openai",
+      "native_inputs": {
+        "images": "supported",
+        "videos": "supported",
+        "files": "supported"
+      },
+      "notes": "Exact model page states text/image input and a unified media URL shape for images, videos, audio, PDF, and other documents; no exact extensions, counts, or sizes were listed."
+    },
+    {
+      "public_id": "claude_fable_5_1",
+      "upstream_model": "claude-fable-5.1",
+      "provider": "APIMart",
+      "url": "https://docs.apimart.ai/ru/api-reference/texts/general/chat-completions",
+      "native_inputs": {
+        "images": "unknown",
+        "videos": "unknown",
+        "files": "unknown"
+      },
+      "notes": "APIMart docs found during this pass were generic chat/responses pages, not a model-specific contract for claude-fable-5.1. Generic gateway compatibility is not treated as proof for this model."
+    },
+    {
+      "public_id": "claude_fable_5",
+      "upstream_model": "claude-fable-5",
+      "provider": "KIE",
+      "url": "https://docs.kie.ai/cn/market/claude/cluade-fable-5",
+      "native_inputs": {
+        "images": "unknown",
+        "videos": "unknown",
+        "files": "unknown"
+      },
+      "notes": "Exact model page shows standard messages and no model-specific media input contract. Unknown is preserved instead of marking unsupported."
+    },
+    {
+      "public_id": "gemini_3_6_flash",
+      "upstream_model": "gemini-3-6-flash-openai",
+      "provider": "KIE",
+      "url": "https://docs.kie.ai/40573330e0",
+      "native_inputs": {
+        "images": "supported",
+        "videos": "supported",
+        "files": "supported"
+      },
+      "notes": "Exact model page states text/image input and a unified media URL shape for images, videos, audio, PDF, and other documents; no exact extensions, counts, or sizes were listed."
+    }
+  ]
+}

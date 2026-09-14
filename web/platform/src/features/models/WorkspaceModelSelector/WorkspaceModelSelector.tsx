@@ -1,4 +1,5 @@
 "use client";
+import { ModelCapabilitiesDetails } from "@/components/models/ModelCapabilitiesDetails";
 
 import Image from "next/image";
 import Link from "next/link";
@@ -159,6 +160,8 @@ export function WorkspaceModelSelector() {
           <Image alt="" height={18} src={assetPaths.icons.ui.chevronDown} unoptimized width={18} />
         </span>
       </button>
+
+      <ModelCapabilitiesDetails capabilities={selectedModel?.capabilities} />
 
       {isOpen ? (
         <section

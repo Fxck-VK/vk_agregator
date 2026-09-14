@@ -1,4 +1,4 @@
-import { cleanup, fireEvent, render, screen } from "@testing-library/react";
+import { cleanup, fireEvent, render, screen, within } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
 import { ru } from "@/i18n/ru";
@@ -29,10 +29,10 @@ describe("ConversationComposer", () => {
   it("renders one compact composer surface with embedded controls and a note below", () => {
     render(<ConversationComposer {...chatScrollProps} onSubmit={vi.fn()} />);
 
-    const mediaButton = screen.getByRole("button", { name: "Загрузить медиа" });
+    const mediaControls = screen.getByRole("group", { name: "Медиа и настройки" });
     const submitButton = screen.getByRole("button", { name: ru.conversations.composerSubmit });
 
-    expect(mediaButton).toBeEnabled();
+    expect(within(mediaControls).queryByRole("button", { name: "Загрузить медиа" })).toBeNull();
     expect(submitButton.querySelector("svg")).not.toBeNull();
     expect(screen.getByText("Стоимость зависит от выбранной нейросети. Нейросеть может ошибаться")).toBeVisible();
   });

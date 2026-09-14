@@ -24,6 +24,7 @@ Read only the document that matches the current task:
 
 | Task scope | Active document |
 | --- | --- |
+| Model input/output capabilities, API support vs implemented application, grouped text/image/video/audio inventory | [Model capabilities](MODEL_CAPABILITIES.md); generated with `go run ./cmd/model-catalog -format markdown` |
 | Text models: KIE and APIMart integration, prices and rollout gates | [Text models](../docs/runbooks/KIE_TEXT_MODELS.md) |
 | Study24 model research, provider documentation and shared integration work | [Model catalog](../docs/superpowers/plans/2026-09-08-study24-apimart/README.md); [shared foundation](../docs/superpowers/plans/2026-09-08-study24-apimart/00-common-foundation.md); [DEV configuration](../docs/runbooks/DEV.md); [read-only preflight](../docs/runbooks/APIMART_PREFLIGHT.md) |
 | Account-first backend core independence, VK adapter separation, neutral sessions and delivery | docs/superpowers/specs/2026-07-30-account-first-backend-core-design.md; implementation plan: docs/superpowers/plans/2026-07-30-channel-neutral-result-delivery.md |
@@ -75,7 +76,7 @@ There must be only one active handoff file:
 
 | File | Status |
 | --- | --- |
-| `docs/HANDOFF_CURRENT.md` | Current handoff slot; currently active for provider API hardening |
+| `docs/HANDOFF_CURRENT.md` | Active: colleague merge of model integrations, 2026-09-14; 16 commits through `f2dfe95` |
 
 When a handoff or merge is complete, archive it under `docs/archive/handoffs/`
 and reset `docs/HANDOFF_CURRENT.md` back to `Status: none`.
@@ -84,6 +85,7 @@ Archived merge and handoff files are not default context:
 
 | File | Status |
 | --- | --- |
+| `docs/archive/handoffs/ACCOUNT_IDENTITY_2026-07-05.md` | Archived account identity snapshot; superseded by the current model integration handoff |
 | `docs/archive/handoffs/FASTLIFE_VIDEO_ROUTER_MERGE_GUIDE.md` | Archived merge-specific guide |
 | `docs/archive/handoffs/SEREGA_DEV_CONTOUR_AND_VIDEO_HANDOFF.md` | Archived merge-specific handoff |
 | `docs/archive/handoffs/SEREGA_PRE_FASTLIFE_MERGE_CONTEXT.md` | Archived merge-specific context |

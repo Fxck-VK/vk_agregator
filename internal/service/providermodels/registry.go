@@ -5,7 +5,6 @@ package providermodels
 
 import (
 	"fmt"
-	"maps"
 	"strings"
 
 	"vk-ai-aggregator/internal/domain"
@@ -13,54 +12,6 @@ import (
 )
 
 const (
-	PublicTextChatGPT        = "chatgpt"
-	ProviderModelDeepSeekV4  = "deepseek-ai/DeepSeek-V4-Flash"
-	PublicImageNanoBanana2   = "nano_banana_2"
-	PublicImageNanoBananaPro = "nano_banana_pro"
-	PublicImageGPTImage2     = "gpt_image_2"
-	PublicImageQwenImage3    = "qwen_image_3"
-	PublicImageGrokImage15   = "grok_image_1_5"
-	PublicImageGrokImage20   = "grok_image_2_0"
-	PublicImageMidjourneyV7  = "midjourney_v7"
-	PublicImageFlux2Pro      = "flux_2_pro"
-	PublicImageSeedream45    = "seedream_4_5"
-	LoadTestImageMock        = "mock_image"
-
-	ProviderModelPoYoNanoBanana2    = "nano-banana-2-new"
-	ProviderModelPoYoNanoBananaPro  = "nano-banana-pro"
-	ProviderModelPoYoSeedream45     = "seedream-4.5"
-	ProviderModelPoYoSeedream45Edit = "seedream-4.5-edit"
-	ProviderModelGemini3ProImage    = "gemini-3-pro-image-preview"
-	ProviderModelGPTImage2          = "gpt-image-2"
-	ProviderModelQwenImage3         = "qwen-image-3.0"
-	ProviderModelGrokImage15        = "grok-imagine-1.5-apimart"
-	ProviderModelGrokImage20        = "grok-imagine-2.0-ext"
-	ProviderModelMidjourneyV7       = "midjourney"
-	ProviderModelFlux2Pro           = "flux-2-pro"
-	ProviderModelMockImage          = "mock-image"
-
-	FeatureImageNanoBanana2   = "FEATURE_IMAGE_MODEL_NANO_BANANA_2_ENABLED"
-	FeatureImageNanoBananaPro = "FEATURE_IMAGE_MODEL_NANO_BANANA_PRO_ENABLED"
-	FeatureImageGPTImage2     = "FEATURE_IMAGE_MODEL_GPT_IMAGE_2_ENABLED"
-	FeatureImageQwenImage3    = "FEATURE_APIMART_QWEN_IMAGE_3_ENABLED"
-	FeatureImageGrokImage15   = "FEATURE_APIMART_GROK_IMAGE_1_5_ENABLED"
-	FeatureImageGrokImage20   = "FEATURE_APIMART_GROK_IMAGE_2_0_ENABLED"
-	FeatureImageMidjourneyV7  = "FEATURE_APIMART_MIDJOURNEY_V7_ENABLED"
-	FeatureImageFlux2Pro      = "FEATURE_APIMART_FLUX_2_PRO_ENABLED"
-	FeatureImageSeedream45    = "FEATURE_IMAGE_MODEL_SEEDREAM_4_5_ENABLED"
-	FeatureImageMock          = "FEATURE_IMAGE_MODEL_MOCK_ENABLED"
-
-	FeatureVideoRouter             = "FEATURE_VIDEO_ROUTER_ENABLED"
-	FeatureVideoHailuo23Fast       = "FEATURE_VIDEO_ROUTE_HAILUO_2_3_FAST_ENABLED"
-	FeatureVideoHailuo23Standard   = "FEATURE_VIDEO_ROUTE_HAILUO_2_3_STANDARD_ENABLED"
-	FeatureVideoKlingO3Standard    = "FEATURE_VIDEO_ROUTE_KLING_O3_STANDARD_ENABLED"
-	FeatureVideoRunwayGen4Turbo    = "FEATURE_VIDEO_ROUTE_RUNWAY_GEN4_TURBO_ENABLED"
-	FeatureVideoSeedance20Fast     = "FEATURE_VIDEO_ROUTE_SEEDANCE_2_0_FAST_ENABLED"
-	FeatureVideoSeedance25         = "FEATURE_APIMART_SEEDANCE_2_5_ENABLED"
-	FeatureVideoRunwayGen45        = "FEATURE_VIDEO_ROUTE_RUNWAY_GEN4_5_ENABLED"
-	FeatureVideoMockTextToVideo    = "FEATURE_VIDEO_ROUTE_MOCK_TEXT_TO_VIDEO_ENABLED"
-	FeatureVideoResellerExperiment = "FEATURE_VIDEO_ROUTE_RESELLER_EXPERIMENTS_ENABLED"
-
 	ProviderFlagAPIMart  = "APIMART_PROVIDER_ENABLED"
 	ProviderFlagPoYo     = "POYO_PROVIDER_ENABLED"
 	ProviderFlagRunway   = "RUNWAY_PROVIDER_ENABLED"
@@ -84,87 +35,12 @@ type ProviderReadiness struct {
 	LoadTestOnly        bool
 }
 
-// Limits describes public request/media bounds for one model or route.
-type Limits struct {
-	SupportsAudio               bool
-	RequiresReferenceVideo      bool
-	AutomaticDuration           bool
-	AllowedReferenceImageCounts []int
-	AllowedQualities            []string
-	AllowedDurationsSec         []int
-	AllowedResolutions          []string
-	AllowedAspectRatios         []string
-	ResolutionDurationsSec      map[string][]int
-	SupportsReferenceImage      bool
-	RequiresStartImage          bool
-	MaxReferenceImages          int
-	MaxOutputCount              int
-}
-
-// TextAlias is the public text model alias mapped to the hidden provider model.
-type TextAlias struct {
-	PublicID        string
-	DisplayName     string
-	Provider        domain.ProviderName
-	ProviderModelID string
-	FeatureFlag     string
-	Readiness       ProviderReadiness
-	PricingKeys     []pricingcatalog.ProductKey
-}
-
-// ImageModel maps one priced public image model id to its provider metadata.
-type ImageModel struct {
-	PublicID        string
-	DisplayName     string
-	Provider        domain.ProviderName
-	ProviderModelID string
-	FeatureFlag     string
-	Readiness       ProviderReadiness
-	Limits          Limits
-	PricingKeys     []pricingcatalog.ProductKey
-	LoadTestOnly    bool
-}
-
-// MediaContractClass is the static portion of provider media contract policy.
-// Runtime fields such as max bytes, probe and transcode toggles remain worker
-// config until phase_5 wires worker contracts through the registry.
-type MediaContractClass struct {
-	ModelClass          string
-	Modality            domain.Modality
-	ExpectedContainer   string
-	ExpectedCodec       string
-	DeliveryReadyOutput bool
-}
-
-// VideoRoute maps one public route alias to provider and media metadata.
-type VideoRoute struct {
-	Alias               domain.VideoRouteAlias
-	Provider            domain.ProviderName
-	ProviderModelID     string
-	ModelClass          string
-	FeatureFlag         string
-	RouterFeatureFlag   string
-	Readiness           ProviderReadiness
-	Spec                domain.VideoRouteSpec
-	Limits              Limits
-	MediaContract       MediaContractClass
-	PricingKeys         []pricingcatalog.ProductKey
-	DisabledPricingKeys []pricingcatalog.ProductKey
-	LoadTestOnly        bool
-}
-
-// ProviderModelAlias maps legacy server-side model selections to public video
-// route aliases without exposing provider-native ids to clients.
-type ProviderModelAlias struct {
-	Alias           domain.VideoRouteAlias
-	ProviderModelID string
-}
-
 // Registry is the static provider/model registry.
 type Registry struct {
 	TextAliases         []TextAlias
 	ImageModels         []ImageModel
 	LoadTestImageModels []ImageModel
+	AudioModels         []AudioModel
 	VideoRouteModels    []VideoRoute
 }
 
@@ -174,329 +50,8 @@ func StaticRegistry() Registry {
 		TextAliases:         textAliases(),
 		ImageModels:         imageModels(),
 		LoadTestImageModels: loadTestImageModels(),
+		AudioModels:         audioModels(),
 		VideoRouteModels:    videoRoutes(),
-	}
-}
-
-func textAliases() []TextAlias {
-	return append([]TextAlias{
-		{
-			PublicID:        PublicTextChatGPT,
-			DisplayName:     "NeiroHub Chat",
-			Provider:        domain.ProviderDeepInfra,
-			ProviderModelID: ProviderModelDeepSeekV4,
-			Readiness: ProviderReadiness{
-				RequiredConfigKeys: []string{ConfigKeyDeepInfraKey, ConfigKeyDeepInfraURL},
-			},
-		},
-	}, PaidTextModels()...)
-}
-
-func imageModels() []ImageModel {
-	return []ImageModel{
-		gptImage25Model(false),
-		gptImage25Model(true),
-		seedream50LiteModel(),
-		seedream50ProModel(),
-		midjourneyV7Model(),
-		flux2ProModel(),
-		imageModel(PublicImageNanoBanana2, "Nano Banana 2", domain.ProviderPoYo, ProviderModelPoYoNanoBanana2, FeatureImageNanoBanana2, poyoReadiness(), 14),
-		imageModel(PublicImageNanoBananaPro, "Nano Banana Pro", domain.ProviderAPIMart, ProviderModelGemini3ProImage, FeatureImageNanoBananaPro, apimartReadiness(), 14),
-		imageModel(PublicImageGPTImage2, "GPT Image 2", domain.ProviderAPIMart, ProviderModelGPTImage2, FeatureImageGPTImage2, apimartReadiness(), 16),
-		qwenImage3Model(),
-		grokImageModel(PublicImageGrokImage15, "Grok Imagine 1.5", ProviderModelGrokImage15, FeatureImageGrokImage15, 1),
-		grokImageModel(PublicImageGrokImage20, "Grok Imagine 2.0", ProviderModelGrokImage20, FeatureImageGrokImage20, 0),
-		imageModelWithQualities(PublicImageSeedream45, "Seedream 4.5", domain.ProviderPoYo, ProviderModelPoYoSeedream45, FeatureImageSeedream45, poyoReadiness(), []string{
-			pricingcatalog.ImageQuality2K,
-			pricingcatalog.ImageQuality4K,
-		}, 10),
-	}
-}
-
-func loadTestImageModels() []ImageModel {
-	return []ImageModel{
-		{
-			PublicID:        LoadTestImageMock,
-			DisplayName:     "Mock Image Loadtest",
-			Provider:        domain.ProviderMock,
-			ProviderModelID: ProviderModelMockImage,
-			FeatureFlag:     FeatureImageMock,
-			Readiness:       mockReadiness(),
-			Limits: Limits{
-				MaxOutputCount: 4,
-			},
-			LoadTestOnly: true,
-		},
-	}
-}
-
-func qwenImage3Model() ImageModel {
-	model := imageModelWithQualities(PublicImageQwenImage3, "Qwen Image 3.0", domain.ProviderAPIMart, ProviderModelQwenImage3, FeatureImageQwenImage3, apimartReadiness(), []string{
-		pricingcatalog.ImageQuality1K,
-		pricingcatalog.ImageQuality2K,
-	}, 3)
-	model.Limits.MaxOutputCount = 1
-	return model
-}
-
-func grokImageModel(publicID, name, providerModelID, flag string, maxRefs int) ImageModel {
-	model := imageModelWithQualities(publicID, name, domain.ProviderAPIMart, providerModelID, flag, apimartReadiness(), []string{pricingcatalog.ImageQualityStandard}, maxRefs)
-	model.Limits.MaxOutputCount = 1
-	model.Limits.SupportsReferenceImage = maxRefs > 0
-	model.Limits.AllowedAspectRatios = []string{"16:9", "1:1", "2:3", "3:2", "9:16"}
-	if publicID == PublicImageGrokImage20 {
-		model.Limits.AllowedAspectRatios = []string{"16:9", "1:1", "2:3", "3:2", "3:4", "4:3", "9:16"}
-	}
-	return model
-}
-
-func imageModel(publicID, displayName string, provider domain.ProviderName, providerModelID, featureFlag string, readiness ProviderReadiness, maxRefs int) ImageModel {
-	qualities := []string{pricingcatalog.ImageQuality1K, pricingcatalog.ImageQuality2K, pricingcatalog.ImageQuality4K}
-	return imageModelWithQualities(publicID, displayName, provider, providerModelID, featureFlag, readiness, qualities, maxRefs)
-}
-
-func imageModelWithQualities(publicID, displayName string, provider domain.ProviderName, providerModelID, featureFlag string, readiness ProviderReadiness, qualities []string, maxRefs int) ImageModel {
-	keys := make([]pricingcatalog.ProductKey, 0, len(qualities))
-	for _, quality := range qualities {
-		keys = append(keys, pricingcatalog.ProductKey{
-			Operation:    domain.OperationImageGenerate,
-			Modality:     domain.ModalityImage,
-			ImageModelID: publicID,
-			Quality:      quality,
-		})
-	}
-	return ImageModel{
-		PublicID:        publicID,
-		DisplayName:     displayName,
-		Provider:        provider,
-		ProviderModelID: providerModelID,
-		FeatureFlag:     featureFlag,
-		Readiness:       readiness,
-		Limits: Limits{
-			AllowedQualities:       qualities,
-			SupportsReferenceImage: true,
-			MaxReferenceImages:     maxRefs,
-			MaxOutputCount:         4,
-		},
-		PricingKeys: keys,
-	}
-}
-
-func videoRoutes() []VideoRoute {
-	return append(klingVeoRoutes(), []VideoRoute{
-		turboH3VideoRoute(false),
-		turboH3VideoRoute(true),
-		omniVideoRoute(false),
-		omniVideoRoute(true),
-		videoRoute(seedance25Spec(), FeatureVideoSeedance25, apimartReadiness(), videoPricingKeys(domain.VideoRouteSeedance25, []string{pricingcatalog.VideoResolution480p, pricingcatalog.VideoResolution720p, pricingcatalog.VideoResolution1080p}, []int{5, 10, 15, 30}), nil, false),
-		videoRoute(hailuo23FastSpec(), FeatureVideoHailuo23Fast, apimartReadiness(), nil, disabledVideoPricingKeys(domain.VideoRouteHailuo23Fast, []string{pricingcatalog.VideoResolution768p, pricingcatalog.VideoResolution1080p}, map[string][]int{
-			pricingcatalog.VideoResolution768p:  {6, 10},
-			pricingcatalog.VideoResolution1080p: {6},
-		}), false),
-		videoRoute(hailuo23StandardSpec(), FeatureVideoHailuo23Standard, apimartReadiness(), nil, disabledVideoPricingKeys(domain.VideoRouteHailuo23Standard, []string{pricingcatalog.VideoResolution768p, pricingcatalog.VideoResolution1080p}, map[string][]int{
-			pricingcatalog.VideoResolution768p:  {6, 10},
-			pricingcatalog.VideoResolution1080p: {6},
-		}), false),
-		videoRoute(klingO3StandardSpec(), FeatureVideoKlingO3Standard, poyoReadiness(), videoPricingKeys(domain.VideoRouteKlingO3Standard, []string{pricingcatalog.VideoResolution720p, pricingcatalog.VideoResolution1080p}, []int{5, 10}), nil, false),
-		videoRoute(runwayGen4TurboSpec(), FeatureVideoRunwayGen4Turbo, runwayReadiness(), videoPricingKeys(domain.VideoRouteRunwayGen4Turbo, []string{pricingcatalog.VideoResolution720p}, []int{5, 10}), nil, false),
-		videoRoute(seedance20FastSpec(), FeatureVideoSeedance20Fast, poyoReadiness(), videoPricingKeys(domain.VideoRouteSeedance20Fast, []string{pricingcatalog.VideoResolution720p}, []int{5, 10}), nil, false),
-		videoRoute(runwayGen45Spec(), FeatureVideoRunwayGen45, poyoReadiness(), videoPricingKeys(domain.VideoRouteRunwayGen45, []string{pricingcatalog.VideoResolution720p, pricingcatalog.VideoResolution1080p}, []int{5, 10}), nil, false),
-		videoRoute(mockTextToVideoSpec(), FeatureVideoMockTextToVideo, mockReadiness(), nil, nil, true),
-	}...)
-}
-
-func videoRoute(spec domain.VideoRouteSpec, featureFlag string, readiness ProviderReadiness, pricingKeys, disabledPricingKeys []pricingcatalog.ProductKey, loadTestOnly bool) VideoRoute {
-	return VideoRoute{
-		Alias:             spec.Alias,
-		Provider:          spec.Provider,
-		ProviderModelID:   spec.ProviderModelID,
-		ModelClass:        spec.ModelClass,
-		FeatureFlag:       featureFlag,
-		RouterFeatureFlag: FeatureVideoRouter,
-		Readiness:         readiness,
-		Spec:              spec,
-		Limits: Limits{
-			AllowedDurationsSec:         append([]int(nil), spec.AllowedDurationsSec...),
-			SupportsAudio:               spec.SupportsAudio,
-			RequiresReferenceVideo:      spec.RequiresReferenceVideo,
-			AutomaticDuration:           spec.AutomaticDuration,
-			AllowedReferenceImageCounts: append([]int(nil), spec.AllowedReferenceImageCounts...),
-			AllowedResolutions:          append([]string(nil), spec.AllowedResolutions...),
-			AllowedAspectRatios:         append([]string(nil), spec.AllowedAspectRatios...),
-			ResolutionDurationsSec:      copyResolutionDurations(spec.ResolutionDurationsSec),
-			SupportsReferenceImage:      spec.SupportsReferenceImage,
-			RequiresStartImage:          spec.RequiresStartImage,
-			MaxReferenceImages:          spec.MaxReferenceImages,
-		},
-		MediaContract: MediaContractClass{
-			ModelClass:          spec.ModelClass,
-			Modality:            domain.ModalityVideo,
-			ExpectedContainer:   "mp4",
-			ExpectedCodec:       "h264",
-			DeliveryReadyOutput: true,
-		},
-		PricingKeys:         append([]pricingcatalog.ProductKey(nil), pricingKeys...),
-		DisabledPricingKeys: append([]pricingcatalog.ProductKey(nil), disabledPricingKeys...),
-		LoadTestOnly:        loadTestOnly,
-	}
-}
-
-func hailuo23FastSpec() domain.VideoRouteSpec {
-	return domain.VideoRouteSpec{
-		Alias:               domain.VideoRouteHailuo23Fast,
-		Provider:            domain.ProviderAPIMart,
-		ProviderModelID:     "MiniMax-Hailuo-2.3-Fast",
-		ModelClass:          "hailuo_2_3_fast",
-		InputModes:          []domain.VideoInputMode{domain.VideoInputImage},
-		RequiresStartImage:  true,
-		AllowedDurationsSec: []int{6, 10},
-		AllowedResolutions:  []string{"768p", "1080p"},
-		ResolutionDurationsSec: map[string][]int{
-			"768p":  {6, 10},
-			"1080p": {6},
-		},
-		SupportsReferenceImage:   true,
-		MaxReferenceImages:       1,
-		ProviderCostCreditsFixed: 1,
-		MaxProviderCostCredits:   1,
-		MaxInternalCostCredits:   2,
-		PriceMultiplier:          2,
-	}
-}
-
-func hailuo23StandardSpec() domain.VideoRouteSpec {
-	return domain.VideoRouteSpec{
-		Alias:               domain.VideoRouteHailuo23Standard,
-		Provider:            domain.ProviderAPIMart,
-		ProviderModelID:     "MiniMax-Hailuo-2.3",
-		ModelClass:          "hailuo_2_3_standard",
-		InputModes:          []domain.VideoInputMode{domain.VideoInputText, domain.VideoInputImage},
-		AllowedDurationsSec: []int{6, 10},
-		AllowedResolutions:  []string{"768p", "1080p"},
-		ResolutionDurationsSec: map[string][]int{
-			"768p":  {6, 10},
-			"1080p": {6},
-		},
-		SupportsReferenceImage:   true,
-		MaxReferenceImages:       1,
-		ProviderCostCreditsFixed: 1,
-		MaxProviderCostCredits:   1,
-		MaxInternalCostCredits:   2,
-		PriceMultiplier:          2,
-	}
-}
-
-func klingO3StandardSpec() domain.VideoRouteSpec {
-	return domain.VideoRouteSpec{
-		Alias:                        domain.VideoRouteKlingO3Standard,
-		Provider:                     domain.ProviderPoYo,
-		ProviderModelID:              "kling-o3/standard",
-		ModelClass:                   "kling_o3_standard",
-		InputModes:                   []domain.VideoInputMode{domain.VideoInputText, domain.VideoInputImage},
-		AllowedDurationsSec:          []int{5, 10},
-		AllowedResolutions:           []string{"720p", "1080p"},
-		AllowedAspectRatios:          []string{"16:9", "9:16", "1:1"},
-		SupportsReferenceImage:       true,
-		MaxReferenceImages:           1,
-		ProviderCostCreditsPerSecond: 10,
-		MaxProviderCostCredits:       100,
-		MaxInternalCostCredits:       200,
-		PriceMultiplier:              2,
-	}
-}
-
-func runwayGen4TurboSpec() domain.VideoRouteSpec {
-	return domain.VideoRouteSpec{
-		Alias:                        domain.VideoRouteRunwayGen4Turbo,
-		Provider:                     domain.ProviderRunway,
-		ProviderModelID:              "gen4_turbo",
-		ModelClass:                   "runway_gen4_turbo",
-		InputModes:                   []domain.VideoInputMode{domain.VideoInputImage},
-		RequiresStartImage:           true,
-		AllowedDurationsSec:          []int{5, 10},
-		AllowedResolutions:           []string{"720p"},
-		AllowedAspectRatios:          []string{"16:9", "9:16", "4:3", "3:4", "1:1", "21:9"},
-		SupportsReferenceImage:       true,
-		MaxReferenceImages:           1,
-		ProviderCostCreditsPerSecond: 5,
-		MaxProviderCostCredits:       50,
-		MaxInternalCostCredits:       100,
-		PriceMultiplier:              2,
-	}
-}
-
-func seedance25Spec() domain.VideoRouteSpec {
-	return domain.VideoRouteSpec{
-		Alias:                                   domain.VideoRouteSeedance25,
-		Provider:                                domain.ProviderAPIMart,
-		ProviderModelID:                         "seedance-2.5",
-		ModelClass:                              "seedance_2_5",
-		InputModes:                              []domain.VideoInputMode{domain.VideoInputText, domain.VideoInputImage, domain.VideoInputReference},
-		AllowedDurationsSec:                     []int{5, 10, 15, 30},
-		AllowedResolutions:                      []string{"480p", "720p", "1080p"},
-		AllowedAspectRatios:                     []string{"16:9", "9:16", "4:3", "3:4", "1:1", "21:9"},
-		SupportsReferenceImage:                  true,
-		MaxReferenceImages:                      4,
-		ProviderCostMicrosPerSecondByResolution: map[string]int64{"480p": 960800, "720p": 2160000, "1080p": 3848800},
-		MaxProviderCostCredits:                  116, MaxInternalCostCredits: 6960,
-		// Legacy safety metadata converts APIMart credits ($0.10) to internal
-		// credits ($0.005) and applies x3. Exact retail lives in pricingcatalog.
-		PriceMultiplier: 60,
-	}
-}
-
-func seedance20FastSpec() domain.VideoRouteSpec {
-	return domain.VideoRouteSpec{
-		Alias:                        domain.VideoRouteSeedance20Fast,
-		Provider:                     domain.ProviderPoYo,
-		ProviderModelID:              "seedance-2-fast",
-		ModelClass:                   "seedance_2_0_fast",
-		InputModes:                   []domain.VideoInputMode{domain.VideoInputText, domain.VideoInputImage, domain.VideoInputReference},
-		AllowedDurationsSec:          []int{5, 10},
-		AllowedResolutions:           []string{"720p"},
-		AllowedAspectRatios:          []string{"16:9", "9:16", "1:1"},
-		SupportsReferenceImage:       true,
-		MaxReferenceImages:           4,
-		ProviderCostCreditsPerSecond: 28,
-		MaxProviderCostCredits:       280,
-		MaxInternalCostCredits:       560,
-		PriceMultiplier:              2,
-	}
-}
-
-func runwayGen45Spec() domain.VideoRouteSpec {
-	return domain.VideoRouteSpec{
-		Alias:                        domain.VideoRouteRunwayGen45,
-		Provider:                     domain.ProviderPoYo,
-		ProviderModelID:              "runway-gen-4.5",
-		ModelClass:                   "runway_gen4_5",
-		InputModes:                   []domain.VideoInputMode{domain.VideoInputText, domain.VideoInputImage},
-		AllowedDurationsSec:          []int{5, 10},
-		AllowedResolutions:           []string{"720p", "1080p"},
-		AllowedAspectRatios:          []string{"16:9", "9:16", "4:3", "3:4", "1:1", "21:9"},
-		SupportsReferenceImage:       true,
-		MaxReferenceImages:           1,
-		ProviderCostCreditsPerSecond: 15,
-		MaxProviderCostCredits:       150,
-		MaxInternalCostCredits:       450,
-		PriceMultiplier:              3,
-	}
-}
-
-func mockTextToVideoSpec() domain.VideoRouteSpec {
-	return domain.VideoRouteSpec{
-		Alias:                    domain.VideoRouteMockTextToVideo,
-		Provider:                 domain.ProviderMock,
-		ProviderModelID:          "mock-video",
-		ModelClass:               "mock_video",
-		InputModes:               []domain.VideoInputMode{domain.VideoInputText},
-		AllowedDurationsSec:      []int{3, 5, 10},
-		AllowedResolutions:       []string{"720p", "1080p"},
-		AllowedAspectRatios:      []string{"16:9", "9:16", "1:1"},
-		ProviderCostCreditsFixed: 50,
-		MaxProviderCostCredits:   50,
-		MaxInternalCostCredits:   50,
-		PriceMultiplier:          1,
 	}
 }
 
@@ -529,114 +84,6 @@ func mockReadiness() ProviderReadiness {
 	}
 }
 
-func videoPricingKeys(alias domain.VideoRouteAlias, resolutions []string, durations []int) []pricingcatalog.ProductKey {
-	keys := make([]pricingcatalog.ProductKey, 0, len(resolutions)*len(durations))
-	for _, resolution := range resolutions {
-		for _, duration := range durations {
-			keys = append(keys, pricingcatalog.ProductKey{
-				Operation:       domain.OperationVideoGenerate,
-				Modality:        domain.ModalityVideo,
-				VideoRouteAlias: alias,
-				Resolution:      resolution,
-				DurationSec:     duration,
-			})
-		}
-	}
-	return keys
-}
-
-func disabledVideoPricingKeys(alias domain.VideoRouteAlias, resolutions []string, durationsByResolution map[string][]int) []pricingcatalog.ProductKey {
-	keys := make([]pricingcatalog.ProductKey, 0)
-	for _, resolution := range resolutions {
-		for _, duration := range durationsByResolution[resolution] {
-			keys = append(keys, pricingcatalog.ProductKey{
-				Operation:       domain.OperationVideoGenerate,
-				Modality:        domain.ModalityVideo,
-				VideoRouteAlias: alias,
-				Resolution:      resolution,
-				DurationSec:     duration,
-			})
-		}
-	}
-	return keys
-}
-
-// PublicImageModels returns priced public image models. Loadtest-only models are
-// exposed separately through LoadTestImageModels to avoid accidental public sale.
-func (r Registry) PublicImageModels() []ImageModel {
-	return copyImageModels(r.ImageModels)
-}
-
-func (r Registry) PublicImageModel(publicID string) (ImageModel, bool) {
-	for _, model := range r.ImageModels {
-		if model.PublicID == publicID {
-			return copyImageModel(model), true
-		}
-	}
-	return ImageModel{}, false
-}
-
-func (r Registry) LoadTestImageModel(publicID string) (ImageModel, bool) {
-	for _, model := range r.LoadTestImageModels {
-		if model.PublicID == publicID {
-			return copyImageModel(model), true
-		}
-	}
-	return ImageModel{}, false
-}
-
-func (r Registry) TextAlias(publicID string) (TextAlias, bool) {
-	for _, alias := range r.TextAliases {
-		if alias.PublicID == publicID {
-			return copyTextAlias(alias), true
-		}
-	}
-	return TextAlias{}, false
-}
-
-func (r Registry) TextAliasModels() []TextAlias {
-	out := make([]TextAlias, 0, len(r.TextAliases))
-	for _, alias := range r.TextAliases {
-		out = append(out, copyTextAlias(alias))
-	}
-	return out
-}
-
-func (r Registry) VideoRoutes() []VideoRoute {
-	out := make([]VideoRoute, 0, len(r.VideoRouteModels))
-	for _, route := range r.VideoRouteModels {
-		out = append(out, copyVideoRoute(route))
-	}
-	return out
-}
-
-func (r Registry) VideoRoute(alias domain.VideoRouteAlias) (VideoRoute, bool) {
-	for _, route := range r.VideoRouteModels {
-		if route.Alias == alias {
-			return copyVideoRoute(route), true
-		}
-	}
-	return VideoRoute{}, false
-}
-
-func (r Registry) VideoRouteSpecs() []domain.VideoRouteSpec {
-	out := make([]domain.VideoRouteSpec, 0, len(r.VideoRouteModels))
-	for _, route := range r.VideoRouteModels {
-		out = append(out, copyVideoRouteSpec(route.Spec))
-	}
-	return out
-}
-
-func (r Registry) ProviderModelAliases() []ProviderModelAlias {
-	return []ProviderModelAlias{
-		{Alias: domain.VideoRouteKlingO3Standard, ProviderModelID: "kling-o3"},
-		{Alias: domain.VideoRouteKlingO3Standard, ProviderModelID: "kling-o3-standard"},
-		{Alias: domain.VideoRouteKlingO3Standard, ProviderModelID: "Kling O3 Standard"},
-		{Alias: domain.VideoRouteSeedance20Fast, ProviderModelID: "seedance-2.0-fast"},
-		{Alias: domain.VideoRouteRunwayGen4Turbo, ProviderModelID: "runway-gen-4-turbo"},
-	}
-}
-
 func (r Registry) ProviderReadiness() []ProviderReadiness {
 	seen := map[string]struct{}{}
 	var out []ProviderReadiness
@@ -655,6 +102,9 @@ func (r Registry) ProviderReadiness() []ProviderReadiness {
 		add(model.Readiness)
 	}
 	for _, model := range r.LoadTestImageModels {
+		add(model.Readiness)
+	}
+	for _, model := range r.AudioModels {
 		add(model.Readiness)
 	}
 	for _, route := range r.VideoRouteModels {
@@ -693,6 +143,16 @@ func (r Registry) Validate() error {
 		}
 		seenText[alias.PublicID] = struct{}{}
 	}
+	seenAudio := map[string]struct{}{}
+	for _, model := range r.AudioModels {
+		if err := validateAudioModel(model, false); err != nil {
+			return err
+		}
+		if _, exists := seenAudio[model.PublicID]; exists {
+			return fmt.Errorf("providermodels: duplicate audio model %s", model.PublicID)
+		}
+		seenAudio[model.PublicID] = struct{}{}
+	}
 	seenRoutes := map[domain.VideoRouteAlias]struct{}{}
 	for _, route := range r.VideoRouteModels {
 		if err := validateVideoRoute(route); err != nil {
@@ -702,53 +162,6 @@ func (r Registry) Validate() error {
 			return fmt.Errorf("providermodels: duplicate video route %s", route.Alias)
 		}
 		seenRoutes[route.Alias] = struct{}{}
-	}
-	return nil
-}
-
-func validateImageModel(model ImageModel, loadTestOnly bool) error {
-	if strings.TrimSpace(model.PublicID) == "" {
-		return fmt.Errorf("providermodels: image public id is required")
-	}
-	if model.Provider == "" || strings.TrimSpace(model.ProviderModelID) == "" {
-		return fmt.Errorf("providermodels: image %s missing provider metadata", model.PublicID)
-	}
-	if strings.TrimSpace(model.FeatureFlag) == "" {
-		return fmt.Errorf("providermodels: image %s missing feature flag", model.PublicID)
-	}
-	if !loadTestOnly && len(model.PricingKeys) == 0 {
-		return fmt.Errorf("providermodels: image %s missing pricing keys", model.PublicID)
-	}
-	if !loadTestOnly && len(model.Limits.AllowedQualities) == 0 {
-		return fmt.Errorf("providermodels: image %s missing quality limits", model.PublicID)
-	}
-	if !loadTestOnly && model.Limits.SupportsReferenceImage && model.Limits.MaxReferenceImages <= 0 {
-		return fmt.Errorf("providermodels: image %s missing reference limits", model.PublicID)
-	}
-	if !loadTestOnly && model.Limits.MaxOutputCount <= 0 {
-		return fmt.Errorf("providermodels: image %s missing output count limit", model.PublicID)
-	}
-	return nil
-}
-
-func validateVideoRoute(route VideoRoute) error {
-	if route.Alias == "" {
-		return fmt.Errorf("providermodels: video route alias is required")
-	}
-	if route.Provider == "" || strings.TrimSpace(route.ProviderModelID) == "" || strings.TrimSpace(route.ModelClass) == "" {
-		return fmt.Errorf("providermodels: route %s missing provider metadata", route.Alias)
-	}
-	if strings.TrimSpace(route.FeatureFlag) == "" || strings.TrimSpace(route.RouterFeatureFlag) == "" {
-		return fmt.Errorf("providermodels: route %s missing feature flag", route.Alias)
-	}
-	if err := route.Spec.Validate(); err != nil {
-		return err
-	}
-	if route.MediaContract.Modality != domain.ModalityVideo || strings.TrimSpace(route.MediaContract.ModelClass) == "" {
-		return fmt.Errorf("providermodels: route %s missing media contract class", route.Alias)
-	}
-	if !route.LoadTestOnly && len(route.PricingKeys) == 0 && len(route.DisabledPricingKeys) == 0 {
-		return fmt.Errorf("providermodels: route %s missing pricing keys", route.Alias)
 	}
 	return nil
 }
@@ -768,6 +181,13 @@ func (r Registry) ValidatePricingCoverage(catalog *pricingcatalog.Catalog, disab
 			}
 		}
 	}
+	for _, model := range r.AudioModels {
+		for _, key := range model.PricingKeys {
+			if _, err := catalog.Lookup(key); err != nil {
+				return fmt.Errorf("providermodels: audio %s pricing key missing: %w", model.PublicID, err)
+			}
+		}
+	}
 	for _, route := range r.VideoRouteModels {
 		for _, key := range route.PricingKeys {
 			if _, err := catalog.Lookup(key); err != nil {
@@ -783,91 +203,7 @@ func (r Registry) ValidatePricingCoverage(catalog *pricingcatalog.Catalog, disab
 	return nil
 }
 
-func copyTextAlias(alias TextAlias) TextAlias {
-	alias.Readiness = copyReadiness(alias.Readiness)
-	alias.PricingKeys = append([]pricingcatalog.ProductKey(nil), alias.PricingKeys...)
-	return alias
-}
-
-func copyImageModels(in []ImageModel) []ImageModel {
-	out := make([]ImageModel, 0, len(in))
-	for _, model := range in {
-		out = append(out, copyImageModel(model))
-	}
-	return out
-}
-
-func copyImageModel(model ImageModel) ImageModel {
-	model.Readiness = copyReadiness(model.Readiness)
-	model.Limits = copyLimits(model.Limits)
-	model.PricingKeys = append([]pricingcatalog.ProductKey(nil), model.PricingKeys...)
-	return model
-}
-
-func copyVideoRoute(route VideoRoute) VideoRoute {
-	route.Readiness = copyReadiness(route.Readiness)
-	route.Spec = copyVideoRouteSpec(route.Spec)
-	route.Limits = copyLimits(route.Limits)
-	route.PricingKeys = append([]pricingcatalog.ProductKey(nil), route.PricingKeys...)
-	route.DisabledPricingKeys = append([]pricingcatalog.ProductKey(nil), route.DisabledPricingKeys...)
-	return route
-}
-
 func copyReadiness(readiness ProviderReadiness) ProviderReadiness {
 	readiness.RequiredConfigKeys = append([]string(nil), readiness.RequiredConfigKeys...)
 	return readiness
-}
-
-func copyLimits(limits Limits) Limits {
-	limits.AllowedReferenceImageCounts = append([]int(nil), limits.AllowedReferenceImageCounts...)
-	limits.AllowedQualities = append([]string(nil), limits.AllowedQualities...)
-	limits.AllowedDurationsSec = append([]int(nil), limits.AllowedDurationsSec...)
-	limits.AllowedResolutions = append([]string(nil), limits.AllowedResolutions...)
-	limits.AllowedAspectRatios = append([]string(nil), limits.AllowedAspectRatios...)
-	limits.ResolutionDurationsSec = copyResolutionDurations(limits.ResolutionDurationsSec)
-	return limits
-}
-
-func copyVideoRouteSpec(spec domain.VideoRouteSpec) domain.VideoRouteSpec {
-	if spec.ProviderCostMicrosByResolutionDuration != nil {
-		prices := make(map[string]map[int]int64, len(spec.ProviderCostMicrosByResolutionDuration))
-		for resolution, durations := range spec.ProviderCostMicrosByResolutionDuration {
-			prices[resolution] = maps.Clone(durations)
-		}
-		spec.ProviderCostMicrosByResolutionDuration = prices
-	}
-	spec.AllowedReferenceImageCounts = append([]int(nil), spec.AllowedReferenceImageCounts...)
-	spec.ProviderCostMicrosPerSecondByResolution = maps.Clone(spec.ProviderCostMicrosPerSecondByResolution)
-	spec.ProviderCostMicrosPerSecondWithAudioByResolution = maps.Clone(spec.ProviderCostMicrosPerSecondWithAudioByResolution)
-	spec.InputModes = append([]domain.VideoInputMode(nil), spec.InputModes...)
-	spec.AllowedDurationsSec = append([]int(nil), spec.AllowedDurationsSec...)
-	spec.AllowedResolutions = append([]string(nil), spec.AllowedResolutions...)
-	spec.AllowedAspectRatios = append([]string(nil), spec.AllowedAspectRatios...)
-	spec.ResolutionDurationsSec = copyResolutionDurations(spec.ResolutionDurationsSec)
-	return spec
-}
-
-func copyResolutionDurations(in map[string][]int) map[string][]int {
-	if len(in) == 0 {
-		return nil
-	}
-	out := make(map[string][]int, len(in))
-	for key, values := range in {
-		out[key] = append([]int(nil), values...)
-	}
-	return out
-}
-
-func midjourneyV7Model() ImageModel {
-	model := imageModelWithQualities(PublicImageMidjourneyV7, "Midjourney V7", domain.ProviderAPIMart, ProviderModelMidjourneyV7, FeatureImageMidjourneyV7, apimartReadiness(), []string{"relax", "fast", "turbo"}, 4)
-	model.Limits.MaxOutputCount = 1
-	return model
-}
-
-func flux2ProModel() ImageModel {
-	model := imageModelWithQualities(PublicImageFlux2Pro, "FLUX.2 Pro", domain.ProviderAPIMart, ProviderModelFlux2Pro, FeatureImageFlux2Pro, apimartReadiness(), []string{"1MP", "2MP", "3MP", "4MP"}, 0)
-	model.Limits.MaxOutputCount = 1
-	model.Limits.SupportsReferenceImage = false
-	model.Limits.AllowedAspectRatios = []string{"16:9", "1:1", "4:3", "3:4", "9:16", "3:2", "2:3", "21:9", "9:21"}
-	return model
 }

@@ -10,6 +10,7 @@ import { loadThemeMode, watchThemeMode, type ThemeMode } from "../settings/theme
 import { modalityByOperation, uid, type Chat, type ChatMessage } from "./types";
 import { cleanupLegacyChatStorage, defaultThread } from "./store";
 import { loadAppTab, saveAppTab, type AppTab } from "../mode";
+import { ModelCapabilitiesDetails } from "../models/ModelCapabilitiesDetails";
 import {
   createChatMessage,
   listTextModels,
@@ -616,6 +617,7 @@ export function ChatScreen({ user }: { user: VkUser }) {
           {textModelId !== CHAT_MODEL_ID && <small>До 2048 токенов ответа. При длинном диалоге может потребоваться новый чат.</small>}
           {textInputError && <small role="alert">{textInputError}</small>}
           {textCatalogFailed && <small>Каталог дополнительных моделей временно недоступен.</small>}
+          <ModelCapabilitiesDetails capabilities={textModels.find(model => model.id === textModelId)?.capabilities} />
           <Composer
             onDraftChange={() => setTextInputError("")}
             onSend={handleSend}
