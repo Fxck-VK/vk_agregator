@@ -14,8 +14,9 @@ type ChatScrollToBottomProps = {
   scrollContainer: HTMLElement | null;
 };
 
+const BOTTOM_TOLERANCE_PX = 4;
 const isAtBottom = (container: HTMLElement) =>
-  container.scrollHeight - container.scrollTop - container.clientHeight <= 1;
+  container.scrollHeight - container.scrollTop - container.clientHeight <= BOTTOM_TOLERANCE_PX;
 
 const scrollBehavior = () => (window.matchMedia?.("(prefers-reduced-motion: reduce)")?.matches ? "auto" : "smooth");
 
@@ -121,8 +122,22 @@ export function ChatScrollToBottom({
     updatePosition();
     scrollContainer.addEventListener("scroll", updatePosition);
 
+    // Images, composer controls and viewport resizing can change the bottom
+    // without a scroll event. Refresh visibility without changing follow intent.
+    const refreshLayout = () => setAtBottom(isAtBottom(scrollContainer));
+    const resizeObserver = typeof ResizeObserver === "undefined"
+      ? null
+      : new ResizeObserver(refreshLayout);
+    resizeObserver?.observe(scrollContainer);
+    for (const content of scrollContainer.children) resizeObserver?.observe(content);
+    scrollContainer.addEventListener("load", refreshLayout, true);
+    window.addEventListener("resize", refreshLayout);
+
     return () => {
       scrollContainer.removeEventListener("scroll", updatePosition);
+      scrollContainer.removeEventListener("load", refreshLayout, true);
+      window.removeEventListener("resize", refreshLayout);
+      resizeObserver?.disconnect();
     };
   }, [scheduleSettle, scrollContainer]);
 

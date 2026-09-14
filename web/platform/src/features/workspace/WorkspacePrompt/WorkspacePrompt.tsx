@@ -8,10 +8,16 @@ import { savePendingConversationBootstrap } from "@/features/conversations/pendi
 import { fallbackConversationTitle } from "@/features/conversations/pending-conversation-title-sync";
 import { useOptionalWorkspaceConversationList } from "@/features/conversations/WorkspaceConversationList/WorkspaceConversationList";
 import { ru } from "@/i18n/ru";
+import { useGenerationControls } from "@/features/models/generation-options";
+import type { GenerationModel } from "@/features/models/generation-model-catalog";
+import type { ChatModel } from "@/lib/web-api/contracts";
 
 import styles from "./WorkspacePrompt.module.css";
 
 type WorkspacePromptProps = {
+  selectedChatModel?: ChatModel;
+  selectedGenerationModel?: GenerationModel;
+  chatModelUnavailable?: boolean;
   access?: "authenticated" | "guest";
   promptValue?: string;
   onPromptChange?: (prompt: string) => void;
@@ -24,6 +30,10 @@ type WorkspacePromptProps = {
   };
   variant?: "workspace" | "newChat" | "hero";
 };
+
+function normalizeChatModel(model: ChatModel): Extract<GenerationModel, { category: "text" }> {
+  return { ...model, operations: undefined, category: "text" as const };
+}
 
 const heroPlaceholderPrefix = "Спросите NeiroHub или ";
 const heroPlaceholderSuggestions = [
@@ -134,7 +144,7 @@ function useHeroPlaceholder(enabled: boolean) {
   };
 }
 
-export function WorkspacePrompt({ access = "authenticated", variant = "workspace", promptValue, onPromptChange, leadingControls, submitAction }: WorkspacePromptProps) {
+export function WorkspacePrompt({ access = "authenticated", variant = "workspace", promptValue, onPromptChange, leadingControls, submitAction, selectedChatModel: explicitChatModel, selectedGenerationModel, chatModelUnavailable = false }: WorkspacePromptProps) {
   const router = useRouter();
   const conversationList = useOptionalWorkspaceConversationList();
   const submissionStartedRef = useRef(false);
@@ -144,8 +154,13 @@ export function WorkspacePrompt({ access = "authenticated", variant = "workspace
     setLocalPrompt(value);
     onPromptChange?.(value);
   };
-  const canSubmit = prompt.trim() !== "" && (submitAction?.canSubmit ?? true);
-  const disabled = submitAction?.disabled ?? false;
+  const selectedModel = selectedGenerationModel ?? (explicitChatModel === undefined ? undefined : normalizeChatModel(explicitChatModel));
+  const selectedChatModel = selectedModel?.category === "text" ? selectedModel : undefined;
+  const generation = useGenerationControls(selectedModel, chatModelUnavailable, setPrompt);
+  const tooLong = selectedChatModel?.max_prompt_bytes !== undefined
+    && new TextEncoder().encode(prompt.trim()).length > selectedChatModel.max_prompt_bytes;
+  const canSubmit = prompt.trim() !== "" && !tooLong && !chatModelUnavailable && (submitAction?.canSubmit ?? generation.canSubmit);
+  const disabled = chatModelUnavailable || (submitAction?.disabled ?? false);
   const isNewChat = variant === "newChat";
   const isHero = variant === "hero";
   const { placeholder: heroPlaceholder, reset: resetHeroPlaceholder } = useHeroPlaceholder(
@@ -197,7 +212,15 @@ export function WorkspacePrompt({ access = "authenticated", variant = "workspace
     const createdAt = new Date().toISOString();
     const fallbackTitle = fallbackConversationTitle(normalizedPrompt);
 
-    savePendingConversationBootstrap({ conversationKey, messageKey, prompt: normalizedPrompt });
+    savePendingConversationBootstrap({
+      conversationKey,
+      messageKey,
+      prompt: normalizedPrompt,
+      ...(selectedModel ? {
+        modelId: selectedModel.id,
+        ...(selectedModel.category === "text" ? {} : { generationOptions: generation.options }),
+      } : {}),
+    });
     conversationList.upsertConversation({
       id: conversationKey,
       title: fallbackTitle,
@@ -219,7 +242,7 @@ export function WorkspacePrompt({ access = "authenticated", variant = "workspace
       <ChatComposer
         canSubmit={canSubmit}
         disabled={disabled}
-        leadingControls={leadingControls}
+        leadingControls={leadingControls ?? generation.controls}
         label={promptLabel}
         mediaLabel={ru.conversations.composerMediaUpload}
         mediaLibraryEnabled={access === "authenticated"}
@@ -229,17 +252,22 @@ export function WorkspacePrompt({ access = "authenticated", variant = "workspace
           menu: ru.conversations.composerMediaMenu,
           uploadFile: ru.conversations.composerMediaUploadFile,
         }}
-        note={isNewChat || isHero ? undefined : ru.workspace.promptSupport}
+        note={selectedModel && selectedModel.category !== "text"
+          ? `${selectedModel.name} · Стоимость: ${generation.cost ?? "—"} токенов`
+          : selectedChatModel
+          ? `${selectedChatModel.name}${selectedChatModel.estimate_credits !== undefined ? ` · ${selectedChatModel.estimate_credits} токенов за ответ` : ""}`
+          : isNewChat || isHero ? undefined : ru.workspace.promptSupport}
         onChange={changePrompt}
         onSend={submit}
         placeholder={promptPlaceholder}
         submitLabel={submitAction?.label ?? ru.workspace.promptSubmit}
         value={prompt}
         variant={variant}
-        wrapLeadingControls={isHero}
+        wrapLeadingControls={isHero || selectedModel !== undefined}
         generatedMediaHref={access === "guest" ? "/login" : "/app/files?category=images"}
         uploadedMediaHref={access === "guest" ? "/login" : "/app/files?category=uploads"}
       />
+      {tooLong ? <p role="alert">Сообщение слишком длинное для выбранной модели.</p> : null}
     </form>
   );
 }

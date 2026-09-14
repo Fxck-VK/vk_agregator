@@ -3,6 +3,7 @@ import { InspirationGallery } from "@/features/inspiration/InspirationGallery/In
 
 import { WorkspaceLanding } from "../WorkspaceLanding/WorkspaceLanding";
 import { WorkspacePrompt } from "../WorkspacePrompt/WorkspacePrompt";
+import { NewChatPrompt } from "../WorkspacePrompt/NewChatPrompt";
 
 import styles from "./WorkspaceHome.module.css";
 
@@ -11,9 +12,10 @@ type WorkspaceSection = keyof typeof ru.workspace.sections;
 type WorkspaceHomeProps = {
   access?: "authenticated" | "guest";
   section?: WorkspaceSection;
+  chatModelId?: string;
 };
 
-export function WorkspaceHome({ access = "authenticated", section = "home" }: WorkspaceHomeProps) {
+export function WorkspaceHome({ access = "authenticated", section = "home", chatModelId }: WorkspaceHomeProps) {
   const content = ru.workspace.sections[section];
 
   if (section === "inspiration") {
@@ -34,7 +36,9 @@ export function WorkspaceHome({ access = "authenticated", section = "home" }: Wo
           <div className={styles.welcome}>
             <h1 id="new-chat-title">{ru.workspace.startTitle}</h1>
           </div>
-          <WorkspacePrompt access={access} variant="newChat" />
+          {chatModelId && access === "authenticated"
+            ? <NewChatPrompt modelId={chatModelId} />
+            : <WorkspacePrompt access={access} variant="newChat" />}
         </div>
       </section>
     );

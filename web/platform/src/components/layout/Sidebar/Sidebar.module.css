@@ -343,6 +343,8 @@
 
   .panel[data-desktop-collapsed="true"] [data-sidebar-conversation-row="true"] {
     display: grid;
+    grid-template-columns: minmax(0, 1fr);
+    gap: 0;
     inline-size: 3.5rem;
     block-size: 3.5rem;
     margin-inline: auto;

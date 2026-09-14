@@ -22,7 +22,7 @@ describe("server-only content repository", () => {
       locale: "en",
       slug: "gpt-image-2",
       title: "GPT Image 2",
-      runtimeCatalogKey: "gpt-image-2",
+      runtimeCatalogKey: "gpt_image_2",
     });
     expect(items[0]).not.toHaveProperty("translations");
     expect(items[0]).not.toHaveProperty("reviewer");

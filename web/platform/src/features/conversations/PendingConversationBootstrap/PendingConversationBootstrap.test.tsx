@@ -57,6 +57,17 @@ describe("PendingConversationBootstrap", () => {
     window.sessionStorage.clear();
   });
 
+  it("sends image settings in the new conversation and stores its public job for refresh recovery", async () => {
+    savePendingConversationBootstrap({conversationKey:conversationIdempotencyId,messageKey:messageIdempotencyId,prompt:"Кадр",modelId:"nano_banana_2",generationOptions:{image_quality:"2K",output_count:2,aspect_ratio:"9:16"}});
+    vi.mocked(webBrowserMutation).mockResolvedValueOnce(Response.json(conversation,{status:201})).mockResolvedValueOnce(Response.json(job,{status:201}));
+    renderPending();
+    await vi.waitFor(()=>expect(replace).toHaveBeenCalledWith(`/app/chat/${serverConversationId}?refresh=1`));
+    const [path,init] = vi.mocked(webBrowserMutation).mock.calls[1];
+    expect(path).toBe(`/web/v1/conversations/${serverConversationId}/messages`);
+    expect(JSON.parse(init.body as string)).toEqual({prompt:"Кадр",model_id:"nano_banana_2",image_quality:"2K",output_count:2,aspect_ratio:"9:16"});
+    expect(JSON.parse(window.sessionStorage.getItem(`neirohub:conversation-pending-media:${serverConversationId}`)!)).toMatchObject({jobID:job.job_id,baselineSeq:0});
+  });
+
   it("shows the first message and typing indicator before create resolves", async () => {
     vi.mocked(webBrowserMutation).mockReturnValueOnce(new Promise<Response>(() => {}));
     renderPending();
@@ -86,6 +97,25 @@ describe("PendingConversationBootstrap", () => {
       headers: { "Content-Type": "application/json", "X-Idempotency-Key": messageIdempotencyId },
       body: JSON.stringify({ prompt: "Первый вопрос" }),
     });
+  });
+
+  it("keeps the chosen model and idempotency key on first-message retries and subsequent turns", async () => {
+    savePendingConversationBootstrap({ conversationKey: conversationIdempotencyId, messageKey: messageIdempotencyId, prompt: "Первый вопрос", modelId: "gpt_5_5" });
+    vi.mocked(webBrowserMutation)
+      .mockResolvedValueOnce(Response.json(conversation, { status: 201 }))
+      .mockRejectedValueOnce(new Error("timeout"))
+      .mockResolvedValueOnce(Response.json(job, { status: 201 }));
+    renderPending();
+    await screen.findByRole("alert");
+    fireEvent.click(screen.getByRole("button", { name: ru.conversations.messageRetryLabel }));
+    await vi.waitFor(() => expect(replace).toHaveBeenCalledWith(`/app/chat/${serverConversationId}?refresh=1`));
+    const calls = vi.mocked(webBrowserMutation).mock.calls.filter(([path]) => path.endsWith("/messages"));
+    expect(calls).toHaveLength(2);
+    for (const [, init] of calls) {
+      expect(JSON.parse(init.body as string)).toEqual({ prompt: "Первый вопрос", model_id: "gpt_5_5" });
+      expect(new Headers(init.headers).get("X-Idempotency-Key")).toBe(messageIdempotencyId);
+    }
+    expect(window.sessionStorage.getItem(`neirohub:conversation-model:${serverConversationId}`)).toBe("gpt_5_5");
   });
 
   it("shows a local failure and retries with the same keys", async () => {

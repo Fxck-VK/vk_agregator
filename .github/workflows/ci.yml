@@ -57,6 +57,12 @@ jobs:
       - name: Test
         run: go test ./...
 
+      - name: Validate model onboarding
+        run: go run ./scripts/models/check
+
+      - name: Validate shared model preview
+        run: go run ./scripts/models/preview -check
+
       - name: Vet
         run: go vet ./...
 

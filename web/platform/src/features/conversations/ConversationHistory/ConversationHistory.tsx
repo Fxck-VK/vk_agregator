@@ -34,6 +34,9 @@ import {
 } from "@/lib/web-api/contracts";
 import { webBrowserFetch, webBrowserMutation } from "@/lib/web-api/browser";
 
+import type { GenerationOptions } from "@/features/models/generation-options";
+
+import { readPendingMediaJob, savePendingMediaJob, clearPendingMediaJob } from "../pending-media-job";
 import styles from "./ConversationHistory.module.css";
 
 type ConversationHistoryProps = {
@@ -45,11 +48,14 @@ type ConversationHistoryProps = {
 type PollRequest = {
   id: number;
   baselineSeq: number;
+  jobID?: string;
+  media?: boolean;
 };
 
 type PendingTurn = PollRequest & {
   idempotencyKey: string | null;
   modelId: string;
+  generationOptions?: GenerationOptions;
   prompt: string;
   status: "sending" | "accepted" | "failed";
 };
@@ -96,10 +102,12 @@ function ConversationHistoryReady({
   const modelSelection = useConversationModelSelection(history.conversationId);
   const replaceConversation = workspaceConversationList?.replaceConversation;
   const updateConversationTitle = workspaceConversationList?.updateConversationTitle;
-  const initialRefreshBaselineSeq = history.messages.at(-1)?.seq ?? 0;
-  const shouldStartInitialRefresh = initialRefresh && !history.messages.some((message) => message.role === "assistant");
+  const [savedMediaJob] = useState(() => readPendingMediaJob(history.conversationId));
+  const resumeMedia = savedMediaJob !== null && !history.messages.some(message => message.role === "assistant" && message.seq > savedMediaJob.baselineSeq);
+  const initialRefreshBaselineSeq = resumeMedia ? savedMediaJob.baselineSeq : history.messages.at(-1)?.seq ?? 0;
+  const shouldStartInitialRefresh = resumeMedia || initialRefresh && !history.messages.some((message) => message.role === "assistant");
   const initialRefreshRequest = shouldStartInitialRefresh
-    ? { id: 1, baselineSeq: initialRefreshBaselineSeq }
+    ? { id: 1, baselineSeq: initialRefreshBaselineSeq, ...(resumeMedia ? {jobID:savedMediaJob.jobID,media:true} : {}) }
     : null;
   const [messages, setMessages] = useState(history.messages);
   const [hasMoreBefore, setHasMoreBefore] = useState(history.hasMoreBefore);
@@ -193,7 +201,7 @@ function ConversationHistoryReady({
           "Content-Type": "application/json",
           "X-Idempotency-Key": turn.idempotencyKey,
         },
-        body: JSON.stringify({ prompt: turn.prompt, ...(turn.modelId ? { model_id: turn.modelId } : {}) }),
+        body: JSON.stringify({ prompt: turn.prompt, ...turn.generationOptions, ...(turn.modelId ? { model_id: turn.modelId } : {}) }),
       });
       if (response.status !== 200 && response.status !== 201) {
         throw new Error("Unable to complete the request.");
@@ -206,7 +214,8 @@ function ConversationHistoryReady({
       setPendingTurn((currentTurn) => currentTurn?.id === turn.id
         ? { ...currentTurn, status: "accepted" }
         : currentTurn);
-      setPollRequest({ id: turn.id, baselineSeq: turn.baselineSeq });
+      if (turn.generationOptions) savePendingMediaJob(history.conversationId, job.job_id, turn.baselineSeq);
+      setPollRequest({ id: turn.id, baselineSeq: turn.baselineSeq, jobID: turn.generationOptions ? job.job_id : undefined, media: turn.generationOptions !== undefined });
     } catch {
       setActiveRefreshID((currentID) => currentID === turn.id ? null : currentID);
       setPendingTurn((currentTurn) => currentTurn?.id === turn.id
@@ -215,7 +224,7 @@ function ConversationHistoryReady({
     }
   };
 
-  const beginMessageSubmission = (prompt: string) => {
+  const beginMessageSubmission = (prompt: string, generationOptions?: GenerationOptions) => {
     const baselineSeq = messages.at(-1)?.seq ?? 0;
     if (baselineSeq === 0 && titleSyncFallback === null) {
       const fallbackTitle = fallbackConversationTitle(prompt);
@@ -234,6 +243,7 @@ function ConversationHistoryReady({
       ...request,
       idempotencyKey: crypto.randomUUID(),
       modelId: modelSelection.selectedModelId,
+      generationOptions,
       prompt,
       status: "sending",
     });
@@ -291,6 +301,8 @@ function ConversationHistoryReady({
     }
 
     let active = true;
+    const maxAttempts = pollRequest.media ? 450 : conversationRefreshMaxAttempts;
+    const deadlineMs = pollRequest.media ? 900_000 : conversationRefreshDeadlineMs;
     let attempts = 0;
     let afterSeq = pollRequest.baselineSeq;
     let nextPollTimer: ReturnType<typeof setTimeout> | undefined;
@@ -312,7 +324,7 @@ function ConversationHistoryReady({
     };
 
     const poll = async () => {
-      if (!active || attempts >= conversationRefreshMaxAttempts) {
+      if (!active || attempts >= maxAttempts) {
         stop();
         return;
       }
@@ -323,6 +335,19 @@ function ConversationHistoryReady({
       activeRequest = request;
       let assistantObserved = false;
       try {
+        if (pollRequest.jobID) {
+          const statusResponse = await webBrowserFetch(`/web/v1/conversations/${history.conversationId}/jobs/${pollRequest.jobID}`, {signal:request.signal});
+          if (statusResponse.status === 200) {
+            const job = parseWebChatJob(await statusResponse.json());
+            if (["failed_terminal","cancelled","expired","refunded","rejected","awaiting_payment"].includes(job.status)) {
+              clearPendingMediaJob(history.conversationId);
+              setRefreshDelayed(true);
+              setPendingTurn(null);
+              stop();
+              return;
+            }
+          }
+        }
         const response = await webBrowserFetch(
           `/web/v1/conversations/${history.conversationId}/messages?after_seq=${requestCursor}&limit=${conversationHistoryPageLimit}` as `/web/v1/${string}`,
           { signal: request.signal },
@@ -361,6 +386,7 @@ function ConversationHistoryReady({
           });
         }
         if (assistantObserved) {
+          clearPendingMediaJob(history.conversationId);
           setRefreshDelayed(false);
           stop();
         }
@@ -375,7 +401,7 @@ function ConversationHistoryReady({
         if (!active) {
           return;
         }
-        if (attempts >= conversationRefreshMaxAttempts) {
+        if (attempts >= maxAttempts) {
           stop();
           return;
         }
@@ -383,7 +409,7 @@ function ConversationHistoryReady({
       }
     };
 
-    const deadlineTimer = setTimeout(stop, conversationRefreshDeadlineMs);
+    const deadlineTimer = setTimeout(stop, deadlineMs);
     void poll();
 
     return () => stop(false);
@@ -471,7 +497,8 @@ function ConversationHistoryReady({
         )}
       </div>
       <ConversationComposer
-        selectedModel={modelSelection.catalog?.items.find((model) => model.id === modelSelection.selectedModelId)}
+        selectedModel={modelSelection.catalog?.items.find((model) => model.id === modelSelection.selectedModelId && model.category === "text")}
+        generationModel={modelSelection.catalog?.items.find((model) => model.id === modelSelection.selectedModelId)}
         contentVersion={contentVersion}
         disabled={pendingTurn !== null || activeRefreshID !== null}
         forceScrollRequest={forceScrollRequest}

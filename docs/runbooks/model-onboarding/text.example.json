@@ -1,0 +1,27 @@
+{
+  "schema_version": 1,
+  "public_id": "example_text",
+  "provider": "example",
+  "provider_model_id": "example-text-v1",
+  "revision": "v1",
+  "endpoint": "POST /example/text",
+  "registry_fingerprint": "",
+  "status": "draft",
+  "categories": ["text", "study-work"],
+  "sources": [],
+  "operations": [
+    {
+      "id": "reply",
+      "kind": "text",
+      "inputs": {
+        "images": {"support": "unknown", "enabled": false},
+        "video": {"support": "unknown", "enabled": false},
+        "audio": {"support": "unknown", "enabled": false},
+        "documents": {"support": "unknown", "enabled": false},
+        "max_total_bytes": 0
+      },
+      "text": {"context_tokens": 0, "max_output_tokens": 0}
+    }
+  ],
+  "checks": []
+}

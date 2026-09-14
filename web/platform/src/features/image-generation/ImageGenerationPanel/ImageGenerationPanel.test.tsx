@@ -17,7 +17,8 @@ vi.mock("@/features/models/image-model-catalog-cache", () => ({
 
 import { ru } from "@/i18n/ru";
 import { webBrowserFetch, webBrowserMutation } from "@/lib/web-api/browser";
-import { parseImageModelList, type ImageModelList } from "@/lib/web-api/contracts";
+import { parseImageModelList as parseImageModels, type ImageModelList } from "@/lib/web-api/contracts";
+import { imageModelFixture } from "@/test/model-catalog";
 import { useSearchParams } from "next/navigation";
 
 import { loadImageModelCatalog } from "@/features/models/image-model-catalog-cache";
@@ -27,6 +28,10 @@ import {
 } from "@/features/models/WorkspaceModelSelection/WorkspaceModelSelection";
 
 import { ImageGenerationPanel } from "./ImageGenerationPanel";
+
+function parseImageModelList(value: unknown): ImageModelList {
+  return { items: parseImageModels(value).items.map(imageModelFixture) };
+}
 
 const job = {
   id: "d7c979f5-24e5-4f88-924b-a592d6e5a906",
@@ -51,6 +56,7 @@ const modelsResponse: ImageModelList = {
       supports_reference_image: true,
       max_reference_images: 4,
       max_output_count: 4,
+      allowed_aspect_ratios: ["16:9", "1:1", "9:16", "4:3", "4:5"],
     },
   ],
 };
@@ -71,6 +77,7 @@ const multipleModelsResponse: ImageModelList = {
       id: "nano-banana-2",
       name: "Nano Banana 2",
       quality_options: ["2K", "4K"],
+      allowed_aspect_ratios: ["16:9", "1:1", "4:5"],
       price_by_quality: { "2K": 60, "4K": 120 },
       default_quality: "2K",
       supports_reference_image: true,
@@ -97,6 +104,9 @@ const gptImage25QualityOptions = [
   "4K-xhigh",
   "4K-max",
 ];
+
+modelsResponse.items = modelsResponse.items.map(imageModelFixture);
+multipleModelsResponse.items = multipleModelsResponse.items.map(imageModelFixture);
 
 const gptImage25Prices = Object.fromEntries(
   gptImage25QualityOptions.map((quality, index) => [quality, 30 + index]),
@@ -190,6 +200,7 @@ describe("ImageGenerationPanel", () => {
   it("quotes Midjourney Fast and prepares exactly one Imagine call", async () => {
     vi.mocked(loadImageModelCatalog).mockResolvedValueOnce(parseImageModelList({ items: [{
       id: "midjourney_v7", name: "Midjourney V7", quality_options: ["relax", "fast", "turbo"], default_quality: "relax",
+      quality_label: "Режим", show_output_count: false,
       price_by_quality: { relax: 30, fast: 35, turbo: 60 }, max_output_count: 1, max_reference_images: 4,
       supports_reference_image: true, allowed_aspect_ratios: ["16:9", "1:1"],
     }] }));
@@ -200,7 +211,7 @@ describe("ImageGenerationPanel", () => {
     const promptInput = await screen.findByRole("textbox", { name: ru.imageGeneration.promptLabel });
     fireEvent.click(screen.getByRole("button", { name: "Режим: Relax" }));
     fireEvent.click(screen.getByRole("radio", { name: "Fast" }));
-    expect(screen.getByLabelText("За запуск Imagine: 35 звёзд")).toBeVisible();
+    expect(screen.getByLabelText(`${ru.imageGeneration.priceLabel}: 35 звёзд`)).toBeVisible();
     expect(screen.queryByRole("group", { name: "Количество изображений" })).not.toBeInTheDocument();
     fireEvent.change(promptInput, { target: { value: "Synthetic scene" } });
     fireEvent.click(getGenerateButton());
@@ -244,8 +255,8 @@ describe("ImageGenerationPanel", () => {
     render(<ImageGenerationPanel />);
     const promptInput = await screen.findByRole("textbox", { name: ru.imageGeneration.promptLabel });
     expect(screen.getByRole("button", { name: "Разрешение: 1K·Среднее" })).toBeVisible();
-    expect(screen.getByText(ru.imageGeneration.priceDependsOnAspectRatio)).toBeVisible();
-    expect(screen.queryByLabelText(`${ru.imageGeneration.priceLabel}: 31 звезда`)).not.toBeInTheDocument();
+    expect(screen.queryByText(ru.imageGeneration.priceDependsOnAspectRatio)).not.toBeInTheDocument();
+    expect(screen.getByLabelText(`${ru.imageGeneration.priceLabel}: 31 звезда`)).toBeVisible();
     fireEvent.click(screen.getByRole("button", { name: "Разрешение: 1K·Среднее" }));
     expect(screen.getAllByRole("radio")).toHaveLength(15);
     expect(screen.getByRole("radio", { name: "1K·Низкое" })).toBeVisible();
@@ -264,6 +275,7 @@ describe("ImageGenerationPanel", () => {
   it("blocks GPT Image 2.5 prompts above 4096 UTF-8 bytes before prepare", async () => {
     vi.mocked(loadImageModelCatalog).mockResolvedValueOnce(parseImageModelList({ items: [{
       id: "gpt_image_2_5_sunburst", name: "GPT Image 2.5 Sunburst", quality_options: ["1K-medium"], default_quality: "1K-medium",
+      max_prompt_bytes: 4096,
       price_by_quality: { "1K-medium": 30 }, max_output_count: 4, max_reference_images: 0,
       supports_reference_image: false, allowed_aspect_ratios: ["16:9"],
     }] }));

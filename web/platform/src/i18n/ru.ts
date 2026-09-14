@@ -304,6 +304,7 @@ export const ru = {
     openGeneratorLabel: "Открыть генератор",
   },
   modelSelector: {
+    feedLabel: "Подборки нейросетей",
     loading: "Загружаем список нейросетей",
     loadingShort: "Загружаем…",
     unavailable: "Нейросети временно недоступны",

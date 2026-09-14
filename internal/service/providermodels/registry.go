@@ -9,6 +9,7 @@ import (
 	"strings"
 
 	"vk-ai-aggregator/internal/domain"
+	"vk-ai-aggregator/internal/service/modelcontract"
 	"vk-ai-aggregator/internal/service/pricingcatalog"
 )
 
@@ -162,6 +163,9 @@ type ProviderModelAlias struct {
 
 // Registry is the static provider/model registry.
 type Registry struct {
+	ModelAliases        []ProviderModelAlias
+	Contracts           map[string]modelcontract.Contract
+	onboardingError     error
 	TextAliases         []TextAlias
 	ImageModels         []ImageModel
 	LoadTestImageModels []ImageModel
@@ -170,7 +174,11 @@ type Registry struct {
 
 // StaticRegistry returns the current static provider/model registry.
 func StaticRegistry() Registry {
+	contracts, err := loadOnboardingContracts()
 	return Registry{
+		ModelAliases:        providerModelAliases(),
+		Contracts:           contracts,
+		onboardingError:     err,
 		TextAliases:         textAliases(),
 		ImageModels:         imageModels(),
 		LoadTestImageModels: loadTestImageModels(),
@@ -628,6 +636,10 @@ func (r Registry) VideoRouteSpecs() []domain.VideoRouteSpec {
 }
 
 func (r Registry) ProviderModelAliases() []ProviderModelAlias {
+	return append([]ProviderModelAlias(nil), r.ModelAliases...)
+}
+
+func providerModelAliases() []ProviderModelAlias {
 	return []ProviderModelAlias{
 		{Alias: domain.VideoRouteKlingO3Standard, ProviderModelID: "kling-o3"},
 		{Alias: domain.VideoRouteKlingO3Standard, ProviderModelID: "kling-o3-standard"},
@@ -703,7 +715,7 @@ func (r Registry) Validate() error {
 		}
 		seenRoutes[route.Alias] = struct{}{}
 	}
-	return nil
+	return r.ValidateOnboarding()
 }
 
 func validateImageModel(model ImageModel, loadTestOnly bool) error {

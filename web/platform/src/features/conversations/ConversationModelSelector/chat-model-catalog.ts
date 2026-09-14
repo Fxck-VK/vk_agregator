@@ -1,8 +1,6 @@
-import { webBrowserFetch } from "@/lib/web-api/browser";
-import { parseChatModelList } from "@/lib/web-api/contracts";
+import { loadModelCatalog } from "@/features/models/model-catalog-cache";
+import { projectChatModelCatalog } from "@/features/models/model-catalog-contract";
 
 export async function loadChatModelCatalog() {
-  const response = await webBrowserFetch("/web/v1/chat-models");
-  if (response.status !== 200) throw new Error("Unable to load chat models.");
-  return parseChatModelList(await response.json());
+  return projectChatModelCatalog(await loadModelCatalog());
 }

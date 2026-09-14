@@ -21,8 +21,8 @@ const (
 var errMissingDependency = errors.New("accountservice: missing dependency")
 
 // IdentityStore exposes account identities to the account boundary. Concrete
-// repositories may store raw identifiers, but AccountService only returns safe
-// DTOs.
+// repositories may store raw identifiers. Profile/identity DTOs are always safe;
+// VerifiedReceiptEmail is restricted to server-side receipt delivery.
 type IdentityStore interface {
 	ListIdentitiesByAccount(ctx context.Context, accountID uuid.UUID, limit, offset int) ([]*domain.AccountIdentity, error)
 }

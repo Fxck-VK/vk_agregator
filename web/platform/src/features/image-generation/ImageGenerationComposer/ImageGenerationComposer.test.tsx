@@ -15,7 +15,7 @@ describe("ImageGenerationComposer", () => {
 
   it("selects an Imagine speed without offering multiple paid calls", () => {
     const onChange = vi.fn();
-    render(<ImageGenerationComposer modelID="midjourney_v7" aspectRatio="16:9" canSubmit errorMessage={null}
+    render(<ImageGenerationComposer modelID="midjourney_v7" qualityLabel="Режим" showOutputCount={false} aspectRatio="16:9" canSubmit errorMessage={null}
       imageQuality="relax" isSubmitting={false} maxOutputCount={1}
       onAspectRatioChange={vi.fn()} onImageQualityChange={onChange}
       onOutputCountChange={vi.fn()} onPromptChange={vi.fn()} onSubmit={vi.fn()}

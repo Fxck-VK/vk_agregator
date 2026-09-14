@@ -2,6 +2,7 @@
 package websession
 
 import (
+	"bytes"
 	"context"
 	"crypto/rand"
 	"crypto/subtle"
@@ -26,6 +27,7 @@ import (
 	"vk-ai-aggregator/internal/service/joborchestrator"
 	"vk-ai-aggregator/internal/service/preparedjobexpiry"
 	"vk-ai-aggregator/internal/service/pricingcatalog"
+	"vk-ai-aggregator/internal/service/productcatalog"
 	"vk-ai-aggregator/internal/service/providermodels"
 	"vk-ai-aggregator/internal/service/resultservice"
 	"vk-ai-aggregator/internal/service/textgeneration"
@@ -49,6 +51,8 @@ type principalContextKey struct{}
 
 // Config contains browser adapter settings.
 type Config struct {
+	TestPaymentsEnabled         bool
+	VideoRoutes                 []productcatalog.VideoRoute
 	TextModels                  []textgeneration.PublicModel
 	WebOrigin                   string
 	ImageModels                 []imagegeneration.PublicModel
@@ -307,6 +311,9 @@ type WebChatMessageLimiter interface {
 
 // Deps are services shared with other account adapters.
 type Deps struct {
+	Payments               WebPaymentService
+	ReceiptContacts        WebReceiptContacts
+	PaymentCreateLimiter   WebChatMessageLimiter
 	Authenticator          PrincipalAuthenticator
 	Sessions               SessionService
 	Passwords              PasswordService
@@ -350,7 +357,14 @@ func (h *Handler) Routes() http.Handler {
 	mux.HandleFunc("GET /web/v1/conversations/{conversationID}", h.requirePrincipal(h.getConversation))
 	mux.HandleFunc("GET /web/v1/conversations/{conversationID}/messages", h.requirePrincipal(h.listConversationMessages))
 	mux.HandleFunc("GET /web/v1/text-models", h.requirePrincipal(h.listTextModels))
+	mux.HandleFunc("GET /web/v1/models", h.requirePrincipal(h.listModels))
 	mux.HandleFunc("GET /web/v1/image-models", h.requirePrincipal(h.listImageModels))
+	mux.HandleFunc("GET /web/v1/video-models", h.requirePrincipal(h.listVideoModels))
+	mux.HandleFunc("GET /web/v1/payment-products", h.requirePrincipal(h.listWebPaymentProducts))
+	mux.HandleFunc("POST /web/v1/payments/intents", h.requireUnsafePrincipal(h.createWebPayment))
+	mux.HandleFunc("GET /web/v1/payments/{paymentID}", h.requirePrincipal(h.getWebPayment))
+	mux.HandleFunc("GET /web/v1/conversations/{conversationID}/jobs/{jobID}", h.requirePrincipal(h.getConversationJob))
+	mux.HandleFunc("GET /web/v1/video-artifacts/{artifactID}", h.requirePrincipal(h.getImageArtifact))
 	mux.HandleFunc("GET /web/v1/chat-models", h.requirePrincipal(h.listChatModels))
 	mux.HandleFunc("GET /web/v1/image-jobs", h.requirePrincipal(h.listImageJobs))
 	mux.HandleFunc("GET /web/v1/image-jobs/{jobID}", h.requirePrincipal(h.getImageJob))
@@ -967,6 +981,11 @@ func (h *Handler) getImageJobResult(w http.ResponseWriter, r *http.Request) {
 // strictly attested redirect fallback.
 func (h *Handler) getImageArtifact(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Cache-Control", "no-store")
+	isVideo := strings.HasPrefix(r.URL.Path, "/web/v1/video-artifacts/")
+	expectedMediaType := domain.MediaTypeImage
+	if isVideo {
+		expectedMediaType = domain.MediaTypeVideo
+	}
 	principal, ok := PrincipalFromContext(r.Context())
 	if !ok {
 		writeError(w, http.StatusUnauthorized, "unauthorized")
@@ -990,7 +1009,7 @@ func (h *Handler) getImageArtifact(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusServiceUnavailable, "image generation unavailable")
 		return
 	}
-	if artifact.ID != artifactID || artifact.OwnerAccountID != principal.AccountID || artifact.JobID == nil || *artifact.JobID == uuid.Nil || artifact.Kind != domain.ArtifactKindOutput || artifact.MediaType != domain.MediaTypeImage || artifact.Status != domain.ArtifactStatusReady || strings.TrimSpace(artifact.StorageBucket) == "" || strings.TrimSpace(artifact.StorageKey) == "" {
+	if artifact.ID != artifactID || artifact.OwnerAccountID != principal.AccountID || artifact.JobID == nil || *artifact.JobID == uuid.Nil || artifact.Kind != domain.ArtifactKindOutput || artifact.MediaType != expectedMediaType || artifact.Status != domain.ArtifactStatusReady || strings.TrimSpace(artifact.StorageBucket) == "" || strings.TrimSpace(artifact.StorageKey) == "" {
 		writeError(w, http.StatusNotFound, "image artifact not found")
 		return
 	}
@@ -1003,7 +1022,7 @@ func (h *Handler) getImageArtifact(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusServiceUnavailable, "image generation unavailable")
 		return
 	}
-	if _, ok := newSafeImageJob(job); !ok {
+	if !validArtifactJob(job, isVideo) {
 		writeError(w, http.StatusNotFound, "image artifact not found")
 		return
 	}
@@ -1016,8 +1035,7 @@ func (h *Handler) getImageArtifact(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusServiceUnavailable, "image generation unavailable")
 		return
 	}
-	safeResult, ok := newSafeImageJobResult(result, job.ID)
-	if !ok || !safeResultContainsArtifact(safeResult, artifactID) {
+	if !safeArtifactResultContains(result, job.ID, artifactID, isVideo) {
 		writeError(w, http.StatusNotFound, "image artifact not found")
 		return
 	}
@@ -1029,9 +1047,13 @@ func (h *Handler) getImageArtifact(w http.ResponseWriter, r *http.Request) {
 		}
 		w.Header().Set("Content-Type", artifact.MimeType)
 		w.Header().Set("Content-Length", strconv.Itoa(len(data)))
-		w.WriteHeader(http.StatusOK)
-		if r.Method != http.MethodHead {
-			_, _ = w.Write(data)
+		if isVideo {
+			http.ServeContent(w, r, "video", job.UpdatedAt, bytes.NewReader(data))
+		} else {
+			w.WriteHeader(http.StatusOK)
+			if r.Method != http.MethodHead {
+				_, _ = w.Write(data)
+			}
 		}
 		return
 	}
@@ -1313,6 +1335,11 @@ func (h *Handler) listConversationMessages(w http.ResponseWriter, r *http.Reques
 			writeError(w, http.StatusServiceUnavailable, "conversations unavailable")
 			return
 		}
+		if message.Role == domain.ConversationRoleAssistant {
+			if !h.attachConversationMedia(r.Context(), principal.AccountID, conversation.ID, message.JobID, &safeMessage) {
+				continue
+			}
+		}
 		items = append(items, safeMessage)
 	}
 	writeJSON(w, http.StatusOK, safeConversationMessageList{Items: items, HasMoreBefore: hasMoreBefore})
@@ -1385,10 +1412,7 @@ func (h *Handler) createConversationMessage(w http.ResponseWriter, r *http.Reque
 		writeError(w, http.StatusBadRequest, "invalid conversation id")
 		return
 	}
-	var req struct {
-		Prompt  string `json:"prompt"`
-		ModelID string `json:"model_id,omitempty"`
-	}
+	var req conversationGenerationRequest
 	if !decodeJSON(w, r, &req) {
 		return
 	}
@@ -1399,7 +1423,7 @@ func (h *Handler) createConversationMessage(w http.ResponseWriter, r *http.Reque
 	}
 	req.ModelID = strings.TrimSpace(req.ModelID)
 	_, paidModel := providermodels.PaidTextModel(req.ModelID)
-	if req.ModelID != "" && req.ModelID != providermodels.PublicTextChatGPT && !paidModel {
+	if req.ModelID != "" && req.ModelID != providermodels.PublicTextChatGPT && !paidModel && !h.isConversationMediaModel(req.ModelID) {
 		writeError(w, http.StatusBadRequest, "invalid chat model")
 		return
 	}
@@ -1428,6 +1452,14 @@ func (h *Handler) createConversationMessage(w http.ResponseWriter, r *http.Reque
 	}
 	if !allowed {
 		writeError(w, http.StatusTooManyRequests, "chat message rate limited")
+		return
+	}
+	if h.isConversationMediaModel(req.ModelID) {
+		h.createConversationMedia(w, r, principal.AccountID, conversation, idempotencyKey, req)
+		return
+	}
+	if req.ImageQuality != "" || req.AspectRatio != "" || req.OutputCount != 0 || req.Resolution != "" || req.DurationSec != 0 {
+		writeError(w, http.StatusBadRequest, "invalid text model options")
 		return
 	}
 	model, snapshot, resolveErr := textgeneration.Resolve(req.ModelID, req.Prompt, h.cfg.TextModels, h.deps.ImagePricing)
@@ -1822,6 +1854,8 @@ type safeConversationMessageList struct {
 }
 
 type safeConversationMessage struct {
+	Images    []safeConversationImage           `json:"images,omitempty"`
+	Videos    []safeConversationVideo           `json:"videos,omitempty"`
 	ID        uuid.UUID                         `json:"id"`
 	Seq       int64                             `json:"seq"`
 	Role      domain.ConversationMessageRole    `json:"role"`
@@ -1959,44 +1993,20 @@ func safeConversationMessageRatingValue(rating domain.ConversationMessageRating)
 }
 
 func newSafeImageModel(model imagegeneration.PublicModel, resolver imagegeneration.Resolver) (safeImageModel, bool) {
-	model.ID = strings.TrimSpace(model.ID)
-	model.Name = strings.TrimSpace(model.Name)
-	if model.ID == "" || model.Name == "" || !model.Enabled || !model.Ready {
+	controls, ok := productcatalog.WorkspaceImageControls(model, resolver)
+	if !ok {
 		return safeImageModel{}, false
-	}
-	qualityOptions := make([]string, 0, len(model.QualityOptions))
-	priceByQuality := make(map[string]int64, len(model.QualityOptions))
-	for _, requestedQuality := range model.QualityOptions {
-		resolution, err := resolver.Resolve(imagegeneration.Request{ModelID: model.ID, Quality: requestedQuality})
-		if err != nil || resolution.PricingSnapshot.InternalCredits <= 0 {
-			continue
-		}
-		quality := resolution.Public.ImageQuality
-		if _, alreadyIncluded := priceByQuality[quality]; alreadyIncluded {
-			continue
-		}
-		qualityOptions = append(qualityOptions, quality)
-		priceByQuality[quality] = resolution.PricingSnapshot.InternalCredits
-	}
-	if len(qualityOptions) == 0 {
-		return safeImageModel{}, false
-	}
-	defaultQuality := qualityOptions[0]
-	if resolution, err := resolver.Resolve(imagegeneration.Request{ModelID: model.ID, Quality: model.DefaultQuality}); err == nil {
-		if _, priced := priceByQuality[resolution.Public.ImageQuality]; priced {
-			defaultQuality = resolution.Public.ImageQuality
-		}
 	}
 	return safeImageModel{
 		ID:                     model.ID,
 		Name:                   model.Name,
-		QualityOptions:         qualityOptions,
-		PriceByQuality:         priceByQuality,
-		DefaultQuality:         defaultQuality,
+		QualityOptions:         controls.QualityOptions,
+		PriceByQuality:         controls.PriceByQuality,
+		DefaultQuality:         controls.DefaultQuality,
 		SupportsReferenceImage: model.SupportsReferenceImage,
 		MaxReferenceImages:     model.MaxReferenceImages,
-		MaxOutputCount:         max(model.MaxOutputCount, imagegeneration.DefaultOutputCount),
-		AllowedAspectRatios:    append([]string(nil), model.AllowedAspectRatios...),
+		MaxOutputCount:         controls.MaxOutputCount,
+		AllowedAspectRatios:    controls.AllowedAspectRatios,
 	}, true
 }
 

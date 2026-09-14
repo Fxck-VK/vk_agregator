@@ -20,3 +20,11 @@
   color: var(--color-text-muted);
   font-size: var(--font-size-ui);
 }
+
+.video {
+ display: block;
+ max-inline-size: min(100%, 600px);
+ max-block-size: min(60dvh, 650px);
+ margin-block: var(--space-3);
+ border-radius: var(--radius-lg);
+}

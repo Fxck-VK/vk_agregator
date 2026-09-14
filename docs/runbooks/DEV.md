@@ -229,6 +229,12 @@ Add a provider:
 
 Add a public image or video model:
 
+For all new model types and changes to existing model capabilities/routes,
+first follow [Model onboarding](../../docs/runbooks/MODEL_ONBOARDING.md). The typed contract,
+source evidence and completed verification report are required by registry
+validation and runtime startup. Existing frozen migration records are explicitly
+unverified and must not be renewed to bypass admission.
+
 1. Add public IDs, provider model IDs, feature flag names, readiness
    requirements, limits and pricing keys in `internal/service/providermodels`.
 2. Keep pricing values in `internal/service/pricingcatalog`; the registry only
@@ -246,6 +252,8 @@ Add a public image or video model:
 Focused checks:
 
 ```bash
+go run ./scripts/models/check
+go test ./internal/service/modelcontract ./scripts/models/check -count=1
 go test ./internal/adapter/provider/... ./internal/domain -count=1
 go test ./internal/service/providermodels ./internal/service/modelcatalog ./internal/service/videorouter ./internal/service/productcatalog -count=1
 go test ./cmd/worker ./internal/worker ./internal/domain -run "ProviderMedia|MediaContract|Provider|Video" -count=1

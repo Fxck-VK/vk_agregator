@@ -10,6 +10,7 @@ import (
 	"errors"
 	"fmt"
 	"math"
+	"slices"
 	"strings"
 
 	"vk-ai-aggregator/internal/domain"
@@ -39,6 +40,16 @@ const (
 var supportedAspectRatios = map[string]struct{}{
 	"16:9": {}, "1:1": {}, "21:9": {}, "2:3": {}, "3:2": {},
 	"3:4": {}, "4:3": {}, "4:5": {}, "5:4": {}, "9:16": {},
+}
+
+// SupportedAspectRatios exposes the same generic fallback used by validation.
+func SupportedAspectRatios() []string {
+	values := make([]string, 0, len(supportedAspectRatios))
+	for ratio := range supportedAspectRatios {
+		values = append(values, ratio)
+	}
+	slices.Sort(values)
+	return values
 }
 
 // PublicModel is a server-built, safe product catalog entry. The caller must

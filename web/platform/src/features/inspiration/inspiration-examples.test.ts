@@ -18,8 +18,8 @@ describe("selectInspirationExamples", () => {
   });
 
   it("returns examples associated with the selected model", () => {
-    expect(selectInspirationExamples("gpt-image-2")).toEqual([
-      expect.objectContaining({ modelId: "gpt-image-2" }),
+    expect(selectInspirationExamples("gpt_image_2")).toEqual([
+      expect.objectContaining({ modelId: "gpt_image_2" }),
     ]);
   });
 
@@ -35,11 +35,11 @@ describe("selectInspirationExamples", () => {
   });
 
   it("fills a short model selection with distinct photos from the shared collection", () => {
-    const examples = selectInspirationExamples("gpt-image-2", 6, "image", { fillFromCollection: true });
+    const examples = selectInspirationExamples("gpt_image_2", 6, "image", { fillFromCollection: true });
 
     expect(examples).toHaveLength(6);
     expect(new Set(examples.map((example) => example.id)).size).toBe(6);
-    expect(examples[0].modelId).toBe("gpt-image-2");
+    expect(examples[0].modelId).toBe("gpt_image_2");
     expect(examples.every((example) => example.mediaType === "image")).toBe(true);
   });
 });

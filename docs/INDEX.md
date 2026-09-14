@@ -36,6 +36,9 @@ Read only the document that matches the current task:
 | Rollback, backups, restore policy | `docs/runbooks/ROLLBACK.md` |
 | Channel-neutral result delivery migrations `000043`/`000044`/`000045`, rollout and canaries | `docs/runbooks/channel-neutral-result-delivery-rollout.md` |
 | Provider/model registry, adapter contracts, add-provider/add-model checklist | `docs/ARCHITECTURE.md` and `docs/runbooks/DEV.md` |
+| Mandatory model capability contract, evidence, admission and re-verification | [Model onboarding](../docs/runbooks/MODEL_ONBOARDING.md) |
+| Unified public model catalog, UI projections and local preview | [Model catalog](../docs/runbooks/MODEL_CATALOG.md); [design](superpowers/specs/2026-09-14-unified-model-catalog-design.md); [plan](superpowers/plans/2026-09-14-unified-model-catalog.md) |
+| Existing model evidence gaps and live verification scope | [43-record verification matrix](runbooks/model-onboarding/existing-models-2026-09-14.md) |
 | APIMart Nano Banana Pro provider migration | `docs/superpowers/plans/2026-07-05-apimart-nano-banana-pro-migration.md` |
 | DEV contour, local DEV tunnel, DEV deploy | `docs/DEV_CONTOUR.md` |
 | Production/runtime deployment domains | `docs/DOMAIN_DEPLOYMENT_PLAN.md` |
@@ -53,7 +56,7 @@ Read only the document that matches the current task:
 | Video providers, routes, model visibility | `docs/VIDEO_GENERATION.md` |
 | VK bot behavior and agent guidance | `docs/VK_BOT_AGENT_GUIDE.md` |
 | Full agent policy reference | `docs/AGENTS_FULL.md` |
-| Current explicit handoff only | `docs/HANDOFF_CURRENT.md` |
+| Current explicit merge handoff: unified model catalog and working-tree dependencies | [Merge handoff](../docs/HANDOFF_CURRENT.md) |
 
 Use local package-level `AGENTS.md` files when touching a package or app surface
 that has its own instructions.
@@ -77,7 +80,7 @@ There must be only one active handoff file:
 
 | File | Status |
 | --- | --- |
-| `docs/HANDOFF_CURRENT.md` | Current handoff slot; currently active for provider API hardening |
+| `docs/HANDOFF_CURRENT.md` | Active: 2026-09-14 unified model catalog merge, source snapshot and DEV push, checks and remaining capability work |
 
 When a handoff or merge is complete, archive it under `docs/archive/handoffs/`
 and reset `docs/HANDOFF_CURRENT.md` back to `Status: none`.

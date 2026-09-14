@@ -7,11 +7,13 @@ import { ScrollArea } from "@/components/ui/ScrollArea/ScrollArea";
 import selectableStyles from "@/components/ui/selectable-control.module.css";
 
 import styles from "./PopoverPanel.module.css";
+import { usePopoverPresence } from "./usePopoverPresence";
 
 type PopoverItemVariant = "action" | "selection";
 
 type PopoverPanelProps = {
   align?: "start" | "end";
+  animated?: boolean;
   anchorRef: RefObject<HTMLButtonElement | null>;
   children: ReactNode;
   id?: string;
@@ -24,37 +26,69 @@ type PopoverPanelProps = {
   width: number;
 };
 
-type PanelLayout = { left: number; maxHeight: number; top: number; width: number };
+type PanelLayout = { left: number; maxHeight: number; top: number; width: number; motionOrigin: "top" | "bottom" };
 
 const viewportMargin = 16;
 const anchorGap = 12;
 const focusableSelector = 'button:not(:disabled), a[href], input:not(:disabled), select:not(:disabled), textarea:not(:disabled), [tabindex]:not([tabindex="-1"])';
 
 type PopoverSurfaceProps = ComponentProps<typeof ScrollArea> & {
+  animated?: boolean;
+  isOpen?: boolean;
   itemVariant?: PopoverItemVariant;
+  motionOrigin?: "top" | "bottom";
+  onAfterClose?: () => void;
 };
 
 export function PopoverSurface({
+  animated = true,
   className,
+  isOpen = true,
   itemVariant = "selection",
+  motionOrigin = "top",
+  onAfterClose,
+  onTransitionEnd,
   ...props
 }: PopoverSurfaceProps) {
+  const presence = usePopoverPresence(isOpen, animated);
+  const wasPresent = useRef(false);
+
+  useLayoutEffect(() => {
+    if (presence.isPresent) wasPresent.current = true;
+    else if (wasPresent.current) {
+      wasPresent.current = false;
+      onAfterClose?.();
+    }
+  }, [onAfterClose, presence.isPresent]);
+
+  if (!presence.isPresent) return null;
+
   return (
     <ScrollArea
       {...props}
+      aria-hidden={!isOpen ? true : props["aria-hidden"]}
+      inert={!isOpen || props.inert}
       className={[
         styles.surface,
+        animated ? styles.motion : undefined,
         itemVariant === "action" ? selectableStyles.actionItems : undefined,
         className,
       ].filter(Boolean).join(" ")}
       data-item-variant={itemVariant}
+      data-motion-state={animated ? presence.motionState : undefined}
+      data-motion-origin={animated ? motionOrigin : undefined}
       data-ui="popover-panel"
+      onTransitionEnd={(event) => {
+        presence.onTransitionEnd(event);
+        onTransitionEnd?.(event);
+      }}
     />
   );
 }
 
 export function PopoverPanel({
   align = "start",
+  animated = true,
   anchorRef,
   children,
   id,
@@ -135,10 +169,11 @@ export function PopoverPanel({
         : above >= viewportMargin && above <= maxTop
           ? above
           : clamp(above, viewportMargin, maxTop);
+      const motionOrigin = top < bounds.top ? "bottom" : "top";
 
-      setLayout((current) => current?.left === left && current.top === top && current.width === width && current.maxHeight === maxHeight
+      setLayout((current) => current?.left === left && current.top === top && current.width === width && current.maxHeight === maxHeight && current.motionOrigin === motionOrigin
         ? current
-        : { left, maxHeight, top, width });
+        : { left, maxHeight, top, width, motionOrigin });
     };
 
     updateLayout();
@@ -150,15 +185,23 @@ export function PopoverPanel({
     };
   }, [align, anchorRef, isOpen, preferredWidth]);
 
-  if (!isOpen || typeof document === "undefined") return null;
+  if (typeof document === "undefined" || (!isOpen && layout === null)) return null;
+
+  const { motionOrigin, ...panelStyle } = layout ?? { motionOrigin: "top" as const, visibility: "hidden" as const };
 
   return createPortal(
     <PopoverSurface
+      animated={animated && layout !== null}
       aria-label={label}
       className={styles.panel}
       id={id}
+      isOpen={isOpen}
       itemVariant={itemVariant}
+      key={layout ? "positioned" : "measuring"}
+      motionOrigin={motionOrigin}
+      onAfterClose={() => setLayout(null)}
       onKeyDown={(event) => {
+        if (!isOpen) return;
         // A surrounding media viewer must not consume the panel's navigation keys.
         if (event.key.startsWith("Arrow")) event.stopPropagation();
         if (event.key !== "Tab") return;
@@ -173,7 +216,7 @@ export function PopoverPanel({
       }}
       ref={panelRef}
       role={role}
-      style={{ ...(layout ?? { visibility: "hidden" }), zIndex: portalLayer }}
+      style={{ ...panelStyle, zIndex: portalLayer }}
     >
       {children}
     </PopoverSurface>,

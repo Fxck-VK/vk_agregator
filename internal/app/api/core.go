@@ -119,6 +119,7 @@ func NewSharedCore(pool *pgxpool.Pool, cfg config.Config, opts ...SharedCoreOpti
 		return SharedCore{}, err
 	}
 	paymentSvc := paymentservice.New(payments, paymentProvider, paymentservice.Config{
+		AccountReturnURL:             WebPaymentReturnURL(&cfg),
 		ReturnURL:                    cfg.YooKassaReturnURL,
 		IncludeDevTestPaymentProduct: cfg.FeatureDevPaymentTestProductEnabled,
 	})

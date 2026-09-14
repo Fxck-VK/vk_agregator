@@ -29,6 +29,9 @@ func FromConfig(cfg config.Config, pricingCatalog *pricingcatalog.Catalog) (Runt
 	if pricingCatalog == nil {
 		return RuntimeCatalog{}, errors.New("productcatalog: pricing catalog is required")
 	}
+	if err := providermodels.StaticRegistry().Validate(); err != nil {
+		return RuntimeCatalog{}, err
+	}
 	if err := validateRegistryConfigMappings(providermodels.StaticRegistry()); err != nil {
 		return RuntimeCatalog{}, err
 	}
@@ -55,6 +58,9 @@ func FromConfig(cfg config.Config, pricingCatalog *pricingcatalog.Catalog) (Runt
 
 func VideoRouteCatalogFromConfig(cfg config.Config) (*videorouter.Catalog, error) {
 	registry := providermodels.StaticRegistry()
+	if err := registry.Validate(); err != nil {
+		return nil, err
+	}
 	if err := validateRegistryConfigMappings(registry); err != nil {
 		return nil, err
 	}

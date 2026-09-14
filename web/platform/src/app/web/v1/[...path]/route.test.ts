@@ -18,9 +18,19 @@ import {
   parseImageJobList,
   parseImageJobResult,
 } from "../../../../lib/web-api/contracts";
-import { GET } from "./route";
+import { GET, POST } from "./route";
+import { parseModelCatalog, projectChatModelCatalog, projectImageModelCatalog } from "@/features/models/model-catalog-contract";
 
 describe("web API route local workspace preview", () => {
+  it("shows preview packages but never forwards a preview payment", async () => {
+    vi.stubEnv("NODE_ENV", "development");
+    vi.stubEnv("NEIROHUB_LOCAL_WORKSPACE_PREVIEW", "1");
+    const response = await GET(new Request("http://localhost:7158/web/v1/payment-products"));
+    expect(await response.json()).toMatchObject({ checkout_available: false, items: expect.any(Array) });
+    const create = await POST(new Request("http://localhost:7158/web/v1/payments/intents", { method: "POST" }));
+    expect(create.status).toBe(503);
+    expect(proxyWebApiRequest).not.toHaveBeenCalled();
+  });
   afterEach(() => {
     vi.clearAllMocks();
     vi.unstubAllEnvs();
@@ -30,31 +40,25 @@ describe("web API route local workspace preview", () => {
     vi.stubEnv("NODE_ENV", "development");
     vi.stubEnv("NEIROHUB_LOCAL_WORKSPACE_PREVIEW", "1");
     const response = await GET(new Request("http://localhost:7158/web/v1/chat-models"));
-    expect(parseChatModelList(await response.json())).toEqual({
-      default_model_id: "chatgpt",
-      items: [{ id: "chatgpt", name: "NeiroHub Chat" }],
-    });
+    const unified = await GET(new Request("http://localhost:7158/web/v1/models"));
+    const catalog = parseModelCatalog(await unified.json());
+    expect(parseChatModelList(await response.json())).toEqual(projectChatModelCatalog(catalog));
+    expect(catalog.items.find(model => model.id === "chatgpt")?.categories).toContain("text");
     expect(response.headers.get("Cache-Control")).toBe("no-store");
     expect(proxyWebApiRequest).not.toHaveBeenCalled();
   });
 
-  it("serves a fixed image model catalogue without the backend in local development", async () => {
+  it("projects image models from the unified generated preview without the backend", async () => {
     vi.stubEnv("NODE_ENV", "development");
     vi.stubEnv("NEIROHUB_LOCAL_WORKSPACE_PREVIEW", "1");
 
     const response = await GET(new Request("http://localhost:7158/web/v1/image-models"));
 
     expect(response.status).toBe(200);
-    await expect(response.json()).resolves.toMatchObject({
-      items: [
-        { id: "nano-banana-2", name: "Nano Banana 2" },
-        { id: "nano-banana-pro", name: "Nano Banana Pro" },
-        { id: "gpt-image-2", name: "GPT Image 2" },
-        { id: "seedream-4-5", name: "Seedream 4.5" },
-        { id: "midjourney", name: "Midjourney" },
-        { id: "flux-2-pro", name: "FLUX 2 Pro" },
-      ],
-    });
+    const unified = await GET(new Request("http://localhost:7158/web/v1/models"));
+    const catalog = parseModelCatalog(await unified.json());
+    await expect(response.json()).resolves.toEqual(projectImageModelCatalog(catalog));
+    expect(catalog.items.some(model => model.id === "gpt_image_2")).toBe(true);
     expect(response.headers.get("Cache-Control")).toBe("no-store");
     expect(getWebApiInternalOrigin).not.toHaveBeenCalled();
     expect(proxyWebApiRequest).not.toHaveBeenCalled();

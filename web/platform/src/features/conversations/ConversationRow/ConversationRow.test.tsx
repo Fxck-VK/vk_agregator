@@ -1,4 +1,4 @@
-import { cleanup, fireEvent, render, screen, within } from "@testing-library/react";
+import { cleanup, createEvent, fireEvent, render, screen, within } from "@testing-library/react";
 import type { ReactNode } from "react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
@@ -125,6 +125,39 @@ describe("ConversationRow", () => {
 
     fireEvent.keyDown(screen.getByRole("button", { name: actionsLabel() }), { key: "Escape" });
     expect(screen.queryByRole("button", { name: ru.conversations.renameLabel })).not.toBeInTheDocument();
+  });
+
+  it("retains the actions menu while closing and reverses a quick reopen", () => {
+    renderRow();
+    const trigger = screen.getByRole("button", { name: actionsLabel() });
+    fireEvent.click(trigger);
+    const menu = screen.getByRole("menu");
+    expect(menu).toHaveAttribute("data-motion-state", "open");
+    fireEvent.keyDown(trigger, { key: "Escape" });
+    expect(menu).toBeInTheDocument();
+    expect(menu).toHaveAttribute("inert");
+    expect(menu).toHaveAttribute("aria-hidden", "true");
+    expect(menu).toHaveAttribute("data-motion-state", "closing");
+    expect(trigger).toHaveFocus();
+    fireEvent.click(trigger);
+    expect(screen.getByRole("menu")).toBe(menu);
+    expect(menu).not.toHaveAttribute("inert");
+    fireEvent.click(trigger);
+    const end = createEvent.transitionEnd(menu);
+    Object.defineProperty(end, "propertyName", { value: "opacity" });
+    fireEvent(menu, end);
+    expect(menu).not.toBeInTheDocument();
+  });
+
+  it("keeps the closing menu inert while focus moves into inline rename", () => {
+    renderRow();
+    fireEvent.click(screen.getByRole("button", { name: actionsLabel() }));
+    const menu = screen.getByRole("menu");
+    fireEvent.click(screen.getByRole("button", { name: ru.conversations.renameLabel }));
+    expect(menu).toBeInTheDocument();
+    expect(menu).toHaveAttribute("inert");
+    expect(screen.getByRole("textbox", { name: ru.conversations.renameInputLabel })).toHaveFocus();
+    expect(webBrowserMutation).not.toHaveBeenCalled();
   });
 
   it("starts rename with the unnamed fallback and submits a parsed PATCH response on Enter", async () => {

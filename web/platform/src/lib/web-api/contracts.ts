@@ -59,6 +59,9 @@ export const chatModelListSchema = z.object({
   items: z.array(z.object({
     id: z.string().trim().min(1),
     name: z.string().trim().min(1),
+    description: z.string().trim().min(1).optional(),
+    categories: z.array(z.string().trim().min(1)).optional(),
+    operations: z.array(z.unknown()).optional(),
     estimate_credits: z.number().int().nonnegative().optional(),
     max_prompt_bytes: z.number().int().positive().optional(),
     max_output_tokens: z.number().int().positive().optional(),
@@ -80,13 +83,21 @@ export const imageModelSchema = z
   .object({
     id: z.string().trim().min(1),
     name: z.string().trim().min(1),
+    description: z.string().trim().min(1).optional(),
+    categories: z.array(z.string().trim().min(1)).optional(),
+    operations: z.array(z.unknown()).optional(),
     quality_options: z.array(z.string().trim().min(1)),
     price_by_quality: z.record(z.string().trim().min(1), z.number().int().positive()).optional(),
+    price_by_variant: z.record(z.string().trim().min(1), z.number().int().positive()).optional(),
     default_quality: z.string().trim().min(1),
+    default_aspect_ratio: z.string().trim().min(1).optional(),
     supports_reference_image: z.boolean(),
     max_reference_images: z.number().int().nonnegative(),
     max_output_count: z.number().int().positive().optional(),
     allowed_aspect_ratios: z.array(z.string().trim().min(1)).min(1).optional(),
+    quality_label: z.string().trim().min(1).optional(),
+    show_output_count: z.boolean().optional(),
+    max_prompt_bytes: z.number().int().positive().optional(),
   })
   .strict();
 
@@ -200,7 +211,12 @@ export const conversationImageSchema = z.object({
   artifact: imageArtifactMetadataSchema,
 }).strict();
 
+export const conversationVideoSchema = z.object({
+ id:z.string().uuid(), mime_type:z.string().startsWith("video/"), width:z.number().int().nonnegative(), height:z.number().int().nonnegative(),
+}).strict();
+
 export const conversationMessageSchema = z.object({
+  videos:z.array(conversationVideoSchema).optional(),
   id: z.string().uuid(),
   seq: z.number().int().positive(),
   role: z.enum(["user", "assistant"]),

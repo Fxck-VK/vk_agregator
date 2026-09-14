@@ -39,7 +39,7 @@ function uploadedExample(example: UploadedExample): InspirationExample {
 export const inspirationExamples: readonly InspirationExample[] = [
   {
     id: "paper-crane-cloud",
-    modelId: "gpt-image-2",
+    modelId: "gpt_image_2",
     modelName: ru.inspiration.modelName,
     quality: "1K",
     mediaType: "image",

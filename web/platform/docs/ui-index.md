@@ -8,6 +8,7 @@
 | --- | --- | --- |
 | Всплывающее окно у кнопки, открыть под/над | `PopoverPanel` | [Панели](ui-catalog.md#panels), [пример 1](ui-catalog-examples.md#example-1) |
 | То же оформление окна; позиционирование уже есть | `PopoverSurface` | [Панели](ui-catalog.md#panels) |
+| Плавное появление и закрытие всплывающей панели | `PopoverSurface` / `PopoverPanel`: анимация по умолчанию, состояние через isOpen; отключение animated=false | [Движение](ui-catalog.md#icons-motion), [пример подключения](../src/components/ui/PopoverPanel/README.md#анимация-панели) |
 | «1-й вариант», подсветить текст/иконку при наведении, ссылка-действие | `itemVariant="action"` + `control`; вне панели — `actionItems` + `control` | [Состояния](ui-catalog.md#states), [пример 1](ui-catalog-examples.md#example-1) |
 | «2-й вариант», выбранная кнопка белая с рамкой | `PopoverOption`, `itemVariant="selection"` | [Состояния](ui-catalog.md#states), [пример 2](ui-catalog-examples.md#example-2) |
 | «Удалить чат»: серый обычно, красный при наведении | Общий action-стиль + локальное исключение `ConversationRow` | [Состояния](ui-catalog.md#states), [пример 1](ui-catalog-examples.md#example-1) |
@@ -16,6 +17,7 @@
 | Выбор соотношения сторон или разрешения, в том числе в редакторе фото | `ImageAspectRatioSelector`, `ImageQualitySelector`; в модальном редакторе portalLayer=170 | [Ввод](ui-catalog.md#input), [панели](ui-catalog.md#panels) |
 | Обычная кнопка с заливкой | `Button` | [Ввод](ui-catalog.md#input) |
 | Поле сообщения / запрос генерации / загрузка медиа | `ChatComposer`; в существующем сценарии — его адаптер | [Ввод](ui-catalog.md#input), [пример 5](ui-catalog-examples.md#example-5) |
+| Стрелка к концу диалога, скрытая внизу | `ChatScrollToBottom` в `ConversationComposer` | [Ввод](ui-catalog.md#input) |
 | Поверхность отдельного input/search | `InputSurface` + нативное поле | [Ввод](ui-catalog.md#input), [пример 4](ui-catalog-examples.md#example-4) |
 | Ползунок, толщина кисти | `RangeSlider` | [Ввод](ui-catalog.md#input), [пример 4](ui-catalog-examples.md#example-4) |
 | Привычная сетка фото, сохранить пропорции | `MasonryGrid`, непосредственные дети `li`; CSS-колонки | [Сетка и фото](ui-catalog.md#media), [пример 6](ui-catalog-examples.md#example-6) |
@@ -25,11 +27,15 @@
 | Новый вид медиапросмотра | `MediaPreviewDialogTemplate<T>`, если готовая специализация не подходит | [Сетка и фото](ui-catalog.md#media) |
 | Модальное окно / крестик закрытия | `ModalBackdrop` + `ModalCloseButton`; содержимое и фокус у потребителя | [Окна](ui-catalog.md#overlays) |
 | Подсказка при наведении | `Tooltip`; при своём позиционировании — `TooltipBubble` | [Подсказки](ui-catalog.md#overlays), [пример 9](ui-catalog-examples.md#example-9) |
+| Описание модели в подсказке только у инпута | `ModelSelector descriptionMode="tooltip"`; по умолчанию `inline` | [Модели](ui-catalog.md#models), [пример 8](ui-catalog-examples.md#example-8) |
 | Общая прокрутка / scrollbar | `ScrollArea` | [Прокрутка](ui-catalog.md#overlays), [пример 9](ui-catalog-examples.md#example-9) |
 | Выбор нейросети / карточка модели | `ModelSelector`, его адаптеры; `ModelCard` и `ModelIcon` | [Модели](ui-catalog.md#models), [пример 8](ui-catalog-examples.md#example-8) |
-| Модель слева от отправки в начатом диалоге | `ConversationModelSelector` → `ModelSelector variant="composer"`; слот additionalControls в ChatComposer | [Модели](ui-catalog.md#models) |
+| Единые данные моделей, категорий, возможностей и цен | `loadModelCatalog` → `/web/v1/models`; специализированные загрузчики — проекции | [Модели](ui-catalog.md#models), [контракт бэкенда](../../../docs/runbooks/MODEL_CATALOG.md) |
+| Лента подборок моделей, до пяти в категории | `ModelSelector categoryModelIds` → общий `ModeSwitchPanel`; выбор категории поднимает её блок, поиск охватывает все подборки | [Модели](ui-catalog.md#models), [панели](ui-catalog.md#panels) |
+| Модель слева от отправки в начатом диалоге | `ConversationModelSelector` → `ModelSelector variant="composer"`; общий generation-model-catalog и useGenerationControls | [Модели](ui-catalog.md#models) |
 | Быстрые кнопки моделей под полем на главной, переключить без перехода | `WorkspaceHero` + `FeaturedModelShortcuts`; один WorkspacePrompt → ChatComposer, сменные ImageGenerationControls | [Модели](ui-catalog.md#models), [ввод](ui-catalog.md#input) |
 | Ширина страницы / публичные блоки | `WorkspacePageFrame`; публичная часть — `PageContainer` и свои компоненты | [Оболочки](ui-catalog.md#models) |
+| Купить пакет токенов / вернуться из ЮKassa | `TokenTopUpDialog`, `PaymentStatus`, `PaymentReturn`; серверный каталог и account-native платёж | [Окна](ui-catalog.md#overlays), [billing runbook](../../../docs/runbooks/BILLING.md#web-platform-test-checkout) |
 | Цена или баланс со звездой | `CreditAmount` | [Ввод](ui-catalog.md#input) |
 | Общие цвета, обводка, скругления, анимация | Токены `globals.css`, готовые состояния и движения компонентов | [Токены](ui-catalog.md#tokens), [иконки и движение](ui-catalog.md#icons-motion) |
 | Иконка должна менять цвет вместе с текстом | Существующий SVG с `currentColor` или `AssetIcon` | [Иконки](ui-catalog.md#icons-motion) |

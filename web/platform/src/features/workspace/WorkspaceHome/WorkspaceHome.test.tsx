@@ -1,23 +1,48 @@
 import { renderToStaticMarkup } from "react-dom/server";
 import { fireEvent, render, screen, within } from "@testing-library/react";
-import { describe, expect, it, vi } from "vitest";
+import { beforeEach, describe, expect, it, vi } from "vitest";
 
 vi.mock("next/navigation", () => ({
   useRouter: vi.fn(() => ({ push: vi.fn() })),
 }));
 
-vi.mock("@/features/models/image-model-catalog-cache", () => ({
-  loadImageModelCatalog: vi.fn(),
+vi.mock("@/features/models/generation-model-catalog", () => ({
+  loadGenerationModelCatalog: vi.fn(),
 }));
 
 import { ru } from "@/i18n/ru";
 import { WorkspaceConversationListProvider } from "@/features/conversations/WorkspaceConversationList/WorkspaceConversationList";
 import { inspirationExamples } from "@/features/inspiration/inspiration-examples";
-import { loadImageModelCatalog } from "@/features/models/image-model-catalog-cache";
+import { loadGenerationModelCatalog } from "@/features/models/generation-model-catalog";
+import { imageModelFixture } from "@/test/model-catalog";
 
 import { WorkspaceHome } from "./WorkspaceHome";
 
+const chatModel = {
+  id: "neirohub-chat",
+  name: "NeiroHub Chat",
+  description: "Текстовая модель из общего каталога",
+  category: "text" as const,
+  categories: ["popular", "text", "study-work", "free"],
+  estimate_credits: 0,
+  isFree: true,
+};
+function imageGenerationModel(model: Parameters<typeof imageModelFixture>[0]) {
+  return { ...imageModelFixture(model), category: "images" as const };
+}
+function generationCatalog(images: ReturnType<typeof imageGenerationModel>[] = []) {
+  return {
+    default_model_id: chatModel.id,
+    categoryErrors: {},
+    items: [...images, chatModel],
+  } as Awaited<ReturnType<typeof loadGenerationModelCatalog>>;
+}
+
 describe("WorkspaceHome", () => {
+  beforeEach(() => {
+    vi.mocked(loadGenerationModelCatalog).mockResolvedValue(generationCatalog());
+  });
+
   it("omits the standalone NeiroHub eyebrow from generic section headings", () => {
     const markup = renderToStaticMarkup(<WorkspaceHome section="models" />);
 
@@ -121,8 +146,6 @@ describe("WorkspaceHome", () => {
   });
 
   it("renders one shared prompt-library card and opens its existing dialog", () => {
-    vi.mocked(loadImageModelCatalog).mockResolvedValue({ items: [] });
-
     render(
       <WorkspaceConversationListProvider accountId="prompt-library-test-account" initialConversations={[]}>
         <WorkspaceHome />
@@ -162,64 +185,72 @@ describe("WorkspaceHome", () => {
   });
 
   it("reveals two additional compact model cards before linking to the catalogue", async () => {
-    vi.mocked(loadImageModelCatalog).mockResolvedValue({
-      items: [
-        {
-          id: "nano-banana-2",
-          name: "Nano Banana 2",
-          quality_options: ["1K", "2K"],
-          price_by_quality: { "1K": 55, "2K": 70 },
-          default_quality: "1K",
-          supports_reference_image: true,
-          max_reference_images: 4,
-        },
-        {
-          id: "nano-banana-pro",
-          name: "Nano Banana Pro",
-          quality_options: ["1K"],
-          price_by_quality: { "1K": 50 },
-          default_quality: "1K",
-          supports_reference_image: true,
-          max_reference_images: 4,
-        },
-        {
-          id: "gpt-image-2",
-          name: "GPT Image 2",
-          quality_options: ["1K"],
-          price_by_quality: { "1K": 40 },
-          default_quality: "1K",
-          supports_reference_image: false,
-          max_reference_images: 0,
-        },
-        {
-          id: "seedream-4.5",
-          name: "Seedream 4.5",
-          quality_options: ["2K", "4K"],
-          price_by_quality: { "2K": 30, "4K": 45 },
-          default_quality: "2K",
-          supports_reference_image: true,
-          max_reference_images: 2,
-        },
-        {
-          id: "hidden-fifth-model",
-          name: "Пятая модель",
-          quality_options: ["1K"],
-          price_by_quality: { "1K": 99 },
-          default_quality: "1K",
-          supports_reference_image: false,
-          max_reference_images: 0,
-        },
-        {
-          id: "hidden-sixth-model",
-          name: "Шестая модель",
-          quality_options: ["1K"],
-          price_by_quality: { "1K": 109 },
-          default_quality: "1K",
-          supports_reference_image: false,
-          max_reference_images: 0,
-        },
-      ],
-    });
+    vi.mocked(loadGenerationModelCatalog).mockResolvedValue(generationCatalog([
+      imageGenerationModel({
+        id: "nano-banana-2",
+        name: "Nano Banana 2",
+        description: "Быстрая генерация и редактирование изображений для повседневных задач",
+        quality_options: ["1K", "2K"],
+        price_by_quality: { "1K": 55, "2K": 70 },
+        default_quality: "1K",
+        supports_reference_image: true,
+        max_reference_images: 4,
+        categories: ["popular", "images"],
+      }),
+      imageGenerationModel({
+        id: "nano-banana-pro",
+        name: "Nano Banana Pro",
+        description: "Детализированные изображения для сложных творческих и рабочих задач",
+        quality_options: ["1K"],
+        price_by_quality: { "1K": 50 },
+        default_quality: "1K",
+        supports_reference_image: true,
+        max_reference_images: 4,
+        categories: ["popular", "images"],
+      }),
+      imageGenerationModel({
+        id: "gpt-image-2",
+        name: "GPT Image 2",
+        description: "Точное создание изображений по описанию с хорошей передачей текста",
+        quality_options: ["1K"],
+        price_by_quality: { "1K": 40 },
+        default_quality: "1K",
+        supports_reference_image: false,
+        max_reference_images: 0,
+        categories: ["popular", "images"],
+      }),
+      imageGenerationModel({
+        id: "seedream-4.5",
+        name: "Seedream 4.5",
+        description: "Фотореалистичные изображения с высокой детализацией и выразительным стилем",
+        quality_options: ["2K", "4K"],
+        price_by_quality: { "2K": 30, "4K": 45 },
+        default_quality: "2K",
+        supports_reference_image: true,
+        max_reference_images: 2,
+        categories: ["popular", "images"],
+      }),
+      imageGenerationModel({
+        id: "hidden-fifth-model",
+        name: "Пятая модель",
+        quality_options: ["1K"],
+        price_by_quality: { "1K": 99 },
+        default_quality: "1K",
+        supports_reference_image: false,
+        max_reference_images: 0,
+        categories: ["popular", "images"],
+      }),
+      imageGenerationModel({
+        id: "hidden-sixth-model",
+        name: "Шестая модель",
+        quality_options: ["1K"],
+        price_by_quality: { "1K": 109 },
+        default_quality: "1K",
+        supports_reference_image: false,
+        max_reference_images: 0,
+        categories: ["popular", "images"],
+      }),
+    ]));
 
     render(
       <WorkspaceConversationListProvider accountId="featured-models-test-account" initialConversations={[]}>
@@ -234,7 +265,7 @@ describe("WorkspaceHome", () => {
     const shortcutLinks = within(shortcutsNavigation).getAllByRole("link");
 
     expect(cards).toHaveLength(4);
-    expect(cards[0]).toHaveAttribute("href", "/app/image?model=nano-banana-2");
+    expect(cards[0]).toHaveAttribute("href", "/app/chats?model=nano-banana-2");
     expect(cards[0]).toHaveTextContent("Nano Banana 2");
     expect(within(cards[0]).getByLabelText("55 звёзд")).toBeInTheDocument();
     expect(within(cards[0]).queryByLabelText("от 55 звёзд")).toBeNull();

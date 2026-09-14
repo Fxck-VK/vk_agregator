@@ -18,7 +18,7 @@
   display: grid;
   justify-items: center;
   gap: var(--space-4);
-  padding: clamp(var(--space-5), 3vw, var(--space-8)) clamp(var(--space-8), 5vw, 5rem) var(--space-5);
+  padding: clamp(var(--space-5), 3vw, var(--space-8)) clamp(4.5rem, 5vw, 5rem) var(--space-5);
   text-align: center;
 }
 
@@ -36,29 +36,10 @@
   font-size: var(--font-size-body);
 }
 
-.closeButton {
+.closeButtonPlacement {
   position: absolute;
   inset-block-start: var(--space-4);
   inset-inline-end: var(--space-4);
-  display: grid;
-  place-items: center;
-  inline-size: 2.75rem;
-  block-size: 2.75rem;
-  border: 0.0625rem solid transparent;
-  border-radius: var(--radius-pill);
-  background: transparent;
-  color: var(--panel-surface-text-muted);
-  cursor: pointer;
-  transition: background-color var(--motion-fast), color var(--motion-fast), rotate var(--motion-fast);
-}
-
-.closeButton:hover {
-  rotate: 4deg;
-}
-
-.closeButton svg {
-  inline-size: 1.5rem;
-  block-size: 1.5rem;
 }
 
 .promoButton,
@@ -338,7 +319,7 @@
 
   .dialogHeader {
     justify-items: start;
-    padding: var(--space-5) 3.75rem var(--space-4) var(--space-4);
+    padding: var(--space-5) 4.5rem var(--space-4) var(--space-4);
     text-align: start;
   }
 
@@ -368,7 +349,6 @@
     animation: none;
   }
 
-  .closeButton,
   .promoButton,
   .dialogFooter button,
   .subscribeButton,

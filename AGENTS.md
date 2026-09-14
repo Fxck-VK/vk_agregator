@@ -132,6 +132,18 @@ omit `service_tier`, do not use explorer agents, and do not set
 `service_tier=priority`.
 ## Required Workflow
 
+### Model onboarding
+
+Before adding a model/provider route or changing its version, capabilities,
+input formats, limits or provider mapping, read `docs/runbooks/MODEL_ONBOARDING.md`
+and follow its mandatory checklist. Use the existing registry, a typed admission
+contract and dated source/verification evidence. Unknown capabilities stay
+disabled; do not invent provider facts, live results or verification dates.
+Run `go run ./scripts/models/check` and the relevant contract/adapter tests.
+Do not extend or refresh `providermodels/onboarding/legacy.json` to bypass
+admission. Report incomplete checks explicitly. Paid live calls require the
+separate scope/budget authorization described in the runbook.
+
 Before edits: restate task, assumptions, likely touched files, concise plan and security/architecture risks.
 
 After edits: list changed files, explain what/why, security/architecture impact, re-check touched surfaces (auth/signature, billing/ledger, job boundaries, VK vs Mini App delivery, safe rendering, idempotency), checks run/skipped, final `git status --short`.

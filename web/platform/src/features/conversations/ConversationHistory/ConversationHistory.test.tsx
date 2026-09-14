@@ -1,22 +1,33 @@
 import { StrictMode } from "react";
 import { act, cleanup, fireEvent, render, screen, within } from "@testing-library/react";
-import { afterEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 vi.mock("@/lib/web-api/browser", () => ({
   webBrowserFetch: vi.fn(),
   webBrowserMutation: vi.fn(),
 }));
 
-vi.mock("@/features/conversations/ConversationModelSelector/chat-model-catalog", () => ({
-  loadChatModelCatalog: vi.fn(() => new Promise(() => {})),
+vi.mock("@/features/models/generation-model-catalog", () => ({
+  loadGenerationModelCatalog: vi.fn(() => new Promise(() => {})),
 }));
 
 import { ru } from "@/i18n/ru";
-import { loadChatModelCatalog } from "@/features/conversations/ConversationModelSelector/chat-model-catalog";
+import { chatModelForSelector } from "@/features/models/chat-model-selector";
+import {
+  parseModelCatalog,
+  projectChatModelCatalog,
+  projectImageModelCatalog,
+} from "@/features/models/model-catalog-contract";
+import {
+  loadGenerationModelCatalog,
+  type GenerationModelCatalog,
+} from "@/features/models/generation-model-catalog";
 import { savePendingConversationPrompt } from "@/features/conversations/pending-conversation-prompt";
 import { savePendingConversationTitleSync } from "@/features/conversations/pending-conversation-title-sync";
 import { WorkspaceConversationListProvider, useWorkspaceConversationList } from "@/features/conversations/WorkspaceConversationList/WorkspaceConversationList";
 import { webBrowserFetch, webBrowserMutation } from "@/lib/web-api/browser";
+import type { ImageModel } from "@/lib/web-api/contracts";
+import { makeModelCatalogFixture } from "@/test/model-catalog";
 
 import { ConversationHistory } from "./ConversationHistory";
 
@@ -33,6 +44,48 @@ const chatModels = {
     { id: "test-chat", name: "Тестовая модель" },
   ],
 };
+
+function makeGenerationModelCatalog({ images = [] }: { images?: ImageModel[] } = {}): GenerationModelCatalog {
+  const catalog = parseModelCatalog(makeModelCatalogFixture({
+    defaultModelId: chatModels.default_model_id,
+    images,
+    text: chatModels.items,
+  }));
+  const imageModels = projectImageModelCatalog(catalog).items.map((model) => ({
+    ...model,
+    category: "images" as const,
+  }));
+  const textModels = projectChatModelCatalog(catalog).items.map((model) => ({
+    ...model,
+    ...chatModelForSelector(model),
+    category: "text" as const,
+  }));
+  return {
+    items: [...imageModels, ...textModels],
+    default_model_id: catalog.default_model_id,
+    categoryErrors: {},
+  };
+}
+
+function mockModelCatalog({ images = [] }: { images?: ImageModel[] } = {}) {
+  vi.mocked(loadGenerationModelCatalog).mockResolvedValueOnce(makeGenerationModelCatalog({ images }));
+}
+
+beforeEach(() => {
+  vi.mocked(webBrowserFetch).mockReset();
+  vi.mocked(webBrowserMutation).mockReset();
+  vi.mocked(loadGenerationModelCatalog).mockReset();
+  vi.mocked(loadGenerationModelCatalog).mockResolvedValue(makeGenerationModelCatalog());
+});
+
+async function setComposerPrompt(value: string) {
+  await act(async () => {});
+  const textarea = screen.getByLabelText(ru.conversations.composerLabel);
+  fireEvent.change(textarea, { target: { value } });
+  await act(async () => {});
+  expect(screen.getByRole("button", { name: ru.conversations.composerSubmit })).toBeEnabled();
+  return textarea;
+}
 
 function WorkspaceConversationTitleProbe() {
   const { conversations } = useWorkspaceConversationList();
@@ -73,21 +126,20 @@ describe("ConversationHistory", () => {
   });
 
   it("reveals the model control after the first submission, not while drafting", async () => {
-    vi.mocked(loadChatModelCatalog).mockResolvedValueOnce(chatModels);
+    mockModelCatalog();
     vi.mocked(webBrowserMutation).mockReturnValueOnce(new Promise(() => {}));
     render(<ConversationHistory history={{ ...initialHistory, messages: [], hasMoreBefore: false }} />);
     await act(async () => {});
     const modelLabel = /Выбрана нейросеть NeiroHub Chat/;
     expect(screen.queryByRole("button", { name: modelLabel })).not.toBeInTheDocument();
-    const input = screen.getByLabelText(ru.conversations.composerLabel);
-    fireEvent.change(input, { target: { value: "Первое сообщение" } });
+    await setComposerPrompt("Первое сообщение");
     expect(screen.queryByRole("button", { name: modelLabel })).not.toBeInTheDocument();
     fireEvent.click(screen.getByRole("button", { name: ru.conversations.composerSubmit }));
     expect(screen.getByRole("button", { name: modelLabel })).toBeDisabled();
   });
 
   it("places the existing selector before send and captures its model on retries without losing the dialogue or draft", async () => {
-    vi.mocked(loadChatModelCatalog).mockResolvedValueOnce(chatModels);
+    mockModelCatalog();
     vi.mocked(webBrowserMutation)
       .mockRejectedValueOnce(new Error("network"))
       .mockReturnValueOnce(new Promise(() => {}));
@@ -95,14 +147,13 @@ describe("ConversationHistory", () => {
     const trigger = await screen.findByRole("button", { name: /Выбрана нейросеть NeiroHub Chat/ });
     const submit = screen.getByRole("button", { name: ru.conversations.composerSubmit });
     expect(trigger.closest('[data-variant="composer"]')?.nextElementSibling?.contains(submit)).toBe(true);
-    const input = screen.getByLabelText(ru.conversations.composerLabel);
-    fireEvent.change(input, { target: { value: "Сохрани черновик" } });
+    const input = await setComposerPrompt("Сохрани черновик");
     const currentURL = window.location.href;
     fireEvent.click(trigger);
     const picker = screen.getByRole("dialog", { name: "Выбор модели для диалога" });
     expect(within(picker).getByRole("searchbox", { name: "Поиск нейросети" })).toHaveFocus();
     expect(within(picker).queryByText("Скоро появятся")).not.toBeInTheDocument();
-    fireEvent.click(within(picker).getByRole("button", { name: /Тестовая модель/ }));
+    fireEvent.click(within(within(picker).getByRole("region", { name: "Текст" })).getByRole("button", { name: /Тестовая модель/ }));
     expect(input).toHaveValue("Сохрани черновик");
     expect(window.location.href).toBe(currentURL);
     expect(screen.getByText("message 103")).toBeInTheDocument();
@@ -122,10 +173,10 @@ describe("ConversationHistory", () => {
 
   it("restores only this conversation's available public model preference", async () => {
     window.sessionStorage.setItem(`neirohub:conversation-model:${conversationId}`, "test-chat");
-    vi.mocked(loadChatModelCatalog).mockResolvedValueOnce(chatModels);
+    mockModelCatalog();
     const view = render(<ConversationHistory history={initialHistory as never} />);
     expect(await screen.findByRole("button", { name: /Выбрана нейросеть Тестовая модель/ })).toBeEnabled();
-    vi.mocked(loadChatModelCatalog).mockResolvedValueOnce(chatModels);
+    mockModelCatalog();
     view.rerender(<ConversationHistory history={{ ...initialHistory, conversationId: "another-conversation" } as never} />);
     expect(await screen.findByRole("button", { name: /Выбрана нейросеть NeiroHub Chat/ })).toBeEnabled();
   });
@@ -286,8 +337,7 @@ describe("ConversationHistory", () => {
     vi.mocked(webBrowserFetch).mockReturnValueOnce(new Promise<Response>(() => {}));
     render(<ConversationHistory history={initialHistory as never} />);
 
-    const textarea = screen.getByLabelText(ru.conversations.composerLabel);
-    fireEvent.change(textarea, { target: { value: "Pending stream prompt" } });
+    const textarea = await setComposerPrompt("Pending stream prompt");
     fireEvent.keyDown(textarea, { key: "Enter" });
 
     await screen.findByText("Pending stream prompt");
@@ -299,39 +349,51 @@ describe("ConversationHistory", () => {
   it("keeps the workspace position when a polling reply arrives above the bottom", async () => {
     const { region, scrollTo, setScrollHeight } = addWorkspaceScrollRegion();
     let resolveRefresh: (response: Response) => void = () => {};
+    const refreshResponse = new Promise<Response>((resolve) => {
+      resolveRefresh = resolve;
+    });
     vi.mocked(webBrowserMutation).mockResolvedValueOnce(Response.json(queuedJob, { status: 201 }));
-    vi.mocked(webBrowserFetch).mockReturnValueOnce(
-      new Promise<Response>((resolve) => {
-        resolveRefresh = resolve;
-      }),
-    );
+    vi.mocked(webBrowserFetch).mockImplementation((path) => {
+      if (String(path) === `/web/v1/conversations/${conversationId}/messages?after_seq=103&limit=100`) {
+        return refreshResponse;
+      }
+      return Promise.resolve(Response.json({ items: [] }));
+    });
     render(<ConversationHistory history={initialHistory as never} />);
 
-    const textarea = screen.getByLabelText(ru.conversations.composerLabel);
-    fireEvent.change(textarea, { target: { value: "Pending stream prompt" } });
+    await setComposerPrompt("Pending stream prompt");
     fireEvent.click(screen.getByRole("button", { name: ru.conversations.composerSubmit }));
     await screen.findByText("Pending stream prompt");
     await vi.waitFor(() =>
       expect(scrollTo).toHaveBeenCalledWith({ behavior: "smooth", top: region.scrollHeight }),
     );
+    await vi.waitFor(() =>
+      expect(webBrowserFetch).toHaveBeenCalledWith(
+        `/web/v1/conversations/${conversationId}/messages?after_seq=103&limit=100`,
+        expect.objectContaining({ signal: expect.any(AbortSignal) }),
+      ),
+    );
+    await act(async () => {});
     scrollTo.mockClear();
 
     region.scrollTop = 100;
     fireEvent.scroll(region);
     setScrollHeight(1_800);
-    resolveRefresh(
-      Response.json({
-        items: [
-          {
-            id: "77777777-7777-4777-8777-777777777777",
-            seq: 104,
-            role: "assistant",
-            text: "assistant reply while scrolled away",
-            created_at: "2026-08-01T12:00:04Z",
-          },
-        ],
-      }),
-    );
+    await act(async () => {
+      resolveRefresh(
+        Response.json({
+          items: [
+            {
+              id: "77777777-7777-4777-8777-777777777777",
+              seq: 104,
+              role: "assistant",
+              text: "assistant reply while scrolled away",
+              created_at: "2026-08-01T12:00:04Z",
+            },
+          ],
+        }),
+      );
+    });
 
     await screen.findByText("assistant reply while scrolled away");
     expect(scrollTo).not.toHaveBeenCalled();
@@ -341,36 +403,48 @@ describe("ConversationHistory", () => {
   it("follows a polling reply while the workspace is already at the bottom", async () => {
     const { region, scrollTo, setScrollHeight } = addWorkspaceScrollRegion();
     let resolveRefresh: (response: Response) => void = () => {};
+    const refreshResponse = new Promise<Response>((resolve) => {
+      resolveRefresh = resolve;
+    });
     vi.mocked(webBrowserMutation).mockResolvedValueOnce(Response.json(queuedJob, { status: 201 }));
-    vi.mocked(webBrowserFetch).mockReturnValueOnce(
-      new Promise<Response>((resolve) => {
-        resolveRefresh = resolve;
-      }),
-    );
+    vi.mocked(webBrowserFetch).mockImplementation((path) => {
+      if (String(path) === `/web/v1/conversations/${conversationId}/messages?after_seq=103&limit=100`) {
+        return refreshResponse;
+      }
+      return Promise.resolve(Response.json({ items: [] }));
+    });
     render(<ConversationHistory history={initialHistory as never} />);
 
-    fireEvent.change(screen.getByLabelText(ru.conversations.composerLabel), { target: { value: "Pending stream prompt" } });
+    await setComposerPrompt("Pending stream prompt");
     fireEvent.click(screen.getByRole("button", { name: ru.conversations.composerSubmit }));
     await screen.findByText("Pending stream prompt");
     await vi.waitFor(() =>
       expect(scrollTo).toHaveBeenCalledWith({ behavior: "smooth", top: region.scrollHeight }),
     );
     scrollTo.mockClear();
+    await vi.waitFor(() =>
+      expect(webBrowserFetch).toHaveBeenCalledWith(
+        `/web/v1/conversations/${conversationId}/messages?after_seq=103&limit=100`,
+        expect.objectContaining({ signal: expect.any(AbortSignal) }),
+      ),
+    );
 
     setScrollHeight(1_800);
-    resolveRefresh(
-      Response.json({
-        items: [
-          {
-            id: "77777777-7777-4777-8777-777777777777",
-            seq: 104,
-            role: "assistant",
-            text: "assistant reply while following latest",
-            created_at: "2026-08-01T12:00:04Z",
-          },
-        ],
-      }),
-    );
+    await act(async () => {
+      resolveRefresh(
+        Response.json({
+          items: [
+            {
+              id: "77777777-7777-4777-8777-777777777777",
+              seq: 104,
+              role: "assistant",
+              text: "assistant reply while following latest",
+              created_at: "2026-08-01T12:00:04Z",
+            },
+          ],
+        }),
+      );
+    });
 
     await screen.findByText("assistant reply while following latest");
     await vi.waitFor(() =>
@@ -382,27 +456,30 @@ describe("ConversationHistory", () => {
   });
 
   it("prepends a bounded older page and keeps its next cursor on the first loaded message", async () => {
-    vi.mocked(webBrowserFetch).mockResolvedValue(
-      Response.json({
-        items: [
-          {
-            id: "99999999-9999-4999-8999-999999999999",
-            seq: 100,
-            role: "user",
-            text: "message 100",
-            created_at: "2026-08-01T11:59:58Z",
-          },
-          {
-            id: "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa",
-            seq: 101,
-            role: "assistant",
-            text: "message 101",
-            created_at: "2026-08-01T11:59:59Z",
-          },
-        ],
-        has_more_before: true,
-      }),
-    );
+    vi.mocked(webBrowserFetch).mockImplementation((path) => {
+      if (String(path) === `/web/v1/conversations/${conversationId}/messages?before_seq=102&limit=100`) {
+        return Promise.resolve(Response.json({
+          items: [
+            {
+              id: "99999999-9999-4999-8999-999999999999",
+              seq: 100,
+              role: "user",
+              text: "message 100",
+              created_at: "2026-08-01T11:59:58Z",
+            },
+            {
+              id: "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa",
+              seq: 101,
+              role: "assistant",
+              text: "message 101",
+              created_at: "2026-08-01T11:59:59Z",
+            },
+          ],
+          has_more_before: true,
+        }));
+      }
+      return Promise.resolve(Response.json({ items: [] }));
+    });
 
     render(<ConversationHistory history={initialHistory as never} />);
 
@@ -532,8 +609,7 @@ describe("ConversationHistory", () => {
     );
     render(<ConversationHistory history={initialHistory as never} />);
 
-    const textarea = screen.getByLabelText(ru.conversations.composerLabel);
-    fireEvent.change(textarea, { target: { value: "Pending stream prompt" } });
+    await setComposerPrompt("Pending stream prompt");
     fireEvent.click(screen.getByRole("button", { name: ru.conversations.composerSubmit }));
 
     const messageList = screen.getByRole("list");
@@ -582,8 +658,7 @@ describe("ConversationHistory", () => {
     );
     render(<ConversationHistory history={initialHistory as never} />);
 
-    const textarea = screen.getByLabelText(ru.conversations.composerLabel);
-    fireEvent.change(textarea, { target: { value: "Покажи индикатор" } });
+    const textarea = await setComposerPrompt("Покажи индикатор");
     fireEvent.keyDown(textarea, { key: "Enter" });
 
     await vi.waitFor(() => {
@@ -623,8 +698,7 @@ describe("ConversationHistory", () => {
     vi.mocked(webBrowserFetch).mockReturnValueOnce(new Promise<Response>(() => {}));
     render(<ConversationHistory history={initialHistory as never} />);
 
-    const textarea = screen.getByLabelText(ru.conversations.composerLabel);
-    fireEvent.change(textarea, { target: { value: "Оптимистичный вопрос" } });
+    const textarea = await setComposerPrompt("Оптимистичный вопрос");
     fireEvent.keyDown(textarea, { key: "Enter" });
 
     expect(textarea).toHaveValue("");
@@ -752,9 +826,7 @@ describe("ConversationHistory", () => {
     );
     render(<ConversationHistory history={initialHistory as never} />);
 
-    fireEvent.change(screen.getByLabelText(ru.conversations.composerLabel), {
-      target: { value: "My pending prompt" },
-    });
+    await setComposerPrompt("My pending prompt");
     fireEvent.click(screen.getByRole("button", { name: ru.conversations.composerSubmit }));
 
     await screen.findByText("Earlier server message");
@@ -776,8 +848,7 @@ describe("ConversationHistory", () => {
     );
     render(<ConversationHistory history={initialHistory as never} />);
 
-    const textarea = screen.getByLabelText(ru.conversations.composerLabel);
-    fireEvent.change(textarea, { target: { value: "Первый запрос" } });
+    const textarea = await setComposerPrompt("Первый запрос");
     fireEvent.click(screen.getByRole("button", { name: ru.conversations.composerSubmit }));
 
     await vi.waitFor(() => expect(webBrowserFetch).toHaveBeenCalledTimes(1));
@@ -843,7 +914,7 @@ describe("ConversationHistory", () => {
     );
     render(<ConversationHistory history={initialHistory as never} />);
 
-    fireEvent.change(screen.getByLabelText(ru.conversations.composerLabel), { target: { value: "Продолжить" } });
+    await setComposerPrompt("Продолжить");
     fireEvent.click(screen.getByRole("button", { name: ru.conversations.composerSubmit }));
 
     await screen.findByText("message 105");
@@ -881,7 +952,7 @@ describe("ConversationHistory", () => {
       );
     render(<ConversationHistory history={initialHistory as never} />);
 
-    fireEvent.change(screen.getByLabelText(ru.conversations.composerLabel), { target: { value: "Продолжить" } });
+    await setComposerPrompt("Продолжить");
     await act(async () => {
       fireEvent.click(screen.getByRole("button", { name: ru.conversations.composerSubmit }));
       await vi.advanceTimersByTimeAsync(0);
@@ -909,7 +980,7 @@ describe("ConversationHistory", () => {
     );
     const { unmount } = render(<ConversationHistory history={initialHistory as never} />);
 
-    fireEvent.change(screen.getByLabelText(ru.conversations.composerLabel), { target: { value: "Продолжить" } });
+    await setComposerPrompt("Продолжить");
     await act(async () => {
       fireEvent.click(screen.getByRole("button", { name: ru.conversations.composerSubmit }));
       await vi.advanceTimersByTimeAsync(0);
@@ -930,7 +1001,7 @@ describe("ConversationHistory", () => {
     vi.mocked(webBrowserFetch).mockResolvedValue(Response.json({ items: [] }));
     render(<ConversationHistory history={initialHistory as never} />);
 
-    fireEvent.change(screen.getByLabelText(ru.conversations.composerLabel), { target: { value: "Продолжить" } });
+    await setComposerPrompt("Продолжить");
     await act(async () => {
       fireEvent.click(screen.getByRole("button", { name: ru.conversations.composerSubmit }));
       await vi.advanceTimersByTimeAsync(0);
@@ -971,3 +1042,30 @@ function addWorkspaceScrollRegion() {
     },
   };
 }
+
+afterEach(() => { cleanup(); vi.clearAllMocks(); window.sessionStorage.clear(); });
+
+it("switches the existing dialogue to an image model, keeps the draft, and freezes image options on retry", async () => {
+ mockModelCatalog({ images: [{id:"nano_banana_2",name:"Nano Banana 2",default_quality:"2K",quality_options:["2K"],price_by_quality:{"2K":60},supports_reference_image:false,max_reference_images:0,max_output_count:4,allowed_aspect_ratios:["16:9","9:16"]}] });
+ vi.mocked(webBrowserMutation).mockRejectedValueOnce(new Error("offline")).mockReturnValueOnce(new Promise(()=>{}));
+ render(<ConversationHistory history={{...initialHistory,messages:initialHistory.messages.map(message=>({...message,rating:null}))}} />);
+ const trigger = await screen.findByRole("button", {name:/Выбрана нейросеть NeiroHub Chat/});
+ const input = screen.getByLabelText(ru.conversations.composerLabel);
+ await setComposerPrompt("Журавль на облаке");
+ const url = window.location.href;
+ fireEvent.click(trigger);
+ const picker = screen.getByRole("dialog",{name:"Выбор модели для диалога"});
+ fireEvent.click(within(within(picker).getByRole("region",{name:"Изображения"})).getByRole("button",{name:/Nano Banana 2/}));
+ expect(screen.getByLabelText(ru.conversations.composerLabel)).toBe(input);
+ expect(input).toHaveValue("Журавль на облаке");
+ expect(window.location.href).toBe(url);
+ expect(screen.getByText("message 103")).toBeVisible();
+ expect(screen.getByText("Стоимость: 60 токенов")).toBeVisible();
+ fireEvent.click(screen.getByRole("button",{name:ru.conversations.composerSubmit}));
+ fireEvent.click(await screen.findByRole("button",{name:ru.conversations.messageRetryLabel}));
+ const calls = vi.mocked(webBrowserMutation).mock.calls;
+ expect(calls).toHaveLength(2);
+ expect(calls[0][0]).toBe(`/web/v1/conversations/${conversationId}/messages`);
+ expect(calls[1]).toEqual(calls[0]);
+ expect(JSON.parse(calls[0][1].body as string)).toEqual({prompt:"Журавль на облаке",model_id:"nano_banana_2",image_quality:"2K",aspect_ratio:"16:9",output_count:1});
+});

@@ -3,18 +3,26 @@ import Link from "next/link";
 import { CreditAmount } from "@/components/ui/CreditAmount/CreditAmount";
 import selectableStyles from "@/components/ui/selectable-control.module.css";
 import { ru } from "@/i18n/ru";
-import type { ImageModel } from "@/lib/web-api/contracts";
 
 import { ModelIcon } from "../ModelIcon/ModelIcon";
 
 import { getModelPresentation } from "./model-card-content";
 import styles from "./ModelCard.module.css";
 
-export type ModelCardModel = Pick<ImageModel, "id" | "name"> &
-  Partial<Pick<ImageModel, "price_by_quality">> & {
-    artworkSrc?: string;
-    description?: string;
-  };
+export type ModelCardModel = {
+  artworkSrc?: string;
+  default_quality?: string;
+  description?: string;
+  estimate_credits?: number;
+  id: string;
+  max_reference_images?: number;
+  name: string;
+  price_by_option?: Record<string, number>;
+  price_by_quality?: Record<string, number>;
+  quality_options?: readonly string[];
+  supports_reference_image?: boolean;
+  [key: string]: unknown;
+};
 
 type SharedModelCardProps = {
   className?: string;
@@ -23,7 +31,7 @@ type SharedModelCardProps = {
 
 type CatalogueModelCardProps = SharedModelCardProps & {
   interactive?: boolean;
-  model: ImageModel;
+  model: ModelCardModel;
   onActivate?: never;
   revealed?: boolean;
   selected?: never;
@@ -31,6 +39,8 @@ type CatalogueModelCardProps = SharedModelCardProps & {
 };
 
 type SelectorModelCardProps = SharedModelCardProps & {
+  descriptionId?: string;
+  descriptionMode?: "inline" | "tooltip";
   model: ModelCardModel;
   onActivate: (model: ModelCardModel, href: string) => void;
   revealed?: never;
@@ -53,6 +63,7 @@ export function ModelCard(props: Readonly<ModelCardProps>) {
 
     return (
       <button
+        aria-describedby={props.descriptionMode === "tooltip" ? props.descriptionId : undefined}
         aria-pressed={props.selected}
         className={classNames}
         data-testid={testId}
@@ -62,13 +73,19 @@ export function ModelCard(props: Readonly<ModelCardProps>) {
         <ModelIcon className={styles.selectorIcon} src={presentation.artworkSrc} />
         <span className={styles.selectorCopy}>
           <span className={styles.selectorTitle}>{model.name}</span>
-          <span className={styles.selectorDescription}>{presentation.description}</span>
+          <span className={styles.selectorDescription} hidden={props.descriptionMode === "tooltip"} id={props.descriptionId}>
+            {presentation.description}
+          </span>
         </span>
       </button>
     );
   }
 
-  const prices = Object.values(model.price_by_quality ?? {});
+  const prices = [
+    ...Object.values(model.price_by_quality ?? {}),
+    ...Object.values(model.price_by_option ?? {}),
+    ...(model.estimate_credits === undefined ? [] : [model.estimate_credits]),
+  ];
   const minimumPrice = prices.length > 0 ? Math.min(...prices) : null;
   const classNames = [styles.cardLink, className].filter(Boolean).join(" ");
   const card = (

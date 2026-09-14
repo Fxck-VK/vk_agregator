@@ -1,0 +1,26 @@
+.page {
+  inline-size: min(100%, 40rem);
+  margin: auto;
+  padding: var(--space-6);
+  border: var(--panel-surface-border);
+  border-radius: var(--radius-lg);
+  background: var(--panel-surface-background);
+  color: var(--panel-surface-text);
+}
+.status { display: grid; gap: var(--space-4); }
+.action {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-block-size: 2.75rem;
+  padding: var(--space-3) var(--space-4);
+  border: var(--panel-surface-border);
+  border-radius: var(--radius-sm);
+  background: transparent;
+  color: var(--panel-surface-text);
+  font: inherit;
+  text-decoration: none;
+  cursor: pointer;
+  transition: border-color var(--motion-fast), color var(--motion-fast);
+}
+.action:hover, .action:focus-visible { border-color: var(--color-accent); color: white; }

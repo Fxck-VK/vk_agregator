@@ -192,16 +192,30 @@ Current durable shared chat context:
   GET /web/v1/chat-models (public items with server price/input/output limits,
   default_model_id, no-store). It shares textgeneration.Models with /text-models;
   only enabled paid models with valid pricing are exposed.
-  POST /web/v1/conversations/{conversationID}/messages accepts optional model_id
-  alongside prompt. Omission retains the server default; explicit IDs must
-  match a canonical public text-model ID from modelcatalog. Display names,
-  private provider codes and image-model IDs are rejected. Model routing,
-  pricing and provider execution remain server/worker responsibilities.
-- The web composer displays its model selector after the first submitted turn
-  and in existing conversations. Changing it keeps the same conversation and
-  draft. The public selection is a per-conversation sessionStorage preference;
-  retries retain the model captured in the original pending turn with the same
-  idempotency key. No provider details or message contents enter this preference.
+  POST /web/v1/conversations/{conversationID}/messages also accepts image and
+  text-to-video models. Image options: image_quality, aspect_ratio, output_count;
+  video options: resolution, duration_sec, aspect_ratio. The handler verifies
+  the active Web conversation owner and resolves public choices through existing
+  imagegeneration, productcatalog and pricingcatalog services. The orchestrator
+  owns reservations and idempotency; workers own provider execution.
+- GET /web/v1/video-models exposes enabled, priced text-to-video routes only.
+  Reference-only routes stay unavailable until Web reference uploads exist.
+  Both selectors share one frontend catalogue adapter for text, image and video.
+  Header selection opens a new-chat form; composer selection preserves the
+  current conversation, its messages and draft. Model/options are frozen with
+  the original idempotency key across submission retries.
+- Workers persist media prompts and assistant completion messages through the
+  existing dialogcontext repository and job/role deduplication. Media providers
+  receive the explicit prompt without text history. History attachments derive
+  only from account-owned, succeeded and moderated results linked to that
+  conversation. Provider Markdown cannot assign images or videos. Video bytes
+  use the same ownership/moderation/storage-origin checks as images at
+  GET /web/v1/video-artifacts/{artifactID}, including Range support.
+- GET /web/v1/conversations/{conversationID}/jobs/{jobID} reports the status of
+  an exact account-owned job linked to that active Web conversation. Media
+  polling is bounded to 15 minutes and stops on terminal failures. A public job
+  ID and baseline sequence in sessionStorage allow refresh recovery. This
+  integration introduces no schema change or separate billing implementation.
 - VK bot and Mini App text chat both use the same Postgres-backed conversation
   core: `conversations`, `conversation_messages`, `conversation_summaries` and
   `internal/service/dialogcontext`.
@@ -341,6 +355,18 @@ Current payment/top-up foundation:
   body as identity. Only this protected operator create path may pass
   `capture: false` to create a two-stage YooKassa smoke intent; user-facing
   Mini App and VK Bot top-ups remain immediate-capture payments.
+- The standalone web BFF exposes cookie-authenticated `/web/v1/payment-products`,
+  `POST /web/v1/payments/intents` (Origin/CSRF, account-scoped idempotency and rate
+  limit), and owner-scoped `GET /web/v1/payments/{id}`. It reuses
+  `CreateAccountIntent` and the existing provider-verified webhook/ledger flow.
+  Amounts and credits come from the server catalog; browser input contains only
+  product code. The Account Layer supplies a verified account email to the receipt
+  server-side, without exposing it to the browser; no verified email returns 422.
+  The initial web rollout allows configured
+  YooKassa test shops in development/staging only. AccountReturnURL derives from
+  WEB_ORIGIN and includes a local payment ID for authenticated return-page status
+  recovery. VK return URLs and the append-only ledger remain unchanged. See
+  `docs/runbooks/BILLING.md` for configuration and smoke requirements.
 - The Mini App BFF exposes authenticated user payment routes:
   `GET /miniapp/payment-products`, `POST /miniapp/payments/intents`,
   `GET /miniapp/payments` and `GET /miniapp/payments/{id}`. These routes derive
@@ -3018,3 +3044,46 @@ catalog v15 covers all documented duration/resolution combinations, applying
 provider cost x3 rounded up to 5 internal credits before reservation. Output
 contracts accept inherited first-frame aspect ratios and portrait/2K media.
 See docs/VIDEO_GENERATION.md for parameter bounds, tariffs and rollout flags.
+## Model capability onboarding (2026-09-14)
+
+`internal/service/modelcontract` owns the internal typed admission contract for
+text, image, video and audio operations. Provider documentation, declared versus
+enabled input capabilities, limits, valid output combinations and verification
+reports are bound to the exact provider/version and registry fingerprint.
+`providermodels.Registry.Validate` rejects new/changed definitions without a ready
+contract. Runtime config validation and product catalog construction enforce the
+same check before providers can be enabled. JSON contracts and hashed report files
+are embedded from `providermodels/onboarding/approved`; no live requests occur in
+validation, startup or CI.
+
+The frozen `onboarding/legacy.json` baseline preserves 43 existing definitions as
+`legacy-unverified`, without claiming newly verified capabilities. A changed
+fingerprint requires onboarding; adding or refreshing exemptions is forbidden.
+Public display capabilities and the migration of all frontend consumers remain
+separate work. Admission records never expose provider endpoints, IDs or reports
+through public DTOs. Pricing remains owned by pricingcatalog, and provider calls
+remain worker-only. See [mandatory workflow](runbooks/MODEL_ONBOARDING.md).
+
+## Unified web model catalog (2026-09-14)
+
+This section supersedes the pending-public-migration note in Model capability
+onboarding above. productcatalog.WorkspaceCatalog owns the safe web projection
+of public model names, descriptions, categories, typed operations and priced
+runtime options. The authenticated GET /web/v1/models is no-store and excludes
+private provider routing/evidence. Registry/provider adapters, pricing snapshots,
+job ownership, moderation, idempotency and ledger writes retain their owners.
+
+The frontend uses one strict parser and shared in-memory catalog loader. Header,
+conversation, new chat, full catalog, home, image generator and file tools use
+that response; old modality loaders are pure projections. Pickers curate only
+IDs and cap each category at five; the full catalog does not. Runtime settings
+are validated combinations, including aspect-dependent image prices and sparse
+video duration/resolution options. Server validation remains authoritative.
+
+The local UI fixture is generated offline from the same builder, with a CI drift
+check. It is not provider availability evidence. Unknown inputs remain disabled;
+reference-required routes are excluded from the text-only web submission path.
+The 43 frozen legacy definitions remain legacy-unverified; paid live verification
+and later web upload/audio execution are not implied by this migration.
+See [catalog ownership and checks](runbooks/MODEL_CATALOG.md) and
+[existing-model evidence matrix](runbooks/model-onboarding/existing-models-2026-09-14.md).

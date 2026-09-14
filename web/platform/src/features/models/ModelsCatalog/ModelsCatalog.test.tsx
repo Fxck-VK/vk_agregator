@@ -20,21 +20,26 @@ vi.mock("next/link", () => ({
   ),
 }));
 
-vi.mock("../image-model-catalog-cache", () => ({
-  loadImageModelCatalog: vi.fn(),
+vi.mock("../generation-model-catalog", () => ({
+  loadGenerationModelCatalog: vi.fn(),
 }));
 
 import { ru } from "@/i18n/ru";
 
-import { loadImageModelCatalog } from "../image-model-catalog-cache";
+import { loadGenerationModelCatalog } from "../generation-model-catalog";
 
 import { ModelsCatalog } from "./ModelsCatalog";
 
 const modelsResponse = {
+  default_model_id: "text-model-1",
+  categoryErrors: {},
   items: [
     {
       id: "nano banana/2&preview",
       name: "Nano Banana",
+      description: "Server supplied image description",
+      category: "images",
+      categories: ["popular", "images"],
       quality_options: ["1K", "2K"],
       price_by_quality: { "1K": 16, "2K": 60 },
       default_quality: "1K",
@@ -44,21 +49,37 @@ const modelsResponse = {
     {
       id: "other-model",
       name: "Other Model",
+      description: "Server supplied fallback image description",
+      category: "images",
+      categories: ["popular", "images"],
       quality_options: ["4K"],
       default_quality: "4K",
       supports_reference_image: false,
       max_reference_images: 0,
     },
     {
-      id: "reference-2k",
-      name: "Reference 2K",
-      quality_options: ["2K"],
-      default_quality: "2K",
-      supports_reference_image: true,
-      max_reference_images: 2,
+      id: "category-authoritative",
+      name: "Text Shaped By Server Category",
+      description: "Server category wins over local kind",
+      category: "images",
+      categories: ["text"],
+    },
+    ...Array.from({ length: 6 }, (_, index) => ({
+      id: `text-model-${index + 1}`,
+      name: `Text Model ${index + 1}`,
+      description: `Text description ${index + 1}`,
+      category: "text",
+      categories: ["text", index === 0 ? "study-work" : "popular"].filter(Boolean),
+    })),
+    {
+      id: "video-model",
+      name: "Video Model",
+      description: "Video description",
+      category: "video",
+      categories: ["video-audio"],
     },
   ],
-};
+} as Awaited<ReturnType<typeof loadGenerationModelCatalog>>;
 
 afterEach(() => {
   cleanup();
@@ -67,21 +88,21 @@ afterEach(() => {
 
 describe("ModelsCatalog", () => {
   it("omits the standalone NeiroHub eyebrow while keeping the catalogue title", () => {
-    vi.mocked(loadImageModelCatalog).mockReturnValue(new Promise(() => {}));
+    vi.mocked(loadGenerationModelCatalog).mockReturnValue(new Promise(() => {}));
     render(<ModelsCatalog />);
 
     expect(screen.queryByText("NeiroHub", { exact: true, selector: "header > p" })).not.toBeInTheDocument();
     expect(screen.getByRole("heading", { name: ru.modelsCatalog.title })).toBeInTheDocument();
   });
 
-  it("loads catalog data, renders the shared card presentation, and links to the selected generator", async () => {
-    vi.mocked(loadImageModelCatalog).mockResolvedValue(modelsResponse);
+  it("loads generation catalog data, renders server descriptions, and links cards to new chat", async () => {
+    vi.mocked(loadGenerationModelCatalog).mockResolvedValue(modelsResponse);
     render(<ModelsCatalog />);
 
-    expect(loadImageModelCatalog).toHaveBeenCalledTimes(1);
+    expect(loadGenerationModelCatalog).toHaveBeenCalledTimes(1);
     expect(await screen.findByRole("link", { name: `${ru.modelsCatalog.openGeneratorLabel}: Nano Banana` })).toHaveAttribute(
       "href",
-      "/app/image?model=nano%20banana%2F2%26preview",
+      "/app/chats?model=nano%20banana%2F2%26preview",
     );
     expect(screen.getByRole("link", { name: `${ru.modelsCatalog.openGeneratorLabel}: Nano Banana` })).toHaveAttribute(
       "data-next-link",
@@ -93,8 +114,8 @@ describe("ModelsCatalog", () => {
     );
     const nanoCard = screen.getByText("Nano Banana").closest("article")!;
     const otherCard = screen.getByText("Other Model").closest("article")!;
-    expect(within(nanoCard).getByText("Nano Banana для создания изображений по вашему описанию")).toBeInTheDocument();
-    expect(within(otherCard).getByText("Other Model для создания изображений по вашему описанию")).toBeInTheDocument();
+    expect(within(nanoCard).getByText("Server supplied image description")).toBeInTheDocument();
+    expect(within(otherCard).getByText("Server supplied fallback image description")).toBeInTheDocument();
     expect(within(nanoCard).queryByRole("list", { name: ru.modelsCatalog.qualityFilterLabel })).toBeNull();
     expect(within(nanoCard).queryByText(ru.modelsCatalog.referenceSupportedLabel)).toBeNull();
     expect(within(nanoCard).getByLabelText("16 звёзд")).toBeInTheDocument();
@@ -105,25 +126,25 @@ describe("ModelsCatalog", () => {
     expect(screen.queryByText("Other Model")).not.toBeInTheDocument();
   });
 
-  it("adds four searchable non-interactive cards when local placeholders are enabled", async () => {
-    vi.mocked(loadImageModelCatalog).mockResolvedValue(modelsResponse);
-    render(<ModelsCatalog includePlaceholders />);
+  it("does not add local placeholder cards to the functional catalog", async () => {
+    vi.mocked(loadGenerationModelCatalog).mockResolvedValue(modelsResponse);
+    render(<ModelsCatalog />);
 
+    expect(await screen.findByRole("heading", { name: "Nano Banana" })).toBeInTheDocument();
     for (const name of ["Recraft V3", "Ideogram 3", "Stable Diffusion 3.5", "Leonardo Phoenix"]) {
-      expect(await screen.findByRole("heading", { name })).toBeInTheDocument();
-      expect(screen.queryByRole("link", { name: `${ru.modelsCatalog.openGeneratorLabel}: ${name}` })).toBeNull();
+      expect(screen.queryByRole("heading", { name })).not.toBeInTheDocument();
     }
 
     fireEvent.change(screen.getByRole("searchbox", { name: ru.modelsCatalog.searchLabel }), {
       target: { value: "recraft" },
     });
 
-    expect(screen.getByRole("heading", { name: "Recraft V3" })).toBeInTheDocument();
-    expect(screen.queryByRole("heading", { name: "Ideogram 3" })).toBeNull();
+    expect(screen.queryByRole("heading", { name: "Recraft V3" })).toBeNull();
+    expect(screen.getByText(ru.modelsCatalog.empty)).toBeInTheDocument();
   });
 
   it("asks the shared loader on every catalogue mount", async () => {
-    vi.mocked(loadImageModelCatalog).mockResolvedValue(modelsResponse);
+    vi.mocked(loadGenerationModelCatalog).mockResolvedValue(modelsResponse);
     const firstMount = render(<ModelsCatalog />);
 
     await screen.findByText("Nano Banana");
@@ -131,11 +152,11 @@ describe("ModelsCatalog", () => {
     render(<ModelsCatalog />);
 
     await screen.findByText("Nano Banana");
-    expect(loadImageModelCatalog).toHaveBeenCalledTimes(2);
+    expect(loadGenerationModelCatalog).toHaveBeenCalledTimes(2);
   });
 
   it("shows a loading status while the catalog request is pending", () => {
-    vi.mocked(loadImageModelCatalog).mockReturnValue(new Promise(() => {}));
+    vi.mocked(loadGenerationModelCatalog).mockReturnValue(new Promise(() => {}));
     render(<ModelsCatalog />);
 
     expect(screen.getByRole("status")).toHaveTextContent(ru.modelsCatalog.loading);
@@ -144,7 +165,7 @@ describe("ModelsCatalog", () => {
   it.each([
     ["a rejected loader", () => Promise.reject(new Error("untrusted backend detail"))],
   ])("shows a neutral alert after %s", async (_caseName, load) => {
-    vi.mocked(loadImageModelCatalog).mockImplementationOnce(load);
+    vi.mocked(loadGenerationModelCatalog).mockImplementationOnce(load);
     render(<ModelsCatalog />);
 
     expect(await screen.findByRole("alert")).toHaveTextContent(ru.modelsCatalog.loadFailure);
@@ -152,15 +173,15 @@ describe("ModelsCatalog", () => {
   });
 
   it("distinguishes a valid empty catalog from a load failure", async () => {
-    vi.mocked(loadImageModelCatalog).mockResolvedValue({ items: [] });
+    vi.mocked(loadGenerationModelCatalog).mockResolvedValue({ default_model_id: "", categoryErrors: {}, items: [] });
     render(<ModelsCatalog />);
 
     expect(await screen.findByText(ru.modelsCatalog.empty)).toBeInTheDocument();
     expect(screen.queryByRole("alert")).not.toBeInTheDocument();
   });
 
-  it("shows the popular image catalogue and switches future categories to their planned state", async () => {
-    vi.mocked(loadImageModelCatalog).mockResolvedValue(modelsResponse);
+  it("filters each full catalogue tab by server categories without a five-item cap", async () => {
+    vi.mocked(loadGenerationModelCatalog).mockResolvedValue(modelsResponse);
     render(<ModelsCatalog />);
 
     await screen.findByText("Nano Banana");
@@ -171,13 +192,21 @@ describe("ModelsCatalog", () => {
     }
     expect(screen.getByText("Nano Banana")).toBeInTheDocument();
 
+    fireEvent.click(screen.getByRole("tab", { name: "Изображения" }));
+    expect(screen.getByText("Nano Banana")).toBeInTheDocument();
+    expect(screen.getByText("Other Model")).toBeInTheDocument();
+    expect(screen.queryByText("Text Shaped By Server Category")).not.toBeInTheDocument();
+
     fireEvent.click(screen.getByRole("tab", { name: "Текст" }));
 
-    expect(await screen.findByText("Категория «Текст» появится позже.")).toBeInTheDocument();
     expect(screen.getByRole("tabpanel", { name: "Текст" })).toHaveAttribute(
       "aria-labelledby",
       "model-category-tab-text",
     );
+    expect(screen.getByText("Text Shaped By Server Category")).toBeInTheDocument();
+    for (let index = 1; index <= 6; index += 1) {
+      expect(screen.getByText(`Text Model ${index}`)).toBeInTheDocument();
+    }
     expect(screen.queryByText("Nano Banana")).not.toBeInTheDocument();
   });
 });

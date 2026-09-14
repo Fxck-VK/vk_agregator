@@ -1,0 +1,45 @@
+{
+  "schema_version": 1,
+  "public_id": "example_video",
+  "provider": "example",
+  "provider_model_id": "example-video-v1",
+  "revision": "v1",
+  "endpoint": "POST /example/video",
+  "registry_fingerprint": "",
+  "status": "draft",
+  "categories": ["video-audio"],
+  "sources": [],
+  "operations": [
+    {
+      "id": "generate",
+      "kind": "video",
+      "inputs": {
+        "images": {
+          "support": "unknown",
+          "enabled": false
+        },
+        "video": {
+          "support": "unknown",
+          "enabled": false
+        },
+        "audio": {
+          "support": "unknown",
+          "enabled": false
+        },
+        "documents": {
+          "support": "unknown",
+          "enabled": false
+        },
+        "max_total_bytes": 0
+      },
+      "video": {
+        "variants": [],
+        "default_variant": 0,
+        "formats": [],
+        "start_image": "unsupported",
+        "end_image": "unsupported"
+      }
+    }
+  ],
+  "checks": []
+}

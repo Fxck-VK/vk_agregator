@@ -34,6 +34,64 @@ describe("ChatScrollToBottom", () => {
     expect(scrollTo).toHaveBeenCalledWith({ behavior: "smooth", top: 1200 });
   });
 
+  it("hides within a few pixels of the bottom and reappears when scrolling up", () => {
+    const region = createScrollRegion({ scrollTop: 1196.5 });
+    render(<ChatScrollToBottom contentVersion="1" forceScrollRequest={0} scrollContainer={region.element} />);
+    expect(screen.queryByRole("button", { name: ru.conversations.scrollToLatest })).toBeNull();
+
+    region.element.scrollTop = 1180;
+    fireEvent.scroll(region.element);
+    expect(screen.getByRole("button", { name: ru.conversations.scrollToLatest })).toBeVisible();
+    region.element.scrollTop = 1200;
+    fireEvent.scroll(region.element);
+    expect(screen.queryByRole("button", { name: ru.conversations.scrollToLatest })).toBeNull();
+  });
+
+  it("updates the bottom state after a viewport resize without requiring a scroll event", () => {
+    const region = createScrollRegion({ scrollTop: 100 });
+    render(<ChatScrollToBottom contentVersion="1" forceScrollRequest={0} scrollContainer={region.element} />);
+    expect(screen.getByRole("button", { name: ru.conversations.scrollToLatest })).toBeVisible();
+
+    Object.defineProperty(region.element, "clientHeight", { configurable: true, value: 1500 });
+    fireEvent.resize(window);
+    expect(screen.queryByRole("button", { name: ru.conversations.scrollToLatest })).toBeNull();
+    Object.defineProperty(region.element, "clientHeight", { configurable: true, value: 400 });
+    fireEvent.resize(window);
+    expect(screen.getByRole("button", { name: ru.conversations.scrollToLatest })).toBeVisible();
+  });
+
+  it("refreshes after content resizes without cancelling the existing follow-latest preference", () => {
+    let onResize: () => void = () => {};
+    const observe = vi.fn();
+    const disconnect = vi.fn();
+    vi.stubGlobal("ResizeObserver", class {
+      constructor(callback: () => void) { onResize = callback; }
+      observe = observe;
+      disconnect = disconnect;
+    });
+    const region = createScrollRegion({ scrollTop: 1200 });
+    const content = document.createElement("section");
+    region.element.append(content);
+    const { rerender, unmount } = render(
+      <ChatScrollToBottom contentVersion="1" forceScrollRequest={0} scrollContainer={region.element} />,
+    );
+    region.setScrollHeight(1800);
+    act(onResize);
+    expect(screen.getByRole("button", { name: ru.conversations.scrollToLatest })).toBeVisible();
+    region.setScrollHeight(1600);
+    act(onResize);
+    expect(screen.queryByRole("button", { name: ru.conversations.scrollToLatest })).toBeNull();
+
+    region.setScrollHeight(1800);
+    act(onResize);
+    rerender(<ChatScrollToBottom contentVersion="2" forceScrollRequest={0} scrollContainer={region.element} />);
+    expect(region.scrollTo).toHaveBeenCalledWith({ behavior: "smooth", top: 1800 });
+    expect(observe).toHaveBeenCalledWith(region.element);
+    expect(observe).toHaveBeenCalledWith(content);
+    unmount();
+    expect(disconnect).toHaveBeenCalled();
+  });
+
   it("keeps the typing dots clickable for scrolling while a reply is pending and restores the arrow afterwards", () => {
     const region = createScrollRegion({ scrollTop: 100 });
     const { rerender } = render(

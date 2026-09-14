@@ -326,11 +326,16 @@ func main() {
 	)
 	webImagePreparedExpiry := preparedjobexpiry.New(postgres.NewPreparedWebImageExpiryRepository(pool))
 	web := websession.NewHandler(websession.Config{
+		TestPaymentsEnabled:         apiapp.WebTestPaymentsEnabled(&cfg),
+		VideoRoutes:                 runtimeCatalog.VideoRoutes(),
 		WebOrigin:                   cfg.WebOrigin,
 		TextModels:                  runtimeCatalog.TextModels,
 		ImageModels:                 webImageModelsFromRuntimeCatalog(runtimeCatalog.ImageModels()),
 		ImageArtifactRedirectPolicy: webArtifactRedirectPolicy,
 	}, websession.Deps{
+		Payments:               core.Payment,
+		ReceiptContacts:        core.Account,
+		PaymentCreateLimiter:   ratelimit.NewRedisFixedWindowLimiter(rdb, "web_payment_create", 10, time.Minute),
 		Authenticator:          core.AccountAuth,
 		Sessions:               core.AccountAuth,
 		Passwords:              core.AccountAuth,

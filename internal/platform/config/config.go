@@ -17,6 +17,7 @@ import (
 	"github.com/joho/godotenv"
 
 	"vk-ai-aggregator/internal/domain"
+	"vk-ai-aggregator/internal/service/providermodels"
 	"vk-ai-aggregator/internal/service/providerreference"
 )
 
@@ -659,6 +660,9 @@ func (c Config) PaymentWebhookHTTPSRequired() bool {
 // Validate fails closed: in production, secrets that protect inbound webhooks
 // and the admin API must be set. Returns a descriptive error otherwise.
 func (c Config) Validate() error {
+	if err := providermodels.StaticRegistry().Validate(); err != nil {
+		return fmt.Errorf("config: model onboarding: %w", err)
+	}
 	if err := c.validateKIEText(); err != nil {
 		return err
 	}

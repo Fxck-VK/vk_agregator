@@ -85,13 +85,11 @@ describe("WorkspaceModelSelector layout", () => {
 
   it("keeps search and footer fixed while only the model list scrolls", () => {
     expect(stylesheet).toMatch(
-      /\.popover\s*\{[^}]*grid-template-rows:\s*auto minmax\(0,\s*1fr\) auto;[^}]*overflow:\s*hidden;/s,
+      /\.popover\s*\{[^}]*grid-template-rows:\s*auto auto minmax\(0,\s*1fr\) auto;[^}]*overflow:\s*hidden;/s,
     );
     expect(stylesheet).toMatch(/\.scrollArea\s*\{[^}]*min-block-size:\s*0;/s);
     expect(component).toContain('from "@/components/ui/ScrollArea/ScrollArea"');
-    expect(component).toContain(
-      "<ScrollArea className={styles.scrollArea} viewportClassName={styles.scrollViewport}>",
-    );
+    expect(component).toMatch(/<ScrollArea\s+className=\{styles.scrollArea\}\s+viewportClassName=\{styles.scrollViewport\}/);
     expect(stylesheet).not.toMatch(/overflow-y:\s*(?:auto|scroll)/);
   });
 
@@ -101,14 +99,7 @@ describe("WorkspaceModelSelector layout", () => {
     );
   });
 
-  it("stacks model sections with compact muted empty states", () => {
-    expect(stylesheet).toMatch(
-      /\.modelSections\s*\{[^}]*display:\s*grid;[^}]*gap:\s*var\(--space-4\);/s,
-    );
-    expect(stylesheet).toMatch(
-      /\.sectionEmpty\s*\{[^}]*color:\s*var\(--color-text-muted\);[^}]*font-size:\s*var\(--font-size-caption\);[^}]*line-height:\s*var\(--line-height-caption\);/s,
-    );
-  });
+
 
   it("constrains the popover to the mobile viewport", () => {
     expect(stylesheet).toMatch(
@@ -174,12 +165,4 @@ describe("WorkspaceModelSelector layout", () => {
     );
   });
 
-  it("uses an inset hover surface for the catalogue link without a divider", () => {
-    const catalogueLinkRule = stylesheet.match(/\.catalogueLink\s*\{[^}]*\}/s)?.[0] ?? "";
-
-    expect(catalogueLinkRule).toContain("background: transparent");
-    expect(catalogueLinkRule).not.toContain("border-block-start");
-    expect(stylesheet).toMatch(/\.catalogueLink::before\s*\{[^}]*inset:\s*var\(--space-2\) var\(--space-3\);/s);
-    expect(stylesheet).toMatch(/\.catalogueLink:hover::before\s*\{[^}]*background:\s*var\(--color-surface-raised\);/s);
-  });
 });

@@ -1349,7 +1349,7 @@ func (p *processor) buildRequest(ctx context.Context, job *domain.Job, attempt i
 		}
 		draft = p.videoDraft
 	}
-	if p.textContext != nil && job.OperationType == domain.OperationTextGenerate && job.Modality == domain.ModalityText {
+	if p.textContext != nil && (job.OperationType == domain.OperationTextGenerate || isWebConversationMedia(job)) {
 		prepared, err := p.textContext.Prepare(ctx, job, pp.Prompt)
 		if err != nil {
 			return domain.ProviderRequest{}, err
@@ -2113,6 +2113,9 @@ func (p *processor) applyResult(ctx context.Context, job *domain.Job, pt *domain
 			return nil
 		}
 		if err := p.saveDialogAnswer(ctx, job, dialogAnswer); err != nil {
+			if isWebConversationMedia(job) {
+				return err
+			}
 			slog.WarnContext(ctx, "dialog context answer save failed",
 				slog.String("job_id", job.ID.String()),
 				logging.ErrorAttr(err))
@@ -2568,8 +2571,33 @@ func safeMediaFailureMessage(err error) string {
 	}
 }
 
+func isWebConversationMedia(job *domain.Job) bool {
+	if job == nil || job.Source != "web" || job.AccountID == uuid.Nil {
+		return false
+	}
+	if !((job.OperationType == domain.OperationImageGenerate && job.Modality == domain.ModalityImage) ||
+		(job.OperationType == domain.OperationVideoGenerate && job.Modality == domain.ModalityVideo)) {
+		return false
+	}
+	var pp promptParams
+	if json.Unmarshal(job.Params, &pp) != nil {
+		return false
+	}
+	id, err := uuid.Parse(pp.ConversationID)
+	return err == nil && id != uuid.Nil
+}
+
 func (p *processor) saveDialogAnswer(ctx context.Context, job *domain.Job, answer string) error {
-	if p.textContext == nil || answer == "" || job.OperationType != domain.OperationTextGenerate || job.Modality != domain.ModalityText {
+	if p.textContext == nil {
+		return nil
+	}
+	if isWebConversationMedia(job) {
+		if job.Modality == domain.ModalityVideo {
+			answer = "Видео готово."
+		} else {
+			answer = "Изображение готово."
+		}
+	} else if answer == "" || job.OperationType != domain.OperationTextGenerate || job.Modality != domain.ModalityText {
 		return nil
 	}
 	var pp promptParams

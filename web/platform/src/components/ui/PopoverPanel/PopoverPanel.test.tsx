@@ -1,14 +1,36 @@
-import { createRef } from "react";
-import { cleanup, fireEvent, render, screen } from "@testing-library/react";
+import { createRef, useRef, useState } from "react";
+import { act, cleanup, createEvent, fireEvent, render, screen } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
 import { PopoverPanel } from "./PopoverPanel";
 
 afterEach(() => {
   cleanup();
+  vi.useRealTimers();
   vi.restoreAllMocks();
   vi.unstubAllGlobals();
 });
+
+function InteractivePanel({ animated, onClose }: { animated?: boolean; onClose: () => void }) {
+  const [isOpen, setIsOpen] = useState(false);
+  const anchorRef = useRef<HTMLButtonElement>(null);
+  const close = () => { onClose(); setIsOpen(false); };
+  return (
+    <>
+      <button aria-expanded={isOpen} onClick={() => setIsOpen((open) => !open)} ref={anchorRef}>Настройки</button>
+      <button>Снаружи</button>
+      <PopoverPanel animated={animated} anchorRef={anchorRef} isOpen={isOpen} label="Настройки" onClose={close} width={352}>
+        <button onClick={close}>Выбрать</button>
+      </PopoverPanel>
+    </>
+  );
+}
+
+function finishTransition(element: Element) {
+  const event = createEvent.transitionEnd(element);
+  Object.defineProperty(event, "propertyName", { value: "opacity" });
+  fireEvent(element, event);
+}
 
 function renderPanel({ isOpen = true, align = "start", width = 352 }:
   { isOpen?: boolean; align?: "start" | "end"; width?: number } = {}) {
@@ -27,6 +49,79 @@ function renderPanel({ isOpen = true, align = "start", width = 352 }:
 }
 
 describe("PopoverPanel", () => {
+  it("allows its consumer to opt out of animation", () => {
+    render(<InteractivePanel animated={false} onClose={vi.fn()} />);
+    const trigger = screen.getByRole("button", { name: "Настройки" });
+    fireEvent.click(trigger);
+    const panel = screen.getByRole("dialog");
+    expect(panel).not.toHaveAttribute("data-motion-state");
+    fireEvent.keyDown(document, { key: "Escape" });
+    expect(panel).not.toBeInTheDocument();
+    expect(trigger).toHaveFocus();
+    fireEvent.click(trigger);
+    expect(screen.getByRole("dialog")).toBeVisible();
+  });
+
+  it.each(["escape", "trigger", "outside", "selection"])("keeps an inert panel until its %s close finishes", (method) => {
+    const onClose = vi.fn();
+    render(<InteractivePanel onClose={onClose} />);
+    const trigger = screen.getByRole("button", { name: "Настройки" });
+    fireEvent.click(trigger);
+    const panel = screen.getByRole("dialog");
+    expect(panel).toHaveAttribute("data-motion-state", "open");
+
+    if (method === "escape") fireEvent.keyDown(document, { key: "Escape" });
+    else if (method === "trigger") fireEvent.click(trigger);
+    else if (method === "selection") fireEvent.click(screen.getByRole("button", { name: "Выбрать" }));
+    else {
+      const outside = screen.getByRole("button", { name: "Снаружи" });
+      outside.focus();
+      fireEvent.mouseDown(outside);
+      expect(outside).toHaveFocus();
+    }
+
+    expect(panel).toBeInTheDocument();
+    expect(panel).toHaveAttribute("data-motion-state", "closing");
+    expect(panel).toHaveAttribute("inert");
+    expect(panel).toHaveAttribute("aria-hidden", "true");
+    expect(trigger).toHaveAttribute("aria-expanded", "false");
+    if (method === "escape") expect(trigger).toHaveFocus();
+    const closeCount = onClose.mock.calls.length;
+    fireEvent.keyDown(document, { key: "Escape" });
+    fireEvent.mouseDown(document.body);
+    expect(onClose).toHaveBeenCalledTimes(closeCount);
+    finishTransition(panel.querySelector("button")!);
+    expect(panel).toBeInTheDocument();
+    finishTransition(panel);
+    expect(panel).not.toBeInTheDocument();
+  });
+
+  it("reverses a quick close without losing the panel or focus to an old timer", () => {
+    vi.useFakeTimers();
+    render(<InteractivePanel onClose={vi.fn()} />);
+    const trigger = screen.getByRole("button", { name: "Настройки" });
+    fireEvent.click(trigger);
+    const panel = screen.getByRole("dialog");
+    fireEvent.click(trigger);
+    fireEvent.click(trigger);
+    expect(screen.getByRole("dialog")).toBe(panel);
+    expect(panel).not.toHaveAttribute("inert");
+    expect(screen.getByRole("button", { name: "Выбрать" })).toHaveFocus();
+    finishTransition(panel);
+    act(() => vi.advanceTimersByTime(1000));
+    expect(panel).toBeInTheDocument();
+  });
+
+  it("does not retain a closed panel when reduced motion is enabled", () => {
+    vi.stubGlobal("matchMedia", vi.fn(() => ({ matches: true, addEventListener: vi.fn(), removeEventListener: vi.fn() })));
+    render(<InteractivePanel onClose={vi.fn()} />);
+    const trigger = screen.getByRole("button", { name: "Настройки" });
+    fireEvent.click(trigger);
+    const panel = screen.getByRole("dialog");
+    fireEvent.click(trigger);
+    expect(panel).not.toBeInTheDocument();
+  });
+
   it("mounts the named dialog in the document body only while open", () => {
     const closed = renderPanel({ isOpen: false });
     expect(screen.queryByRole("dialog")).toBeNull();
@@ -95,6 +190,7 @@ describe("PopoverPanel", () => {
     expect(screen.getByRole("dialog", { name: "Настройки" })).toHaveStyle({
       left: `${expectedLeft}px`, top: `${expectedTop}px`, width: `${expectedWidth}px`, maxHeight: `${vh - 32}px`,
     });
+    expect(screen.getByRole("dialog")).toHaveAttribute("data-motion-origin", expectedTop < top ? "bottom" : "top");
   });
 
   it("follows its trigger when scrolling and stays in bounds after resizing", () => {

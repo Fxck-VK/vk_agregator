@@ -4,19 +4,9 @@ import {
   loadImageModelCatalog,
   resetImageModelCatalogCacheForTests,
 } from "./image-model-catalog-cache";
+import { publicModelCatalog } from "./model-catalog-test-fixtures";
 
-const validCatalogue = {
-  items: [
-    {
-      id: "nano-banana-2",
-      name: "Nano Banana",
-      quality_options: ["1K", "2K"],
-      default_quality: "1K",
-      supports_reference_image: true,
-      max_reference_images: 1,
-    },
-  ],
-};
+const validCatalogue = publicModelCatalog();
 
 function deferred<T>() {
   let resolve!: (value: T | PromiseLike<T>) => void;
@@ -39,7 +29,7 @@ describe("loadImageModelCatalog", () => {
     const second = loadImageModelCatalog({ fetcher });
 
     expect(fetcher).toHaveBeenCalledOnce();
-    expect(fetcher).toHaveBeenCalledWith("/web/v1/image-models");
+    expect(fetcher).toHaveBeenCalledWith("/web/v1/models");
     response.resolve(Response.json(validCatalogue));
     await expect(Promise.all([first, second])).resolves.toEqual([
       expect.objectContaining({ items: expect.any(Array) }),
@@ -57,6 +47,25 @@ describe("loadImageModelCatalog", () => {
     );
 
     expect(clone).not.toHaveBeenCalled();
+  });
+
+  it("projects image controls and server metadata from the unified catalogue", async () => {
+    const fetcher = vi.fn(() => Promise.resolve(Response.json(validCatalogue)));
+
+    await expect(loadImageModelCatalog({ fetcher })).resolves.toEqual({
+      items: [
+        expect.objectContaining({
+          id: "image",
+          description: "Server image description",
+          categories: ["popular", "images"],
+          default_aspect_ratio: "16:9",
+          price_by_variant: { "1K:1:1": 10, "1K:16:9": 12, "2K:1:1": 18, "2K:16:9": 20 },
+          quality_label: "Режим",
+          show_output_count: false,
+          max_prompt_bytes: 2048,
+        }),
+      ],
+    });
   });
 
   it("reuses a fresh successful catalogue then refetches after 60 seconds", async () => {

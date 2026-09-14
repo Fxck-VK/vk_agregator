@@ -5,8 +5,8 @@ vi.mock("@/lib/web-api/browser", () => ({
   webBrowserFetch: vi.fn(),
 }));
 
-vi.mock("@/features/conversations/ConversationModelSelector/chat-model-catalog", () => ({
-  loadChatModelCatalog: vi.fn(() => new Promise(() => {})),
+vi.mock("@/features/models/generation-model-catalog", () => ({
+  loadGenerationModelCatalog: vi.fn(() => new Promise(() => {})),
 }));
 
 import {
@@ -209,3 +209,6 @@ describe("ConversationHistoryLoader", () => {
     expect(webBrowserFetch).not.toHaveBeenCalled();
   });
 });
+
+
+vi.mock("@/features/models/image-model-catalog-cache", () => ({ loadImageModelCatalog: vi.fn(async () => ({items:[]})) }));

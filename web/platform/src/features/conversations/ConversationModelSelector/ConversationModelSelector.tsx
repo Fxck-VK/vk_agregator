@@ -3,13 +3,14 @@
 import { useEffect, useState } from "react";
 
 import { ModelSelector, type ModelSelectorStatus } from "@/features/models/WorkspaceModelSelector/ModelSelector";
-import type { ChatModelList } from "@/lib/web-api/contracts";
+import { loadGenerationModelCatalog, type GenerationModelCatalog } from "@/features/models/generation-model-catalog";
 
-import { loadChatModelCatalog } from "./chat-model-catalog";
+
+
 import styles from "./ConversationModelSelector.module.css";
 
 type ModelSelection = {
-  catalog: ChatModelList | null;
+  catalog: GenerationModelCatalog | null;
   selectedModelId: string;
   status: ModelSelectorStatus;
 };
@@ -24,7 +25,7 @@ export function useConversationModelSelection(conversationId: string) {
 
   useEffect(() => {
     let active = true;
-    void loadChatModelCatalog().then((catalog) => {
+    void loadGenerationModelCatalog().then((catalog) => {
       if (!active) return;
       let savedModel: string | null = null;
       try {
@@ -34,7 +35,7 @@ export function useConversationModelSelection(conversationId: string) {
       }
       const selectedModelId = catalog.items.find((model) => model.id === savedModel)?.id
         ?? catalog.default_model_id;
-      setSelection({ catalog, selectedModelId, status: "ready" });
+      setSelection({ catalog, selectedModelId, status: catalog.items.length > 0 ? "ready" : "failure" });
     }).catch(() => {
       if (active) setSelection((current) => ({ ...current, status: "failure" }));
     });
@@ -63,17 +64,12 @@ export function ConversationModelSelector({ disabled, selection }: Readonly<Conv
   return (
     <ModelSelector
       className={styles.selector}
+      descriptionMode="tooltip"
       dialogLabel="Выбор модели для диалога"
       disabled={disabled}
-      hideEmptySections
+      categoryErrors={selection.catalog?.categoryErrors}
       key={disabled ? "busy" : "ready"}
-      models={(selection.catalog?.items ?? []).map((model) => ({
-        ...model,
-        category: "text",
-        description: (model.estimate_credits ?? 0) > 0
-          ? `${model.estimate_credits} токенов за ответ · до ${model.max_output_tokens} токенов ответа`
-          : "Ответы на вопросы и работа с текстом в текущем диалоге",
-      }))}
+      models={selection.catalog?.items ?? []}
       onSelect={(model) => selection.selectModel(model.id)}
       renderInPortal
       selectedModelId={selection.selectedModelId}

@@ -11,11 +11,22 @@ vi.mock("@/features/models/WorkspaceModelSelector/WorkspaceModelSelector", () =>
 
 import { usePathname } from "next/navigation";
 
+import { loadPaymentProducts } from "@/features/payments/payments";
+vi.mock("@/features/payments/payments", async (original) => ({ ...await original<typeof import("@/features/payments/payments")>(), loadPaymentProducts: vi.fn() }));
+
 import { WorkspaceHeader } from "./WorkspaceHeader";
 
 describe("WorkspaceHeader", () => {
   beforeEach(() => {
     vi.mocked(usePathname).mockReturnValue("/app/profile");
+    sessionStorage.clear();
+    vi.mocked(loadPaymentProducts).mockResolvedValue({ checkout_available: true, items: [
+      { code: "20000", credits: 20000, amount: 920000, currency: "RUB" },
+      { code: "10000", credits: 10000, amount: 470000, currency: "RUB" },
+      { code: "3000", credits: 3000, amount: 150000, currency: "RUB" },
+      { code: "1500", credits: 1500, amount: 75000, currency: "RUB" },
+      { code: "800", credits: 800, amount: 40000, currency: "RUB" },
+    ] });
   });
 
   afterEach(() => {
@@ -68,7 +79,7 @@ describe("WorkspaceHeader", () => {
     expect(screen.getByTestId("workspace-balance")).not.toHaveTextContent("★");
   });
 
-  it("opens token top-up from the balance and selects a package", () => {
+  it("opens token top-up from the balance and selects a package", async () => {
     render(<WorkspaceHeader balance={104} />);
 
     const balanceButton = screen.getByRole("button", {
@@ -82,10 +93,8 @@ describe("WorkspaceHeader", () => {
     const dialog = screen.getByRole("dialog", { name: "Пополнить баланс токенов" });
     expect(balanceButton).toHaveAttribute("aria-expanded", "true");
     expect(screen.getByText("Выберите подходящий пакет токенов.")).toBeInTheDocument();
-    expect(screen.getAllByRole("radio")).toHaveLength(5);
+    expect(await screen.findAllByRole("radio")).toHaveLength(5);
     expect(screen.getByRole("radio", { name: "20 000 токенов за 9 200 ₽" })).toBeChecked();
-    expect(screen.getByText("10 575 ₽")).toBeInTheDocument();
-    expect(screen.getByText("-13%")).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "Купить за 9 200 ₽" })).toBeInTheDocument();
 
     fireEvent.click(screen.getByRole("radio", { name: "10 000 токенов за 4 700 ₽" }));

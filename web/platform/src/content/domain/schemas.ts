@@ -208,7 +208,7 @@ export const modelContentSchema = z
     kind: z.literal("model"),
     ...lifecycleFields,
     category: contentCategorySchema,
-    runtimeCatalogKey: contentSlugSchema.optional(),
+    runtimeCatalogKey: z.string().regex(/^[a-z0-9][a-z0-9_-]*$/).optional(),
     relatedToolIds: uniqueStringArray(contentIdSchema),
     relatedArticleIds: uniqueStringArray(contentIdSchema),
     translations: localizedModelTranslationsSchema,

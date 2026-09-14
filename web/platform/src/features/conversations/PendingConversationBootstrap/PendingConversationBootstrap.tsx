@@ -1,4 +1,5 @@
 "use client";
+import { savePendingMediaJob } from "../pending-media-job";
 
 import { useCallback, useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
@@ -73,7 +74,7 @@ export function PendingConversationBootstrap({ conversationKey }: PendingConvers
           "Content-Type": "application/json",
           "X-Idempotency-Key": currentIntent.messageKey,
         },
-        body: JSON.stringify({ prompt: currentIntent.prompt }),
+        body: JSON.stringify({ prompt: currentIntent.prompt, ...currentIntent.generationOptions, ...(currentIntent.modelId ? { model_id: currentIntent.modelId } : {}) }),
       });
       if (messageResponse.status !== 200 && messageResponse.status !== 201) {
         throw new Error("Unable to send first message.");
@@ -83,7 +84,15 @@ export function PendingConversationBootstrap({ conversationKey }: PendingConvers
         throw new Error("Unsafe first message response.");
       }
 
+      if (currentIntent.generationOptions && Object.keys(currentIntent.generationOptions).length > 0) savePendingMediaJob(conversationID, job.job_id, 0);
       savePendingConversationPrompt(conversationID, currentIntent.prompt);
+      if (currentIntent.modelId) {
+        try {
+          window.sessionStorage.setItem(`neirohub:conversation-model:${conversationID}`, currentIntent.modelId);
+        } catch {
+          // The accepted message must remain successful when storage is unavailable.
+        }
+      }
       clearPendingConversationBootstrap(conversationKey);
       router.replace(`/app/chat/${conversationID}?refresh=1`);
     } catch {

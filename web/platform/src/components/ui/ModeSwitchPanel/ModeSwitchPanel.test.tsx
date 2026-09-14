@@ -30,6 +30,28 @@ function ControlledPanel({ iconOnly = false }: { iconOnly?: boolean }) {
 }
 
 describe("ModeSwitchPanel", () => {
+  it("reveals the active tab in a narrow viewport without undoing manual scrolling", () => {
+    const measure = vi.spyOn(HTMLElement.prototype, "getBoundingClientRect").mockImplementation(function (this: HTMLElement) {
+      if (this.getAttribute("role") === "tablist") return new DOMRect(0, 0, 200, 44);
+      if (this.tagName === "BUTTON") {
+        const viewport = this.closest('[role="tablist"]') as HTMLElement;
+        return new DOMRect((this.textContent?.includes("Оживить") ? 300 : 10) - viewport.scrollLeft, 0, 80, 44);
+      }
+      return new DOMRect();
+    });
+    try {
+      const { rerender } = render(<ModeSwitchPanel activeID="animate" ariaLabel="Категории" items={items} onChange={vi.fn()} semantics="tabs" />);
+      const viewport = screen.getByRole("tablist");
+      expect(viewport.scrollLeft).toBe(180);
+      viewport.scrollLeft = 100;
+      rerender(<ModeSwitchPanel activeID="animate" ariaLabel="Категории" items={[...items]} onChange={vi.fn()} semantics="tabs" />);
+      expect(viewport.scrollLeft).toBe(100);
+      rerender(<ModeSwitchPanel activeID="general" ariaLabel="Категории" items={items} onChange={vi.fn()} semantics="tabs" />);
+      expect(viewport.scrollLeft).toBe(10);
+    } finally {
+      measure.mockRestore();
+    }
+  });
   it("places the initial indicator without a transition and restores motion for selection changes", () => {
     const measure = vi.spyOn(HTMLElement.prototype, "getBoundingClientRect")
       .mockImplementation(function (this: HTMLElement) {

@@ -15,7 +15,7 @@ export const models = [
     author: "NeiroHub editorial",
     reviewer: "NeiroHub review",
     category: "image",
-    runtimeCatalogKey: "gpt-image-2",
+    runtimeCatalogKey: "gpt_image_2",
     relatedToolIds: ["tool-image-generator"],
     relatedArticleIds: ["article-image-prompt-basics"],
     translations: {

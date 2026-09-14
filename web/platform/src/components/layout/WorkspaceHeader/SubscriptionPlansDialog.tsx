@@ -3,6 +3,7 @@
 import { useEffect, useRef } from "react";
 
 import { ModalBackdrop } from "@/components/ui/ModalBackdrop/ModalBackdrop";
+import { ModalCloseButton } from "@/components/ui/ModalCloseButton/ModalCloseButton";
 import { ScrollArea } from "@/components/ui/ScrollArea/ScrollArea";
 
 import styles from "./SubscriptionPlansDialog.module.css";
@@ -112,14 +113,6 @@ const teamFeatures = [
   ["Персональная поддержка", "Менеджер и быстрый саппорт"],
 ] as const;
 
-function CloseIcon() {
-  return (
-    <svg aria-hidden="true" fill="none" viewBox="0 0 24 24">
-      <path d="m6 6 12 12M18 6 6 18" stroke="currentColor" strokeLinecap="round" strokeWidth="1.8" />
-    </svg>
-  );
-}
-
 function PlanCard({ plan }: { plan: Plan }) {
   return (
     <article className={`${styles.planCard} ${plan.popular ? styles.popularPlan : ""}`}>
@@ -179,15 +172,12 @@ export function SubscriptionPlansDialog({ onClose }: SubscriptionPlansDialogProp
             <h2 id="subscription-plans-title">С подпиской — максимум возможностей</h2>
             <p>Выберите подходящий объём возможностей NeiroHub</p>
           </div>
-          <button
+          <ModalCloseButton
             aria-label="Закрыть тарифы"
-            className={styles.closeButton}
+            className={styles.closeButtonPlacement}
             onClick={requestClose}
             ref={closeButtonRef}
-            type="button"
-          >
-            <CloseIcon />
-          </button>
+          />
           <button className={styles.promoButton} type="button">Активировать промокод</button>
         </header>
 

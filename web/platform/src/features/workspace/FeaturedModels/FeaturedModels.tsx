@@ -6,8 +6,7 @@ import { useEffect, useState } from "react";
 
 import { assetPaths } from "@/assets/asset-paths";
 import { ModelCard } from "@/features/models/ModelCard/ModelCard";
-import { loadImageModelCatalog } from "@/features/models/image-model-catalog-cache";
-import type { ImageModel } from "@/lib/web-api/contracts";
+import { loadGenerationModelCatalog, type GenerationModel } from "@/features/models/generation-model-catalog";
 
 import styles from "./FeaturedModels.module.css";
 
@@ -32,14 +31,14 @@ function CatalogActionContent({ label }: { label: string }) {
 }
 
 export function FeaturedModels() {
-  const [models, setModels] = useState<ImageModel[]>([]);
+  const [models, setModels] = useState<GenerationModel[]>([]);
   const [loadState, setLoadState] = useState<LoadState>("loading");
   const [expanded, setExpanded] = useState(false);
 
   useEffect(() => {
     let active = true;
 
-    void loadImageModelCatalog()
+    void loadGenerationModelCatalog()
       .then((catalog) => {
         if (!active) return;
         setModels(catalog.items.slice(0, expandedModelLimit));

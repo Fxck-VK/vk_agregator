@@ -89,6 +89,10 @@ export function ConversationAssistantMessage({ message }: Readonly<{ message: Co
   return (
     <>
       <AssistantMessageContent markdown={message.text} omitImageArtifactIDs={images.map((image) => image.artifact.id)} />
+      {message.videos?.map(video => <video
+        aria-label="Сгенерированное видео" className={styles.video} controls playsInline preload="metadata"
+        key={video.id} src={`/web/v1/video-artifacts/${video.id}`}
+      />)}
       {images.length > 0 && gallery ? (
         <div className={styles.images}>
           {images.map((image) => (

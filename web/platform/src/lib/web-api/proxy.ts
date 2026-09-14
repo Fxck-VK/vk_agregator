@@ -4,6 +4,8 @@ import { canonicalizeWebApiPath } from "./path";
 
 const forwardedRequestHeaders = [
   "Accept",
+  "Range",
+  "If-Range",
   "Content-Type",
   "Origin",
   "X-CSRF-Token",
@@ -13,7 +15,7 @@ const forwardedRequestHeaders = [
 const returnCookieName = "__Host-nh-return-to";
 const imageArtifactRedirectOriginHeader = "X-NeiroHub-Image-Artifact-Origin";
 const imageArtifactPathPattern =
-  /^\/web\/v1\/image-artifacts\/[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+  /^\/web\/v1\/(?:image|video)-artifacts\/[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
 export const MAX_PROXY_REQUEST_BODY_BYTES = 64 * 1024;
 
@@ -44,7 +46,7 @@ function proxyRequestHeaders(requestHeaders: Headers): Headers {
 
 function proxyResponseHeaders(upstream: Headers): Headers {
   const headers = new Headers();
-  for (const header of ["Content-Type", "Cache-Control"]) {
+  for (const header of ["Content-Type", "Cache-Control", "Content-Range", "Accept-Ranges"]) {
     const value = upstream.get(header);
     if (value) {
       headers.set(header, value);

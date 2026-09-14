@@ -50,6 +50,7 @@ export function ModeSwitchPanel<ID extends string>({
   const buttonRefs = useRef<Array<HTMLButtonElement | null>>([]);
   const indicatorRef = useRef<HTMLSpanElement>(null);
   const viewportRef = useRef<HTMLElement>(null);
+  const revealedLayoutRef = useRef<{ activeID: ID; width: number } | null>(null);
 
   const updateIndicator = useCallback(() => {
     const activeIndex = items.findIndex((item) => item.id === activeID);
@@ -67,6 +68,17 @@ export function ModeSwitchPanel<ID extends string>({
     indicator.style.inlineSize = `${targetRect.width}px`;
     indicator.style.transform = `translate3d(${targetOffset}px, 0, 0)`;
     indicator.dataset.ready = "true";
+
+    // Reveal on selection/mount/resize only; scrolling the strip by hand must remain possible.
+    const previousLayout = revealedLayoutRef.current;
+    if (previousLayout?.activeID !== activeID || previousLayout.width !== viewportRect.width) {
+      revealedLayoutRef.current = { activeID, width: viewportRect.width };
+      if (targetRect.left < viewportRect.left) {
+        viewport.scrollLeft = Math.max(0, targetOffset);
+      } else if (targetRect.right > viewportRect.right) {
+        viewport.scrollLeft = Math.max(0, targetOffset + targetRect.width - viewportRect.width);
+      }
+    }
   }, [activeID, items]);
 
   useLayoutEffect(() => {

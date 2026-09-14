@@ -93,7 +93,7 @@ func New(repo domain.ConversationRepository, cfg Config) *Service {
 // explicit source/thread ref use that ref; legacy VK bot jobs fall back to
 // user_id + vk_peer_id.
 func (s *Service) Prepare(ctx context.Context, job *domain.Job, prompt string) (Prepared, error) {
-	if s == nil || !s.cfg.Enabled || s.repo == nil || !eligibleText(job) {
+	if s == nil || s.repo == nil || !(s.cfg.Enabled && eligibleText(job) || eligibleWebMedia(job)) {
 		return Prepared{Prompt: prompt, MaxOutputTokens: s.maxOutputTokens()}, nil
 	}
 	target := resolveConversationTarget(job)
@@ -142,6 +142,9 @@ func (s *Service) Prepare(ctx context.Context, job *domain.Job, prompt string) (
 		}
 	}
 
+	if eligibleWebMedia(job) {
+		return Prepared{ConversationID: conversation.ID, Prompt: prompt}, nil
+	}
 	summary, err := s.repo.LatestSummary(ctx, conversation.ID)
 	if errors.Is(err, domain.ErrNotFound) {
 		summary = nil
@@ -167,8 +170,17 @@ func (s *Service) Prepare(ctx context.Context, job *domain.Job, prompt string) (
 // Complete stores an assistant answer and updates the rolling summary if the
 // unsummarized history has grown beyond configured thresholds.
 func (s *Service) Complete(ctx context.Context, job *domain.Job, conversationID uuid.UUID, answer string) error {
-	if s == nil || !s.cfg.Enabled || s.repo == nil || !eligibleText(job) || conversationID == uuid.Nil || strings.TrimSpace(answer) == "" {
+	if s == nil || s.repo == nil || !(s.cfg.Enabled && eligibleText(job) || eligibleWebMedia(job)) || conversationID == uuid.Nil || strings.TrimSpace(answer) == "" {
 		return nil
+	}
+	if eligibleWebMedia(job) {
+		target := resolveConversationTarget(job)
+		if target.invalid || target.conversationID != conversationID {
+			return nil
+		}
+		if _, ok, err := s.getOrCreateConversation(ctx, job, target); err != nil || !ok {
+			return err
+		}
 	}
 	if _, err := s.repo.UpsertMessage(ctx, &domain.ConversationMessage{
 		ConversationID: conversationID,
@@ -191,6 +203,13 @@ func (s *Service) maxOutputTokens() int {
 
 func eligibleText(job *domain.Job) bool {
 	return job != nil && job.OperationType == domain.OperationTextGenerate && job.Modality == domain.ModalityText
+}
+
+func eligibleWebMedia(job *domain.Job) bool {
+	return job != nil && job.Source == "web" && job.AccountID != uuid.Nil &&
+		((job.OperationType == domain.OperationImageGenerate && job.Modality == domain.ModalityImage) ||
+			(job.OperationType == domain.OperationVideoGenerate && job.Modality == domain.ModalityVideo)) &&
+		resolveConversationTarget(job).ref.Source == domain.ConversationSourceWeb
 }
 
 func resolveConversationTarget(job *domain.Job) conversationTarget {

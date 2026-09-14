@@ -1,5 +1,6 @@
 import { WorkspaceHome } from "@/features/workspace/WorkspaceHome/WorkspaceHome";
 
-export default function ChatsPage() {
-  return <WorkspaceHome section="chats" />;
+export default async function ChatsPage({ searchParams }: { searchParams: Promise<{ model?: string | string[] }> }) {
+  const { model } = await searchParams;
+  return <WorkspaceHome chatModelId={typeof model === "string" ? model : undefined} section="chats" />;
 }

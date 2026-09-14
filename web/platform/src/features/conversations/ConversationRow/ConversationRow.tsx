@@ -463,28 +463,27 @@ export function ConversationRow({
         >
           <MoreIcon />
         </button>
-        {panelIsVisible && panel === "actions" ? (
-          <FloatingConversationPanel
-            anchorRef={actionToggleRef}
-            ariaLabel={`${ru.conversations.actionsLabel}: ${title}`}
-            className={styles.floatingPanel}
-            dismissible={!isPending}
-            onDismiss={dismissPanel}
-            placementKey={panel}
-            role="menu"
-          >
-            <div className={styles.menu}>
-              <button className={selectableStyles.control} disabled={isPending} onClick={() => openPanel("rename")} type="button">
-                <svg aria-hidden="true" viewBox="0 0 24 24"><path d="m4 20 4.3-1 10-10a2.1 2.1 0 0 0-3-3l-10 10L4 20Zm10-12 3 3" /></svg>
-                {ru.conversations.renameLabel}
-              </button>
-              <button className={`${selectableStyles.control} ${styles.deleteMenuItem}`} disabled={isPending} onClick={() => openPanel("archive")} type="button">
-                <svg aria-hidden="true" viewBox="0 0 24 24"><path d="M4 7h16m-10 4v6m4-6v6M9 4h6l1 3H8l1-3Zm-3 3 1 13h10l1-13" /></svg>
-                {ru.conversations.archiveLabel}
-              </button>
-            </div>
-          </FloatingConversationPanel>
-        ) : null}
+        <FloatingConversationPanel
+          anchorRef={actionToggleRef}
+          ariaLabel={`${ru.conversations.actionsLabel}: ${title}`}
+          className={styles.floatingPanel}
+          dismissible={!isPending}
+          isOpen={panelIsVisible && panel === "actions"}
+          onDismiss={dismissPanel}
+          placementKey="actions"
+          role="menu"
+        >
+          <div className={styles.menu}>
+            <button className={selectableStyles.control} disabled={isPending} onClick={() => openPanel("rename")} type="button">
+              <svg aria-hidden="true" viewBox="0 0 24 24"><path d="m4 20 4.3-1 10-10a2.1 2.1 0 0 0-3-3l-10 10L4 20Zm10-12 3 3" /></svg>
+              {ru.conversations.renameLabel}
+            </button>
+            <button className={`${selectableStyles.control} ${styles.deleteMenuItem}`} disabled={isPending} onClick={() => openPanel("archive")} type="button">
+              <svg aria-hidden="true" viewBox="0 0 24 24"><path d="M4 7h16m-10 4v6m4-6v6M9 4h6l1 3H8l1-3Zm-3 3 1 13h10l1-13" /></svg>
+              {ru.conversations.archiveLabel}
+            </button>
+          </div>
+        </FloatingConversationPanel>
       </div>
       )}
       {panelIsVisible && panel === "rename" && hasError ? (

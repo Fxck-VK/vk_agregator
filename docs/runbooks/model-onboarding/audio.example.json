@@ -1,0 +1,47 @@
+{
+  "schema_version": 1,
+  "public_id": "example_audio",
+  "provider": "example",
+  "provider_model_id": "example-audio-v1",
+  "revision": "v1",
+  "endpoint": "POST /example/audio",
+  "registry_fingerprint": "",
+  "status": "draft",
+  "categories": ["video-audio"],
+  "sources": [],
+  "operations": [
+    {
+      "id": "speech",
+      "kind": "audio",
+      "inputs": {
+        "images": {
+          "support": "unknown",
+          "enabled": false
+        },
+        "video": {
+          "support": "unknown",
+          "enabled": false
+        },
+        "audio": {
+          "support": "unknown",
+          "enabled": false
+        },
+        "documents": {
+          "support": "unknown",
+          "enabled": false
+        },
+        "max_total_bytes": 0
+      },
+      "audio": {
+        "tasks": [
+          "speech"
+        ],
+        "languages": [],
+        "voices": [],
+        "formats": [],
+        "max_duration_sec": 0
+      }
+    }
+  ],
+  "checks": []
+}

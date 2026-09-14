@@ -16,27 +16,40 @@ import { createPortal } from "react-dom";
 
 import { assetPaths } from "@/assets/asset-paths";
 import { SearchIcon } from "@/components/icons/SearchIcon";
+import { ModeSwitchPanel } from "@/components/ui/ModeSwitchPanel/ModeSwitchPanel";
 import { ScrollArea } from "@/components/ui/ScrollArea/ScrollArea";
+import selectableStyles from "@/components/ui/selectable-control.module.css";
 import { ru } from "@/i18n/ru";
 
 import { getModelPresentation } from "../ModelCard/model-card-content";
-import { ModelCard, type ModelCardModel } from "../ModelCard/ModelCard";
+import type { ModelCardModel } from "../ModelCard/ModelCard";
 import { ModelIcon } from "../ModelIcon/ModelIcon";
+import { ModelSelectorOption } from "./ModelSelectorOption";
+import {
+  getModelSelectorSections,
+  modelSelectorCategoryModelIds,
+  type ModelSelectorCategoryId,
+  type ModelSelectorCategoryModelIds,
+} from "./model-selector-sections";
 import styles from "./WorkspaceModelSelector.module.css";
 
 export type ModelSelectorCategory = "popular" | "images" | "text" | "video" | "audio";
 export type ModelSelectorModel = ModelCardModel & {
+  categories?: string[];
   category: Exclude<ModelSelectorCategory, "popular">;
+  isFree?: boolean;
 };
 export type ModelSelectorStatus = "loading" | "ready" | "failure";
 export type ModelSelectorVariant = "compact" | "panel" | "composer";
 
 type ModelSelectorProps = {
+  categoryErrors?: Partial<Record<ModelSelectorCategoryId, string>>;
+  categoryModelIds?: ModelSelectorCategoryModelIds;
   className?: string;
+  descriptionMode?: "inline" | "tooltip";
   dialogId?: string;
   dialogLabel?: string;
   disabled?: boolean;
-  hideEmptySections?: boolean;
   models: readonly ModelSelectorModel[];
   onSelect: (model: ModelSelectorModel) => void;
   renderInPortal?: boolean;
@@ -56,40 +69,26 @@ type PortalLayout = {
   placement: "bottom" | "top";
 };
 
-const popularModelLimit = 2;
 const compactNameLimit = 40;
 const portalEdge = 16;
 const popoverGap = 12;
 const popoverMaximumWidth = 512;
 const popoverMaximumHeight = 736;
+const composerPopoverHeight = 586;
 const portalLayer = 170;
-
-const categoryOrder: readonly ModelSelectorCategory[] = [
-  "popular",
-  "images",
-  "text",
-  "video",
-  "audio",
-];
-
-const categoryLabels: Readonly<Record<ModelSelectorCategory, string>> = {
-  popular: ru.modelSelector.categories.popular,
-  images: ru.modelSelector.categories.images,
-  text: ru.modelSelector.categories.text,
-  video: ru.modelSelector.categories.video,
-  audio: ru.modelSelector.categories.audio,
-};
 
 function getDefaultTriggerAriaLabel(name: string, isOpen: boolean) {
   return `Выбрана нейросеть ${name}. ${isOpen ? "Закрыть" : "Открыть"} список`;
 }
 
 export function ModelSelector({
+  categoryErrors,
+  categoryModelIds = modelSelectorCategoryModelIds,
   className,
+  descriptionMode = "inline",
   dialogId: providedDialogId,
   dialogLabel = ru.modelSelector.dialogLabel,
   disabled = false,
-  hideEmptySections = false,
   models,
   onSelect,
   renderInPortal = false,
@@ -106,6 +105,9 @@ export function ModelSelector({
   const triggerRef = useRef<HTMLButtonElement>(null);
   const hasFocusedOnOpen = useRef(false);
   const [query, setQuery] = useState("");
+  const [category, setCategory] = useState<ModelSelectorCategoryId>("popular");
+  const [activeDescriptionId, setActiveDescriptionId] = useState<string | null>(null);
+  const listViewportRef = useRef<HTMLElement>(null);
   const [popoverState, setPopoverState] = useState<PopoverState>("closed");
   const [portalLayout, setPortalLayout] = useState<PortalLayout | null>(null);
   const isOpen = popoverState === "open";
@@ -120,6 +122,23 @@ export function ModelSelector({
   const visibleTriggerText = variant === "compact" && triggerCharacters.length > compactNameLimit
     ? `${triggerCharacters.slice(0, compactNameLimit - 1).join("")}…`
     : triggerText;
+
+  const sections = useMemo(() => getModelSelectorSections(models, categoryModelIds, categoryErrors), [models, categoryModelIds, categoryErrors]);
+  const activeCategory = sections.some((section) => section.id === category) ? category : sections[0]?.id ?? "popular";
+  const panelId = `${dialogId}-models`;
+  const visibleSections = useMemo(() => {
+    const normalizedQuery = query.trim().toLocaleLowerCase("ru");
+    const orderedSections = [
+      ...sections.filter((section) => section.id === activeCategory),
+      ...sections.filter((section) => section.id !== activeCategory),
+    ];
+    return orderedSections.map((section) => ({
+      ...section,
+      models: section.models.filter((model) =>
+        `${model.name} ${model.id}`.toLocaleLowerCase("ru").includes(normalizedQuery),
+      ),
+    })).filter((section) => section.models.length > 0 || section.error);
+  }, [activeCategory, query, sections]);
 
   const requestClose = useCallback((restoreTriggerFocus = false) => {
     setPopoverState((currentState) => (
@@ -215,7 +234,7 @@ export function ModelSelector({
       const spaceBelow = Math.max(0, viewportHeight - triggerBounds.bottom - popoverGap - portalEdge);
       const spaceAbove = Math.max(0, triggerBounds.top - popoverGap - portalEdge);
       const desiredHeight = Math.min(
-        popover.scrollHeight || popoverMaximumHeight,
+        variant === "composer" ? composerPopoverHeight : popover.scrollHeight || popoverMaximumHeight,
         popoverMaximumHeight,
         viewportHeight - portalEdge * 2,
       );
@@ -231,7 +250,10 @@ export function ModelSelector({
           : "auto",
         insetBlockStart: placement === "bottom" ? triggerBounds.bottom + popoverGap : "auto",
         insetInlineStart,
-        maxBlockSize: Math.min(popoverMaximumHeight, Math.max(0, availableHeight)),
+        maxBlockSize: Math.min(
+          variant === "composer" ? desiredHeight : popoverMaximumHeight,
+          Math.max(0, availableHeight),
+        ),
         placement,
       });
     };
@@ -243,32 +265,17 @@ export function ModelSelector({
       window.removeEventListener("resize", updateLayout);
       window.removeEventListener("scroll", updateLayout, true);
     };
-  }, [popoverState, renderInPortal]);
+  }, [popoverState, renderInPortal, variant]);
 
-  const filteredModels = useMemo(() => {
-    const normalizedQuery = query.trim().toLocaleLowerCase("ru");
-    if (normalizedQuery.length === 0) return models;
+  useLayoutEffect(() => {
+    if (listViewportRef.current) listViewportRef.current.scrollTop = 0;
+  }, [activeCategory, query, sections]);
 
-    return models.filter((model) =>
-      `${model.name} ${model.id}`.toLocaleLowerCase("ru").includes(normalizedQuery),
-    );
-  }, [models, query]);
-
-  const modelSections = useMemo(() => {
-    const popularModelIds = new Set(
-      models.slice(0, popularModelLimit).map((model) => model.id),
-    );
-
-    return categoryOrder.map((category) => ({
-      id: category,
-      label: categoryLabels[category],
-      models: category === "popular"
-        ? filteredModels.filter((model) => popularModelIds.has(model.id))
-        : filteredModels.filter((model) => (
-          !popularModelIds.has(model.id) && model.category === category
-        )),
-    })).filter((section) => !hideEmptySections || section.models.length > 0);
-  }, [filteredModels, hideEmptySections, models]);
+  const promoteCategory = (id: ModelSelectorCategoryId) => {
+    setCategory(id);
+    setActiveDescriptionId(null);
+    if (listViewportRef.current) listViewportRef.current.scrollTop = 0;
+  };
 
   const triggerName = status === "loading"
     ? ru.modelSelector.loading
@@ -295,6 +302,7 @@ export function ModelSelector({
       ref={popoverRef}
       role="dialog"
       style={renderInPortal ? {
+        blockSize: variant === "composer" ? portalLayout?.maxBlockSize : undefined,
         inlineSize: portalLayout?.inlineSize,
         insetBlockEnd: portalLayout?.insetBlockEnd,
         insetBlockStart: portalLayout?.insetBlockStart,
@@ -310,7 +318,10 @@ export function ModelSelector({
         <input
           aria-label={ru.modelSelector.searchLabel}
           className={styles.search}
-          onChange={(event) => setQuery(event.target.value)}
+          onChange={(event) => {
+            setQuery(event.target.value);
+            setActiveDescriptionId(null);
+          }}
           placeholder={ru.modelSelector.searchPlaceholder}
           ref={searchRef}
           type="search"
@@ -318,53 +329,62 @@ export function ModelSelector({
         />
       </div>
 
-      <ScrollArea className={styles.scrollArea} viewportClassName={styles.scrollViewport}>
-        {filteredModels.length > 0 ? (
-          <div className={styles.modelSections}>
-            {modelSections.map((section) => {
-              const headingId = `${dialogId}-${section.id}`;
+      {sections.length > 0 ? <ModeSwitchPanel
+        activeID={activeCategory}
+        ariaLabel={ru.modelsCatalog.categoryTabsLabel}
+        className={styles.categoryPanel}
+        items={sections.map(({ id, label }) => ({ id, label }))}
+        onChange={promoteCategory}
+      /> : null}
 
-              return (
-                <section
-                  aria-labelledby={headingId}
-                  className={styles.modelSection}
-                  key={section.id}
-                >
-                  <h2 className={styles.category} id={headingId}>{section.label}</h2>
-                  {section.models.length > 0 ? (
-                    <ul aria-label={section.label} className={styles.options}>
-                      {section.models.map((model) => (
-                        <li key={model.id}>
-                          <ModelCard
-                            model={model}
-                            onActivate={selectModel}
-                            selected={model.id === selectedModelId}
-                            variant="selector"
-                          />
-                        </li>
-                      ))}
-                    </ul>
-                  ) : (
-                    <p className={styles.sectionEmpty}>{ru.modelSelector.sectionEmpty}</p>
-                  )}
-                </section>
-              );
-            })}
+      <ScrollArea
+        className={styles.scrollArea}
+        viewportClassName={styles.scrollViewport}
+        viewportProps={{ id: panelId, role: "region", "aria-label": ru.modelSelector.feedLabel, tabIndex: 0 }}
+        viewportRef={listViewportRef}
+      >
+        {visibleSections.length > 0 ? (
+          <div className={styles.categoryFeed}>
+            {visibleSections.map((section) => (
+              <section aria-labelledby={`${panelId}-${section.id}`} key={section.id}>
+                <h3 className={styles.categoryHeading} id={`${panelId}-${section.id}`}>{section.label}</h3>
+                {section.error ? <p className={styles.empty} role="status">{section.error}</p> : null}
+                {section.models.length > 0 ? <ul className={styles.options}>
+                  {section.models.map((model) => (
+                    <ModelSelectorOption
+                      descriptionMode={descriptionMode}
+                      isDescriptionActive={activeDescriptionId === `${section.id}:${model.id}`}
+                      isOpen={isOpen}
+                      key={model.id}
+                      model={model}
+                      onActivate={selectModel}
+                      onDescriptionActivate={() => setActiveDescriptionId(`${section.id}:${model.id}`)}
+                      popoverRef={popoverRef}
+                      selected={model.id === selectedModelId}
+                    />
+                  ))}
+                </ul> : null}
+              </section>
+            ))}
           </div>
         ) : (
-          <p className={styles.empty} role="status">{ru.modelSelector.empty}</p>
+          <p className={styles.empty} role="status">
+            {ru.modelSelector.empty}
+          </p>
         )}
       </ScrollArea>
 
-      <Link
-        className={styles.catalogueLink}
-        href="/app/models"
-        onClick={() => requestClose()}
-        prefetch={false}
-      >
-        <span>{ru.modelSelector.openCatalogue}</span>
-        <span aria-hidden="true">→</span>
-      </Link>
+      <div className={`${selectableStyles.actionItems} ${styles.catalogueFooter}`}>
+        <Link
+          className={`${selectableStyles.control} ${styles.catalogueLink}`}
+          href="/app/models"
+          onClick={() => requestClose()}
+          prefetch={false}
+        >
+          <span>{ru.modelSelector.openCatalogue}</span>
+          <span aria-hidden="true">→</span>
+        </Link>
+      </div>
     </section>
   );
 

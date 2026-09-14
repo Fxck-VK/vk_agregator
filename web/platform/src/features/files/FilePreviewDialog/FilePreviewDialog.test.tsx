@@ -1,9 +1,14 @@
 import { act, cleanup, fireEvent, render, screen, within } from "@testing-library/react";
-import { afterEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import type { ImageJob, ImageJobResult } from "@/lib/web-api/contracts";
 
 import { FilePreviewDialog, type FilePreviewItem } from "./FilePreviewDialog";
+import {
+  resetFileActionModelCatalogLoaderForTests,
+  setFileActionModelCatalogLoaderForTests,
+  type WorkspaceModelCatalog,
+} from "./file-action-models";
 
 const job: ImageJob = {
   cost_estimate: 50,
@@ -37,6 +42,50 @@ const items: FilePreviewItem[] = [
   },
 ];
 
+const emptyFileActionCatalog: WorkspaceModelCatalog = {
+  default_model_id: "",
+  items: [],
+  schema_version: 1,
+};
+
+const fileEditCatalog: WorkspaceModelCatalog = {
+  default_model_id: "catalog-edit",
+  items: [{
+    categories: ["popular", "images"],
+    description: "Catalog backed file editor.",
+    id: "catalog-edit",
+    kind: "image",
+    name: "Catalog Edit",
+    operations: [{
+      enabled: true,
+      id: "edit",
+      image: {
+        allowed_aspect_ratios: ["1:1", "16:9"],
+        default_aspect_ratio: "1:1",
+        default_quality: "HD",
+        max_output_count: 1,
+        max_reference_images: 1,
+        price_by_quality: { HD: 70, "4K": 90 },
+        price_by_variant: { "HD:1:1": 70, "4K:16:9": 90 },
+        quality_label: "Разрешение",
+        quality_options: ["HD", "4K"],
+        show_output_count: true,
+        supports_reference_image: true,
+      },
+      inputs: {
+        audio: { enabled: false, support: "unsupported" },
+        documents: { enabled: false, support: "unsupported" },
+        images: { enabled: true, support: "supported" },
+        max_total_bytes: 10_000_000,
+        video: { enabled: false, support: "unsupported" },
+      },
+      kind: "image",
+    }],
+    verification: "verified-contract",
+  }],
+  schema_version: 1,
+};
+
 function renderDialog({
   previewItems = items,
   onClose = vi.fn(),
@@ -59,8 +108,13 @@ function renderDialog({
 }
 
 describe("FilePreviewDialog", () => {
+  beforeEach(() => {
+    setFileActionModelCatalogLoaderForTests(async () => emptyFileActionCatalog);
+  });
+
   afterEach(() => {
     cleanup();
+    resetFileActionModelCatalogLoaderForTests();
     Reflect.deleteProperty(navigator, "share");
     Reflect.deleteProperty(navigator, "clipboard");
     vi.useRealTimers();
@@ -112,35 +166,25 @@ describe("FilePreviewDialog", () => {
   });
 
   it.each([
-    ["Оживить", "Генератор видео"],
-    ["Улучшить", "Nano Banana Pro"],
-    ["Удалить фон", "Recraft AI"],
-    ["Редактировать", "Nano Banana Pro"],
-  ] as const)("reuses the workspace model selector for the %s task", (taskLabel, modelName) => {
+    ["Оживить"],
+    ["Улучшить"],
+    ["Удалить фон"],
+    ["Редактировать"],
+  ] as const)("disables the %s model selector when the catalog has no file-input operation", async (taskLabel) => {
     renderDialog();
 
     fireEvent.click(screen.getByRole("button", { name: taskLabel }));
     const infoPanel = screen.getByRole("complementary");
-    const modelSelector = within(infoPanel).getByRole("button", {
-      name: `Выбрана модель ${modelName}. Открыть список`,
+    const modelSelector = await within(infoPanel).findByRole("button", {
+      name: "Нейросети временно недоступны",
     });
     expect(modelSelector.parentElement).toHaveAttribute("data-variant", "panel");
-    fireEvent.click(modelSelector);
-
-    const selectorDialog = screen.getByRole("dialog", {
-      name: `Выбор нейросети для «${taskLabel}»`,
-    });
-    expect(within(selectorDialog).getByRole("searchbox", { name: "Поиск нейросети" })).toBeInTheDocument();
-    expect(within(selectorDialog).getByRole("button", { name: new RegExp(modelName) })).toHaveAttribute(
-      "aria-pressed",
-      "true",
-    );
-    expect(within(selectorDialog).getByRole("link", {
-      name: "Все нейросети и возможности",
-    })).toHaveAttribute("href", "/app/models");
+    expect(modelSelector).toBeDisabled();
+    expect(within(infoPanel).queryByText("Генератор видео")).toBeNull();
+    expect(within(infoPanel).queryByText("Nano Banana Pro")).toBeNull();
   });
 
-  it("replaces the right panel with animation model controls", () => {
+  it("replaces the right panel with disabled animation model controls", async () => {
     renderDialog();
 
     const toolbar = screen.getByRole("toolbar");
@@ -155,31 +199,16 @@ describe("FilePreviewDialog", () => {
     expect(screen.queryByRole("link", { name: "Пересоздать" })).toBeNull();
     expect(screen.queryByRole("button", { name: "Поделиться файлом" })).toBeNull();
 
-    const modelSelector = within(infoPanel).getByRole("button", {
-      name: "Выбрана модель Генератор видео. Открыть список",
+    const modelSelector = await within(infoPanel).findByRole("button", {
+      name: "Нейросети временно недоступны",
     });
     expect(modelSelector).toHaveAttribute("aria-expanded", "false");
-    expect(within(infoPanel).getByRole("button", { name: "Оживить за 17 звёзд" })).toBeInTheDocument();
-
-    fireEvent.click(modelSelector);
-
-    expect(modelSelector).toHaveAttribute("aria-expanded", "true");
-    const selectorDialog = screen.getByRole("dialog", { name: "Выбор нейросети для «Оживить»" });
-    expect(within(selectorDialog).getAllByRole("button")).toHaveLength(4);
-    expect(within(selectorDialog).getByRole("button", { name: /Генератор видео/ })).toHaveAttribute(
-      "aria-pressed",
-      "true",
-    );
-
-    fireEvent.click(within(selectorDialog).getByRole("button", { name: /Google Veo 3.1/ }));
-
-    expect(within(infoPanel).getByRole("button", { name: "Оживить за 264 звезды" })).toBeInTheDocument();
-    expect(within(infoPanel).getByRole("button", {
-      name: "Выбрана модель Google Veo 3.1. Открыть список",
-    })).toHaveAttribute("aria-expanded", "false");
+    expect(modelSelector).toBeDisabled();
+    expect(within(infoPanel).getByRole("button", { name: "Оживить недоступно" })).toBeDisabled();
+    expect(within(infoPanel).queryByText("Google Veo 3.1")).toBeNull();
   });
 
-  it("replaces the right panel with image enhancement model controls", () => {
+  it("replaces the right panel with disabled image enhancement controls", async () => {
     renderDialog();
 
     const toolbar = screen.getByRole("toolbar");
@@ -193,31 +222,16 @@ describe("FilePreviewDialog", () => {
     expect(within(infoPanel).queryByText(job.prompt)).toBeNull();
     expect(screen.queryByRole("link", { name: "Пересоздать" })).toBeNull();
 
-    const modelSelector = within(infoPanel).getByRole("button", {
-      name: "Выбрана модель Nano Banana Pro. Открыть список",
+    const modelSelector = await within(infoPanel).findByRole("button", {
+      name: "Нейросети временно недоступны",
     });
     expect(modelSelector).toHaveAttribute("aria-expanded", "false");
-    expect(within(infoPanel).getByRole("button", { name: "Улучшить за 55 звёзд" })).toBeInTheDocument();
-
-    fireEvent.click(modelSelector);
-
-    expect(modelSelector).toHaveAttribute("aria-expanded", "true");
-    const selectorDialog = screen.getByRole("dialog", { name: "Выбор нейросети для «Улучшить»" });
-    expect(within(selectorDialog).getAllByRole("button")).toHaveLength(4);
-    expect(within(selectorDialog).getByRole("button", { name: /Nano Banana Pro/ })).toHaveAttribute(
-      "aria-pressed",
-      "true",
-    );
-
-    fireEvent.click(within(selectorDialog).getByRole("button", { name: /GPT Image 2/ }));
-
-    expect(within(infoPanel).getByRole("button", { name: "Улучшить за 51 звезду" })).toBeInTheDocument();
-    expect(within(infoPanel).getByRole("button", {
-      name: "Выбрана модель GPT Image 2. Открыть список",
-    })).toHaveAttribute("aria-expanded", "false");
+    expect(modelSelector).toBeDisabled();
+    expect(within(infoPanel).getByRole("button", { name: "Улучшить недоступно" })).toBeDisabled();
+    expect(within(infoPanel).queryByText("GPT Image 2")).toBeNull();
   });
 
-  it("replaces the right panel with background removal controls", () => {
+  it("replaces the right panel with disabled background removal controls", async () => {
     renderDialog();
 
     const toolbar = screen.getByRole("toolbar");
@@ -231,26 +245,16 @@ describe("FilePreviewDialog", () => {
     expect(within(infoPanel).queryByText(job.prompt)).toBeNull();
     expect(screen.queryByRole("link", { name: "Пересоздать" })).toBeNull();
 
-    const modelSelector = within(infoPanel).getByRole("button", {
-      name: "Выбрана модель Recraft AI. Открыть список",
+    const modelSelector = await within(infoPanel).findByRole("button", {
+      name: "Нейросети временно недоступны",
     });
     expect(modelSelector).toHaveAttribute("aria-expanded", "false");
-    expect(within(infoPanel).getByRole("button", { name: "Удалить фон за 5 звёзд" })).toBeInTheDocument();
-
-    fireEvent.click(modelSelector);
-
-    expect(modelSelector).toHaveAttribute("aria-expanded", "true");
-    const selectorDialog = screen.getByRole("dialog", {
-      name: "Выбор нейросети для «Удалить фон»",
-    });
-    expect(within(selectorDialog).getAllByRole("button")).toHaveLength(1);
-    expect(within(selectorDialog).getByRole("button", { name: /Recraft AI/ })).toHaveAttribute(
-      "aria-pressed",
-      "true",
-    );
+    expect(modelSelector).toBeDisabled();
+    expect(within(infoPanel).getByRole("button", { name: "Удалить фон недоступно" })).toBeDisabled();
+    expect(within(infoPanel).queryByText("Recraft AI")).toBeNull();
   });
 
-  it("replaces the right panel with local image editing controls", () => {
+  it("replaces the right panel with local image editing controls", async () => {
     renderDialog();
 
     const toolbar = screen.getByRole("toolbar");
@@ -272,54 +276,59 @@ describe("FilePreviewDialog", () => {
     expect(promptField).toHaveAttribute("data-scroll-area-viewport", "true");
     expect(promptField.closest('[data-ui="input-surface"]')).not.toBeNull();
     expect(within(infoPanel).getByRole("slider", { name: "Размер кисти" })).toHaveValue("32");
-    expect(within(infoPanel).getByRole("button", {
-      name: "Выбрана модель Nano Banana Pro. Открыть список",
-    })).toBeInTheDocument();
-    expect(within(infoPanel).getByRole("button", { name: "Соотношение сторон: 9:16" })).toBeInTheDocument();
-    expect(within(infoPanel).getByRole("button", { name: "Разрешение: 2K" })).toBeInTheDocument();
+    expect(await within(infoPanel).findByRole("button", {
+      name: "Нейросети временно недоступны",
+    })).toBeDisabled();
+    expect(within(infoPanel).queryByRole("button", { name: /Соотношение сторон:/ })).toBeNull();
+    expect(within(infoPanel).queryByRole("button", { name: /Разрешение:/ })).toBeNull();
     expect(within(infoPanel).getByRole("heading", { name: "Как работает" })).toBeInTheDocument();
     expect(within(infoPanel).getByText("Изменяет часть изображения")).toBeInTheDocument();
     expect(within(infoPanel).getByText(
       "Выделяет нужную область и позволяет описать, что в ней изменить.",
     )).toBeInTheDocument();
-    expect(within(infoPanel).getByRole("button", { name: "Редактировать за 55 звёзд" })).toBeInTheDocument();
+    expect(within(infoPanel).getByRole("button", { name: "Редактировать недоступно" })).toBeDisabled();
     expect(screen.queryByRole("link", { name: "Пересоздать" })).toBeNull();
   });
 
-  it("selects editor settings, keeps them across tools and resets them for another file", () => {
+  it("selects catalog editor settings, keeps them across tools and resets them for another file", async () => {
+    setFileActionModelCatalogLoaderForTests(async () => fileEditCatalog);
     renderDialog();
     fireEvent.click(screen.getByRole("button", { name: "Редактировать" }));
 
-    fireEvent.click(screen.getByRole("button", { name: "Соотношение сторон: 9:16" }));
-    expect(screen.getByRole("dialog", { name: "Соотношение сторон" })).toHaveStyle({ zIndex: "170" });
-    expect(screen.getByRole("radio", { name: "9:16" })).toHaveFocus();
-    fireEvent.click(screen.getByRole("radio", { name: "1:1" }));
-    expect(screen.getByRole("button", { name: "Соотношение сторон: 1:1" })).toHaveFocus();
+    await screen.findByRole("button", { name: "Выбрана модель Catalog Edit. Открыть список" });
 
-    fireEvent.click(screen.getByRole("button", { name: "Разрешение: 2K" }));
+    fireEvent.click(await screen.findByRole("button", { name: "Соотношение сторон: 1:1" }));
+    expect(screen.getByRole("dialog", { name: "Соотношение сторон" })).toHaveStyle({ zIndex: "170" });
+    expect(screen.queryByRole("radio", { name: "9:16" })).toBeNull();
+    expect(screen.getByRole("radio", { name: "1:1" })).toHaveFocus();
+    fireEvent.click(screen.getByRole("radio", { name: "16:9" }));
+    expect(screen.getByRole("button", { name: "Соотношение сторон: 16:9" })).toHaveFocus();
+
+    fireEvent.click(screen.getByRole("button", { name: "Разрешение: HD" }));
     expect(screen.getByRole("dialog", { name: "Разрешение" })).toHaveStyle({ zIndex: "170" });
-    expect(screen.getAllByRole("radio").map((radio) => radio.textContent)).toEqual(["1K", "2K", "4K"]);
+    expect(screen.getAllByRole("radio").map((radio) => radio.textContent)).toEqual(["HD", "4K"]);
     fireEvent.click(screen.getByRole("radio", { name: "4K" }));
     expect(screen.getByRole("button", { name: "Разрешение: 4K" })).toHaveFocus();
 
     fireEvent.click(screen.getByRole("button", { name: "Общая" }));
     fireEvent.click(screen.getByRole("button", { name: "Редактировать" }));
-    expect(screen.getByRole("button", { name: "Соотношение сторон: 1:1" })).toBeInTheDocument();
+    expect(await screen.findByRole("button", { name: "Соотношение сторон: 16:9" })).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "Разрешение: 4K" })).toBeInTheDocument();
 
     fireEvent.click(screen.getByRole("button", { name: "Следующий файл" }));
-    expect(screen.getByRole("button", { name: "Соотношение сторон: 9:16" })).toBeInTheDocument();
-    expect(screen.getByRole("button", { name: "Разрешение: 2K" })).toBeInTheDocument();
+    expect(await screen.findByRole("button", { name: "Соотношение сторон: 1:1" })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Разрешение: HD" })).toBeInTheDocument();
   });
 
-  it("keeps editor popover keyboard navigation separate from the file viewer", () => {
+  it("keeps editor popover keyboard navigation separate from the file viewer", async () => {
+    setFileActionModelCatalogLoaderForTests(async () => fileEditCatalog);
     const onSelect = vi.fn();
     const onClose = vi.fn();
     renderDialog({ onSelect, onClose });
     fireEvent.click(screen.getByRole("button", { name: "Редактировать" }));
-    const trigger = screen.getByRole("button", { name: "Разрешение: 2K" });
+    const trigger = await screen.findByRole("button", { name: "Разрешение: HD" });
     fireEvent.click(trigger);
-    const selected = screen.getByRole("radio", { name: "2K" });
+    const selected = screen.getByRole("radio", { name: "HD" });
 
     fireEvent.keyDown(selected, { key: "ArrowRight" });
     expect(onSelect).not.toHaveBeenCalled();
@@ -465,14 +474,14 @@ describe("FilePreviewDialog", () => {
     expect(editMask.querySelectorAll("[data-edit-stroke]")).toHaveLength(0);
   });
 
-  it("scrolls editor settings separately from the fixed submit button", () => {
+  it("scrolls editor settings separately from the fixed submit button", async () => {
     renderDialog();
     fireEvent.click(screen.getByRole("button", { name: "Редактировать" }));
 
     const infoPanel = screen.getByRole("complementary");
     const settingsViewport = within(infoPanel).getByLabelText("Параметры редактирования");
-    const submitButton = within(infoPanel).getByRole("button", {
-      name: "Редактировать за 55 звёзд",
+    const submitButton = await within(infoPanel).findByRole("button", {
+      name: "Редактировать недоступно",
     });
 
     expect(settingsViewport).toHaveAttribute("data-scroll-area-viewport", "true");
@@ -482,13 +491,14 @@ describe("FilePreviewDialog", () => {
     expect(settingsViewport).not.toContainElement(submitButton);
   });
 
-  it("opens the editor model list above when the scroll viewport lacks room below", () => {
+  it("opens the editor model list above when the scroll viewport lacks room below", async () => {
+    setFileActionModelCatalogLoaderForTests(async () => fileEditCatalog);
     renderDialog();
     fireEvent.click(screen.getByRole("button", { name: "Редактировать" }));
 
     const infoPanel = screen.getByRole("complementary");
-    const modelSelector = within(infoPanel).getByRole("button", {
-      name: "Выбрана модель Nano Banana Pro. Открыть список",
+    const modelSelector = await within(infoPanel).findByRole("button", {
+      name: "Выбрана модель Catalog Edit. Открыть список",
     });
     const modelListId = modelSelector.getAttribute("aria-controls");
     let modelSelectorTop = 620;
@@ -516,13 +526,14 @@ describe("FilePreviewDialog", () => {
     }
   });
 
-  it("keeps an upward editor model list inside the browser viewport", () => {
+  it("keeps an upward editor model list inside the browser viewport", async () => {
+    setFileActionModelCatalogLoaderForTests(async () => fileEditCatalog);
     renderDialog();
     fireEvent.click(screen.getByRole("button", { name: "Редактировать" }));
 
     const infoPanel = screen.getByRole("complementary");
-    const modelSelector = within(infoPanel).getByRole("button", {
-      name: "Выбрана модель Nano Banana Pro. Открыть список",
+    const modelSelector = await within(infoPanel).findByRole("button", {
+      name: "Выбрана модель Catalog Edit. Открыть список",
     });
     const modelListId = modelSelector.getAttribute("aria-controls");
 

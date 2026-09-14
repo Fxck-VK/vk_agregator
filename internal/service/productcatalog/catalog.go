@@ -350,30 +350,10 @@ func imageDescription(modelID string) string {
 }
 
 func imageQualityOptions(modelID string) []string {
-	switch modelID {
-	case modelcatalog.MiniAppImageGPTImage25Flare, modelcatalog.MiniAppImageGPTImage25Sunburst:
-		return providermodels.GPTImage25Qualities()
-	case modelcatalog.MiniAppImageSeedream50Lite:
-		return []string{"2K", "3K", "4K"}
-	case modelcatalog.MiniAppImageSeedream50Pro:
-		return []string{"1.5K", "1K", "2K"}
-	case modelcatalog.MiniAppImageFlux2Pro:
-		return []string{"1MP", "2MP", "3MP", "4MP"}
-	case modelcatalog.MiniAppImageMidjourneyV7:
-		return []string{"relax", "fast", "turbo"}
-	case modelcatalog.MiniAppImageGrokImage15, modelcatalog.MiniAppImageGrokImage20:
-		return []string{pricingcatalog.ImageQualityStandard}
-	case modelcatalog.MiniAppImageNanoBanana2,
-		modelcatalog.MiniAppImageNanoBananaPro,
-		modelcatalog.MiniAppImageGPTImage2:
-		return []string{modelcatalog.ImageQuality1K, modelcatalog.ImageQuality2K, modelcatalog.ImageQuality4K}
-	case modelcatalog.MiniAppImageSeedream45:
-		return []string{modelcatalog.ImageQuality2K, modelcatalog.ImageQuality4K}
-	case modelcatalog.MiniAppImageQwenImage3:
-		return []string{modelcatalog.ImageQuality1K, modelcatalog.ImageQuality2K}
-	default:
-		return nil
+	if model, ok := providermodels.StaticRegistry().PublicImageModel(modelID); ok {
+		return append([]string(nil), model.Limits.AllowedQualities...)
 	}
+	return nil
 }
 
 func imageDefaultQuality(modelID string) string {

@@ -18,3 +18,40 @@
   position: fixed;
   z-index: 50;
 }
+
+.motion {
+  --popover-hidden-clip: inset(0 0 100% 0);
+  clip-path: inset(0);
+  opacity: 1;
+  transition: clip-path var(--motion-normal), opacity var(--motion-normal);
+}
+
+.motion[data-motion-origin="bottom"] {
+  --popover-hidden-clip: inset(100% 0 0 0);
+}
+
+.motion[data-motion-state="closing"] {
+  clip-path: var(--popover-hidden-clip);
+  opacity: 0;
+  pointer-events: none;
+}
+
+@starting-style {
+  .motion[data-motion-state="open"] {
+    clip-path: var(--popover-hidden-clip);
+    opacity: 0;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .motion {
+    transition: none;
+  }
+
+  @starting-style {
+    .motion[data-motion-state="open"] {
+      clip-path: inset(0);
+      opacity: 1;
+    }
+  }
+}

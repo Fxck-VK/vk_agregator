@@ -21,6 +21,8 @@ type ImageGenerationComposerProps = ImageGenerationControlsProps & {
 export function ImageGenerationComposer({
   access = "authenticated",
   modelID,
+  qualityLabel,
+  showOutputCount,
   allowedAspectRatios,
   aspectRatio,
   canSubmit,
@@ -51,6 +53,8 @@ export function ImageGenerationComposer({
         leadingControls={(
           <ImageGenerationControls
             modelID={modelID}
+            qualityLabel={qualityLabel}
+            showOutputCount={showOutputCount}
             allowedAspectRatios={allowedAspectRatios}
             aspectRatio={aspectRatio}
             imageQuality={imageQuality}
@@ -73,7 +77,7 @@ export function ImageGenerationComposer({
         uploadedMediaHref={access === "guest" ? "/login" : undefined}
         note={priceNote ?? (price === null
           ? ru.imageGeneration.priceUnavailable
-          : <CreditAmount prefix={modelID === "midjourney_v7" ? "За запуск Imagine:" : `${ru.imageGeneration.priceLabel}:`} value={price} />)}
+          : <CreditAmount prefix={`${ru.imageGeneration.priceLabel}:`} value={price} />)}
         onChange={(event) => onPromptChange(event.target.value)}
         onSend={onSubmit}
         placeholder={ru.imageGeneration.promptPlaceholder}

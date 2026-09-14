@@ -16,6 +16,9 @@ describe("shared model-card integration", () => {
     const selector = readSource(
       "src/features/models/WorkspaceModelSelector/ModelSelector.tsx",
     );
+    const selectorOption = readSource(
+      "src/features/models/WorkspaceModelSelector/ModelSelectorOption.tsx",
+    );
     const workspaceSelector = readSource(
       "src/features/models/WorkspaceModelSelector/WorkspaceModelSelector.tsx",
     );
@@ -23,19 +26,20 @@ describe("shared model-card integration", () => {
       "src/features/workspace/FeaturedModelShortcuts/FeaturedModelShortcuts.tsx",
     );
 
-    expect(presentation).toContain("artworkSrc?: string");
     expect(presentation).toContain("getModelPresentation");
-    expect(presentation).toContain("/app/image?model=${encodeURIComponent(model.id)}");
+    expect(presentation).not.toContain("modelPresentationById");
+    expect(presentation).toContain("/app/chats?model=${encodeURIComponent(model.id)}");
     expect(card).toContain("getModelPresentation(model)");
-    expect(selector).toContain('<ModelCard');
-    expect(selector).toContain('variant="selector"');
+    expect(selector).toContain('<ModelSelectorOption');
+    expect(selectorOption).toContain('<ModelCard');
+    expect(selectorOption).toContain('variant="selector"');
     expect(selector).toContain("getModelPresentation(selectedModel)");
     expect(selector).toContain("src={selectedModelPresentation?.artworkSrc}");
     expect(selector).not.toMatch(
       /styles\.(?:option|optionSelected|optionIcon|optionCopy|optionTitle|optionDescription)\b/,
     );
     expect(workspaceSelector).toContain("<ModelSelector");
-    expect(shortcuts).toContain("getModelPresentation(model)");
+    expect(shortcuts).not.toContain("NeiroHub Chat");
     expect(shortcuts).not.toContain("artworkByModelId");
   });
 });

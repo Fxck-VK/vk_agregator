@@ -1,0 +1,46 @@
+{
+  "schema_version": 1,
+  "public_id": "example_image",
+  "provider": "example",
+  "provider_model_id": "example-image-v1",
+  "revision": "v1",
+  "endpoint": "POST /example/image",
+  "registry_fingerprint": "",
+  "status": "draft",
+  "categories": ["images"],
+  "sources": [],
+  "operations": [
+    {
+      "id": "generate",
+      "kind": "image",
+      "inputs": {
+        "images": {
+          "support": "unknown",
+          "enabled": false
+        },
+        "video": {
+          "support": "unknown",
+          "enabled": false
+        },
+        "audio": {
+          "support": "unknown",
+          "enabled": false
+        },
+        "documents": {
+          "support": "unknown",
+          "enabled": false
+        },
+        "max_total_bytes": 0
+      },
+      "image": {
+        "variants": [],
+        "default_variant": 0,
+        "formats": [],
+        "max_output_count": 0,
+        "mask": "unsupported",
+        "transparent_background": false
+      }
+    }
+  ],
+  "checks": []
+}

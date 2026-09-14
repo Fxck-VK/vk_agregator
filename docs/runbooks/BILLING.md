@@ -63,6 +63,51 @@ Events:
 
 The route must reach `cmd/provider-webhook`, not `cmd/api`.
 
+## Web platform test checkout
+
+The web uses the existing account-native payment service and ledger pipeline:
+
+- `GET /web/v1/payment-products`: authenticated active server catalog, amount in
+  kopecks, current-denomination credits, and `checkout_available`.
+- `POST /web/v1/payments/intents`: cookie session + Origin/CSRF + UUID
+  `X-Idempotency-Key`; accepts only `product_code`.
+  Keys are namespaced by account. Creation is limited to 10 requests/min/account.
+  The Account Layer resolves the authenticated account's verified email for the
+  receipt server-side; the browser cannot supply a contact. No usable email
+  returns 422 before payment creation. Contacts never enter browser DTOs/logs.
+- `GET /web/v1/payments/{id}`: exact account ownership, safe status DTO.
+  Only approved HTTPS YooKassa checkout hosts may reach the browser.
+
+This rollout permits **test checkout only**: `APP_ENV=development|staging`,
+`PAYMENT_PROVIDER=yookassa`, configured `YOOKASSA_SHOP_ID`, a test secret key
+(`test_` prefix), and a valid `WEB_ORIGIN`. Live/mock or incomplete configurations
+leave checkout unavailable. Credentials belong in runtime secrets, never the
+frontend or chat. The existing provider-webhook runtime must use the same shop.
+
+Account-native web payments return to `WEB_ORIGIN/app/payment-return?payment_id=...`.
+This server-owned return URL does not change VK/Mini App return URLs. The ID is
+not payment proof. The authenticated page polls the stored status every 3 seconds
+for up to 2 minutes, with a manual retry after timeout/network errors. It refreshes
+the server-owned workspace balance only after `succeeded`. Pending IDs and request
+keys may survive refresh in sessionStorage; receipt email, payment credentials and
+checkout URLs are not stored there.
+
+Deploy `platform` and `api` together. The existing `provider-webhook` processing
+and reconciliation must be running; no new migration is needed. For a smoke test,
+use an account with a verified email, select a server package, complete the test checkout and
+verify exactly one ledger top-up even after a repeated webhook/status reload.
+Cancel a second checkout and verify no top-up. Use the
+[official test-payment instructions](https://yookassa.ru/developers/payment-acceptance/testing-and-going-live/testing).
+
+The current `/payments` receipt integration requires a customer contact before
+redirecting to checkout. Removing the web email field does not move contact
+collection to YooKassa: the existing verified account email supplies the receipt.
+See [receipt requirements](https://yookassa.ru/developers/payment-acceptance/receipts/54fz/yoomoney/payments).
+
+`NEIROHUB_LOCAL_WORKSPACE_PREVIEW=1` is read-only UI preview: its sample packages
+always have `checkout_available=false`, and payment requests are never forwarded.
+Disable preview and use the real authenticated API for a provider integration test.
+
 ## Payment Smoke
 
 Before real-money confidence, verify:

@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { generationOptionsSchema } from "@/features/models/generation-options-contract";
 
 const pendingConversationBootstrapPrefix = "neirohub.pending-conversation-bootstrap:";
 
@@ -8,6 +9,8 @@ const pendingConversationBootstrapSchema = z
     conversationId: z.string().uuid().optional(),
     messageKey: z.string().uuid(),
     prompt: z.string().trim().min(1),
+    modelId: z.string().trim().min(1).optional(),
+    generationOptions: generationOptionsSchema.optional(),
   })
   .strict();
 

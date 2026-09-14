@@ -35,6 +35,13 @@ export const assetPaths = {
   images: {
     credits: {
       star: "/assets/images/credits/credit-star.png",
+      packages: {
+        tokens800: "/assets/images/credits/token-package-800.png",
+        tokens1500: "/assets/images/credits/token-package-1500.png",
+        tokens3000: "/assets/images/credits/token-package-3000.png",
+        tokens10000: "/assets/images/credits/token-package-10000.png",
+        tokens20000: "/assets/images/credits/token-package-20000.png",
+      },
     },
     inspiration: {
       birthdayPhotoStrip: "/assets/images/inspiration/birthday-photo-strip.png",

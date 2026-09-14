@@ -24,6 +24,20 @@ describe("proxyWebApiRequest", () => {
     },
   );
 
+  it("forwards a video byte range while keeping the authenticated same-origin response", async () => {
+    const fetchMock = vi.fn(async () => new Response("2345", {status:206,headers:{"Content-Type":"video/mp4","Content-Range":"bytes 2-5/10","Accept-Ranges":"bytes","Cache-Control":"no-store"}}));
+    vi.stubGlobal("fetch",fetchMock);
+    const path = "/web/v1/video-artifacts/4e9defcb-59d7-4d45-bc2e-7cdb770ad729";
+    const response = await proxyWebApiRequest(new Request(`https://platform.example${path}`,{headers:{Range:"bytes=2-5",Cookie:"nh_access=session"}}),path,internalOrigin);
+    expect(fetchMock).toHaveBeenCalledWith(`${internalOrigin}${path}`,expect.objectContaining({headers:expect.any(Headers)}));
+    const headers = new Headers((fetchMock.mock.calls[0] as unknown as [string,RequestInit])[1].headers);
+    expect(headers.get("Range")).toBe("bytes=2-5");
+    expect(headers.get("Cookie")).toBe("nh_access=session");
+    expect(response.status).toBe(206);
+    expect(response.headers.get("Content-Range")).toBe("bytes 2-5/10");
+    expect(await response.text()).toBe("2345");
+  });
+
   it("forwards session and CSRF cookies but strips the platform-only return cookie", async () => {
     const upstreamHeaders = new Headers({
       "Cache-Control": "no-store",

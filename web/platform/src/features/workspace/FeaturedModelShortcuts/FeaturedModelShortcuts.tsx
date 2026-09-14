@@ -2,10 +2,9 @@
 
 import { useEffect, useState } from "react";
 
-import { loadImageModelCatalog } from "@/features/models/image-model-catalog-cache";
+import { loadGenerationModelCatalog, type GenerationModel } from "@/features/models/generation-model-catalog";
 import { getModelPresentation } from "@/features/models/ModelCard/model-card-content";
 import { ModelIcon } from "@/features/models/ModelIcon/ModelIcon";
-import type { ImageModel } from "@/lib/web-api/contracts";
 
 import styles from "./FeaturedModelShortcuts.module.css";
 
@@ -15,45 +14,68 @@ type LoadState = "loading" | "ready" | "failed";
 
 type FeaturedModelShortcutsProps = {
   selectedModelId: string | null;
-  onSelect: (model: ImageModel | null) => void;
+  onSelect: (model: GenerationModel) => void;
+  onTextModelLoad?: (model: GenerationModel | null) => void;
   disabled?: boolean;
 };
 
-export function FeaturedModelShortcuts({ selectedModelId, onSelect, disabled = false }: FeaturedModelShortcutsProps) {
-  const [models, setModels] = useState<ImageModel[]>([]);
+function hasCategory(model: GenerationModel, category: string) {
+  return model.categories?.includes(category) ?? false;
+}
+
+function isImageModel(model: GenerationModel) {
+  return hasCategory(model, "images");
+}
+
+function isTextModel(model: GenerationModel) {
+  return hasCategory(model, "text");
+}
+
+export function FeaturedModelShortcuts({ selectedModelId, onSelect, onTextModelLoad, disabled = false }: FeaturedModelShortcutsProps) {
+  const [chatModel, setChatModel] = useState<GenerationModel | null>(null);
+  const [models, setModels] = useState<GenerationModel[]>([]);
   const [loadState, setLoadState] = useState<LoadState>("loading");
 
   useEffect(() => {
     let active = true;
 
-    void loadImageModelCatalog()
-      .then((catalogue) => {
+    void loadGenerationModelCatalog()
+      .then((catalog) => {
         if (!active) return;
-        setModels(catalogue.items.slice(0, featuredModelShortcutLimit));
+        const nextChatModel =
+          catalog.items.find((model) => model.id === catalog.default_model_id && isTextModel(model))
+          ?? catalog.items.find(isTextModel)
+          ?? null;
+        setChatModel(nextChatModel);
+        onTextModelLoad?.(nextChatModel);
+        setModels(catalog.items.filter(isImageModel).slice(0, featuredModelShortcutLimit));
         setLoadState("ready");
       })
       .catch(() => {
         if (!active) return;
+        onTextModelLoad?.(null);
         setLoadState("failed");
       });
 
     return () => {
       active = false;
     };
-  }, []);
+  }, [onTextModelLoad]);
 
   return <>
-    <button
-      aria-label="Выбрать модель: NeiroHub Chat"
-      aria-pressed={selectedModelId === null}
-      className={styles.shortcut}
-      disabled={disabled}
-      onClick={() => onSelect(null)}
-      type="button"
-    >
-      <ModelIcon className={styles.icon} />
-      <span>NeiroHub Chat</span>
-    </button>
+    {loadState === "ready" && chatModel !== null ? (
+      <button
+        aria-label={`Выбрать модель: ${chatModel.name}`}
+        aria-pressed={selectedModelId === chatModel.id}
+        className={styles.shortcut}
+        disabled={disabled}
+        onClick={() => onSelect(chatModel)}
+        type="button"
+      >
+        <ModelIcon className={styles.icon} src={getModelPresentation(chatModel).artworkSrc} />
+        <span>{chatModel.name}</span>
+      </button>
+    ) : null}
     {loadState === "loading" ? Array.from({ length: featuredModelShortcutLimit }, (_, index) => (
       <span
         aria-hidden="true"

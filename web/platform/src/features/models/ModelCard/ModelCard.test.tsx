@@ -19,10 +19,11 @@ import { ModelCard } from "./ModelCard";
 describe("ModelCard", () => {
   afterEach(() => cleanup());
 
-  it("renders the approved shared name and description without catalogue-only facts", () => {
+  it("renders the approved shared name and server description without catalogue-only facts", () => {
     render(
       <ModelCard
         model={{
+          description: "Server supplied card description",
           default_quality: "1K",
           id: "nano-banana-2",
           max_reference_images: 1,
@@ -34,9 +35,7 @@ describe("ModelCard", () => {
     );
 
     const heading = screen.getByRole("heading", { level: 3, name: "Nano Banana 2" });
-    const description = screen.getByText(
-      "Быстрая генерация и редактирование изображений для повседневных задач",
-    );
+    const description = screen.getByText("Server supplied card description");
 
     expect(heading).toBeInTheDocument();
     expect(
@@ -108,7 +107,7 @@ describe("ModelCard", () => {
     const card = screen.getByRole("button", { name: /Nano \/ Banana/ });
     expect(card).toHaveAttribute("aria-pressed", "true");
     expect(card).toHaveTextContent(
-      "Nano / Banana для создания изображений по вашему описанию",
+      "Nano / Banana доступна для выбора в NeiroHub.",
     );
     expect(screen.queryByTestId("credit-star-icon")).not.toBeInTheDocument();
     expect(card).toHaveClass(selectableStyles.control);
@@ -116,7 +115,7 @@ describe("ModelCard", () => {
     fireEvent.click(card);
     expect(onActivate).toHaveBeenCalledExactlyOnceWith(
       model,
-      "/app/image?model=nano%20%2F%20banana",
+      "/app/chats?model=nano%20%2F%20banana",
     );
   });
 
@@ -136,7 +135,7 @@ describe("ModelCard", () => {
 
     expect(screen.getByRole("link", { name: /Nano Banana/i })).toHaveAttribute(
       "href",
-      "/app/image?model=nano-banana-2",
+      "/app/chats?model=nano-banana-2",
     );
     expect(screen.queryByText(ru.modelsCatalog.openGeneratorLabel)).not.toBeInTheDocument();
     expect(screen.queryByText(/provider|price|description/i)).not.toBeInTheDocument();
@@ -220,7 +219,7 @@ describe("ModelCard", () => {
     expect(screen.queryByTestId("credit-star-icon")).not.toBeInTheDocument();
   });
 
-  it("opens the new GPT image variants using the shared catalogue card", () => {
+  it("opens new generation variants through the shared chat route", () => {
     render(
       <ModelCard
         model={{
@@ -234,7 +233,7 @@ describe("ModelCard", () => {
       />,
     );
 
-    expect(screen.getByRole("link")).toHaveAttribute("href", "/app/image?model=gpt_image_2_5_flare");
+    expect(screen.getByRole("link")).toHaveAttribute("href", "/app/chats?model=gpt_image_2_5_flare");
     expect(screen.getByRole("heading", { name: "GPT Image 2.5 Flare" })).toBeVisible();
     expect(screen.queryByText("1K-medium")).not.toBeInTheDocument();
   });

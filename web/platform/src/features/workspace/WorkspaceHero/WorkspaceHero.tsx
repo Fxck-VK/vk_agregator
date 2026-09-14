@@ -5,7 +5,7 @@ import { useCallback, useRef, useState, type ReactNode } from "react";
 import { ImageGenerationControls } from "@/features/image-generation/ImageGenerationComposer/ImageGenerationControls";
 import { ImageGenerationFeedback } from "@/features/image-generation/ImageGenerationPanel/ImageGenerationFeedback";
 import { useImageGeneration } from "@/features/image-generation/ImageGenerationPanel/useImageGeneration";
-import type { ImageModel } from "@/lib/web-api/contracts";
+import type { GenerationModel } from "@/features/models/generation-model-catalog";
 import { ru } from "@/i18n/ru";
 
 import { FeaturedModelShortcuts } from "../FeaturedModelShortcuts/FeaturedModelShortcuts";
@@ -21,30 +21,36 @@ type WorkspaceHeroProps = {
 };
 
 export function WorkspaceHero({ access, allModelsLink, modelLinksClassName }: WorkspaceHeroProps) {
-  const [selectedModel, setSelectedModel] = useState<ImageModel | null>(null);
+  const [selectedModel, setSelectedModel] = useState<GenerationModel | null>(null);
+  const selectedImageModel = selectedModel?.category === "images" ? selectedModel : null;
   const [prompt, setPrompt] = useState("");
   const controlsRef = useRef<HTMLDivElement>(null);
   const [exitingControls, setExitingControls] = useState<ExitingControlsSnapshot | null>(null);
   const finishControlsExit = useCallback(() => setExitingControls(null), []);
-  const generation = useImageGeneration({ access, model: selectedModel, promptValue: prompt, onPromptChange: setPrompt });
+  const selectInitialTextModel = useCallback((model: GenerationModel | null) => {
+    setSelectedModel((current) => current ?? model);
+  }, []);
+  const generation = useImageGeneration({ access, model: selectedImageModel, promptValue: prompt, onPromptChange: setPrompt });
 
   return (
     <>
       <div className={styles.composer}>
         <WorkspacePrompt
           access={access}
-          leadingControls={selectedModel === null ? (
+          chatModelUnavailable={selectedModel === null}
+          leadingControls={selectedImageModel === null ? (
             exitingControls === null ? undefined : (
               <ExitingModelControls onComplete={finishControlsExit} snapshot={exitingControls} />
             )
           ) : (
-            <div className={styles.modelControls} key={selectedModel.id} ref={controlsRef}>
+            <div className={styles.modelControls} key={selectedImageModel.id} ref={controlsRef}>
               <ImageGenerationControls {...generation.composerProps} isSubmitting={generation.busy} />
             </div>
           )}
           onPromptChange={generation.stage === "result" ? generation.createAnother : generation.changePrompt}
           promptValue={prompt}
-          submitAction={selectedModel === null ? undefined : {
+          selectedGenerationModel={selectedModel ?? undefined}
+          submitAction={selectedImageModel === null ? undefined : {
             canSubmit: generation.canPrepare,
             disabled: generation.busy,
             label: generation.stage === "preparing" ? ru.imageGeneration.preparing : ru.imageGeneration.generate,
@@ -58,11 +64,12 @@ export function WorkspaceHero({ access, allModelsLink, modelLinksClassName }: Wo
         <FeaturedModelShortcuts
           disabled={generation.busy}
           onSelect={(model) => {
-            if (generation.busy || model?.id === selectedModel?.id) return;
-            setExitingControls(model === null ? captureExitingControls(controlsRef.current, generation.composerProps) : null);
+            if (generation.busy || model.id === selectedModel?.id) return;
+            setExitingControls(model.category === "text" ? captureExitingControls(controlsRef.current, generation.composerProps) : null);
             generation.reset();
             setSelectedModel(model);
           }}
+          onTextModelLoad={selectInitialTextModel}
           selectedModelId={selectedModel?.id ?? null}
         />
         {allModelsLink}

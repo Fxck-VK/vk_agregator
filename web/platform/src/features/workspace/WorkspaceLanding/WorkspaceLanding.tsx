@@ -304,10 +304,10 @@ export function WorkspaceLanding({ access = "authenticated" }: WorkspaceLandingP
           <nav aria-label="Разделы платформы" className={styles.footerColumns}>
             <div className={styles.footerColumn}>
               <strong>Нейросети</strong>
-              <Link href="/app/image?model=nano-banana-2">Nano Banana 2</Link>
-              <Link href="/app/image?model=nano-banana-pro">Nano Banana Pro</Link>
-              <Link href="/app/image?model=gpt-image-2">GPT Image 2</Link>
-              <Link href="/app/image?model=seedream-4-5">Seedream 4.5</Link>
+              <Link href="/app/image?model=nano_banana_2">Nano Banana 2</Link>
+              <Link href="/app/image?model=nano_banana_pro">Nano Banana Pro</Link>
+              <Link href="/app/image?model=gpt_image_2">GPT Image 2</Link>
+              <Link href="/app/image?model=seedream_4_5">Seedream 4.5</Link>
               <Link href="/app/models">Все нейросети</Link>
             </div>
             <div className={styles.footerColumn}>

@@ -17,7 +17,7 @@ import { ScrollArea } from "@/components/ui/ScrollArea/ScrollArea";
 import { ImageAspectRatioSelector } from "@/features/image-generation/ImageAspectRatioSelector/ImageAspectRatioSelector";
 import { ImageQualitySelector } from "@/features/image-generation/ImageQualitySelector/ImageQualitySelector";
 
-import { getFileActionModels } from "./file-action-models";
+import { type FileActionModel, useFileActionModels } from "./file-action-models";
 import styles from "./FileEditorPanel.module.css";
 import { FileTaskModelSelector } from "./FileTaskModelSelector";
 
@@ -37,8 +37,6 @@ const editZoomLevels = [1, 1.2, 1.5, 2, 3, 4, 5];
 
 const brushSizeMin = 8;
 const brushSizeMax = 80;
-const editModels = getFileActionModels("edit");
-const editQualityOptions = ["1K", "2K", "4K"] as const;
 
 export type FileEditorController = {
   addStroke: (stroke: EditStrokeInput) => void;
@@ -176,12 +174,70 @@ function CreditStar() {
   );
 }
 
+function getSelectedImageOptions(model: FileActionModel | null) {
+  return model?.operation.image ?? null;
+}
+
+function firstOption(options: readonly string[] | undefined, fallback = "") {
+  return options?.[0] ?? fallback;
+}
+
+function selectedOption(
+  options: readonly string[],
+  currentValue: string,
+  preferredValue: string | undefined,
+) {
+  if (options.includes(currentValue)) return currentValue;
+  if (preferredValue && options.includes(preferredValue)) return preferredValue;
+  return firstOption(options);
+}
+
+function selectedImageCost(
+  model: FileActionModel,
+  quality: string,
+  aspectRatio: string,
+) {
+  const image = model.operation.image;
+  if (!image) return model.cost;
+  return image.price_by_variant[`${quality}:${aspectRatio}`]
+    ?? image.price_by_quality[quality]
+    ?? model.cost;
+}
+
 export function FileEditorPanel({
   controller,
 }: Readonly<{ controller: FileEditorController }>) {
-  const [selectedModelId, setSelectedModelId] = useState<string>(editModels[0].id);
-  const selectedModel = editModels.find((model) => model.id === selectedModelId) ?? editModels[0];
+  const { models, status } = useFileActionModels("edit");
+  const [selectedModelId, setSelectedModelId] = useState("");
+  const selectedModel = models.find((model) => model.id === selectedModelId) ?? models[0] ?? null;
+  const selectedImageOptions = getSelectedImageOptions(selectedModel);
+  const qualityOptions = selectedImageOptions?.quality_options ?? [];
+  const allowedAspectRatios = selectedImageOptions?.allowed_aspect_ratios ?? [];
+  const selectedImageQuality = selectedImageOptions
+    ? selectedOption(qualityOptions, controller.imageQuality, selectedImageOptions.default_quality)
+    : controller.imageQuality;
+  const selectedAspectRatio = selectedImageOptions
+    ? selectedOption(allowedAspectRatios, controller.aspectRatio, selectedImageOptions.default_aspect_ratio)
+    : controller.aspectRatio;
+  const selectedCost = selectedModel === null
+    ? null
+    : selectedImageCost(selectedModel, selectedImageQuality, selectedAspectRatio);
+  const submitLabel = selectedModel === null
+    ? "Редактировать недоступно"
+    : `Редактировать за ${selectedCost} звёзд`;
   const isBrushSizeVisible = controller.tool !== "lasso";
+
+  useEffect(() => {
+    if (!selectedImageOptions) return;
+
+    if (selectedImageQuality && selectedImageQuality !== controller.imageQuality) {
+      controller.setImageQuality(selectedImageQuality);
+    }
+
+    if (selectedAspectRatio && selectedAspectRatio !== controller.aspectRatio) {
+      controller.setAspectRatio(selectedAspectRatio);
+    }
+  }, [controller, selectedAspectRatio, selectedImageOptions, selectedImageQuality]);
 
   return (
     <section aria-label="Настройки редактирования" className={styles.panel}>
@@ -317,31 +373,40 @@ export function FileEditorPanel({
           <div className={`${styles.field} ${styles.modelField}`}>
             <span>Модель</span>
             <FileTaskModelSelector
+              models={models}
               onSelect={setSelectedModelId}
-              selectedModelId={selectedModelId}
+            selectedModelId={selectedModel?.id ?? ""}
+              status={status}
               task="edit"
             />
           </div>
 
-          <section className={styles.controlSection}>
-            <h3>Настройки генерации</h3>
-            <div className={styles.generationSettings}>
-              <ImageAspectRatioSelector
-                disabled={false}
-                onChange={controller.setAspectRatio}
-                portalLayer={170}
-                value={controller.aspectRatio}
-              />
-              <ImageQualitySelector
-                disabled={false}
-                label="Разрешение"
-                onChange={controller.setImageQuality}
-                options={editQualityOptions}
-                portalLayer={170}
-                value={controller.imageQuality}
-              />
-            </div>
-          </section>
+          {selectedImageOptions !== null ? (
+            <section className={styles.controlSection}>
+              <h3>Настройки генерации</h3>
+              <div className={styles.generationSettings}>
+                {allowedAspectRatios.length > 0 ? (
+                  <ImageAspectRatioSelector
+                    disabled={false}
+                    onChange={controller.setAspectRatio}
+                    options={allowedAspectRatios}
+                    portalLayer={170}
+                    value={selectedAspectRatio}
+                  />
+                ) : null}
+                {qualityOptions.length > 0 ? (
+                  <ImageQualitySelector
+                    disabled={false}
+                    label={selectedImageOptions.quality_label ?? "Разрешение"}
+                    onChange={controller.setImageQuality}
+                    options={qualityOptions}
+                    portalLayer={170}
+                    value={selectedImageQuality}
+                  />
+                ) : null}
+              </div>
+            </section>
+          ) : null}
 
           <section className={styles.howItWorks}>
             <h3>Как работает</h3>
@@ -364,12 +429,19 @@ export function FileEditorPanel({
       </ScrollArea>
 
       <button
-        aria-label={`Редактировать за ${selectedModel.cost} звёзд`}
+        aria-label={submitLabel}
         className={styles.submitButton}
+        disabled
         type="button"
       >
-        Редактировать за {selectedModel.cost}
-        <CreditStar />
+        {selectedModel === null ? (
+          submitLabel
+        ) : (
+          <>
+            Редактировать за {selectedCost}
+            <CreditStar />
+          </>
+        )}
       </button>
     </section>
   );

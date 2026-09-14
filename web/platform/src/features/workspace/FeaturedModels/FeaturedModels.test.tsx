@@ -1,17 +1,19 @@
 import { fireEvent, render, screen } from "@testing-library/react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
-vi.mock("@/features/models/image-model-catalog-cache", () => ({
-  loadImageModelCatalog: vi.fn(),
+vi.mock("@/features/models/generation-model-catalog", () => ({
+  loadGenerationModelCatalog: vi.fn(),
 }));
 
-import { loadImageModelCatalog } from "@/features/models/image-model-catalog-cache";
-import type { ImageModel } from "@/lib/web-api/contracts";
+import { loadGenerationModelCatalog } from "@/features/models/generation-model-catalog";
 
 import { FeaturedModels } from "./FeaturedModels";
 
-function createModel(index: number): ImageModel {
+function createModel(index: number) {
   return {
+    category: index % 2 === 0 ? "text" as const : "images" as const,
+    categories: [index % 2 === 0 ? "text" : "images"],
+    description: `Описание модели ${index}`,
     id: `model-${index}`,
     name: `Модель ${index}`,
     quality_options: ["1K"],
@@ -24,9 +26,11 @@ function createModel(index: number): ImageModel {
 
 describe("FeaturedModels", () => {
   beforeEach(() => {
-    vi.mocked(loadImageModelCatalog).mockResolvedValue({
+    vi.mocked(loadGenerationModelCatalog).mockResolvedValue({
+      default_model_id: "model-2",
+      categoryErrors: {},
       items: Array.from({ length: 6 }, (_, index) => createModel(index + 1)),
-    });
+    } as Awaited<ReturnType<typeof loadGenerationModelCatalog>>);
   });
 
   it("reveals two more cards before offering the complete catalogue", async () => {
@@ -61,9 +65,11 @@ describe("FeaturedModels", () => {
   });
 
   it("links directly to the catalogue when there are no hidden cards", async () => {
-    vi.mocked(loadImageModelCatalog).mockResolvedValue({
+    vi.mocked(loadGenerationModelCatalog).mockResolvedValue({
+      default_model_id: "model-2",
+      categoryErrors: {},
       items: Array.from({ length: 4 }, (_, index) => createModel(index + 1)),
-    });
+    } as Awaited<ReturnType<typeof loadGenerationModelCatalog>>);
 
     render(<FeaturedModels />);
 

@@ -6,13 +6,14 @@
   border: 0.0625rem solid rgb(255 255 255 / 20%);
   border-radius: 0.875rem;
   background: rgb(11 12 15 / 70%);
-  color: #fff;
-  transition: border-color var(--motion-fast);
+  color: var(--panel-surface-text-muted);
+  transition: border-color var(--motion-fast), color var(--motion-fast);
 }
 
 .button:hover,
 .button:focus-visible {
   border-color: var(--input-focus-border-color);
+  color: #fff;
   outline: none;
 }
 
@@ -41,4 +42,10 @@
 
 .icon::after {
   transform: translate(-50%, -50%) rotate(-45deg);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .button {
+    transition: none;
+  }
 }

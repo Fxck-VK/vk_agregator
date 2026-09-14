@@ -17,18 +17,18 @@ describe("TokenTopUpDialog styles", () => {
     expect(cardRule).toContain("--color-text-muted: var(--panel-surface-text)");
     expect(cardRule).not.toMatch(/(?:background|border|border-radius|box-shadow):/);
     expect(stylesheet).not.toContain(".selectionMark");
-    expect(stylesheet).toMatch(/\.packageMark span\s*\{[^}]*background:\s*var\(--gradient-brand\);/s);
     expect(stylesheet).toMatch(/\.priceLine mark\s*\{[^}]*background:\s*var\(--gradient-brand\);/s);
     expect(stylesheet).toMatch(/\.purchaseButton\s*\{[^}]*background:\s*var\(--gradient-brand\);/s);
   });
 
-  it("keeps the complete purchase dialog inside the viewport", () => {
+  it("keeps the purchase dialog at eighty percent of the viewport", () => {
     expect(stylesheet).toMatch(
-      /\.dialog\s*\{[^}]*block-size:\s*min\(50\.75rem, calc\(100dvh - 2rem\)\);[^}]*min-block-size:\s*37rem;[^}]*overflow:\s*hidden;/s,
+      /\.dialog\s*\{[^}]*block-size:\s*80dvh;[^}]*min-block-size:\s*0;[^}]*overflow:\s*hidden;/s,
     );
     expect(stylesheet).toMatch(
-      /\.packageList\s*\{[^}]*grid-template-rows:\s*repeat\(5, minmax\(0, 1fr\)\);[^}]*min-block-size:\s*0;/s,
+      /\.packageList\s*\{[^}]*min-block-size:\s*0;/s,
     );
     expect(stylesheet).toMatch(/\.packageCard\s*\{[^}]*min-block-size:\s*0;/s);
+    expect(stylesheet).not.toContain("min-block-size: 100dvh");
   });
 });

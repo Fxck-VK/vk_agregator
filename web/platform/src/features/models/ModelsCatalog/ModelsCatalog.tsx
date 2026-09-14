@@ -4,33 +4,24 @@ import { useDeferredValue, useEffect, useMemo, useState } from "react";
 
 import { WorkspacePageFrame } from "@/components/layout/WorkspacePageFrame/WorkspacePageFrame";
 import { ru } from "@/i18n/ru";
-import type { ImageModel } from "@/lib/web-api/contracts";
 
-import { loadImageModelCatalog } from "../image-model-catalog-cache";
+import { loadGenerationModelCatalog, type GenerationModel } from "../generation-model-catalog";
 import { ModelCard } from "../ModelCard/ModelCard";
 import {
   getModelCatalogCategoryTabId,
   ModelCatalogToolbar,
   type ModelCatalogCategory,
 } from "../ModelCatalogToolbar/ModelCatalogToolbar";
-import {
-  catalogPlaceholderModels,
-  isCatalogPlaceholderModel,
-} from "./catalog-placeholder-models";
-import { filterAndSortImageModels } from "./model-filters";
+import { filterAndSortCatalogModels } from "./model-filters";
 import styles from "./ModelsCatalog.module.css";
 
 type CatalogStatus = "loading" | "ready" | "failure";
 
 const modelsCatalogPanelId = "models-catalog-panel";
 
-type ModelsCatalogProps = {
-  includePlaceholders?: boolean;
-};
-
-export function ModelsCatalog({ includePlaceholders = false }: ModelsCatalogProps = {}) {
+export function ModelsCatalog() {
   const [status, setStatus] = useState<CatalogStatus>("loading");
-  const [models, setModels] = useState<ImageModel[]>([]);
+  const [models, setModels] = useState<GenerationModel[]>([]);
   const [query, setQuery] = useState("");
   const [category, setCategory] = useState<ModelCatalogCategory["id"]>("popular");
   const deferredQuery = useDeferredValue(query);
@@ -40,16 +31,12 @@ export function ModelsCatalog({ includePlaceholders = false }: ModelsCatalogProp
 
     const loadModels = async () => {
       try {
-        const catalog = await loadImageModelCatalog();
+        const catalog = await loadGenerationModelCatalog();
         if (!active) {
           return;
         }
-        setModels(
-          includePlaceholders
-            ? [...catalog.items, ...catalogPlaceholderModels]
-            : catalog.items,
-        );
-        setStatus("ready");
+        setModels(catalog.items);
+        setStatus(catalog.items.length === 0 && Object.keys(catalog.categoryErrors).length > 0 ? "failure" : "ready");
       } catch {
         if (active) {
           setStatus("failure");
@@ -61,14 +48,13 @@ export function ModelsCatalog({ includePlaceholders = false }: ModelsCatalogProp
     return () => {
       active = false;
     };
-  }, [includePlaceholders]);
+  }, []);
 
   const filteredModels = useMemo(
-    () => filterAndSortImageModels(models, { query: deferredQuery, referenceOnly: false, quality: null }, "catalog"),
-    [deferredQuery, models],
+    () => filterAndSortCatalogModels(models, { category, query: deferredQuery }, "catalog"),
+    [category, deferredQuery, models],
   );
   const selectedCategory = ru.modelsCatalog.categories.find((item) => item.id === category) ?? ru.modelsCatalog.categories[0];
-  const showImageModels = category === "popular" || category === "images";
 
   return (
     <WorkspacePageFrame>
@@ -104,24 +90,19 @@ export function ModelsCatalog({ includePlaceholders = false }: ModelsCatalogProp
             >
               <h2 className={styles.sectionTitle}>{selectedCategory.label}</h2>
 
-              {showImageModels && filteredModels.length === 0 ? (
+              {filteredModels.length === 0 ? (
                 <p className={styles.emptyState}>{ru.modelsCatalog.empty}</p>
               ) : null}
 
-              {showImageModels && filteredModels.length > 0 ? (
+              {filteredModels.length > 0 ? (
                 <div className={styles.grid}>
                   {filteredModels.map((model) => (
                     <ModelCard
-                      interactive={!isCatalogPlaceholderModel(model)}
                       key={model.id}
                       model={model}
                     />
                   ))}
                 </div>
-              ) : null}
-
-              {!showImageModels ? (
-                <p className={styles.emptyState}>{ru.modelsCatalog.categoryComingSoon(selectedCategory.label)}</p>
               ) : null}
             </div>
           </>

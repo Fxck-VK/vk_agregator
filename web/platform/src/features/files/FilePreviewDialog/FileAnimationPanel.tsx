@@ -4,8 +4,8 @@ import Image from "next/image";
 import { useState } from "react";
 
 import {
-  fileModelTaskConfiguration,
   type FileModelTask,
+  useFileActionModels,
 } from "./file-action-models";
 import styles from "./FileAnimationPanel.module.css";
 import { FileTaskModelSelector } from "./FileTaskModelSelector";
@@ -50,9 +50,12 @@ function FileModelActionPanel({
   title,
   titleIconSrc,
 }: Readonly<FileModelActionPanelProps>) {
-  const models = fileModelTaskConfiguration[task].models;
-  const [selectedModelId, setSelectedModelId] = useState<string>(models[0].id);
-  const selectedModel = models.find((model) => model.id === selectedModelId) ?? models[0];
+  const { models, status } = useFileActionModels(task);
+  const [selectedModelId, setSelectedModelId] = useState("");
+  const selectedModel = models.find((model) => model.id === selectedModelId) ?? models[0] ?? null;
+  const actionButtonLabel = selectedModel === null
+    ? `${actionLabel} недоступно`
+    : `${actionLabel} за ${getActionCreditAmountLabel(selectedModel.cost)}`;
 
   return (
     <section aria-label={panelLabel} className={styles.panel}>
@@ -71,19 +74,28 @@ function FileModelActionPanel({
       <div className={styles.modelControl}>
         <span className={styles.modelLabel}>Модель</span>
         <FileTaskModelSelector
+          models={models}
           onSelect={setSelectedModelId}
-          selectedModelId={selectedModelId}
+          selectedModelId={selectedModel?.id ?? ""}
+          status={status}
           task={task}
         />
       </div>
 
       <button
-        aria-label={`${actionLabel} за ${getActionCreditAmountLabel(selectedModel.cost)}`}
+        aria-label={actionButtonLabel}
         className={styles.actionButton}
+        disabled
         type="button"
       >
-        {actionLabel} за {selectedModel.cost}
-        <CreditStar />
+        {selectedModel === null ? (
+          actionButtonLabel
+        ) : (
+          <>
+            {actionLabel} за {selectedModel.cost}
+            <CreditStar />
+          </>
+        )}
       </button>
     </section>
   );

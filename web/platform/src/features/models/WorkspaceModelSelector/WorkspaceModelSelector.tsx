@@ -1,13 +1,15 @@
 "use client";
 
 import { useRouter, useSearchParams } from "next/navigation";
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useState } from "react";
 
 import { ru } from "@/i18n/ru";
-import type { ImageModel } from "@/lib/web-api/contracts";
+import { loadGenerationModelCatalog, type GenerationModelCatalog } from "../generation-model-catalog";
 
-import { loadImageModelCatalog } from "../image-model-catalog-cache";
-import { getModelPresentation } from "../ModelCard/model-card-content";
+
+
+
+
 import { useWorkspaceModelSelection } from "../WorkspaceModelSelection/WorkspaceModelSelection";
 import {
   ModelSelector,
@@ -23,57 +25,39 @@ export function WorkspaceModelSelector() {
   const workspaceSelectedModelId = workspaceSelection?.selectedModelId ?? null;
   const setWorkspaceModelId = workspaceSelection?.setSelectedModelId;
   const [status, setStatus] = useState<ModelSelectorStatus>("loading");
-  const [models, setModels] = useState<ImageModel[]>([]);
+  const [models, setModels] = useState<ModelSelectorModel[]>([]);
   const [selectedModelId, setSelectedModelId] = useState("");
+  const [catalogFailures, setCatalogFailures] = useState<GenerationModelCatalog["categoryErrors"]>({});
 
   useEffect(() => {
     let active = true;
 
-    void loadImageModelCatalog()
-      .then((catalogue) => {
-        if (!active) return;
-
-        const requestedModelExists = requestedModelId !== null
-          && catalogue.items.some((model) => model.id === requestedModelId);
-        const workspaceModelExists = workspaceSelectedModelId !== null
-          && catalogue.items.some((model) => model.id === workspaceSelectedModelId);
-        const initialModelId = requestedModelExists
-          ? requestedModelId
-          : workspaceModelExists
-            ? workspaceSelectedModelId
-            : (catalogue.items[0]?.id ?? "");
-
-        setModels(catalogue.items);
-        setSelectedModelId(initialModelId);
-        if (initialModelId !== "") {
-          setWorkspaceModelId?.(initialModelId);
-        }
-        setStatus(catalogue.items.length > 0 ? "ready" : "failure");
-      })
-      .catch(() => {
-        if (active) setStatus("failure");
-      });
+    void loadGenerationModelCatalog().then((catalog) => {
+      if (!active) return;
+      setModels(catalog.items);
+      setCatalogFailures(catalog.categoryErrors);
+      setStatus(catalog.items.length > 0 ? "ready" : "failure");
+    });
 
     return () => {
       active = false;
     };
-  }, [requestedModelId, setWorkspaceModelId, workspaceSelectedModelId]);
+  }, []);
 
-  const selectorModels = useMemo<readonly ModelSelectorModel[]>(() => (
-    models.map((model) => ({ ...model, category: "images" }))
-  ), [models]);
-  const activeSelectedModelId = workspaceSelectedModelId ?? selectedModelId;
+  const activeSelectedModelId = [requestedModelId, workspaceSelectedModelId, selectedModelId]
+    .find((id) => models.some((model) => model.id === id)) ?? models[0]?.id ?? "";
 
   const selectModel = (model: ModelSelectorModel) => {
     setSelectedModelId(model.id);
-    setWorkspaceModelId?.(model.id);
-    router.push(getModelPresentation(model).href);
+    if (model.category === "images") setWorkspaceModelId?.(model.id);
+    router.push(`/app/chats?model=${encodeURIComponent(model.id)}`);
   };
 
   return (
     <ModelSelector
       dialogId="workspace-model-selector-dialog"
-      models={selectorModels}
+      categoryErrors={catalogFailures}
+      models={models}
       onSelect={selectModel}
       selectedModelId={activeSelectedModelId}
       status={status}

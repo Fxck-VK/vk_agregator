@@ -5,24 +5,41 @@ vi.mock("next/navigation", () => ({
   useRouter: vi.fn(),
   useSearchParams: vi.fn(() => new URLSearchParams()),
 }));
-vi.mock("@/features/models/image-model-catalog-cache", () => ({ loadImageModelCatalog: vi.fn() }));
+vi.mock("@/features/models/generation-model-catalog", () => ({ loadGenerationModelCatalog: vi.fn() }));
 vi.mock("@/lib/web-api/browser", () => ({ webBrowserMutation: vi.fn(), webBrowserFetch: vi.fn() }));
 
 import { useRouter } from "next/navigation";
-import { loadImageModelCatalog } from "@/features/models/image-model-catalog-cache";
+import { loadGenerationModelCatalog } from "@/features/models/generation-model-catalog";
 import { WorkspaceConversationListProvider } from "@/features/conversations/WorkspaceConversationList/WorkspaceConversationList";
 import { readPendingConversationBootstrap } from "@/features/conversations/pending-conversation-bootstrap";
 import { webBrowserMutation } from "@/lib/web-api/browser";
-import type { ImageModelList } from "@/lib/web-api/contracts";
 import { ru } from "@/i18n/ru";
+import { imageModelFixture } from "@/test/model-catalog";
 import { WorkspaceHero } from "./WorkspaceHero";
 
 const push = vi.fn();
 const requestId = "11111111-1111-4111-8111-111111111111";
-const catalogue: ImageModelList = { items: [
-  { id: "nano-banana-pro", name: "Nano Banana Pro", quality_options: ["2K", "4K"], default_quality: "2K", price_by_quality: { "2K": 30, "4K": 60 }, supports_reference_image: true, max_reference_images: 1, max_output_count: 4 },
-  { id: "nano-banana-2", name: "Nano Banana 2", quality_options: ["1K"], default_quality: "1K", price_by_quality: { "1K": 10 }, supports_reference_image: false, max_reference_images: 0, max_output_count: 1 },
-] };
+const chatModel = {
+  id: "neirohub-chat",
+  name: "NeiroHub Chat",
+  description: "Текстовая модель из общего каталога",
+  category: "text" as const,
+  categories: ["popular", "text", "study-work", "free"],
+  estimate_credits: 0,
+  isFree: true,
+};
+function imageGenerationModel(model: Parameters<typeof imageModelFixture>[0]) {
+  return { ...imageModelFixture(model), category: "images" as const };
+}
+const catalogue = {
+  default_model_id: chatModel.id,
+  categoryErrors: {},
+  items: [
+    chatModel,
+    imageGenerationModel({ id: "nano-banana-pro", name: "Nano Banana Pro", quality_options: ["2K", "4K"], default_quality: "2K", price_by_quality: { "2K": 30, "4K": 60 }, supports_reference_image: true, max_reference_images: 1, max_output_count: 4, categories: ["popular", "images"] }),
+    imageGenerationModel({ id: "nano-banana-2", name: "Nano Banana 2", quality_options: ["1K"], default_quality: "1K", price_by_quality: { "1K": 10 }, supports_reference_image: false, max_reference_images: 0, max_output_count: 1, categories: ["popular", "images"] }),
+  ],
+} as Awaited<ReturnType<typeof loadGenerationModelCatalog>>;
 
 function renderHero(access: "authenticated" | "guest" = "authenticated") {
   return render(
@@ -35,7 +52,7 @@ const selectModel = async (name: string) => fireEvent.click(await screen.findByR
 
 beforeEach(() => {
   vi.mocked(useRouter).mockReturnValue({ push } as never);
-  vi.mocked(loadImageModelCatalog).mockResolvedValue(catalogue);
+  vi.mocked(loadGenerationModelCatalog).mockResolvedValue(catalogue);
   vi.stubGlobal("crypto", { randomUUID: vi.fn(() => requestId) });
 });
 afterEach(() => {
@@ -47,6 +64,36 @@ afterEach(() => {
 });
 
 describe("WorkspaceHero model selection", () => {
+  it("submits the loaded default text model before an image shortcut is selected", async () => {
+    renderHero();
+    await screen.findByRole("button", { name: "Выбрать модель: NeiroHub Chat" });
+    fireEvent.change(screen.getByRole("textbox"), { target: { value: "Помоги с планом" } });
+    fireEvent.click(screen.getByRole("button", { name: ru.workspace.promptSubmit }));
+
+    expect(push).toHaveBeenCalledExactlyOnceWith(`/app/chat/${requestId}?pending=1`);
+    expect(readPendingConversationBootstrap(requestId)).toMatchObject({
+      modelId: chatModel.id,
+      prompt: "Помоги с планом",
+    });
+    expect(webBrowserMutation).not.toHaveBeenCalled();
+  });
+
+  it("keeps text submission disabled when the catalog has no text model", async () => {
+    vi.mocked(loadGenerationModelCatalog).mockResolvedValue({
+      ...catalogue,
+      default_model_id: "",
+      items: catalogue.items.filter((model) => model.category !== "text"),
+    } as Awaited<ReturnType<typeof loadGenerationModelCatalog>>);
+    renderHero();
+    await screen.findByRole("button", { name: "Выбрать модель: Nano Banana Pro" });
+    fireEvent.change(screen.getByRole("textbox"), { target: { value: "Текст без модели" } });
+
+    expect(screen.getByRole("button", { name: ru.workspace.promptSubmit })).toBeDisabled();
+    fireEvent.click(screen.getByRole("button", { name: ru.workspace.promptSubmit }));
+    expect(push).not.toHaveBeenCalled();
+    expect(webBrowserMutation).not.toHaveBeenCalled();
+  });
+
   it("keeps outgoing settings inert for the exit animation and then removes them", async () => {
     const { container } = renderHero();
     await selectModel("Nano Banana Pro");
@@ -201,7 +248,10 @@ describe("WorkspaceHero model selection", () => {
     fireEvent.change(screen.getByRole("textbox"), { target: { value: "Помоги с текстом" } });
     fireEvent.click(screen.getByRole("button", { name: ru.workspace.promptSubmit }));
     expect(push).toHaveBeenCalledExactlyOnceWith(`/app/chat/${requestId}?pending=1`);
-    expect(readPendingConversationBootstrap(requestId)?.prompt).toBe("Помоги с текстом");
+    expect(readPendingConversationBootstrap(requestId)).toMatchObject({
+      modelId: chatModel.id,
+      prompt: "Помоги с текстом",
+    });
     expect(webBrowserMutation).not.toHaveBeenCalled();
   });
 });

@@ -34,6 +34,8 @@ const (
 
 // Config controls payment lifecycle behavior.
 type Config struct {
+	// AccountReturnURL is the trusted web return page; VK callers keep ReturnURL.
+	AccountReturnURL             string
 	ReturnURL                    string
 	IncludeDevTestPaymentProduct bool
 	// AccountIntentCapture is the server-owned capture policy for strict
@@ -459,7 +461,7 @@ func (s *Service) CreateAccountIntent(ctx context.Context, in CreateAccountInten
 	if !s.userFacingProductAllowed(product) {
 		return CreateIntentResult{}, domain.ErrNotFound
 	}
-	returnURL := strings.TrimSpace(s.cfg.ReturnURL)
+	returnURL := strings.TrimSpace(defaultString(s.cfg.AccountReturnURL, s.cfg.ReturnURL))
 	capture := s.accountIntentCapturePolicy()
 
 	if existing, err := s.repo.GetIntentByIdempotencyKey(ctx, in.IdempotencyKey); err == nil {
@@ -871,6 +873,16 @@ func (s *Service) ensureProviderPayment(ctx context.Context, intent *domain.Paym
 		Metadata:                  intent.Metadata,
 		IdempotencyKey:            "pay:" + intent.ID.String(),
 		Capture:                   paymentIntentCapture(intent),
+	}
+	// The local ID supports return-page recovery without browser storage. It is
+	// never proof of payment; status reads still require the owning account.
+	if paymentMetadataSource(intent.Metadata) == "web" {
+		if returnPage, parseErr := url.Parse(createInput.ReturnURL); parseErr == nil && returnPage.Host != "" {
+			query := returnPage.Query()
+			query.Set("payment_id", intent.ID.String())
+			returnPage.RawQuery = query.Encode()
+			createInput.ReturnURL = returnPage.String()
+		}
 	}
 	result, err := s.provider.CreatePayment(ctx, createInput)
 	if err != nil {

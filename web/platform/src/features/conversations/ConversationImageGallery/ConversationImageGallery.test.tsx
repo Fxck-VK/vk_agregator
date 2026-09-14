@@ -159,3 +159,12 @@ describe("conversation image gallery", () => {
     expect(parseConversationMessageList({ items: [{ ...message, images: undefined }] }).items[0].images).toBeUndefined();
   });
 });
+
+it("renders video outputs from safe artifact IDs within the assistant message", () => {
+ const {unmount} = render(<ConversationAssistantMessage message={{...message,images:undefined,videos:[{id:image.artifact.id,mime_type:"video/mp4",width:1280,height:720}]}} />);
+ const video = screen.getByLabelText("Сгенерированное видео");
+ expect(video).toHaveAttribute("src",`/web/v1/video-artifacts/${image.artifact.id}`);
+ expect(video).toHaveAttribute("controls");
+ expect(video).not.toHaveAttribute("autoplay");
+ unmount();
+});

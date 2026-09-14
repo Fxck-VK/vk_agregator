@@ -1,13 +1,14 @@
 import { describe, expect, it } from "vitest";
 
-import type { ImageModel } from "@/lib/web-api/contracts";
+import type { ModelCatalogModel } from "./model-filters";
 
-import { filterAndSortImageModels, filterImageModels, imageModelQualities } from "./model-filters";
+import { filterAndSortCatalogModels, filterCatalogModels } from "./model-filters";
 
-const models: ImageModel[] = [
+const models: ModelCatalogModel[] = [
   {
     id: "nano-banana-2",
     name: "Nano Banana",
+    categories: ["popular", "images"],
     quality_options: ["1K", "2K"],
     default_quality: "1K",
     supports_reference_image: true,
@@ -16,6 +17,7 @@ const models: ImageModel[] = [
   {
     id: "MODEL-ID",
     name: "Other Model",
+    categories: ["text"],
     quality_options: ["4K"],
     default_quality: "4K",
     supports_reference_image: false,
@@ -24,6 +26,7 @@ const models: ImageModel[] = [
   {
     id: "third-model",
     name: "Third Model",
+    categories: ["text", "study-work"],
     quality_options: ["2K", "8K"],
     default_quality: "2K",
     supports_reference_image: true,
@@ -31,33 +34,28 @@ const models: ImageModel[] = [
   },
 ];
 
-describe("filterImageModels", () => {
-  it("matches a trimmed query by model name and combines reference and quality filters", () => {
-    expect(filterImageModels(models, { query: " banana ", referenceOnly: true, quality: "2K" })).toEqual([models[0]]);
+describe("filterCatalogModels", () => {
+  it("matches a trimmed query by model name inside the selected server category", () => {
+    expect(filterCatalogModels(models, { category: "images", query: " banana " })).toEqual([models[0]]);
   });
 
-  it("matches a query by model id without applying optional filters", () => {
-    expect(filterImageModels(models, { query: "model-id", referenceOnly: false, quality: null })).toEqual([models[1]]);
+  it("matches a query by model id without inferring another category", () => {
+    expect(filterCatalogModels(models, { category: "images", query: "model-id" })).toEqual([]);
+    expect(filterCatalogModels(models, { category: "text", query: "model-id" })).toEqual([models[1]]);
   });
 });
 
-describe("filterAndSortImageModels", () => {
+describe("filterAndSortCatalogModels", () => {
   it("orders only matching models by name without mutating the cached catalog", () => {
     const unsortedModels = [models[2], models[0], models[1]];
 
-    const result = filterAndSortImageModels(
+    const result = filterAndSortCatalogModels(
       unsortedModels,
-      { query: "", referenceOnly: false, quality: null },
+      { category: "text", query: "" },
       "name",
     );
 
-    expect(result.map((model) => model.name)).toEqual(["Nano Banana", "Other Model", "Third Model"]);
+    expect(result.map((model) => model.name)).toEqual(["Other Model", "Third Model"]);
     expect(unsortedModels.map((model) => model.name)).toEqual(["Third Model", "Nano Banana", "Other Model"]);
-  });
-});
-
-describe("imageModelQualities", () => {
-  it("returns distinct qualities in source order", () => {
-    expect(imageModelQualities(models)).toEqual(["1K", "2K", "4K", "8K"]);
   });
 });

@@ -1,7 +1,7 @@
 .header {
   container-type: inline-size;
   position: absolute;
-  z-index: 10;
+  z-index: 20;
   inset-block-start: 0;
   inset-inline: 0;
   display: flex;

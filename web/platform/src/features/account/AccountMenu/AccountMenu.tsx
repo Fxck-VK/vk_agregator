@@ -102,73 +102,73 @@ export function AccountMenu({ identityLabel, isLogoutPending, logoutFailure, onL
 
   return (
     <div className={styles.root} ref={rootRef}>
-      {isOpen ? (
-        <PopoverSurface
-          aria-label={ru.account.menuLabel}
-          className={styles.menu}
-          id={menuId}
-          onKeyDown={(event) => {
-            if (event.key === "Escape") {
-              event.preventDefault();
-              if (isUpdatesOpen) setIsUpdatesOpen(false);
-              else closeMenu();
-            }
-          }}
-          ref={menuRef}
-          role="region"
-          tabIndex={-1}
-        >
-          <div className={`${selectableStyles.actionItems} ${styles.menuList}`}>
-            <Link className={`${selectableStyles.control} ${styles.menuAction}`} href="/app/profile" onClick={closeMenu}>
-              <ProfileIcon />
-              <span>{ru.account.profileLabel}</span>
-            </Link>
-            <a
-              className={`${selectableStyles.control} ${styles.menuAction}`}
-              href="https://vk.me/neirohub_help"
-              onClick={closeMenu}
-              rel="noopener noreferrer"
-              target="_blank"
-            >
-              <SupportIcon />
-              <span>{ru.account.supportLabel}</span>
-            </a>
-            <button
-              aria-controls={updatesPanelId}
-              aria-expanded={isUpdatesOpen}
-              className={`${selectableStyles.control} ${styles.menuAction}`}
-              onClick={() => setIsUpdatesOpen((open) => !open)}
-              type="button"
-            >
-              <MegaphoneIcon />
-              <span>{ru.account.updatesLabel}</span>
-            </button>
-          </div>
+      <PopoverSurface
+        aria-label={ru.account.menuLabel}
+        className={styles.menu}
+        id={menuId}
+        isOpen={isOpen}
+        motionOrigin="bottom"
+        onKeyDown={(event) => {
+          if (event.key === "Escape") {
+            event.preventDefault();
+            if (isUpdatesOpen) setIsUpdatesOpen(false);
+            else closeMenu();
+          }
+        }}
+        ref={menuRef}
+        role="region"
+        tabIndex={-1}
+      >
+        <div className={`${selectableStyles.actionItems} ${styles.menuList}`}>
+          <Link className={`${selectableStyles.control} ${styles.menuAction}`} href="/app/profile" onClick={closeMenu}>
+            <ProfileIcon />
+            <span>{ru.account.profileLabel}</span>
+          </Link>
+          <a
+            className={`${selectableStyles.control} ${styles.menuAction}`}
+            href="https://vk.me/neirohub_help"
+            onClick={closeMenu}
+            rel="noopener noreferrer"
+            target="_blank"
+          >
+            <SupportIcon />
+            <span>{ru.account.supportLabel}</span>
+          </a>
+          <button
+            aria-controls={updatesPanelId}
+            aria-expanded={isUpdatesOpen}
+            className={`${selectableStyles.control} ${styles.menuAction}`}
+            onClick={() => setIsUpdatesOpen((open) => !open)}
+            type="button"
+          >
+            <MegaphoneIcon />
+            <span>{ru.account.updatesLabel}</span>
+          </button>
+        </div>
 
-          <div className={styles.themeSection}>
-            <ModeSwitchPanel
-              activeID={themePreference}
-              ariaLabel={ru.account.themeLabel}
-              className={styles.themeSwitcher}
-              iconOnly
-              items={themeOptions}
-              onChange={selectTheme}
-            />
-          </div>
+        <div className={styles.themeSection}>
+          <ModeSwitchPanel
+            activeID={themePreference}
+            ariaLabel={ru.account.themeLabel}
+            className={styles.themeSwitcher}
+            iconOnly
+            items={themeOptions}
+            onChange={selectTheme}
+          />
+        </div>
 
-          <div className={`${selectableStyles.actionItems} ${styles.logoutSection}`}>
-            <button className={`${selectableStyles.control} ${styles.logoutAction}`} disabled={isLogoutPending} onClick={onLogout} type="button">
-              <LogoutIcon />
-              <span>{isLogoutPending ? ru.account.logoutPending : ru.account.logoutLabel}</span>
-            </button>
-            {logoutFailure ? (
-              <p className={styles.error} role="alert">
-                {logoutFailure}
-              </p>
-            ) : null}
-          </div>
-        </PopoverSurface>
-      ) : null}
+        <div className={`${selectableStyles.actionItems} ${styles.logoutSection}`}>
+          <button className={`${selectableStyles.control} ${styles.logoutAction}`} disabled={isLogoutPending} onClick={onLogout} type="button">
+            <LogoutIcon />
+            <span>{isLogoutPending ? ru.account.logoutPending : ru.account.logoutLabel}</span>
+          </button>
+          {logoutFailure ? (
+            <p className={styles.error} role="alert">
+              {logoutFailure}
+            </p>
+          ) : null}
+        </div>
+      </PopoverSurface>
 
       {isOpen && isUpdatesOpen ? <AccountUpdatesPanel id={updatesPanelId} /> : null}
 
