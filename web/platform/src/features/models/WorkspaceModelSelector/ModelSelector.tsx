@@ -57,6 +57,7 @@ type PortalLayout = {
 };
 
 const popularModelLimit = 2;
+const compactNameLimit = 40;
 const portalEdge = 16;
 const popoverGap = 12;
 const popoverMaximumWidth = 512;
@@ -112,6 +113,13 @@ export function ModelSelector({
   const selectedModelPresentation = selectedModel === null
     ? null
     : getModelPresentation(selectedModel);
+  const triggerText = status === "loading"
+    ? ru.modelSelector.loadingShort
+    : (selectedModel?.name ?? ru.modelSelector.unavailable);
+  const triggerCharacters = Array.from(triggerText);
+  const visibleTriggerText = variant === "compact" && triggerCharacters.length > compactNameLimit
+    ? `${triggerCharacters.slice(0, compactNameLimit - 1).join("")}…`
+    : triggerText;
 
   const requestClose = useCallback((restoreTriggerFocus = false) => {
     setPopoverState((currentState) => (
@@ -388,9 +396,7 @@ export function ModelSelector({
           src={selectedModelPresentation?.artworkSrc}
         />
         <span className={styles.triggerText}>
-          {status === "loading"
-            ? ru.modelSelector.loadingShort
-            : (selectedModel?.name ?? ru.modelSelector.unavailable)}
+          {visibleTriggerText}
         </span>
         <span aria-hidden="true" className={`${styles.chevron} ${isOpen ? styles.chevronOpen : ""}`}>
           <Image alt="" height={8} src={assetPaths.icons.ui.faqArrow} unoptimized width={14} />

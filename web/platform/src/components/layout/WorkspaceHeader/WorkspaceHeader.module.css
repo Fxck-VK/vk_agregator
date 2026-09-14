@@ -20,11 +20,13 @@
 }
 
 .leading {
+  flex: 0 1 auto;
   min-inline-size: 0;
 }
 
 .trailing {
   display: flex;
+  flex: 0 0 auto;
   align-items: center;
   gap: var(--space-3);
 }

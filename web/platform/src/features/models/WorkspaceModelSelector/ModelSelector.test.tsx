@@ -42,6 +42,26 @@ describe("ModelSelector", () => {
     );
   });
 
+  it.each([
+    ["М".repeat(40), "М".repeat(40)],
+    ["М".repeat(41), `${"М".repeat(39)}…`],
+    ["🧠".repeat(41), `${"🧠".repeat(39)}…`],
+  ])("limits the compact label while keeping the full accessible name: %s", (name, visibleName) => {
+    render(<ModelSelector models={[{ ...taskModels[0], name }]} onSelect={vi.fn()} selectedModelId="video-generator" />);
+
+    const trigger = screen.getByRole("button", { name: `Выбрана нейросеть ${name}. Открыть список` });
+    expect(trigger.textContent).toBe(visibleName);
+    fireEvent.click(trigger);
+    expect(within(screen.getByRole("dialog")).getByText(name, { exact: true })).toBeInTheDocument();
+  });
+
+  it("keeps the complete name in the file editor panel variant", () => {
+    const name = "Полное название модели для редактора фотографий длиннее сорока символов";
+    render(<ModelSelector models={[{ ...taskModels[0], name }]} onSelect={vi.fn()} selectedModelId="video-generator" variant="panel" />);
+
+    expect(screen.getByRole("button", { name: `Выбрана нейросеть ${name}. Открыть список` }).textContent).toBe(name);
+  });
+
   it("uses the workspace selector view for a controlled task-specific model set", () => {
     const onSelect = vi.fn();
 
