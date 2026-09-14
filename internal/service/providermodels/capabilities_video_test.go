@@ -145,13 +145,6 @@ func capabilityForVideoRoute(t *testing.T, alias domain.VideoRouteAlias) *ModelC
 	return caps
 }
 
-func expectInputCapability(t *testing.T, got InputCapability, support Support, max int, extensions []string) {
-	t.Helper()
-	want := inputCapability(support, integer(max), extensions...)
-	if !reflect.DeepEqual(got, want) {
-		t.Fatalf("input capability mismatch\nwant %#v\n got %#v", want, got)
-	}
-}
 func expectImageInput(t *testing.T, got InputCapability, max int) {
 	t.Helper()
 	if max == 0 {
