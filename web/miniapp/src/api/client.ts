@@ -4,6 +4,8 @@
 
 import bridge from "@vkontakte/vk-bridge";
 
+import { parseModelCapabilities, type ModelCapabilities } from "../models/model-capabilities";
+
 /** Mirrors internal/adapter/inbound/miniapp JobDTO */
 export interface Job {
   id: string;
@@ -103,6 +105,7 @@ export interface EstimateResponse {
 
 /** Public catalog item: estimate_credits is a backend display hint only. */
 export interface ModelCatalogItem {
+  capabilities?: ModelCapabilities;
   type: "image" | "video";
   id: string;
   alias?: string;
@@ -706,11 +709,6 @@ async function apiErrorFromResponse(res: Response): Promise<ApiError> {
 
 function validateReferenceArtifactIDs(ids?: string[]): void {
   if (!ids || ids.length === 0) return;
-  if (ids.length > MAX_REFERENCE_ARTIFACTS) {
-    throw new ApiError(400, "too_many_reference_artifacts", {
-      backendError: "too many reference artifacts",
-    });
-  }
   for (const id of ids) {
     if (!ARTIFACT_ID_RE.test(id)) {
       throw new ApiError(400, "validation_error", {
@@ -935,7 +933,7 @@ interface ModelCatalogListResponse {
 
 export async function listModelCatalog(): Promise<ModelCatalogItem[]> {
   const data = await request<ModelCatalogListResponse>("/miniapp/model-catalog");
-  return data.items ?? [];
+  return (data.items ?? []).map(sanitizeModelCatalogItemCapabilities);
 }
 
 export async function getJob(id: string): Promise<Job> {
@@ -1202,11 +1200,37 @@ export async function resolveBotText(job: Job): Promise<string | undefined> {
   return undefined;
 }
 
-export interface TextModel { id: string; name: string; estimate_credits: number; max_prompt_bytes?: number; max_output_tokens?: number }
+export interface TextModel { id: string; name: string; estimate_credits: number; max_prompt_bytes?: number; max_output_tokens?: number; capabilities?: ModelCapabilities }
 export async function listTextModels(): Promise<TextModel[]> {
   const data = await request<{items: TextModel[]}>("/miniapp/text-models");
   if (!Array.isArray(data.items) || data.items.length > 12 || data.items.some(m =>
     !["chatgpt", "gpt_5_5", "claude_opus_4_7", "gemini_3_1_pro", "claude_opus_4_8", "gpt_5_6_terra", "gpt_6_astra", "claude_opus_5", "gemini_3_7_flash", "claude_fable_5_1", "claude_fable_5", "gemini_3_6_flash"].includes(m.id) || typeof m.name !== "string" || !Number.isSafeInteger(m.estimate_credits) || m.estimate_credits < 0
   )) throw new ApiError(500,"service_unavailable");
-  return data.items;
+  return data.items.map(sanitizeTextModelCapabilities);
+}
+
+function sanitizeModelCatalogItemCapabilities(item: ModelCatalogItem): ModelCatalogItem {
+  const capabilities = parseModelCapabilities(item.capabilities);
+  if (item.capabilities === undefined) return item;
+  if (capabilities && modelCapabilitiesPurpose(capabilities) === item.type) return { ...item, capabilities };
+  const copy: ModelCatalogItem = { ...item };
+  delete copy.capabilities;
+  return copy;
+}
+
+function sanitizeTextModelCapabilities(item: TextModel): TextModel {
+  const capabilities = parseModelCapabilities(item.capabilities);
+  if (item.capabilities === undefined) return item;
+  if (capabilities && modelCapabilitiesPurpose(capabilities) === "text") return { ...item, capabilities };
+  const copy: TextModel = { ...item };
+  delete copy.capabilities;
+  return copy;
+}
+
+function modelCapabilitiesPurpose(capabilities: ModelCapabilities): "text" | "image" | "video" | "audio" | undefined {
+  if (capabilities.application.text) return "text";
+  if (capabilities.application.image) return "image";
+  if (capabilities.application.video) return "video";
+  if (capabilities.application.audio) return "audio";
+  return undefined;
 }

@@ -16,6 +16,13 @@ func TestOnboardingRejectsNewOrChangedUnverifiedModels(t *testing.T) {
 		{"new image", func(r *Registry) { r.ImageModels[0].PublicID = "new_image" }},
 		{"provider model change", func(r *Registry) { r.ImageModels[0].ProviderModelID = "different-version" }},
 		{"capability change", func(r *Registry) { r.ImageModels[0].Limits.MaxReferenceImages++ }},
+		{"legacy ratio declaration change", func(r *Registry) {
+			for i := range r.ImageModels {
+				if r.ImageModels[i].PublicID == PublicImageQwenImage3 {
+					r.ImageModels[i].Limits.AllowedAspectRatios = []string{"1:1", "21:9"}
+				}
+			}
+		}},
 		{"text provider change", func(r *Registry) { r.TextAliases[0].Provider = "different" }},
 		{"video duration change", func(r *Registry) { r.VideoRouteModels[0].Limits.AllowedDurationsSec = []int{99} }},
 	} {
@@ -32,6 +39,14 @@ func TestOnboardingRejectsNewOrChangedUnverifiedModels(t *testing.T) {
 func TestExistingRegistryHasExplicitMigrationBaseline(t *testing.T) {
 	if err := StaticRegistry().Validate(); err != nil {
 		t.Fatal(err)
+	}
+}
+
+func TestAudioRegistryCannotBypassOnboarding(t *testing.T) {
+	r := StaticRegistry()
+	r.AudioModels = []AudioModel{{PublicID: "new_audio", Provider: "synthetic", ProviderModelID: "new-audio-v1"}}
+	if err := r.ValidateOnboarding(); err == nil || !strings.Contains(err.Error(), "audio/new_audio requires a verified onboarding contract") {
+		t.Fatalf("audio declaration bypassed admission: %v", err)
 	}
 }
 

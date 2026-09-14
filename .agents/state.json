@@ -1,9 +1,8 @@
 {
   "schema_version": 5,
-  "updated_at": "2026-07-29T00:00:00+03:00",
+  "updated_at": "2026-09-14T00:00:00+03:00",
   "branch": "dev-deploy",
   "remote_tracking": "origin/dev-deploy",
-  "head": "5fe9ddb",
   "purpose": "Short machine-readable current context and routing for agents. This file is not project history.",
   "read_policy": {
     "canonical_read_order": [
@@ -40,7 +39,9 @@
       "docs/OPERATOR_UI.md",
       "docs/VIDEO_GENERATION.md",
       "docs/VK_BOT_AGENT_GUIDE.md",
-      "docs/superpowers/specs/2026-07-29-neirohub-web-platform-design.md"
+      "docs/MODEL_CAPABILITIES.md",
+      "docs/runbooks/MODEL_CATALOG.md",
+      "docs/runbooks/MODEL_ONBOARDING.md"
     ],
     "do_not_read_by_default": [
       ".agents/logs/**",
@@ -51,12 +52,11 @@
     "history_read_condition": "Read logs/archive only when explicitly asked for history, repeated-error debugging, regression archaeology, or old audit details."
   },
   "current_context": {
-    "worktree": "The accepted NeiroHub web platform design is the only active documentation change in this task.",
-    "active_branch_role": "dev-deploy is the current integration/deployment branch for this workspace; production remains main-only.",
-    "dev_contour": "dev-deploy branch plus DEV VPS, DEV Cloudflare tunnel, DEV VK group and DEV payment/provider secrets. DEV should mirror production architecture with separate secrets and routes.",
-    "prod_contour": "main only. Production deploy goes through GitHub Actions, GHCR images, VPS deploy script, smoke checks and rollback policy.",
-    "loadtest_contour": "APP_ENV=loadtest with mock providers, mock payments and mock delivery only. Production hosts and paid providers are blocked for load tests.",
-    "current_doc_work": "The accepted NeiroHub web platform design is active; implementation has not started and requires written-spec review followed by an implementation plan."
+    "active_branch_role": "dev-deploy is the integration/deployment branch; synchronize fastlife_dev after tested merges. Production remains main-only.",
+    "worktree": "Shared web catalog/workspace and typed API/application model capabilities integrated. Read Git for current commit and uncommitted changes.",
+    "dev_contour": "DEV uses separate secrets, VPS, tunnel, VK group and payment configuration.",
+    "prod_contour": "main deploys through GitHub Actions and immutable GHCR images with mandatory smoke.",
+    "loadtest_contour": "Mock providers, payments and delivery only; no production hosts or paid calls."
   },
   "recent_decisions": [
     "Default context is intentionally small: AGENTS.md, .agents/state.json and docs/ARCHITECTURE.md.",
@@ -78,16 +78,18 @@
     "YooKassa payment values are contour-specific: do not value-sync payments.dev.env and payments.prod.env, and do not force YOOKASSA_SECRET_KEY, YOOKASSA_SHOP_ID or YooKassa return URLs to match across DEV, PROD, .env and dev.env.",
     "Provider calls remain isolated in workers/adapters; VK bot, Mini App and cmd/api must not call AI providers directly.",
     "Billing remains ledger-based and payment top-ups require provider-verified webhook/reconciliation.",
-    "The standalone NeiroHub web platform uses one independently deployable Next.js application with public SSG/ISR routes, authenticated no-store/noindex routes, secure server-managed web sessions and a channel-neutral versioned /web/v1 Go API."
+    "The standalone NeiroHub web platform uses one independently deployable Next.js application with public SSG/ISR routes, authenticated no-store/noindex routes, secure server-managed web sessions and a channel-neutral versioned /web/v1 Go API.",
+    "The shared /web/v1/models catalog feeds all web selectors and generation controls; API and application capabilities remain separate and never enable unwired inputs.",
+    "Registry records are typed by purpose. Stable admission serialization preserves the frozen legacy baseline; descriptions do not establish verified onboarding.",
+    "Completed September 14 source handoffs are archived; docs/HANDOFF_CURRENT.md has Status: none."
   ],
   "active_priorities": [
-    "Finish documentation canonicalization without turning docs into history logs.",
     "Keep DEV and PROD deploy workflows aligned but isolated by secrets, tunnel, VK group and payment settings.",
     "Run longer sustained load tests before claiming scale readiness.",
     "Verify live YooKassa smoke before real-money confidence: payment.succeeded, payment.canceled, refund.succeeded, replay/idempotency and reconciliation.",
     "Plan operational migration to external/managed Postgres, Redis and S3 before serious traffic.",
     "Use protected PR/review flow for main; no force push.",
-    "Implement the accepted NeiroHub web platform design in independently verifiable vertical slices, beginning with web identity/session verification and the /web/v1 API foundation."
+    "Verify legacy model capabilities with dated provider evidence and authorized live checks before expanding supported inputs."
   ],
   "open_risks": [
     "DEV/PROD env drift is still possible if the parity allowlist becomes too broad or secret files are edited manually.",

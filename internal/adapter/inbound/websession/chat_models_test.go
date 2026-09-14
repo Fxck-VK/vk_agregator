@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
+	"reflect"
 	"testing"
 
 	"github.com/google/uuid"
@@ -95,7 +96,7 @@ func TestWebChatCatalogUsesEnabledModelsAndServerPrices(t *testing.T) {
 			t.Fatal(err)
 		}
 		if available {
-			if len(payload.Items) != 2 || payload.Items[1] != h.cfg.TextModels[1] {
+			if len(payload.Items) != 2 || !reflect.DeepEqual(payload.Items[1], h.cfg.TextModels[1]) {
 				t.Fatal("configured paid model must expose the server price and limits")
 			}
 		} else if len(payload.Items) != 1 || payload.Items[0].ID != "chatgpt" {

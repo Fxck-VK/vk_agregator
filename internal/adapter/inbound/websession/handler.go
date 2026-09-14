@@ -1888,15 +1888,16 @@ type safeImageModelList struct {
 }
 
 type safeImageModel struct {
-	ID                     string           `json:"id"`
-	Name                   string           `json:"name"`
-	QualityOptions         []string         `json:"quality_options"`
-	PriceByQuality         map[string]int64 `json:"price_by_quality"`
-	DefaultQuality         string           `json:"default_quality"`
-	SupportsReferenceImage bool             `json:"supports_reference_image"`
-	MaxReferenceImages     int              `json:"max_reference_images"`
-	MaxOutputCount         int              `json:"max_output_count"`
-	AllowedAspectRatios    []string         `json:"allowed_aspect_ratios,omitempty"`
+	Capabilities           *providermodels.ModelCapabilities `json:"capabilities,omitempty"`
+	ID                     string                            `json:"id"`
+	Name                   string                            `json:"name"`
+	QualityOptions         []string                          `json:"quality_options"`
+	PriceByQuality         map[string]int64                  `json:"price_by_quality"`
+	DefaultQuality         string                            `json:"default_quality"`
+	SupportsReferenceImage bool                              `json:"supports_reference_image"`
+	MaxReferenceImages     int                               `json:"max_reference_images"`
+	MaxOutputCount         int                               `json:"max_output_count"`
+	AllowedAspectRatios    []string                          `json:"allowed_aspect_ratios,omitempty"`
 }
 
 // webImageJobParams is stored with the job for the worker. It is deliberately
@@ -1998,13 +1999,14 @@ func newSafeImageModel(model imagegeneration.PublicModel, resolver imagegenerati
 		return safeImageModel{}, false
 	}
 	return safeImageModel{
+		Capabilities:           providermodels.ImageCapabilitiesForSurface(model.ID, "web", controls.QualityOptions),
 		ID:                     model.ID,
 		Name:                   model.Name,
 		QualityOptions:         controls.QualityOptions,
 		PriceByQuality:         controls.PriceByQuality,
 		DefaultQuality:         controls.DefaultQuality,
-		SupportsReferenceImage: model.SupportsReferenceImage,
-		MaxReferenceImages:     model.MaxReferenceImages,
+		SupportsReferenceImage: false,
+		MaxReferenceImages:     0,
 		MaxOutputCount:         controls.MaxOutputCount,
 		AllowedAspectRatios:    controls.AllowedAspectRatios,
 	}, true

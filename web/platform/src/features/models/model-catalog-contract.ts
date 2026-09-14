@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { modelCapabilitiesSchema } from "@/lib/web-api/model-capabilities-schema";
 
 import {
   parseChatModelList,
@@ -225,6 +226,7 @@ const publicOperationSchema = z.object({
 });
 
 const publicCatalogModelSchema = z.object({
+  capabilities: modelCapabilitiesSchema.optional(),
   id: nonEmptyString,
   name: nonEmptyString,
   description: nonEmptyString,
@@ -234,6 +236,9 @@ const publicCatalogModelSchema = z.object({
   version: nonEmptyString.optional(),
   operations: z.array(publicOperationSchema).min(1),
 }).strict().superRefine((model, ctx) => {
+  if (model.capabilities && (!model.capabilities.api[model.kind] || !model.capabilities.application[model.kind])) {
+    ctx.addIssue({ code: "custom", path: ["capabilities"], message: "Capabilities must match the model purpose." });
+  }
   addUniqueStringIssues(model.categories, ctx, "Model categories");
   const operationIDs = model.operations.map((operation) => operation.id);
   addUniqueStringIssues(operationIDs, ctx, "Model operations");
@@ -260,6 +265,7 @@ export type PublicOperation = PublicCatalogModel["operations"][number];
 export type PublicCatalogCategory = PublicCatalogModel["categories"][number];
 
 export const videoModelSchema = z.object({
+  capabilities: modelCapabilitiesSchema.optional(),
   id: nonEmptyString,
   name: nonEmptyString,
   description: nonEmptyString,
@@ -303,6 +309,7 @@ export function projectImageModelCatalog(catalog: PublicCatalog): ImageModelList
         description: model.description,
         categories: model.categories,
         operations: model.operations,
+        ...(model.capabilities ? { capabilities: model.capabilities } : {}),
         quality_options: operation.image.quality_options,
         price_by_quality: operation.image.price_by_quality,
         price_by_variant: operation.image.price_by_variant,
@@ -330,6 +337,7 @@ export function projectChatModelCatalog(catalog: PublicCatalog): ChatModelList {
       description: model.description,
       categories: model.categories,
       operations: model.operations,
+        ...(model.capabilities ? { capabilities: model.capabilities } : {}),
       estimate_credits: operation.text.estimate_credits,
       max_prompt_bytes: operation.text.max_prompt_bytes,
       max_output_tokens: operation.text.max_output_tokens,
@@ -352,6 +360,7 @@ export function projectVideoModelCatalog(catalog: PublicCatalog): VideoModelList
         description: model.description,
         categories: model.categories,
         operations: model.operations,
+        ...(model.capabilities ? { capabilities: model.capabilities } : {}),
         allowed_resolutions: operation.video.allowed_resolutions,
         allowed_durations_sec: operation.video.allowed_durations_sec,
         allowed_aspect_ratios: operation.video.allowed_aspect_ratios,

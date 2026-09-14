@@ -14,18 +14,19 @@ import (
 var ErrUnavailable = errors.New("text model unavailable")
 
 type PublicModel struct {
-	ID              string `json:"id"`
-	Name            string `json:"name"`
-	EstimateCredits int64  `json:"estimate_credits"`
-	MaxPromptBytes  int    `json:"max_prompt_bytes,omitempty"`
-	MaxOutputTokens int    `json:"max_output_tokens,omitempty"`
+	Capabilities    *providermodels.ModelCapabilities `json:"capabilities,omitempty"`
+	ID              string                            `json:"id"`
+	Name            string                            `json:"name"`
+	EstimateCredits int64                             `json:"estimate_credits"`
+	MaxPromptBytes  int                               `json:"max_prompt_bytes,omitempty"`
+	MaxOutputTokens int                               `json:"max_output_tokens,omitempty"`
 }
 type SnapshotCatalog interface {
 	Snapshot(pricingcatalog.ProductKey) (pricingcatalog.PricingSnapshot, error)
 }
 
 func Models(enabledIDs []string, prices SnapshotCatalog) []PublicModel {
-	models := []PublicModel{{ID: providermodels.PublicTextChatGPT, Name: "NeiroHub Chat"}}
+	models := []PublicModel{{ID: providermodels.PublicTextChatGPT, Name: "NeiroHub Chat", Capabilities: providermodels.Capabilities(providermodels.PublicTextChatGPT)}}
 	for _, id := range enabledIDs {
 		m, ok := providermodels.PaidTextModel(id)
 		if !ok || prices == nil {
@@ -35,7 +36,7 @@ func Models(enabledIDs []string, prices SnapshotCatalog) []PublicModel {
 		if err != nil || !snapshot.Valid() {
 			continue
 		}
-		models = append(models, PublicModel{ID: id, Name: m.DisplayName, EstimateCredits: snapshot.InternalCredits, MaxPromptBytes: pricingcatalog.TextMaxInputTokens - 512, MaxOutputTokens: pricingcatalog.TextMaxOutputTokens})
+		models = append(models, PublicModel{ID: id, Name: m.DisplayName, EstimateCredits: snapshot.InternalCredits, MaxPromptBytes: pricingcatalog.TextMaxInputTokens - 512, MaxOutputTokens: pricingcatalog.TextMaxOutputTokens, Capabilities: providermodels.Capabilities(id)})
 	}
 	return models
 }

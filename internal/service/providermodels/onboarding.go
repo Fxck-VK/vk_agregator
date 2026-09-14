@@ -39,10 +39,13 @@ func (r Registry) Bindings() []Binding {
 		add("text", m.PublicID, string(m.Provider), m.ProviderModelID, m)
 	}
 	for _, m := range r.ImageModels {
-		add("image", m.PublicID, string(m.Provider), m.ProviderModelID, m)
+		add("image", m.PublicID, string(m.Provider), m.ProviderModelID, imageAdmissionValue(m))
 	}
 	for _, m := range r.LoadTestImageModels {
-		add("image", m.PublicID, string(m.Provider), m.ProviderModelID, m)
+		add("image", m.PublicID, string(m.Provider), m.ProviderModelID, imageAdmissionValue(m))
+	}
+	for _, m := range r.AudioModels {
+		add("audio", m.PublicID, string(m.Provider), m.ProviderModelID, m)
 	}
 	for _, m := range r.VideoRouteModels {
 		var aliases []ProviderModelAlias
@@ -51,10 +54,7 @@ func (r Registry) Bindings() []Binding {
 				aliases = append(aliases, alias)
 			}
 		}
-		add("video", string(m.Alias), string(m.Provider), m.ProviderModelID, struct {
-			Route   VideoRoute
-			Aliases []ProviderModelAlias
-		}{m, aliases})
+		add("video", string(m.Alias), string(m.Provider), m.ProviderModelID, videoAdmissionValue(m, aliases))
 	}
 	return bindings
 }

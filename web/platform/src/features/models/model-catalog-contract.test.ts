@@ -53,6 +53,20 @@ describe("model catalog contract", () => {
       show_output_count: expect.any(Boolean),
     }));
     expect(video.items[0]?.variants?.[0]).toEqual(expect.objectContaining({ audio: null, fps: null }));
+    for (const projection of [images.items, chat.items, video.items]) {
+      for (const model of projection) {
+        expect(model.capabilities).toEqual(catalog.items.find((entry) => entry.id === model.id)?.capabilities);
+        expect(model.capabilities).toBeDefined();
+      }
+    }
+  });
+
+  it("rejects capabilities copied from another model purpose", () => {
+    const catalog = structuredClone(previewCatalog);
+    const image = catalog.items.find((model) => model.kind === "image")!;
+    const text = catalog.items.find((model) => model.kind === "text")!;
+    image.capabilities = text.capabilities;
+    expect(() => parseModelCatalog(catalog)).toThrow();
   });
 
   it.each([

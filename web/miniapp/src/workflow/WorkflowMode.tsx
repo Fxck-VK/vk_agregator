@@ -30,6 +30,7 @@ import type { VkUser } from "../hooks/useBridge";
 import { formatCredits } from "../ui/credits";
 import { jobDisplayTitle } from "../utils/jobDisplay";
 import neuroHubBanner from "../assets/neurohub-banner.png";
+import { ModelCapabilitiesDetails } from "../models/ModelCapabilitiesDetails";
 
 type WorkflowScreen = "home" | "status" | "result" | "history";
 
@@ -85,6 +86,7 @@ function createLocalReferenceId(): string {
 }
 
 type CreateMode = {
+  capabilities?: ModelCatalogItem["capabilities"];
   modalityId: ModalityId;
   modelId: string;
   videoRouteAlias?: string;
@@ -184,18 +186,20 @@ const IMAGE_MODE_COPY: Record<string, Omit<CreateMode, "modalityId" | "modelId" 
 
 function createModeFromImageItem(model: ModelCatalogItem): CreateMode {
   const copy = IMAGE_MODE_COPY[model.id] ?? DEFAULT_IMAGE_COPY;
+  const capability = model.capabilities?.application.image;
   return {
     ...copy,
     modalityId: "image",
     modelId: model.id,
+    capabilities: model.capabilities,
     name: model.name,
     subtitle: model.description || copy.subtitle,
     description: model.description,
     catalogEstimateCredits: model.estimate_credits,
     qualityOptions: model.quality_options?.filter(Boolean),
     defaultQuality: model.default_quality,
-    supportsReferenceImage: model.supports_reference_image,
-    maxReferenceImages: model.max_reference_images ?? copy.maxReferenceImages,
+    supportsReferenceImage: capability ? capability.images.support === "supported" : model.supports_reference_image,
+    maxReferenceImages: capability?.images.max_count ?? model.max_reference_images ?? copy.maxReferenceImages,
   };
 }
 
@@ -338,32 +342,34 @@ const VIDEO_ROUTE_COPY: Record<string, Omit<CreateMode, "modalityId" | "modelId"
 function createModeFromVideoItem(route: ModelCatalogItem): CreateMode {
   const alias = route.alias || route.id;
   const copy = VIDEO_ROUTE_COPY[alias] ?? VIDEO_ROUTE_COPY.video_kling_o3_standard;
-  const durations = route.allowed_durations_sec?.filter((value) => Number.isFinite(value) && value > 0) ?? [];
-  const aspectRatios = route.allowed_aspect_ratios?.filter(Boolean) ?? [];
+  const capability = route.capabilities?.application.video;
+  const durations = (capability?.duration.allowed_seconds ?? route.allowed_durations_sec)?.filter((value) => Number.isFinite(value) && value > 0) ?? [];
+  const aspectRatios = (capability?.aspect_ratios ?? route.allowed_aspect_ratios)?.filter(Boolean) ?? [];
   return {
     ...copy,
     modalityId: "video",
     modelId: alias,
+    capabilities: route.capabilities,
     videoRouteAlias: alias,
     name: route.name || copy.name,
     subtitle: route.description || copy.subtitle,
     description: route.description,
     catalogEstimateCredits: route.estimate_credits,
     durationOptions: durations,
-    automaticDuration: route.automatic_duration,
-    allowedReferenceImageCounts: route.allowed_reference_image_counts,
-    resolutionOptions: route.allowed_resolutions?.filter(Boolean) ?? [],
+    automaticDuration: capability ? capability.duration.mode === "automatic" : route.automatic_duration,
+    allowedReferenceImageCounts: capability?.allowed_image_counts ?? route.allowed_reference_image_counts,
+    resolutionOptions: (capability ? (capability.quality_modes?.length ? capability.quality_modes : capability.resolutions) : route.allowed_resolutions)?.filter(Boolean) ?? [],
     defaultResolution: route.default_resolution,
     defaultDurationSec: route.default_duration_sec ?? durations[0] ?? DEFAULT_VIDEO_DURATION_SEC,
     aspectRatioOptions: aspectRatios,
     defaultAspectRatio: route.default_aspect_ratio ?? aspectRatios[0],
-    requiresStartImage: route.requires_start_image,
-    supportsReferenceImage: route.supports_reference_image,
-    supportsAudio: copy.referenceImageRole === "firstFrame" ? false : route.supports_audio,
+    requiresStartImage: capability ? capability.start_frame === "required" : route.requires_start_image,
+    supportsReferenceImage: capability ? capability.images.support === "supported" : route.supports_reference_image,
+    supportsAudio: capability ? capability.audio.mode === "optional" && capability.audio.selectable : copy.referenceImageRole === "firstFrame" ? false : route.supports_audio,
     requiresReferenceVideo: route.requires_reference_video,
-    maxReferenceImages: route.max_reference_images,
+    maxReferenceImages: capability?.images.max_count ?? route.max_reference_images,
     maxPromptChars: route.max_prompt_chars ?? copy.maxPromptChars,
-    referenceImageRole: copy.referenceImageRole,
+    referenceImageRole: capability && capability.start_frame === "optional" && capability.images.max_count === 1 ? "firstFrame" : copy.referenceImageRole,
   };
 }
 
@@ -627,8 +633,8 @@ export function WorkflowMode({
   const requiresReferenceVideo = isVideoModality && activeCreateModel?.requiresReferenceVideo === true;
   const maxReferenceItems = Math.max(1, activeCreateModel?.maxReferenceImages ?? MAX_REFERENCE_ARTIFACTS);
   const videoDurationOptions = useMemo(
-    () => (activeCreateModel ? durationButtonOptions(activeCreateModel) : []),
-    [activeCreateModel],
+    () => activeCreateModel?.capabilities?.application.video?.duration.by_resolution?.[videoResolution ?? ""] ?? (activeCreateModel ? durationButtonOptions(activeCreateModel) : []),
+    [activeCreateModel, videoResolution],
   );
   const imageQualityOptions = useMemo(
     () => activeCreateModel?.qualityOptions ?? [],
@@ -643,7 +649,7 @@ export function WorkflowMode({
     [acceptsImageReferences, referenceItems],
   );
   const referenceVideoArtifactId = requiresReferenceVideo ? referenceVideoItem?.artifactId : undefined;
-  const videoDurationForRequest = requiresReferenceVideo ? referenceVideoItem?.durationSec : videoDurationSec;
+  const videoDurationForRequest = requiresReferenceVideo ? referenceVideoItem?.durationSec : activeCreateModel?.automaticDuration ? defaultDurationForModel(activeCreateModel) : videoDurationSec;
   const referenceVideoDurationAllowed =
     !requiresReferenceVideo ||
     !referenceVideoItem ||
@@ -756,8 +762,9 @@ export function WorkflowMode({
 
   useEffect(() => {
     if (!activeCreateModel) return;
-    if (isVideoModality && !videoDurationOptions.includes(videoDurationSec)) {
-      setVideoDurationSec(defaultDurationForModel(activeCreateModel));
+    if (isVideoModality && !activeCreateModel.automaticDuration && videoDurationOptions.length > 0 && !videoDurationOptions.includes(videoDurationSec)) {
+      const defaultDuration = defaultDurationForModel(activeCreateModel);
+      setVideoDurationSec(videoDurationOptions.includes(defaultDuration) ? defaultDuration : videoDurationOptions[0]);
     }
     if (!supportsVideoAudio && videoAudio) {
       setVideoAudio(false);
@@ -1373,6 +1380,7 @@ export function WorkflowMode({
               <div className="workflow-empty">Нет доступных моделей для выбранного типа.</div>
             )}
 
+            <ModelCapabilitiesDetails capabilities={activeCreateModel?.capabilities} />
             {activeCreateModel && isImageModality && imageQualityOptions.length > 0 && (
               <div className="create-setting" role="group" aria-label={activeCreateModel.modelId === "midjourney_v7" ? "Режим генерации" : "Качество изображения"}>
                 <span className="create-control-label">{activeCreateModel.modelId === "midjourney_v7" ? "Режим" : "Качество"}</span>

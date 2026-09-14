@@ -11,6 +11,7 @@ import {
   getAccountProfile,
   launchParamsFromLocation,
   listChatMessages,
+  listModelCatalog,
   listTextModels,
   normalizeRawParams,
   referralCodeFromRaw,
@@ -276,6 +277,191 @@ describe("generation request pricing contract", () => {
       expect(body).not.toHaveProperty("provider_model_id");
       expect(body).not.toHaveProperty("model_code");
     }
+  });
+
+  test("sends more than the legacy fallback reference count when UUIDs are valid", async () => {
+    window.history.replaceState({}, "", "/?vk_user_id=42&vk_ts=1&sign=fake");
+    const refs = Array.from({ length: 5 }, (_, index) => `550e8400-e29b-41d4-a716-44665544000${index}`);
+    const fetchMock = vi.spyOn(globalThis, "fetch").mockResolvedValueOnce(
+      jsonResponse({
+        id: ARTIFACT_ID,
+        operation: "image_generate",
+        modality: "image",
+        status: "received",
+        cost_estimate: 16,
+        cost_captured: 0,
+        output_artifact_ids: [],
+        created_at: "2026-01-01T00:00:00Z",
+        updated_at: "2026-01-01T00:00:00Z",
+      }),
+    );
+
+    await createJob(
+      {
+        operation: "image_generate",
+        prompt: "many refs",
+        model_id: "nano_banana_2",
+        reference_artifact_ids: refs,
+      },
+      { idempotencyKey: "idem-many-refs" },
+    );
+
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+    const body = JSON.parse(String((fetchMock.mock.calls[0][1] as RequestInit).body ?? "{}")) as Record<
+      string,
+      unknown
+    >;
+    expect(body.reference_artifact_ids).toEqual(refs);
+  });
+
+  test("rejects invalid reference artifact UUIDs before calling the backend", async () => {
+    const fetchMock = vi.spyOn(globalThis, "fetch").mockResolvedValueOnce(jsonResponse({}));
+
+    await expect(
+      createJob(
+        {
+          operation: "image_generate",
+          prompt: "bad ref",
+          model_id: "nano_banana_2",
+          reference_artifact_ids: ["not-a-uuid"],
+        },
+        { idempotencyKey: "idem-invalid-ref" },
+      ),
+    ).rejects.toMatchObject({ status: 400, code: "validation_error" });
+    expect(fetchMock).not.toHaveBeenCalled();
+  });
+});
+
+describe("model capability response safety", () => {
+  test("keeps legacy catalog items and discards malformed nested capabilities", async () => {
+    const validCapabilities = {
+      schema_version: 1,
+      api: {
+        image: {
+          images: { support: "supported", extensions: [".png"], max_count: 16 },
+          aspect_ratios: ["1:1"],
+          resolutions: ["1024x1024"],
+          quality_modes: ["high"],
+          speed_modes: ["fast"],
+          max_output_count: 1,
+          max_combined_images: 16,
+        },
+      },
+      application: {
+        image: {
+          images: { support: "unsupported", extensions: [], max_count: 0 },
+          aspect_ratios: ["1:1"],
+          resolutions: ["1024x1024"],
+          quality_modes: ["high"],
+          speed_modes: ["fast"],
+          max_output_count: 1,
+          max_combined_images: 1,
+        },
+      },
+    };
+    vi.spyOn(globalThis, "fetch").mockResolvedValueOnce(
+      jsonResponse({
+        items: [
+          {
+            type: "image",
+            id: "legacy",
+            name: "Legacy",
+            enabled: true,
+            supports_reference_image: false,
+            requires_start_image: false,
+          },
+          {
+            type: "image",
+            id: "valid",
+            name: "Valid",
+            enabled: true,
+            supports_reference_image: false,
+            requires_start_image: false,
+            capabilities: validCapabilities,
+          },
+          {
+            type: "image",
+            id: "malformed",
+            name: "Malformed",
+            enabled: true,
+            supports_reference_image: false,
+            requires_start_image: false,
+            capabilities: { schema_version: 1, api: { text: {}, image: {} }, application: { text: {} } },
+          },
+          {
+            type: "video",
+            id: "wrong-purpose",
+            name: "Wrong purpose",
+            enabled: true,
+            supports_reference_image: false,
+            requires_start_image: false,
+            capabilities: validCapabilities,
+          },
+        ],
+      }),
+    );
+
+    const items = await listModelCatalog();
+
+    expect(items).toHaveLength(4);
+    expect(items[0]?.capabilities).toBeUndefined();
+    expect(items[1]?.capabilities).toEqual(validCapabilities);
+    expect(items[2]?.capabilities).toBeUndefined();
+    expect(items[3]?.capabilities).toBeUndefined();
+  });
+
+  test("keeps text models when malformed capabilities are discarded", async () => {
+    vi.spyOn(globalThis, "fetch").mockResolvedValueOnce(
+      jsonResponse({
+        items: [
+          {
+            id: "chatgpt",
+            name: "НейроХаб",
+            estimate_credits: 0,
+            capabilities: {
+              schema_version: 2,
+              api: { text: {} },
+              application: { text: {} },
+            },
+          },
+          {
+            id: "gpt_5_5",
+            name: "GPT 5.5",
+            estimate_credits: 5,
+            capabilities: {
+              schema_version: 1,
+              api: {
+                image: {
+                  images: { support: "supported", extensions: [], max_count: 4 },
+                  aspect_ratios: ["1:1"],
+                  resolutions: ["1024x1024"],
+                  quality_modes: ["high"],
+                  speed_modes: [],
+                  max_output_count: 1,
+                  max_combined_images: 4,
+                },
+              },
+              application: {
+                image: {
+                  images: { support: "unsupported", extensions: [], max_count: 0 },
+                  aspect_ratios: ["1:1"],
+                  resolutions: ["1024x1024"],
+                  quality_modes: ["high"],
+                  speed_modes: [],
+                  max_output_count: 1,
+                  max_combined_images: 1,
+                },
+              },
+            },
+          },
+        ],
+      }),
+    );
+
+    expect(await listTextModels()).toEqual([
+      { id: "chatgpt", name: "НейроХаб", estimate_credits: 0 },
+      { id: "gpt_5_5", name: "GPT 5.5", estimate_credits: 5 },
+    ]);
   });
 });
 

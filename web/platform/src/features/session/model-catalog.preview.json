@@ -325,7 +325,98 @@
             }
           }
         }
-      ]
+      ],
+      "capabilities": {
+        "schema_version": 1,
+        "api": {
+          "image": {
+            "images": {
+              "support": "supported",
+              "extensions": [],
+              "max_count": null
+            },
+            "aspect_ratios": [
+              "1:1",
+              "3:2",
+              "2:3",
+              "4:3",
+              "3:4",
+              "5:4",
+              "4:5",
+              "16:9",
+              "9:16",
+              "2:1",
+              "1:2",
+              "21:9",
+              "9:21",
+              "3:1",
+              "1:3"
+            ],
+            "resolutions": [
+              "1K",
+              "2K",
+              "4K"
+            ],
+            "quality_modes": [
+              "medium",
+              "low",
+              "high",
+              "xhigh",
+              "max"
+            ],
+            "speed_modes": [],
+            "max_output_count": null,
+            "max_combined_images": null
+          },
+          "notes": [
+            "API предусматривает референсы; максимальное количество требует подтверждения. В приложении референсы отключены до проверки их тарификации."
+          ]
+        },
+        "application": {
+          "image": {
+            "images": {
+              "support": "unsupported",
+              "extensions": [],
+              "max_count": 0
+            },
+            "aspect_ratios": [
+              "1:1",
+              "3:2",
+              "2:3",
+              "4:3",
+              "3:4",
+              "5:4",
+              "4:5",
+              "16:9",
+              "9:16",
+              "2:1",
+              "1:2",
+              "21:9",
+              "9:21",
+              "3:1",
+              "1:3"
+            ],
+            "resolutions": [
+              "1K",
+              "2K",
+              "4K"
+            ],
+            "quality_modes": [
+              "medium",
+              "low",
+              "high",
+              "xhigh",
+              "max"
+            ],
+            "speed_modes": [],
+            "max_output_count": 4,
+            "max_combined_images": null
+          },
+          "notes": [
+            "На сайте загрузка фото в запрос генерации ещё не подключена."
+          ]
+        }
+      }
     },
     {
       "id": "gpt_image_2_5_sunburst",
@@ -650,7 +741,98 @@
             }
           }
         }
-      ]
+      ],
+      "capabilities": {
+        "schema_version": 1,
+        "api": {
+          "image": {
+            "images": {
+              "support": "supported",
+              "extensions": [],
+              "max_count": null
+            },
+            "aspect_ratios": [
+              "1:1",
+              "3:2",
+              "2:3",
+              "4:3",
+              "3:4",
+              "5:4",
+              "4:5",
+              "16:9",
+              "9:16",
+              "2:1",
+              "1:2",
+              "21:9",
+              "9:21",
+              "3:1",
+              "1:3"
+            ],
+            "resolutions": [
+              "1K",
+              "2K",
+              "4K"
+            ],
+            "quality_modes": [
+              "medium",
+              "low",
+              "high",
+              "xhigh",
+              "max"
+            ],
+            "speed_modes": [],
+            "max_output_count": null,
+            "max_combined_images": null
+          },
+          "notes": [
+            "API предусматривает референсы; максимальное количество требует подтверждения. В приложении референсы отключены до проверки их тарификации."
+          ]
+        },
+        "application": {
+          "image": {
+            "images": {
+              "support": "unsupported",
+              "extensions": [],
+              "max_count": 0
+            },
+            "aspect_ratios": [
+              "1:1",
+              "3:2",
+              "2:3",
+              "4:3",
+              "3:4",
+              "5:4",
+              "4:5",
+              "16:9",
+              "9:16",
+              "2:1",
+              "1:2",
+              "21:9",
+              "9:21",
+              "3:1",
+              "1:3"
+            ],
+            "resolutions": [
+              "1K",
+              "2K",
+              "4K"
+            ],
+            "quality_modes": [
+              "medium",
+              "low",
+              "high",
+              "xhigh",
+              "max"
+            ],
+            "speed_modes": [],
+            "max_output_count": 4,
+            "max_combined_images": null
+          },
+          "notes": [
+            "На сайте загрузка фото в запрос генерации ещё не подключена."
+          ]
+        }
+      }
     },
     {
       "id": "seedream_5_0_lite",
@@ -743,7 +925,73 @@
             }
           }
         }
-      ]
+      ],
+      "capabilities": {
+        "schema_version": 1,
+        "api": {
+          "image": {
+            "images": {
+              "support": "supported",
+              "extensions": [],
+              "max_count": 14
+            },
+            "aspect_ratios": [
+              "1:1",
+              "4:3",
+              "3:4",
+              "16:9",
+              "9:16",
+              "3:2",
+              "2:3",
+              "21:9",
+              "auto"
+            ],
+            "resolutions": [
+              "2K",
+              "3K",
+              "4K"
+            ],
+            "quality_modes": [],
+            "speed_modes": [],
+            "max_output_count": 15,
+            "max_combined_images": 15
+          },
+          "notes": [
+            "Указаны подтверждённые параметры подключённого API. Полный набор возможностей и неуказанные ограничения требуют проверки документации."
+          ]
+        },
+        "application": {
+          "image": {
+            "images": {
+              "support": "unsupported",
+              "extensions": [],
+              "max_count": 0
+            },
+            "aspect_ratios": [
+              "1:1",
+              "4:3",
+              "3:4",
+              "16:9",
+              "9:16",
+              "3:2",
+              "2:3",
+              "21:9"
+            ],
+            "resolutions": [
+              "2K",
+              "3K",
+              "4K"
+            ],
+            "quality_modes": [],
+            "speed_modes": [],
+            "max_output_count": 15,
+            "max_combined_images": 15
+          },
+          "notes": [
+            "На сайте загрузка фото в запрос генерации ещё не подключена."
+          ]
+        }
+      }
     },
     {
       "id": "seedream_5_0_pro",
@@ -844,7 +1092,76 @@
             }
           }
         }
-      ]
+      ],
+      "capabilities": {
+        "schema_version": 1,
+        "api": {
+          "image": {
+            "images": {
+              "support": "supported",
+              "extensions": [],
+              "max_count": 10
+            },
+            "aspect_ratios": [
+              "1:1",
+              "4:3",
+              "3:4",
+              "16:9",
+              "9:16",
+              "3:2",
+              "2:3",
+              "2:1",
+              "1:2",
+              "21:9"
+            ],
+            "resolutions": [
+              "1.5K",
+              "1K",
+              "2K"
+            ],
+            "quality_modes": [],
+            "speed_modes": [],
+            "max_output_count": 1,
+            "max_combined_images": null
+          },
+          "notes": [
+            "Указаны подтверждённые параметры подключённого API. Полный набор возможностей и неуказанные ограничения требуют проверки документации."
+          ]
+        },
+        "application": {
+          "image": {
+            "images": {
+              "support": "unsupported",
+              "extensions": [],
+              "max_count": 0
+            },
+            "aspect_ratios": [
+              "1:1",
+              "4:3",
+              "3:4",
+              "16:9",
+              "9:16",
+              "3:2",
+              "2:3",
+              "2:1",
+              "1:2",
+              "21:9"
+            ],
+            "resolutions": [
+              "1.5K",
+              "1K",
+              "2K"
+            ],
+            "quality_modes": [],
+            "speed_modes": [],
+            "max_output_count": 1,
+            "max_combined_images": null
+          },
+          "notes": [
+            "На сайте загрузка фото в запрос генерации ещё не подключена."
+          ]
+        }
+      }
     },
     {
       "id": "midjourney_v7",
@@ -945,7 +1262,66 @@
             }
           }
         }
-      ]
+      ],
+      "capabilities": {
+        "schema_version": 1,
+        "api": {
+          "image": {
+            "images": {
+              "support": "supported",
+              "extensions": [],
+              "max_count": null
+            },
+            "aspect_ratios": [],
+            "resolutions": [],
+            "quality_modes": [],
+            "speed_modes": [
+              "relax",
+              "fast",
+              "turbo"
+            ],
+            "max_output_count": null,
+            "max_combined_images": null
+          },
+          "notes": [
+            "Imagine принимает фото; точный максимум не подтверждён. Relax/Fast/Turbo — скорость. Разрешение 1K/2K/4K этим запросом не выбирается."
+          ]
+        },
+        "application": {
+          "image": {
+            "images": {
+              "support": "unsupported",
+              "extensions": [],
+              "max_count": 0
+            },
+            "aspect_ratios": [
+              "16:9",
+              "1:1",
+              "21:9",
+              "2:3",
+              "3:2",
+              "3:4",
+              "4:3",
+              "4:5",
+              "5:4",
+              "9:16"
+            ],
+            "resolutions": [],
+            "quality_modes": [],
+            "speed_modes": [
+              "relax",
+              "fast",
+              "turbo"
+            ],
+            "max_output_count": 1,
+            "max_combined_images": null
+          },
+          "notes": [
+            "Relax/Fast/Turbo — скорость генерации. Один результат Imagine может содержать сетку изображений.",
+            "На сайте загрузка фото в запрос генерации ещё не подключена."
+          ]
+        }
+      }
     },
     {
       "id": "flux_2_pro",
@@ -1052,7 +1428,77 @@
             }
           }
         }
-      ]
+      ],
+      "capabilities": {
+        "schema_version": 1,
+        "api": {
+          "image": {
+            "images": {
+              "support": "supported",
+              "extensions": [],
+              "max_count": 8
+            },
+            "aspect_ratios": [
+              "16:9",
+              "1:1",
+              "4:3",
+              "3:4",
+              "9:16",
+              "3:2",
+              "2:3",
+              "21:9",
+              "9:21",
+              "auto"
+            ],
+            "resolutions": [
+              "1MP",
+              "2MP",
+              "3MP",
+              "4MP"
+            ],
+            "quality_modes": [],
+            "speed_modes": [],
+            "max_output_count": 1,
+            "max_combined_images": null
+          },
+          "notes": [
+            "API принимает до 8 фото; суммарно выход и референсы — до 9 МП. Поддерживает точные размеры до 4 МП. Загрузка референсов в этой интеграции ещё не подключена."
+          ]
+        },
+        "application": {
+          "image": {
+            "images": {
+              "support": "unsupported",
+              "extensions": [],
+              "max_count": 0
+            },
+            "aspect_ratios": [
+              "16:9",
+              "1:1",
+              "4:3",
+              "3:4",
+              "9:16",
+              "3:2",
+              "2:3",
+              "21:9",
+              "9:21"
+            ],
+            "resolutions": [
+              "1MP",
+              "2MP",
+              "3MP",
+              "4MP"
+            ],
+            "quality_modes": [],
+            "speed_modes": [],
+            "max_output_count": 1,
+            "max_combined_images": null
+          },
+          "notes": [
+            "На сайте загрузка фото в запрос генерации ещё не подключена."
+          ]
+        }
+      }
     },
     {
       "id": "nano_banana_2",
@@ -1153,7 +1599,70 @@
             }
           }
         }
-      ]
+      ],
+      "capabilities": {
+        "schema_version": 1,
+        "api": {
+          "image": {
+            "images": {
+              "support": "supported",
+              "extensions": [],
+              "max_count": null
+            },
+            "aspect_ratios": [
+              "1:4",
+              "4:1",
+              "1:8",
+              "8:1"
+            ],
+            "resolutions": [
+              "1K",
+              "2K",
+              "4K"
+            ],
+            "quality_modes": [],
+            "speed_modes": [],
+            "max_output_count": null,
+            "max_combined_images": null
+          },
+          "notes": [
+            "Указаны подтверждённые параметры подключённого API. Полный набор возможностей и неуказанные ограничения требуют проверки документации."
+          ]
+        },
+        "application": {
+          "image": {
+            "images": {
+              "support": "unsupported",
+              "extensions": [],
+              "max_count": 0
+            },
+            "aspect_ratios": [
+              "16:9",
+              "1:1",
+              "21:9",
+              "2:3",
+              "3:2",
+              "3:4",
+              "4:3",
+              "4:5",
+              "5:4",
+              "9:16"
+            ],
+            "resolutions": [
+              "1K",
+              "2K",
+              "4K"
+            ],
+            "quality_modes": [],
+            "speed_modes": [],
+            "max_output_count": 4,
+            "max_combined_images": null
+          },
+          "notes": [
+            "На сайте загрузка фото в запрос генерации ещё не подключена."
+          ]
+        }
+      }
     },
     {
       "id": "nano_banana_pro",
@@ -1254,7 +1763,67 @@
             }
           }
         }
-      ]
+      ],
+      "capabilities": {
+        "schema_version": 1,
+        "api": {
+          "image": {
+            "images": {
+              "support": "supported",
+              "extensions": [],
+              "max_count": null
+            },
+            "aspect_ratios": [
+              "auto"
+            ],
+            "resolutions": [
+              "1K",
+              "2K",
+              "4K"
+            ],
+            "quality_modes": [],
+            "speed_modes": [],
+            "max_output_count": null,
+            "max_combined_images": null
+          },
+          "notes": [
+            "Указаны подтверждённые параметры подключённого API. Полный набор возможностей и неуказанные ограничения требуют проверки документации."
+          ]
+        },
+        "application": {
+          "image": {
+            "images": {
+              "support": "unsupported",
+              "extensions": [],
+              "max_count": 0
+            },
+            "aspect_ratios": [
+              "16:9",
+              "1:1",
+              "21:9",
+              "2:3",
+              "3:2",
+              "3:4",
+              "4:3",
+              "4:5",
+              "5:4",
+              "9:16"
+            ],
+            "resolutions": [
+              "1K",
+              "2K",
+              "4K"
+            ],
+            "quality_modes": [],
+            "speed_modes": [],
+            "max_output_count": 4,
+            "max_combined_images": null
+          },
+          "notes": [
+            "На сайте загрузка фото в запрос генерации ещё не подключена."
+          ]
+        }
+      }
     },
     {
       "id": "gpt_image_2",
@@ -1355,7 +1924,71 @@
             }
           }
         }
-      ]
+      ],
+      "capabilities": {
+        "schema_version": 1,
+        "api": {
+          "image": {
+            "images": {
+              "support": "supported",
+              "extensions": [],
+              "max_count": null
+            },
+            "aspect_ratios": [
+              "2:1",
+              "1:2",
+              "3:1",
+              "1:3",
+              "9:21"
+            ],
+            "resolutions": [
+              "1K",
+              "2K",
+              "4K"
+            ],
+            "quality_modes": [],
+            "speed_modes": [],
+            "max_output_count": null,
+            "max_combined_images": null
+          },
+          "notes": [
+            "Указаны подтверждённые параметры подключённого API. Полный набор возможностей и неуказанные ограничения требуют проверки документации."
+          ]
+        },
+        "application": {
+          "image": {
+            "images": {
+              "support": "unsupported",
+              "extensions": [],
+              "max_count": 0
+            },
+            "aspect_ratios": [
+              "16:9",
+              "1:1",
+              "21:9",
+              "2:3",
+              "3:2",
+              "3:4",
+              "4:3",
+              "4:5",
+              "5:4",
+              "9:16"
+            ],
+            "resolutions": [
+              "1K",
+              "2K",
+              "4K"
+            ],
+            "quality_modes": [],
+            "speed_modes": [],
+            "max_output_count": 4,
+            "max_combined_images": null
+          },
+          "notes": [
+            "На сайте загрузка фото в запрос генерации ещё не подключена."
+          ]
+        }
+      }
     },
     {
       "id": "qwen_image_3",
@@ -1401,16 +2034,13 @@
             ],
             "default_quality": "1K",
             "allowed_aspect_ratios": [
-              "16:9",
               "1:1",
-              "21:9",
-              "2:3",
-              "3:2",
-              "3:4",
               "4:3",
-              "4:5",
-              "5:4",
-              "9:16"
+              "3:4",
+              "16:9",
+              "9:16",
+              "3:2",
+              "2:3"
             ],
             "default_aspect_ratio": "16:9",
             "max_output_count": 1,
@@ -1423,28 +2053,75 @@
             "price_by_variant": {
               "1K:16:9": 15,
               "1K:1:1": 15,
-              "1K:21:9": 15,
               "1K:2:3": 15,
               "1K:3:2": 15,
               "1K:3:4": 15,
               "1K:4:3": 15,
-              "1K:4:5": 15,
-              "1K:5:4": 15,
               "1K:9:16": 15,
               "2K:16:9": 15,
               "2K:1:1": 15,
-              "2K:21:9": 15,
               "2K:2:3": 15,
               "2K:3:2": 15,
               "2K:3:4": 15,
               "2K:4:3": 15,
-              "2K:4:5": 15,
-              "2K:5:4": 15,
               "2K:9:16": 15
             }
           }
         }
-      ]
+      ],
+      "capabilities": {
+        "schema_version": 1,
+        "api": {
+          "image": {
+            "images": {
+              "support": "supported",
+              "extensions": [],
+              "max_count": null
+            },
+            "aspect_ratios": [],
+            "resolutions": [
+              "1K",
+              "2K"
+            ],
+            "quality_modes": [],
+            "speed_modes": [],
+            "max_output_count": null,
+            "max_combined_images": null
+          },
+          "notes": [
+            "Указаны подтверждённые параметры подключённого API. Полный набор возможностей и неуказанные ограничения требуют проверки документации."
+          ]
+        },
+        "application": {
+          "image": {
+            "images": {
+              "support": "unsupported",
+              "extensions": [],
+              "max_count": 0
+            },
+            "aspect_ratios": [
+              "1:1",
+              "4:3",
+              "3:4",
+              "16:9",
+              "9:16",
+              "3:2",
+              "2:3"
+            ],
+            "resolutions": [
+              "1K",
+              "2K"
+            ],
+            "quality_modes": [],
+            "speed_modes": [],
+            "max_output_count": 1,
+            "max_combined_images": null
+          },
+          "notes": [
+            "На сайте загрузка фото в запрос генерации ещё не подключена."
+          ]
+        }
+      }
     },
     {
       "id": "grok_image_1_5",
@@ -1511,7 +2188,62 @@
             }
           }
         }
-      ]
+      ],
+      "capabilities": {
+        "schema_version": 1,
+        "api": {
+          "image": {
+            "images": {
+              "support": "supported",
+              "extensions": [],
+              "max_count": null
+            },
+            "aspect_ratios": [
+              "16:9",
+              "1:1",
+              "2:3",
+              "3:2",
+              "9:16"
+            ],
+            "resolutions": [],
+            "quality_modes": [
+              "standard"
+            ],
+            "speed_modes": [],
+            "max_output_count": null,
+            "max_combined_images": null
+          },
+          "notes": [
+            "Указаны подтверждённые параметры подключённого API. Полный набор возможностей и неуказанные ограничения требуют проверки документации."
+          ]
+        },
+        "application": {
+          "image": {
+            "images": {
+              "support": "unsupported",
+              "extensions": [],
+              "max_count": 0
+            },
+            "aspect_ratios": [
+              "16:9",
+              "1:1",
+              "2:3",
+              "3:2",
+              "9:16"
+            ],
+            "resolutions": [],
+            "quality_modes": [
+              "standard"
+            ],
+            "speed_modes": [],
+            "max_output_count": 1,
+            "max_combined_images": null
+          },
+          "notes": [
+            "На сайте загрузка фото в запрос генерации ещё не подключена."
+          ]
+        }
+      }
     },
     {
       "id": "grok_image_2_0",
@@ -1581,7 +2313,66 @@
             }
           }
         }
-      ]
+      ],
+      "capabilities": {
+        "schema_version": 1,
+        "api": {
+          "image": {
+            "images": {
+              "support": "unknown",
+              "extensions": [],
+              "max_count": null
+            },
+            "aspect_ratios": [
+              "16:9",
+              "1:1",
+              "2:3",
+              "3:2",
+              "3:4",
+              "4:3",
+              "9:16"
+            ],
+            "resolutions": [],
+            "quality_modes": [
+              "standard"
+            ],
+            "speed_modes": [],
+            "max_output_count": null,
+            "max_combined_images": null
+          },
+          "notes": [
+            "Указаны подтверждённые параметры подключённого API. Полный набор возможностей и неуказанные ограничения требуют проверки документации."
+          ]
+        },
+        "application": {
+          "image": {
+            "images": {
+              "support": "unsupported",
+              "extensions": [],
+              "max_count": 0
+            },
+            "aspect_ratios": [
+              "16:9",
+              "1:1",
+              "2:3",
+              "3:2",
+              "3:4",
+              "4:3",
+              "9:16"
+            ],
+            "resolutions": [],
+            "quality_modes": [
+              "standard"
+            ],
+            "speed_modes": [],
+            "max_output_count": 1,
+            "max_combined_images": null
+          },
+          "notes": [
+            "На сайте загрузка фото в запрос генерации ещё не подключена."
+          ]
+        }
+      }
     },
     {
       "id": "seedream_4_5",
@@ -1627,16 +2418,14 @@
             ],
             "default_quality": "2K",
             "allowed_aspect_ratios": [
-              "16:9",
               "1:1",
-              "21:9",
-              "2:3",
-              "3:2",
-              "3:4",
               "4:3",
-              "4:5",
-              "5:4",
-              "9:16"
+              "3:4",
+              "16:9",
+              "9:16",
+              "3:2",
+              "2:3",
+              "21:9"
             ],
             "default_aspect_ratio": "16:9",
             "max_output_count": 4,
@@ -1654,8 +2443,6 @@
               "2K:3:2": 30,
               "2K:3:4": 30,
               "2K:4:3": 30,
-              "2K:4:5": 30,
-              "2K:5:4": 30,
               "2K:9:16": 30,
               "4K:16:9": 40,
               "4K:1:1": 40,
@@ -1664,13 +2451,65 @@
               "4K:3:2": 40,
               "4K:3:4": 40,
               "4K:4:3": 40,
-              "4K:4:5": 40,
-              "4K:5:4": 40,
               "4K:9:16": 40
             }
           }
         }
-      ]
+      ],
+      "capabilities": {
+        "schema_version": 1,
+        "api": {
+          "image": {
+            "images": {
+              "support": "supported",
+              "extensions": [],
+              "max_count": null
+            },
+            "aspect_ratios": [],
+            "resolutions": [
+              "2K",
+              "4K"
+            ],
+            "quality_modes": [],
+            "speed_modes": [],
+            "max_output_count": null,
+            "max_combined_images": null
+          },
+          "notes": [
+            "Указаны подтверждённые параметры подключённого API. Полный набор возможностей и неуказанные ограничения требуют проверки документации."
+          ]
+        },
+        "application": {
+          "image": {
+            "images": {
+              "support": "unsupported",
+              "extensions": [],
+              "max_count": 0
+            },
+            "aspect_ratios": [
+              "1:1",
+              "4:3",
+              "3:4",
+              "16:9",
+              "9:16",
+              "3:2",
+              "2:3",
+              "21:9"
+            ],
+            "resolutions": [
+              "2K",
+              "4K"
+            ],
+            "quality_modes": [],
+            "speed_modes": [],
+            "max_output_count": 4,
+            "max_combined_images": null
+          },
+          "notes": [
+            "На сайте загрузка фото в запрос генерации ещё не подключена."
+          ]
+        }
+      }
     },
     {
       "id": "chatgpt",
@@ -1712,7 +2551,54 @@
             "estimate_credits": 0
           }
         }
-      ]
+      ],
+      "capabilities": {
+        "schema_version": 1,
+        "api": {
+          "text": {
+            "images": {
+              "support": "unknown",
+              "extensions": [],
+              "max_count": null
+            },
+            "videos": {
+              "support": "unknown",
+              "extensions": [],
+              "max_count": null
+            },
+            "files": {
+              "support": "unknown",
+              "extensions": [],
+              "max_count": null
+            }
+          },
+          "notes": [
+            "Поддержка вложений у провайдера для базовой модели ещё не подтверждена. В приложении можно отправить только текст."
+          ]
+        },
+        "application": {
+          "text": {
+            "images": {
+              "support": "unsupported",
+              "extensions": [],
+              "max_count": 0
+            },
+            "videos": {
+              "support": "unsupported",
+              "extensions": [],
+              "max_count": 0
+            },
+            "files": {
+              "support": "unsupported",
+              "extensions": [],
+              "max_count": 0
+            }
+          },
+          "notes": [
+            "Сейчас можно отправить только текст. Фото, видео, аудио, PDF и другие файлы в запрос не передаются."
+          ]
+        }
+      }
     },
     {
       "id": "gpt_5_5",
@@ -1755,7 +2641,55 @@
             "max_output_tokens": 2048
           }
         }
-      ]
+      ],
+      "capabilities": {
+        "schema_version": 1,
+        "api": {
+          "text": {
+            "images": {
+              "support": "supported",
+              "extensions": [],
+              "max_count": null
+            },
+            "videos": {
+              "support": "unknown",
+              "extensions": [],
+              "max_count": null
+            },
+            "files": {
+              "support": "supported",
+              "extensions": [],
+              "max_count": null
+            }
+          },
+          "notes": [
+            "Публичная документация для этой модели подтверждает мультимодальный API-ввод с текстом, изображениями и файлами, но не перечисляет точные расширения, лимиты и поддержку видео.",
+            "В приложении пока доступна отправка только текста."
+          ]
+        },
+        "application": {
+          "text": {
+            "images": {
+              "support": "unsupported",
+              "extensions": [],
+              "max_count": 0
+            },
+            "videos": {
+              "support": "unsupported",
+              "extensions": [],
+              "max_count": 0
+            },
+            "files": {
+              "support": "unsupported",
+              "extensions": [],
+              "max_count": 0
+            }
+          },
+          "notes": [
+            "Сейчас можно отправить только текст. Фото, видео, аудио, PDF и другие файлы в запрос не передаются."
+          ]
+        }
+      }
     },
     {
       "id": "claude_opus_4_7",
@@ -1798,7 +2732,54 @@
             "max_output_tokens": 2048
           }
         }
-      ]
+      ],
+      "capabilities": {
+        "schema_version": 1,
+        "api": {
+          "text": {
+            "images": {
+              "support": "unknown",
+              "extensions": [],
+              "max_count": null
+            },
+            "videos": {
+              "support": "unknown",
+              "extensions": [],
+              "max_count": null
+            },
+            "files": {
+              "support": "unknown",
+              "extensions": [],
+              "max_count": null
+            }
+          },
+          "notes": [
+            "Для этой версии модели документация провайдера не подтверждает возможности работы с вложениями. Это не означает, что модель их не поддерживает."
+          ]
+        },
+        "application": {
+          "text": {
+            "images": {
+              "support": "unsupported",
+              "extensions": [],
+              "max_count": 0
+            },
+            "videos": {
+              "support": "unsupported",
+              "extensions": [],
+              "max_count": 0
+            },
+            "files": {
+              "support": "unsupported",
+              "extensions": [],
+              "max_count": 0
+            }
+          },
+          "notes": [
+            "Сейчас можно отправить только текст. Фото, видео, аудио, PDF и другие файлы в запрос не передаются."
+          ]
+        }
+      }
     },
     {
       "id": "gemini_3_1_pro",
@@ -1841,7 +2822,57 @@
             "max_output_tokens": 2048
           }
         }
-      ]
+      ],
+      "capabilities": {
+        "schema_version": 1,
+        "api": {
+          "text": {
+            "images": {
+              "support": "supported",
+              "extensions": [],
+              "max_count": null
+            },
+            "videos": {
+              "support": "supported",
+              "extensions": [],
+              "max_count": null
+            },
+            "files": {
+              "support": "supported",
+              "extensions": [
+                "pdf"
+              ],
+              "max_count": null
+            }
+          },
+          "notes": [
+            "Документация подтверждает фото, видео, аудио, PDF и другие документы. PDF указан в списке форматов; полный перечень расширений и лимиты пока не подтверждены.",
+            "В приложении пока доступна отправка только текста."
+          ]
+        },
+        "application": {
+          "text": {
+            "images": {
+              "support": "unsupported",
+              "extensions": [],
+              "max_count": 0
+            },
+            "videos": {
+              "support": "unsupported",
+              "extensions": [],
+              "max_count": 0
+            },
+            "files": {
+              "support": "unsupported",
+              "extensions": [],
+              "max_count": 0
+            }
+          },
+          "notes": [
+            "Сейчас можно отправить только текст. Фото, видео, аудио, PDF и другие файлы в запрос не передаются."
+          ]
+        }
+      }
     },
     {
       "id": "claude_opus_4_8",
@@ -1884,7 +2915,54 @@
             "max_output_tokens": 2048
           }
         }
-      ]
+      ],
+      "capabilities": {
+        "schema_version": 1,
+        "api": {
+          "text": {
+            "images": {
+              "support": "unknown",
+              "extensions": [],
+              "max_count": null
+            },
+            "videos": {
+              "support": "unknown",
+              "extensions": [],
+              "max_count": null
+            },
+            "files": {
+              "support": "unknown",
+              "extensions": [],
+              "max_count": null
+            }
+          },
+          "notes": [
+            "Для этой версии модели документация провайдера не подтверждает возможности работы с вложениями. Это не означает, что модель их не поддерживает."
+          ]
+        },
+        "application": {
+          "text": {
+            "images": {
+              "support": "unsupported",
+              "extensions": [],
+              "max_count": 0
+            },
+            "videos": {
+              "support": "unsupported",
+              "extensions": [],
+              "max_count": 0
+            },
+            "files": {
+              "support": "unsupported",
+              "extensions": [],
+              "max_count": 0
+            }
+          },
+          "notes": [
+            "Сейчас можно отправить только текст. Фото, видео, аудио, PDF и другие файлы в запрос не передаются."
+          ]
+        }
+      }
     },
     {
       "id": "gpt_5_6_terra",
@@ -1927,7 +3005,55 @@
             "max_output_tokens": 2048
           }
         }
-      ]
+      ],
+      "capabilities": {
+        "schema_version": 1,
+        "api": {
+          "text": {
+            "images": {
+              "support": "supported",
+              "extensions": [],
+              "max_count": null
+            },
+            "videos": {
+              "support": "unknown",
+              "extensions": [],
+              "max_count": null
+            },
+            "files": {
+              "support": "supported",
+              "extensions": [],
+              "max_count": null
+            }
+          },
+          "notes": [
+            "Публичная документация для этой модели подтверждает мультимодальный API-ввод с текстом, изображениями и файлами, но не перечисляет точные расширения, лимиты и поддержку видео.",
+            "В приложении пока доступна отправка только текста."
+          ]
+        },
+        "application": {
+          "text": {
+            "images": {
+              "support": "unsupported",
+              "extensions": [],
+              "max_count": 0
+            },
+            "videos": {
+              "support": "unsupported",
+              "extensions": [],
+              "max_count": 0
+            },
+            "files": {
+              "support": "unsupported",
+              "extensions": [],
+              "max_count": 0
+            }
+          },
+          "notes": [
+            "Сейчас можно отправить только текст. Фото, видео, аудио, PDF и другие файлы в запрос не передаются."
+          ]
+        }
+      }
     },
     {
       "id": "gpt_6_astra",
@@ -1970,7 +3096,55 @@
             "max_output_tokens": 2048
           }
         }
-      ]
+      ],
+      "capabilities": {
+        "schema_version": 1,
+        "api": {
+          "text": {
+            "images": {
+              "support": "supported",
+              "extensions": [],
+              "max_count": null
+            },
+            "videos": {
+              "support": "unknown",
+              "extensions": [],
+              "max_count": null
+            },
+            "files": {
+              "support": "supported",
+              "extensions": [],
+              "max_count": null
+            }
+          },
+          "notes": [
+            "Публичная документация для этой модели подтверждает мультимодальный API-ввод с текстом, изображениями и файлами, но не перечисляет точные расширения, лимиты и поддержку видео.",
+            "В приложении пока доступна отправка только текста."
+          ]
+        },
+        "application": {
+          "text": {
+            "images": {
+              "support": "unsupported",
+              "extensions": [],
+              "max_count": 0
+            },
+            "videos": {
+              "support": "unsupported",
+              "extensions": [],
+              "max_count": 0
+            },
+            "files": {
+              "support": "unsupported",
+              "extensions": [],
+              "max_count": 0
+            }
+          },
+          "notes": [
+            "Сейчас можно отправить только текст. Фото, видео, аудио, PDF и другие файлы в запрос не передаются."
+          ]
+        }
+      }
     },
     {
       "id": "claude_opus_5",
@@ -2013,7 +3187,54 @@
             "max_output_tokens": 2048
           }
         }
-      ]
+      ],
+      "capabilities": {
+        "schema_version": 1,
+        "api": {
+          "text": {
+            "images": {
+              "support": "unknown",
+              "extensions": [],
+              "max_count": null
+            },
+            "videos": {
+              "support": "unknown",
+              "extensions": [],
+              "max_count": null
+            },
+            "files": {
+              "support": "unknown",
+              "extensions": [],
+              "max_count": null
+            }
+          },
+          "notes": [
+            "Для этой версии модели документация провайдера не подтверждает возможности работы с вложениями. Это не означает, что модель их не поддерживает."
+          ]
+        },
+        "application": {
+          "text": {
+            "images": {
+              "support": "unsupported",
+              "extensions": [],
+              "max_count": 0
+            },
+            "videos": {
+              "support": "unsupported",
+              "extensions": [],
+              "max_count": 0
+            },
+            "files": {
+              "support": "unsupported",
+              "extensions": [],
+              "max_count": 0
+            }
+          },
+          "notes": [
+            "Сейчас можно отправить только текст. Фото, видео, аудио, PDF и другие файлы в запрос не передаются."
+          ]
+        }
+      }
     },
     {
       "id": "gemini_3_7_flash",
@@ -2056,7 +3277,57 @@
             "max_output_tokens": 2048
           }
         }
-      ]
+      ],
+      "capabilities": {
+        "schema_version": 1,
+        "api": {
+          "text": {
+            "images": {
+              "support": "supported",
+              "extensions": [],
+              "max_count": null
+            },
+            "videos": {
+              "support": "supported",
+              "extensions": [],
+              "max_count": null
+            },
+            "files": {
+              "support": "supported",
+              "extensions": [
+                "pdf"
+              ],
+              "max_count": null
+            }
+          },
+          "notes": [
+            "Документация подтверждает фото, видео, аудио, PDF и другие документы. PDF указан в списке форматов; полный перечень расширений и лимиты пока не подтверждены.",
+            "В приложении пока доступна отправка только текста."
+          ]
+        },
+        "application": {
+          "text": {
+            "images": {
+              "support": "unsupported",
+              "extensions": [],
+              "max_count": 0
+            },
+            "videos": {
+              "support": "unsupported",
+              "extensions": [],
+              "max_count": 0
+            },
+            "files": {
+              "support": "unsupported",
+              "extensions": [],
+              "max_count": 0
+            }
+          },
+          "notes": [
+            "Сейчас можно отправить только текст. Фото, видео, аудио, PDF и другие файлы в запрос не передаются."
+          ]
+        }
+      }
     },
     {
       "id": "claude_fable_5_1",
@@ -2099,7 +3370,54 @@
             "max_output_tokens": 2048
           }
         }
-      ]
+      ],
+      "capabilities": {
+        "schema_version": 1,
+        "api": {
+          "text": {
+            "images": {
+              "support": "unknown",
+              "extensions": [],
+              "max_count": null
+            },
+            "videos": {
+              "support": "unknown",
+              "extensions": [],
+              "max_count": null
+            },
+            "files": {
+              "support": "unknown",
+              "extensions": [],
+              "max_count": null
+            }
+          },
+          "notes": [
+            "Для этой версии модели документация провайдера не подтверждает возможности работы с вложениями. Это не означает, что модель их не поддерживает."
+          ]
+        },
+        "application": {
+          "text": {
+            "images": {
+              "support": "unsupported",
+              "extensions": [],
+              "max_count": 0
+            },
+            "videos": {
+              "support": "unsupported",
+              "extensions": [],
+              "max_count": 0
+            },
+            "files": {
+              "support": "unsupported",
+              "extensions": [],
+              "max_count": 0
+            }
+          },
+          "notes": [
+            "Сейчас можно отправить только текст. Фото, видео, аудио, PDF и другие файлы в запрос не передаются."
+          ]
+        }
+      }
     },
     {
       "id": "claude_fable_5",
@@ -2142,7 +3460,54 @@
             "max_output_tokens": 2048
           }
         }
-      ]
+      ],
+      "capabilities": {
+        "schema_version": 1,
+        "api": {
+          "text": {
+            "images": {
+              "support": "unknown",
+              "extensions": [],
+              "max_count": null
+            },
+            "videos": {
+              "support": "unknown",
+              "extensions": [],
+              "max_count": null
+            },
+            "files": {
+              "support": "unknown",
+              "extensions": [],
+              "max_count": null
+            }
+          },
+          "notes": [
+            "Для этой версии модели документация провайдера не подтверждает возможности работы с вложениями. Это не означает, что модель их не поддерживает."
+          ]
+        },
+        "application": {
+          "text": {
+            "images": {
+              "support": "unsupported",
+              "extensions": [],
+              "max_count": 0
+            },
+            "videos": {
+              "support": "unsupported",
+              "extensions": [],
+              "max_count": 0
+            },
+            "files": {
+              "support": "unsupported",
+              "extensions": [],
+              "max_count": 0
+            }
+          },
+          "notes": [
+            "Сейчас можно отправить только текст. Фото, видео, аудио, PDF и другие файлы в запрос не передаются."
+          ]
+        }
+      }
     },
     {
       "id": "gemini_3_6_flash",
@@ -2185,7 +3550,57 @@
             "max_output_tokens": 2048
           }
         }
-      ]
+      ],
+      "capabilities": {
+        "schema_version": 1,
+        "api": {
+          "text": {
+            "images": {
+              "support": "supported",
+              "extensions": [],
+              "max_count": null
+            },
+            "videos": {
+              "support": "supported",
+              "extensions": [],
+              "max_count": null
+            },
+            "files": {
+              "support": "supported",
+              "extensions": [
+                "pdf"
+              ],
+              "max_count": null
+            }
+          },
+          "notes": [
+            "Документация подтверждает фото, видео, аудио, PDF и другие документы. PDF указан в списке форматов; полный перечень расширений и лимиты пока не подтверждены.",
+            "В приложении пока доступна отправка только текста."
+          ]
+        },
+        "application": {
+          "text": {
+            "images": {
+              "support": "unsupported",
+              "extensions": [],
+              "max_count": 0
+            },
+            "videos": {
+              "support": "unsupported",
+              "extensions": [],
+              "max_count": 0
+            },
+            "files": {
+              "support": "unsupported",
+              "extensions": [],
+              "max_count": 0
+            }
+          },
+          "notes": [
+            "Сейчас можно отправить только текст. Фото, видео, аудио, PDF и другие файлы в запрос не передаются."
+          ]
+        }
+      }
     },
     {
       "id": "video_kling_v3",
@@ -3116,7 +4531,136 @@
             "end_image": "unsupported"
           }
         }
-      ]
+      ],
+      "capabilities": {
+        "schema_version": 1,
+        "api": {
+          "video": {
+            "images": {
+              "support": "supported",
+              "extensions": [
+                "jpg",
+                "jpeg",
+                "png",
+                "webp"
+              ],
+              "max_count": 2
+            },
+            "videos": {
+              "support": "unknown",
+              "extensions": [],
+              "max_count": null
+            },
+            "allowed_image_counts": [
+              0,
+              1,
+              2
+            ],
+            "duration": {
+              "mode": "selected",
+              "min_seconds": 3,
+              "max_seconds": 15,
+              "allowed_seconds": [
+                3,
+                4,
+                5,
+                6,
+                7,
+                8,
+                9,
+                10,
+                11,
+                12,
+                13,
+                14,
+                15
+              ]
+            },
+            "resolutions": [
+              "720p",
+              "1080p",
+              "4k"
+            ],
+            "quality_modes": null,
+            "aspect_ratios": [
+              "16:9",
+              "9:16",
+              "1:1"
+            ],
+            "audio": {
+              "mode": "optional",
+              "selectable": true
+            },
+            "start_frame": "optional",
+            "end_frame": "optional"
+          },
+          "notes": [
+            "Профиль показывает проверенные ограничения выбора; стоимость считается отдельно перед запуском.",
+            "Указан проверенный набор параметров API. Неподтверждённые форматы и ограничения отмечены отдельно; отсутствие значения не означает отсутствие поддержки.",
+            "Можно добавить до двух кадров; стартовый и конечный кадр зависят от числа изображений."
+          ]
+        },
+        "application": {
+          "video": {
+            "images": {
+              "support": "unsupported",
+              "extensions": [],
+              "max_count": 0
+            },
+            "videos": {
+              "support": "unsupported",
+              "extensions": [],
+              "max_count": 0
+            },
+            "allowed_image_counts": [
+              0
+            ],
+            "duration": {
+              "mode": "selected",
+              "min_seconds": 3,
+              "max_seconds": 15,
+              "allowed_seconds": [
+                3,
+                4,
+                5,
+                6,
+                7,
+                8,
+                9,
+                10,
+                11,
+                12,
+                13,
+                14,
+                15
+              ]
+            },
+            "resolutions": [
+              "720p",
+              "1080p",
+              "4k"
+            ],
+            "quality_modes": null,
+            "aspect_ratios": [
+              "16:9",
+              "9:16",
+              "1:1"
+            ],
+            "audio": {
+              "mode": "unknown",
+              "selectable": false
+            },
+            "start_frame": "unsupported",
+            "end_frame": "unsupported"
+          },
+          "notes": [
+            "Профиль показывает проверенные ограничения выбора; стоимость считается отдельно перед запуском.",
+            "В интерфейсе изображения загружаются как JPEG/PNG; видео MP4/MOV доступно только для Motion Control.",
+            "Можно добавить до двух кадров; стартовый и конечный кадр зависят от числа изображений.",
+            "На сайте видеозапрос принимает только текст. Загрузка референсов и переключатель звука ещё не подключены."
+          ]
+        }
+      }
     },
     {
       "id": "video_veo_3_1_fast",
@@ -3221,7 +4765,111 @@
             "end_image": "unsupported"
           }
         }
-      ]
+      ],
+      "capabilities": {
+        "schema_version": 1,
+        "api": {
+          "video": {
+            "images": {
+              "support": "supported",
+              "extensions": [
+                "jpg",
+                "jpeg",
+                "png",
+                "webp"
+              ],
+              "max_count": 3
+            },
+            "videos": {
+              "support": "unknown",
+              "extensions": [],
+              "max_count": null
+            },
+            "allowed_image_counts": [
+              0,
+              1,
+              2,
+              3
+            ],
+            "duration": {
+              "mode": "selected",
+              "min_seconds": 8,
+              "max_seconds": 8,
+              "allowed_seconds": [
+                8
+              ]
+            },
+            "resolutions": [
+              "720p",
+              "1080p",
+              "4k"
+            ],
+            "quality_modes": null,
+            "aspect_ratios": [
+              "16:9",
+              "9:16"
+            ],
+            "audio": {
+              "mode": "unknown",
+              "selectable": false
+            },
+            "start_frame": "optional",
+            "end_frame": "optional"
+          },
+          "notes": [
+            "Профиль показывает проверенные ограничения выбора; стоимость считается отдельно перед запуском.",
+            "Указан проверенный набор параметров API. Неподтверждённые форматы и ограничения отмечены отдельно; отсутствие значения не означает отсутствие поддержки.",
+            "Одно или два изображения используются как кадры; у Fast три изображения считаются референсами."
+          ]
+        },
+        "application": {
+          "video": {
+            "images": {
+              "support": "unsupported",
+              "extensions": [],
+              "max_count": 0
+            },
+            "videos": {
+              "support": "unsupported",
+              "extensions": [],
+              "max_count": 0
+            },
+            "allowed_image_counts": [
+              0
+            ],
+            "duration": {
+              "mode": "selected",
+              "min_seconds": 8,
+              "max_seconds": 8,
+              "allowed_seconds": [
+                8
+              ]
+            },
+            "resolutions": [
+              "720p",
+              "1080p",
+              "4k"
+            ],
+            "quality_modes": null,
+            "aspect_ratios": [
+              "16:9",
+              "9:16"
+            ],
+            "audio": {
+              "mode": "unknown",
+              "selectable": false
+            },
+            "start_frame": "unsupported",
+            "end_frame": "unsupported"
+          },
+          "notes": [
+            "Профиль показывает проверенные ограничения выбора; стоимость считается отдельно перед запуском.",
+            "В интерфейсе изображения загружаются как JPEG/PNG; видео MP4/MOV доступно только для Motion Control.",
+            "Одно или два изображения используются как кадры; у Fast три изображения считаются референсами.",
+            "На сайте видеозапрос принимает только текст. Загрузка референсов и переключатель звука ещё не подключены."
+          ]
+        }
+      }
     },
     {
       "id": "video_veo_3_1_quality",
@@ -3326,7 +4974,110 @@
             "end_image": "unsupported"
           }
         }
-      ]
+      ],
+      "capabilities": {
+        "schema_version": 1,
+        "api": {
+          "video": {
+            "images": {
+              "support": "supported",
+              "extensions": [
+                "jpg",
+                "jpeg",
+                "png",
+                "webp"
+              ],
+              "max_count": 2
+            },
+            "videos": {
+              "support": "unknown",
+              "extensions": [],
+              "max_count": null
+            },
+            "allowed_image_counts": [
+              0,
+              1,
+              2
+            ],
+            "duration": {
+              "mode": "selected",
+              "min_seconds": 8,
+              "max_seconds": 8,
+              "allowed_seconds": [
+                8
+              ]
+            },
+            "resolutions": [
+              "720p",
+              "1080p",
+              "4k"
+            ],
+            "quality_modes": null,
+            "aspect_ratios": [
+              "16:9",
+              "9:16"
+            ],
+            "audio": {
+              "mode": "unknown",
+              "selectable": false
+            },
+            "start_frame": "optional",
+            "end_frame": "optional"
+          },
+          "notes": [
+            "Профиль показывает проверенные ограничения выбора; стоимость считается отдельно перед запуском.",
+            "Указан проверенный набор параметров API. Неподтверждённые форматы и ограничения отмечены отдельно; отсутствие значения не означает отсутствие поддержки.",
+            "Одно или два изображения используются как кадры; у Fast три изображения считаются референсами."
+          ]
+        },
+        "application": {
+          "video": {
+            "images": {
+              "support": "unsupported",
+              "extensions": [],
+              "max_count": 0
+            },
+            "videos": {
+              "support": "unsupported",
+              "extensions": [],
+              "max_count": 0
+            },
+            "allowed_image_counts": [
+              0
+            ],
+            "duration": {
+              "mode": "selected",
+              "min_seconds": 8,
+              "max_seconds": 8,
+              "allowed_seconds": [
+                8
+              ]
+            },
+            "resolutions": [
+              "720p",
+              "1080p",
+              "4k"
+            ],
+            "quality_modes": null,
+            "aspect_ratios": [
+              "16:9",
+              "9:16"
+            ],
+            "audio": {
+              "mode": "unknown",
+              "selectable": false
+            },
+            "start_frame": "unsupported",
+            "end_frame": "unsupported"
+          },
+          "notes": [
+            "Профиль показывает проверенные ограничения выбора; стоимость считается отдельно перед запуском.",
+            "В интерфейсе изображения загружаются как JPEG/PNG; видео MP4/MOV доступно только для Motion Control.",
+            "Одно или два изображения используются как кадры; у Fast три изображения считаются референсами.",
+            "На сайте видеозапрос принимает только текст. Загрузка референсов и переключатель звука ещё не подключены."
+          ]
+        }
+      }
     },
     {
       "id": "video_veo_3_1_lite",
@@ -3431,7 +5182,101 @@
             "end_image": "unsupported"
           }
         }
-      ]
+      ],
+      "capabilities": {
+        "schema_version": 1,
+        "api": {
+          "video": {
+            "images": {
+              "support": "unsupported",
+              "extensions": [],
+              "max_count": 0
+            },
+            "videos": {
+              "support": "unknown",
+              "extensions": [],
+              "max_count": null
+            },
+            "allowed_image_counts": [
+              0
+            ],
+            "duration": {
+              "mode": "selected",
+              "min_seconds": 8,
+              "max_seconds": 8,
+              "allowed_seconds": [
+                8
+              ]
+            },
+            "resolutions": [
+              "720p",
+              "1080p",
+              "4k"
+            ],
+            "quality_modes": null,
+            "aspect_ratios": [
+              "16:9",
+              "9:16"
+            ],
+            "audio": {
+              "mode": "unknown",
+              "selectable": false
+            },
+            "start_frame": "unsupported",
+            "end_frame": "unsupported"
+          },
+          "notes": [
+            "Профиль показывает проверенные ограничения выбора; стоимость считается отдельно перед запуском.",
+            "Указан проверенный набор параметров API. Неподтверждённые форматы и ограничения отмечены отдельно; отсутствие значения не означает отсутствие поддержки."
+          ]
+        },
+        "application": {
+          "video": {
+            "images": {
+              "support": "unsupported",
+              "extensions": [],
+              "max_count": 0
+            },
+            "videos": {
+              "support": "unsupported",
+              "extensions": [],
+              "max_count": 0
+            },
+            "allowed_image_counts": [
+              0
+            ],
+            "duration": {
+              "mode": "selected",
+              "min_seconds": 8,
+              "max_seconds": 8,
+              "allowed_seconds": [
+                8
+              ]
+            },
+            "resolutions": [
+              "720p",
+              "1080p",
+              "4k"
+            ],
+            "quality_modes": null,
+            "aspect_ratios": [
+              "16:9",
+              "9:16"
+            ],
+            "audio": {
+              "mode": "unknown",
+              "selectable": false
+            },
+            "start_frame": "unsupported",
+            "end_frame": "unsupported"
+          },
+          "notes": [
+            "Профиль показывает проверенные ограничения выбора; стоимость считается отдельно перед запуском.",
+            "В интерфейсе изображения загружаются как JPEG/PNG; видео MP4/MOV доступно только для Motion Control.",
+            "На сайте видеозапрос принимает только текст. Загрузка референсов и переключатель звука ещё не подключены."
+          ]
+        }
+      }
     },
     {
       "id": "video_kling_3_0_turbo",
@@ -4075,7 +5920,130 @@
             "end_image": "unsupported"
           }
         }
-      ]
+      ],
+      "capabilities": {
+        "schema_version": 1,
+        "api": {
+          "video": {
+            "images": {
+              "support": "supported",
+              "extensions": [
+                "jpg",
+                "jpeg",
+                "png"
+              ],
+              "max_count": 1
+            },
+            "videos": {
+              "support": "unknown",
+              "extensions": [],
+              "max_count": null
+            },
+            "allowed_image_counts": [
+              0,
+              1
+            ],
+            "duration": {
+              "mode": "selected",
+              "min_seconds": 3,
+              "max_seconds": 15,
+              "allowed_seconds": [
+                3,
+                4,
+                5,
+                6,
+                7,
+                8,
+                9,
+                10,
+                11,
+                12,
+                13,
+                14,
+                15
+              ]
+            },
+            "resolutions": [
+              "720p",
+              "1080p"
+            ],
+            "quality_modes": null,
+            "aspect_ratios": [
+              "16:9",
+              "9:16",
+              "1:1"
+            ],
+            "audio": {
+              "mode": "unknown",
+              "selectable": false
+            },
+            "start_frame": "optional",
+            "end_frame": "unknown"
+          },
+          "notes": [
+            "Профиль показывает проверенные ограничения выбора; стоимость считается отдельно перед запуском.",
+            "Указан проверенный набор параметров API. Неподтверждённые форматы и ограничения отмечены отдельно; отсутствие значения не означает отсутствие поддержки."
+          ]
+        },
+        "application": {
+          "video": {
+            "images": {
+              "support": "unsupported",
+              "extensions": [],
+              "max_count": 0
+            },
+            "videos": {
+              "support": "unsupported",
+              "extensions": [],
+              "max_count": 0
+            },
+            "allowed_image_counts": [
+              0
+            ],
+            "duration": {
+              "mode": "selected",
+              "min_seconds": 3,
+              "max_seconds": 15,
+              "allowed_seconds": [
+                3,
+                4,
+                5,
+                6,
+                7,
+                8,
+                9,
+                10,
+                11,
+                12,
+                13,
+                14,
+                15
+              ]
+            },
+            "resolutions": [
+              "720p",
+              "1080p"
+            ],
+            "quality_modes": null,
+            "aspect_ratios": [
+              "16:9",
+              "9:16",
+              "1:1"
+            ],
+            "audio": {
+              "mode": "unknown",
+              "selectable": false
+            },
+            "start_frame": "unsupported",
+            "end_frame": "unsupported"
+          },
+          "notes": [
+            "Профиль показывает проверенные ограничения выбора; стоимость считается отдельно перед запуском.",
+            "В интерфейсе изображения загружаются как JPEG/PNG; видео MP4/MOV доступно только для Motion Control.",
+            "На сайте видеозапрос принимает только текст. Загрузка референсов и переключатель звука ещё не подключены."
+          ]
+        }
+      }
     },
     {
       "id": "video_minimax_h3",
@@ -5181,7 +7149,135 @@
             "end_image": "unsupported"
           }
         }
-      ]
+      ],
+      "capabilities": {
+        "schema_version": 1,
+        "api": {
+          "video": {
+            "images": {
+              "support": "supported",
+              "extensions": [
+                "jpg",
+                "jpeg",
+                "png",
+                "webp"
+              ],
+              "max_count": 1
+            },
+            "videos": {
+              "support": "unknown",
+              "extensions": [],
+              "max_count": null
+            },
+            "allowed_image_counts": [
+              0,
+              1
+            ],
+            "duration": {
+              "mode": "selected",
+              "min_seconds": 4,
+              "max_seconds": 15,
+              "allowed_seconds": [
+                4,
+                5,
+                6,
+                7,
+                8,
+                9,
+                10,
+                11,
+                12,
+                13,
+                14,
+                15
+              ]
+            },
+            "resolutions": [
+              "2k",
+              "768p"
+            ],
+            "quality_modes": null,
+            "aspect_ratios": [
+              "16:9",
+              "9:16",
+              "1:1",
+              "4:3",
+              "3:4",
+              "21:9"
+            ],
+            "audio": {
+              "mode": "unknown",
+              "selectable": false
+            },
+            "start_frame": "optional",
+            "end_frame": "unknown"
+          },
+          "notes": [
+            "Профиль показывает проверенные ограничения выбора; стоимость считается отдельно перед запуском.",
+            "Указан проверенный набор параметров API. Неподтверждённые форматы и ограничения отмечены отдельно; отсутствие значения не означает отсутствие поддержки."
+          ]
+        },
+        "application": {
+          "video": {
+            "images": {
+              "support": "unsupported",
+              "extensions": [],
+              "max_count": 0
+            },
+            "videos": {
+              "support": "unsupported",
+              "extensions": [],
+              "max_count": 0
+            },
+            "allowed_image_counts": [
+              0
+            ],
+            "duration": {
+              "mode": "selected",
+              "min_seconds": 4,
+              "max_seconds": 15,
+              "allowed_seconds": [
+                4,
+                5,
+                6,
+                7,
+                8,
+                9,
+                10,
+                11,
+                12,
+                13,
+                14,
+                15
+              ]
+            },
+            "resolutions": [
+              "2k",
+              "768p"
+            ],
+            "quality_modes": null,
+            "aspect_ratios": [
+              "16:9",
+              "9:16",
+              "1:1",
+              "4:3",
+              "3:4",
+              "21:9"
+            ],
+            "audio": {
+              "mode": "unknown",
+              "selectable": false
+            },
+            "start_frame": "unsupported",
+            "end_frame": "unsupported"
+          },
+          "notes": [
+            "Профиль показывает проверенные ограничения выбора; стоимость считается отдельно перед запуском.",
+            "В интерфейсе изображения загружаются как JPEG/PNG; видео MP4/MOV доступно только для Motion Control.",
+            "На сайте видеозапрос принимает только текст. Загрузка референсов и переключатель звука ещё не подключены."
+          ]
+        }
+      }
     },
     {
       "id": "video_gemini_omni_1_1_flash_ext",
@@ -5485,7 +7581,118 @@
             "end_image": "unsupported"
           }
         }
-      ]
+      ],
+      "capabilities": {
+        "schema_version": 1,
+        "api": {
+          "video": {
+            "images": {
+              "support": "supported",
+              "extensions": [
+                "jpg",
+                "jpeg",
+                "png",
+                "webp"
+              ],
+              "max_count": 3
+            },
+            "videos": {
+              "support": "unknown",
+              "extensions": [],
+              "max_count": null
+            },
+            "allowed_image_counts": [
+              0,
+              1,
+              3
+            ],
+            "duration": {
+              "mode": "selected",
+              "min_seconds": 4,
+              "max_seconds": 10,
+              "allowed_seconds": [
+                4,
+                6,
+                8,
+                10
+              ]
+            },
+            "resolutions": [
+              "720p",
+              "1080p",
+              "360p",
+              "4k"
+            ],
+            "quality_modes": null,
+            "aspect_ratios": [
+              "16:9",
+              "9:16"
+            ],
+            "audio": {
+              "mode": "generated",
+              "selectable": false
+            },
+            "start_frame": "optional",
+            "end_frame": "unknown"
+          },
+          "notes": [
+            "Профиль показывает проверенные ограничения выбора; стоимость считается отдельно перед запуском.",
+            "Указан проверенный набор параметров API. Неподтверждённые форматы и ограничения отмечены отдельно; отсутствие значения не означает отсутствие поддержки.",
+            "Два изображения не принимаются: можно без изображения, с одним кадром или с тремя референсами."
+          ]
+        },
+        "application": {
+          "video": {
+            "images": {
+              "support": "unsupported",
+              "extensions": [],
+              "max_count": 0
+            },
+            "videos": {
+              "support": "unsupported",
+              "extensions": [],
+              "max_count": 0
+            },
+            "allowed_image_counts": [
+              0
+            ],
+            "duration": {
+              "mode": "selected",
+              "min_seconds": 4,
+              "max_seconds": 10,
+              "allowed_seconds": [
+                4,
+                6,
+                8,
+                10
+              ]
+            },
+            "resolutions": [
+              "720p",
+              "1080p",
+              "360p",
+              "4k"
+            ],
+            "quality_modes": null,
+            "aspect_ratios": [
+              "16:9",
+              "9:16"
+            ],
+            "audio": {
+              "mode": "generated",
+              "selectable": false
+            },
+            "start_frame": "unsupported",
+            "end_frame": "unsupported"
+          },
+          "notes": [
+            "Профиль показывает проверенные ограничения выбора; стоимость считается отдельно перед запуском.",
+            "В интерфейсе изображения загружаются как JPEG/PNG; видео MP4/MOV доступно только для Motion Control.",
+            "Два изображения не принимаются: можно без изображения, с одним кадром или с тремя референсами.",
+            "На сайте видеозапрос принимает только текст. Загрузка референсов и переключатель звука ещё не подключены."
+          ]
+        }
+      }
     },
     {
       "id": "video_seedance_2_5",
@@ -6068,7 +8275,120 @@
             "end_image": "unsupported"
           }
         }
-      ]
+      ],
+      "capabilities": {
+        "schema_version": 1,
+        "api": {
+          "video": {
+            "images": {
+              "support": "supported",
+              "extensions": [
+                "jpg",
+                "jpeg",
+                "png",
+                "webp"
+              ],
+              "max_count": null
+            },
+            "videos": {
+              "support": "unknown",
+              "extensions": [],
+              "max_count": null
+            },
+            "allowed_image_counts": null,
+            "duration": {
+              "mode": "selected",
+              "min_seconds": 5,
+              "max_seconds": 30,
+              "allowed_seconds": [
+                5,
+                10,
+                15,
+                30
+              ]
+            },
+            "resolutions": [
+              "480p",
+              "720p",
+              "1080p"
+            ],
+            "quality_modes": null,
+            "aspect_ratios": [
+              "16:9",
+              "9:16",
+              "4:3",
+              "3:4",
+              "1:1",
+              "21:9"
+            ],
+            "audio": {
+              "mode": "generated",
+              "selectable": false
+            },
+            "start_frame": "unknown",
+            "end_frame": "unknown"
+          },
+          "notes": [
+            "Профиль показывает проверенные ограничения выбора; стоимость считается отдельно перед запуском.",
+            "Указан проверенный набор параметров API. Неподтверждённые форматы и ограничения отмечены отдельно; отсутствие значения не означает отсутствие поддержки.",
+            "Звук генерируется автоматически; переключатель звука не показывается."
+          ]
+        },
+        "application": {
+          "video": {
+            "images": {
+              "support": "unsupported",
+              "extensions": [],
+              "max_count": 0
+            },
+            "videos": {
+              "support": "unsupported",
+              "extensions": [],
+              "max_count": 0
+            },
+            "allowed_image_counts": [
+              0
+            ],
+            "duration": {
+              "mode": "selected",
+              "min_seconds": 5,
+              "max_seconds": 30,
+              "allowed_seconds": [
+                5,
+                10,
+                15,
+                30
+              ]
+            },
+            "resolutions": [
+              "480p",
+              "720p",
+              "1080p"
+            ],
+            "quality_modes": null,
+            "aspect_ratios": [
+              "16:9",
+              "9:16",
+              "4:3",
+              "3:4",
+              "1:1",
+              "21:9"
+            ],
+            "audio": {
+              "mode": "generated",
+              "selectable": false
+            },
+            "start_frame": "unsupported",
+            "end_frame": "unsupported"
+          },
+          "notes": [
+            "Профиль показывает проверенные ограничения выбора; стоимость считается отдельно перед запуском.",
+            "В интерфейсе изображения загружаются как JPEG/PNG; видео MP4/MOV доступно только для Motion Control.",
+            "Звук генерируется автоматически; переключатель звука не показывается.",
+            "На сайте видеозапрос принимает только текст. Загрузка референсов и переключатель звука ещё не подключены."
+          ]
+        }
+      }
     },
     {
       "id": "video_kling_o3_standard",
@@ -6217,7 +8537,103 @@
             "end_image": "unsupported"
           }
         }
-      ]
+      ],
+      "capabilities": {
+        "schema_version": 1,
+        "api": {
+          "video": {
+            "images": {
+              "support": "supported",
+              "extensions": [],
+              "max_count": null
+            },
+            "videos": {
+              "support": "unknown",
+              "extensions": [],
+              "max_count": null
+            },
+            "allowed_image_counts": null,
+            "duration": {
+              "mode": "selected",
+              "min_seconds": 5,
+              "max_seconds": 10,
+              "allowed_seconds": [
+                5,
+                10
+              ]
+            },
+            "resolutions": [
+              "720p",
+              "1080p"
+            ],
+            "quality_modes": null,
+            "aspect_ratios": [
+              "16:9",
+              "9:16",
+              "1:1"
+            ],
+            "audio": {
+              "mode": "silent",
+              "selectable": false
+            },
+            "start_frame": "unknown",
+            "end_frame": "unknown"
+          },
+          "notes": [
+            "Профиль показывает проверенные ограничения выбора; стоимость считается отдельно перед запуском.",
+            "Указан проверенный набор параметров API. Неподтверждённые форматы и ограничения отмечены отдельно; отсутствие значения не означает отсутствие поддержки.",
+            "Звук выключен. В приложении можно добавить одно референсное изображение; полный лимит API пока не подтверждён."
+          ]
+        },
+        "application": {
+          "video": {
+            "images": {
+              "support": "unsupported",
+              "extensions": [],
+              "max_count": 0
+            },
+            "videos": {
+              "support": "unsupported",
+              "extensions": [],
+              "max_count": 0
+            },
+            "allowed_image_counts": [
+              0
+            ],
+            "duration": {
+              "mode": "selected",
+              "min_seconds": 5,
+              "max_seconds": 10,
+              "allowed_seconds": [
+                5,
+                10
+              ]
+            },
+            "resolutions": [
+              "720p",
+              "1080p"
+            ],
+            "quality_modes": null,
+            "aspect_ratios": [
+              "16:9",
+              "9:16",
+              "1:1"
+            ],
+            "audio": {
+              "mode": "silent",
+              "selectable": false
+            },
+            "start_frame": "unsupported",
+            "end_frame": "unsupported"
+          },
+          "notes": [
+            "Профиль показывает проверенные ограничения выбора; стоимость считается отдельно перед запуском.",
+            "В интерфейсе изображения загружаются как JPEG/PNG; видео MP4/MOV доступно только для Motion Control.",
+            "Звук выключен. В приложении можно добавить одно референсное изображение; полный лимит API пока не подтверждён.",
+            "На сайте видеозапрос принимает только текст. Загрузка референсов и переключатель звука ещё не подключены."
+          ]
+        }
+      }
     },
     {
       "id": "video_seedance_2_0_fast",
@@ -6321,7 +8737,105 @@
             "end_image": "unsupported"
           }
         }
-      ]
+      ],
+      "capabilities": {
+        "schema_version": 1,
+        "api": {
+          "video": {
+            "images": {
+              "support": "supported",
+              "extensions": [],
+              "max_count": 4
+            },
+            "videos": {
+              "support": "unknown",
+              "extensions": [],
+              "max_count": null
+            },
+            "allowed_image_counts": [
+              0,
+              1,
+              2,
+              3,
+              4
+            ],
+            "duration": {
+              "mode": "selected",
+              "min_seconds": 5,
+              "max_seconds": 10,
+              "allowed_seconds": [
+                5,
+                10
+              ]
+            },
+            "resolutions": [
+              "720p"
+            ],
+            "quality_modes": null,
+            "aspect_ratios": [
+              "16:9",
+              "9:16",
+              "1:1"
+            ],
+            "audio": {
+              "mode": "silent",
+              "selectable": false
+            },
+            "start_frame": "unknown",
+            "end_frame": "unknown"
+          },
+          "notes": [
+            "Профиль показывает проверенные ограничения выбора; стоимость считается отдельно перед запуском.",
+            "Указан проверенный набор параметров API. Неподтверждённые форматы и ограничения отмечены отдельно; отсутствие значения не означает отсутствие поддержки."
+          ]
+        },
+        "application": {
+          "video": {
+            "images": {
+              "support": "unsupported",
+              "extensions": [],
+              "max_count": 0
+            },
+            "videos": {
+              "support": "unsupported",
+              "extensions": [],
+              "max_count": 0
+            },
+            "allowed_image_counts": [
+              0
+            ],
+            "duration": {
+              "mode": "selected",
+              "min_seconds": 5,
+              "max_seconds": 10,
+              "allowed_seconds": [
+                5,
+                10
+              ]
+            },
+            "resolutions": [
+              "720p"
+            ],
+            "quality_modes": null,
+            "aspect_ratios": [
+              "16:9",
+              "9:16",
+              "1:1"
+            ],
+            "audio": {
+              "mode": "silent",
+              "selectable": false
+            },
+            "start_frame": "unsupported",
+            "end_frame": "unsupported"
+          },
+          "notes": [
+            "Профиль показывает проверенные ограничения выбора; стоимость считается отдельно перед запуском.",
+            "В интерфейсе изображения загружаются как JPEG/PNG; видео MP4/MOV доступно только для Motion Control.",
+            "На сайте видеозапрос принимает только текст. Загрузка референсов и переключатель звука ещё не подключены."
+          ]
+        }
+      }
     },
     {
       "id": "video_runway_gen4_5",
@@ -6557,7 +9071,110 @@
             "end_image": "unsupported"
           }
         }
-      ]
+      ],
+      "capabilities": {
+        "schema_version": 1,
+        "api": {
+          "video": {
+            "images": {
+              "support": "supported",
+              "extensions": [],
+              "max_count": 1
+            },
+            "videos": {
+              "support": "unknown",
+              "extensions": [],
+              "max_count": null
+            },
+            "allowed_image_counts": [
+              0,
+              1
+            ],
+            "duration": {
+              "mode": "selected",
+              "min_seconds": 5,
+              "max_seconds": 10,
+              "allowed_seconds": [
+                5,
+                10
+              ]
+            },
+            "resolutions": [
+              "720p",
+              "1080p"
+            ],
+            "quality_modes": null,
+            "aspect_ratios": [
+              "16:9",
+              "9:16",
+              "4:3",
+              "3:4",
+              "1:1",
+              "21:9"
+            ],
+            "audio": {
+              "mode": "unknown",
+              "selectable": false
+            },
+            "start_frame": "unknown",
+            "end_frame": "unknown"
+          },
+          "notes": [
+            "Профиль показывает проверенные ограничения выбора; стоимость считается отдельно перед запуском.",
+            "Указан проверенный набор параметров API. Неподтверждённые форматы и ограничения отмечены отдельно; отсутствие значения не означает отсутствие поддержки."
+          ]
+        },
+        "application": {
+          "video": {
+            "images": {
+              "support": "unsupported",
+              "extensions": [],
+              "max_count": 0
+            },
+            "videos": {
+              "support": "unsupported",
+              "extensions": [],
+              "max_count": 0
+            },
+            "allowed_image_counts": [
+              0
+            ],
+            "duration": {
+              "mode": "selected",
+              "min_seconds": 5,
+              "max_seconds": 10,
+              "allowed_seconds": [
+                5,
+                10
+              ]
+            },
+            "resolutions": [
+              "720p",
+              "1080p"
+            ],
+            "quality_modes": null,
+            "aspect_ratios": [
+              "16:9",
+              "9:16",
+              "4:3",
+              "3:4",
+              "1:1",
+              "21:9"
+            ],
+            "audio": {
+              "mode": "unknown",
+              "selectable": false
+            },
+            "start_frame": "unsupported",
+            "end_frame": "unsupported"
+          },
+          "notes": [
+            "Профиль показывает проверенные ограничения выбора; стоимость считается отдельно перед запуском.",
+            "В интерфейсе изображения загружаются как JPEG/PNG; видео MP4/MOV доступно только для Motion Control.",
+            "На сайте видеозапрос принимает только текст. Загрузка референсов и переключатель звука ещё не подключены."
+          ]
+        }
+      }
     }
   ]
 }

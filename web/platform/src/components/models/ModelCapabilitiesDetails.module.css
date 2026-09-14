@@ -1,0 +1,9 @@
+.details { margin-block: 12px; padding: 12px; border: 1px solid rgba(128,128,128,.25); border-radius: 12px; font-size: 13px; line-height: 1.5; max-width: 100%; overflow-wrap: anywhere; }
+.details summary { cursor: pointer; font-weight: var(--font-weight-semibold); }
+.details section + section { border-top: 1px solid rgba(128,128,128,.25); margin-top: 12px; padding-top: 8px; }
+.details dl { margin: 0; }
+.details dl > div { display: grid; grid-template-columns: minmax(100px, 1fr) minmax(0, 2fr); gap: 8px; padding-block: 4px; }
+.details dt { opacity: .75; }
+.details dd { margin: 0; }
+.details p { margin-block: 8px; }
+@media (max-width: 420px) { .details dl > div { grid-template-columns: 1fr; gap: 0; } }

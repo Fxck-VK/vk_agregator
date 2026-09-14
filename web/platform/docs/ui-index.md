@@ -29,6 +29,7 @@
 | Подсказка при наведении | `Tooltip`; при своём позиционировании — `TooltipBubble` | [Подсказки](ui-catalog.md#overlays), [пример 9](ui-catalog-examples.md#example-9) |
 | Описание модели в подсказке только у инпута | `ModelSelector descriptionMode="tooltip"`; по умолчанию `inline` | [Модели](ui-catalog.md#models), [пример 8](ui-catalog-examples.md#example-8) |
 | Общая прокрутка / scrollbar | `ScrollArea` | [Прокрутка](ui-catalog.md#overlays), [пример 9](ui-catalog-examples.md#example-9) |
+| Возможности API и приложения отдельно | `ModelCapabilitiesDetails` внутри `ModelSelector`, данные общего каталога | [Модели](ui-catalog.md#models) |
 | Выбор нейросети / карточка модели | `ModelSelector`, его адаптеры; `ModelCard` и `ModelIcon` | [Модели](ui-catalog.md#models), [пример 8](ui-catalog-examples.md#example-8) |
 | Единые данные моделей, категорий, возможностей и цен | `loadModelCatalog` → `/web/v1/models`; специализированные загрузчики — проекции | [Модели](ui-catalog.md#models), [контракт бэкенда](../../../docs/runbooks/MODEL_CATALOG.md) |
 | Лента подборок моделей, до пяти в категории | `ModelSelector categoryModelIds` → общий `ModeSwitchPanel`; выбор категории поднимает её блок, поиск охватывает все подборки | [Модели](ui-catalog.md#models), [панели](ui-catalog.md#panels) |

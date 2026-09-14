@@ -2,6 +2,8 @@ import { cleanup, fireEvent, render, screen, within } from "@testing-library/rea
 import { afterEach, describe, expect, it, vi } from "vitest";
 
 import { ru } from "@/i18n/ru";
+import previewCatalog from "@/features/session/model-catalog.preview.json";
+import { parseModelCatalog, projectChatModelCatalog } from "../model-catalog-contract";
 
 import { ModelSelector, type ModelSelectorModel } from "./ModelSelector";
 
@@ -32,6 +34,17 @@ function popularOptions(dialog = screen.getByRole("dialog")) {
 
 describe("ModelSelector", () => {
   afterEach(cleanup);
+
+  it("keeps native and application capabilities in the shared model picker", () => {
+    const text = projectChatModelCatalog(parseModelCatalog(previewCatalog)).items.find((model) => model.id === "gpt_5_5")!;
+    const model: ModelSelectorModel = { ...text, category: "text" };
+    render(<ModelSelector models={[model]} onSelect={vi.fn()} selectedModelId={model.id} />);
+    fireEvent.click(screen.getByRole("button", { name: /Выбрана нейросеть/ }));
+    fireEvent.click(screen.getByText("Возможности модели"));
+    const dialog = within(screen.getByRole("dialog"));
+    expect(dialog.getByText("В этом интерфейсе")).toBeVisible();
+    expect(dialog.getByText("В API провайдера")).toBeVisible();
+  });
 
   it("keeps descriptions inline by default, including on hover", () => {
     const model = { ...taskModels[0], description: "Описание возможностей модели" };

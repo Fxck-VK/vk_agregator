@@ -75,6 +75,7 @@ export function ConversationComposer({
         additionalControls={modelSelector}
         leadingControls={generation.controls}
         wrapLeadingControls
+        attachmentsEnabled={false}
         canSubmit={canSubmit}
         disabled={disabled}
         label={ru.conversations.composerLabel}

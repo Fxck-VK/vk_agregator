@@ -53,6 +53,7 @@ func WorkspaceCatalog(cfg WorkspaceConfig) WorkspaceModelList {
 			}
 		}
 		model.Categories = workspacePriceCategories(model.Categories, free)
+		model.Capabilities = workspaceCapabilities(id, op)
 		out.Items = append(out.Items, model)
 	}
 	resolver := imagegeneration.NewResolver(cfg.ImageModels, cfg.Pricing)

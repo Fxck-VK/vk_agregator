@@ -3087,3 +3087,42 @@ The 43 frozen legacy definitions remain legacy-unverified; paid live verificatio
 and later web upload/audio execution are not implied by this migration.
 See [catalog ownership and checks](runbooks/MODEL_CATALOG.md) and
 [existing-model evidence matrix](runbooks/model-onboarding/existing-models-2026-09-14.md).
+
+## Typed model capabilities (2026-09-14)
+
+The provider registry is split by purpose into registry_text.go,
+registry_image.go, registry_video.go and registry_audio.go. ImageLimits and
+VideoLimits are distinct types; the audio catalog is explicitly empty until
+real audio products have pricing and worker support.
+
+Capabilities expose two independent profiles: api (verified provider contract
+subset, with unknown fields preserved) and application (implemented request
+contract). Input support uses supported/unsupported/unknown; null bounds mean
+unverified, never unlimited. Image aspect ratio, resolution, detail and speed
+are separate. Video duration mode, duration/resolution restrictions, audio,
+first/last frame roles and accepted media are explicit.
+
+The registry remains the source for request limits. Public API projections add
+capabilities without exposing native identifiers, readiness configuration,
+provider credentials or costs. Projections narrow application options to their
+interface and current pricing: Mini App image requests produce one square image;
+web image requests currently accept no references. API metadata never enables
+an unimplemented input or bypasses feature flags, pricing, artifact ownership,
+moderation, reservations, worker dispatch or idempotency.
+
+The inventory command cmd/model-catalog produces JSON or the task-scoped
+MODEL_CAPABILITIES.md report from the same registry. It performs no network or
+provider calls. Source evidence is kept beside the capability definitions.
+
+## Shared catalog and capability integration (2026-09-14)
+
+WorkspaceCatalog attaches API/application metadata to each public model. All
+web projections preserve it, and ModelSelector renders it without extra network
+requests. Application fields follow the priced controls of the same web route.
+Metadata does not grant model admission or enable uploads.
+
+Admission uses a stable v1 fingerprint codec alongside purpose-specific runtime
+limits; the frozen legacy baseline is unchanged. Legacy missing image ratios
+resolve to existing adapter bounds in public copies, without enabling new
+provider features. Web submission, authorization, ownership, billing and worker
+boundaries are unchanged by this merge.

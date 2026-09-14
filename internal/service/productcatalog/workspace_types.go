@@ -3,6 +3,7 @@ package productcatalog
 import (
 	"vk-ai-aggregator/internal/service/imagegeneration"
 	"vk-ai-aggregator/internal/service/modelcontract"
+	"vk-ai-aggregator/internal/service/providermodels"
 	"vk-ai-aggregator/internal/service/textgeneration"
 )
 
@@ -22,14 +23,15 @@ type WorkspaceModelList struct {
 // WorkspaceModel contains product facts only. Provider routing and admission
 // evidence never cross this public boundary.
 type WorkspaceModel struct {
-	ID           string               `json:"id"`
-	Name         string               `json:"name"`
-	Description  string               `json:"description"`
-	Kind         string               `json:"kind"`
-	Categories   []string             `json:"categories"`
-	Verification string               `json:"verification"`
-	Version      string               `json:"version,omitempty"`
-	Operations   []WorkspaceOperation `json:"operations"`
+	ID           string                            `json:"id"`
+	Name         string                            `json:"name"`
+	Description  string                            `json:"description"`
+	Kind         string                            `json:"kind"`
+	Categories   []string                          `json:"categories"`
+	Verification string                            `json:"verification"`
+	Version      string                            `json:"version,omitempty"`
+	Operations   []WorkspaceOperation              `json:"operations"`
+	Capabilities *providermodels.ModelCapabilities `json:"capabilities,omitempty"`
 }
 
 type WorkspaceOperation struct {

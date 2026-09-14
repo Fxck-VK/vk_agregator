@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { modelCapabilitiesSchema } from "./model-capabilities-schema";
 
 const safeIdentityRefSchema = z
   .object({
@@ -65,6 +66,7 @@ export const chatModelListSchema = z.object({
     estimate_credits: z.number().int().nonnegative().optional(),
     max_prompt_bytes: z.number().int().positive().optional(),
     max_output_tokens: z.number().int().positive().optional(),
+    capabilities: modelCapabilitiesSchema.optional(),
   }).strict()).min(1),
   default_model_id: z.string().trim().min(1),
 }).strict().refine((catalog) => (
@@ -87,6 +89,7 @@ export const imageModelSchema = z
     categories: z.array(z.string().trim().min(1)).optional(),
     operations: z.array(z.unknown()).optional(),
     quality_options: z.array(z.string().trim().min(1)),
+	capabilities: modelCapabilitiesSchema.optional(),
     price_by_quality: z.record(z.string().trim().min(1), z.number().int().positive()).optional(),
     price_by_variant: z.record(z.string().trim().min(1), z.number().int().positive()).optional(),
     default_quality: z.string().trim().min(1),

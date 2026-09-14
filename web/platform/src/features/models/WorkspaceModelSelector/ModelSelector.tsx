@@ -20,6 +20,8 @@ import { ModeSwitchPanel } from "@/components/ui/ModeSwitchPanel/ModeSwitchPanel
 import { ScrollArea } from "@/components/ui/ScrollArea/ScrollArea";
 import selectableStyles from "@/components/ui/selectable-control.module.css";
 import { ru } from "@/i18n/ru";
+import { ModelCapabilitiesDetails } from "@/components/models/ModelCapabilitiesDetails";
+import type { ChatModel } from "@/lib/web-api/contracts";
 
 import { getModelPresentation } from "../ModelCard/model-card-content";
 import type { ModelCardModel } from "../ModelCard/ModelCard";
@@ -35,6 +37,7 @@ import styles from "./WorkspaceModelSelector.module.css";
 
 export type ModelSelectorCategory = "popular" | "images" | "text" | "video" | "audio";
 export type ModelSelectorModel = ModelCardModel & {
+  capabilities?: ChatModel["capabilities"];
   categories?: string[];
   category: Exclude<ModelSelectorCategory, "popular">;
   isFree?: boolean;
@@ -343,6 +346,7 @@ export function ModelSelector({
         viewportProps={{ id: panelId, role: "region", "aria-label": ru.modelSelector.feedLabel, tabIndex: 0 }}
         viewportRef={listViewportRef}
       >
+        <ModelCapabilitiesDetails capabilities={selectedModel?.capabilities} />
         {visibleSections.length > 0 ? (
           <div className={styles.categoryFeed}>
             {visibleSections.map((section) => (

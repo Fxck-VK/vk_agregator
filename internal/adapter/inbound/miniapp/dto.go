@@ -8,6 +8,7 @@ import (
 	"github.com/google/uuid"
 
 	"vk-ai-aggregator/internal/domain"
+	"vk-ai-aggregator/internal/service/providermodels"
 )
 
 // pagination is the echoed paging metadata for list responses.
@@ -159,28 +160,29 @@ type ImageModelDTO struct {
 // It exposes estimate_credits only as a backend-provided display hint and never
 // exposes provider, floor, multiplier, provider cost or provider-native ids.
 type ModelCatalogItemDTO struct {
-	SupportsAudio               bool     `json:"supports_audio,omitempty"`
-	RequiresReferenceVideo      bool     `json:"requires_reference_video,omitempty"`
-	AutomaticDuration           bool     `json:"automatic_duration,omitempty"`
-	AllowedReferenceImageCounts []int    `json:"allowed_reference_image_counts,omitempty"`
-	Type                        string   `json:"type"`
-	ID                          string   `json:"id"`
-	Alias                       string   `json:"alias,omitempty"`
-	Name                        string   `json:"name"`
-	Description                 string   `json:"description,omitempty"`
-	EstimateCredits             int64    `json:"estimate_credits,omitempty"`
-	Enabled                     bool     `json:"enabled"`
-	QualityOptions              []string `json:"quality_options,omitempty"`
-	DefaultQuality              string   `json:"default_quality,omitempty"`
-	AllowedDurationsSec         []int    `json:"allowed_durations_sec,omitempty"`
-	AllowedResolutions          []string `json:"allowed_resolutions,omitempty"`
-	AllowedAspectRatios         []string `json:"allowed_aspect_ratios,omitempty"`
-	DefaultDurationSec          int      `json:"default_duration_sec,omitempty"`
-	DefaultResolution           string   `json:"default_resolution,omitempty"`
-	DefaultAspectRatio          string   `json:"default_aspect_ratio,omitempty"`
-	RequiresStartImage          bool     `json:"requires_start_image"`
-	SupportsReferenceImage      bool     `json:"supports_reference_image"`
-	MaxReferenceImages          int      `json:"max_reference_images,omitempty"`
+	Capabilities                *providermodels.ModelCapabilities `json:"capabilities,omitempty"`
+	SupportsAudio               bool                              `json:"supports_audio,omitempty"`
+	RequiresReferenceVideo      bool                              `json:"requires_reference_video,omitempty"`
+	AutomaticDuration           bool                              `json:"automatic_duration,omitempty"`
+	AllowedReferenceImageCounts []int                             `json:"allowed_reference_image_counts,omitempty"`
+	Type                        string                            `json:"type"`
+	ID                          string                            `json:"id"`
+	Alias                       string                            `json:"alias,omitempty"`
+	Name                        string                            `json:"name"`
+	Description                 string                            `json:"description,omitempty"`
+	EstimateCredits             int64                             `json:"estimate_credits,omitempty"`
+	Enabled                     bool                              `json:"enabled"`
+	QualityOptions              []string                          `json:"quality_options,omitempty"`
+	DefaultQuality              string                            `json:"default_quality,omitempty"`
+	AllowedDurationsSec         []int                             `json:"allowed_durations_sec,omitempty"`
+	AllowedResolutions          []string                          `json:"allowed_resolutions,omitempty"`
+	AllowedAspectRatios         []string                          `json:"allowed_aspect_ratios,omitempty"`
+	DefaultDurationSec          int                               `json:"default_duration_sec,omitempty"`
+	DefaultResolution           string                            `json:"default_resolution,omitempty"`
+	DefaultAspectRatio          string                            `json:"default_aspect_ratio,omitempty"`
+	RequiresStartImage          bool                              `json:"requires_start_image"`
+	SupportsReferenceImage      bool                              `json:"supports_reference_image"`
+	MaxReferenceImages          int                               `json:"max_reference_images,omitempty"`
 }
 
 // EstimateDTO is returned by POST /miniapp/estimate. cost_estimate is the exact
