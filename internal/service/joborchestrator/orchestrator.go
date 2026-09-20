@@ -24,6 +24,7 @@ import (
 	"vk-ai-aggregator/internal/platform/metrics"
 	"vk-ai-aggregator/internal/platform/tracing"
 	"vk-ai-aggregator/internal/platform/uow"
+	"vk-ai-aggregator/internal/service/mediaprobe"
 	"vk-ai-aggregator/internal/service/outboxrelay"
 	"vk-ai-aggregator/internal/service/pricingcatalog"
 	"vk-ai-aggregator/internal/service/videoreference"
@@ -610,7 +611,7 @@ func (o *Orchestrator) PrepareAccountJob(ctx context.Context, in PrepareAccountJ
 	} else if !errors.Is(err, domain.ErrNotFound) {
 		return nil, fmt.Errorf("joborchestrator: account idempotency lookup: %w", err)
 	}
-	if err := o.validatePreparedInputArtifacts(ctx, in.AccountID, in.InputArtifactIDs); err != nil {
+	if err := o.validatePreparedInputArtifacts(ctx, in.AccountID, in.InputArtifactIDs, in.Operation); err != nil {
 		return nil, err
 	}
 
@@ -688,8 +689,9 @@ func (o *Orchestrator) PrepareAccountJob(ctx context.Context, in PrepareAccountJ
 }
 
 func (o *Orchestrator) preparedWebImageExpiry(operation domain.OperationType, modality domain.Modality) *time.Time {
+	mediaPreparation := (operation == domain.OperationImageGenerate && modality == domain.ModalityImage) || (operation == domain.OperationAudioMusic && modality == domain.ModalityAudio)
 	if o.maxPreparedWebImageJobs <= 0 || o.preparedWebImageTTL <= 0 ||
-		operation != domain.OperationImageGenerate || modality != domain.ModalityImage {
+		!mediaPreparation {
 		return nil
 	}
 	expiresAt := o.now().Add(o.preparedWebImageTTL)
@@ -1097,7 +1099,7 @@ func pricingSnapshotProvided(snapshot pricingcatalog.PricingSnapshot) bool {
 	return snapshot != (pricingcatalog.PricingSnapshot{})
 }
 
-func (o *Orchestrator) validatePreparedInputArtifacts(ctx context.Context, accountID uuid.UUID, artifactIDs []uuid.UUID) error {
+func (o *Orchestrator) validatePreparedInputArtifacts(ctx context.Context, accountID uuid.UUID, artifactIDs []uuid.UUID, operation domain.OperationType) error {
 	if len(artifactIDs) == 0 {
 		return nil
 	}
@@ -1120,7 +1122,13 @@ func (o *Orchestrator) validatePreparedInputArtifacts(ctx context.Context, accou
 			}
 			return fmt.Errorf("joborchestrator: input artifact lookup: %w", err)
 		}
-		if artifact.OwnerAccountID != accountID || artifact.Kind != domain.ArtifactKindInput || artifact.MediaType != domain.MediaTypeImage || artifact.Status != domain.ArtifactStatusReady || strings.TrimSpace(artifact.StorageBucket) == "" || strings.TrimSpace(artifact.StorageKey) == "" {
+		if operation == domain.OperationAudioMusic {
+			if mediaprobe.ValidateMusicInputArtifact(artifact, accountID) != nil {
+				return fmt.Errorf("%w: invalid audio input", ErrInvalidInputArtifact)
+			}
+			continue
+		}
+		if artifact == nil || artifact.OwnerAccountID != accountID || artifact.Kind != domain.ArtifactKindInput || artifact.MediaType != domain.MediaTypeImage || artifact.Status != domain.ArtifactStatusReady || strings.TrimSpace(artifact.StorageBucket) == "" || strings.TrimSpace(artifact.StorageKey) == "" {
 			return fmt.Errorf("%w: invalid account input", ErrInvalidInputArtifact)
 		}
 	}

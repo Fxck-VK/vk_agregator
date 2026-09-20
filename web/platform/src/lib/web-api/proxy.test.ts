@@ -38,6 +38,32 @@ describe("proxyWebApiRequest", () => {
     expect(await response.text()).toBe("2345");
   });
 
+  it("permits bounded raw music uploads without raising other request limits", async () => {
+    const upstream = vi.fn().mockResolvedValue(new Response("{}", {status: 201}));
+    vi.stubGlobal("fetch", upstream);
+    const payload = new Uint8Array(128 * 1024);
+    const uploadPath = "/web/v1/music-inputs";
+    const upload = new Request(`https://platform.example${uploadPath}`, {method: "POST", body: payload, headers: {"Content-Type": "audio/mpeg"}});
+    expect((await proxyWebApiRequest(upload, uploadPath, internalOrigin)).status).toBe(201);
+    expect(upstream).toHaveBeenCalledTimes(1);
+    const preparePath = "/web/v1/music-jobs/prepare";
+    const prepare = new Request(`https://platform.example${preparePath}`, {method: "POST", body: payload});
+    expect((await proxyWebApiRequest(prepare, preparePath, internalOrigin)).status).toBe(413);
+    const oversized = new Request(`https://platform.example${uploadPath}`, {method: "POST", headers: {"Content-Length": String(25 * 1024 * 1024 + 1)}});
+    expect((await proxyWebApiRequest(oversized, uploadPath, internalOrigin)).status).toBe(413);
+    expect(upstream).toHaveBeenCalledTimes(1);
+  });
+
+  it("preserves music artifact download and nosniff headers", async () => {
+    vi.stubGlobal("fetch", vi.fn().mockResolvedValue(new Response("notes", {headers: {
+      "Content-Type": "application/octet-stream", "Content-Disposition": "attachment", "X-Content-Type-Options": "nosniff",
+    }})));
+    const path = "/web/v1/music-artifacts/4e9defcb-59d7-4d45-bc2e-7cdb770ad729";
+    const response = await proxyWebApiRequest(new Request(`https://platform.example${path}`), path, internalOrigin);
+    expect(response.headers.get("Content-Disposition")).toBe("attachment");
+    expect(response.headers.get("X-Content-Type-Options")).toBe("nosniff");
+  });
+
   it("forwards session and CSRF cookies but strips the platform-only return cookie", async () => {
     const upstreamHeaders = new Headers({
       "Cache-Control": "no-store",

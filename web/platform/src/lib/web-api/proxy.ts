@@ -18,6 +18,7 @@ const imageArtifactPathPattern =
   /^\/web\/v1\/(?:image|video)-artifacts\/[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
 export const MAX_PROXY_REQUEST_BODY_BYTES = 64 * 1024;
+export const MAX_MUSIC_UPLOAD_BODY_BYTES = 25 * 1024 * 1024;
 
 type ProxyRequestBody =
   | { kind: "body"; body: ArrayBuffer }
@@ -46,7 +47,7 @@ function proxyRequestHeaders(requestHeaders: Headers): Headers {
 
 function proxyResponseHeaders(upstream: Headers): Headers {
   const headers = new Headers();
-  for (const header of ["Content-Type", "Cache-Control", "Content-Range", "Accept-Ranges"]) {
+  for (const header of ["Content-Type", "Cache-Control", "Content-Range", "Accept-Ranges", "Content-Disposition", "X-Content-Type-Options"]) {
     const value = upstream.get(header);
     if (value) {
       headers.set(header, value);
@@ -124,9 +125,9 @@ function declaredContentLength(requestHeaders: Headers): number | undefined {
   return Number.isSafeInteger(length) ? length : undefined;
 }
 
-async function readProxyRequestBody(request: Request): Promise<ProxyRequestBody> {
+async function readProxyRequestBody(request: Request, maxBytes: number): Promise<ProxyRequestBody> {
   const contentLength = declaredContentLength(request.headers);
-  if (contentLength !== undefined && contentLength > MAX_PROXY_REQUEST_BODY_BYTES) {
+  if (contentLength !== undefined && contentLength > maxBytes) {
     return { kind: "too_large" };
   }
 
@@ -148,7 +149,7 @@ async function readProxyRequestBody(request: Request): Promise<ProxyRequestBody>
       }
 
       totalBytes += value.byteLength;
-      if (totalBytes > MAX_PROXY_REQUEST_BODY_BYTES) {
+      if (totalBytes > maxBytes) {
         void reader.cancel().catch(() => undefined);
         return { kind: "too_large" };
       }
@@ -178,7 +179,8 @@ export async function proxyWebApiRequest(
   const safePath = canonicalizeWebApiPath(rawPath);
   let body: ArrayBuffer | undefined;
   if (request.method !== "GET" && request.method !== "HEAD") {
-    const proxyBody = await readProxyRequestBody(request);
+    const isMusicUpload = request.method === "POST" && safePath.split("?", 1)[0] === "/web/v1/music-inputs";
+    const proxyBody = await readProxyRequestBody(request, isMusicUpload ? MAX_MUSIC_UPLOAD_BODY_BYTES : MAX_PROXY_REQUEST_BODY_BYTES);
     if (proxyBody.kind === "too_large") {
       return requestBodyTooLargeResponse();
     }

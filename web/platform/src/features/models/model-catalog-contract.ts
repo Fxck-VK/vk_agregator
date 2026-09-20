@@ -205,6 +205,33 @@ const audioControlsSchema = z.object({
   max_duration_sec: positiveInt.optional(),
 }).strict();
 
+const musicControlsSchema = z.object({
+  title: nonEmptyString,
+  group: nonEmptyString,
+  output_kind: nonEmptyString,
+  supports_max: z.boolean(),
+  supports_custom_model: z.boolean(),
+  supports_persona: z.boolean().default(false),
+  supports_audio_format: z.boolean(),
+  min_sources: nonNegativeInt,
+  max_sources: nonNegativeInt,
+  min_uploads: nonNegativeInt,
+  max_uploads: nonNegativeInt,
+  estimate_credits: nonNegativeInt,
+  max_estimate_credits: nonNegativeInt.optional(),
+  unavailable_reason: nonEmptyString.optional(),
+}).strict().superRefine((music, ctx) => {
+  if (music.max_sources < music.min_sources) {
+    ctx.addIssue({ code: "custom", path: ["max_sources"], message: "Music max sources must be >= min sources." });
+  }
+  if (music.max_uploads < music.min_uploads) {
+    ctx.addIssue({ code: "custom", path: ["max_uploads"], message: "Music max uploads must be >= min uploads." });
+  }
+  if (music.max_estimate_credits !== undefined && music.max_estimate_credits < music.estimate_credits) {
+    ctx.addIssue({ code: "custom", path: ["max_estimate_credits"], message: "Music max estimate must be >= estimate." });
+  }
+});
+
 const publicOperationSchema = z.object({
   id: nonEmptyString,
   kind: publicKindSchema,
@@ -214,6 +241,7 @@ const publicOperationSchema = z.object({
   image: imageControlsSchema.optional(),
   video: videoControlsSchema.optional(),
   audio: audioControlsSchema.optional(),
+  music: musicControlsSchema.optional(),
 }).strict().superRefine((operation, ctx) => {
   const outputKeys = (["text", "image", "video", "audio"] as const).filter((key) => operation[key] !== undefined);
   if (outputKeys.length !== 1) {
@@ -232,7 +260,7 @@ const publicCatalogModelSchema = z.object({
   description: nonEmptyString,
   kind: publicKindSchema,
   categories: z.array(publicCategorySchema).min(1),
-  verification: z.enum(["legacy-unverified", "verified-contract"]),
+  verification: z.enum(["legacy-unverified", "pending-verification", "verified-contract"]),
   version: nonEmptyString.optional(),
   operations: z.array(publicOperationSchema).min(1),
 }).strict().superRefine((model, ctx) => {
@@ -242,7 +270,7 @@ const publicCatalogModelSchema = z.object({
   addUniqueStringIssues(model.categories, ctx, "Model categories");
   const operationIDs = model.operations.map((operation) => operation.id);
   addUniqueStringIssues(operationIDs, ctx, "Model operations");
-  if (!model.operations.some((operation) => operation.enabled && operation.kind === model.kind)) {
+  if (model.verification !== "pending-verification" && !model.operations.some((operation) => operation.enabled && operation.kind === model.kind)) {
     ctx.addIssue({ code: "custom", path: ["operations"], message: "Model kind must have a matching enabled operation." });
   }
 });

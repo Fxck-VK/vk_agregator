@@ -6,7 +6,7 @@ import (
 )
 
 func (h *Handler) workspaceModels() productcatalog.WorkspaceModelList {
-	return productcatalog.WorkspaceCatalog(productcatalog.WorkspaceConfig{TextModels: h.availableTextModels(), ImageModels: h.cfg.ImageModels, VideoRoutes: h.conversationVideoRoutes(), Pricing: h.deps.ImagePricing})
+	return productcatalog.WorkspaceCatalog(productcatalog.WorkspaceConfig{IncludePendingMedia: true, TextModels: h.availableTextModels(), ImageModels: h.cfg.ImageModels, VideoRoutes: h.conversationVideoRoutes(), Pricing: h.deps.ImagePricing})
 }
 
 func (h *Handler) listModels(w http.ResponseWriter, _ *http.Request) {

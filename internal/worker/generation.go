@@ -189,7 +189,7 @@ func isAsyncMediaJob(job *domain.Job) bool {
 	if job == nil {
 		return false
 	}
-	return job.Modality == domain.ModalityImage || job.Modality == domain.ModalityVideo
+	return job.Modality == domain.ModalityImage || job.Modality == domain.ModalityVideo || job.Modality == domain.ModalityAudio
 }
 
 func isAsyncMediaProvider(provider domain.ProviderName) bool {

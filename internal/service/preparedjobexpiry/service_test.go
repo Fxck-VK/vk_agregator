@@ -98,6 +98,38 @@ func TestReconcileIsBoundedAndCanDrainInPages(t *testing.T) {
 	}
 }
 
+func TestMusicPreparationExpiresWithoutTouchingForeignOrActivatedJobs(t *testing.T) {
+	ctx := context.Background()
+	now := time.Date(2026, 9, 16, 12, 0, 0, 0, time.UTC)
+	owner := uuid.New()
+	jobs := memory.NewJobRepo()
+	due := expiryJob(owner, "music-due", now.Add(-time.Minute))
+	foreign := expiryJob(uuid.New(), "music-foreign", now.Add(-time.Minute))
+	active := expiryJob(owner, "music-active", now.Add(-time.Minute))
+	active.Status = domain.JobStatusQueued
+	for _, job := range []*domain.Job{due, foreign, active} {
+		job.OperationType = domain.OperationAudioMusic
+		job.Modality = domain.ModalityAudio
+		if err := jobs.Create(ctx, job); err != nil {
+			t.Fatal(err)
+		}
+	}
+	svc := New(memory.NewPreparedWebImageExpiryRepository(jobs), WithClock(func() time.Time { return now }))
+	got, err := svc.ReconcileAccount(ctx, owner, 10)
+	if err != nil || got.Expired != 1 {
+		t.Fatalf("reconcile music: %+v %v", got, err)
+	}
+	for _, test := range []struct {
+		job  *domain.Job
+		want domain.JobStatus
+	}{{due, domain.JobStatusExpired}, {foreign, domain.JobStatusPrepared}, {active, domain.JobStatusQueued}} {
+		stored, err := jobs.GetByID(ctx, test.job.ID)
+		if err != nil || stored.Status != test.want {
+			t.Fatalf("status = %+v, err = %v", stored, err)
+		}
+	}
+}
+
 func TestConcurrentReconciliationClaimsPreparedJobsOnlyOnce(t *testing.T) {
 	ctx := context.Background()
 	now := time.Date(2026, 8, 1, 12, 0, 0, 0, time.UTC)

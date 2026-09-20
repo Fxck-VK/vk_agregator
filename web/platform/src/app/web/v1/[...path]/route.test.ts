@@ -22,6 +22,21 @@ import { GET, POST } from "./route";
 import { parseModelCatalog, projectChatModelCatalog, projectImageModelCatalog } from "@/features/models/model-catalog-contract";
 
 describe("web API route local workspace preview", () => {
+  it.each(["development", "production"] as const)("keeps empty music history limited to local development: %s", async (environment) => {
+    vi.stubEnv("NODE_ENV", environment);
+    vi.stubEnv("NEIROHUB_LOCAL_WORKSPACE_PREVIEW", "1");
+    const request = new Request("http://localhost:7158/web/v1/music-jobs?limit=8");
+
+    const response = await GET(request);
+
+    if (environment === "development") {
+      expect(await response.json()).toEqual({ items: [], has_more: false, next_cursor: null });
+      expect(proxyWebApiRequest).not.toHaveBeenCalled();
+    } else {
+      expect(proxyWebApiRequest).toHaveBeenCalledWith(request, "/web/v1/music-jobs?limit=8", "http://backend.internal:8080");
+    }
+  });
+
   it("shows preview packages but never forwards a preview payment", async () => {
     vi.stubEnv("NODE_ENV", "development");
     vi.stubEnv("NEIROHUB_LOCAL_WORKSPACE_PREVIEW", "1");

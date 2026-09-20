@@ -85,6 +85,9 @@ func WorkspaceCatalog(cfg WorkspaceConfig) WorkspaceModelList {
 	} else if len(out.Items) > 0 {
 		out.DefaultModelID = out.Items[0].ID
 	}
+	if cfg.IncludePendingMedia {
+		out.Items = append(out.Items, pendingMediaWorkspaceModels()...)
+	}
 	return out
 }
 

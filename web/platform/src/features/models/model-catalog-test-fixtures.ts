@@ -24,6 +24,11 @@ type PublicVideoOperationFixture = PublicOperationBaseFixture & {
   video: NonNullable<PublicOperation["video"]> & Record<string, unknown>;
 };
 
+type PublicAudioOperationFixture = PublicOperationBaseFixture & {
+  audio: NonNullable<PublicOperation["audio"]> & Record<string, unknown>;
+  music?: NonNullable<PublicOperation["music"]> & Record<string, unknown>;
+};
+
 type PublicCatalogModelBaseFixture =
   & Omit<PublicCatalog["items"][number], "kind" | "operations">
   & {
@@ -32,7 +37,7 @@ type PublicCatalogModelBaseFixture =
   & Record<string, unknown>;
 
 type PublicCatalogModelFixture = PublicCatalogModelBaseFixture & {
-  operations: Array<PublicTextOperationFixture | PublicImageOperationFixture | PublicVideoOperationFixture>;
+  operations: Array<PublicTextOperationFixture | PublicImageOperationFixture | PublicVideoOperationFixture | PublicAudioOperationFixture>;
 };
 
 type PublicImageCatalogModelFixture = PublicCatalogModelBaseFixture & {

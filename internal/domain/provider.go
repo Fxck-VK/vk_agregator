@@ -92,6 +92,10 @@ const (
 // generation request. The adapter translates it into the provider's native API
 // shape. It must never contain VK- or billing-specific concerns.
 type ProviderRequest struct {
+	// Music and VideoMedia are typed worker-owned contracts. Fetch URLs inside
+	// these contracts are ephemeral and excluded from durable snapshots.
+	Music      *MusicRequest      `json:"music,omitempty"`
+	VideoMedia *VideoMediaRequest `json:"video_media,omitempty"`
 	// Video options are normalized by the worker from the immutable route snapshot.
 	VideoAudio           bool   `json:"video_audio,omitempty"`
 	CharacterOrientation string `json:"character_orientation,omitempty"`
@@ -288,6 +292,9 @@ type Capability struct {
 
 // ProviderTaskResult holds the normalized output of a finished provider task.
 type ProviderTaskResult struct {
+	// Music holds transient structured music outputs, including original track
+	// indexes. Only inspected artifacts may be exposed to the account owner.
+	Music *MusicResult `json:"music,omitempty"`
 	// Status is the normalized terminal/intermediate status.
 	Status ProviderTaskStatus `json:"status"`
 	// OutputURLs are URLs of produced artifacts to be downloaded and stored.

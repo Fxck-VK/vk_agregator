@@ -81,6 +81,9 @@ func (u FloorUnit) Valid() bool {
 // lookup. It intentionally has no provider, provider model id, floor or
 // multiplier fields.
 type ProductKey struct {
+	AudioModelID    string                 `json:"audio_model_id,omitempty"`
+	AudioAction     string                 `json:"audio_action,omitempty"`
+	AudioMax        bool                   `json:"audio_max,omitempty"`
 	TextModelID     string                 `json:"text_model_id,omitempty"`
 	Operation       domain.OperationType   `json:"operation"`
 	Modality        domain.Modality        `json:"modality"`
@@ -93,6 +96,8 @@ type ProductKey struct {
 
 // Normalize returns a trimmed copy suitable for stable lookup and snapshots.
 func (k ProductKey) Normalize() ProductKey {
+	k.AudioModelID = strings.TrimSpace(k.AudioModelID)
+	k.AudioAction = strings.TrimSpace(k.AudioAction)
 	k.TextModelID = strings.TrimSpace(k.TextModelID)
 	k.ImageModelID = strings.TrimSpace(k.ImageModelID)
 	k.VideoRouteAlias = domain.VideoRouteAlias(strings.TrimSpace(string(k.VideoRouteAlias)))
@@ -106,6 +111,12 @@ func (k ProductKey) Normalize() ProductKey {
 func (k ProductKey) Valid() bool {
 	k = k.Normalize()
 	if !k.Operation.Valid() || !k.Modality.Valid() {
+		return false
+	}
+	if k.Operation == domain.OperationAudioMusic {
+		return k.Modality == domain.ModalityAudio && k.AudioModelID != "" && k.AudioAction != "" && k.TextModelID == "" && k.ImageModelID == "" && k.VideoRouteAlias == "" && k.Quality == "" && k.Resolution == "" && k.DurationSec == 0
+	}
+	if k.AudioModelID != "" || k.AudioAction != "" || k.AudioMax {
 		return false
 	}
 	switch k.Operation {
@@ -473,6 +484,9 @@ func productKeySortKey(key ProductKey) string {
 	return strings.Join([]string{
 		string(key.Operation),
 		string(key.Modality),
+		key.AudioModelID,
+		key.AudioAction,
+		fmt.Sprint(key.AudioMax),
 		key.TextModelID,
 		key.ImageModelID,
 		string(key.VideoRouteAlias),

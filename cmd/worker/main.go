@@ -387,7 +387,7 @@ func main() {
 	}
 
 	var referenceSigner worker.ReferenceVideoSigner
-	if cfg.FeatureAPIMartKling26MotionEnabled {
+	if cfg.FeatureAPIMartKling26MotionEnabled || providermodels.MusicReferencesAdmitted() {
 		gateway, err := providerreference.New(cfg.ProviderReferenceBaseURL, cfg.ProviderReferenceSigningKey, jobs, artRepo, store)
 		if err != nil {
 			logger.Error("provider reference gateway configuration invalid")
@@ -500,7 +500,7 @@ func main() {
 			os.Exit(1)
 		}
 
-		genStreams := []string{redisqueue.StreamText, redisqueue.StreamImage, redisqueue.StreamVideo}
+		genStreams := []string{redisqueue.StreamText, redisqueue.StreamImage, redisqueue.StreamVideo, redisqueue.StreamAudio}
 		engines := []*worker.Engine{
 			worker.NewEngine(consumer, genStreams, gen.Process, worker.WithLogger(logger)),
 			worker.NewConversationTitleEngine(consumer, title.Process, logger),

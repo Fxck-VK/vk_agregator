@@ -14,6 +14,9 @@ import (
 
 	"vk-ai-aggregator/internal/adapter/storage/memory"
 	"vk-ai-aggregator/internal/domain"
+	"vk-ai-aggregator/internal/service/musicgeneration"
+	"vk-ai-aggregator/internal/service/pricingcatalog"
+	"vk-ai-aggregator/internal/service/providermodels"
 	"vk-ai-aggregator/internal/service/videoreference"
 )
 
@@ -79,7 +82,7 @@ func TestServeHTTPRejectsTamperedSignature(t *testing.T) {
 	f := newFixture(t)
 	u := parseTestURL(t, f.mustURL(t))
 	q := u.Query()
-	q.Set("signature", "00"+q.Get("signature")[2:])
+	q.Set("signature", strings.Repeat("0", len(q.Get("signature"))))
 	u.RawQuery = q.Encode()
 
 	rec := f.serve(t, http.MethodGet, u.String())
@@ -287,4 +290,154 @@ func parseTestURL(t *testing.T, raw string) *url.URL {
 		t.Fatalf("parse url: %v", err)
 	}
 	return u
+}
+
+func TestServeHTTPValidMusicAudioRead(t *testing.T) {
+	f := newMusicFixture(t)
+	rec := f.serve(t, http.MethodGet, f.mustURL(t))
+	if rec.Code != http.StatusOK {
+		t.Fatalf("status = %d, body = %q", rec.Code, rec.Body.String())
+	}
+	if rec.Body.String() != string(f.body) {
+		t.Fatalf("body = %q, want %q", rec.Body.String(), string(f.body))
+	}
+	if got := rec.Header().Get("Content-Type"); !strings.HasPrefix(got, "audio/mpeg") {
+		t.Fatalf("Content-Type = %q", got)
+	}
+}
+
+func TestServeHTTPRejectsMusicArtifactOutsideParams(t *testing.T) {
+	f := newMusicFixture(t)
+	params := musicParams(t, uuid.New())
+	f.job.Params = params
+	if err := f.jobs.Update(f.ctx, f.job); err != nil {
+		t.Fatalf("update job: %v", err)
+	}
+	rec := f.serve(t, http.MethodGet, f.mustURL(t))
+	if rec.Code != http.StatusNotFound {
+		t.Fatalf("status = %d, want 404", rec.Code)
+	}
+}
+
+func TestServeHTTPRejectsMusicCanonicalProviderModelMismatch(t *testing.T) {
+	f := newMusicFixture(t)
+	var params musicgeneration.JobParams
+	if err := json.Unmarshal(f.job.Params, &params); err != nil {
+		t.Fatalf("unmarshal params: %v", err)
+	}
+	params.ModelCode = "forged-native-model"
+	raw, err := json.Marshal(params)
+	if err != nil {
+		t.Fatalf("marshal params: %v", err)
+	}
+	f.job.Params = raw
+	if err := f.jobs.Update(f.ctx, f.job); err != nil {
+		t.Fatalf("update job: %v", err)
+	}
+	rec := f.serve(t, http.MethodGet, f.mustURL(t))
+	if rec.Code != http.StatusForbidden {
+		t.Fatalf("status = %d, want 403", rec.Code)
+	}
+}
+
+func TestServeHTTPRejectsInvalidMusicAudioMetadata(t *testing.T) {
+	f := newMusicFixture(t)
+	f.artifact.MimeType = "audio/mp4"
+	if err := f.artifacts.Update(f.ctx, f.artifact); err != nil {
+		t.Fatalf("update artifact: %v", err)
+	}
+	rec := f.serve(t, http.MethodGet, f.mustURL(t))
+	if rec.Code != http.StatusForbidden {
+		t.Fatalf("status = %d, want 403", rec.Code)
+	}
+}
+
+func newMusicFixture(t *testing.T) *testFixture {
+	t.Helper()
+	ctx := context.Background()
+	jobs := memory.NewJobRepo()
+	artifacts := memory.NewArtifactRepo()
+	objects := memory.NewObjectStore()
+	now := time.Date(2026, 9, 16, 12, 0, 0, 0, time.UTC)
+	service, err := New("https://provider.example.com", strings.Repeat("s", MinSecretLength), jobs, artifacts, objects)
+	if err != nil {
+		t.Fatalf("New: %v", err)
+	}
+	service.now = func() time.Time { return now }
+
+	accountID := uuid.New()
+	artifactID := uuid.New()
+	body := []byte("mp3-private-bytes")
+	artifact := &domain.Artifact{
+		ID:             artifactID,
+		OwnerAccountID: accountID,
+		Kind:           domain.ArtifactKindInput,
+		MediaType:      domain.MediaTypeAudio,
+		MimeType:       "audio/mpeg",
+		StorageBucket:  "artifacts",
+		StorageKey:     "provider/ref.mp3",
+		SizeBytes:      int64(len(body)),
+		DurationMS:     12000,
+		Codec:          "mp3",
+		Container:      "mp3",
+		BitrateBPS:     128000,
+		ProbeStatus:    domain.MediaProbePassed,
+		Status:         domain.ArtifactStatusReady,
+	}
+	if err := artifacts.Create(ctx, artifact); err != nil {
+		t.Fatalf("create artifact: %v", err)
+	}
+	if err := objects.Put(ctx, artifact.StorageBucket, artifact.StorageKey, body, artifact.MimeType); err != nil {
+		t.Fatalf("put object: %v", err)
+	}
+
+	snapshot, err := pricingcatalog.MusicCandidateQuote("suno_v6", string(domain.MusicActionUpload), false)
+	if err != nil {
+		t.Fatalf("music quote: %v", err)
+	}
+	job := &domain.Job{
+		ID:               uuid.New(),
+		AccountID:        accountID,
+		Source:           "web",
+		ResultMode:       domain.ResultModeAccountHistory,
+		OperationType:    domain.OperationAudioMusic,
+		Modality:         domain.ModalityAudio,
+		Status:           domain.JobStatusProviderSubmitted,
+		IdempotencyKey:   uuid.NewString(),
+		InputArtifactIDs: []uuid.UUID{artifactID},
+		Params:           musicParams(t, artifactID),
+		PricingSnapshot:  mustJSON(t, snapshot),
+		CostEstimate:     snapshot.InternalCredits,
+	}
+	if err := jobs.Create(ctx, job); err != nil {
+		t.Fatalf("create job: %v", err)
+	}
+	return &testFixture{ctx: ctx, jobs: jobs, artifacts: artifacts, objects: objects, service: service, now: now, job: job, artifact: artifact, body: body}
+}
+
+func musicParams(t *testing.T, artifactID uuid.UUID) json.RawMessage {
+	t.Helper()
+	candidate, ok := providermodels.MediaCandidateByID("suno_v6")
+	if !ok {
+		t.Fatal("missing suno_v6 candidate")
+	}
+	return mustJSON(t, musicgeneration.JobParams{
+		Request: musicgeneration.Request{
+			ModelID:          "suno_v6",
+			Music:            domain.MusicRequest{Action: domain.MusicActionUpload},
+			AudioArtifactIDs: []uuid.UUID{artifactID},
+		},
+		Provider:  candidate.Provider,
+		ModelCode: candidate.ModelCode,
+		ModelName: candidate.Name,
+	})
+}
+
+func mustJSON(t *testing.T, value any) json.RawMessage {
+	t.Helper()
+	raw, err := json.Marshal(value)
+	if err != nil {
+		t.Fatalf("marshal json: %v", err)
+	}
+	return raw
 }

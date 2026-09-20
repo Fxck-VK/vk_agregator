@@ -311,6 +311,8 @@ type WebChatMessageLimiter interface {
 
 // Deps are services shared with other account adapters.
 type Deps struct {
+	MusicInputArtifacts    MusicInputArtifactSaver
+	MusicInputProber       MusicInputProber
 	Payments               WebPaymentService
 	ReceiptContacts        WebReceiptContacts
 	PaymentCreateLimiter   WebChatMessageLimiter
@@ -358,6 +360,13 @@ func (h *Handler) Routes() http.Handler {
 	mux.HandleFunc("GET /web/v1/conversations/{conversationID}/messages", h.requirePrincipal(h.listConversationMessages))
 	mux.HandleFunc("GET /web/v1/text-models", h.requirePrincipal(h.listTextModels))
 	mux.HandleFunc("GET /web/v1/models", h.requirePrincipal(h.listModels))
+	mux.HandleFunc("GET /web/v1/music-jobs", h.requirePrincipal(h.listMusicJobs))
+	mux.HandleFunc("GET /web/v1/music-jobs/{jobID}", h.requirePrincipal(h.getMusicJob))
+	mux.HandleFunc("GET /web/v1/music-jobs/{jobID}/result", h.requirePrincipal(h.getMusicJobResult))
+	mux.HandleFunc("GET /web/v1/music-artifacts/{artifactID}", h.requirePrincipal(h.getMusicArtifact))
+	mux.HandleFunc("POST /web/v1/music-jobs/prepare", h.requireUnsafePrincipal(h.prepareMusicJob))
+	mux.HandleFunc("POST /web/v1/music-inputs", h.requireUnsafePrincipal(h.uploadMusicInput))
+	mux.HandleFunc("POST /web/v1/music-jobs/{jobID}/activate", h.requireUnsafePrincipal(h.activateMusicJob))
 	mux.HandleFunc("GET /web/v1/image-models", h.requirePrincipal(h.listImageModels))
 	mux.HandleFunc("GET /web/v1/video-models", h.requirePrincipal(h.listVideoModels))
 	mux.HandleFunc("GET /web/v1/payment-products", h.requirePrincipal(h.listWebPaymentProducts))

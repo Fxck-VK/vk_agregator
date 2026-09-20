@@ -51,7 +51,12 @@ func (w *PollWorker) Process(ctx context.Context, task queue.Task) error {
 		if res, ok := durableProviderTaskResultForJob(pt, job); ok {
 			return w.applyResult(ctx, job, pt, res, task)
 		}
-		return nil
+		// Music output downloads may have stopped between the provider terminal
+		// checkpoint and the durable artifact checkpoint. Re-poll the SAME paid
+		// task to recover ephemeral URLs; never allocate a replacement submit.
+		if job.OperationType != domain.OperationAudioMusic || pt.Status != domain.ProviderTaskSucceeded {
+			return nil
+		}
 	}
 
 	provider, err := w.providers.ForName(pt.Provider)

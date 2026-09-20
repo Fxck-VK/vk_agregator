@@ -37,6 +37,9 @@ async function handle(request: Request): Promise<Response> {
     if (requestURL.pathname === "/web/v1/image-jobs") {
       return previewJson(localWorkspacePreviewImageJobs);
     }
+    if (requestURL.pathname === "/web/v1/music-jobs") {
+      return previewJson({ items: [], has_more: false, next_cursor: null });
+    }
 
     const conversationMessagesMatch = requestURL.pathname.match(
       /^\/web\/v1\/conversations\/([^/]+)\/messages$/,

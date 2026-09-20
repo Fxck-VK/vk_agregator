@@ -258,6 +258,20 @@ func (r *Registry) ForOperation(_ domain.OperationType) (domain.Provider, error)
 // selected provider chain in order and returns the task from the actual provider
 // that accepted the request.
 func (r *Registry) ForRequest(ctx context.Context, req domain.ProviderRequest) (domain.Provider, error) {
+	// An adapter implementation and a runtime feature flag are not model
+	// admission. Recheck the canonical contract before any candidate can route.
+	for _, candidate := range providermodels.MediaCandidates() {
+		if candidate.ModelCode != req.ModelCode || (req.Provider != "" && req.Provider != candidate.Provider) {
+			continue
+		}
+		action := "text_to_video"
+		if req.Music != nil {
+			action = string(req.Music.Action)
+		}
+		if !providermodels.StaticRegistry().MediaCandidateAdmitted(candidate.PublicID, action) {
+			return nil, providerResultError{class: domain.ProviderErrModelUnavailable, message: "model admission pending"}
+		}
+	}
 	candidates, err := r.candidates(ctx, req)
 	if err != nil {
 		return nil, err
@@ -1269,6 +1283,9 @@ func observeVideoRouteMediaFailureForJob(job *domain.Job, stage, errorClass stri
 // idempotency key is scoped to the attempt so a re-delivered task maps to one
 // provider task, while a genuine retry after failure starts a fresh one.
 func (p *processor) buildRequest(ctx context.Context, job *domain.Job, attempt int) (domain.ProviderRequest, error) {
+	if job.OperationType == domain.OperationAudioMusic {
+		return p.buildMusicRequest(ctx, job, attempt)
+	}
 	var pp promptParams
 	if len(job.Params) > 0 {
 		_ = json.Unmarshal(job.Params, &pp)
@@ -1390,10 +1407,21 @@ func (p *processor) buildRequest(ctx context.Context, job *domain.Job, attempt i
 	if job.Modality == domain.ModalityVideo {
 		providerParams = safeVideoProviderParams(durationSec, resolution, pp.AspectRatio, draft, pp.ResolvedVideoRoute)
 	}
+	keepOriginalSound := pp.KeepOriginalSound == nil || *pp.KeepOriginalSound
+	if job.Modality == domain.ModalityVideo && providermodels.IsPendingMediaRoute(pp.Provider, modelCode) {
+		// The first application route is text-only. Advanced native modes have
+		// adapter contracts but need separate owned-input hydration and admission.
+		if len(job.InputArtifactIDs) > 0 || len(pp.ReferenceArtifactIDs) > 0 || referenceVideoURL != "" || pp.VideoAudio || pp.CharacterOrientation != "" {
+			return domain.ProviderRequest{}, providerResultError{class: domain.ProviderErrInvalidRequest, message: "video media inputs are not enabled"}
+		}
+		keepOriginalSound = false
+		draft = false
+		providerParams = safeVideoProviderParams(durationSec, resolution, pp.AspectRatio, false, pp.ResolvedVideoRoute)
+	}
 	return domain.ProviderRequest{
 		VideoAudio:           pp.VideoAudio,
 		CharacterOrientation: pp.CharacterOrientation,
-		KeepOriginalSound:    pp.KeepOriginalSound == nil || *pp.KeepOriginalSound,
+		KeepOriginalSound:    keepOriginalSound,
 		ReferenceVideoURL:    referenceVideoURL,
 		JobID:                job.ID,
 		UserID:               workerJobOwnerID(job),
@@ -2041,6 +2069,9 @@ func durableProviderTaskResultForJob(pt *domain.ProviderTask, job *domain.Job) (
 	}
 	switch res.Status {
 	case domain.ProviderTaskSucceeded:
+		if job != nil && job.OperationType == domain.OperationAudioMusic {
+			return durableMusicTaskResult(job)
+		}
 		if len(res.OutputURLs) > 0 {
 			return res, true
 		}
@@ -2078,7 +2109,13 @@ func (p *processor) applyResult(ctx context.Context, job *domain.Job, pt *domain
 		if !paidImageOutputCountMatches(job, res.OutputURLs) {
 			return p.handleFailure(ctx, job, task, domain.ProviderErrInternal, safeProviderFailureMessage(domain.ProviderErrInternal))
 		}
-		if err := p.saveOutputs(ctx, job, res.OutputURLs, res.Text); err != nil {
+		var saveErr error
+		if job.OperationType == domain.OperationAudioMusic {
+			saveErr = p.saveMusicOutputs(ctx, job, res)
+		} else {
+			saveErr = p.saveOutputs(ctx, job, res.OutputURLs, res.Text)
+		}
+		if err := saveErr; err != nil {
 			failureClass := outputArtifactFailureClass(err)
 			p.recordProviderProductFailureForTask(job, pt, string(failureClass))
 			observeVideoRouteMediaFailureForJob(job, "download", string(failureClass))

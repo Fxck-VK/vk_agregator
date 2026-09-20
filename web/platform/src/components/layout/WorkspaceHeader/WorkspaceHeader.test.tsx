@@ -68,6 +68,15 @@ describe("WorkspaceHeader", () => {
     expect(screen.queryByTestId("workspace-balance")).not.toBeInTheDocument();
   });
 
+  it("leaves music model selection in the music workspace", () => {
+    vi.mocked(usePathname).mockReturnValue("/app/music");
+
+    render(<WorkspaceHeader balance={104} />);
+
+    expect(screen.getByRole("banner", { name: "Музыка" })).toHaveTextContent("Музыка");
+    expect(screen.queryByRole("button", { name: "Nano Banana 2" })).not.toBeInTheDocument();
+  });
+
   it("renders the shared credit-star artwork instead of a text glyph", () => {
     render(<WorkspaceHeader balance={104} />);
 

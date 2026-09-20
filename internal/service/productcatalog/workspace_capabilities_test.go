@@ -19,7 +19,20 @@ func TestWorkspaceCapabilitiesDescribeActualSubmissionSurface(t *testing.T) {
 			if c == nil {
 				t.Fatal("public model lost API/application capabilities")
 			}
-			if !reflect.DeepEqual(c.API, providermodels.Capabilities(model.ID).API) {
+			expected := providermodels.Capabilities(model.ID)
+			if model.Verification == "pending-verification" {
+				candidate, ok := providermodels.MediaCandidateByID(model.ID)
+				if !ok {
+					t.Fatal("pending model lacks source-backed candidate metadata")
+				}
+				expected = &candidate.Capabilities
+				for _, operation := range model.Operations {
+					if operation.Enabled {
+						t.Fatal("pending operation became executable")
+					}
+				}
+			}
+			if expected == nil || !reflect.DeepEqual(c.API, expected.API) {
 				t.Fatal("web controls must not rewrite native API capabilities")
 			}
 			op := model.Operations[0]

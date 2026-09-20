@@ -41,12 +41,15 @@ import (
 	"vk-ai-aggregator/internal/platform/tracing"
 	"vk-ai-aggregator/internal/service/accountauth"
 	"vk-ai-aggregator/internal/service/accountlink"
+	"vk-ai-aggregator/internal/service/artifactservice"
 	"vk-ai-aggregator/internal/service/imagegeneration"
 	"vk-ai-aggregator/internal/service/joborchestrator"
 	"vk-ai-aggregator/internal/service/maintenance"
+	"vk-ai-aggregator/internal/service/mediaprobe"
 	"vk-ai-aggregator/internal/service/preparedjobexpiry"
 	"vk-ai-aggregator/internal/service/pricingcatalog"
 	"vk-ai-aggregator/internal/service/productcatalog"
+	"vk-ai-aggregator/internal/service/providermodels"
 	"vk-ai-aggregator/internal/service/providerreference"
 	"vk-ai-aggregator/internal/service/resultservice"
 	"vk-ai-aggregator/internal/service/videorouter"
@@ -310,6 +313,11 @@ func main() {
 		Logger:    logger,
 	})
 	webArtifactURLSigner := newWebImageArtifactURLSigner(ctx, cfg, logger)
+	var musicInputs websession.MusicInputArtifactSaver
+	if objects, ok := webArtifactURLSigner.(artifactservice.ObjectStore); ok {
+		musicInputs = artifactservice.New(core.Artifacts, objects, cfg.S3Bucket)
+	}
+	musicInputProber := mediaprobe.NewFFProbe(mediaprobe.Config{FFProbePath: cfg.FFProbePath, Timeout: cfg.MediaProbeTimeout})
 	webArtifactRedirectPolicy := newWebImageArtifactRedirectPolicy(cfg, logger)
 	webResults := resultservice.New(core.Jobs, core.Artifacts, core.Moderation)
 	webImagePrepareLimiter := ratelimit.NewRedisFixedWindowLimiter(
@@ -352,6 +360,8 @@ func main() {
 		ImageResults:           webResults,
 		ImageArtifacts:         core.Artifacts,
 		ImageArtifactURLSigner: webArtifactURLSigner,
+		MusicInputArtifacts:    musicInputs,
+		MusicInputProber:       musicInputProber,
 		WebChatJobs:            core.Orchestrator,
 		WebChatMessageLimiter:  webChatMessageLimiter,
 	})
@@ -570,7 +580,7 @@ func newWebImageArtifactRedirectPolicy(cfg config.Config, logger *slog.Logger) w
 }
 
 func newProviderReferenceGateway(ctx context.Context, cfg config.Config, core apiapp.SharedCore) (http.Handler, error) {
-	if !cfg.FeatureAPIMartKling26MotionEnabled {
+	if !cfg.FeatureAPIMartKling26MotionEnabled && !providermodels.MusicReferencesAdmitted() {
 		return nil, nil
 	}
 	store, err := s3store.New(ctx, s3store.Config{
@@ -588,7 +598,7 @@ func newProviderReferenceGateway(ctx context.Context, cfg config.Config, core ap
 }
 
 func newProviderReferenceGatewayWithObjects(cfg config.Config, core apiapp.SharedCore, objects providerreference.ObjectStore) (http.Handler, error) {
-	if !cfg.FeatureAPIMartKling26MotionEnabled {
+	if !cfg.FeatureAPIMartKling26MotionEnabled && !providermodels.MusicReferencesAdmitted() {
 		return nil, nil
 	}
 	gateway, err := providerreference.New(cfg.ProviderReferenceBaseURL, cfg.ProviderReferenceSigningKey, core.Jobs, core.Artifacts, objects)

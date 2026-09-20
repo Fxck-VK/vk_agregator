@@ -49,5 +49,5 @@ func WorkspacePreviewCatalog() (WorkspaceModelList, error) {
 			textIDs = append(textIDs, m.PublicID)
 		}
 	}
-	return WorkspaceCatalog(WorkspaceConfig{ImageModels: images, TextModels: textgeneration.Models(textIDs, prices), VideoRoutes: catalog.VideoRoutes(), Pricing: prices}), nil
+	return WorkspaceCatalog(WorkspaceConfig{ImageModels: images, TextModels: textgeneration.Models(textIDs, prices), VideoRoutes: catalog.VideoRoutes(), Pricing: prices, IncludePendingMedia: true}), nil
 }

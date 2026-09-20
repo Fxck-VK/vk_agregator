@@ -3126,3 +3126,26 @@ limits; the frozen legacy baseline is unchanged. Legacy missing image ratios
 resolve to existing adapter bounds in public copies, without enabling new
 provider features. Web submission, authorization, ownership, billing and worker
 boundaries are unchanged by this merge.
+
+## Music workspace and pending APIMart media (2026-09-16)
+
+The web music workspace uses account-owned audio_music Jobs, a dedicated audio
+stream, prepared confirmation expiry, and the existing ledger lifecycle. API
+prepares/activates Jobs; workers own Suno native actions, durable submit intents
+and music-prefixed task polling. Transforms resolve owned, succeeded source Jobs
+and original one-based track indexes. Partial artifact checkpoints preserve
+associations; complete checkpoints resume moderation/delivery without resubmit.
+
+Audio inputs are private Artifacts checked by content and ffprobe. Workers issue
+expiring Job-bound provider-reference URLs through the signed gateway. Results
+are served to the authenticated owner after completion and moderation; private
+storage/provider URLs never reach the browser. Gateway startup requires music
+admission or the existing Motion Control flag plus valid signing configuration.
+
+HappyHorse 1.0/1.1, SkyReels V4 Fast/Std and Suno V6/Wild/Mini have native adapters,
+dated facts, draft contracts and cost-times-three candidate quotes. They remain
+outside active bindings and runtime tariffs. The catalog can display them as
+pending-verification with all operations disabled. Required real output evidence
+cannot be replaced by an implementation or feature flag. Video application
+hydration is text-only: native frame/Omni/edit adapter modes do not enable web
+inputs. The frozen legacy baseline is unchanged. See runbooks/MODEL_CATALOG.md.

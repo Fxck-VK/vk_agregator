@@ -139,8 +139,7 @@ const globalPreparedWebImageExpiryQuery = `
 		FROM jobs
 		WHERE account_id IS NOT NULL
 		  AND source = 'web'
-		  AND operation_type = 'image_generate'
-		  AND modality = 'image'
+		  AND ((operation_type = 'image_generate' AND modality = 'image') OR (operation_type = 'audio_music' AND modality = 'audio'))
 		  AND status = 'prepared'
 		  AND expires_at IS NOT NULL
 		  AND expires_at <= $1
@@ -176,8 +175,7 @@ const accountPreparedWebImageExpiryQuery = `
 		FROM jobs
 		WHERE account_id = $1
 		  AND source = 'web'
-		  AND operation_type = 'image_generate'
-		  AND modality = 'image'
+		  AND ((operation_type = 'image_generate' AND modality = 'image') OR (operation_type = 'audio_music' AND modality = 'audio'))
 		  AND status = 'prepared'
 		  AND expires_at IS NOT NULL
 		  AND expires_at <= $2
@@ -216,8 +214,7 @@ const exactPreparedWebImageExpiryQuery = `
 	WHERE id = $1
 	  AND account_id = $2
 	  AND source = 'web'
-	  AND operation_type = 'image_generate'
-	  AND modality = 'image'
+	  AND ((operation_type = 'image_generate' AND modality = 'image') OR (operation_type = 'audio_music' AND modality = 'audio'))
 	  AND status = 'prepared'
 	  AND expires_at IS NOT NULL
 	  AND expires_at <= $3

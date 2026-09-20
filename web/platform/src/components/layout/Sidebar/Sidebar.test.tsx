@@ -119,11 +119,12 @@ describe("Sidebar", () => {
     vi.unstubAllGlobals();
   });
 
-  it("defines exactly the four fixed workspace routes with the requested icon order", () => {
+  it("defines the fixed workspace routes with the requested icon order", () => {
     expect(workspaceNavigationItems).toEqual([
       { href: "/app/chats", icon: "edit", label: ru.navigation.chats, prefetch: true },
       { href: "/app/files", icon: "file", label: ru.navigation.files, prefetch: true },
       { href: "/app/models", icon: "grid", label: ru.navigation.models, prefetch: true },
+      { href: "/app/music", icon: "image", label: ru.navigation.music, prefetch: true },
       { href: "/app/inspiration", icon: "image", label: ru.navigation.inspiration, prefetch: true },
     ]);
   });
@@ -147,12 +148,14 @@ describe("Sidebar", () => {
       ru.navigation.chats,
       ru.navigation.files,
       ru.navigation.models,
+      ru.navigation.music,
       ru.navigation.inspiration,
     ]);
     expect(links.map((link) => link.querySelector("svg")?.getAttribute("data-icon"))).toEqual([
       "edit",
       "file",
       "grid",
+      "image",
       "image",
     ]);
   });

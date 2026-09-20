@@ -91,8 +91,7 @@ func duePreparedWebImage(job domain.Job, accountID *uuid.UUID, now time.Time) bo
 	return (accountID == nil || job.AccountID == *accountID) &&
 		job.AccountID != uuid.Nil &&
 		job.Source == "web" &&
-		job.OperationType == domain.OperationImageGenerate &&
-		job.Modality == domain.ModalityImage &&
+		((job.OperationType == domain.OperationImageGenerate && job.Modality == domain.ModalityImage) || (job.OperationType == domain.OperationAudioMusic && job.Modality == domain.ModalityAudio)) &&
 		job.Status == domain.JobStatusPrepared &&
 		job.ExpiresAt != nil &&
 		!job.ExpiresAt.After(now)
