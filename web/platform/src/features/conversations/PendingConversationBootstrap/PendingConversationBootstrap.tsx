@@ -1,11 +1,15 @@
 "use client";
-import { savePendingMediaJob } from "../pending-media-job";
+
+import { StateNotice } from "@/components/ui/AsyncState/AsyncState";
+import { useDictionary } from "@/i18n/LocaleProvider";
+
+import { pendingImagePreview, savePendingMediaJob } from "../pending-media-job";
 
 import { useCallback, useEffect, useRef, useState } from "react";
-import { useRouter } from "next/navigation";
+import { useRouter } from "@/i18n/navigation";
 
-import { AssistantTypingIndicator } from "@/components/chat/AssistantTypingIndicator/AssistantTypingIndicator";
-import { Button } from "@/components/ui/Button/Button";
+import { PendingGenerationIndicator } from "../PendingGenerationIndicator";
+import { ConversationInputImages } from "@/features/conversations/ConversationInputImages/ConversationInputImages";
 import {
   clearPendingConversationBootstrap,
   readPendingConversationBootstrap,
@@ -15,7 +19,6 @@ import {
 import { savePendingConversationPrompt } from "@/features/conversations/pending-conversation-prompt";
 import { fallbackConversationTitle, savePendingConversationTitleSync } from "@/features/conversations/pending-conversation-title-sync";
 import { useWorkspaceConversationList } from "@/features/conversations/WorkspaceConversationList/WorkspaceConversationList";
-import { ru } from "@/i18n/ru";
 import { webBrowserMutation } from "@/lib/web-api/browser";
 import { isSafeWebChatAcceptedResponse, parseConversationItem, parseWebChatJob } from "@/lib/web-api/contracts";
 
@@ -28,6 +31,7 @@ type PendingConversationBootstrapProps = {
 type BootstrapStatus = "active" | "failed" | "missing";
 
 export function PendingConversationBootstrap({ conversationKey }: PendingConversationBootstrapProps) {
+  const t = useDictionary();
   const router = useRouter();
   const { resolvePendingConversation, upsertConversation } = useWorkspaceConversationList();
   const [intent] = useState<PendingConversationBootstrapIntent | null>(() => readPendingConversationBootstrap(conversationKey));
@@ -84,7 +88,7 @@ export function PendingConversationBootstrap({ conversationKey }: PendingConvers
         throw new Error("Unsafe first message response.");
       }
 
-      if (currentIntent.generationOptions && Object.keys(currentIntent.generationOptions).length > 0) savePendingMediaJob(conversationID, job.job_id, 0);
+      if (currentIntent.generationOptions && Object.keys(currentIntent.generationOptions).length > 0) savePendingMediaJob(conversationID, job.job_id, 0, currentIntent.generationOptions);
       savePendingConversationPrompt(conversationID, currentIntent.prompt);
       if (currentIntent.modelId) {
         try {
@@ -130,28 +134,26 @@ export function PendingConversationBootstrap({ conversationKey }: PendingConvers
 
   if (intent === null || status === "missing") {
     return (
-      <section aria-label={ru.conversations.historyTitle} className={`${styles.content} ${styles.state}`}>
-        <p className={styles.empty} role="status">{ru.conversations.historyUnavailable}</p>
+      <section aria-label={t.conversations.historyTitle} className={`${styles.content} ${styles.state}`}>
+        <StateNotice inline kind="empty">{t.conversations.historyUnavailable}</StateNotice>
       </section>
     );
   }
 
   return (
-    <section aria-label={ru.conversations.historyTitle} className={styles.content}>
+    <section aria-label={t.conversations.historyTitle} className={styles.content}>
       <div className={styles.history}>
         <ol className={styles.messages}>
           <li className={styles.userMessage} data-chat-pending="user">
+            <ConversationInputImages ids={intent.generationOptions?.reference_artifact_ids} />
             <p>{intent.prompt}</p>
             {status === "failed" ? (
-              <div className={styles.pendingTurnFailure}>
-                <span role="alert">{ru.conversations.messageNotSent}</span>
-                <Button onClick={retry}>{ru.conversations.messageRetryLabel}</Button>
-              </div>
+              <StateNotice inline kind="error" action={{ label: t.conversations.messageRetryLabel, onClick: retry }}>{t.conversations.messageNotSent}</StateNotice>
             ) : null}
           </li>
           {status === "active" ? (
             <li className={styles.assistantMessage} data-chat-pending="assistant">
-              <AssistantTypingIndicator label={ru.conversations.composerAwaitingResponse} />
+              <PendingGenerationIndicator image={pendingImagePreview(intent.generationOptions)} />
             </li>
           ) : null}
         </ol>

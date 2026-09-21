@@ -29,7 +29,7 @@ describe("WorkspaceLanding capability links", () => {
 
     expect(links).toHaveLength(6);
     expect(links.map((link) => link.textContent)).toEqual(capabilityLinks.map((item) => item.label));
-    expect(links.map((link) => link.getAttribute("href"))).toEqual(capabilityLinks.map((item) => item.href));
+    expect(links.map((link) => link.getAttribute("href"))).toEqual(capabilityLinks.map((item) => `/ru${item.href}`));
 
     const fallbackIcons = within(navigation).getAllByTestId("workspace-capability-icon");
 

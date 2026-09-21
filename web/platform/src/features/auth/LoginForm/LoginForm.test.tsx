@@ -41,7 +41,7 @@ describe("LoginForm", () => {
     fireEvent.submit(screen.getByRole("button", { name: ru.login.submitLabel }).closest("form")!);
 
     await vi.waitFor(() =>
-      expect(replace).toHaveBeenCalledWith("/app/chat/d7c979f5-24e5-4f88-924b-a592d6e5a906"),
+      expect(replace).toHaveBeenCalledWith("/ru/app/chat/d7c979f5-24e5-4f88-924b-a592d6e5a906"),
     );
     expect(webBrowserFetch).toHaveBeenCalledWith("/web/v1/auth/password/login", {
       method: "POST",
@@ -64,7 +64,7 @@ describe("LoginForm", () => {
       });
       fireEvent.submit(screen.getByRole("button", { name: ru.login.submitLabel }).closest("form")!);
 
-      await vi.waitFor(() => expect(replace).toHaveBeenCalledWith("/app"));
+      await vi.waitFor(() => expect(replace).toHaveBeenCalledWith("/ru/app"));
     },
   );
 

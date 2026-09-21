@@ -1,19 +1,23 @@
 "use client";
 
+import { Skeleton, StateNotice } from "@/components/ui/AsyncState/AsyncState";
+import { useDictionary, useMessages } from "@/i18n/LocaleProvider";
+
+
 import Image from "next/image";
-import Link from "next/link";
-import { useEffect, useState } from "react";
+import Link from "@/i18n/Link";
+import { useState } from "react";
 
 import { assetPaths } from "@/assets/asset-paths";
 import { ModelCard } from "@/features/models/ModelCard/ModelCard";
-import { loadGenerationModelCatalog, type GenerationModel } from "@/features/models/generation-model-catalog";
+import { useGenerationCatalog } from "@/features/models/GenerationCatalogProvider";
 
 import styles from "./FeaturedModels.module.css";
 
 const collapsedModelLimit = 4;
 const expandedModelLimit = 6;
 
-type LoadState = "loading" | "ready" | "failed";
+
 
 function CatalogActionContent({ label }: { label: string }) {
   return (
@@ -31,41 +35,25 @@ function CatalogActionContent({ label }: { label: string }) {
 }
 
 export function FeaturedModels() {
-  const [models, setModels] = useState<GenerationModel[]>([]);
-  const [loadState, setLoadState] = useState<LoadState>("loading");
+  const msg = useMessages();
+  const t = useDictionary();
+  const { catalog, status, retry } = useGenerationCatalog();
+  const models = catalog?.items.slice(0, expandedModelLimit) ?? [];
+  const loadState = status === "failure" ? "failed" : status;
   const [expanded, setExpanded] = useState(false);
-
-  useEffect(() => {
-    let active = true;
-
-    void loadGenerationModelCatalog()
-      .then((catalog) => {
-        if (!active) return;
-        setModels(catalog.items.slice(0, expandedModelLimit));
-        setLoadState("ready");
-      })
-      .catch(() => {
-        if (!active) return;
-        setLoadState("failed");
-      });
-
-    return () => {
-      active = false;
-    };
-  }, []);
 
   if (loadState === "loading") {
     return (
       <div aria-hidden="true" className={styles.grid}>
         {Array.from({ length: collapsedModelLimit }, (_, index) => (
-          <div className={styles.skeletonCard} key={index} />
+          <Skeleton className={styles.skeletonCard} key={index} />
         ))}
       </div>
     );
   }
 
   if (loadState === "failed" || models.length === 0) {
-    return <p className={styles.empty}>Каталог нейросетей временно недоступен.</p>;
+    return <StateNotice kind="error" action={{ label: t.files.retry, onClick: retry }}>{msg("featuredModels.theAiModelCatalogIsTemporarilyUnavailable")}</StateNotice>;
   }
 
   const canExpand = models.length > collapsedModelLimit;
@@ -98,7 +86,7 @@ export function FeaturedModels() {
             onClick={() => setExpanded(true)}
             type="button"
           >
-            <CatalogActionContent label="Показать ещё" />
+            <CatalogActionContent label={msg("featuredModels.showMore")} />
           </button>
         ) : (
           <Link
@@ -106,7 +94,7 @@ export function FeaturedModels() {
             data-revealed={expanded || undefined}
             href="/app/models"
           >
-            <CatalogActionContent label="Все нейросети" />
+            <CatalogActionContent label={msg("featuredModels.allAiModels")} />
           </Link>
         )}
       </div>

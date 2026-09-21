@@ -1,3 +1,6 @@
+vi.mock("server-only", () => ({}));
+vi.mock("next/navigation", () => ({ useRouter: vi.fn() }));
+vi.mock("next/headers", () => ({ headers: vi.fn(async () => new Headers()), cookies: vi.fn(async () => ({ get: () => undefined })) }));
 import { renderToStaticMarkup } from "react-dom/server";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
@@ -21,7 +24,7 @@ describe("HomePage", () => {
 
     expect(connection).toHaveBeenCalledOnce();
     expect(markup).toContain("NeiroHub");
-    expect(markup).toContain('href="/app"');
+    expect(markup).toContain('href="/ru/app"');
     expect(markup).toContain("data-size=\"narrow\"");
   });
 });

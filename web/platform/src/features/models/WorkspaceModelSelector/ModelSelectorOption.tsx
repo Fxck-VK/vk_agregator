@@ -1,6 +1,12 @@
 "use client";
 
-import { useCallback, useId, useLayoutEffect, useRef, useState, type RefObject } from "react";
+import { useMessages } from "@/i18n/LocaleProvider";
+import { tokenAmount } from "@/i18n/counts";
+import { RichMessage } from "@/i18n/RichMessage";
+import { CreditAmount } from "@/components/ui/CreditAmount/CreditAmount";
+import type { ModelSelectorModel } from "./ModelSelector";
+
+import { useCallback, useId, useLayoutEffect, useRef, useState, type ReactNode, type RefObject } from "react";
 import { createPortal } from "react-dom";
 
 import { TooltipBubble } from "@/components/ui/Tooltip/Tooltip";
@@ -39,7 +45,7 @@ export function getModelDescriptionPosition(
 
 function ModelDescriptionTooltip({ anchor, description, onDismiss, popoverRef }: {
   anchor: HTMLElement;
-  description: string;
+  description: ReactNode;
   onDismiss: () => void;
   popoverRef: RefObject<HTMLElement | null>;
 }) {
@@ -83,16 +89,21 @@ export function ModelSelectorOption({ descriptionMode, isDescriptionActive, isOp
   descriptionMode: "inline" | "tooltip";
   isDescriptionActive: boolean;
   isOpen: boolean;
-  model: ModelCardModel;
+  model: ModelSelectorModel;
   onActivate: (model: ModelCardModel) => void;
   onDescriptionActivate: () => void;
   popoverRef: RefObject<HTMLElement | null>;
   selected: boolean;
 }) {
+  const msg = useMessages();
   const descriptionId = useId();
   const [activeDescription, setActiveDescription] = useState<{ source: "pointer" | "focus"; anchor: HTMLElement } | null>(null);
   const dismissDescription = useCallback(() => setActiveDescription(null), []);
   const showDescription = descriptionMode === "tooltip" && isOpen;
+  const description = model.responsePrice ? <RichMessage id="chatModelSelector.valueTokensPerResponseValue" values={{
+    value1: <CreditAmount value={model.responsePrice.credits} />,
+    value2: model.responsePrice.maxOutputTokens ? msg("chatModelSelector.upToValueResponseTokens", { value1: tokenAmount(msg, model.responsePrice.maxOutputTokens, "outputTokens") }) : "",
+  }} /> : getModelPresentation(model, msg).description;
 
   return (
     <li
@@ -112,6 +123,7 @@ export function ModelSelectorOption({ descriptionMode, isDescriptionActive, isOp
       onPointerLeave={() => setActiveDescription((active) => active?.source === "pointer" ? null : active)}
     >
       <ModelCard
+        descriptionContent={description}
         descriptionId={descriptionMode === "tooltip" ? descriptionId : undefined}
         descriptionMode={descriptionMode}
         model={model}
@@ -122,7 +134,7 @@ export function ModelSelectorOption({ descriptionMode, isDescriptionActive, isOp
       {showDescription && isDescriptionActive && activeDescription !== null ? (
         <ModelDescriptionTooltip
           anchor={activeDescription.anchor}
-          description={getModelPresentation(model).description}
+          description={description}
           onDismiss={dismissDescription}
           popoverRef={popoverRef}
         />

@@ -34,9 +34,9 @@ describe("ChatScrollToBottom", () => {
     expect(scrollTo).toHaveBeenCalledWith({ behavior: "smooth", top: 1200 });
   });
 
-  it("hides within a few pixels of the bottom and reappears when scrolling up", () => {
+  it.each([false, true])("hides at the bottom and reappears when scrolling up (awaiting response: %s)", (isAwaitingResponse) => {
     const region = createScrollRegion({ scrollTop: 1196.5 });
-    render(<ChatScrollToBottom contentVersion="1" forceScrollRequest={0} scrollContainer={region.element} />);
+    render(<ChatScrollToBottom contentVersion="1" forceScrollRequest={0} isAwaitingResponse={isAwaitingResponse} scrollContainer={region.element} />);
     expect(screen.queryByRole("button", { name: ru.conversations.scrollToLatest })).toBeNull();
 
     region.element.scrollTop = 1180;
@@ -47,9 +47,9 @@ describe("ChatScrollToBottom", () => {
     expect(screen.queryByRole("button", { name: ru.conversations.scrollToLatest })).toBeNull();
   });
 
-  it("updates the bottom state after a viewport resize without requiring a scroll event", () => {
+  it.each([false, true])("updates visibility after resizing without a scroll event (awaiting response: %s)", (isAwaitingResponse) => {
     const region = createScrollRegion({ scrollTop: 100 });
-    render(<ChatScrollToBottom contentVersion="1" forceScrollRequest={0} scrollContainer={region.element} />);
+    render(<ChatScrollToBottom contentVersion="1" forceScrollRequest={0} isAwaitingResponse={isAwaitingResponse} scrollContainer={region.element} />);
     expect(screen.getByRole("button", { name: ru.conversations.scrollToLatest })).toBeVisible();
 
     Object.defineProperty(region.element, "clientHeight", { configurable: true, value: 1500 });
@@ -107,6 +107,12 @@ describe("ChatScrollToBottom", () => {
     expect(screen.getByRole("status", { name: ru.conversations.composerAwaitingResponse })).toBeVisible();
     fireEvent.click(pendingButton);
     expect(region.scrollTo).toHaveBeenCalledWith({ behavior: "smooth", top: 1200 });
+    region.element.scrollTop = 1200;
+    fireEvent.scroll(region.element);
+    expect(screen.queryByRole("button", { name: ru.conversations.scrollToLatest })).toBeNull();
+    region.element.scrollTop = 100;
+    fireEvent.scroll(region.element);
+    expect(screen.getByRole("status", { name: ru.conversations.composerAwaitingResponse })).toBeVisible();
 
     rerender(
       <ChatScrollToBottom

@@ -1,8 +1,12 @@
-import Link from "next/link";
+"use client";
+
+import { useMessages, useDictionary } from "@/i18n/LocaleProvider";
+
+import Link from "@/i18n/Link";
+import type { ReactNode } from "react";
 
 import { CreditAmount } from "@/components/ui/CreditAmount/CreditAmount";
 import selectableStyles from "@/components/ui/selectable-control.module.css";
-import { ru } from "@/i18n/ru";
 
 import { ModelIcon } from "../ModelIcon/ModelIcon";
 
@@ -13,6 +17,7 @@ export type ModelCardModel = {
   artworkSrc?: string;
   default_quality?: string;
   description?: string;
+  description_translations?: Partial<Record<import("@/i18n/locales").Locale, string>>;
   estimate_credits?: number;
   id: string;
   max_reference_images?: number;
@@ -39,6 +44,7 @@ type CatalogueModelCardProps = SharedModelCardProps & {
 };
 
 type SelectorModelCardProps = SharedModelCardProps & {
+  descriptionContent?: ReactNode;
   descriptionId?: string;
   descriptionMode?: "inline" | "tooltip";
   model: ModelCardModel;
@@ -51,8 +57,10 @@ type SelectorModelCardProps = SharedModelCardProps & {
 type ModelCardProps = CatalogueModelCardProps | SelectorModelCardProps;
 
 export function ModelCard(props: Readonly<ModelCardProps>) {
+  const msg = useMessages();
+  const t = useDictionary();
   const { className, model, testId } = props;
-  const presentation = getModelPresentation(model);
+  const presentation = getModelPresentation(model, msg);
 
   if (props.variant === "selector") {
     const classNames = [
@@ -74,7 +82,7 @@ export function ModelCard(props: Readonly<ModelCardProps>) {
         <span className={styles.selectorCopy}>
           <span className={styles.selectorTitle}>{model.name}</span>
           <span className={styles.selectorDescription} hidden={props.descriptionMode === "tooltip"} id={props.descriptionId}>
-            {presentation.description}
+            {props.descriptionContent ?? presentation.description}
           </span>
         </span>
       </button>
@@ -115,7 +123,7 @@ export function ModelCard(props: Readonly<ModelCardProps>) {
 
   return (
     <Link
-      aria-label={`${ru.modelsCatalog.openGeneratorLabel}: ${model.name}`}
+      aria-label={`${t.modelsCatalog.openGeneratorLabel}: ${model.name}`}
       className={classNames}
       data-revealed={props.revealed || undefined}
       data-testid={testId}

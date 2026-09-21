@@ -12,7 +12,7 @@
 .statistic,
 .steps li {
   border-radius: var(--radius-lg);
-  background: var(--color-surface);
+  background: var(--color-panel);
 }
 
 .launchCard {
@@ -20,13 +20,13 @@
   isolation: isolate;
   overflow: hidden;
   padding: var(--space-5);
-  border: 0.0625rem solid var(--color-border);
+  border: 0.0625rem solid var(--color-card-border);
   background: radial-gradient(
       circle at 100% 0%,
       color-mix(in srgb, var(--color-accent) 30%, transparent),
       transparent 52%
     ),
-    var(--color-surface);
+    var(--color-panel);
 }
 
 .launchCard::before {

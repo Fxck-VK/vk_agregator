@@ -2,14 +2,16 @@
   position: sticky;
   z-index: 10;
   inset-block-end: 0;
-  inline-size: 100%;
-  padding: var(--space-4) clamp(var(--space-4), 6vw, 5rem) max(var(--space-4), env(safe-area-inset-bottom));
+  inline-size: min(100%, var(--workspace-page-shell-width));
+  margin-inline: auto;
+  padding-block: var(--space-4) max(var(--space-4), env(safe-area-inset-bottom));
+  padding-inline: var(--workspace-page-inline-gutter);
   border: 0;
   background: transparent;
 }
 
-@media (width < 40rem) {
+@media (48rem <= width < 82rem) {
   .dock {
-    padding-inline: var(--space-3);
+    padding-inline: var(--space-4);
   }
 }

@@ -1,5 +1,8 @@
 "use client";
 
+import { useMessages } from "@/i18n/LocaleProvider";
+
+
 import { useRef, useState, type CSSProperties } from "react";
 
 import { InputControlChip } from "@/components/ui/InputControlChip/InputControlChip";
@@ -31,6 +34,7 @@ type ImageAspectRatioSelectorProps = {
 };
 
 export function ImageAspectRatioSelector({ disabled, onChange, portalLayer, value, options = IMAGE_ASPECT_RATIOS }: Readonly<ImageAspectRatioSelectorProps>) {
+  const msg = useMessages();
   const [isOpen, setIsOpen] = useState(false);
   const triggerRef = useRef<HTMLButtonElement>(null);
 
@@ -39,7 +43,7 @@ export function ImageAspectRatioSelector({ disabled, onChange, portalLayer, valu
       <InputControlChip
         aria-expanded={isOpen}
         aria-haspopup="dialog"
-        aria-label={`Соотношение сторон: ${value}`}
+        aria-label={msg("imageAspectRatioSelector.aspectRatioValue", { value1: value })}
         className={styles.trigger}
         disabled={disabled}
         onClick={() => setIsOpen((current) => !current)}
@@ -52,12 +56,12 @@ export function ImageAspectRatioSelector({ disabled, onChange, portalLayer, valu
       <PopoverPanel
         anchorRef={triggerRef}
         isOpen={isOpen}
-        label="Соотношение сторон"
+        label={msg("imageAspectRatioSelector.aspectRatio")}
         onClose={() => setIsOpen(false)}
         portalLayer={portalLayer}
         width={544}
       >
-        <p className={styles.title}>Соотношение сторон</p>
+        <p className={styles.title}>{msg("imageAspectRatioSelector.aspectRatio")}</p>
         <div className={styles.options} role="radiogroup">
           {options.map((ratio) => {
             const selected = ratio === value;

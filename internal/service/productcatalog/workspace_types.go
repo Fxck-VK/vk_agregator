@@ -7,11 +7,16 @@ import (
 	"vk-ai-aggregator/internal/service/textgeneration"
 )
 
+// Web transport bounds; provider/model limits may be narrower.
+const WebReferenceMaxBytes = 20 << 20
+const WebReferenceMaxDimension = 4096
+
 type WorkspaceConfig struct {
-	TextModels  []textgeneration.PublicModel
-	ImageModels []imagegeneration.PublicModel
-	VideoRoutes []VideoRoute
-	Pricing     imagegeneration.SnapshotCatalog
+	ImageReferenceUploads bool
+	TextModels            []textgeneration.PublicModel
+	ImageModels           []imagegeneration.PublicModel
+	VideoRoutes           []VideoRoute
+	Pricing               imagegeneration.SnapshotCatalog
 }
 
 type WorkspaceModelList struct {

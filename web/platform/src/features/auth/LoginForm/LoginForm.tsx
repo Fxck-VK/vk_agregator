@@ -1,16 +1,21 @@
 "use client";
 
+import { StateNotice, LoadingIndicator } from "@/components/ui/AsyncState/AsyncState";
+import { useDictionary } from "@/i18n/LocaleProvider";
+import { LanguageSwitcher } from "@/i18n/LanguageSwitcher";
+
+
 import { type FormEvent, useState } from "react";
-import { useRouter } from "next/navigation";
+import { useRouter } from "@/i18n/navigation";
 
 import { Button } from "@/components/ui/Button/Button";
-import { ru } from "@/i18n/ru";
 import { safeReturnPath } from "@/lib/auth/return-path";
 import { webBrowserFetch } from "@/lib/web-api/browser";
 
 import styles from "./LoginForm.module.css";
 
 export function LoginForm({ returnTo }: Readonly<{ returnTo?: string }>) {
+  const t = useDictionary();
   const router = useRouter();
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
@@ -44,8 +49,9 @@ export function LoginForm({ returnTo }: Readonly<{ returnTo?: string }>) {
 
   return (
     <form className={styles.form} onSubmit={submit}>
+      <LanguageSwitcher />
       <div className={styles.field}>
-        <label htmlFor="login-email">{ru.login.emailLabel}</label>
+        <label htmlFor="login-email">{t.login.emailLabel}</label>
         <input
           autoComplete="email"
           disabled={isPending}
@@ -58,7 +64,7 @@ export function LoginForm({ returnTo }: Readonly<{ returnTo?: string }>) {
         />
       </div>
       <div className={styles.field}>
-        <label htmlFor="login-password">{ru.login.passwordLabel}</label>
+        <label htmlFor="login-password">{t.login.passwordLabel}</label>
         <input
           autoComplete="current-password"
           disabled={isPending}
@@ -71,12 +77,13 @@ export function LoginForm({ returnTo }: Readonly<{ returnTo?: string }>) {
         />
       </div>
       {hasError ? (
-        <p className={styles.error} role="alert">
-          {ru.login.failure}
-        </p>
+        <StateNotice inline kind="error">
+          {t.login.failure}
+        </StateNotice>
       ) : null}
       <Button disabled={isPending} type="submit">
-        {isPending ? ru.login.pending : ru.login.submitLabel}
+        {isPending ? <span aria-hidden="true"><LoadingIndicator label="" /></span> : null}
+        {isPending ? t.login.pending : t.login.submitLabel}
       </Button>
     </form>
   );

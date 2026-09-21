@@ -41,6 +41,7 @@ import (
 	"vk-ai-aggregator/internal/platform/tracing"
 	"vk-ai-aggregator/internal/service/accountauth"
 	"vk-ai-aggregator/internal/service/accountlink"
+	"vk-ai-aggregator/internal/service/artifactservice"
 	"vk-ai-aggregator/internal/service/imagegeneration"
 	"vk-ai-aggregator/internal/service/joborchestrator"
 	"vk-ai-aggregator/internal/service/maintenance"
@@ -325,6 +326,15 @@ func main() {
 		webChatMessageRateWindow,
 	)
 	webImagePreparedExpiry := preparedjobexpiry.New(postgres.NewPreparedWebImageExpiryRepository(pool))
+	var webInputs websession.InputArtifactService
+	var webInputObjects websession.ImageArtifactObjectReader
+	if objects, ok := webArtifactURLSigner.(interface {
+		artifactservice.ObjectStore
+		websession.ImageArtifactObjectReader
+	}); ok && cfg.MediaReferenceUploadsEnabled {
+		webInputs = artifactservice.New(core.Artifacts, objects, "artifacts")
+		webInputObjects = objects
+	}
 	web := websession.NewHandler(websession.Config{
 		TestPaymentsEnabled:         apiapp.WebTestPaymentsEnabled(&cfg),
 		VideoRoutes:                 runtimeCatalog.VideoRoutes(),
@@ -333,6 +343,7 @@ func main() {
 		ImageModels:                 webImageModelsFromRuntimeCatalog(runtimeCatalog.ImageModels()),
 		ImageArtifactRedirectPolicy: webArtifactRedirectPolicy,
 	}, websession.Deps{
+		InputArtifacts: webInputs, InputObjects: webInputObjects,
 		Payments:               core.Payment,
 		ReceiptContacts:        core.Account,
 		PaymentCreateLimiter:   ratelimit.NewRedisFixedWindowLimiter(rdb, "web_payment_create", 10, time.Minute),

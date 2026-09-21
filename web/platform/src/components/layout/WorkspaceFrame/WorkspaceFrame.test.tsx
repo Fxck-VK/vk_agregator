@@ -255,7 +255,7 @@ describe("WorkspaceFrame", () => {
 
     const loginActions = screen.getAllByRole("link", { name: ru.login.submitLabel });
     expect(loginActions).toHaveLength(2);
-    loginActions.forEach((link) => expect(link).toHaveAttribute("href", "/login"));
+    loginActions.forEach((link) => expect(link).toHaveAttribute("href", "/ru/login"));
     expect(screen.getByText("Guest landing")).toBeInTheDocument();
     expect(screen.queryByTestId("workspace-balance")).not.toBeInTheDocument();
     expect(screen.queryByRole("heading", { name: ru.conversations.recentHeading })).not.toBeInTheDocument();

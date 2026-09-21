@@ -131,8 +131,8 @@ describe("FilesWorkspace", () => {
 
     const image = await screen.findByRole("img", { name: ru.files.generatedImageAlt });
     expect(webBrowserFetch).toHaveBeenNthCalledWith(1, "/web/v1/image-jobs?limit=12");
-    expect(webBrowserFetch).toHaveBeenNthCalledWith(2, `/web/v1/image-jobs/${firstSucceededJob.id}/result`);
-    expect(image).toHaveAttribute("src", "/web/v1/image-artifacts/6ca96a58-a902-4f23-a92a-6726e1a0cd20");
+    expect(webBrowserFetch).toHaveBeenNthCalledWith(2, `/web/v1/image-jobs/${firstSucceededJob.id}/result`, expect.objectContaining({ signal: expect.any(AbortSignal) }));
+    expect(image).toHaveAttribute("src", "/web/v1/image-artifacts/6ca96a58-a902-4f23-a92a-6726e1a0cd20?preview=1");
     expect(screen.queryByText("https://objects.example.test/private-key")).not.toBeInTheDocument();
   });
 
@@ -245,7 +245,7 @@ describe("FilesWorkspace", () => {
     }));
 
     await waitFor(() => {
-      expect(webBrowserFetch).toHaveBeenCalledWith(`/web/v1/image-jobs/${secondSucceededJob.id}/result`);
+      expect(webBrowserFetch).toHaveBeenCalledWith(`/web/v1/image-jobs/${secondSucceededJob.id}/result`, expect.objectContaining({ signal: expect.any(AbortSignal) }));
     });
     expect(screen.getByRole("button", {
       name: `Загружаем файл: ${secondSucceededJob.prompt}`,
@@ -289,7 +289,7 @@ describe("FilesWorkspace", () => {
 
     expect(await screen.findByRole("img", { name: ru.files.generatedImageAlt })).toHaveAttribute(
       "src",
-      "/web/v1/image-artifacts/6ca96a58-a902-4f23-a92a-6726e1a0cd20",
+      "/web/v1/image-artifacts/6ca96a58-a902-4f23-a92a-6726e1a0cd20?preview=1",
     );
   });
 

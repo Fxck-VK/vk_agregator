@@ -1,6 +1,10 @@
 "use client";
 
-import { useRouter } from "next/navigation";
+import { StateNotice } from "@/components/ui/AsyncState/AsyncState";
+import { useDictionary } from "@/i18n/LocaleProvider";
+
+
+import { useRouter } from "@/i18n/navigation";
 import {
   createContext,
   type ReactNode,
@@ -14,7 +18,6 @@ import {
 import { clearPendingConversationPrompts } from "@/features/conversations/pending-conversation-prompt";
 import { clearPendingConversationBootstraps } from "@/features/conversations/pending-conversation-bootstrap";
 import { clearPendingConversationTitleSyncs } from "@/features/conversations/pending-conversation-title-sync";
-import { ru } from "@/i18n/ru";
 
 import { requestWorkspaceLogout } from "./workspace-logout-request";
 import styles from "./WorkspaceLogoutBoundary.module.css";
@@ -54,6 +57,7 @@ function clearPrivateBrowserState() {
 }
 
 export function WorkspaceLogoutBoundary({ children, guest }: WorkspaceLogoutBoundaryProps) {
+  const t = useDictionary();
   const router = useRouter();
   const [phase, setPhase] = useState<WorkspaceLogoutPhase>("authenticated");
   const phaseRef = useRef<WorkspaceLogoutPhase>("authenticated");
@@ -176,12 +180,7 @@ export function WorkspaceLogoutBoundary({ children, guest }: WorkspaceLogoutBoun
         <div aria-hidden="true" className={styles.transitionVeil} data-testid="workspace-logout-transition" />
       ) : null}
       {phase === "failed" ? (
-        <div aria-live="polite" className={styles.failureNotice} role="status">
-          <span>{ru.account.logoutServerFailure}</span>
-          <button className={styles.retryButton} onClick={runLogout} type="button">
-            {ru.account.logoutRetryLabel}
-          </button>
-        </div>
+        <StateNotice role="status" className={styles.failureNotice} kind="error" action={{ label: t.account.logoutRetryLabel, onClick: runLogout }}>{t.account.logoutServerFailure}</StateNotice>
       ) : null}
     </WorkspaceLogoutContext.Provider>
   );

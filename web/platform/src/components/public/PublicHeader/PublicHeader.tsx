@@ -1,4 +1,4 @@
-import Link from "next/link";
+import Link from "@/i18n/Link";
 
 import { ScrollArea } from "@/components/ui/ScrollArea/ScrollArea";
 import type { PublicDictionary } from "@/i18n/public/dictionary";

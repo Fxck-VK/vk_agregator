@@ -1,5 +1,8 @@
 "use client";
 
+import { useMessages } from "@/i18n/LocaleProvider";
+
+
 import { useCallback, useState } from "react";
 
 import { CreditAmount, getCreditAmountLabel } from "@/components/ui/CreditAmount/CreditAmount";
@@ -12,9 +15,10 @@ type BalanceTopUpButtonProps = {
 };
 
 export function BalanceTopUpButton({ balance, className }: Readonly<BalanceTopUpButtonProps>) {
+  const msg = useMessages();
   const [dialogIsOpen, setDialogIsOpen] = useState(false);
   const closeDialog = useCallback(() => setDialogIsOpen(false), []);
-  const accessibleLabel = `Пополнить баланс токенов. Текущий баланс: ${getCreditAmountLabel(balance)}`;
+  const accessibleLabel = msg("balanceTopUpButton.topUpTokensCurrentBalanceValue", { value1: getCreditAmountLabel(balance, undefined, msg) });
 
   return (
     <>

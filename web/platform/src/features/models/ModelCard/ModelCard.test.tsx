@@ -135,7 +135,7 @@ describe("ModelCard", () => {
 
     expect(screen.getByRole("link", { name: /Nano Banana/i })).toHaveAttribute(
       "href",
-      "/app/chats?model=nano-banana-2",
+      "/ru/app/chats?model=nano-banana-2",
     );
     expect(screen.queryByText(ru.modelsCatalog.openGeneratorLabel)).not.toBeInTheDocument();
     expect(screen.queryByText(/provider|price|description/i)).not.toBeInTheDocument();
@@ -233,7 +233,7 @@ describe("ModelCard", () => {
       />,
     );
 
-    expect(screen.getByRole("link")).toHaveAttribute("href", "/app/chats?model=gpt_image_2_5_flare");
+    expect(screen.getByRole("link")).toHaveAttribute("href", "/ru/app/chats?model=gpt_image_2_5_flare");
     expect(screen.getByRole("heading", { name: "GPT Image 2.5 Flare" })).toBeVisible();
     expect(screen.queryByText("1K-medium")).not.toBeInTheDocument();
   });

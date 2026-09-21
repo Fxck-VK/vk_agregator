@@ -19,7 +19,7 @@ describe("AppShell floating panel gaps", () => {
       /\.workspace\s*\{[^}]*position:\s*relative;[^}]*margin-inline-start:\s*var\(--sidebar-width\);/s,
     );
     expect(stylesheet).toMatch(
-      /\.sidebar\s*\{[^}]*position:\s*absolute;[^}]*inline-size:\s*calc\(var\(--sidebar-width\) \+ var\(--radius-lg\)\);[^}]*padding:\s*0;[^}]*padding-inline-end:\s*var\(--radius-lg\);[^}]*background:\s*var\(--color-panel\);/s,
+      /\.sidebar\s*\{[^}]*position:\s*absolute;[^}]*inline-size:\s*calc\(var\(--sidebar-width\) \+ var\(--radius-lg\)\);[^}]*padding:\s*0;[^}]*padding-inline-end:\s*var\(--radius-lg\);[^}]*background:\s*var\(--color-sidebar, var\(--color-panel\)\);/s,
     );
     expect(stylesheet).toMatch(
       /\.shell\[data-desktop-sidebar-collapsed="true"\] \.sidebar\s*\{[^}]*inline-size:\s*calc\(var\(--sidebar-collapsed-rail-width\) \+ var\(--radius-lg\)\);/s,
@@ -34,9 +34,9 @@ describe("AppShell floating panel gaps", () => {
       /\.shell\s*\{[^}]*--app-shell-edge-gap:\s*var\(--app-workspace-edge-gap\);/s,
     );
     expect(stylesheet).toMatch(
-      /\.workspace\s*\{[^}]*block-size:\s*100dvh;[^}]*margin-block:\s*0;[^}]*margin-inline-end:\s*var\(--app-shell-edge-gap\);[^}]*border-radius:\s*var\(--radius-lg\) 0 0 var\(--radius-lg\);/s,
+      /\.workspace\s*\{[^}]*block-size:\s*100dvh;[^}]*margin-block:\s*0;[^}]*margin-inline-end:\s*var\(--app-shell-edge-gap\);[^}]*border-start-start-radius:\s*var\(--radius-lg\);[^}]*border-end-start-radius:\s*var\(--radius-lg\);/s,
     );
-    expect(stylesheet).toMatch(/\.workspaceScroller\s*\{[^}]*background:\s*var\(--color-background\);/s);
+    expect(stylesheet).toMatch(/\.workspaceScroller\s*\{[^}]*background:\s*var\(--color-workspace\);/s);
     expect(stylesheet).not.toMatch(/\.workspaceScroller\s*\{[^}]*margin-inline-end:/s);
     expect(stylesheet).toMatch(
       /@media \(width < 48rem\)\s*\{[\s\S]*?\.workspace\s*\{[^}]*margin:\s*0;/s,

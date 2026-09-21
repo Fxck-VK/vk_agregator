@@ -1,3 +1,5 @@
+import { getTranslator, type Translator } from "@/i18n/messages";
+
 import { useEffect, useState } from "react";
 
 import { loadModelCatalog } from "@/features/models/model-catalog-cache";
@@ -39,12 +41,17 @@ const videoCategory = "video" satisfies Exclude<ModelSelectorCategory, "popular"
 
 let modelCatalogLoaderForTests: ModelCatalogLoader | null = null;
 
-export const fileModelTaskConfiguration = {
-  animate: { label: "Оживить" },
-  enhance: { label: "Улучшить" },
-  "remove-background": { label: "Удалить фон" },
-  edit: { label: "Редактировать" },
-} as const satisfies Record<FileModelTask, FileModelTaskConfiguration>;
+export function getFileModelTaskConfiguration(msg: Translator = getTranslator("ru")) {
+
+  return {
+    animate: { label: msg("fileActionModels.animate") },
+    enhance: { label: msg("fileActionModels.enhance") },
+    "remove-background": { label: msg("fileActionModels.removeBackground") },
+    edit: { label: msg("fileActionModels.edit") },
+  } as const satisfies Record<FileModelTask, FileModelTaskConfiguration>;
+}
+
+export const fileModelTaskConfiguration = getFileModelTaskConfiguration();
 
 function getModelCatalogLoader(): ModelCatalogLoader {
   return modelCatalogLoaderForTests ?? loadModelCatalog;
@@ -141,6 +148,7 @@ function actionModelFromOperation(
     category,
     cost,
     description: model.description ?? "",
+    ...(model.description_translations ? { description_translations: model.description_translations } : {}),
     id: model.id,
     isFree: cost === 0,
     name: model.name,

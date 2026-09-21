@@ -1,5 +1,11 @@
 "use client";
 
+import { useMessages } from "@/i18n/LocaleProvider";
+import { actionCreditAmount } from "@/i18n/counts";
+import { RichMessage } from "@/i18n/RichMessage";
+import { CreditAmount } from "@/components/ui/CreditAmount/CreditAmount";
+
+
 import Image from "next/image";
 import { useState } from "react";
 
@@ -18,31 +24,6 @@ type FileModelActionPanelProps = {
   titleIconSrc: string;
 };
 
-function CreditStar() {
-  return (
-    <Image
-      alt=""
-      aria-hidden="true"
-      className={styles.creditStar}
-      height={18}
-      src="/assets/icons/ui/star-white.svg"
-      unoptimized
-      width={18}
-    />
-  );
-}
-
-function getActionCreditAmountLabel(value: number): string {
-  const absoluteValue = Math.abs(value);
-  const lastTwoDigits = absoluteValue % 100;
-  const lastDigit = absoluteValue % 10;
-
-  if (lastTwoDigits >= 11 && lastTwoDigits <= 14) return `${value} звёзд`;
-  if (lastDigit === 1) return `${value} звезду`;
-  if (lastDigit >= 2 && lastDigit <= 4) return `${value} звезды`;
-  return `${value} звёзд`;
-}
-
 function FileModelActionPanel({
   actionLabel,
   panelLabel,
@@ -50,12 +31,13 @@ function FileModelActionPanel({
   title,
   titleIconSrc,
 }: Readonly<FileModelActionPanelProps>) {
+  const msg = useMessages();
   const { models, status } = useFileActionModels(task);
   const [selectedModelId, setSelectedModelId] = useState("");
   const selectedModel = models.find((model) => model.id === selectedModelId) ?? models[0] ?? null;
   const actionButtonLabel = selectedModel === null
-    ? `${actionLabel} недоступно`
-    : `${actionLabel} за ${getActionCreditAmountLabel(selectedModel.cost)}`;
+    ? msg("fileAnimationPanel.valueUnavailable", { value1: actionLabel })
+    : msg("fileAnimationPanel.valueForValue", { value1: actionLabel, value2: actionCreditAmount(msg, selectedModel.cost) });
 
   return (
     <section aria-label={panelLabel} className={styles.panel}>
@@ -72,7 +54,7 @@ function FileModelActionPanel({
       </header>
 
       <div className={styles.modelControl}>
-        <span className={styles.modelLabel}>Модель</span>
+        <span className={styles.modelLabel}>{msg("fileAnimationPanel.model")}</span>
         <FileTaskModelSelector
           models={models}
           onSelect={setSelectedModelId}
@@ -91,10 +73,7 @@ function FileModelActionPanel({
         {selectedModel === null ? (
           actionButtonLabel
         ) : (
-          <>
-            {actionLabel} за {selectedModel.cost}
-            <CreditStar />
-          </>
+          <RichMessage id="fileAnimationPanel.valueForValue" values={{ value1: actionLabel, value2: <CreditAmount aria-hidden="true" value={selectedModel.cost} /> }} />
         )}
       </button>
     </section>
@@ -102,36 +81,39 @@ function FileModelActionPanel({
 }
 
 export function FileAnimationPanel() {
+  const msg = useMessages();
   return (
     <FileModelActionPanel
-      actionLabel="Оживить"
-      panelLabel="Настройки анимации"
+      actionLabel={msg("fileAnimationPanel.animate")}
+      panelLabel={msg("fileAnimationPanel.animationSettings")}
       task="animate"
-      title="Оживить"
+      title={msg("fileAnimationPanel.animate")}
       titleIconSrc="/assets/icons/ui/animate-white.svg"
     />
   );
 }
 
 export function FileEnhancementPanel() {
+  const msg = useMessages();
   return (
     <FileModelActionPanel
-      actionLabel="Улучшить"
-      panelLabel="Настройки улучшения"
+      actionLabel={msg("fileAnimationPanel.enhance")}
+      panelLabel={msg("fileAnimationPanel.enhancementSettings")}
       task="enhance"
-      title="Улучшить"
+      title={msg("fileAnimationPanel.enhance")}
       titleIconSrc="/assets/icons/ui/enhance-white.svg"
     />
   );
 }
 
 export function FileBackgroundRemovalPanel() {
+  const msg = useMessages();
   return (
     <FileModelActionPanel
-      actionLabel="Удалить фон"
-      panelLabel="Настройки удаления фона"
+      actionLabel={msg("fileAnimationPanel.removeBackground")}
+      panelLabel={msg("fileAnimationPanel.backgroundRemovalSettings")}
       task="remove-background"
-      title="Удалить фон"
+      title={msg("fileAnimationPanel.removeBackground")}
       titleIconSrc="/assets/icons/ui/remove-background-white.svg"
     />
   );

@@ -1,0 +1,14 @@
+.page { display: grid; gap: var(--space-8); padding-block: var(--space-6) var(--space-8); }
+.page h1, .page h2 { margin: 0; }
+.page header p { color: var(--color-text-muted); line-height: var(--line-height-ui); }
+.page section { display: grid; gap: var(--space-4); scroll-margin-block-start: calc(var(--header-height) + var(--space-6)); }
+.page section > a { color: var(--color-accent); justify-self: start; }
+.card { inline-size: min(100%, 18rem); }
+.data { display: grid; gap: var(--space-4); }
+.heading { inline-size: 50%; block-size: 2rem; }
+.input { block-size: 8rem; }
+.description { margin: 0; color: var(--color-text-muted); line-height: var(--line-height-ui); }
+.controls { display: flex; flex-wrap: wrap; gap: var(--space-3); }
+.batchImage { aspect-ratio: var(--generation-aspect-ratio); min-inline-size: 0; overflow: hidden; border: 1px solid var(--color-card-border); border-radius: var(--radius-md); }
+.batchImage button { block-size: 100%; }
+.batchImage button img { block-size: 100%; object-fit: cover; }

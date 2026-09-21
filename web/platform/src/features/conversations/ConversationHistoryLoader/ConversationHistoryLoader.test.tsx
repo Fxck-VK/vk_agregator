@@ -79,12 +79,14 @@ describe("ConversationHistoryLoader", () => {
     vi.unstubAllGlobals();
   });
 
-  it("keeps a cold load visually empty and shows only a delayed top progress line", () => {
+  it("reserves history geometry and offers a draft during a cold load", () => {
     vi.useFakeTimers();
     vi.mocked(webBrowserFetch).mockReturnValueOnce(new Promise<Response>(() => {}));
 
     renderLoader();
 
+    expect(screen.getByLabelText(ru.conversations.composerLabel)).toBeEnabled();
+    expect(document.querySelectorAll('[data-ui="skeleton"]').length).toBeGreaterThan(0);
     expect(screen.queryByText(ru.conversations.historyLoadEarlierPending)).not.toBeInTheDocument();
     expect(screen.queryByRole("progressbar")).not.toBeInTheDocument();
 
@@ -118,6 +120,8 @@ describe("ConversationHistoryLoader", () => {
     renderLoader({ cacheHistory: cachedHistory });
 
     expect(screen.getByText("cached private message")).toBeInTheDocument();
+    const input = screen.getByLabelText(ru.conversations.composerLabel);
+    fireEvent.change(input, { target: { value: "Не потерять" } });
     resolveRevalidation(
       Response.json({
         items: [
@@ -134,6 +138,8 @@ describe("ConversationHistoryLoader", () => {
 
     expect(await screen.findByText("fresh private message")).toBeInTheDocument();
     expect(screen.queryByText("cached private message")).not.toBeInTheDocument();
+    expect(screen.getByLabelText(ru.conversations.composerLabel)).toBe(input);
+    expect(input).toHaveValue("Не потерять");
   });
 
   it("does not cache a not-found history", async () => {

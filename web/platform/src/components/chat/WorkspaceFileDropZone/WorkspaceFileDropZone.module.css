@@ -1,0 +1,40 @@
+.overlay {
+  position: absolute;
+  z-index: 90;
+  inset: 0;
+  display: grid;
+  place-items: center;
+  padding: var(--space-6);
+  border-radius: inherit;
+  background: var(--modal-backdrop-background, rgb(3 3 6 / 80%));
+  color: var(--color-text);
+  backdrop-filter: blur(0.25rem);
+  pointer-events: none;
+}
+
+.message {
+  display: grid;
+  justify-items: center;
+  gap: var(--space-3);
+  max-inline-size: 30rem;
+  text-align: center;
+}
+
+.message strong {
+  font-size: clamp(1.25rem, 3vw, var(--font-size-section));
+  line-height: 1.25;
+  font-weight: var(--font-weight-semibold);
+}
+
+.message p {
+  margin: 0;
+  color: var(--color-text-muted);
+  font-size: var(--font-size-body);
+}
+
+.artwork {
+  inline-size: 10rem;
+  block-size: auto;
+  object-fit: contain;
+  margin-block-end: var(--space-4);
+}

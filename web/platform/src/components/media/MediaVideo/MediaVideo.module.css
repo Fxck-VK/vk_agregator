@@ -1,0 +1,9 @@
+.root { position: relative; display: grid; inline-size: 100%; block-size: 100%; min-inline-size: 0; min-block-size: 0; border-radius: inherit; }
+.root > video { display: block; inline-size: 100%; block-size: 100%; max-inline-size: 100%; object-fit: contain; border-radius: inherit; }
+.root[data-fit="cover"] > video { object-fit: cover; }
+.poster { position: absolute; inset: 0; z-index: 1; display: block; inline-size: 100%; block-size: 100%; object-fit: contain; border-radius: inherit; pointer-events: none; }
+.poster[hidden] { display: none; }
+.root[data-fit="cover"] > .poster { object-fit: cover; }
+.overlay { position: absolute; z-index: 3; inset: 0; display: grid; border-radius: inherit; --media-state-min-size: 0; }
+.overlay[data-over-poster] { --state-background: transparent; }
+.overlay[data-passive] { pointer-events: none; }

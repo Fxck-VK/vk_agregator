@@ -3,8 +3,10 @@ import { Geist } from "next/font/google";
 import { headers } from "next/headers";
 import type { ReactNode } from "react";
 
-import { themeBootstrapScript } from "@/features/theme/theme-preference";
-import { ru } from "@/i18n/ru";
+import { ThemeBootstrapScript } from "@/features/theme/ThemeBootstrapScript";
+import { RouteLocaleProvider } from "@/i18n/RouteLocaleProvider";
+import { getLocaleDirection } from "@/i18n/locales";
+import { getRequestDictionary, getRequestLocale } from "@/i18n/server";
 
 import "./globals.css";
 
@@ -14,9 +16,7 @@ const geistSans = Geist({
   variable: "--font-geist-sans",
 });
 
-export const metadata: Metadata = {
-  title: ru.document.title,
-  description: ru.document.description,
+const baseMetadata: Metadata = {
   icons: {
     icon: [
       {
@@ -41,19 +41,21 @@ export const metadata: Metadata = {
   },
 };
 
+export async function generateMetadata(): Promise<Metadata> {
+  const t = await getRequestDictionary();
+  return { ...baseMetadata, title: t.document.title, description: t.document.description };
+}
+
 export default async function RootLayout({ children }: Readonly<{ children: ReactNode }>) {
   const nonce = (await headers()).get("x-nonce") ?? undefined;
+  const locale = await getRequestLocale();
 
   return (
-    <html className={geistSans.variable} data-theme="system" lang="ru" suppressHydrationWarning>
+    <html className={geistSans.variable} data-theme="system" dir={getLocaleDirection(locale)} lang={locale} suppressHydrationWarning>
       <head>
-        <script
-          dangerouslySetInnerHTML={{ __html: themeBootstrapScript }}
-          nonce={nonce}
-          suppressHydrationWarning
-        />
+        <ThemeBootstrapScript nonce={nonce} />
       </head>
-      <body>{children}</body>
+      <body><RouteLocaleProvider locale={locale}>{children}</RouteLocaleProvider></body>
     </html>
   );
 }

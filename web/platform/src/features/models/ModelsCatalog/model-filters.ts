@@ -1,6 +1,7 @@
 import type { ModelSelectorCategoryId } from "../WorkspaceModelSelector/model-selector-sections";
 
 export type ModelCatalogModel = {
+  category?: string;
   categories?: readonly string[];
   id: string;
   name: string;
@@ -14,13 +15,20 @@ export type ModelCatalogFilters = {
 
 export type ImageModelSort = "catalog" | "name";
 
+export function matchesModelCatalogCategory(model: Pick<ModelCatalogModel, "categories" | "category">, category: ModelSelectorCategoryId) {
+  if (category === "video" || category === "audio") {
+    return (model.categories?.includes("video-audio") ?? false) && model.category === category;
+  }
+  return model.categories?.includes(category) ?? false;
+}
+
 export function filterCatalogModels<T extends ModelCatalogModel>(models: readonly T[], filters: ModelCatalogFilters): T[] {
   const query = filters.query.trim().toLowerCase();
 
   return models.filter((model) => {
     const matchesQuery =
       query === "" || model.name.toLowerCase().includes(query) || model.id.toLowerCase().includes(query);
-    const matchesCategory = model.categories?.includes(filters.category) ?? false;
+    const matchesCategory = matchesModelCatalogCategory(model, filters.category);
 
     return matchesQuery && matchesCategory;
   });

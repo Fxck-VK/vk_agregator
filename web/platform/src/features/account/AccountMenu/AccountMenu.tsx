@@ -1,6 +1,8 @@
 "use client";
 
-import Link from "next/link";
+import { useDictionary } from "@/i18n/LocaleProvider";
+
+import Link from "@/i18n/Link";
 import { type ReactNode, useEffect, useRef, useState } from "react";
 
 import { LogoutIcon } from "@/components/icons/LogoutIcon";
@@ -19,9 +21,9 @@ import {
   readThemePreference,
   type ThemePreference,
 } from "@/features/theme/theme-preference";
-import { ru } from "@/i18n/ru";
 
 import styles from "./AccountMenu.module.css";
+import { LanguageSwitcher } from "@/i18n/LanguageSwitcher";
 
 type AccountMenuProps = {
   identityLabel: string;
@@ -33,12 +35,6 @@ type AccountMenuProps = {
 const menuId = "account-menu";
 const updatesPanelId = "account-updates-panel";
 
-const themeOptions: readonly ModeSwitchPanelItem<ThemePreference>[] = [
-  { id: "system", label: ru.account.systemThemeLabel, icon: <MonitorIcon /> },
-  { id: "light", label: ru.account.lightThemeLabel, icon: <SunIcon /> },
-  { id: "dark", label: ru.account.darkThemeLabel, icon: <MoonIcon /> },
-];
-
 function AccountIcon({ children }: { children: ReactNode }) {
   return (
     <svg aria-hidden="true" viewBox="0 0 24 24">
@@ -48,6 +44,13 @@ function AccountIcon({ children }: { children: ReactNode }) {
 }
 
 export function AccountMenu({ identityLabel, isLogoutPending, logoutFailure, onLogout }: AccountMenuProps) {
+  const t = useDictionary();
+  const themeOptions: readonly ModeSwitchPanelItem<ThemePreference>[] = [
+    { id: "system", label: t.account.systemThemeLabel, icon: <MonitorIcon /> },
+    { id: "light", label: t.account.lightThemeLabel, icon: <SunIcon /> },
+    { id: "dark", label: t.account.darkThemeLabel, icon: <MoonIcon /> },
+  ];
+
   const [isOpen, setIsOpen] = useState(false);
   const [isUpdatesOpen, setIsUpdatesOpen] = useState(false);
   const [themePreference, setThemePreference] = useState<ThemePreference>(() =>
@@ -103,7 +106,7 @@ export function AccountMenu({ identityLabel, isLogoutPending, logoutFailure, onL
   return (
     <div className={styles.root} ref={rootRef}>
       <PopoverSurface
-        aria-label={ru.account.menuLabel}
+        aria-label={t.account.menuLabel}
         className={styles.menu}
         id={menuId}
         isOpen={isOpen}
@@ -122,7 +125,7 @@ export function AccountMenu({ identityLabel, isLogoutPending, logoutFailure, onL
         <div className={`${selectableStyles.actionItems} ${styles.menuList}`}>
           <Link className={`${selectableStyles.control} ${styles.menuAction}`} href="/app/profile" onClick={closeMenu}>
             <ProfileIcon />
-            <span>{ru.account.profileLabel}</span>
+            <span>{t.account.profileLabel}</span>
           </Link>
           <a
             className={`${selectableStyles.control} ${styles.menuAction}`}
@@ -132,7 +135,7 @@ export function AccountMenu({ identityLabel, isLogoutPending, logoutFailure, onL
             target="_blank"
           >
             <SupportIcon />
-            <span>{ru.account.supportLabel}</span>
+            <span>{t.account.supportLabel}</span>
           </a>
           <button
             aria-controls={updatesPanelId}
@@ -142,14 +145,15 @@ export function AccountMenu({ identityLabel, isLogoutPending, logoutFailure, onL
             type="button"
           >
             <MegaphoneIcon />
-            <span>{ru.account.updatesLabel}</span>
+            <span>{t.account.updatesLabel}</span>
           </button>
         </div>
 
         <div className={styles.themeSection}>
+          <LanguageSwitcher />
           <ModeSwitchPanel
             activeID={themePreference}
-            ariaLabel={ru.account.themeLabel}
+            ariaLabel={t.account.themeLabel}
             className={styles.themeSwitcher}
             iconOnly
             items={themeOptions}
@@ -160,7 +164,7 @@ export function AccountMenu({ identityLabel, isLogoutPending, logoutFailure, onL
         <div className={`${selectableStyles.actionItems} ${styles.logoutSection}`}>
           <button className={`${selectableStyles.control} ${styles.logoutAction}`} disabled={isLogoutPending} onClick={onLogout} type="button">
             <LogoutIcon />
-            <span>{isLogoutPending ? ru.account.logoutPending : ru.account.logoutLabel}</span>
+            <span>{isLogoutPending ? t.account.logoutPending : t.account.logoutLabel}</span>
           </button>
           {logoutFailure ? (
             <p className={styles.error} role="alert">
@@ -175,10 +179,10 @@ export function AccountMenu({ identityLabel, isLogoutPending, logoutFailure, onL
       <button
         aria-controls={menuId}
         aria-expanded={isOpen}
-        aria-label={isOpen ? ru.account.closeMenuLabel : ru.account.openMenuLabel}
+        aria-label={isOpen ? t.account.closeMenuLabel : t.account.openMenuLabel}
         className={styles.trigger}
         data-sidebar-account-trigger="true"
-        data-sidebar-tooltip={ru.account.profileLabel}
+        data-sidebar-tooltip={t.account.profileLabel}
         data-open={isOpen}
         onClick={toggleMenu}
         ref={triggerRef}

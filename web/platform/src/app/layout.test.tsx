@@ -1,21 +1,34 @@
+vi.mock("server-only", () => ({}));
 import { renderToStaticMarkup } from "react-dom/server";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 vi.mock("next/headers", () => ({
   headers: vi.fn(),
+  cookies: vi.fn(async () => ({ get: () => undefined })),
 }));
 
 vi.mock("next/font/google", () => ({
   Geist: vi.fn(() => ({ variable: "font-geist-sans-test" })),
 }));
 
-import { headers } from "next/headers";
+import { headers, cookies } from "next/headers";
+import { getDictionary } from "@/i18n/dictionary";
 
-import RootLayout, { metadata } from "./layout";
+import RootLayout, { generateMetadata } from "./layout";
 
 describe("RootLayout", () => {
   beforeEach(() => {
     vi.mocked(headers).mockResolvedValue(new Headers({ "x-nonce": "test-theme-nonce" }) as never);
+    vi.mocked(cookies).mockResolvedValue({ get: () => undefined } as never);
+  });
+
+  it("renders the saved locale and localized metadata on the server", async () => {
+    vi.mocked(headers).mockResolvedValue(new Headers({ "x-neirohub-page-locale": "en" }) as never);
+    const markup = renderToStaticMarkup(await RootLayout({ children: <main>Content</main> }));
+    const document = new DOMParser().parseFromString(markup, "text/html");
+    expect(document.documentElement.lang).toBe("en");
+    expect(document.documentElement.dir).toBe("ltr");
+    expect(await generateMetadata()).toMatchObject({ title: getDictionary("en").document.title, description: getDictionary("en").document.description });
   });
 
   it("sets Russian as the document language", async () => {
@@ -40,8 +53,8 @@ describe("RootLayout", () => {
     expect(document.documentElement.classList.contains("font-geist-sans-test")).toBe(true);
   });
 
-  it("uses dedicated square NeiroHub assets for browser and device icons", () => {
-    expect(metadata.icons).toEqual({
+  it("uses dedicated square NeiroHub assets for browser and device icons", async () => {
+    expect((await generateMetadata()).icons).toEqual({
       icon: [
         {
           url: "/assets/brand/favicons/neirohub-favicon-32.png",
@@ -72,13 +85,11 @@ describe("RootLayout", () => {
     const markup = renderToStaticMarkup(layout);
     const document = new DOMParser().parseFromString(markup, "text/html");
     const bootstrapScript = document.querySelector("head script");
-    const head = layout.props.children[0];
-    const bootstrapScriptElement = head.props.children;
 
     expect(document.documentElement.getAttribute("data-theme")).toBe("system");
     expect(bootstrapScript?.textContent).toContain("neirohub.theme");
     expect(bootstrapScript?.getAttribute("nonce")).toBe("test-theme-nonce");
-    expect(bootstrapScriptElement.props.suppressHydrationWarning).toBe(true);
+    expect(bootstrapScript?.getAttribute("type")).toBe("text/plain");
     expect(markup.indexOf("<script")).toBeLessThan(markup.indexOf("<body"));
   });
 });

@@ -67,11 +67,11 @@ describe("SidebarConversations", () => {
     expect(screen.getByRole("heading", { name: ru.conversations.recentHeading })).toBeInTheDocument();
     expect(screen.getByRole("link", { name: "Подготовить макет" })).toHaveAttribute(
       "href",
-      "/app/chat/d7c979f5-24e5-4f88-924b-a592d6e5a906",
+      "/ru/app/chat/d7c979f5-24e5-4f88-924b-a592d6e5a906",
     );
     expect(screen.getByRole("link", { name: ru.conversations.unnamed })).toHaveAttribute(
       "href",
-      "/app/chat/a2a006fc-4457-4bb5-bc4d-4f553d51766b",
+      "/ru/app/chat/a2a006fc-4457-4bb5-bc4d-4f553d51766b",
     );
     expect(screen.queryByText(conversations[0].created_at)).not.toBeInTheDocument();
     expect(screen.queryByText(conversations[0].updated_at)).not.toBeInTheDocument();
@@ -208,6 +208,6 @@ describe("SidebarConversations", () => {
 
     fireEvent.click(screen.getByRole("button", { name: "Add workspace chat" }));
 
-    expect(screen.getByRole("link", { name: addedConversation.title })).toHaveAttribute("href", `/app/chat/${addedConversation.id}`);
+    expect(screen.getByRole("link", { name: addedConversation.title })).toHaveAttribute("href", `/ru/app/chat/${addedConversation.id}`);
   });
 });

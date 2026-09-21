@@ -12,7 +12,7 @@ export const imageFilesPageLimit = 12;
 export const maxConcurrentImageFilePreviews = 2;
 
 type ImageFilePreviewQueueOptions = {
-  fetchResult?: (job: ImageJob) => Promise<ImageJobResult>;
+  fetchResult?: (job: ImageJob, signal?: AbortSignal) => Promise<ImageJobResult>;
   onFailure: (job: ImageJob) => void;
   onStart: (job: ImageJob) => void;
   onSuccess: (job: ImageJob, result: ImageJobResult) => void;
@@ -28,6 +28,7 @@ export function createImageFilePreviewQueue({
   const queuedJobs: ImageJob[] = [];
   let activeRequests = 0;
   let disposed = false;
+  const request = new AbortController();
 
   const drain = () => {
     if (disposed) {
@@ -42,7 +43,7 @@ export function createImageFilePreviewQueue({
 
       activeRequests += 1;
       onStart(job);
-      void fetchResult(job)
+      void fetchResult(job, request.signal)
         .then((result) => {
           if (!disposed) {
             onSuccess(job, result);
@@ -74,6 +75,7 @@ export function createImageFilePreviewQueue({
     },
     dispose() {
       disposed = true;
+      request.abort();
       queuedJobs.length = 0;
       scheduledJobIDs.clear();
     },
@@ -133,8 +135,8 @@ export async function fetchImageFileJob(jobID: string, signal?: AbortSignal): Pr
   return job;
 }
 
-export async function fetchImageFileResult(job: ImageJob): Promise<ImageJobResult> {
-  const response = await webBrowserFetch(`/web/v1/image-jobs/${job.id}/result`);
+export async function fetchImageFileResult(job: ImageJob, signal?: AbortSignal): Promise<ImageJobResult> {
+  const response = await webBrowserFetch(`/web/v1/image-jobs/${job.id}/result`, { signal });
   if (response.status !== 200) {
     throw new Error("Unable to load image file result.");
   }

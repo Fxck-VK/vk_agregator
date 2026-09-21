@@ -27,7 +27,7 @@ describe("RangeSlider styles", () => {
 
     expect(rangeWrapperRule).toContain("block-size: 1.375rem");
     expect(trackLayerRule).toContain("block-size: 1.25rem");
-    expect(trackRule).toContain("background: rgb(8 9 12 / 78%)");
+    expect(trackRule).toContain("background: var(--slider-track-background, rgb(8 9 12 / 78%))");
     expect(trackRule).toContain("border-radius: var(--radius-sm)");
     expect(fillRule).toContain("inline-size: var(--range-slider-fill)");
     expect(fillRule).toContain("background: var(--color-accent)");

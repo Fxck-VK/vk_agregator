@@ -82,7 +82,10 @@ function getTrackSize(track: HTMLElement, orientation: ScrollAreaOrientation) {
 }
 
 function getScrollPosition(viewport: HTMLElement, orientation: ScrollAreaOrientation) {
-  return orientation === "horizontal" ? viewport.scrollLeft : viewport.scrollTop;
+  if (orientation !== "horizontal") return viewport.scrollTop;
+  return getComputedStyle(viewport).direction === "rtl"
+    ? viewport.scrollWidth - viewport.clientWidth + viewport.scrollLeft
+    : viewport.scrollLeft;
 }
 
 function setScrollPosition(
@@ -91,7 +94,9 @@ function setScrollPosition(
   value: number,
 ) {
   if (orientation === "horizontal") {
-    viewport.scrollLeft = value;
+    viewport.scrollLeft = getComputedStyle(viewport).direction === "rtl"
+      ? value - (viewport.scrollWidth - viewport.clientWidth)
+      : value;
   } else {
     viewport.scrollTop = value;
   }
@@ -245,7 +250,7 @@ export const ScrollArea = forwardRef<HTMLDivElement, ScrollAreaProps>(function S
         ? viewportSize
         : 1;
     const nextScrollPosition = Math.min(
-      Math.max(currentScrollPosition + delta * wheelMultiplier, 0),
+      Math.max(currentScrollPosition + delta * wheelMultiplier * (orientation === "horizontal" && Math.abs(event.deltaY) >= Math.abs(event.deltaX) && getComputedStyle(viewport).direction === "rtl" ? -1 : 1), 0),
       scrollRange,
     );
     if (nextScrollPosition === currentScrollPosition) return;

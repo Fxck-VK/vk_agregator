@@ -1,6 +1,6 @@
 "use client";
 
-import { ru } from "@/i18n/ru";
+import { useDictionary } from "@/i18n/LocaleProvider";
 
 import styles from "./FilesToolbar.module.css";
 
@@ -14,26 +14,27 @@ type FilesToolbarProps = {
 };
 
 export function FilesToolbar({ onQueryChange, onStatusChange, query, status }: Readonly<FilesToolbarProps>) {
+  const t = useDictionary();
   return (
     <div className={styles.toolbar}>
       <label className={styles.search}>
-        <span>{ru.files.searchLabel}</span>
+        <span>{t.files.searchLabel}</span>
         <input
           onChange={(event) => onQueryChange(event.target.value)}
-          placeholder={ru.files.searchPlaceholder}
+          placeholder={t.files.searchPlaceholder}
           type="search"
           value={query}
         />
       </label>
       <label className={styles.filter}>
-        <span>{ru.files.statusFilterLabel}</span>
+        <span>{t.files.statusFilterLabel}</span>
         <select
           onChange={(event) => onStatusChange(event.target.value as FileStatusFilter)}
           value={status}
         >
-          <option value="all">{ru.files.statusFilterAll}</option>
-          <option value="ready">{ru.files.statusFilterReady}</option>
-          <option value="in_progress">{ru.files.statusFilterInProgress}</option>
+          <option value="all">{t.files.statusFilterAll}</option>
+          <option value="ready">{t.files.statusFilterReady}</option>
+          <option value="in_progress">{t.files.statusFilterInProgress}</option>
         </select>
       </label>
     </div>

@@ -17,39 +17,6 @@
   white-space: nowrap;
 }
 
-.tabsScroll {
-  max-inline-size: 100%;
-  border-block-end: 0.0625rem solid var(--color-border);
-}
-
-.tabs {
-  display: flex;
-  gap: var(--space-4);
-}
-
-.tab {
-  flex: 0 0 auto;
-  padding: 0 var(--space-1) var(--space-3);
-  border: 0;
-  border-block-end: 0.125rem solid transparent;
-  background: transparent;
-  color: var(--color-text-muted);
-  font: inherit;
-  font-size: var(--font-size-navigation);
-  font-weight: var(--font-weight-medium);
-  line-height: var(--line-height-navigation);
-}
-
-.tab[aria-selected="true"] {
-  border-block-end-color: var(--color-text);
-  color: var(--color-text);
-}
-
-.tab:disabled {
-  cursor: default;
-  opacity: 1;
-}
-
 .content {
   display: grid;
   gap: var(--space-6);
@@ -75,7 +42,7 @@
   min-block-size: 6.75rem;
   padding: var(--space-4) var(--space-5);
   border-radius: var(--radius-lg);
-  background: var(--color-surface-raised);
+  background: var(--color-panel);
 }
 
 .placeholderCard p {

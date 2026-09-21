@@ -6,6 +6,8 @@ import previewCatalog from "@/features/session/model-catalog.preview.json";
 import { parseModelCatalog, projectChatModelCatalog } from "../model-catalog-contract";
 
 import { ModelSelector, type ModelSelectorModel } from "./ModelSelector";
+import { chatModelForSelector } from "../chat-model-selector";
+import { LocaleProvider } from "@/i18n/LocaleProvider";
 
 const taskModels: readonly ModelSelectorModel[] = [
   {
@@ -35,15 +37,30 @@ function popularOptions(dialog = screen.getByRole("dialog")) {
 describe("ModelSelector", () => {
   afterEach(cleanup);
 
-  it("keeps native and application capabilities in the shared model picker", () => {
+  it.each(["ru", "en"] as const)("renders fallback prices with the shared star in inline and tooltip descriptions (%s)", locale => {
+    const model = chatModelForSelector({ id: "priced-model", name: "Priced model", categories: ["text"], estimate_credits: 20, max_output_tokens: 2048 });
+    const props = { models: [model], onSelect: vi.fn(), selectedModelId: model.id };
+    const view = render(<LocaleProvider locale={locale}><ModelSelector {...props} /></LocaleProvider>);
+    fireEvent.click(screen.getByRole("button"));
+    const option = within(screen.getByRole("dialog")).getAllByRole("button", { name: /^Priced model/ })[0];
+    expect(within(option).getByTestId("credit-star-icon")).toBeVisible();
+    expect(option).toHaveTextContent(locale === "ru" ? "20 за ответ · до 2 048 токенов ответа" : "20 per response · up to 2,048 output tokens");
+    expect(option).not.toHaveTextContent(locale === "ru" ? "20 токенов" : "20 tokens");
+    view.rerender(<LocaleProvider locale={locale}><ModelSelector {...props} descriptionMode="tooltip" /></LocaleProvider>);
+    fireEvent.pointerEnter(option, { pointerType: "mouse" });
+    expect(within(screen.getByRole("tooltip")).getByTestId("credit-star-icon")).toBeVisible();
+  });
+
+  it("omits technical capability details even when the selected model has them", () => {
     const text = projectChatModelCatalog(parseModelCatalog(previewCatalog)).items.find((model) => model.id === "gpt_5_5")!;
     const model: ModelSelectorModel = { ...text, category: "text" };
     render(<ModelSelector models={[model]} onSelect={vi.fn()} selectedModelId={model.id} />);
     fireEvent.click(screen.getByRole("button", { name: /Выбрана нейросеть/ }));
-    fireEvent.click(screen.getByText("Возможности модели"));
     const dialog = within(screen.getByRole("dialog"));
-    expect(dialog.getByText("В этом интерфейсе")).toBeVisible();
-    expect(dialog.getByText("В API провайдера")).toBeVisible();
+    expect(dialog.queryByText("Возможности модели")).not.toBeInTheDocument();
+    expect(dialog.queryByText("В этом интерфейсе")).not.toBeInTheDocument();
+    expect(dialog.queryByText("В API провайдера")).not.toBeInTheDocument();
+    expect(popularOptions().getByRole("button", { name: new RegExp(model.name) })).toBeVisible();
   });
 
   it("keeps descriptions inline by default, including on hover", () => {
@@ -125,7 +142,7 @@ describe("ModelSelector", () => {
     const popular = screen.getByRole("button", { name: "Популярные" });
     expect(within(screen.getByRole("toolbar")).getAllByRole("button")).toHaveLength(2);
     fireEvent.keyDown(popular, { key: "ArrowRight" });
-    const video = screen.getByRole("button", { name: "Видео и аудио" });
+    const video = screen.getByRole("button", { name: "Видео" });
     expect(video).toHaveFocus();
     expect(video).toHaveAttribute("aria-pressed", "true");
     expect(screen.getByRole("status")).toHaveTextContent(ru.modelSelector.empty);
@@ -193,7 +210,7 @@ describe("ModelSelector", () => {
     const dialog = screen.getByRole("dialog", { name: "Выбор нейросети для «Оживить»" });
     expect(screen.getByRole("searchbox", { name: ru.modelSelector.searchLabel })).toHaveFocus();
     expect(within(within(dialog).getByRole("toolbar")).getAllByRole("button").map((button) => button.textContent)).toEqual(
-      ["Популярные", "Видео и аудио"],
+      ["Популярные", "Видео"],
     );
     expect(popularOptions(dialog).getByRole("button", { name: /Генератор видео/ })).toHaveAttribute(
       "aria-pressed",

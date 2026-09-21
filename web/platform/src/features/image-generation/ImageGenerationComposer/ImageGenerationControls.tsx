@@ -1,10 +1,12 @@
 "use client";
 
+import { useDictionary } from "@/i18n/LocaleProvider";
+
+
 import { ImageAspectRatioSelector } from "@/features/image-generation/ImageAspectRatioSelector/ImageAspectRatioSelector";
 import { ImageQualitySelector } from "@/features/image-generation/ImageQualitySelector/ImageQualitySelector";
 import { ImageOutputCountSelector } from "@/features/image-generation/ImageOutputCountSelector/ImageOutputCountSelector";
 import { ImageTemplatePicker } from "@/features/image-generation/ImageTemplatePicker/ImageTemplatePicker";
-import { ru } from "@/i18n/ru";
 
 export type ImageGenerationControlsProps = {
   modelID?: string;
@@ -24,13 +26,14 @@ export type ImageGenerationControlsProps = {
 };
 
 export function ImageGenerationControls(props: Readonly<ImageGenerationControlsProps>) {
+  const t = useDictionary();
   return (
     <>
       <ImageTemplatePicker disabled={props.isSubmitting} onSelect={(template) => props.onPromptChange(template.prompt)} />
       <ImageAspectRatioSelector disabled={props.isSubmitting} onChange={props.onAspectRatioChange} value={props.aspectRatio} options={props.allowedAspectRatios} />
       {props.qualityOptions.length > 1 ? <ImageQualitySelector
         disabled={props.isSubmitting}
-        label={props.qualityLabel ?? ru.imageGeneration.resolutionLabel}
+        label={props.qualityLabel ?? t.imageGeneration.resolutionLabel}
         onChange={props.onImageQualityChange}
         options={props.qualityOptions}
         value={props.imageQuality}

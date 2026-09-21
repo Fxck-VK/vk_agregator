@@ -1,9 +1,10 @@
+/* eslint-disable @next/next/no-html-link-for-pages -- Native link fixtures and router mocks are intentional in these tests. */
 import { render, screen } from "@testing-library/react";
 import { describe, expect, it } from "vitest";
 
 import { ContentCard } from "./ContentCard/ContentCard";
 import { EmptyState } from "./EmptyState/EmptyState";
-import { FAQ } from "./FAQ/FAQ";
+import { FAQ } from "@/components/ui/FAQ/FAQ";
 import { ModelPreviewCard } from "./ModelPreviewCard/ModelPreviewCard";
 import { PageContainer } from "./PageContainer/PageContainer";
 import { PrimaryButton } from "./PrimaryButton/PrimaryButton";
@@ -41,8 +42,8 @@ describe("public design primitives", () => {
       </>,
     );
 
-    expect(screen.getByRole("link", { name: "Открыть платформу" })).toHaveAttribute("href", "/app");
-    expect(screen.getByRole("link", { name: "Посмотреть модели" })).toHaveAttribute("href", "/models");
+    expect(screen.getByRole("link", { name: "Открыть платформу" })).toHaveAttribute("href", "/ru/app");
+    expect(screen.getByRole("link", { name: "Посмотреть модели" })).toHaveAttribute("href", "/ru/models");
   });
 
   it("renders neutral and model-specific cards with semantic article markup", () => {
@@ -60,7 +61,7 @@ describe("public design primitives", () => {
 
     expect(screen.getByRole("heading", { name: "Нейтральная карточка" }).closest("article")).not.toBeNull();
     expect(screen.getByRole("heading", { name: "Тестовая модель" }).closest("article")).not.toBeNull();
-    expect(screen.getByRole("link", { name: "Подробнее" })).toHaveAttribute("href", "/models/example");
+    expect(screen.getByRole("link", { name: "Подробнее" })).toHaveAttribute("href", "/ru/models/example");
   });
 
   it("renders native FAQ disclosure controls", () => {

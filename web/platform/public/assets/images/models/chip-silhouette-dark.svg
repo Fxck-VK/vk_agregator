@@ -51,7 +51,7 @@
     </mask>
   </defs>
 
-  <g fill="#15161C">
+  <g fill="white">
 
     <!-- Верхние контакты -->
     <rect x="304" y="36" width="104" height="210" rx="52"/>

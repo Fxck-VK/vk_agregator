@@ -44,6 +44,11 @@
   block-size: 2.75rem;
   min-block-size: 2.75rem;
   max-block-size: 2.75rem;
+  transition: border-color var(--motion-fast);
+}
+
+.root[data-variant="compact"] .trigger:not(:disabled):hover {
+  border-color: var(--color-accent);
 }
 
 .root[data-variant="compact"] .triggerText {
@@ -83,6 +88,7 @@
   display: block;
   inline-size: 100%;
   block-size: auto;
+  filter: var(--themed-icon-filter, none);
 }
 
 .chevronOpen {
@@ -137,8 +143,8 @@
   clip-path: inset(0);
   border: 0.0625rem solid var(--color-border);
   border-radius: var(--radius-lg);
-  background: var(--color-background);
-  box-shadow: 0 1.25rem 3.75rem rgb(0 0 0 / 34%);
+  background: var(--floating-panel-background, var(--color-background));
+  box-shadow: var(--floating-panel-shadow, 0 1.25rem 3.75rem rgb(0 0 0 / 34%));
   opacity: 1;
   will-change: clip-path, opacity;
 }
@@ -183,7 +189,7 @@
   min-block-size: 4rem;
   margin: var(--space-3) var(--space-3) 0;
   padding-inline: var(--space-4);
-  border: 0.0625rem solid var(--color-border);
+  border: 0.0625rem solid var(--color-input-border, var(--color-border));
   border-radius: var(--radius-md);
 }
 
@@ -193,6 +199,7 @@
 }
 
 .searchIcon {
+  filter: var(--themed-icon-filter, none);
   display: block;
   flex: 0 0 auto;
   inline-size: 1.5rem;
@@ -212,7 +219,7 @@
 }
 
 .search::placeholder {
-  color: var(--color-text-muted);
+  color: var(--color-placeholder, var(--color-text-muted));
 }
 
 .scrollArea {

@@ -26,8 +26,12 @@ func TestWorkspaceCapabilitiesDescribeActualSubmissionSurface(t *testing.T) {
 			switch model.Kind {
 			case "image":
 				v := c.Application.Image
-				if v.Images.Support != providermodels.Unsupported || v.Images.MaxCount == nil || *v.Images.MaxCount != 0 {
-					t.Fatal("web image submission has no reference input")
+				if op.Inputs.Images.Enabled {
+					if v.Images.Support != providermodels.Supported || v.Images.MaxCount == nil || *v.Images.MaxCount != op.Image.MaxReferenceImages || op.Inputs.Images.MaxCount != op.Image.MaxReferenceImages || op.Inputs.Images.MaxBytes != productcatalog.WebReferenceMaxBytes {
+						t.Fatal("reference metadata differs from upload limits")
+					}
+				} else if v.Images.Support != providermodels.Unsupported || v.Images.MaxCount == nil || *v.Images.MaxCount != 0 {
+					t.Fatal("disabled reference input advertised")
 				}
 				if !reflect.DeepEqual(v.AspectRatios, op.Image.AllowedAspectRatios) || v.MaxOutputCount == nil || *v.MaxOutputCount != op.Image.MaxOutputCount {
 					t.Fatal("image metadata differs from priced controls")

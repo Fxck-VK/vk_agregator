@@ -22,9 +22,9 @@ describe("ModalCloseButton styles", () => {
 
     expect(button).toContain("inline-size: 3rem");
     expect(button).toContain("block-size: 3rem");
-    expect(button).toContain("border: 0.0625rem solid rgb(255 255 255 / 20%)");
+    expect(button).toContain("border: 0.0625rem solid var(--close-button-border, rgb(255 255 255 / 20%))");
     expect(button).toContain("border-radius: 0.875rem");
-    expect(button).toContain("background: rgb(11 12 15 / 70%)");
+    expect(button).toContain("background: var(--close-button-background, rgb(11 12 15 / 70%))");
   });
 
   it("owns the branded interaction state and centered CSS cross", () => {

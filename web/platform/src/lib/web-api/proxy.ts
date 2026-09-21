@@ -1,6 +1,7 @@
 import "server-only";
 
 import { canonicalizeWebApiPath } from "./path";
+import { readSignal } from "./read-signal";
 
 const forwardedRequestHeaders = [
   "Accept",
@@ -124,9 +125,9 @@ function declaredContentLength(requestHeaders: Headers): number | undefined {
   return Number.isSafeInteger(length) ? length : undefined;
 }
 
-async function readProxyRequestBody(request: Request): Promise<ProxyRequestBody> {
+async function readProxyRequestBody(request: Request, maxBytes: number): Promise<ProxyRequestBody> {
   const contentLength = declaredContentLength(request.headers);
-  if (contentLength !== undefined && contentLength > MAX_PROXY_REQUEST_BODY_BYTES) {
+  if (contentLength !== undefined && contentLength > maxBytes) {
     return { kind: "too_large" };
   }
 
@@ -148,7 +149,7 @@ async function readProxyRequestBody(request: Request): Promise<ProxyRequestBody>
       }
 
       totalBytes += value.byteLength;
-      if (totalBytes > MAX_PROXY_REQUEST_BODY_BYTES) {
+      if (totalBytes > maxBytes) {
         void reader.cancel().catch(() => undefined);
         return { kind: "too_large" };
       }
@@ -178,7 +179,7 @@ export async function proxyWebApiRequest(
   const safePath = canonicalizeWebApiPath(rawPath);
   let body: ArrayBuffer | undefined;
   if (request.method !== "GET" && request.method !== "HEAD") {
-    const proxyBody = await readProxyRequestBody(request);
+    const proxyBody = await readProxyRequestBody(request, request.method === "POST" && safePath.split("?")[0] === "/web/v1/input-artifacts" ? 21 * 1024 * 1024 : MAX_PROXY_REQUEST_BODY_BYTES);
     if (proxyBody.kind === "too_large") {
       return requestBodyTooLargeResponse();
     }
@@ -192,6 +193,7 @@ export async function proxyWebApiRequest(
   try {
     upstream = await fetch(new URL(safePath, internalOrigin).toString(), {
       method: request.method,
+      signal: readSignal({ method: request.method, signal: request.signal }),
       body,
       cache: "no-store",
       headers: proxyRequestHeaders(request.headers),

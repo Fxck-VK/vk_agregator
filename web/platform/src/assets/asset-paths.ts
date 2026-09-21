@@ -1,5 +1,15 @@
 export const assetPaths = {
   icons: {
+    plans: {
+      imageGeneration: "/assets/icons/plans/image-generation-white.svg",
+      videoGeneration: "/assets/icons/plans/video-generation-white.svg",
+      aiModels: "/assets/icons/plans/ai-models-white.svg",
+      presentationGeneration: "/assets/icons/plans/presentation-generation-white.svg",
+      customLimits: "/assets/icons/plans/custom-limits-white.svg",
+      prioritySpeed: "/assets/icons/plans/priority-speed-white.svg",
+      teamwork: "/assets/icons/plans/teamwork-white.svg",
+      personalSupport: "/assets/icons/plans/personal-support-white.svg",
+    },
     features: {
       answers: "/assets/icons/features/answers-white.svg",
       generateImage: "/assets/icons/features/generate-image-white.svg",
@@ -23,6 +33,7 @@ export const assetPaths = {
       chevronDown: "/assets/icons/ui/chevron-down.svg",
       faqArrow: "/assets/icons/ui/faq-arrow.svg",
       resolution: "/assets/icons/ui/resolution-white.svg",
+      retryUpload: "/assets/icons/ui/restart-white.svg",
       search: "/assets/icons/ui/search.svg",
       sendMessage: "/assets/icons/ui/send-message-white.svg",
       templateSelect: "/assets/icons/ui/template-select-white.svg",
@@ -31,6 +42,7 @@ export const assetPaths = {
   },
   illustrations: {
     filesEmptyFolder: "/assets/illustrations/files-empty-folder.png",
+    notFoundCharacter: "/assets/illustrations/not-found-character.png",
   },
   images: {
     credits: {
@@ -44,6 +56,8 @@ export const assetPaths = {
       },
     },
     inspiration: {
+      videoOnePoster: "/assets/images/inspiration/video-1-poster.webp",
+      videoTwoPoster: "/assets/images/inspiration/video-2-poster.webp",
       birthdayPhotoStrip: "/assets/images/inspiration/birthday-photo-strip.png",
       desertAirplaneTraveler: "/assets/images/inspiration/desert-airplane-traveler.png",
       desertStormTraveler: "/assets/images/inspiration/desert-storm-traveler.png",
@@ -60,6 +74,8 @@ export const assetPaths = {
       allModelsBadge: "/assets/images/workspace/all-models-90-plus.png",
       allModelsButtonBackground: "/assets/images/workspace/all-models-button-background.png",
       howItWorksPoster: "/assets/images/workspace/neirohub-how-it-works-poster.png",
+      fileDrop: "/assets/images/workspace/file-drop.png",
+      litePlanBackground: "/assets/images/workspace/lite-plan-background.webp",
     },
     models: {
       fallback: {

@@ -35,28 +35,43 @@ it("keeps the composer panel height fixed across categories and search results",
   expect(dialog.style.blockSize).toBe(height);
 });
 
+it("keeps video and audio in separate selectable sections", () => {
+  const video = { categories: ["video-audio"], id: "video", name: "Video model", category: "video" as const };
+  const audio = { categories: ["video-audio"], id: "audio", name: "Audio model", category: "audio" as const };
+  const onSelect = vi.fn();
+  openSelector({ models: [video, audio], selectedModelId: video.id, onSelect });
+
+  expect(within(screen.getByRole("region", { name: "Видео" })).getByRole("button", { name: /Video model/ })).toBeInTheDocument();
+  const audioSection = screen.getByRole("region", { name: "Аудио" });
+  expect(within(audioSection).queryByRole("button", { name: /Video model/ })).not.toBeInTheDocument();
+  fireEvent.click(within(screen.getByRole("toolbar")).getByRole("button", { name: "Аудио" }));
+  expect(screen.getAllByRole("heading")[0]).toHaveTextContent("Аудио");
+  fireEvent.click(within(audioSection).getByRole("button", { name: /Audio model/ }));
+  expect(onSelect).toHaveBeenCalledExactlyOnceWith(audio);
+});
+
 it("shows a continuous feed capped at five models per category and promotes a section without removing others", () => {
   const onSelect = vi.fn();
   const dialog = openSelector({ onSelect });
   const headings = () => within(dialog).getAllByRole("heading").map((heading) => heading.textContent);
-  expect(headings()).toEqual(["Популярные", "Изображения", "Текст", "Видео и аудио", "Бесплатные", "Учёба и работа"]);
+  expect(headings()).toEqual(["Популярные", "Изображения", "Текст", "Видео", "Бесплатные", "Учёба и работа"]);
   expect(within(screen.getByRole("region", { name: "Изображения" })).getAllByRole("listitem")).toHaveLength(5);
   expect(within(dialog).queryByRole("button", { name: /Image 5/ })).not.toBeInTheDocument();
 
   const feed = within(dialog).getByRole("region", { name: "Подборки нейросетей" });
   feed.scrollTop = 200;
   fireEvent.click(within(screen.getByRole("toolbar")).getByRole("button", { name: "Текст" }));
-  expect(headings()).toEqual(["Текст", "Популярные", "Изображения", "Видео и аудио", "Бесплатные", "Учёба и работа"]);
+  expect(headings()).toEqual(["Текст", "Популярные", "Изображения", "Видео", "Бесплатные", "Учёба и работа"]);
   expect(feed.scrollTop).toBe(0);
   expect(onSelect).not.toHaveBeenCalled();
-  fireEvent.click(within(screen.getByRole("region", { name: "Видео и аудио" })).getByRole("button", { name: /Video/ }));
+  fireEvent.click(within(screen.getByRole("region", { name: "Видео" })).getByRole("button", { name: /Video/ }));
   expect(onSelect).toHaveBeenCalledExactlyOnceWith(models.at(-1));
 });
 
 it("accepts ordered model ID selections, removes duplicates and unavailable IDs, and hides empty categories", () => {
   const dialog = openSelector({ categoryModelIds: {
     popular: [], images: ["missing", "chat", "image-6", "image-6", "image-5", "image-4", "image-3", "image-2", "image-1"],
-    text: [], free: [], "study-work": [], "video-audio": [],
+    text: [], free: [], "study-work": [], video: [], audio: [],
   } });
   expect(within(dialog).getAllByRole("heading").map((heading) => heading.textContent)).toEqual(["Изображения"]);
   expect(within(dialog).getAllByRole("listitem").map((item) => item.querySelector("button")?.textContent)).toEqual(

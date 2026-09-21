@@ -1,0 +1,14 @@
+.root { position: relative; display: grid; inline-size: 100%; min-inline-size: 0; min-block-size: 0; border-radius: inherit; }
+.root > img { display: block; inline-size: 100%; block-size: auto; max-inline-size: 100%; border-radius: inherit; }
+.root [data-image-state="error"] { opacity: 0; }
+.root[data-state="loading"], .root[data-state="error"] { min-block-size: var(--media-image-min-size, 10rem); }
+.root[data-fit="contain"], .root[data-fit="cover"] { block-size: 100%; min-block-size: 0; }
+.root[data-fit="contain"] > img, .root[data-fit="cover"] > img { inline-size: 100%; block-size: 100%; min-block-size: 0; object-fit: contain; }
+.root[data-fit="cover"] > img { object-fit: cover; }
+.overlay { position: absolute; z-index: 3; inset: 0; display: grid; border-radius: inherit; --media-state-min-size: 0; }
+.overlay[data-passive] { pointer-events: none; }
+.slow { position: absolute; inset-inline: var(--space-3); inset-block-end: var(--space-3); color: var(--color-text-muted); font-size: var(--font-size-ui); line-height: var(--line-height-ui); text-align: center; }
+.root[data-state="loading"] > .overlay { pointer-events: none; }
+.open { display: block; inline-size: 100%; padding: 0; border: 0; border-radius: inherit; background: transparent; color: inherit; cursor: zoom-in; }
+.open img { display: block; inline-size: 100%; block-size: auto; border-radius: inherit; }
+.open:focus-visible { outline: 2px solid var(--color-focus); outline-offset: -2px; }

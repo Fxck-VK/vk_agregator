@@ -1,0 +1,131 @@
+.root {
+  position: relative;
+  flex: 0 0 auto;
+  inline-size: 4.5rem;
+  max-inline-size: 100%;
+  transition: inline-size var(--motion-fast);
+}
+
+.root:only-child { inline-size: 11.25rem; }
+
+.preview {
+  position: relative;
+  inline-size: 100%;
+  aspect-ratio: 1;
+  overflow: hidden;
+  border-radius: var(--radius-sm);
+}
+
+.preview img {
+  display: block;
+  inline-size: 100%;
+  block-size: 100%;
+  object-fit: cover;
+}
+
+.openPreview {
+  position: absolute;
+  inset: 0;
+  border: 0;
+  padding: 0;
+  border-radius: inherit;
+  background: transparent;
+  cursor: zoom-in;
+}
+
+.openPreview:focus-visible {
+  outline: 2px solid var(--input-focus-border-color);
+  outline-offset: -2px;
+}
+
+.file {
+  display: grid;
+  place-items: center;
+  align-content: center;
+  gap: var(--space-2);
+  block-size: 100%;
+  padding: var(--space-2);
+  overflow-wrap: anywhere;
+  font-size: var(--font-size-caption);
+}
+
+.file > svg { inline-size: 2rem; block-size: 2rem; }
+
+.loading {
+  position: absolute;
+  inset: 0;
+  display: grid;
+  place-items: center;
+  background: rgb(0 0 0 / 35%);
+  z-index: 4;
+  --loading-indicator-color: #fff;
+  --loading-indicator-size: 2.5rem;
+  pointer-events: none;
+}
+
+.remove {
+  position: absolute;
+  z-index: 2;
+  inset-block-start: 0.5rem;
+  inset-inline-end: 0.5rem;
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity var(--motion-fast);
+}
+
+.root:hover .remove,
+.root:focus-within .remove { opacity: 1; pointer-events: auto; }
+
+.remove button:disabled { cursor: default; opacity: 0.5; }
+
+.failure {
+  position: absolute;
+  inset: 0;
+  display: grid;
+  place-items: center;
+  border-radius: var(--radius-sm);
+  background: rgb(0 0 0 / 35%);
+  pointer-events: none;
+}
+
+.retry.retry {
+  --color-border: rgb(255 255 255 / 55%);
+  display: grid;
+  place-items: center;
+  inline-size: 2.5rem;
+  block-size: 2.5rem;
+  padding: 0;
+  color: #fff;
+  cursor: pointer;
+  pointer-events: auto;
+}
+
+.retry .retryIcon { inline-size: 1.25rem; block-size: 1.25rem; }
+.retry:disabled { cursor: default; }
+.failure [data-ui="tooltip-bubble"] { max-inline-size: 11rem; }
+
+/* Keep the retry target separate from the 32px touch removal button. */
+.root:not(:only-child) .failure { padding-block-start: 2.25rem; }
+.root:not(:only-child) .retry { --retry-action-size: 1.5rem; inline-size: 1.5rem; block-size: 1.5rem; }
+.root:not(:only-child) .retryIcon { inline-size: 1rem; block-size: 1rem; }
+.root:not(:only-child) .failure [data-ui="tooltip-bubble"] { max-inline-size: 8rem; }
+
+.screenReaderError {
+  position: absolute;
+  inline-size: 1px;
+  block-size: 1px;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
+}
+
+
+@media (hover: none), (pointer: coarse) {
+  .remove { opacity: 1; pointer-events: auto; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .root, .remove { transition: none; }
+}
+
+.preview [data-ui="media-image"] { block-size: 100%; }

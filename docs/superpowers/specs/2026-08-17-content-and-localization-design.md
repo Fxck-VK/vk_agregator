@@ -1,5 +1,10 @@
 # Content and localization design
 
+Status: content ownership and schema contract remain active. The locale URL
+strategy below is superseded by [the current routing contract](../../../web/platform/docs/locale-routing.md):
+both Russian and English UI pages use explicit prefixes. Runtime UI dictionary
+usage is described in [the localization guide](../../../web/platform/docs/localization.md).
+
 ## Objective
 
 Create the second public-platform foundation chapter: a typed, validated,

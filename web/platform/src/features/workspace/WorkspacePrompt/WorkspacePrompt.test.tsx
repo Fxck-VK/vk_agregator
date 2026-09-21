@@ -19,6 +19,8 @@ import { ru } from "@/i18n/ru";
 import { webBrowserMutation } from "@/lib/web-api/browser";
 
 import { WorkspacePrompt } from "./WorkspacePrompt";
+import catalog from "@/features/session/model-catalog.preview.json";
+import { parseModelCatalog, projectImageModelCatalog } from "@/features/models/model-catalog-contract";
 
 const push = vi.fn();
 const conversationKey = "c7c979f5-24e5-4f88-924b-a592d6e5a906";
@@ -42,6 +44,12 @@ function renderPrompt({ access = "authenticated", variant = "workspace", ...prop
 }
 
 describe("WorkspacePrompt", () => {
+  it("hides unknown image pricing and does not show a quote failure on entry", () => {
+    const model = projectImageModelCatalog(parseModelCatalog(catalog)).items.find(item => item.id === "seedream_5_0_pro")!;
+    renderPrompt({ selectedGenerationModel: { ...model, category: "images", price_by_quality: undefined, price_by_variant: undefined } });
+    expect(screen.queryByText(/Стоимость: —/)).toBeNull();
+    expect(screen.queryByRole("alert")).toBeNull();
+  });
   beforeEach(() => {
     vi.mocked(usePathname).mockReturnValue("/app");
     vi.mocked(useRouter).mockReturnValue({ push } as never);
@@ -158,7 +166,7 @@ describe("WorkspacePrompt", () => {
     fireEvent.change(screen.getByLabelText("Задайте вопрос NeiroHub"), { target: { value: "Помоги составить план" } });
     fireEvent.click(screen.getByRole("button", { name: ru.workspace.promptSubmit }));
 
-    expect(push).toHaveBeenCalledWith("/login");
+    expect(push).toHaveBeenCalledWith("/ru/login");
     expect(webBrowserMutation).not.toHaveBeenCalled();
   });
 
@@ -169,7 +177,7 @@ describe("WorkspacePrompt", () => {
     fireEvent.change(textarea, { target: { value: "  Мгновенный диалог  " } });
     fireEvent.click(screen.getByRole("button", { name: ru.workspace.promptSubmit }));
 
-    expect(push).toHaveBeenCalledWith(`/app/chat/${conversationKey}?pending=1`);
+    expect(push).toHaveBeenCalledWith(`/ru/app/chat/${conversationKey}?pending=1`);
     expect(textarea).toHaveValue("");
     expect(webBrowserMutation).not.toHaveBeenCalled();
     expect(readPendingConversationBootstrap(conversationKey)).toMatchObject({

@@ -38,3 +38,7 @@
   padding: 0 var(--space-1) var(--space-2) 0;
   list-style: none;
 }
+
+.listScrollArea[data-scrollable="true"] :where(.list) {
+  padding-inline-end: calc(0.625rem + var(--space-2));
+}

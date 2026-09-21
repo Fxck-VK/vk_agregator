@@ -1,9 +1,11 @@
 "use client";
 
-import { useSearchParams } from "next/navigation";
+import { useDictionary } from "@/i18n/LocaleProvider";
+
+
+import { useSearchParams } from "@/i18n/navigation";
 
 import { ImageGenerationComposer } from "@/features/image-generation/ImageGenerationComposer/ImageGenerationComposer";
-import { ru } from "@/i18n/ru";
 
 import { ImageGenerationFeedback } from "./ImageGenerationFeedback";
 import { useImageGeneration, type ImageGenerationOptions } from "./useImageGeneration";
@@ -12,6 +14,7 @@ import styles from "./ImageGenerationPanel.module.css";
 type ImageGenerationPanelProps = Omit<ImageGenerationOptions, "initialValues">;
 
 export function ImageGenerationPanel(props: Readonly<ImageGenerationPanelProps>) {
+  const t = useDictionary();
   const searchParams = useSearchParams();
   const generation = useImageGeneration({
     ...props,
@@ -23,7 +26,7 @@ export function ImageGenerationPanel(props: Readonly<ImageGenerationPanelProps>)
   });
 
   return (
-    <section aria-label={ru.imageGeneration.title} className={styles.panel}>
+    <section aria-label={t.imageGeneration.title} className={styles.panel}>
       {(generation.stage === "editor" || generation.stage === "preparing") && generation.selectedModel !== null ? (
         <ImageGenerationComposer {...generation.composerProps} />
       ) : null}

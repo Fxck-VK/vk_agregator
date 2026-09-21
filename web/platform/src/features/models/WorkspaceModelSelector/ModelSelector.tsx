@@ -1,7 +1,13 @@
 "use client";
 
+import { StateNotice, LoadingIndicator } from "@/components/ui/AsyncState/AsyncState";
+import { useMessages, useDictionary } from "@/i18n/LocaleProvider";
+
+
+import { getTranslator, type Translator } from "@/i18n/messages";
+
 import Image from "next/image";
-import Link from "next/link";
+import Link from "@/i18n/Link";
 import {
   useCallback,
   useEffect,
@@ -19,8 +25,6 @@ import { SearchIcon } from "@/components/icons/SearchIcon";
 import { ModeSwitchPanel } from "@/components/ui/ModeSwitchPanel/ModeSwitchPanel";
 import { ScrollArea } from "@/components/ui/ScrollArea/ScrollArea";
 import selectableStyles from "@/components/ui/selectable-control.module.css";
-import { ru } from "@/i18n/ru";
-import { ModelCapabilitiesDetails } from "@/components/models/ModelCapabilitiesDetails";
 import type { ChatModel } from "@/lib/web-api/contracts";
 
 import { getModelPresentation } from "../ModelCard/model-card-content";
@@ -41,6 +45,7 @@ export type ModelSelectorModel = ModelCardModel & {
   categories?: string[];
   category: Exclude<ModelSelectorCategory, "popular">;
   isFree?: boolean;
+  responsePrice?: { credits: number; maxOutputTokens?: number };
 };
 export type ModelSelectorStatus = "loading" | "ready" | "failure";
 export type ModelSelectorVariant = "compact" | "panel" | "composer";
@@ -80,8 +85,8 @@ const popoverMaximumHeight = 736;
 const composerPopoverHeight = 586;
 const portalLayer = 170;
 
-function getDefaultTriggerAriaLabel(name: string, isOpen: boolean) {
-  return `Выбрана нейросеть ${name}. ${isOpen ? "Закрыть" : "Открыть"} список`;
+function getDefaultTriggerAriaLabel(name: string, isOpen: boolean, msg: Translator = getTranslator("ru")) {
+  return msg("modelSelector.selectedAiModelValueValueList", { value1: name, value2: isOpen ? msg("modelSelector.close") : msg("modelSelector.open") });
 }
 
 export function ModelSelector({
@@ -90,16 +95,20 @@ export function ModelSelector({
   className,
   descriptionMode = "inline",
   dialogId: providedDialogId,
-  dialogLabel = ru.modelSelector.dialogLabel,
+  dialogLabel: requestedDialogLabel,
   disabled = false,
   models,
   onSelect,
   renderInPortal = false,
   selectedModelId,
   status = "ready",
-  triggerAriaLabel = getDefaultTriggerAriaLabel,
+  triggerAriaLabel: requestedTriggerAriaLabel,
   variant = "compact",
 }: Readonly<ModelSelectorProps>) {
+  const t = useDictionary();
+  const msg = useMessages();
+  const triggerAriaLabel = requestedTriggerAriaLabel ?? ((name: string, open: boolean) => getDefaultTriggerAriaLabel(name, open, msg));
+  const dialogLabel = requestedDialogLabel ?? t.modelSelector.dialogLabel;
   const generatedId = useId().replace(/[^a-zA-Z0-9_-]/g, "");
   const dialogId = providedDialogId ?? `model-selector-dialog-${generatedId}`;
   const rootRef = useRef<HTMLDivElement>(null);
@@ -117,20 +126,20 @@ export function ModelSelector({
   const selectedModel = models.find((model) => model.id === selectedModelId) ?? null;
   const selectedModelPresentation = selectedModel === null
     ? null
-    : getModelPresentation(selectedModel);
+    : getModelPresentation(selectedModel, msg);
   const triggerText = status === "loading"
-    ? ru.modelSelector.loadingShort
-    : (selectedModel?.name ?? ru.modelSelector.unavailable);
+    ? t.modelSelector.loadingShort
+    : (selectedModel?.name ?? t.modelSelector.unavailable);
   const triggerCharacters = Array.from(triggerText);
   const visibleTriggerText = variant === "compact" && triggerCharacters.length > compactNameLimit
     ? `${triggerCharacters.slice(0, compactNameLimit - 1).join("")}…`
     : triggerText;
 
-  const sections = useMemo(() => getModelSelectorSections(models, categoryModelIds, categoryErrors), [models, categoryModelIds, categoryErrors]);
+  const sections = useMemo(() => getModelSelectorSections(models, categoryModelIds, categoryErrors, t), [models, categoryModelIds, categoryErrors, t]);
   const activeCategory = sections.some((section) => section.id === category) ? category : sections[0]?.id ?? "popular";
   const panelId = `${dialogId}-models`;
   const visibleSections = useMemo(() => {
-    const normalizedQuery = query.trim().toLocaleLowerCase("ru");
+    const normalizedQuery = query.trim().toLowerCase();
     const orderedSections = [
       ...sections.filter((section) => section.id === activeCategory),
       ...sections.filter((section) => section.id !== activeCategory),
@@ -138,7 +147,7 @@ export function ModelSelector({
     return orderedSections.map((section) => ({
       ...section,
       models: section.models.filter((model) =>
-        `${model.name} ${model.id}`.toLocaleLowerCase("ru").includes(normalizedQuery),
+        `${model.name} ${model.id}`.toLowerCase().includes(normalizedQuery),
       ),
     })).filter((section) => section.models.length > 0 || section.error);
   }, [activeCategory, query, sections]);
@@ -281,9 +290,9 @@ export function ModelSelector({
   };
 
   const triggerName = status === "loading"
-    ? ru.modelSelector.loading
+    ? t.modelSelector.loading
     : selectedModel === null
-      ? ru.modelSelector.unavailable
+      ? t.modelSelector.unavailable
       : triggerAriaLabel(selectedModel.name, isOpen);
 
   const selectModel = (model: ModelCardModel) => {
@@ -319,13 +328,13 @@ export function ModelSelector({
       <div className={styles.searchRow}>
         <SearchIcon className={styles.searchIcon} />
         <input
-          aria-label={ru.modelSelector.searchLabel}
+          aria-label={t.modelSelector.searchLabel}
           className={styles.search}
           onChange={(event) => {
             setQuery(event.target.value);
             setActiveDescriptionId(null);
           }}
-          placeholder={ru.modelSelector.searchPlaceholder}
+          placeholder={t.modelSelector.searchPlaceholder}
           ref={searchRef}
           type="search"
           value={query}
@@ -334,7 +343,7 @@ export function ModelSelector({
 
       {sections.length > 0 ? <ModeSwitchPanel
         activeID={activeCategory}
-        ariaLabel={ru.modelsCatalog.categoryTabsLabel}
+        ariaLabel={t.modelsCatalog.categoryTabsLabel}
         className={styles.categoryPanel}
         items={sections.map(({ id, label }) => ({ id, label }))}
         onChange={promoteCategory}
@@ -343,16 +352,15 @@ export function ModelSelector({
       <ScrollArea
         className={styles.scrollArea}
         viewportClassName={styles.scrollViewport}
-        viewportProps={{ id: panelId, role: "region", "aria-label": ru.modelSelector.feedLabel, tabIndex: 0 }}
+        viewportProps={{ id: panelId, role: "region", "aria-label": t.modelSelector.feedLabel, tabIndex: 0 }}
         viewportRef={listViewportRef}
       >
-        <ModelCapabilitiesDetails capabilities={selectedModel?.capabilities} />
         {visibleSections.length > 0 ? (
           <div className={styles.categoryFeed}>
             {visibleSections.map((section) => (
               <section aria-labelledby={`${panelId}-${section.id}`} key={section.id}>
                 <h3 className={styles.categoryHeading} id={`${panelId}-${section.id}`}>{section.label}</h3>
-                {section.error ? <p className={styles.empty} role="status">{section.error}</p> : null}
+                {section.error ? <StateNotice inline kind="empty">{section.error}</StateNotice> : null}
                 {section.models.length > 0 ? <ul className={styles.options}>
                   {section.models.map((model) => (
                     <ModelSelectorOption
@@ -372,9 +380,9 @@ export function ModelSelector({
             ))}
           </div>
         ) : (
-          <p className={styles.empty} role="status">
-            {ru.modelSelector.empty}
-          </p>
+          <StateNotice inline kind="empty">
+            {t.modelSelector.empty}
+          </StateNotice>
         )}
       </ScrollArea>
 
@@ -385,8 +393,7 @@ export function ModelSelector({
           onClick={() => requestClose()}
           prefetch={false}
         >
-          <span>{ru.modelSelector.openCatalogue}</span>
-          <span aria-hidden="true">→</span>
+          <span>{t.modelSelector.openCatalogue}</span>
         </Link>
       </div>
     </section>
@@ -415,10 +422,7 @@ export function ModelSelector({
         ref={triggerRef}
         type="button"
       >
-        <ModelIcon
-          className={styles.modelIcon}
-          src={selectedModelPresentation?.artworkSrc}
-        />
+        {status === "loading" ? <LoadingIndicator label={t.modelSelector.loading} className={styles.modelIcon} /> : <ModelIcon className={styles.modelIcon} src={selectedModelPresentation?.artworkSrc} />}
         <span className={styles.triggerText}>
           {visibleTriggerText}
         </span>

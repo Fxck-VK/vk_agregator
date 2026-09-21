@@ -34,11 +34,11 @@ describe("ChatMediaMenu", () => {
     expect(screen.getByRole("menuitem", { name: labels.uploadFile })).toBeVisible();
     expect(screen.getByRole("menuitem", { name: labels.chooseUploaded })).toHaveAttribute(
       "href",
-      "/app/files?category=uploads",
+      "/ru/app/files?category=uploads",
     );
     expect(screen.getByRole("menuitem", { name: labels.chooseGenerated })).toHaveAttribute(
       "href",
-      "/app/files?category=images",
+      "/ru/app/files?category=images",
     );
   });
 

@@ -38,7 +38,8 @@ describe("ConversationRow styles", () => {
 
   it("uses one shared highlight for the title and ellipsis", () => {
     expect(stylesheet).toMatch(/\.row\s*\{[^}]*border-radius:\s*var\(--radius-sm\);/s);
-    expect(stylesheet).toMatch(/\.row:hover,[\s\S]*\.row\[data-active="true"\],[\s\S]*\.row\[data-panel-open="true"\]\s*\{[^}]*background:\s*var\(--color-surface-raised\);/s);
+    expect(stylesheet).toMatch(/\.row\[data-panel-open="true"\]\s*\{[^}]*background:\s*var\(--color-surface-raised\);/s);
+    expect(stylesheet).toMatch(/\.row:hover,\s*\.row:focus-within,\s*\.row\[data-active="true"\]\s*\{[^}]*background:\s*transparent;[^}]*box-shadow:\s*inset 0 0 0 0\.0625rem var\(--color-accent\);/s);
     expect(stylesheet).not.toMatch(/\.link:hover,[\s\S]*\.link\[aria-current="page"\]\s*\{[^}]*background:/s);
     expect(stylesheet).not.toMatch(/\.actionToggle:hover\s*\{[^}]*background:/s);
   });

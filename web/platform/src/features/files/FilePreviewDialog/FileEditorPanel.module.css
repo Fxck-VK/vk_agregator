@@ -255,7 +255,7 @@
 }
 
 .field textarea::placeholder {
-  color: var(--color-text-muted);
+  color: var(--color-placeholder, var(--color-text-muted));
 }
 
 .field textarea:focus {
@@ -320,7 +320,7 @@
   border: 0.0625rem solid rgb(255 255 255 / 12%);
   border-radius: 1rem;
   padding: var(--space-2) var(--space-3);
-  background: rgb(5 6 9 / 78%);
+  background: var(--editor-option-background, rgb(5 6 9 / 78%));
   cursor: pointer;
 }
 
@@ -343,12 +343,6 @@
   gap: 0.2rem;
   margin-inline-start: auto;
   font-weight: var(--font-weight-semibold);
-}
-
-.creditStar {
-  inline-size: 1rem;
-  block-size: 1rem;
-  object-fit: contain;
 }
 
 .generationSettings {
@@ -406,7 +400,7 @@
   border-radius: 1rem;
   padding: 0.8rem 1.25rem;
   background: var(--gradient-brand);
-  color: #fff;
+  color: var(--color-text-on-gradient, #fff);
   box-shadow: 0 0.5rem 1.25rem color-mix(in srgb, var(--color-accent) 24%, transparent);
   font: inherit;
   font-weight: var(--font-weight-semibold);

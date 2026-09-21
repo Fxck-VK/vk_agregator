@@ -1,4 +1,4 @@
-import Link, { type LinkProps } from "next/link";
+import Link, { type LinkProps } from "@/i18n/Link";
 import type { AnchorHTMLAttributes } from "react";
 
 import styles from "./SecondaryButton.module.css";

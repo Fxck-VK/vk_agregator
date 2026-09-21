@@ -1,3 +1,10 @@
+"use client";
+
+import { countLabel } from "@/i18n/counts";
+
+import { useMessages } from "@/i18n/LocaleProvider";
+import { getTranslator, type Translator } from "@/i18n/messages";
+
 import Image from "next/image";
 import type { ComponentPropsWithoutRef } from "react";
 
@@ -10,28 +17,9 @@ type CreditAmountProps = Omit<ComponentPropsWithoutRef<"span">, "children"> & {
   value: number;
 };
 
-function getCreditUnit(value: number): string {
-  const absoluteValue = Math.abs(value);
-  const lastTwoDigits = absoluteValue % 100;
-  const lastDigit = absoluteValue % 10;
 
-  if (lastTwoDigits >= 11 && lastTwoDigits <= 14) {
-    return "звёзд";
-  }
-
-  if (lastDigit === 1) {
-    return "звезда";
-  }
-
-  if (lastDigit >= 2 && lastDigit <= 4) {
-    return "звезды";
-  }
-
-  return "звёзд";
-}
-
-export function getCreditAmountLabel(value: number, prefix?: string): string {
-  return [prefix, value, getCreditUnit(value)].filter(Boolean).join(" ");
+export function getCreditAmountLabel(value: number, prefix?: string, msg: Translator = getTranslator("ru")): string {
+  return [prefix, countLabel(msg, "stars", value)].filter(Boolean).join(" ");
 }
 
 export function CreditAmount({
@@ -41,12 +29,13 @@ export function CreditAmount({
   value,
   ...props
 }: Readonly<CreditAmountProps>) {
-  const accessibleLabel = getCreditAmountLabel(value, prefix);
+  const msg = useMessages();
+  const accessibleLabel = getCreditAmountLabel(value, prefix, msg);
   const classes = [styles.amount, className].filter(Boolean).join(" ");
 
   return (
     <span aria-label={ariaLabel ?? accessibleLabel} className={classes} {...props}>
-      <span aria-hidden="true">{prefix ? `${prefix} ` : ""}{value}</span>
+      <span aria-hidden="true" className={styles.value}>{prefix ? `${prefix} ` : ""}{new Intl.NumberFormat(msg.locale).format(value)}</span>
       <Image
         alt=""
         aria-hidden="true"

@@ -1,9 +1,13 @@
 "use client";
 
+import { StateNotice, LoadingIndicator } from "@/components/ui/AsyncState/AsyncState";
+import { useDictionary } from "@/i18n/LocaleProvider";
+
+
 import { useCallback, useEffect, useRef, useState } from "react";
 
 import { Button } from "@/components/ui/Button/Button";
-import { ru } from "@/i18n/ru";
+import type { Dictionary } from "@/i18n/dictionary";
 import {
   parseImageJobActivation,
   parseImageJobResult,
@@ -25,6 +29,7 @@ type ImageJobTrackerProps = {
 };
 
 export function ImageJobTracker({ job, onError, onJobUpdate, onResult }: Readonly<ImageJobTrackerProps>) {
+  const t = useDictionary();
   const [error, setError] = useState<TrackerError>(null);
   const [isRefreshing, setIsRefreshing] = useState(false);
   const refreshInFlight = useRef(false);
@@ -155,44 +160,44 @@ export function ImageJobTracker({ job, onError, onJobUpdate, onResult }: Readonl
     <section aria-labelledby="image-job-status-title" className={styles.tracker}>
       <div className={styles.heading}>
         <div>
-          <h3 id="image-job-status-title">{ru.imageGeneration.statusTitle}</h3>
-          <p className={styles.statusValue}>{imageJobStatusLabel(job.status)}</p>
+          <h3 id="image-job-status-title">{t.imageGeneration.statusTitle}</h3>
+          <p className={styles.statusValue}>{imageJobStatusLabel(job.status, t)}</p>
         </div>
-        <span aria-hidden="true" className={styles.pulse} />
+        {!jobIsTerminal || isRefreshing ? <LoadingIndicator label={imageJobStatusLabel(job.status, t)} /> : null}
       </div>
       <div className={styles.actions}>
         {canRefresh ? (
-          <Button onClick={() => void refresh()}>
-            {isRefreshing ? ru.imageGeneration.statusRefreshing : ru.imageGeneration.statusRefresh}
+          <Button variant="outline" onClick={() => void refresh()}>
+            {isRefreshing ? t.imageGeneration.statusRefreshing : t.imageGeneration.statusRefresh}
           </Button>
         ) : null}
       </div>
       {error === "status" ? (
-        <p className={styles.error} role="alert">
-          {ru.imageGeneration.statusFailure}
-        </p>
+        <StateNotice inline kind="error">
+          {t.imageGeneration.statusFailure}
+        </StateNotice>
       ) : null}
       {error === "result" ? (
-        <p className={styles.error} role="alert">
-          {ru.imageGeneration.resultFailure}
-        </p>
+        <StateNotice inline kind="error">
+          {t.imageGeneration.resultFailure}
+        </StateNotice>
       ) : null}
     </section>
   );
 }
 
-function imageJobStatusLabel(status: ImageJob["status"]): string {
+function imageJobStatusLabel(status: ImageJob["status"], t: Dictionary): string {
   if (status === "succeeded") {
-    return ru.imageGeneration.statusReady;
+    return t.imageGeneration.statusReady;
   }
   if (isTerminalImageJobStatus(status)) {
-    return ru.imageGeneration.statusAttention;
+    return t.imageGeneration.statusAttention;
   }
   if (status === "queued" || status === "dispatching_provider" || status === "provider_submitted") {
-    return ru.imageGeneration.statusQueued;
+    return t.imageGeneration.statusQueued;
   }
   if (status === "result_ready" || status === "delivering") {
-    return ru.imageGeneration.statusFinishing;
+    return t.imageGeneration.statusFinishing;
   }
-  return ru.imageGeneration.statusWorking;
+  return t.imageGeneration.statusWorking;
 }

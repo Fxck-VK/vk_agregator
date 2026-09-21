@@ -1,7 +1,7 @@
 .surface {
-  border: 0.0625rem solid var(--color-border);
+  border: 0.0625rem solid var(--color-input-border, var(--color-border));
   border-radius: var(--radius-lg);
-  background: rgb(8 8 12 / 92%);
+  background: var(--panel-surface-background);
 }
 
 .surface:has(:is(input, textarea, [contenteditable="true"]):focus) {

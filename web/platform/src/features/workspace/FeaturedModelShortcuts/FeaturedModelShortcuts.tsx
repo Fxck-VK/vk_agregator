@@ -1,16 +1,22 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { Skeleton, StateNotice } from "@/components/ui/AsyncState/AsyncState";
+import { useMessages } from "@/i18n/LocaleProvider";
 
-import { loadGenerationModelCatalog, type GenerationModel } from "@/features/models/generation-model-catalog";
+
+import { useEffect } from "react";
+
+import { type GenerationModel } from "@/features/models/generation-model-catalog";
 import { getModelPresentation } from "@/features/models/ModelCard/model-card-content";
 import { ModelIcon } from "@/features/models/ModelIcon/ModelIcon";
+
+import { useGenerationCatalog } from "@/features/models/GenerationCatalogProvider";
 
 import styles from "./FeaturedModelShortcuts.module.css";
 
 const featuredModelShortcutLimit = 4;
 
-type LoadState = "loading" | "ready" | "failed";
+
 
 type FeaturedModelShortcutsProps = {
   selectedModelId: string | null;
@@ -32,63 +38,41 @@ function isTextModel(model: GenerationModel) {
 }
 
 export function FeaturedModelShortcuts({ selectedModelId, onSelect, onTextModelLoad, disabled = false }: FeaturedModelShortcutsProps) {
-  const [chatModel, setChatModel] = useState<GenerationModel | null>(null);
-  const [models, setModels] = useState<GenerationModel[]>([]);
-  const [loadState, setLoadState] = useState<LoadState>("loading");
-
-  useEffect(() => {
-    let active = true;
-
-    void loadGenerationModelCatalog()
-      .then((catalog) => {
-        if (!active) return;
-        const nextChatModel =
-          catalog.items.find((model) => model.id === catalog.default_model_id && isTextModel(model))
-          ?? catalog.items.find(isTextModel)
-          ?? null;
-        setChatModel(nextChatModel);
-        onTextModelLoad?.(nextChatModel);
-        setModels(catalog.items.filter(isImageModel).slice(0, featuredModelShortcutLimit));
-        setLoadState("ready");
-      })
-      .catch(() => {
-        if (!active) return;
-        onTextModelLoad?.(null);
-        setLoadState("failed");
-      });
-
-    return () => {
-      active = false;
-    };
-  }, [onTextModelLoad]);
+  const msg = useMessages();
+  const { catalog, status } = useGenerationCatalog();
+  const chatModel = catalog?.items.find(model => model.id === catalog.default_model_id && isTextModel(model))
+    ?? catalog?.items.find(isTextModel) ?? null;
+  const models = catalog?.items.filter(isImageModel).slice(0, featuredModelShortcutLimit) ?? [];
+  const loadState = status === "failure" ? "failed" : status;
+  useEffect(() => { onTextModelLoad?.(chatModel); }, [chatModel, onTextModelLoad]);
 
   return <>
+    {loadState === "failed" ? <StateNotice inline kind="error">{msg("featuredModels.theAiModelCatalogIsTemporarilyUnavailable")}</StateNotice> : null}
     {loadState === "ready" && chatModel !== null ? (
       <button
-        aria-label={`Выбрать модель: ${chatModel.name}`}
+        aria-label={msg("featuredModelShortcuts.selectModelValue", { value1: chatModel.name })}
         aria-pressed={selectedModelId === chatModel.id}
         className={styles.shortcut}
         disabled={disabled}
         onClick={() => onSelect(chatModel)}
         type="button"
       >
-        <ModelIcon className={styles.icon} src={getModelPresentation(chatModel).artworkSrc} />
+        <ModelIcon className={styles.icon} src={getModelPresentation(chatModel, msg).artworkSrc} />
         <span>{chatModel.name}</span>
       </button>
     ) : null}
     {loadState === "loading" ? Array.from({ length: featuredModelShortcutLimit }, (_, index) => (
-      <span
-        aria-hidden="true"
+      <Skeleton
         className={styles.skeleton}
         data-testid="featured-model-shortcut-skeleton"
         key={index}
       />
     )) : models.map((model) => {
-    const presentation = getModelPresentation(model);
+    const presentation = getModelPresentation(model, msg);
 
     return (
       <button
-        aria-label={`Выбрать модель: ${model.name}`}
+        aria-label={msg("featuredModelShortcuts.selectModelValue", { value1: model.name })}
         aria-pressed={selectedModelId === model.id}
         className={styles.shortcut}
         data-testid="featured-model-shortcut"

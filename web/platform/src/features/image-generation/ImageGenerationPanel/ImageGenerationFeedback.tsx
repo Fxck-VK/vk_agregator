@@ -1,13 +1,16 @@
 "use client";
 
+import { StateNotice } from "@/components/ui/AsyncState/AsyncState";
+import { useDictionary } from "@/i18n/LocaleProvider";
+
+
 import { Button } from "@/components/ui/Button/Button";
 import { ImageGenerationConfirmation } from "@/features/image-generation/ImageGenerationConfirmation/ImageGenerationConfirmation";
 import { ImageGenerationResult } from "@/features/image-generation/ImageGenerationResult/ImageGenerationResult";
 import { ImageJobTracker } from "@/features/image-generation/ImageJobTracker/ImageJobTracker";
-import { ru } from "@/i18n/ru";
 
 import type { ImageGenerationController } from "./useImageGeneration";
-import styles from "./ImageGenerationPanel.module.css";
+
 
 type ImageGenerationFeedbackProps = {
   generation: ImageGenerationController;
@@ -15,19 +18,20 @@ type ImageGenerationFeedbackProps = {
 };
 
 export function ImageGenerationFeedback({ generation, showEditorError = false }: ImageGenerationFeedbackProps) {
+  const t = useDictionary();
   const { stage, preparation, activeJob, result } = generation;
 
   return (
     <>
-      {stage === "loading" ? <p role="status">{ru.imageGeneration.loadingModels}</p> : null}
+      {stage === "loading" ? <StateNotice inline kind="loading">{t.imageGeneration.loadingModels}</StateNotice> : null}
       {stage === "loadFailure" ? (
-        <div className={styles.loadFailure}>
-          <p className={styles.error} role="alert">{generation.loadFailure}</p>
-          <Button onClick={generation.retryModelCatalog}>{ru.imageGeneration.retryModels}</Button>
+        <div>
+          <StateNotice inline kind="error">{generation.loadFailure}</StateNotice>
+          <Button variant="outline" onClick={generation.retryModelCatalog}>{t.imageGeneration.retryModels}</Button>
         </div>
       ) : null}
       {showEditorError && stage === "editor" && generation.editorError !== null ? (
-        <p className={styles.error} role="alert">{generation.editorError}</p>
+        <StateNotice inline kind="error">{generation.editorError}</StateNotice>
       ) : null}
       {(stage === "confirmation" || stage === "activating") && preparation !== null ? (
         <ImageGenerationConfirmation

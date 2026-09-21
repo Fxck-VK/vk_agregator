@@ -64,45 +64,12 @@
   translate: 0 -0.2rem;
 }
 
-.skeleton {
-  position: relative;
-  display: block;
-  justify-self: center;
-  inline-size: 3.5rem;
-  block-size: 3.5rem;
-  overflow: hidden;
-  border: 0.0625rem solid var(--color-border);
-  border-radius: 1rem;
-  background: var(--color-surface);
-}
-
-.skeleton::after {
-  position: absolute;
-  inset: 0;
-  background: linear-gradient(
-    105deg,
-    transparent 30%,
-    color-mix(in srgb, var(--color-text) 7%, transparent) 45%,
-    transparent 60%
-  );
-  content: "";
-  translate: -100% 0;
-  animation: featured-model-shortcut-shimmer 1.4s ease-in-out infinite;
-}
-
-@keyframes featured-model-shortcut-shimmer {
-  to {
-    translate: 100% 0;
-  }
-}
+.skeleton { justify-self: center; inline-size: 3.5rem; block-size: 3.5rem; }
 
 @media (prefers-reduced-motion: reduce) {
   .shortcut,
   .shortcut::after,
   .icon {
     transition: none;
-  }
-  .skeleton::after {
-    animation: none;
   }
 }

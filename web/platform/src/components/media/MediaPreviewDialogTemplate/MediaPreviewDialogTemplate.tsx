@@ -1,7 +1,7 @@
 "use client";
 
 import Image from "next/image";
-import Link from "next/link";
+import Link from "@/i18n/Link";
 import {
   useCallback,
   useEffect,
@@ -105,7 +105,7 @@ export type MediaPreviewDialogTemplateProps<T> = {
   getItemKey: (item: T) => string;
   getPreviewDimensions: (item: T) => { height: number; width: number };
   getThumbnailLabel: (item: T) => string;
-  infoPanel: (item: T) => ReactNode;
+  infoPanel?: (item: T) => ReactNode;
   infoPanelTestId?: string;
   isItemSelectable?: (item: T) => boolean;
   items: readonly T[];
@@ -297,6 +297,7 @@ export function MediaPreviewDialogTemplate<T>({
           aria-modal="true"
           className={styles.dialog}
           data-single-item={items.length === 1}
+          data-media-only={!infoPanel && !actions}
           ref={dialogRef}
           role="dialog"
           tabIndex={-1}
@@ -398,13 +399,13 @@ export function MediaPreviewDialogTemplate<T>({
             ) : null}
           </div>
 
-          <ScrollArea
+          {infoPanel || actions ? <ScrollArea
             className={styles.infoPanel}
             viewportAs="aside"
             viewportClassName={styles.infoPanelViewport}
             viewportProps={infoPanelTestId ? { "data-testid": infoPanelTestId } : undefined}
           >
-            {infoPanel(selectedItem)}
+            {infoPanel?.(selectedItem)}
             {actions && (actions.feedback || hasActionButtons) ? (
               <div className={styles.previewActions}>
                 {actions.feedback}
@@ -470,7 +471,7 @@ export function MediaPreviewDialogTemplate<T>({
                 ) : null}
               </div>
             ) : null}
-          </ScrollArea>
+          </ScrollArea> : null}
         </div>
       )}
     </ModalBackdrop>

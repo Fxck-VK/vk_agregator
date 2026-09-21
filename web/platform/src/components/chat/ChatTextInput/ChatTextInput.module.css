@@ -29,7 +29,7 @@
   inline-size: 100%;
   block-size: 100%;
   resize: none;
-  border: 0.0625rem solid var(--color-border);
+  border: 0.0625rem solid var(--color-input-border, var(--color-border));
   border-radius: var(--radius-sm);
   padding: var(--space-3);
   padding-inline-end: calc(var(--space-3) + var(--chat-text-input-scrollbar-gutter) + var(--chat-text-input-action-gutter));
@@ -41,7 +41,7 @@
 }
 
 .inset {
-  background: var(--color-background);
+  background: var(--field-background, var(--color-background));
 }
 
 .plain {
@@ -162,4 +162,8 @@
   .expandIcon path {
     transition: none;
   }
+}
+
+.input::placeholder {
+  color: var(--color-placeholder, revert);
 }

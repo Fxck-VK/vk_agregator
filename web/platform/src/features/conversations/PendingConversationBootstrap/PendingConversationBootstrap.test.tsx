@@ -61,11 +61,24 @@ describe("PendingConversationBootstrap", () => {
     savePendingConversationBootstrap({conversationKey:conversationIdempotencyId,messageKey:messageIdempotencyId,prompt:"Кадр",modelId:"nano_banana_2",generationOptions:{image_quality:"2K",output_count:2,aspect_ratio:"9:16"}});
     vi.mocked(webBrowserMutation).mockResolvedValueOnce(Response.json(conversation,{status:201})).mockResolvedValueOnce(Response.json(job,{status:201}));
     renderPending();
-    await vi.waitFor(()=>expect(replace).toHaveBeenCalledWith(`/app/chat/${serverConversationId}?refresh=1`));
+    await vi.waitFor(()=>expect(replace).toHaveBeenCalledWith(`/ru/app/chat/${serverConversationId}?refresh=1`));
     const [path,init] = vi.mocked(webBrowserMutation).mock.calls[1];
     expect(path).toBe(`/web/v1/conversations/${serverConversationId}/messages`);
     expect(JSON.parse(init.body as string)).toEqual({prompt:"Кадр",model_id:"nano_banana_2",image_quality:"2K",output_count:2,aspect_ratio:"9:16"});
-    expect(JSON.parse(window.sessionStorage.getItem(`neirohub:conversation-pending-media:${serverConversationId}`)!)).toMatchObject({jobID:job.job_id,baselineSeq:0});
+    expect(JSON.parse(window.sessionStorage.getItem(`neirohub:conversation-pending-media:${serverConversationId}`)!)).toMatchObject({jobID:job.job_id,baselineSeq:0,image:{count:2,aspectRatio:"9:16"}});
+  });
+
+  it("shows four image placeholders before the first request resolves and removes them on failure", async () => {
+    savePendingConversationBootstrap({ conversationKey: conversationIdempotencyId, messageKey: messageIdempotencyId, prompt: "Четыре кадра", modelId: "nano_banana_2", generationOptions: { image_quality: "2K", output_count: 4, aspect_ratio: "9:16" } });
+    let rejectRequest!: (error: Error) => void;
+    vi.mocked(webBrowserMutation).mockReturnValueOnce(new Promise((_resolve, reject) => { rejectRequest = reject; }));
+    const { container } = renderPending();
+    expect(screen.getAllByRole("progressbar")).toHaveLength(4);
+    expect(container.querySelector('[data-ui="image-generation-grid"]')).toHaveAttribute("data-count", "4");
+    expect(container.querySelector('[data-ui="image-generation-grid"]')).toHaveStyle({ "--generation-aspect-ratio": "0.5625" });
+    rejectRequest(new Error("offline"));
+    await screen.findByText(ru.conversations.messageNotSent);
+    expect(screen.queryAllByRole("progressbar")).toHaveLength(0);
   });
 
   it("shows the first message and typing indicator before create resolves", async () => {
@@ -87,7 +100,7 @@ describe("PendingConversationBootstrap", () => {
       .mockResolvedValueOnce(Response.json(job, { status: 201 }));
     renderPending();
 
-    await vi.waitFor(() => expect(replace).toHaveBeenCalledWith(`/app/chat/${serverConversationId}?refresh=1`));
+    await vi.waitFor(() => expect(replace).toHaveBeenCalledWith(`/ru/app/chat/${serverConversationId}?refresh=1`));
     expect(webBrowserMutation).toHaveBeenNthCalledWith(1, "/web/v1/conversations", {
       method: "POST",
       headers: { "X-Idempotency-Key": conversationIdempotencyId },
@@ -108,7 +121,7 @@ describe("PendingConversationBootstrap", () => {
     renderPending();
     await screen.findByRole("alert");
     fireEvent.click(screen.getByRole("button", { name: ru.conversations.messageRetryLabel }));
-    await vi.waitFor(() => expect(replace).toHaveBeenCalledWith(`/app/chat/${serverConversationId}?refresh=1`));
+    await vi.waitFor(() => expect(replace).toHaveBeenCalledWith(`/ru/app/chat/${serverConversationId}?refresh=1`));
     const calls = vi.mocked(webBrowserMutation).mock.calls.filter(([path]) => path.endsWith("/messages"));
     expect(calls).toHaveLength(2);
     for (const [, init] of calls) {
@@ -128,7 +141,7 @@ describe("PendingConversationBootstrap", () => {
     expect(await screen.findByRole("alert")).toHaveTextContent(ru.conversations.messageNotSent);
     fireEvent.click(screen.getByRole("button", { name: ru.conversations.messageRetryLabel }));
 
-    await vi.waitFor(() => expect(replace).toHaveBeenCalledWith(`/app/chat/${serverConversationId}?refresh=1`));
+    await vi.waitFor(() => expect(replace).toHaveBeenCalledWith(`/ru/app/chat/${serverConversationId}?refresh=1`));
     const createCalls = vi.mocked(webBrowserMutation).mock.calls.filter(([path]) => path === "/web/v1/conversations");
     expect(createCalls).toHaveLength(2);
     expect(createCalls.map(([, init]) => new Headers(init.headers).get("X-Idempotency-Key"))).toEqual([
@@ -147,7 +160,7 @@ describe("PendingConversationBootstrap", () => {
     expect(await screen.findByRole("alert")).toHaveTextContent(ru.conversations.messageNotSent);
     fireEvent.click(screen.getByRole("button", { name: ru.conversations.messageRetryLabel }));
 
-    await vi.waitFor(() => expect(replace).toHaveBeenCalledWith(`/app/chat/${serverConversationId}?refresh=1`));
+    await vi.waitFor(() => expect(replace).toHaveBeenCalledWith(`/ru/app/chat/${serverConversationId}?refresh=1`));
     expect(vi.mocked(webBrowserMutation).mock.calls.filter(([path]) => path === "/web/v1/conversations")).toHaveLength(1);
     const messageCalls = vi.mocked(webBrowserMutation).mock.calls.filter(([path]) => path.includes("/messages"));
     expect(messageCalls).toHaveLength(2);

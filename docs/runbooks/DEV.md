@@ -3,6 +3,19 @@
 The DEV contour mirrors production architecture with separate secrets, domains,
 VK community, YooKassa/test settings and Cloudflare tunnel.
 
+## Platform language URLs
+
+The platform serves existing UI pages under `/ru` and `/en`. Legacy page URLs
+redirect; `/web/v1`, assets and `/health` remain unprefixed. The DEV web overlay
+passes the existing trusted `WEB_ORIGIN` to the platform container, where it is
+required at production runtime for canonical URLs, hreflang and the public
+sitemap. It must match the frontend's public origin, without a path or credentials.
+
+After deploying, verify direct `/ru` and `/en` loads, their canonical/alternate
+links, `/sitemap.xml`, legacy `/app` redirect and localized login return. Keep the
+outer DEV gateway and private page session checks enabled. Full contract:
+[`web/platform/docs/locale-routing.md`](../../web/platform/docs/locale-routing.md).
+
 ## Grok Imagine image configuration
 
 `grok_image_1_5` and `grok_image_2_0` use the existing APIMart worker with

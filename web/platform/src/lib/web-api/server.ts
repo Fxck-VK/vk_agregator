@@ -1,6 +1,7 @@
 import "server-only";
 
 import { headers } from "next/headers";
+import { readSignal } from "./read-signal";
 
 import { getWebApiInternalOrigin } from "./internal-origin";
 import { canonicalizeWebApiPath, type WebApiPath } from "./path";
@@ -32,6 +33,7 @@ export async function webServerFetch(path: WebApiPath, init?: RequestInit): Prom
   const target = new URL(safePath, getWebApiInternalOrigin()).toString();
   return fetch(target, {
     ...init,
+    signal: readSignal(init),
     cache: "no-store",
     headers: serverRequestHeaders(init, requestHeaders.get("cookie")),
   });

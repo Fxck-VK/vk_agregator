@@ -1,15 +1,24 @@
 "use client";
 
+import { RetryAction } from "@/components/ui/AsyncState/RetryAction";
+import { StateNotice } from "@/components/ui/AsyncState/AsyncState";
+import type { MessageKey } from "@/i18n/messages";
+import { formatCurrency } from "@/i18n/format";
+
+import { useMessages } from "@/i18n/LocaleProvider";
+
+
 import Image from "next/image";
 import { useEffect, useId, useRef, useState, type FormEvent } from "react";
 import { assetPaths } from "@/assets/asset-paths";
 import { ModalBackdrop } from "@/components/ui/ModalBackdrop/ModalBackdrop";
 import { ModalCloseButton } from "@/components/ui/ModalCloseButton/ModalCloseButton";
 import { ScrollArea } from "@/components/ui/ScrollArea/ScrollArea";
+import { CreditAmount, getCreditAmountLabel } from "@/components/ui/CreditAmount/CreditAmount";
 import selectableStyles from "@/components/ui/selectable-control.module.css";
 import { PaymentStatus } from "@/features/payments/PaymentStatus";
 import { checkoutNavigation } from "@/features/payments/checkout-navigation";
-import { clearPaymentAttempt, createPayment, formatPaymentNumber, formatPaymentPrice, loadPaymentProducts, paymentAttemptKey, PaymentRequestError, readPendingPayment, savePendingPayment, type PaymentCatalog, type PaymentRequest } from "@/features/payments/payments";
+import { clearPaymentAttempt, createPayment, formatPaymentPrice, loadPaymentProducts, paymentAttemptKey, PaymentRequestError, readPendingPayment, savePendingPayment, type PaymentCatalog, type PaymentRequest } from "@/features/payments/payments";
 import styles from "./TokenTopUpDialog.module.css";
 
 type TokenTopUpDialogProps = { onClose: () => void };
@@ -23,9 +32,10 @@ function packageArtwork(credits: number) {
 }
 
 export function TokenTopUpDialog({ onClose }: Readonly<TokenTopUpDialogProps>) {
+  const msg = useMessages();
   const [catalog, setCatalog] = useState<PaymentCatalog | null>(null);
   const [selectedCode, setSelectedCode] = useState("");
-  const [error, setError] = useState("");
+  const [error, setError] = useState<MessageKey | "">("");
   const [loading, setLoading] = useState(true);
   const [busy, setBusy] = useState(false);
   const [pendingID, setPendingID] = useState<string | null>(() => readPendingPayment());
@@ -51,7 +61,7 @@ export function TokenTopUpDialog({ onClose }: Readonly<TokenTopUpDialogProps>) {
       setCatalog(result); setSelectedCode(result.items[0]?.code ?? ""); setLoading(false);
     }).catch(() => {
       if (controller.signal.aborted) return;
-      setLoading(false); setError("Не удалось загрузить пакеты токенов. Попробуйте ещё раз.");
+      setLoading(false); setError("tokenTopUpDialog.couldNotLoadTokenPacksPleaseTry");
     });
     return () => controller.abort();
   }, [reload]);
@@ -79,11 +89,11 @@ export function TokenTopUpDialog({ onClose }: Readonly<TokenTopUpDialogProps>) {
     } catch (cause) {
       if (!alive.current) return;
       const status = cause instanceof PaymentRequestError ? cause.status : 0;
-      setError(status === 401 || status === 403 ? "Войдите в аккаунт заново и повторите покупку."
-        : status === 409 ? "Данные покупки изменились. Выберите пакет заново."
-        : status === 422 ? "Для оплаты нужен подтверждённый email в аккаунте."
-        : status === 429 ? "Слишком много запросов. Повторите покупку через минуту."
-        : "Не удалось открыть оплату. Повторите попытку — операция сохранена.");
+      setError(status === 401 || status === 403 ? "tokenTopUpDialog.signInAgainAndRetryThePurchase"
+        : status === 409 ? "tokenTopUpDialog.purchaseDetailsHaveChangedSelectThePack"
+        : status === 422 ? "tokenTopUpDialog.aVerifiedAccountEmailIsRequiredFor"
+        : status === 429 ? "tokenTopUpDialog.tooManyRequestsRetryThePurchaseIn"
+        : "tokenTopUpDialog.couldNotOpenCheckoutTryAgainThe");
     } finally {
       submitting.current = false;
       if (alive.current) setBusy(false);
@@ -95,42 +105,42 @@ export function TokenTopUpDialog({ onClose }: Readonly<TokenTopUpDialogProps>) {
       {(requestClose) => (
         <div aria-labelledby={titleId} aria-modal="true" className={styles.dialogLayer} role="dialog">
           <ModalCloseButton
-            aria-label="Закрыть пополнение баланса"
+            aria-label={msg("tokenTopUpDialog.closeBalanceTopUp")}
             className={styles.closeButtonPlacement}
             onClick={requestClose}
             ref={closeButtonRef}
           />
           <section className={styles.dialog}>
             <header className={styles.header}>
-              <div><h2 id={titleId}>Пополнить баланс токенов</h2><p>Выберите подходящий пакет токенов.</p></div>
+              <div><h2 id={titleId}>{msg("tokenTopUpDialog.topUpTokens")}</h2><p>{msg("tokenTopUpDialog.chooseATokenPack")}</p></div>
             </header>
             {pendingID ? <PaymentStatus paymentID={pendingID} onDone={() => setPendingID(null)} /> : (
               <form className={styles.checkoutForm} onSubmit={purchase}>
-                {loading ? <p role="status">Загружаем пакеты токенов…</p> : null}
+                {loading ? <StateNotice inline kind="loading">{msg("tokenTopUpDialog.loadingTokenPacks")}</StateNotice> : null}
                 <ScrollArea className={styles.packageScroll} viewportClassName={styles.packageViewport}>
-                  <fieldset aria-label="Пакеты токенов" className={styles.packageList} disabled={busy}>
+                  <fieldset aria-label={msg("tokenTopUpDialog.tokenPacks")} className={styles.packageList} disabled={busy}>
                   {catalog?.items.map((item) => (
                     <label className={`${selectableStyles.control} ${styles.packageCard}`} key={item.code}>
-                      <input aria-label={`${formatPaymentNumber(item.credits)} токенов за ${formatPaymentPrice(item.amount)} ₽`} checked={item.code === selectedCode} className={styles.radioInput} name="token-package"
+                      <input aria-label={msg("tokenTopUpDialog.valueTokensForValue", { value1: getCreditAmountLabel(item.credits, undefined, msg), value2: formatPaymentPrice(item.amount, msg.locale) })} checked={item.code === selectedCode} className={styles.radioInput} name="token-package"
                         onChange={() => { changeDetails(); setSelectedCode(item.code); }} type="radio" value={item.code} />
                       <Image alt="" aria-hidden="true" className={styles.packageMark} height={48} sizes="48px" src={packageArtwork(item.credits)} width={48} />
                       <span className={styles.packageDetails}>
-                        <span className={styles.tokenLine}><strong>{formatPaymentNumber(item.credits)}</strong><span>ТОКЕНОВ</span></span>
-                        <span className={styles.priceLine}>за {formatPaymentPrice(item.amount)} ₽</span>
+                        <strong className={styles.tokenLine}><CreditAmount value={item.credits} /></strong>
+                        <span className={styles.priceLine}>{msg("billing.packagePrice", { price: formatCurrency(msg.locale, item.amount / 100, item.currency) })}</span>
                       </span>
                     </label>
                   ))}
                   </fieldset>
                 </ScrollArea>
-                {catalog?.items.length === 0 ? <p role="status">Сейчас нет доступных пакетов токенов.</p> : null}
-                {catalog && !catalog.checkout_available ? <p role="status">Тестовая оплата пока недоступна.</p> : null}
+                {catalog?.items.length === 0 ? <StateNotice inline kind="empty">{msg("tokenTopUpDialog.noTokenPacksAreCurrentlyAvailable")}</StateNotice> : null}
+                {catalog && !catalog.checkout_available ? <StateNotice inline kind="empty">{msg("tokenTopUpDialog.testPaymentsAreNotAvailableYet")}</StateNotice> : null}
                 {selectedPackage ? <>
                   <button className={styles.purchaseButton} disabled={busy || !catalog?.checkout_available} type="submit">
-                    {busy ? "Открываем ЮKassa…" : `Купить за ${formatPaymentPrice(selectedPackage.amount)} ₽`}
+                    {busy ? msg("tokenTopUpDialog.openingYookassa") : msg("tokenTopUpDialog.buyForValue", { value1: formatPaymentPrice(selectedPackage.amount, msg.locale) })}
                   </button>
                 </> : null}
-                {error ? <p className={styles.error} role="alert">{error}</p> : null}
-                {!catalog && !loading ? <button className={styles.purchaseButton} onClick={() => { setError(""); setLoading(true); setReload((value) => value + 1); }} type="button">Загрузить пакеты</button> : null}
+                {error ? <StateNotice inline kind="error">{msg(error)}</StateNotice> : null}
+                {!catalog && !loading ? <RetryAction label={msg("tokenTopUpDialog.loadTokenPacks")} onClick={() => { setError(""); setLoading(true); setReload((value) => value + 1); }} /> : null}
               </form>
             )}
           </section>

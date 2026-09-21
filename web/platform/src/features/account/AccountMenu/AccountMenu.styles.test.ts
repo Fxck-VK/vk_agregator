@@ -37,11 +37,11 @@ describe("AccountMenu styles", () => {
     expect(stylesheet).not.toContain("::-webkit-scrollbar");
   });
 
-  it("keeps the rectangular account trigger transparent until interaction", () => {
+  it("keeps the account trigger transparent with an outline on interaction", () => {
     expect(triggerRule).toContain("grid-template-columns: 2.5rem minmax(0, 1fr) 1.5rem");
     expect(triggerRule).toContain("background: transparent");
     expect(stylesheet).toMatch(
-      /\.trigger:hover,\s*\.trigger:focus-visible,\s*\.trigger\[data-open="true"\]\s*\{[^}]*background:\s*var\(--color-surface-raised\)/s,
+      /\.trigger:hover,\s*\.trigger:focus-visible,\s*\.trigger\[data-open="true"\]\s*\{[^}]*background:\s*transparent;[^}]*box-shadow:\s*inset 0 0 0 0\.0625rem var\(--color-accent\);/s,
     );
   });
 
@@ -49,7 +49,7 @@ describe("AccountMenu styles", () => {
     expect(stylesheet).toMatch(/\.avatar\s*\{[^}]*inline-size:\s*2\.5rem;/s);
     expect(stylesheet).toMatch(/\.avatar\s*\{[^}]*block-size:\s*2\.5rem;/s);
     expect(stylesheet).toMatch(/\.avatar\s*\{[^}]*border-radius:\s*var\(--radius-sm\);/s);
-    expect(triggerRule).toContain("border-radius: var(--radius-lg)");
+    expect(triggerRule).toContain("border-radius: var(--radius-sm)");
   });
 
   it("highlights every account-menu row on hover without shifting its layout", () => {

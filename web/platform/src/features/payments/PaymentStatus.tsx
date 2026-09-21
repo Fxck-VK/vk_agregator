@@ -1,17 +1,29 @@
 "use client";
 
-import Link from "next/link";
-import { useRouter } from "next/navigation";
+import { StateNotice } from "@/components/ui/AsyncState/AsyncState";
+import { RetryAction } from "@/components/ui/AsyncState/RetryAction";
+import { RichMessage } from "@/i18n/RichMessage";
+import { CreditAmount } from "@/components/ui/CreditAmount/CreditAmount";
+
+
+import type { MessageKey } from "@/i18n/messages";
+
+import { useMessages } from "@/i18n/LocaleProvider";
+
+
+import Link from "@/i18n/Link";
+import { useRouter } from "@/i18n/navigation";
 import { useEffect, useRef, useState } from "react";
-import { clearPendingPayment, clearPaymentAttempt, formatPaymentNumber, getPayment, PaymentRequestError, type Payment } from "./payments";
+import { clearPendingPayment, clearPaymentAttempt, getPayment, PaymentRequestError, type Payment } from "./payments";
 import styles from "./payments.module.css";
 
 type Props = { paymentID: string; onDone?: () => void };
 export function PaymentStatus({ paymentID, onDone }: Props) {
+  const msg = useMessages();
   const { refresh } = useRouter();
   const refreshed = useRef<string | null>(null);
   const [payment, setPayment] = useState<Payment | null>(null);
-  const [message, setMessage] = useState("");
+  const [message, setMessage] = useState<MessageKey | "">("");
   const [stopped, setStopped] = useState(false);
   const [notFound, setNotFound] = useState(false);
   const [retry, setRetry] = useState(0);
@@ -35,7 +47,7 @@ export function PaymentStatus({ paymentID, onDone }: Props) {
           clearPendingPayment(paymentID); clearPaymentAttempt(); setStopped(true); return;
         }
         if (++attempts >= 40) {
-          setMessage("Подтверждение ещё не получено. Проверьте оплату немного позже."); setStopped(true); return;
+          setMessage("paymentStatus.confirmationHasNotArrivedYetCheckThe"); setStopped(true); return;
         }
         timer = setTimeout(check, 3000);
       } catch (error) {
@@ -43,9 +55,9 @@ export function PaymentStatus({ paymentID, onDone }: Props) {
         if (error instanceof PaymentRequestError && error.status === 404) {
           setNotFound(true);
           clearPendingPayment(paymentID); clearPaymentAttempt();
-          setMessage("Этот платёж недоступен для текущего аккаунта.");
+          setMessage("paymentStatus.thisPaymentIsNotAvailableToThe");
         } else {
-          setMessage("Не удалось проверить оплату. Попробуйте ещё раз.");
+          setMessage("paymentStatus.couldNotCheckThePaymentPleaseTry");
         }
         setStopped(true);
       }
@@ -59,22 +71,22 @@ export function PaymentStatus({ paymentID, onDone }: Props) {
   const refunded = payment && ["refunded", "partially_refunded"].includes(payment.status);
   return (
     <div className={styles.status}>
-      <div aria-live="polite" role="status">
-        <h2>{succeeded ? "Оплата прошла" : "Статус оплаты"}</h2>
-        <p>{succeeded ? `Начислено ${formatPaymentNumber(payment.credits)} токенов.`
-          : canceled ? "Оплата отменена. Токены не начислены."
-          : refunded ? "По платежу оформлен возврат."
-          : message || "Ожидаем подтверждения оплаты. Баланс обновится после зачисления."}</p>
-      </div>
+      <StateNotice kind={succeeded ? "success" : stopped && !canceled && !refunded && !notFound ? "error" : canceled || refunded || notFound ? "info" : "loading"}>
+        <h2>{succeeded ? msg("paymentStatus.paymentSuccessful") : msg("paymentStatus.paymentStatus")}</h2>
+        <p>{succeeded ? <RichMessage id="paymentStatus.valueTokensCredited" values={{ value1: <CreditAmount value={payment.credits} /> }} />
+          : canceled ? msg("paymentStatus.paymentCanceledNoTokensWereCredited")
+          : refunded ? msg("paymentStatus.thisPaymentHasBeenRefunded")
+          : (message ? msg(message) : null) || msg("paymentStatus.waitingForPaymentConfirmationYourBalanceWill")}</p>
+      </StateNotice>
       {!succeeded && !canceled && !refunded && !notFound && stopped ? (
-        <button className={styles.action} onClick={() => { setMessage(""); setStopped(false); setRetry((value) => value + 1); }} type="button">Проверить оплату</button>
+        <RetryAction label={msg("paymentStatus.checkPayment")} onClick={() => { setMessage(""); setStopped(false); setRetry((value) => value + 1); }} />
       ) : null}
       {payment?.status === "waiting_for_user" && payment.confirmation_url ? (
-        <a className={styles.action} href={payment.confirmation_url}>Продолжить оплату в ЮKassa</a>
+        <a className={styles.action} href={payment.confirmation_url}>{msg("paymentStatus.continuePaymentInYookassa")}</a>
       ) : null}
       {onDone && (succeeded || canceled || refunded || notFound) ? (
-        <button className={styles.action} onClick={onDone} type="button">К пакетам токенов</button>
-      ) : <Link className={styles.action} href="/app">Вернуться к работе</Link>}
+        <button className={styles.action} onClick={onDone} type="button">{msg("paymentStatus.viewTokenPacks")}</button>
+      ) : <Link className={styles.action} href="/app">{msg("paymentStatus.returnToWorkspace")}</Link>}
     </div>
   );
 }

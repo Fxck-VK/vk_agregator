@@ -1,5 +1,7 @@
 # Documentation Index
 
+Local platform UI without backend/deploy: [local development scenarios](../web/platform/docs/local-development.md).
+
 This file is the canonical map for repository documentation. It tells agents
 which documents are active, which are task-scoped, and which are historical.
 
@@ -48,7 +50,15 @@ Read only the document that matches the current task:
 | Standalone NeiroHub web platform, browser UX, SEO, performance, web sessions | accepted architecture: `docs/superpowers/specs/2026-07-29-neirohub-web-platform-design.md`; active route contract: `docs/WEB_PLATFORM_ROUTE_BOUNDARIES.md`; public/private route boundary plan: `docs/superpowers/plans/2026-08-17-public-private-route-boundary.md`; public content and localization design: `docs/superpowers/specs/2026-08-17-content-and-localization-design.md`; implementation plan: `docs/superpowers/plans/2026-08-17-content-and-localization.md`; local platform setup: `web/platform/README.md` |
 | NeiroHub web static assets, reusable SVG icons and feature-local media | approved design: `docs/superpowers/specs/2026-08-19-web-asset-library-design.md`; implementation plan: `docs/superpowers/plans/2026-08-19-web-asset-library.md` |
 | Reusing NeiroHub web UI components, shared styles and tokens | Start with `web/platform/docs/ui-index.md`, then read only the linked catalog section/example. Workflow: `web/platform/AGENTS.md`. The archived draft inventory is supporting baseline evidence only. |
+| Workspace preloading, streamed shell, catalog seed, independent balance/history/files, private previews | [Architecture and checks](../web/platform/docs/preloading.md); [implementation plan](superpowers/plans/2026-09-20-workspace-preloading.md) |
+| Video example posters and deferred MP4 loading | [Behavior](../web/platform/docs/preloading.md#обложки-видеопримеров); [implementation plan](superpowers/plans/2026-09-20-video-posters.md) |
+| Shared web loading/error/empty states and local visual review | Component contract: `web/platform/docs/ui-catalog.md#async-states`; consumer map: `web/platform/docs/shared-async-states.md`; scoped execution plan: `web/platform/docs/shared-async-states-plan.md`. |
+| Branded missing-page UI / 404 | Shared styling and navigation: `web/platform/docs/ui-catalog.md#not-found`; approved design and verification: `web/platform/docs/not-found-page-plan.md`. |
+| Shared FAQ component on home and referral pages | Component contract: `web/platform/docs/ui-catalog.md#faq`; scoped design and verification: `web/platform/docs/shared-faq-plan.md`. |
+| Platform localization, UI copy, language preference and RTL | Read `web/platform/docs/localization.md`. Dictionaries live under `web/platform/src/i18n`; use the shared locale provider and request-scoped server loader. Completed implementation and verification record: `web/platform/docs/localization-plan.md`. |
+| Platform `/ru` and `/en` URLs, locale navigation, redirects, canonical/hreflang and return paths | Active contract: `web/platform/docs/locale-routing.md`; implementation and verification: `web/platform/docs/locale-routing-plan.md`. Supersedes the earlier unprefixed-Russian URL strategy. |
 | Conversation image cards, shared file preview and conversation-only galleries | client contract and implementation: `web/platform/src/features/conversations/ConversationImageGallery/README.md` |
+| Attached photo viewing from composer and sent messages without metadata | Contract: `web/platform/docs/ui-catalog.md#media`; implementation and verification: `web/platform/docs/attachment-preview-plan.md` |
 | Fast private workspace navigation, fixed-route prefetch, account-tab cache, DEV timing | approved design: `docs/superpowers/specs/2026-08-03-fast-workspace-navigation-design.md`; implementation plan: `docs/superpowers/plans/2026-08-03-fast-workspace-navigation.md` |
 | NeiroHub system, light and dark appearance switching | approved design: `docs/superpowers/specs/2026-08-04-neirohub-theme-switching-design.md`; implementation plan: `docs/superpowers/plans/2026-08-04-neirohub-theme-switching.md` |
 | Retention, cleanup, analytics aggregates | `docs/DATA_RETENTION_POLICY.md` |

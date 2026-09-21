@@ -5,7 +5,7 @@
   align-items: center;
   padding: clamp(var(--space-4), 4vw, var(--space-5));
   border-radius: var(--radius-lg);
-  background: var(--color-surface);
+  background: var(--color-panel);
 }
 
 .plan,
@@ -38,7 +38,7 @@
 }
 
 .balance strong {
-  background: var(--gradient-brand);
+  background: var(--gradient-text, var(--gradient-brand));
   background-clip: text;
   color: transparent;
   font-size: clamp(1.5rem, 4vw, 2rem);

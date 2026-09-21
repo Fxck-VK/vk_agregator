@@ -8,6 +8,7 @@ import styles from "./ChatSubmitButton.module.css";
 
 type ChatSubmitButtonProps = {
   disabled: boolean;
+  onClick?: ButtonHTMLAttributes<HTMLButtonElement>["onClick"];
   label: string;
   type?: ButtonHTMLAttributes<HTMLButtonElement>["type"];
 };
@@ -15,6 +16,7 @@ type ChatSubmitButtonProps = {
 export function ChatSubmitButton({
   disabled,
   label,
+  onClick,
   type = "submit",
 }: ChatSubmitButtonProps) {
   return (
@@ -25,6 +27,7 @@ export function ChatSubmitButton({
         data-ui="chat-submit-button"
         disabled={disabled}
         type={type}
+        onClick={onClick}
       >
         <Image
           alt=""

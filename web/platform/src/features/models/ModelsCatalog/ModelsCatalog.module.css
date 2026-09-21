@@ -62,19 +62,6 @@
   gap: var(--space-5);
 }
 
-.emptyState,
-.error {
-  margin: 0;
-}
-
-.emptyState {
-  color: var(--color-text-muted);
-}
-
-.error {
-  color: var(--color-danger);
-}
-
 @container models-catalog (max-width: 42rem) {
   .grid {
     grid-template-columns: minmax(0, 1fr);
@@ -87,3 +74,5 @@
     padding-block-end: var(--space-4);
   }
 }
+
+.loadingCard { min-block-size: 11.5rem; }

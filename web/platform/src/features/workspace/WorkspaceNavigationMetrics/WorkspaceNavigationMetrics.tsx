@@ -1,7 +1,8 @@
 "use client";
 
-import { usePathname } from "next/navigation";
+import { usePathname } from "@/i18n/navigation";
 import { useEffect, useRef } from "react";
+import { stripLocale } from "@/i18n/routing";
 
 import { beginWorkspaceNavigation, completeWorkspaceNavigation, isWorkspaceMetricsEnabled } from "./workspace-navigation-metrics";
 
@@ -29,14 +30,15 @@ export function WorkspaceNavigationMetrics() {
       if (!anchor || (anchor.target && anchor.target !== "_self") || anchor.hasAttribute("download")) return;
 
       const destination = new URL(anchor.href, window.location.origin);
+      const destinationPath = stripLocale(destination.pathname);
 
       if (
         destination.origin !== window.location.origin
-        || (destination.pathname !== "/app" && !destination.pathname.startsWith("/app/"))
-        || destination.pathname === pathname
+        || (destinationPath !== "/app" && !destinationPath.startsWith("/app/"))
+        || destinationPath === pathname
       ) return;
 
-      beginWorkspaceNavigation(destination.pathname);
+      beginWorkspaceNavigation(destinationPath);
     };
 
     document.addEventListener("click", observeNavigation, true);

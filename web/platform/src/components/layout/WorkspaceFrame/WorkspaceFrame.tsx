@@ -13,6 +13,12 @@ import { WorkspaceLoginAction } from "@/features/auth/WorkspaceLoginAction/Works
 import { WorkspaceModelSelectionProvider } from "@/features/models/WorkspaceModelSelection/WorkspaceModelSelection";
 import { WorkspaceDataCacheProvider } from "@/features/workspace/WorkspaceDataCache/WorkspaceDataCache";
 import { WorkspaceNavigationMetrics } from "@/features/workspace/WorkspaceNavigationMetrics/WorkspaceNavigationMetrics";
+import { GenerationCatalogProvider } from "@/features/models/GenerationCatalogProvider";
+import type { GenerationModelCatalog } from "@/features/models/generation-model-catalog";
+import { Skeleton, StateNotice } from "@/components/ui/AsyncState/AsyncState";
+import { useDictionary } from "@/i18n/LocaleProvider";
+import { useRouter } from "@/i18n/navigation";
+import { LanguageSwitcher } from "@/i18n/LanguageSwitcher";
 import type { AccountProfile, ConversationItem } from "@/lib/web-api/contracts";
 
 const desktopSidebarCollapsedStorageKey = "neirohub.desktop-sidebar-collapsed";
@@ -35,6 +41,8 @@ type WorkspaceFrameProps = {
   children: ReactNode;
   conversations: ConversationItem[];
   profile: AccountProfile;
+  deferred?: boolean;
+  initialCatalog?: GenerationModelCatalog | null;
 };
 
 type WorkspaceChromeProps = {
@@ -84,10 +92,11 @@ function WorkspaceChrome({ account, balance = null, children, conversations, tra
   );
 }
 
-export function WorkspaceFrame({ account, accountId, balance = null, children, conversations, profile }: WorkspaceFrameProps) {
+export function WorkspaceFrame({ account, accountId, balance = null, children, conversations, profile, deferred = false, initialCatalog = null }: WorkspaceFrameProps) {
   return (
-    <WorkspaceAccountProvider snapshot={{ balance, profile }}>
-      <WorkspaceConversationListProvider accountId={accountId} initialConversations={conversations} key={accountId}>
+    <GenerationCatalogProvider initial={initialCatalog} key={accountId}>
+    <WorkspaceAccountProvider deferred={deferred} snapshot={{ balance, profile }}>
+      <WorkspaceConversationListProvider deferred={deferred} accountId={accountId} initialConversations={conversations} key={accountId}>
         <WorkspaceDataCacheProvider>
           <WorkspaceModelSelectionProvider key={accountId}>
             <WorkspaceChrome
@@ -101,7 +110,20 @@ export function WorkspaceFrame({ account, accountId, balance = null, children, c
         </WorkspaceDataCacheProvider>
       </WorkspaceConversationListProvider>
     </WorkspaceAccountProvider>
+    </GenerationCatalogProvider>
   );
+}
+
+export function SessionFailureNotice() {
+  const t = useDictionary();
+  const router = useRouter();
+  return <StateNotice kind="error" action={{ label: t.files.retry, onClick: () => router.refresh() }}>{t.workspace.unavailable}</StateNotice>;
+}
+
+export function LoadingWorkspaceFrame({ children }: { children?: ReactNode }) {
+  return <AppShell header={<div style={{ display: "flex", justifyContent: "space-between", padding: "1rem" }}><Skeleton style={{ width: "12rem", height: "2.5rem" }} /><Skeleton style={{ width: "7rem", height: "2.5rem" }} /></div>} sidebar={<Sidebar account={<Skeleton style={{ width: "8rem", height: "2.5rem" }} />} />}>
+    {children ?? <div aria-busy="true" style={{ padding: "2rem", display: "grid", gap: "1rem" }}><Skeleton style={{ width: "40%", height: "2rem" }} /><Skeleton style={{ width: "100%", height: "10rem" }} /></div>}
+  </AppShell>;
 }
 
 export function GuestWorkspaceFrame({ children }: Readonly<{ children: ReactNode }>) {
@@ -109,7 +131,7 @@ export function GuestWorkspaceFrame({ children }: Readonly<{ children: ReactNode
     <WorkspaceDataCacheProvider>
       <WorkspaceModelSelectionProvider>
         <WorkspaceChrome
-          account={<WorkspaceLoginAction placement="sidebar" />}
+          account={<><LanguageSwitcher /><WorkspaceLoginAction placement="sidebar" /></>}
           trailingAction={<WorkspaceLoginAction placement="header" />}
         >
           {children}

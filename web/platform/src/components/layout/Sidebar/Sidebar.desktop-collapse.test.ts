@@ -19,7 +19,7 @@ const tooltipStylesheet = readFileSync(
 describe("Sidebar desktop collapse stylesheet", () => {
   it("keeps the sidebar content full-height while its surface continues beneath the workspace", () => {
     expect(appShellStylesheet).toMatch(
-      /\.sidebar\s*\{[^}]*position:\s*absolute;[^}]*inline-size:\s*calc\(var\(--sidebar-width\) \+ var\(--radius-lg\)\);[^}]*padding:\s*0;[^}]*padding-inline-end:\s*var\(--radius-lg\);[^}]*background:\s*var\(--color-panel\);/s,
+      /\.sidebar\s*\{[^}]*position:\s*absolute;[^}]*inline-size:\s*calc\(var\(--sidebar-width\) \+ var\(--radius-lg\)\);[^}]*padding:\s*0;[^}]*padding-inline-end:\s*var\(--radius-lg\);[^}]*background:\s*var\(--color-sidebar, var\(--color-panel\)\);/s,
     );
     expect(stylesheet).toMatch(
       /\.panel\s*\{[^}]*block-size:\s*100%;[^}]*inline-size:\s*100%;[^}]*border-radius:\s*0;/s,

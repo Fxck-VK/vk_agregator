@@ -34,7 +34,7 @@ describe("AppShell workspace scrollbar", () => {
     expect(component).toContain('viewportAs="main"');
     expect(workspaceRule).toContain("position: relative");
     expect(workspaceRule).toContain("overflow: hidden");
-    expect(workspaceScrollerRule).toContain("background: var(--color-background)");
+    expect(workspaceScrollerRule).toContain("background: var(--color-workspace)");
     expect(workspaceScrollerRule).not.toContain("margin-inline-end");
   });
 
@@ -49,7 +49,7 @@ describe("AppShell workspace surface", () => {
   it("uses the panel surface for the sidebar layer and graphite behind the workspace", () => {
     expect(shellRule).toContain("--app-shell-canvas: var(--color-background)");
     expect(shellRule).toContain("background: var(--app-shell-canvas)");
-    expect(sidebarRule).toContain("background: var(--color-panel)");
+    expect(sidebarRule).toContain("background: var(--color-sidebar, var(--color-panel))");
   });
 
   it("renders the desktop workspace flush with the vertical viewport edges", () => {
@@ -57,9 +57,10 @@ describe("AppShell workspace surface", () => {
     expect(workspaceRule).toContain("block-size: 100dvh");
     expect(workspaceRule).toContain("margin-block: 0");
     expect(workspaceRule).toContain("margin-inline-end: var(--app-shell-edge-gap)");
-    expect(workspaceRule).toContain("border-radius: var(--radius-lg)");
+    expect(workspaceRule).toContain("border-start-start-radius: var(--radius-lg)");
+    expect(workspaceRule).toContain("border-end-start-radius: var(--radius-lg)");
     expect(workspaceRule).toContain("background: var(--color-workspace)");
-    expect(workspaceRule).toContain("box-shadow: var(--shadow-card)");
+    expect(workspaceRule).not.toContain("box-shadow:");
   });
 
   it("removes the floating-panel spacing and rounding on mobile", () => {

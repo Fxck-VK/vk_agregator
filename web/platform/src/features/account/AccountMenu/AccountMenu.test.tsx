@@ -1,6 +1,10 @@
 import { act, cleanup, createEvent, fireEvent, render, screen } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
+vi.mock("next/navigation", () => ({
+  useRouter: vi.fn(() => ({ push: vi.fn(), replace: vi.fn(), refresh: vi.fn() })),
+}));
+
 import { AccountMenu } from "./AccountMenu";
 
 afterEach(() => {

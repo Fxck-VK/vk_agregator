@@ -20,9 +20,9 @@ describe("payment return recovery", () => {
   savePendingPayment(id);
   vi.mocked(getPayment).mockResolvedValue({ id, status: "succeeded", amount: 40000, currency: "RUB", credits: 800 });
   const { rerender } = render(<PaymentReturn />);
-  await screen.findByText("Начислено 800 токенов.");
+  await screen.findByLabelText("800 звёзд");
   expect(sessionStorage.getItem("neirohub:pending-payment")).toBeNull();
   rerender(<PaymentReturn />);
-  expect(screen.getByText("Начислено 800 токенов.")).toBeInTheDocument();
+  expect(screen.getByTestId("credit-star-icon")).toBeInTheDocument();
  });
 });

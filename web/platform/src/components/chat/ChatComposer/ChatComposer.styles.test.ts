@@ -54,7 +54,7 @@ describe("ChatComposer landing styles", () => {
     );
     expect(stylesheet).toMatch(/\.field\s*\{[^}]*grid-area:\s*field;/s);
     expect(stylesheet).toMatch(/\.controls\s*\{[^}]*grid-area:\s*controls;/s);
-    expect(stylesheet).toMatch(/\.attachment\s*\{[^}]*grid-area:\s*attachment;/s);
+    expect(stylesheet).toMatch(/\.attachments\s*\{[^}]*grid-area:\s*attachment;/s);
   });
 
   it("lets the shared text input own wrapping and vertical growth", () => {

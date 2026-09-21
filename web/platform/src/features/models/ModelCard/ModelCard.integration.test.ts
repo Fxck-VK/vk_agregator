@@ -29,11 +29,11 @@ describe("shared model-card integration", () => {
     expect(presentation).toContain("getModelPresentation");
     expect(presentation).not.toContain("modelPresentationById");
     expect(presentation).toContain("/app/chats?model=${encodeURIComponent(model.id)}");
-    expect(card).toContain("getModelPresentation(model)");
+    expect(card).toContain("getModelPresentation(model, msg)");
     expect(selector).toContain('<ModelSelectorOption');
     expect(selectorOption).toContain('<ModelCard');
     expect(selectorOption).toContain('variant="selector"');
-    expect(selector).toContain("getModelPresentation(selectedModel)");
+    expect(selector).toContain("getModelPresentation(selectedModel, msg)");
     expect(selector).toContain("src={selectedModelPresentation?.artworkSrc}");
     expect(selector).not.toMatch(
       /styles\.(?:option|optionSelected|optionIcon|optionCopy|optionTitle|optionDescription)\b/,

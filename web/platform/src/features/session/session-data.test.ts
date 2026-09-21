@@ -20,26 +20,13 @@ const profile = {
   identity_refs: [],
 };
 
-const conversations = {
-  items: [
-    {
-      id: "d7c979f5-24e5-4f88-924b-a592d6e5a906",
-      title: "New conversation",
-      created_at: "2026-07-31T09:00:00Z",
-      updated_at: "2026-07-31T09:05:00Z",
-    },
-  ],
-};
-
-const balance = { balance: 104 };
-
 describe("loadWorkspaceSession", () => {
   beforeEach(() => {
     vi.mocked(cookies).mockResolvedValue({ has: vi.fn(() => false) } as never);
   });
 
   afterEach(() => {
-    vi.clearAllMocks();
+    vi.resetAllMocks();
     vi.unstubAllEnvs();
   });
 
@@ -121,34 +108,15 @@ describe("loadWorkspaceSession", () => {
     await expect(loadWorkspaceSession()).resolves.toEqual({ kind: "unavailable" });
   });
 
-  it("returns parsed profile, conversations, and the independently scoped balance", async () => {
-    vi.mocked(webServerFetch)
-      .mockResolvedValueOnce(Response.json(profile))
-      .mockResolvedValueOnce(Response.json(conversations))
-      .mockResolvedValueOnce(Response.json(balance));
-
-    await expect(loadWorkspaceSession()).resolves.toEqual({
-      kind: "authenticated",
-      profile,
-      conversations: conversations.items,
-      balance: 104,
+  it("opens after identity without waiting for balance or sidebar reads", async () => {
+    vi.mocked(webServerFetch).mockImplementation(async path => {
+      if (path === "/web/v1/me") return Response.json(profile);
+      return new Promise<Response>(() => {});
     });
-    expect(webServerFetch).toHaveBeenNthCalledWith(1, "/web/v1/me");
-    expect(webServerFetch).toHaveBeenNthCalledWith(2, "/web/v1/conversations?limit=20");
-    expect(webServerFetch).toHaveBeenNthCalledWith(3, "/web/v1/balance");
-  });
-
-  it("keeps the workspace available without inventing a zero balance when the balance response is unavailable", async () => {
-    vi.mocked(webServerFetch)
-      .mockResolvedValueOnce(Response.json(profile))
-      .mockResolvedValueOnce(Response.json(conversations))
-      .mockResolvedValueOnce(new Response(null, { status: 503 }));
-
     await expect(loadWorkspaceSession()).resolves.toEqual({
-      kind: "authenticated",
-      profile,
-      conversations: conversations.items,
-      balance: null,
+      kind: "authenticated", profile, conversations: [], balance: null, deferred: true,
     });
+    expect(webServerFetch).toHaveBeenCalledTimes(1);
+    expect(webServerFetch).toHaveBeenCalledWith("/web/v1/me");
   });
 });

@@ -184,12 +184,6 @@
   font-weight: var(--font-weight-semibold);
 }
 
-.creditStar {
-  inline-size: 1rem;
-  block-size: 1rem;
-  object-fit: contain;
-}
-
 .modelDescription {
   color: var(--color-text-muted);
   font-size: 0.8125rem;
@@ -223,7 +217,7 @@
   border-radius: var(--radius-sm);
   padding: 0.8rem 1.25rem;
   background: var(--gradient-brand);
-  color: #fff;
+  color: var(--color-text-on-gradient, #fff);
   box-shadow: 0 0.5rem 1.25rem color-mix(in srgb, var(--color-accent) 24%, transparent);
   font: inherit;
   font-weight: var(--font-weight-semibold);

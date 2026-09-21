@@ -9,40 +9,10 @@
 }
 
 .failureNotice {
-  position: fixed;
-  z-index: 90;
-  inset: calc(var(--header-height) + var(--space-4)) var(--space-5) auto auto;
-  display: flex;
+  position: fixed; z-index: 90;
+  inset-block-start: calc(var(--header-height) + var(--space-4));
+  inset-inline-end: var(--space-5);
   max-inline-size: min(28rem, calc(100vw - 2 * var(--space-5)));
-  padding: var(--space-3) var(--space-4);
-  border: 0.0625rem solid var(--color-border);
-  border-radius: var(--radius-lg);
-  align-items: center;
-  gap: var(--space-3);
-  background: var(--color-surface-raised);
-  box-shadow: var(--shadow-card);
-  color: var(--color-text-muted);
-}
-
-.retryButton {
-  min-block-size: 2.25rem;
-  padding-inline: var(--space-4);
-  border: 0;
-  border-radius: var(--radius-pill);
-  background: var(--color-accent);
-  color: var(--color-text-on-accent);
-  font: inherit;
-  font-weight: var(--font-weight-semibold);
-  white-space: nowrap;
-}
-
-.retryButton:hover {
-  background: var(--color-accent-strong);
-}
-
-.retryButton:focus-visible {
-  outline: 0.1875rem solid color-mix(in srgb, var(--color-accent) 40%, transparent);
-  outline-offset: 0.125rem;
 }
 
 @keyframes logout-unveil {

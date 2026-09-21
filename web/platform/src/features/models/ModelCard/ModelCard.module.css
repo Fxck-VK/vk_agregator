@@ -13,7 +13,7 @@
   min-inline-size: 0;
   min-block-size: 11.5rem;
   block-size: 100%;
-  border: 0.0625rem solid var(--color-border);
+  border: 0.0625rem solid var(--color-card-border);
   border-radius: 1.25rem;
   padding: clamp(var(--space-5), 3vw, var(--space-6));
   background: var(--color-panel);
@@ -34,11 +34,11 @@
 
 .cardLink:focus-visible {
   outline: none;
+  box-shadow: none;
 }
 
 .cardLink:focus-visible .card {
-  outline: 0.1875rem solid var(--color-focus);
-  outline-offset: 0.1875rem;
+  border-color: var(--color-accent);
 }
 
 .cardTop {

@@ -1,3 +1,5 @@
+vi.mock("server-only", () => ({}));
+vi.mock("next/headers", () => ({ headers: vi.fn(async () => new Headers()), cookies: vi.fn(async () => ({ get: () => undefined })) }));
 import { renderToStaticMarkup } from "react-dom/server";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
@@ -23,7 +25,7 @@ import { WorkspaceConversationListProvider } from "@/features/conversations/Work
 import { loadWorkspaceSession } from "@/features/session/session-data";
 import { WorkspaceHome } from "@/features/workspace/WorkspaceHome/WorkspaceHome";
 
-import WorkspaceLayout, { dynamic, metadata, revalidate } from "./layout";
+import StreamingLayout, { WorkspaceSessionContent as WorkspaceLayout, dynamic, generateMetadata, revalidate } from "./layout";
 
 const authenticatedSession = {
   kind: "authenticated" as const,
@@ -52,6 +54,13 @@ const authenticatedSession = {
 };
 
 describe("WorkspaceLayout", () => {
+  it("renders a neutral shell before the identity promise completes", () => {
+    vi.mocked(loadWorkspaceSession).mockReturnValue(new Promise(() => {}));
+    const markup = renderToStaticMarkup(StreamingLayout({ children: <p>private child</p> }));
+    expect(markup).toContain('data-ui="skeleton"');
+    expect(markup).toContain('data-testid="app-shell"');
+    expect(markup).not.toContain("private child");
+  });
   beforeEach(() => {
     vi.mocked(usePathname).mockReturnValue("/app");
     vi.mocked(useRouter).mockReturnValue({ push: vi.fn(), replace: vi.fn() } as never);
@@ -67,7 +76,7 @@ describe("WorkspaceLayout", () => {
     const markup = renderToStaticMarkup(await WorkspaceLayout({ children: <p>private child</p> }));
 
     expect(markup).toContain("Простой старт в мир");
-    expect(markup.match(/href="\/login"/g)).toHaveLength(2);
+    expect(markup.match(/href="\/ru\/login"/g)).toHaveLength(2);
     expect(markup).not.toContain("private child");
     expect(markup).not.toContain("member@example.com");
     expect(markup).not.toContain(authenticatedSession.conversations[0].title);
@@ -116,10 +125,10 @@ describe("WorkspaceLayout", () => {
     expect(loadWorkspaceSession).toHaveBeenCalledTimes(1);
   });
 
-  it("marks all workspace pages dynamic and unindexable", () => {
+  it("marks all workspace pages dynamic and unindexable", async () => {
     expect(dynamic).toBe("force-dynamic");
     expect(revalidate).toBe(0);
-    expect(metadata.robots).toEqual({ index: false, follow: false });
+    expect((await generateMetadata()).robots).toEqual({ index: false, follow: false });
   });
 });
 
@@ -137,12 +146,12 @@ describe("Workspace destinations", () => {
     expect(markup).toContain("Популярные нейросети");
     expect(markup).not.toContain("Нейросети для разных задач");
     expect(markup).toContain("Частые вопросы");
-    expect(markup).toContain('href="/app/chats"');
-    expect(markup).toContain('href="/app/image"');
-    expect(markup).toContain('href="/app/models"');
-    expect(markup).toContain('href="/app/files"');
-    expect(markup).toContain('href="/app/inspiration"');
-    expect(markup).toContain('href="/app/profile"');
+    expect(markup).toContain('href="/ru/app/chats"');
+    expect(markup).toContain('href="/ru/app/image"');
+    expect(markup).toContain('href="/ru/app/models"');
+    expect(markup).toContain('href="/ru/app/files"');
+    expect(markup).toContain('href="/ru/app/inspiration"');
+    expect(markup).toContain('href="/ru/app/profile"');
     expect(markup).not.toContain("image-generation-title");
     expect(markup).not.toContain(ru.imageHistory.load);
   });

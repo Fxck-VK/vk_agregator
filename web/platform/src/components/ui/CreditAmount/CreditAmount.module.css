@@ -1,8 +1,14 @@
 .amount {
   display: inline-flex;
-  align-items: center;
+  align-items: baseline;
   gap: 0.2em;
+  vertical-align: baseline;
   white-space: nowrap;
+}
+
+.value,
+.icon {
+  align-self: baseline;
 }
 
 .icon {
@@ -10,4 +16,7 @@
   inline-size: 1em;
   block-size: 1em;
   object-fit: contain;
+  /* Center the star on the glyph height without moving the text baseline. */
+  transform: translateY(0.125em);
+  transform: translateY(calc((1em - 1cap) / 2));
 }

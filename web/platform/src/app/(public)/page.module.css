@@ -12,7 +12,7 @@
   padding: clamp(var(--space-6), 8vw, 5rem);
   background:
     linear-gradient(135deg, color-mix(in srgb, var(--color-accent) 15%, transparent), transparent 45%),
-    var(--color-surface);
+    var(--color-panel);
 }
 
 .brand {

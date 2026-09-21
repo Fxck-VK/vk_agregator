@@ -12,7 +12,7 @@ describe("ModalBackdrop styles", () => {
   it("defines the single visual treatment for every full-screen modal background", () => {
     expect(stylesheet).toMatch(/\.backdrop\s*\{[^}]*position:\s*fixed;[^}]*inset:\s*0;/s);
     expect(stylesheet).toMatch(/\.backdrop\s*\{[^}]*z-index:\s*160;/s);
-    expect(stylesheet).toMatch(/\.backdrop\s*\{[^}]*background:\s*rgb\(3 3 6 \/ 80%\);/s);
+    expect(stylesheet).toMatch(/\.backdrop\s*\{[^}]*background:\s*var\(--modal-backdrop-background, rgb\(3 3 6 \/ 80%\)\);/s);
     expect(stylesheet).toMatch(/\.backdrop\s*\{[^}]*backdrop-filter:\s*blur\(0\.55rem\);/s);
     expect(stylesheet).toMatch(/\.backdrop\s*\{[^}]*animation:\s*modalBackdropIn var\(--motion-normal\) both;/s);
     expect(stylesheet).toMatch(

@@ -55,7 +55,7 @@ describe("conversation image gallery", () => {
     render(<Gallery />);
     expect(screen.getByText("Готово.")).toBeVisible();
     const card = screen.getByRole("article");
-    expect(within(card).getByRole("img", { name: ru.files.generatedImageAlt })).toHaveAttribute("src", imagePath);
+    expect(within(card).getByRole("img", { name: ru.files.generatedImageAlt })).toHaveAttribute("src", `${imagePath}?preview=1`);
     expect(screen.getAllByRole("link")).toHaveLength(1);
     expect(screen.getByRole("link")).toHaveAttribute("href", imagePath);
     const trigger = within(card).getByRole("button", { name: "Открыть файл: Журавль" });

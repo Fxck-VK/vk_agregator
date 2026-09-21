@@ -1,11 +1,15 @@
 "use client";
 
-import { useDeferredValue, useEffect, useMemo, useState } from "react";
+import { StateNotice, Skeleton } from "@/components/ui/AsyncState/AsyncState";
+import { LoadFeedback } from "@/components/ui/AsyncState/LoadFeedback";
+import { useDictionary } from "@/i18n/LocaleProvider";
+
+
+import { useDeferredValue, useMemo, useState } from "react";
 
 import { WorkspacePageFrame } from "@/components/layout/WorkspacePageFrame/WorkspacePageFrame";
-import { ru } from "@/i18n/ru";
 
-import { loadGenerationModelCatalog, type GenerationModel } from "../generation-model-catalog";
+import { useGenerationCatalog } from "../GenerationCatalogProvider";
 import { ModelCard } from "../ModelCard/ModelCard";
 import {
   getModelCatalogCategoryTabId,
@@ -15,66 +19,43 @@ import {
 import { filterAndSortCatalogModels } from "./model-filters";
 import styles from "./ModelsCatalog.module.css";
 
-type CatalogStatus = "loading" | "ready" | "failure";
+
 
 const modelsCatalogPanelId = "models-catalog-panel";
 
 export function ModelsCatalog() {
-  const [status, setStatus] = useState<CatalogStatus>("loading");
-  const [models, setModels] = useState<GenerationModel[]>([]);
+  const t = useDictionary();
+  const { catalog, status, pending, failed, retry } = useGenerationCatalog();
   const [query, setQuery] = useState("");
   const [category, setCategory] = useState<ModelCatalogCategory["id"]>("popular");
   const deferredQuery = useDeferredValue(query);
 
-  useEffect(() => {
-    let active = true;
-
-    const loadModels = async () => {
-      try {
-        const catalog = await loadGenerationModelCatalog();
-        if (!active) {
-          return;
-        }
-        setModels(catalog.items);
-        setStatus(catalog.items.length === 0 && Object.keys(catalog.categoryErrors).length > 0 ? "failure" : "ready");
-      } catch {
-        if (active) {
-          setStatus("failure");
-        }
-      }
-    };
-
-    void loadModels();
-    return () => {
-      active = false;
-    };
-  }, []);
-
   const filteredModels = useMemo(
-    () => filterAndSortCatalogModels(models, { category, query: deferredQuery }, "catalog"),
-    [category, deferredQuery, models],
+    () => filterAndSortCatalogModels(catalog?.items ?? [], { category, query: deferredQuery }, "catalog"),
+    [category, deferredQuery, catalog],
   );
-  const selectedCategory = ru.modelsCatalog.categories.find((item) => item.id === category) ?? ru.modelsCatalog.categories[0];
+  const selectedCategory = t.modelsCatalog.categories.find((item) => item.id === category) ?? t.modelsCatalog.categories[0];
 
   return (
     <WorkspacePageFrame>
       <section aria-labelledby="models-catalog-title" className={styles.catalog}>
         <header className={styles.header}>
-          <h1 id="models-catalog-title">{ru.modelsCatalog.title}</h1>
-          <p>{ru.modelsCatalog.description}</p>
+          <h1 id="models-catalog-title">{t.modelsCatalog.title}</h1>
+          <p>{t.modelsCatalog.description}</p>
         </header>
+        <LoadFeedback pending={pending} failed={failed && catalog !== null} hasData={catalog !== null} onRetry={retry} />
 
-        {status === "loading" ? <p role="status">{ru.modelsCatalog.loading}</p> : null}
+        {status === "loading" ? <div role="status" aria-label={t.modelsCatalog.loading}><div className={styles.grid} aria-hidden="true">{Array.from({ length: 6 }, (_, index) => <Skeleton key={index} className={styles.loadingCard} />)}</div></div> : null}
         {status === "failure" ? (
-          <p className={styles.error} role="alert">
-            {ru.modelsCatalog.loadFailure}
-          </p>
+          <StateNotice kind="error" action={{ label: t.files.retry, onClick: retry }}>
+            {t.modelsCatalog.loadFailure}
+          </StateNotice>
         ) : null}
 
         {status === "ready" ? (
           <>
             <ModelCatalogToolbar
-              categories={ru.modelsCatalog.categories}
+              categories={t.modelsCatalog.categories}
               category={category}
               onCategoryChange={setCategory}
               onQueryChange={setQuery}
@@ -91,7 +72,7 @@ export function ModelsCatalog() {
               <h2 className={styles.sectionTitle}>{selectedCategory.label}</h2>
 
               {filteredModels.length === 0 ? (
-                <p className={styles.emptyState}>{ru.modelsCatalog.empty}</p>
+                <StateNotice>{t.modelsCatalog.empty}</StateNotice>
               ) : null}
 
               {filteredModels.length > 0 ? (

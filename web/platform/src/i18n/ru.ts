@@ -1,4 +1,12 @@
 export const ru = {
+  preloading: {
+    offline: "Нет подключения к интернету. Данные на экране сохранены.",
+    refreshFailed: "Не удалось обновить данные. Показана последняя загруженная версия.",
+    failed: "Не удалось загрузить данные. Попробуйте ещё раз.",
+    slow: "Загрузка занимает больше времени. Вы можете продолжать работать.",
+    imageSlow: "Фото ещё загружается…",
+    balanceRetry: "Не удалось обновить баланс. Повторить",
+  },
   document: {
     title: "NeiroHub — рабочее пространство",
     description: "Единая рабочая среда для нейросетевых инструментов.",
@@ -6,6 +14,11 @@ export const ru = {
   brand: {
     name: "NeiroHub",
     monogram: "NH",
+  },
+  notFound: {
+    codeLabel: "Ошибка 404 — страница не найдена",
+    title: "Страница не найдена",
+    homeAction: "На главную",
   },
   home: {
     title: "Нейросети в одном рабочем пространстве",
@@ -56,6 +69,8 @@ export const ru = {
       "Мы готовим новый раздел ИИ-помощников. Расскажи, какой помощник нужен именно тебе.",
     updatesIdeaAction: "Предложить",
     themeLabel: "Тема интерфейса",
+    languageLabel: "Язык интерфейса",
+    languageFailure: "Не удалось изменить язык. Попробуйте ещё раз.",
     systemThemeLabel: "Системная тема",
     lightThemeLabel: "Светлая тема",
     darkThemeLabel: "Тёмная тема",
@@ -173,7 +188,7 @@ export const ru = {
     mediaLibraryUploaded: "Загруженные",
     mediaLibraryEmptyGenerated: "Подходящих сгенерированных файлов пока нет",
     mediaLibraryEmptyUploaded: "Подходящих загруженных файлов пока нет",
-    mediaLibraryChoose: "Выбрать",
+    mediaLibraryChoose: "Прикрепить",
     mediaLibraryUpload: "Загрузить файл",
     composerDisclaimer: "Стоимость зависит от выбранной нейросети. Нейросеть может ошибаться",
     composerPending: "Отправляем…",
@@ -286,7 +301,8 @@ export const ru = {
       { id: "popular", label: "Популярные" },
       { id: "images", label: "Изображения" },
       { id: "text", label: "Текст" },
-      { id: "video-audio", label: "Видео и аудио" },
+      { id: "video", label: "Видео" },
+      { id: "audio", label: "Аудио" },
       { id: "free", label: "Бесплатные" },
       { id: "study-work", label: "Учёба и работа" },
     ],

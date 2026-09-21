@@ -35,6 +35,18 @@ const models: ModelCatalogModel[] = [
 ];
 
 describe("filterCatalogModels", () => {
+  it("separates video and audio within the shared server category", () => {
+    const media = [
+      { id: "video", name: "Video", category: "video", categories: ["video-audio"] },
+      { id: "audio", name: "Audio", category: "audio", categories: ["video-audio"] },
+      { id: "uncategorized", name: "Uncategorized", category: "video" },
+    ];
+
+    expect(filterCatalogModels(media, { category: "video", query: "" })).toEqual([media[0]]);
+    expect(filterCatalogModels(media, { category: "audio", query: "" })).toEqual([media[1]]);
+    expect(filterCatalogModels(media, { category: "audio", query: "video" })).toEqual([]);
+  });
+
   it("matches a trimmed query by model name inside the selected server category", () => {
     expect(filterCatalogModels(models, { category: "images", query: " banana " })).toEqual([models[0]]);
   });

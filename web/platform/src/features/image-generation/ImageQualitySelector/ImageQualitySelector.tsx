@@ -1,5 +1,9 @@
 "use client";
 
+import { translateCatalogText } from "@/i18n/catalog";
+
+import { useMessages } from "@/i18n/LocaleProvider";
+
 import Image from "next/image";
 import { useRef, useState } from "react";
 
@@ -21,12 +25,14 @@ type ImageQualitySelectorProps = {
 
 export function ImageQualitySelector({
   disabled,
-  label,
+  label: sourceLabel,
   onChange,
   options,
   portalLayer,
   value,
 }: Readonly<ImageQualitySelectorProps>) {
+  const msg = useMessages();
+  const label = translateCatalogText(sourceLabel, msg);
   const [isOpen, setIsOpen] = useState(false);
   const triggerRef = useRef<HTMLButtonElement>(null);
 
@@ -37,14 +43,14 @@ export function ImageQualitySelector({
       <InputControlChip
         aria-expanded={isOpen}
         aria-haspopup="dialog"
-        aria-label={`${label}: ${imageQualityLabel(value)}`}
+        aria-label={`${label}: ${imageQualityLabel(value, msg)}`}
         className={styles.trigger}
         disabled={isDisabled}
         onClick={() => setIsOpen((current) => !current)}
         ref={triggerRef}
       >
         <TuneIcon />
-        <span>{imageQualityLabel(value)}</span>
+        <span>{imageQualityLabel(value, msg)}</span>
         <ChevronIcon />
       </InputControlChip>
 
@@ -63,7 +69,7 @@ export function ImageQualitySelector({
             const selected = quality === value;
             return (
               <PopoverOption
-                aria-label={imageQualityLabel(quality)}
+                aria-label={imageQualityLabel(quality, msg)}
                 className={styles.option}
                 key={quality}
                 onClick={() => {
@@ -73,7 +79,7 @@ export function ImageQualitySelector({
                 }}
                 selected={selected}
               >
-                {imageQualityLabel(quality)}
+                {imageQualityLabel(quality, msg)}
               </PopoverOption>
             );
           })}

@@ -2,7 +2,7 @@
   --color-text: var(--panel-surface-text);
   --color-text-muted: var(--panel-surface-text-muted);
 
-  color-scheme: dark;
+  color-scheme: var(--panel-surface-color-scheme, dark);
   color: var(--color-text);
   display: grid;
   grid-template-rows: minmax(0, 1fr);

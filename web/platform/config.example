@@ -3,3 +3,6 @@
 # Browser code stays same-origin and requests only /web/v1/* through the platform.
 # Keep real credentials and secrets in ignored local env files, never in this file.
 WEB_API_INTERNAL_ORIGIN=http://127.0.0.1:8080
+# Trusted public origin for absolute canonical, hreflang and sitemap URLs.
+# Required at runtime in production; never derive this from a browser Host header.
+WEB_ORIGIN=http://localhost:7158

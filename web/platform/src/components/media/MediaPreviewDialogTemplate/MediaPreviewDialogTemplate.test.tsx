@@ -25,6 +25,7 @@ function TemplateHarness({
   onShare = vi.fn(),
   previewActions = false,
   previewFooter,
+  mediaOnly = false,
   testItems = items,
 }: Readonly<{
   initialSelectedIndex?: number;
@@ -33,6 +34,7 @@ function TemplateHarness({
   onShare?: () => void;
   previewActions?: boolean;
   previewFooter?: boolean;
+  mediaOnly?: boolean;
   testItems?: readonly TestItem[];
 }>) {
   const [selectedIndex, setSelectedIndex] = useState(initialSelectedIndex);
@@ -60,7 +62,7 @@ function TemplateHarness({
       getItemKey={(item) => item.id}
       getPreviewDimensions={() => ({ height: 1, width: 1 })}
       getThumbnailLabel={(item) => `Показать ${item.label}`}
-      infoPanel={(item) => <p>Панель: {item.label}</p>}
+      infoPanel={mediaOnly ? undefined : (item) => <p>Панель: {item.label}</p>}
       infoPanelTestId="template-info-panel"
       isItemSelectable={isItemSelectable}
       items={testItems}
@@ -88,6 +90,16 @@ describe("MediaPreviewDialogTemplate", () => {
   afterEach(() => {
     cleanup();
     vi.unstubAllGlobals();
+  });
+
+  it("omits the information panel in media-only mode while retaining gallery navigation", () => {
+    render(<TemplateHarness mediaOnly />);
+    expect(screen.queryByRole("complementary")).not.toBeInTheDocument();
+    expect(screen.getByRole("dialog")).toHaveAttribute("data-media-only", "true");
+    fireEvent.click(screen.getByRole("button", { name: "Следующий" }));
+    expect(screen.getByText("Превью: Второй")).toBeInTheDocument();
+    fireEvent.keyDown(document, { key: "ArrowLeft" });
+    expect(screen.getByText("Превью: Первый")).toBeInTheDocument();
   });
 
   it("renders the selected preview and consumer-provided information panel", () => {
@@ -281,7 +293,7 @@ describe("MediaPreviewDialogTemplate", () => {
     const download = screen.getByRole("link", { name: "Скачать" });
     const share = screen.getByRole("button", { name: "Поделиться" });
 
-    expect(recreate).toHaveAttribute("href", "/recreate/one");
+    expect(recreate).toHaveAttribute("href", "/ru/recreate/one");
     expect(recreate.querySelector("img")).toHaveAttribute(
       "src",
       "/assets/icons/ui/star-white.svg",

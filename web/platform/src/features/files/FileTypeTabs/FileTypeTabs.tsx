@@ -1,9 +1,8 @@
 "use client";
 
-import { useRef } from "react";
+import { useDictionary } from "@/i18n/LocaleProvider";
 
-import { ScrollArea } from "@/components/ui/ScrollArea/ScrollArea";
-import { ru } from "@/i18n/ru";
+import { ModeSwitchPanel } from "@/components/ui/ModeSwitchPanel/ModeSwitchPanel";
 
 import styles from "./FileTypeTabs.module.css";
 
@@ -11,72 +10,27 @@ const fileCategories = ["all", "images", "reports", "presentations", "video", "u
 
 export type FileCategory = (typeof fileCategories)[number];
 
-type FileTypeTabsProps = {
+export function FileTypeTabs({ onValueChange, value }: Readonly<{
   onValueChange: (value: FileCategory) => void;
   value: FileCategory;
-};
-
-function nextCategoryIndex(currentIndex: number, key: string): number | null {
-  if (key === "Home") {
-    return 0;
-  }
-  if (key === "End") {
-    return fileCategories.length - 1;
-  }
-  if (key === "ArrowRight") {
-    return (currentIndex + 1) % fileCategories.length;
-  }
-  if (key === "ArrowLeft") {
-    return (currentIndex - 1 + fileCategories.length) % fileCategories.length;
-  }
-  return null;
-}
-
-export function FileTypeTabs({ onValueChange, value }: Readonly<FileTypeTabsProps>) {
-  const tabRefs = useRef<Array<HTMLButtonElement | null>>([]);
+}>) {
+  const t = useDictionary();
+  const items = fileCategories.map((category) => ({
+    id: category,
+    label: t.files.categories[category],
+    elementID: `files-tab-${category}`,
+    ariaControls: "files-panel",
+  }));
 
   return (
-    <ScrollArea
-      className={styles.tabScroll}
-      orientation="horizontal"
-      viewportClassName={styles.tabList}
-      viewportProps={{
-        "aria-label": ru.files.categoryTabsLabel,
-        role: "tablist",
-      }}
-    >
-      {fileCategories.map((category, index) => {
-        const isSelected = category === value;
-        return (
-          <button
-            aria-controls="files-panel"
-            aria-selected={isSelected}
-            className={styles.tab}
-            data-selected={isSelected || undefined}
-            id={`files-tab-${category}`}
-            key={category}
-            onClick={() => onValueChange(category)}
-            onKeyDown={(event) => {
-              const nextIndex = nextCategoryIndex(index, event.key);
-              if (nextIndex === null) {
-                return;
-              }
-              event.preventDefault();
-              const nextCategory = fileCategories[nextIndex];
-              onValueChange(nextCategory);
-              tabRefs.current[nextIndex]?.focus();
-            }}
-            ref={(element) => {
-              tabRefs.current[index] = element;
-            }}
-            role="tab"
-            tabIndex={isSelected ? 0 : -1}
-            type="button"
-          >
-            {ru.files.categories[category]}
-          </button>
-        );
-      })}
-    </ScrollArea>
+    <ModeSwitchPanel
+      activeID={value}
+      ariaLabel={t.files.categoryTabsLabel}
+      className={styles.panel}
+      fullWidth
+      items={items}
+      onChange={onValueChange}
+      semantics="tabs"
+    />
   );
 }

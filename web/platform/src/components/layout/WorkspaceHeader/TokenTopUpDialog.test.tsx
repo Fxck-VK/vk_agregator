@@ -18,7 +18,9 @@ describe("token checkout", () => {
   const payment = { id: "12345678-1234-4000-8000-123456789012", status: "waiting_for_user" as const, amount: 12300, currency: "RUB" as const, credits: 777, confirmation_url: "https://yoomoney.ru/checkout/test" };
   vi.mocked(createPayment).mockRejectedValueOnce(new Error("network")).mockResolvedValueOnce(payment);
   render(<TokenTopUpDialog onClose={vi.fn()} />);
-  expect(await screen.findByRole("radio", { name: "777 токенов за 123 ₽" })).toBeChecked();
+  expect(await screen.findByRole("radio", { name: "777 звёзд за 123 ₽" })).toBeChecked();
+  expect(screen.getByLabelText("777 звёзд")).toContainElement(screen.getByTestId("credit-star-icon"));
+  expect(screen.queryByText("ТОКЕНОВ")).not.toBeInTheDocument();
   expect(screen.queryByRole("textbox")).not.toBeInTheDocument();
   fireEvent.click(screen.getByRole("button", { name: "Купить за 123 ₽" }));
   await screen.findByRole("alert");

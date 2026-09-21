@@ -1,0 +1,75 @@
+.dialog {
+  position: relative;
+  inline-size: min(32rem, calc(100% - 1.5rem));
+  padding: var(--space-8);
+  border: var(--panel-surface-border);
+  border-radius: var(--radius-xl);
+  background: var(--panel-surface-background);
+  box-shadow: var(--panel-surface-shadow);
+  color: var(--panel-surface-text);
+  color-scheme: var(--panel-surface-color-scheme, dark);
+}
+
+.dialog h2 {
+  margin: 0 var(--space-6) var(--space-6);
+  font-size: 1.25rem;
+  font-weight: var(--font-weight-semibold);
+  line-height: 1.35;
+  text-align: center;
+}
+
+.closeButtonPlacement {
+  position: fixed;
+  inset-block-start: var(--space-4);
+  inset-inline-end: var(--space-4);
+}
+
+.form {
+  display: grid;
+  gap: var(--space-4);
+}
+
+.input {
+  display: block;
+  inline-size: 100%;
+  min-inline-size: 0;
+  min-block-size: 3.25rem;
+  border: 0;
+  outline: none;
+  padding: var(--space-3) var(--space-4);
+  background: transparent;
+  color: var(--panel-surface-text);
+  font: inherit;
+}
+
+.input::placeholder {
+  color: var(--color-placeholder, var(--color-text-muted));
+  opacity: 1;
+}
+
+.activateButton {
+  min-block-size: 3rem;
+  border: 0.0625rem solid transparent;
+  border-radius: var(--radius-sm);
+  font: inherit;
+  font-weight: var(--font-weight-semibold);
+  cursor: pointer;
+}
+
+.activateButton:hover:not(:disabled) {
+  border-color: var(--input-focus-border-color);
+  background: var(--color-surface-raised);
+}
+
+.status {
+  margin: 0;
+  color: var(--panel-surface-text-muted);
+  font-size: var(--font-size-caption);
+  line-height: 1.45;
+}
+
+@media (width < 40rem) {
+  .dialog {
+    padding: var(--space-8) var(--space-5) var(--space-5);
+  }
+}

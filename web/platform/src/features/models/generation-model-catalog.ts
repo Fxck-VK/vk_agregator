@@ -1,15 +1,15 @@
 import type { ChatModel, ImageModel } from "@/lib/web-api/contracts";
-import { ru } from "@/i18n/ru";
+
 import type { VideoModel } from "./video-model-catalog";
 import { chatModelForSelector } from "./chat-model-selector";
 import type { ModelSelectorModel } from "./WorkspaceModelSelector/ModelSelector";
+import type { ModelSelectorCategoryId } from "./WorkspaceModelSelector/model-selector-sections";
 import { loadModelCatalog } from "./model-catalog-cache";
 import {
  projectChatModelCatalog,
  projectImageModelCatalog,
  projectVideoModelCatalog,
  type PublicCatalog,
- type PublicCatalogCategory,
  type PublicOperation,
 } from "./model-catalog-contract";
 
@@ -24,7 +24,7 @@ export type GenerationModel = ModelSelectorModel & GenerationModelMetadata & (
 export type GenerationModelCatalog = {
  items: GenerationModel[];
  default_model_id: string;
- categoryErrors: Partial<Record<PublicCatalogCategory, string>>;
+ categoryErrors: Partial<Record<ModelSelectorCategoryId, string>>;
 };
 
 function projectOrError<T>(project: () => T): { value: T; error?: never } | { value?: never; error: unknown } {
@@ -35,7 +35,7 @@ function projectOrError<T>(project: () => T): { value: T; error?: never } | { va
  }
 }
 
-function projectGenerationModelCatalog(catalog: PublicCatalog) {
+export function projectGenerationModelCatalog(catalog: PublicCatalog) {
  const images = projectOrError(() => projectImageModelCatalog(catalog));
  const text = projectOrError(() => projectChatModelCatalog(catalog));
  const video = projectOrError(() => projectVideoModelCatalog(catalog));
@@ -61,20 +61,21 @@ function projectGenerationModelCatalog(catalog: PublicCatalog) {
   items,
   default_model_id: items.some((model) => model.id === catalog.default_model_id) ? catalog.default_model_id : items[0]?.id ?? "",
   categoryErrors: {
-   ...(images.error ? { images: ru.modelsCatalog.loadFailure } : {}),
-   ...(text.error ? { text: ru.modelsCatalog.loadFailure, free: ru.modelsCatalog.loadFailure, "study-work": ru.modelsCatalog.loadFailure } : {}),
-   ...(video.error ? { "video-audio": ru.modelsCatalog.loadFailure } : {}),
+   ...(images.error ? { images: "models_load_failed" } : {}),
+   ...(text.error ? { text: "models_load_failed", free: "models_load_failed", "study-work": "models_load_failed" } : {}),
+   ...(video.error ? { video: "models_load_failed" } : {}),
   },
  };
 }
 
 function allCategoryErrors() {
- const message = ru.modelsCatalog.loadFailure;
+ const message = "models_load_failed";
  return {
   popular: message,
   images: message,
   text: message,
-  "video-audio": message,
+  video: message,
+  audio: message,
   free: message,
   "study-work": message,
  };

@@ -311,6 +311,8 @@ type WebChatMessageLimiter interface {
 
 // Deps are services shared with other account adapters.
 type Deps struct {
+	InputArtifacts         InputArtifactService
+	InputObjects           ImageArtifactObjectReader
 	Payments               WebPaymentService
 	ReceiptContacts        WebReceiptContacts
 	PaymentCreateLimiter   WebChatMessageLimiter
@@ -370,6 +372,9 @@ func (h *Handler) Routes() http.Handler {
 	mux.HandleFunc("GET /web/v1/image-jobs/{jobID}", h.requirePrincipal(h.getImageJob))
 	mux.HandleFunc("GET /web/v1/image-jobs/{jobID}/result", h.requirePrincipal(h.getImageJobResult))
 	mux.HandleFunc("GET /web/v1/image-artifacts/{artifactID}", h.requirePrincipal(h.getImageArtifact))
+	mux.HandleFunc("GET /web/v1/image-reference-quote", h.requirePrincipal(h.quoteConversationImage))
+	mux.HandleFunc("POST /web/v1/input-artifacts", h.requireUnsafePrincipal(h.uploadConversationInput))
+	mux.HandleFunc("GET /web/v1/input-artifacts/{artifactID}", h.requirePrincipal(h.getConversationInput))
 	mux.HandleFunc("POST /web/v1/conversations", h.requireUnsafePrincipal(h.createConversation))
 	mux.HandleFunc("POST /web/v1/conversations/{conversationID}/messages", h.requireUnsafePrincipal(h.createConversationMessage))
 	mux.HandleFunc("PUT /web/v1/conversations/{conversationID}/messages/{messageID}/rating", h.requireUnsafePrincipal(h.rateConversationMessage))
@@ -1335,6 +1340,9 @@ func (h *Handler) listConversationMessages(w http.ResponseWriter, r *http.Reques
 			writeError(w, http.StatusServiceUnavailable, "conversations unavailable")
 			return
 		}
+		if message.Role == domain.ConversationRoleUser {
+			h.attachConversationInputs(r.Context(), principal.AccountID, conversation.ID, message.JobID, &safeMessage)
+		}
 		if message.Role == domain.ConversationRoleAssistant {
 			if !h.attachConversationMedia(r.Context(), principal.AccountID, conversation.ID, message.JobID, &safeMessage) {
 				continue
@@ -1458,7 +1466,7 @@ func (h *Handler) createConversationMessage(w http.ResponseWriter, r *http.Reque
 		h.createConversationMedia(w, r, principal.AccountID, conversation, idempotencyKey, req)
 		return
 	}
-	if req.ImageQuality != "" || req.AspectRatio != "" || req.OutputCount != 0 || req.Resolution != "" || req.DurationSec != 0 {
+	if len(req.ReferenceArtifactIDs) > 0 || req.ImageQuality != "" || req.AspectRatio != "" || req.OutputCount != 0 || req.Resolution != "" || req.DurationSec != 0 {
 		writeError(w, http.StatusBadRequest, "invalid text model options")
 		return
 	}
@@ -1854,14 +1862,15 @@ type safeConversationMessageList struct {
 }
 
 type safeConversationMessage struct {
-	Images    []safeConversationImage           `json:"images,omitempty"`
-	Videos    []safeConversationVideo           `json:"videos,omitempty"`
-	ID        uuid.UUID                         `json:"id"`
-	Seq       int64                             `json:"seq"`
-	Role      domain.ConversationMessageRole    `json:"role"`
-	Text      string                            `json:"text"`
-	Rating    *domain.ConversationMessageRating `json:"rating"`
-	CreatedAt time.Time                         `json:"created_at"`
+	InputImages []uuid.UUID                       `json:"input_images,omitempty"`
+	Images      []safeConversationImage           `json:"images,omitempty"`
+	Videos      []safeConversationVideo           `json:"videos,omitempty"`
+	ID          uuid.UUID                         `json:"id"`
+	Seq         int64                             `json:"seq"`
+	Role        domain.ConversationMessageRole    `json:"role"`
+	Text        string                            `json:"text"`
+	Rating      *domain.ConversationMessageRating `json:"rating"`
+	CreatedAt   time.Time                         `json:"created_at"`
 }
 
 type safeConversationMessageRating struct {
@@ -1953,6 +1962,8 @@ type safeImageJob struct {
 	ModelID      string           `json:"model_id"`
 	ModelName    string           `json:"model_name"`
 	ImageQuality string           `json:"image_quality"`
+	AspectRatio  string           `json:"aspect_ratio,omitempty"`
+	OutputCount  int              `json:"output_count,omitempty"`
 	CostEstimate int64            `json:"cost_estimate"`
 	CreatedAt    time.Time        `json:"created_at"`
 	UpdatedAt    time.Time        `json:"updated_at"`
@@ -2071,6 +2082,21 @@ func newSafeImageJob(job *domain.Job) (safeImageJob, bool) {
 	if err := json.Unmarshal(job.Params, &params); err != nil || strings.TrimSpace(params.Prompt) == "" || strings.TrimSpace(params.ModelID) == "" || strings.TrimSpace(params.ModelName) == "" {
 		return safeImageJob{}, false
 	}
+	// Public geometry lets clients reserve space before loading artifact metadata.
+	// Keep historical jobs without these fields valid; never expose worker params.
+	parts := strings.Split(params.AspectRatio, ":")
+	aspectRatio := ""
+	if len(parts) == 2 {
+		width, widthErr := strconv.Atoi(parts[0])
+		height, heightErr := strconv.Atoi(parts[1])
+		if widthErr == nil && heightErr == nil && width > 0 && width <= 64 && height > 0 && height <= 64 {
+			aspectRatio = strconv.Itoa(width) + ":" + strconv.Itoa(height)
+		}
+	}
+	outputCount := params.OutputCount
+	if outputCount < 1 || outputCount > 15 {
+		outputCount = 0
+	}
 	return safeImageJob{
 		ID:           job.ID,
 		Status:       job.Status,
@@ -2078,6 +2104,8 @@ func newSafeImageJob(job *domain.Job) (safeImageJob, bool) {
 		ModelID:      params.ModelID,
 		ModelName:    params.ModelName,
 		ImageQuality: params.ImageQuality,
+		AspectRatio:  aspectRatio,
+		OutputCount:  outputCount,
 		CostEstimate: job.CostEstimate,
 		CreatedAt:    job.CreatedAt,
 		UpdatedAt:    job.UpdatedAt,

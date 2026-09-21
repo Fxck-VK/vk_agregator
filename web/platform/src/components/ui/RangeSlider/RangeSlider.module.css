@@ -27,7 +27,7 @@
   content: "";
   inset-inline: 0;
   border-radius: var(--radius-sm);
-  background: rgb(8 9 12 / 78%);
+  background: var(--slider-track-background, rgb(8 9 12 / 78%));
 }
 
 .fill {
@@ -53,7 +53,7 @@
   padding-inline: 0.4rem;
   background: var(--panel-surface-background);
   box-shadow: var(--panel-surface-shadow);
-  color: #fff;
+  color: var(--slider-label-text, #fff);
   font-size: 0.75rem;
   font-variant-numeric: tabular-nums;
   line-height: 1;

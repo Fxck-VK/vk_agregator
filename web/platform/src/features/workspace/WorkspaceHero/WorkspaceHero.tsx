@@ -1,12 +1,13 @@
 "use client";
 
+import { useMessages, useDictionary } from "@/i18n/LocaleProvider";
+
 import { useCallback, useRef, useState, type ReactNode } from "react";
 
 import { ImageGenerationControls } from "@/features/image-generation/ImageGenerationComposer/ImageGenerationControls";
 import { ImageGenerationFeedback } from "@/features/image-generation/ImageGenerationPanel/ImageGenerationFeedback";
 import { useImageGeneration } from "@/features/image-generation/ImageGenerationPanel/useImageGeneration";
 import type { GenerationModel } from "@/features/models/generation-model-catalog";
-import { ru } from "@/i18n/ru";
 
 import { FeaturedModelShortcuts } from "../FeaturedModelShortcuts/FeaturedModelShortcuts";
 import { WorkspacePrompt } from "../WorkspacePrompt/WorkspacePrompt";
@@ -21,6 +22,8 @@ type WorkspaceHeroProps = {
 };
 
 export function WorkspaceHero({ access, allModelsLink, modelLinksClassName }: WorkspaceHeroProps) {
+  const msg = useMessages();
+  const t = useDictionary();
   const [selectedModel, setSelectedModel] = useState<GenerationModel | null>(null);
   const selectedImageModel = selectedModel?.category === "images" ? selectedModel : null;
   const [prompt, setPrompt] = useState("");
@@ -53,14 +56,14 @@ export function WorkspaceHero({ access, allModelsLink, modelLinksClassName }: Wo
           submitAction={selectedImageModel === null ? undefined : {
             canSubmit: generation.canPrepare,
             disabled: generation.busy,
-            label: generation.stage === "preparing" ? ru.imageGeneration.preparing : ru.imageGeneration.generate,
+            label: generation.stage === "preparing" ? t.imageGeneration.preparing : t.imageGeneration.generate,
             onSubmit: () => void generation.prepareImage(),
           }}
           variant="hero"
         />
         <ImageGenerationFeedback generation={generation} showEditorError />
       </div>
-      <nav aria-label="Основные возможности" className={modelLinksClassName}>
+      <nav aria-label={msg("workspaceHero.mainFeatures")} className={modelLinksClassName}>
         <FeaturedModelShortcuts
           disabled={generation.busy}
           onSelect={(model) => {

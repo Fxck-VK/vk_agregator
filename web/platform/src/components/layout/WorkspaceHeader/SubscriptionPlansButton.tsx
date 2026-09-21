@@ -1,5 +1,8 @@
 "use client";
 
+import { useMessages } from "@/i18n/LocaleProvider";
+
+
 import { useCallback, useState } from "react";
 import { SubscriptionPlansDialog } from "./SubscriptionPlansDialog";
 
@@ -8,6 +11,7 @@ type SubscriptionPlansButtonProps = {
 };
 
 export function SubscriptionPlansButton({ className }: SubscriptionPlansButtonProps) {
+  const msg = useMessages();
   const [plansAreOpen, setPlansAreOpen] = useState(false);
   const closePlans = useCallback(() => setPlansAreOpen(false), []);
 
@@ -20,8 +24,7 @@ export function SubscriptionPlansButton({ className }: SubscriptionPlansButtonPr
         onClick={() => setPlansAreOpen(true)}
         type="button"
       >
-        Выбрать тариф
-      </button>
+        {msg("subscriptionPlansButton.chooseAPlan")}</button>
       {plansAreOpen ? <SubscriptionPlansDialog onClose={closePlans} /> : null}
     </>
   );
