@@ -200,6 +200,15 @@ export function buildMusicPrepareBody(
   tracks: readonly MusicTrack[],
   operation: MusicWorkspaceOperation | undefined,
 ): MusicPrepareBody {
+	if (request.modelId === "lyria_3_5") {
+		return { model_id: request.modelId, sources: [], audio_artifact_ids: [], music: compactRecord({
+			action: request.operationId,
+			prompt: nonEmpty(request.draft.descriptionPrompt),
+			lyrics: request.mode === "own_lyrics" ? nonEmpty(request.draft.lyrics) : undefined,
+			style: nonEmpty(request.draft.style), title: nonEmpty(request.draft.title),
+			duration_sec: request.draft.targetDurationMode === "custom" ? clampInteger(request.draft.targetDurationSec, 1, 240) : undefined,
+		}) };
+	}
   const trackById = new Map(tracks.map((track) => [track.id, track]));
   const sources = operationConsumesSources(request.operationId, operation)
     ? request.sourceTrackIds.flatMap((trackId): MusicPrepareSource[] => {

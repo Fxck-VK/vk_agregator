@@ -4,11 +4,13 @@ import (
 	"encoding/json"
 	"strings"
 	"testing"
+
+	"vk-ai-aggregator/internal/service/providermodels"
 )
 
 func TestPendingMediaCatalogIsInformational(t *testing.T) {
 	list := WorkspaceCatalog(WorkspaceConfig{IncludePendingMedia: true})
-	if len(list.Items) != 7 {
+	if len(list.Items) != len(providermodels.MediaCandidates()) {
 		t.Fatalf("candidate count %d", len(list.Items))
 	}
 	for _, m := range list.Items {
@@ -19,7 +21,7 @@ func TestPendingMediaCatalogIsInformational(t *testing.T) {
 			if op.Enabled || op.Inputs.Audio.Enabled || op.Inputs.Images.Enabled || op.Inputs.Video.Enabled {
 				t.Fatalf("unverified operation enabled %s/%s", m.ID, op.ID)
 			}
-			if m.Kind == "audio" && (op.Music == nil || op.Music.EstimateCredits <= 0) {
+			if op.Music != nil && op.Music.EstimateCredits <= 0 {
 				t.Fatalf("music controls absent %s/%s", m.ID, op.ID)
 			}
 		}

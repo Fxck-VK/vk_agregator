@@ -1283,6 +1283,9 @@ func observeVideoRouteMediaFailureForJob(job *domain.Job, stage, errorClass stri
 // idempotency key is scoped to the attempt so a re-delivered task maps to one
 // provider task, while a genuine retry after failure starts a fresh one.
 func (p *processor) buildRequest(ctx context.Context, job *domain.Job, attempt int) (domain.ProviderRequest, error) {
+	if isSpeechJob(job) {
+		return p.buildSpeechRequest(ctx, job, attempt)
+	}
 	if job.OperationType == domain.OperationAudioMusic {
 		return p.buildMusicRequest(ctx, job, attempt)
 	}

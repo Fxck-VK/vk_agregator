@@ -3149,3 +3149,28 @@ pending-verification with all operations disabled. Required real output evidence
 cannot be replaced by an implementation or feature flag. Video application
 hydration is text-only: native frame/Omni/edit adapter modes do not enable web
 inputs. The frozen legacy baseline is unchanged. See runbooks/MODEL_CATALOG.md.
+
+## Additional APIMart media and synchronous speech (2026-09-20)
+
+Wan 3.0, Vidu Q3 Pro, Imagen 4.0 and Lyria 3.5 extend the pending candidate
+catalog with dated API facts and separate application capabilities. Lyria uses
+Flow Music generation/polling; Suno-only actions and source transformations
+cannot consume Lyria Jobs. Candidate quotes preserve the existing x3 policy.
+
+Account-owned audio_tts/audio_stt Jobs use /web/v1/speech-jobs prepare/activate
+and the existing ledger, outbox, moderation and account-history finalization.
+TTS produces audio; STT produces text from an owned, inspected private audio
+Artifact. Worker reads input bytes; API/BFF never calls the provider. Audio
+uploads reuse the private music-inputs path. Output routes enforce ownership
+and completed moderation before returning bytes.
+
+The synchronous speech adapter returns transient bytes/text without persisting
+raw provider responses. Worker stores private output Artifacts and records their
+IDs before the terminal provider checkpoint. Recovery reuses that checkpoint;
+ambiguous paid submissions cannot automatically replay. Prepared confirmation
+expiry covers TTS/STT through additive migration 000054.
+
+GPT-4o Mini TTS and Whisper-1 remain disabled until audio metering and live
+outputs are verified; token price tables alone are not per-job quotes. All six
+models remain outside active bindings/runtime prices until canonical admission.
+See runbooks/MODEL_CATALOG.md for application limits and remaining rollout gates.

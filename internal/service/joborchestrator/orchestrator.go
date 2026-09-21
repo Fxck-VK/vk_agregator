@@ -689,7 +689,7 @@ func (o *Orchestrator) PrepareAccountJob(ctx context.Context, in PrepareAccountJ
 }
 
 func (o *Orchestrator) preparedWebImageExpiry(operation domain.OperationType, modality domain.Modality) *time.Time {
-	mediaPreparation := (operation == domain.OperationImageGenerate && modality == domain.ModalityImage) || (operation == domain.OperationAudioMusic && modality == domain.ModalityAudio)
+	mediaPreparation := (operation == domain.OperationImageGenerate && modality == domain.ModalityImage) || (operation == domain.OperationAudioMusic && modality == domain.ModalityAudio) || (operation == domain.OperationAudioTTS && modality == domain.ModalityAudio) || (operation == domain.OperationAudioSTT && modality == domain.ModalityText)
 	if o.maxPreparedWebImageJobs <= 0 || o.preparedWebImageTTL <= 0 ||
 		!mediaPreparation {
 		return nil
@@ -1122,7 +1122,7 @@ func (o *Orchestrator) validatePreparedInputArtifacts(ctx context.Context, accou
 			}
 			return fmt.Errorf("joborchestrator: input artifact lookup: %w", err)
 		}
-		if operation == domain.OperationAudioMusic {
+		if operation == domain.OperationAudioMusic || operation == domain.OperationAudioSTT {
 			if mediaprobe.ValidateMusicInputArtifact(artifact, accountID) != nil {
 				return fmt.Errorf("%w: invalid audio input", ErrInvalidInputArtifact)
 			}

@@ -41,6 +41,18 @@ func MediaCandidateOperationFacts(publicID string) []MediaCandidateOperationFact
 		return skyReelsOperationFacts(candidate.ModelCode)
 	case "suno_v6", "suno_v6_wild", "suno_v6_mini":
 		return sunoOperationFacts(sunoCandidateNativeVersion(candidate.ModelCode))
+	case "wan_3_0":
+		return wan30OperationFacts(candidate.ModelCode)
+	case "vidu_q3_pro":
+		return viduQ3ProOperationFacts(candidate.ModelCode)
+	case "imagen_4_0":
+		return imagen40OperationFacts(candidate.ModelCode)
+	case "lyria_3_5":
+		return lyria35OperationFacts()
+	case "gpt_4o_mini_tts":
+		return gpt4oMiniTTSOperationFacts(candidate.ModelCode)
+	case "whisper_1":
+		return whisper1OperationFacts(candidate.ModelCode)
 	default:
 		return nil
 	}
@@ -53,14 +65,78 @@ func buildMediaCandidateDraftContract(candidate MediaCandidate) modelcontract.Co
 		PublicID:        candidate.PublicID,
 		Provider:        string(candidate.Provider),
 		ProviderModelID: candidate.ModelCode,
-		Revision:        mediaCandidateCheckedAt,
+		Revision:        candidate.CheckedAt,
 		Endpoint:        mediaCandidateContractEndpoint(candidate, facts),
 		Status:          "draft",
-		Categories:      []string{"video-audio"},
+		Categories:      mediaCandidateCategories(candidate),
 		Sources:         mediaCandidateSources(candidate, facts),
 		Operations:      mediaCandidateOperations(candidate, facts),
-		Checks:          mediaCandidateDraftChecks(facts),
+		Checks:          mediaCandidateDraftChecks(facts, candidate.CheckedAt),
 	}
+}
+
+func wan30OperationFacts(modelCode string) []MediaCandidateOperationFact {
+	return cloneOperationFacts([]MediaCandidateOperationFact{
+		{ID: "text_to_video", Kind: "video", Endpoint: apimartVideoEndpoint, NativeVersion: modelCode, SourceID: "wan_3_0_generation", InputModes: []string{"prompt"}, KnownLimits: []string{"duration 2..30 seconds or -1 model-chosen", "resolution 480P/720P/1080P", "size 16:9/4:3/1:1/3:4/9:16/adaptive", "audio true/false does not change price"}},
+		{ID: "frame_video", Kind: "video", Endpoint: apimartVideoEndpoint, NativeVersion: modelCode, SourceID: "wan_3_0_generation", InputModes: []string{"prompt optional", "first_frame", "last_frame optional"}, KnownLimits: []string{"frame family must not mix with reference family", "images JPEG/JPG/PNG/BMP/WEBP <=20MB each", "edge 240..8000px, aspect <=8:1"}},
+		{ID: "reference_media_video", Kind: "video", Endpoint: apimartVideoEndpoint, NativeVersion: modelCode, SourceID: "wan_3_0_generation", InputModes: []string{"prompt optional", "reference images/video/audio/documents/link"}, KnownLimits: []string{"reference images <=10", "reference videos <=5 clips, 1..15s each, total <=15s, mp4/mov <=100MB", "reference audio <=5 clips, 1..15s each, total <=15s, wav/mp3 <=15MB", "documents <=1, <=100MB, <=50 pages"}},
+	})
+}
+
+func viduQ3ProOperationFacts(modelCode string) []MediaCandidateOperationFact {
+	return cloneOperationFacts([]MediaCandidateOperationFact{
+		{ID: "text_to_video", Kind: "video", Endpoint: apimartVideoEndpoint, NativeVersion: modelCode, SourceID: "vidu_q3_pro_generation", InputModes: []string{"prompt"}, KnownLimits: []string{"prompt <=2000 chars", "duration 1..16 seconds", "resolution 540p/720p/1080p", "aspect_ratio 16:9/9:16/4:3/3:4/1:1 for text-to-video", "audio true by default"}},
+		{ID: "image_to_video", Kind: "video", Endpoint: apimartVideoEndpoint, NativeVersion: modelCode, SourceID: "vidu_q3_pro_generation", InputModes: []string{"prompt optional", "image_urls exactly 1"}, KnownLimits: []string{"duration 1..16 seconds", "resolution 540p/720p/1080p", "aspect_ratio cannot be used with image_urls"}},
+		{ID: "first_last_frame", Kind: "video", Endpoint: apimartVideoEndpoint, NativeVersion: modelCode, SourceID: "vidu_q3_pro_generation", InputModes: []string{"prompt optional", "image_urls exactly 2"}, KnownLimits: []string{"first image is first frame, second image is last frame", "duration 1..16 seconds", "resolution 540p/720p/1080p"}},
+	})
+}
+
+func imagen40OperationFacts(modelCode string) []MediaCandidateOperationFact {
+	return cloneOperationFacts([]MediaCandidateOperationFact{{
+		ID:            "generate",
+		Kind:          "image",
+		Endpoint:      "POST /v1/images/generations",
+		NativeVersion: modelCode,
+		SourceID:      "imagen_4_0_generation",
+		InputModes:    []string{"prompt"},
+		KnownLimits:   []string{"text-to-image only", "n exactly 1", "size 1:1/4:3/3:4/16:9/9:16", "image/image_urls/mask/quality unsupported"},
+	}})
+}
+
+func lyria35OperationFacts() []MediaCandidateOperationFact {
+	return cloneOperationFacts([]MediaCandidateOperationFact{{
+		ID:            "generate",
+		Kind:          "audio",
+		Endpoint:      "POST /v1/music/generations",
+		NativeVersion: "lyria-3.5",
+		SourceID:      "lyria_3_5_generation",
+		InputModes:    []string{"sound_prompt and/or lyrics"},
+		KnownLimits:   []string{"wire model flowmusic", "wire version lyria-3.5", "length 1..240 seconds", "sound_prompt and lyrics cannot both be empty", "one track per request"},
+	}})
+}
+
+func gpt4oMiniTTSOperationFacts(modelCode string) []MediaCandidateOperationFact {
+	return cloneOperationFacts([]MediaCandidateOperationFact{{
+		ID:            "speak",
+		Kind:          "audio",
+		Endpoint:      "POST /v1/audio/speech",
+		NativeVersion: modelCode,
+		SourceID:      "gpt_4o_mini_tts_speak",
+		InputModes:    []string{"input text"},
+		KnownLimits:   []string{"input <=4096 chars", "voices alloy/echo/fable/onyx/nova/shimmer", "response_format wav/opus/aac/flac/pcm", "speed 0.25..4.0"},
+	}})
+}
+
+func whisper1OperationFacts(modelCode string) []MediaCandidateOperationFact {
+	return cloneOperationFacts([]MediaCandidateOperationFact{{
+		ID:            "transcribe",
+		Kind:          "text",
+		Endpoint:      "POST /v1/audio/transcriptions",
+		NativeVersion: modelCode,
+		SourceID:      "whisper_1_transcription",
+		InputModes:    []string{"multipart audio file"},
+		KnownLimits:   []string{"file <=25MB", "formats mp3/mp4/mpeg/mpga/m4a/wav/webm", "response_format json/text/srt/vtt/verbose_json", "prompt <=224 tokens", "temperature 0..1"},
+	}})
 }
 
 func happyHorseOperationFacts(modelCode, sourceID string, includeEdit bool) []MediaCandidateOperationFact {
@@ -307,34 +383,82 @@ func mediaCandidateContractEndpoint(candidate MediaCandidate, facts []MediaCandi
 	if len(facts) == 0 {
 		return ""
 	}
-	if candidate.Kind == "audio" {
+	first := facts[0].Endpoint
+	allSame := true
+	for _, fact := range facts[1:] {
+		if fact.Endpoint != first {
+			allSame = false
+			break
+		}
+	}
+	if allSame {
+		return first
+	}
+	if strings.HasPrefix(candidate.PublicID, "suno_") {
 		return "POST /v1/music/generations/*"
 	}
-	return facts[0].Endpoint
+	return first
+}
+
+func mediaCandidateCategories(candidate MediaCandidate) []string {
+	if candidate.Kind == "image" {
+		return []string{"images"}
+	}
+	return []string{"video-audio"}
 }
 
 func mediaCandidateSources(candidate MediaCandidate, facts []MediaCandidateOperationFact) []modelcontract.Source {
 	seen := map[string]bool{}
 	var sources []modelcontract.Source
+	addURL := func(id, url string) {
+		if id == "" || url == "" || seen[id] {
+			return
+		}
+		seen[id] = true
+		sources = append(sources, modelcontract.Source{ID: id, URL: url, CheckedAt: candidate.CheckedAt})
+	}
 	add := func(id, path string) {
 		if id == "" || seen[id] {
 			return
 		}
 		seen[id] = true
-		sources = append(sources, modelcontract.Source{ID: id, URL: apimartDocsBase + path, CheckedAt: mediaCandidateCheckedAt})
+		sources = append(sources, modelcontract.Source{ID: id, URL: apimartDocsBase + path, CheckedAt: candidate.CheckedAt})
 	}
-	if candidate.Kind == "audio" {
+	if strings.HasPrefix(candidate.PublicID, "suno_") {
 		add("suno_overview", "audios/suno/overview")
 	}
 	for _, fact := range facts {
+		if url := mediaCandidateSourceURL(fact.SourceID); url != "" {
+			addURL(fact.SourceID, url)
+			continue
+		}
 		if path := mediaCandidateSourcePath(fact.SourceID); path != "" {
 			add(fact.SourceID, path)
 		}
 	}
 	if len(sources) == 0 && strings.TrimSpace(candidate.Documentation) != "" {
-		sources = append(sources, modelcontract.Source{ID: "candidate_documentation", URL: candidate.Documentation, CheckedAt: candidate.CheckedAt})
+		addURL("candidate_documentation", candidate.Documentation)
 	}
 	return sources
+}
+
+func mediaCandidateSourceURL(sourceID string) string {
+	switch sourceID {
+	case "wan_3_0_generation":
+		return "https://docs.apimart.ai/en/api-reference/videos/wan3.0-video/generation"
+	case "vidu_q3_pro_generation":
+		return "https://docs.apimart.ai/en/api-reference/videos/vidu-q3-pro/generation"
+	case "imagen_4_0_generation":
+		return "https://docs.apimart.ai/en/api-reference/images/imagen-4.0-apimart/generation"
+	case "lyria_3_5_generation":
+		return "https://docs.apimart.ai/en/api-reference/audios/flow-music/music-lyria-3-5"
+	case "gpt_4o_mini_tts_speak":
+		return "https://docs.apimart.ai/en/api-reference/audios/tts"
+	case "whisper_1_transcription":
+		return "https://docs.apimart.ai/en/api-reference/audios/whisper-1"
+	default:
+		return ""
+	}
 }
 
 func mediaCandidateSourcePath(sourceID string) string {
@@ -422,11 +546,32 @@ func mediaCandidateOperations(candidate MediaCandidate, facts []MediaCandidateOp
 		switch candidate.Kind {
 		case "video":
 			ops = append(ops, mediaCandidateVideoOperation(candidate, fact))
+		case "image":
+			ops = append(ops, mediaCandidateImageOperation(candidate, fact))
 		case "audio":
-			ops = append(ops, mediaCandidateAudioOperation(fact))
+			ops = append(ops, mediaCandidateAudioOperation(candidate, fact))
 		}
 	}
 	return ops
+}
+
+func mediaCandidateImageOperation(candidate MediaCandidate, fact MediaCandidateOperationFact) modelcontract.Operation {
+	inputs := explicitUnsupportedInputs()
+	variants := make([]modelcontract.ImageVariant, 0, len(nextImagenAspectRatios()))
+	for _, ratio := range nextImagenAspectRatios() {
+		variants = append(variants, modelcontract.ImageVariant{AspectRatio: ratio})
+	}
+	return modelcontract.Operation{
+		ID:     fact.ID,
+		Kind:   "image",
+		Inputs: inputs,
+		Image: &modelcontract.ImageOutput{
+			Variants:       variants,
+			DefaultVariant: 3,
+			MaxOutputCount: 1,
+			Mask:           "unsupported",
+		},
+	}
 }
 
 func mediaCandidateVideoOperation(candidate MediaCandidate, fact MediaCandidateOperationFact) modelcontract.Operation {
@@ -466,6 +611,30 @@ func mediaCandidateVideoOperation(candidate MediaCandidate, fact MediaCandidateO
 			inputs.Images = enabledImageInput(true, 15, integerRange(1, 15), skyReelsImageFormats(), 0)
 			inputs.Audio = modelcontract.Input{Support: modelcontract.Unknown}
 		}
+	case "wan_3_0":
+		switch fact.ID {
+		case "frame_video":
+			inputs.Images = enabledImageInput(true, 2, []int{1, 2}, wanImageFormats(), 20<<20)
+			inputs.MaxTotalBytes = 40 << 20
+			startImage = "required"
+			endImage = "optional"
+		case "reference_media_video":
+			inputs.Images = enabledImageInput(false, 10, integerRange(0, 10), wanImageFormats(), 20<<20)
+			inputs.Video = enabledVideoInput(false, 5, integerRange(0, 5), videoMP4MOVFormats(), 100<<20, 15)
+			inputs.Audio = enabledAudioInput(false, 5, integerRange(0, 5), []modelcontract.FileFormat{{Extension: ".wav", MIME: "audio/wav"}, {Extension: ".mp3", MIME: "audio/mpeg"}}, 15<<20, 15)
+			inputs.Documents = modelcontract.Input{Support: modelcontract.Supported, Enabled: true, Processing: "native", MaxCount: 1, AllowedCounts: []int{0, 1}, MaxBytes: 100 << 20, MaxPages: 50}
+			inputs.MaxTotalBytes = 100 << 20
+		}
+	case "vidu_q3_pro":
+		switch fact.ID {
+		case "image_to_video":
+			inputs.Images = enabledImageInput(true, 1, []int{1}, nil, 0)
+			startImage = "required"
+		case "first_last_frame":
+			inputs.Images = enabledImageInput(true, 2, []int{2}, nil, 0)
+			startImage = "required"
+			endImage = "required"
+		}
 	}
 	return modelcontract.Operation{
 		ID:     fact.ID,
@@ -481,8 +650,12 @@ func mediaCandidateVideoOperation(candidate MediaCandidate, fact MediaCandidateO
 	}
 }
 
-func mediaCandidateAudioOperation(fact MediaCandidateOperationFact) modelcontract.Operation {
+func mediaCandidateAudioOperation(candidate MediaCandidate, fact MediaCandidateOperationFact) modelcontract.Operation {
 	inputs := explicitUnsupportedInputs()
+	if candidate.PublicID == "whisper_1" {
+		inputs.Audio = enabledAudioInput(true, 1, []int{1}, whisperAudioFormats(), 25<<20, 0)
+		inputs.MaxTotalBytes = 25 << 20
+	}
 	switch fact.ID {
 	case "inspo":
 		inputs.Audio = enabledAudioInput(true, 4, integerRange(1, 4), nil, 0, 0)
@@ -494,6 +667,17 @@ func mediaCandidateAudioOperation(fact MediaCandidateOperationFact) modelcontrac
 		inputs.Audio = enabledAudioInput(true, 24, integerRange(6, 24), nil, 0, 0)
 	}
 	op := modelcontract.Operation{ID: fact.ID, Kind: fact.Kind, Inputs: inputs}
+	switch candidate.PublicID {
+	case "lyria_3_5":
+		op.Audio = &modelcontract.AudioOutput{Tasks: []string{"music"}, MaxDurationSec: 240}
+		return op
+	case "gpt_4o_mini_tts":
+		op.Audio = &modelcontract.AudioOutput{Tasks: []string{"speech"}, Voices: []string{"alloy", "echo", "fable", "onyx", "nova", "shimmer"}, Formats: []string{"wav", "opus", "aac", "flac", "pcm"}}
+		return op
+	case "whisper_1":
+		op.Text = &modelcontract.TextOutput{}
+		return op
+	}
 	switch fact.Kind {
 	case "text":
 		op.Text = &modelcontract.TextOutput{}
@@ -515,6 +699,14 @@ func mediaCandidateVideoVariants(modelCode, operationID string) []modelcontract.
 	var aspects []string
 	var durations []int
 	switch strings.ToLower(strings.TrimSpace(modelCode)) {
+	case "wan3.0-video":
+		resolutions = []string{"480p", "720p", "1080p"}
+		aspects = []string{"16:9", "4:3", "1:1", "3:4", "9:16"}
+		durations = integerRange(2, 30)
+	case "viduq3-pro":
+		resolutions = []string{"540p", "720p", "1080p"}
+		aspects = []string{"16:9", "9:16", "4:3", "3:4", "1:1"}
+		durations = integerRange(1, 16)
 	case "happyhorse-1.0", "happyhorse-1.1":
 		resolutions = []string{"720P", "1080P"}
 		aspects = []string{"16:9", "9:16", "1:1", "4:3", "3:4"}
@@ -540,10 +732,10 @@ func mediaCandidateVideoVariants(modelCode, operationID string) []modelcontract.
 	return variants
 }
 
-func mediaCandidateDraftChecks(facts []MediaCandidateOperationFact) []modelcontract.Check {
+func mediaCandidateDraftChecks(facts []MediaCandidateOperationFact, checkedAt string) []modelcontract.Check {
 	checks := make([]modelcontract.Check, 0, len(facts))
 	for _, fact := range facts {
-		checks = append(checks, modelcontract.Check{Scenario: fact.ID + "/live-output", Status: "not_run", CheckedAt: mediaCandidateCheckedAt})
+		checks = append(checks, modelcontract.Check{Scenario: fact.ID + "/live-output", Status: "not_run", CheckedAt: checkedAt})
 	}
 	return checks
 }
@@ -575,6 +767,14 @@ func skyReelsImageFormats() []modelcontract.FileFormat {
 
 func videoMP4MOVFormats() []modelcontract.FileFormat {
 	return []modelcontract.FileFormat{{Extension: ".mp4", MIME: "video/mp4"}, {Extension: ".mov", MIME: "video/quicktime"}}
+}
+
+func wanImageFormats() []modelcontract.FileFormat {
+	return []modelcontract.FileFormat{{Extension: ".jpg", MIME: "image/jpeg"}, {Extension: ".jpeg", MIME: "image/jpeg"}, {Extension: ".png", MIME: "image/png"}, {Extension: ".bmp", MIME: "image/bmp"}, {Extension: ".webp", MIME: "image/webp"}}
+}
+
+func whisperAudioFormats() []modelcontract.FileFormat {
+	return []modelcontract.FileFormat{{Extension: ".mp3", MIME: "audio/mpeg"}, {Extension: ".mp4", MIME: "video/mp4"}, {Extension: ".mpeg", MIME: "audio/mpeg"}, {Extension: ".mpga", MIME: "audio/mpeg"}, {Extension: ".m4a", MIME: "audio/mp4"}, {Extension: ".wav", MIME: "audio/wav"}, {Extension: ".webm", MIME: "audio/webm"}}
 }
 
 func cloneFileFormats(in []modelcontract.FileFormat) []modelcontract.FileFormat {

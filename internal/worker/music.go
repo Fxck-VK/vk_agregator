@@ -177,7 +177,7 @@ func (p *processor) musicSourceFacts(ctx context.Context, job *domain.Job, param
 		if err != nil {
 			return nil, musicInvalidRequestError("music source job is invalid")
 		}
-		if sourceParams.Provider != params.Provider {
+		if sourceParams.Provider != params.Provider || !musicgeneration.SameSourceFamily(params.ModelID, sourceParams.ModelID) {
 			return nil, musicInvalidRequestError("music source provider does not match request provider")
 		}
 		if sourceParams.Result == nil || !sourceParams.Result.Complete {

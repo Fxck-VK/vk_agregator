@@ -17,7 +17,7 @@ import { ScrollArea } from "@/components/ui/ScrollArea/ScrollArea";
 
 import styles from "./MusicWorkspace.module.css";
 
-export type MusicModelID = "suno_v6" | "suno_v6_wild" | "suno_v6_mini";
+export type MusicModelID = "suno_v6" | "suno_v6_wild" | "suno_v6_mini" | "lyria_3_5";
 export type MusicCreationMode = "description" | "own_lyrics" | "upload";
 export type MusicOutputFormat = "mp3" | "m4a" | "wav";
 export type MusicDurationMode = "auto" | "custom";
@@ -491,7 +491,7 @@ function getDisabledReason(
     if (mode !== "own_lyrics" && draft.descriptionPrompt.trim().length === 0) return "Нужно описание трека";
     const customAssetSelected = (operation.supportsPersona === true && (draft.personaJobId?.trim() ?? "") !== "")
       || (operation.supportsCustomModel === true && (draft.customModelJobId?.trim() ?? "") !== "");
-    if (mode === "description" && !draft.instrumental && (draft.maxMode || customAssetSelected)) {
+    if (mode === "description" && !draft.instrumental && ((operation.supportsMaxMode === true && draft.maxMode) || customAssetSelected)) {
       return "Max mode, persona и пользовательская модель требуют свой текст или инструментал";
     }
   }
@@ -720,6 +720,7 @@ export function MusicWorkspace({
 
           <div className={styles.modePanel}>
             <SharedSongFields
+              lyria={selectedModelId === "lyria_3_5"}
               busy={busy}
               draft={draft}
               onEnhanceStyle={onEnhanceStyle}
@@ -735,6 +736,7 @@ export function MusicWorkspace({
               updateDraft={updateDraft}
             />
             <AdvancedControls
+              lyria={selectedModelId === "lyria_3_5"}
               busy={busy}
               customModelEnabled={generateOperation?.supportsCustomModel === true}
               draft={draft}
@@ -864,12 +866,14 @@ function GenerationPriceNote({
 }
 
 function SharedSongFields({
+  lyria,
   busy,
   draft,
   onEnhanceStyle,
   onRequestSuggestedLyrics,
   updateDraft,
 }: Readonly<{
+  lyria: boolean;
   busy: boolean;
   draft: MusicWorkspaceDraft;
   onEnhanceStyle?: (style: string) => void;
@@ -905,7 +909,7 @@ function SharedSongFields({
         </label>
       </div>
       <div className={styles.inlineActions}>
-        <label className={styles.checkboxRow}>
+        {!lyria ? <label className={styles.checkboxRow}>
           <input
             checked={draft.instrumental}
             disabled={busy}
@@ -913,7 +917,7 @@ function SharedSongFields({
             type="checkbox"
           />
           <span>Инструментал</span>
-        </label>
+        </label> : <span>Для инструментального трека укажите это в описании.</span>}
         <Button
           disabled={busy || onRequestSuggestedLyrics === undefined}
           onClick={onRequestSuggestedLyrics}
@@ -1031,6 +1035,7 @@ function ModeSpecificFields({
 }
 
 function AdvancedControls({
+  lyria,
   busy,
   customModelEnabled,
   draft,
@@ -1038,6 +1043,7 @@ function AdvancedControls({
   reusableAssets,
   updateDraft,
 }: Readonly<{
+  lyria: boolean;
   busy: boolean;
   customModelEnabled: boolean;
   draft: MusicWorkspaceDraft;
@@ -1052,13 +1058,13 @@ function AdvancedControls({
     <section aria-label="Расширенные параметры" className={styles.card}>
       <div className={styles.sectionTitle}>
         <h2>Расширенные параметры</h2>
-        <OutputFormatSelector
+        {!lyria ? <OutputFormatSelector
           disabled={busy}
           onChange={(outputFormat) => updateDraft({ outputFormat })}
           value={draft.outputFormat}
-        />
+        /> : null}
       </div>
-      <div className={styles.sliders}>
+      {!lyria ? <div className={styles.sliders}>
         <WeightControl
           disabled={busy}
           label="Вес описания"
@@ -1077,7 +1083,7 @@ function AdvancedControls({
           onChange={(variety) => updateDraft({ variety })}
           value={draft.variety}
         />
-      </div>
+      </div> : null}
       <div className={styles.durationRow}>
         <ModeSwitchPanel
           activeID={draft.targetDurationMode}
@@ -1085,7 +1091,7 @@ function AdvancedControls({
           items={durationModeItems.map((item) => ({ ...item, disabled: busy }))}
           onChange={(targetDurationMode) => updateDraft({ targetDurationMode })}
         />
-        <label className={styles.checkboxRow}>
+        {!lyria ? <label className={styles.checkboxRow}>
           <input
             checked={draft.maxMode}
             disabled={busy}
@@ -1093,19 +1099,19 @@ function AdvancedControls({
             type="checkbox"
           />
           <span>Max mode</span>
-        </label>
+        </label> : null}
       </div>
       {draft.targetDurationMode === "custom" ? (
         <div className={styles.durationSlider}>
-          <span>Целевая длительность: {draft.targetDurationSec} сек.</span>
+          <span>Целевая длительность: {clamp(draft.targetDurationSec, lyria ? 1 : 10, lyria ? 240 : 360)} сек.</span>
           <RangeSlider
             aria-label="Целевая длительность"
             disabled={busy}
-            max={360}
-            min={10}
+            max={lyria ? 240 : 360}
+            min={lyria ? 1 : 10}
             onValueChange={(targetDurationSec) => updateDraft({ targetDurationSec })}
-            step={5}
-            value={clamp(draft.targetDurationSec, 10, 360)}
+            step={lyria ? 1 : 5}
+            value={clamp(draft.targetDurationSec, lyria ? 1 : 10, lyria ? 240 : 360)}
           />
         </div>
       ) : null}

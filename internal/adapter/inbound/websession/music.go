@@ -172,7 +172,7 @@ func (h *Handler) validateMusicSources(ctx context.Context, account uuid.UUID, r
 			return domain.ErrNotFound
 		}
 		p, err := musicgeneration.DecodeJob(job)
-		if err != nil || p.Result == nil || !p.Result.Complete {
+		if err != nil || !musicgeneration.SameSourceFamily(request.ModelID, p.ModelID) || p.Result == nil || !p.Result.Complete {
 			return domain.ErrNotFound
 		}
 		if _, err := h.deps.ImageResults.GetResult(ctx, account, id); err != nil {
@@ -438,6 +438,10 @@ func musicAssetName(name, fallback string) string {
 }
 
 func (h *Handler) getMusicArtifact(w http.ResponseWriter, r *http.Request) {
+	h.serveGeneratedArtifact(w, r, func(job *domain.Job, owner uuid.UUID) bool { _, ok := musicJobDTO(job, owner); return ok })
+}
+
+func (h *Handler) serveGeneratedArtifact(w http.ResponseWriter, r *http.Request, validJob func(*domain.Job, uuid.UUID) bool) {
 	w.Header().Set("Cache-Control", "private, no-store")
 	w.Header().Set("X-Content-Type-Options", "nosniff")
 	p, _ := PrincipalFromContext(r.Context())
@@ -461,7 +465,7 @@ func (h *Handler) getMusicArtifact(w http.ResponseWriter, r *http.Request) {
 		writeError(w, 404, "music artifact not found")
 		return
 	}
-	if _, ok := musicJobDTO(job, p.AccountID); !ok || !slices.Contains(job.OutputArtifactIDs, id) {
+	if !validJob(job, p.AccountID) || !slices.Contains(job.OutputArtifactIDs, id) {
 		writeError(w, 404, "music artifact not found")
 		return
 	}

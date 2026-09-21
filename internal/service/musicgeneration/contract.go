@@ -57,6 +57,12 @@ type StoredArtifact struct {
 
 func (r Request) Validate() error {
 	m := r.Music
+	if r.ModelID == "lyria_3_5" {
+		if len(r.Sources) != 0 || len(r.AudioArtifactIDs) != 0 || r.PersonaJobID != uuid.Nil || r.CustomModelJobID != uuid.Nil || domain.ValidateLyriaMusicRequest(m) != nil {
+			return ErrInvalidRequest
+		}
+		return nil
+	}
 	if _, ok := providermodels.MediaCandidateByID(r.ModelID); !ok || !m.Action.Valid() {
 		return ErrInvalidRequest
 	}

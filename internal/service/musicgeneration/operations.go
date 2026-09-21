@@ -75,3 +75,19 @@ func OperationByID(id domain.MusicAction) (Operation, bool) {
 	}
 	return Operation{}, false
 }
+
+// OperationsForModel prevents controls and source tasks from leaking between
+// music APIs which happen to share the same reseller.
+func OperationsForModel(model string) []Operation {
+	if model == "lyria_3_5" {
+		return []Operation{{ID: domain.MusicActionGenerate, Title: "Создать музыку", Group: "create", OutputKind: "audio"}}
+	}
+	if model == "suno_v6" || model == "suno_v6_wild" || model == "suno_v6_mini" {
+		return Operations()
+	}
+	return nil
+}
+
+func SameSourceFamily(a, b string) bool {
+	return a != "lyria_3_5" && b != "lyria_3_5" && len(OperationsForModel(a)) > 0 && len(OperationsForModel(b)) > 0
+}

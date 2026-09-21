@@ -126,12 +126,12 @@ func (g *GenerationWorker) Process(ctx context.Context, task queue.Task) error {
 	cancel()
 
 	if submitted.ImmediateResult != nil {
-		if intent == nil || job.Modality != domain.ModalityText || submitted.ImmediateResult.Status != domain.ProviderTaskSucceeded {
+		if intent == nil || (job.Modality != domain.ModalityText && job.OperationType != domain.OperationAudioTTS) || submitted.ImmediateResult.Status != domain.ProviderTaskSucceeded {
 			return errors.New("worker: unexpected synchronous result")
 		}
 		// Save private text before the terminal provider checkpoint. A restart can
 		// finish from artifact IDs even if the checkpoint write is interrupted.
-		if err := g.saveOutputs(ctx, job, nil, submitted.ImmediateResult.Text); err != nil {
+		if err := g.saveSynchronousResult(ctx, job, *submitted.ImmediateResult); err != nil {
 			return g.failPaidSubmit(ctx, job, intent, task, outputArtifactFailureClass(err))
 		}
 	}

@@ -92,6 +92,7 @@ const (
 // generation request. The adapter translates it into the provider's native API
 // shape. It must never contain VK- or billing-specific concerns.
 type ProviderRequest struct {
+	Speech *SpeechRequest `json:"-"`
 	// Music and VideoMedia are typed worker-owned contracts. Fetch URLs inside
 	// these contracts are ephemeral and excluded from durable snapshots.
 	Music      *MusicRequest      `json:"music,omitempty"`
@@ -292,6 +293,9 @@ type Capability struct {
 
 // ProviderTaskResult holds the normalized output of a finished provider task.
 type ProviderTaskResult struct {
+	// InlineAudio is transient; the worker persists it privately before recording
+	// synchronous provider completion. It never enters durable task JSON.
+	InlineAudio *InlineAudio `json:"-"`
 	// Music holds transient structured music outputs, including original track
 	// indexes. Only inspected artifacts may be exposed to the account owner.
 	Music *MusicResult `json:"music,omitempty"`

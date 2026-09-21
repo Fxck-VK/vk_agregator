@@ -51,6 +51,7 @@ export const workspaceNavigationItems = [
   { href: "/app/files", icon: "file", label: ru.navigation.files, prefetch: true },
   { href: "/app/models", icon: "grid", label: ru.navigation.models, prefetch: true },
   { href: "/app/music", icon: "image", label: ru.navigation.music, prefetch: true },
+  { href: "/app/speech", icon: "edit", label: "Речь", prefetch: true },
   { href: "/app/inspiration", icon: "image", label: ru.navigation.inspiration, prefetch: true },
 ] as const;
 

@@ -113,6 +113,10 @@ func (k ProductKey) Valid() bool {
 	if !k.Operation.Valid() || !k.Modality.Valid() {
 		return false
 	}
+	if k.Operation == domain.OperationAudioTTS || k.Operation == domain.OperationAudioSTT {
+		pair := k.Operation == domain.OperationAudioTTS && k.Modality == domain.ModalityAudio && k.AudioAction == "speak" || k.Operation == domain.OperationAudioSTT && k.Modality == domain.ModalityText && k.AudioAction == "transcribe"
+		return pair && k.AudioModelID != "" && !k.AudioMax && k.TextModelID == "" && k.ImageModelID == "" && k.VideoRouteAlias == "" && k.Quality == "" && k.Resolution == "" && k.DurationSec == 0
+	}
 	if k.Operation == domain.OperationAudioMusic {
 		return k.Modality == domain.ModalityAudio && k.AudioModelID != "" && k.AudioAction != "" && k.TextModelID == "" && k.ImageModelID == "" && k.VideoRouteAlias == "" && k.Quality == "" && k.Resolution == "" && k.DurationSec == 0
 	}

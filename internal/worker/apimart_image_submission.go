@@ -92,8 +92,11 @@ func (p *processor) failPaidSubmit(ctx context.Context, job *domain.Job, intent 
 }
 
 func (p *processor) resumePaidSubmit(ctx context.Context, job *domain.Job, intent *domain.ProviderTask, task queue.Task) error {
-	if providermodels.IsPaidTextRoute(intent.Provider, intent.ModelCode) && len(job.OutputArtifactIDs) > 0 && intent.ErrorClass == "" {
+	if (providermodels.IsPaidTextRoute(intent.Provider, intent.ModelCode) || isSpeechJob(job)) && len(job.OutputArtifactIDs) > 0 && intent.ErrorClass == "" {
 		intent.ExternalID = "text:" + job.ID.String()
+		if isSpeechJob(job) {
+			intent.ExternalID = "speech:" + job.ID.String()
+		}
 		intent.Status = domain.ProviderTaskSucceeded
 		if job.Status == domain.JobStatusDispatchingProvider {
 			if err := p.setStatus(ctx, job, domain.JobStatusProviderSubmitted, "", ""); err != nil {

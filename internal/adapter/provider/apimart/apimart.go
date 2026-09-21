@@ -105,6 +105,12 @@ func (p *Provider) Capabilities(ctx context.Context) ([]domain.Capability, error
 		return nil, err
 	}
 	return append(textCaps, []domain.Capability{
+		{Operation: domain.OperationVideoGenerate, Modality: domain.ModalityVideo, ModelCode: ModelWan30Video, SupportsPolling: true, MaxDurationSec: 30},
+		{Operation: domain.OperationVideoGenerate, Modality: domain.ModalityVideo, ModelCode: ModelViduQ3Pro, SupportsPolling: true, MaxDurationSec: 16},
+		{Operation: domain.OperationImageGenerate, Modality: domain.ModalityImage, ModelCode: ModelImagen40, SupportsPolling: true},
+		{Operation: domain.OperationAudioTTS, Modality: domain.ModalityAudio, ModelCode: ModelGPT4oMiniTTS},
+		{Operation: domain.OperationAudioSTT, Modality: domain.ModalityText, ModelCode: ModelWhisper1},
+		{Operation: domain.OperationAudioMusic, Modality: domain.ModalityAudio, ModelCode: ModelLyria35, SupportsPolling: true, MaxDurationSec: 240},
 		{Operation: domain.OperationAudioMusic, Modality: domain.ModalityAudio, ModelCode: ModelSunoV6, SupportsPolling: true},
 		{Operation: domain.OperationAudioMusic, Modality: domain.ModalityAudio, ModelCode: ModelSunoV6Wild, SupportsPolling: true},
 		{Operation: domain.OperationAudioMusic, Modality: domain.ModalityAudio, ModelCode: ModelSunoV6Mini, SupportsPolling: true},
@@ -169,6 +175,22 @@ func (p *Provider) Capabilities(ctx context.Context) ([]domain.Capability, error
 // and telemetry. User billing must use pricingcatalog snapshots, never adapter
 // estimates.
 func (p *Provider) Estimate(ctx context.Context, req domain.ProviderRequest) (domain.CostEstimate, error) {
+	if isSpeechModel(req.ModelCode) {
+		return domain.CostEstimate{}, &Error{Class: domain.ProviderErrModelUnavailable, Message: "speech billing awaits verification"}
+	}
+	if isNextVisualModel(req.ModelCode) {
+		return estimateNextVisual(req)
+	}
+	if req.ModelCode == ModelLyria35 {
+		if err := validateLyriaRequest(req); err != nil {
+			return domain.CostEstimate{}, err
+		}
+		quote, err := pricingcatalog.MusicCandidateQuote("lyria_3_5", "generate", false)
+		if err != nil {
+			return domain.CostEstimate{}, &Error{Class: domain.ProviderErrModelUnavailable, Message: "music price unavailable"}
+		}
+		return domain.CostEstimate{AmountCredits: (quote.Floor.Amount + 99999) / 100000, Currency: "credits", Estimated: false}, nil
+	}
 	if isSunoModel(req.ModelCode) {
 		if err := validateSunoRequest(req); err != nil {
 			return domain.CostEstimate{}, err
@@ -296,6 +318,18 @@ func (p *Provider) Estimate(ctx context.Context, req domain.ProviderRequest) (do
 
 // Submit returns synchronous text to the worker or creates an async media task.
 func (p *Provider) Submit(ctx context.Context, req domain.ProviderRequest) (domain.ProviderTask, error) {
+	if isSpeechModel(req.ModelCode) {
+		return p.submitSpeech(ctx, req)
+	}
+	if isNextVisualModel(req.ModelCode) {
+		if err := validateNextVisualRequest(req); err != nil {
+			return domain.ProviderTask{}, err
+		}
+		return p.submitUnversionedOnce(ctx, req, p.submitNextVisual)
+	}
+	if req.ModelCode == ModelLyria35 {
+		return p.submitLyria(ctx, req)
+	}
 	if isSunoModel(req.ModelCode) {
 		return p.submitSuno(ctx, req)
 	}
@@ -489,6 +523,12 @@ func (p *Provider) submitImage(ctx context.Context, req domain.ProviderRequest) 
 // when the task has completed. The worker stores those URLs as our artifacts
 // before the job can become successful.
 func (p *Provider) Poll(ctx context.Context, ref domain.ProviderTaskRef) (domain.ProviderTaskResult, error) {
+	if strings.HasPrefix(ref.ExternalID, "speech:") {
+		return domain.ProviderTaskResult{}, &Error{Class: domain.ProviderErrUnsupportedCapab, Message: "synchronous speech requires stored output"}
+	}
+	if strings.HasPrefix(ref.ExternalID, lyriaTaskPrefix) {
+		return p.pollLyria(ctx, ref)
+	}
 	if strings.HasPrefix(ref.ExternalID, sunoTaskPrefix) {
 		return p.pollSuno(ctx, ref)
 	}
@@ -559,7 +599,7 @@ func (p *Provider) Poll(ctx context.Context, ref domain.ProviderTaskRef) (domain
 
 // Cancel is a no-op until APIMart documents a stable task cancellation endpoint.
 func (p *Provider) Cancel(_ context.Context, ref domain.ProviderTaskRef) error {
-	if strings.HasPrefix(ref.ExternalID, sunoTaskPrefix) {
+	if strings.HasPrefix(ref.ExternalID, sunoTaskPrefix) || strings.HasPrefix(ref.ExternalID, lyriaTaskPrefix) {
 		return &Error{Class: domain.ProviderErrUnsupportedCapab, Message: "music cancellation is not supported"}
 	}
 	return nil

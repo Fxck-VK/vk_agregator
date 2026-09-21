@@ -9,6 +9,12 @@ import "vk-ai-aggregator/internal/domain"
 // Candidate prices are deliberately not inserted into StaticProductPrices:
 // pricing evidence alone does not admit a model or an operation.
 func MusicCandidateQuote(model, action string, max bool) (PricingSnapshot, error) {
+	if model == "lyria_3_5" {
+		if action != "generate" || max {
+			return PricingSnapshot{}, ErrPriceNotFound
+		}
+		return candidateUSDQuote(ProductKey{Operation: domain.OperationAudioMusic, Modality: domain.ModalityAudio, AudioModelID: model, AudioAction: action}, 60000)
+	}
 	if model != "suno_v6" && model != "suno_v6_wild" && model != "suno_v6_mini" {
 		return PricingSnapshot{}, ErrPriceNotFound
 	}

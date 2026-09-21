@@ -39,7 +39,7 @@ func TestDraftMediaContractsRemainNotReady(t *testing.T) {
 		if contract.Status != "draft" {
 			t.Fatalf("%s status = %q, want draft", candidate.PublicID, contract.Status)
 		}
-		if contract.Revision != "2026-09-16" {
+		if contract.Revision != candidate.CheckedAt {
 			t.Fatalf("%s revision = %q", candidate.PublicID, contract.Revision)
 		}
 		if contract.ProviderModelID != candidate.ModelCode || contract.Provider != string(candidate.Provider) {
@@ -52,10 +52,10 @@ func TestDraftMediaContractsRemainNotReady(t *testing.T) {
 			t.Fatalf("%s missing sources/operations/checks: %+v", candidate.PublicID, contract)
 		}
 		for _, source := range contract.Sources {
-			if source.CheckedAt != "2026-09-16" {
-				t.Fatalf("%s source %s checked_at = %q", candidate.PublicID, source.ID, source.CheckedAt)
+			if source.CheckedAt != candidate.CheckedAt {
+				t.Fatalf("%s source %s checked_at = %q, want %q", candidate.PublicID, source.ID, source.CheckedAt, candidate.CheckedAt)
 			}
-			if !strings.HasPrefix(source.URL, "https://docs.apimart.ai/ru/api-reference/") {
+			if !strings.HasPrefix(source.URL, "https://docs.apimart.ai/") {
 				t.Fatalf("%s source %s URL = %q", candidate.PublicID, source.ID, source.URL)
 			}
 		}

@@ -17,7 +17,8 @@
 | Выбор соотношения сторон или разрешения, в том числе в редакторе фото | `ImageAspectRatioSelector`, `ImageQualitySelector`; в модальном редакторе portalLayer=170 | [Ввод](ui-catalog.md#input), [панели](ui-catalog.md#panels) |
 | Обычная кнопка с заливкой | `Button` | [Ввод](ui-catalog.md#input) |
 | Поле сообщения / запрос генерации / загрузка медиа | `ChatComposer`; в существующем сценарии — его адаптер | [Ввод](ui-catalog.md#input), [пример 5](ui-catalog-examples.md#example-5) |
-| Музыкальная workspace-страница / Suno candidates | `MusicWorkspaceController` + `MusicWorkspace`; catalog projection из `/web/v1/models`, prepare/activate, multi-upload tools, route header «Музыка» и safe downloads | [Модели](ui-catalog.md#models), [Ввод](ui-catalog.md#input) |
+| Музыкальная workspace-страница / Suno и Lyria | `MusicWorkspaceController` + `MusicWorkspace`; операции и контролы выбранной модели из общего каталога, prepare/activate и safe downloads | [Модели](ui-catalog.md#models), [Ввод](ui-catalog.md#input) |
+| Озвучка текста / распознавание записи | `SpeechWorkspace` в `/app/speech`; серверный prepare/activate, собственные MP3/WAV, WAV/текст на выходе; pending-модели не запускаются | [Модели](ui-catalog.md#models), [Ввод](ui-catalog.md#input) |
 | Стрелка к концу диалога, скрытая внизу | `ChatScrollToBottom` в `ConversationComposer` | [Ввод](ui-catalog.md#input) |
 | Поверхность отдельного input/search | `InputSurface` + нативное поле | [Ввод](ui-catalog.md#input), [пример 4](ui-catalog-examples.md#example-4) |
 | Ползунок, толщина кисти | `RangeSlider` | [Ввод](ui-catalog.md#input), [пример 4](ui-catalog-examples.md#example-4) |

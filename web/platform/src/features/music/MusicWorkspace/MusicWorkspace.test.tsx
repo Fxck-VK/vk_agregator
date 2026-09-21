@@ -136,6 +136,22 @@ function StatefulWorkspace({
 }
 
 describe("MusicWorkspace", () => {
+  it("shows Lyria controls without cached Suno options or duration above 240 seconds", () => {
+    render(<StatefulWorkspace
+      selectedModelId="lyria_3_5"
+      models={[{ id: "lyria_3_5", name: "Lyria 3.5", enabled: true, availability: "available" }]}
+      operations={[{ id: "generate", enabled: true, estimateCredits: 40 }]}
+      initialDraft={{ ...baseDraft, descriptionPrompt: "synthetic piano", maxMode: true, targetDurationMode: "custom", targetDurationSec: 360 }}
+    />);
+    expect(screen.queryByRole("checkbox", { name: "Max mode" })).not.toBeInTheDocument();
+    expect(screen.queryByRole("checkbox", { name: "Инструментал" })).not.toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: /Формат:/ })).not.toBeInTheDocument();
+    expect(screen.queryByRole("slider", { name: "Вес описания" })).not.toBeInTheDocument();
+    expect(screen.getByRole("slider", { name: "Целевая длительность" })).toHaveAttribute("max", "240");
+    expect(screen.getByRole("slider", { name: "Целевая длительность" })).toHaveValue("240");
+    expect(screen.getByRole("button", { name: "Сгенерировать" })).toBeEnabled();
+  });
+
   it("shows mode-specific fields and preserves controlled drafts across modes", () => {
     const onRequestOwnedUpload = vi.fn();
     render(<StatefulWorkspace onRequestOwnedUpload={onRequestOwnedUpload} uploadsEnabled />);

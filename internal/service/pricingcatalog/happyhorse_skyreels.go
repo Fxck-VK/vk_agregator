@@ -1,17 +1,33 @@
 package pricingcatalog
 
-import "vk-ai-aggregator/internal/domain"
+import (
+	"strings"
 
-// Exact discounted USD micros per second, checked 2026-09-16 at
+	"vk-ai-aggregator/internal/domain"
+)
+
+// Exact discounted USD micros per second, checked 2026-09-16 for
+// HappyHorse/SkyReels and 2026-09-20 for Wan/Vidu at
 // https://api.apimart.ai/api/pricing/model?model=<native-model-id>.
 // The caller must use probed inherited duration for EDIT/reference-video;
 // client-supplied duration is never authority for inherited-mode billing.
 func MediaVideoCandidateQuote(model, mode, resolution string, seconds int) (PricingSnapshot, error) {
-	if seconds < 3 || seconds > 15 {
-		return PricingSnapshot{}, ErrPriceNotFound
-	}
 	var rates map[string]int64
+	minSeconds, maxSeconds := 3, 15
+	resolution = strings.ToLower(strings.TrimSpace(resolution))
 	switch model {
+	case "wan_3_0":
+		if mode != "" {
+			return PricingSnapshot{}, ErrPriceNotFound
+		}
+		minSeconds, maxSeconds = 2, 30
+		rates = map[string]int64{"480p": 32880, "720p": 65752, "1080p": 131504}
+	case "vidu_q3_pro":
+		if mode != "" {
+			return PricingSnapshot{}, ErrPriceNotFound
+		}
+		minSeconds, maxSeconds = 1, 16
+		rates = map[string]int64{"540p": 56000, "720p": 120000, "1080p": 128000}
 	case "happyhorse_1_0":
 		if mode != "" && mode != "edit" {
 			return PricingSnapshot{}, ErrPriceNotFound
@@ -33,6 +49,9 @@ func MediaVideoCandidateQuote(model, mode, resolution string, seconds int) (Pric
 			rates = map[string]int64{"480p": 144000, "720p": 200000, "1080p": 500000}
 		}
 	default:
+		return PricingSnapshot{}, ErrPriceNotFound
+	}
+	if seconds < minSeconds || seconds > maxSeconds {
 		return PricingSnapshot{}, ErrPriceNotFound
 	}
 	if model == "skyreels_v4_fast" || model == "skyreels_v4_std" {

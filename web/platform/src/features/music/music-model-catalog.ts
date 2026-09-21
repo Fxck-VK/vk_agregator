@@ -17,7 +17,7 @@ export type MusicModelCatalog = {
   models: readonly MusicCatalogModel[];
 };
 
-const musicModelIds = ["suno_v6", "suno_v6_wild", "suno_v6_mini"] as const satisfies readonly MusicModelID[];
+const musicModelIds = ["suno_v6", "suno_v6_wild", "suno_v6_mini", "lyria_3_5"] as const satisfies readonly MusicModelID[];
 
 const musicOperationIds = [
   "generate",
