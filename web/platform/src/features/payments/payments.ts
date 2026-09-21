@@ -1,3 +1,4 @@
+import type { Locale } from "@/i18n/locales";
 import { z } from "zod";
 import { webBrowserFetch, webBrowserMutation } from "@/lib/web-api/browser";
 
@@ -73,5 +74,5 @@ export function paymentAttemptKey(code: string): string {
 export function clearPaymentAttempt(): void {
   try { sessionStorage.removeItem(attemptKey); } catch { /* No billing state lives here. */ }
 }
-export const formatPaymentNumber = (value: number) => new Intl.NumberFormat("ru-RU").format(value).replace(/\u00a0/g, " ");
-export const formatPaymentPrice = (minorUnits: number) => formatPaymentNumber(minorUnits / 100);
+export const formatPaymentNumber = (value: number, locale: Locale = "ru") => new Intl.NumberFormat(locale).format(value).replace(/\u00a0/g, " ");
+export const formatPaymentPrice = (minorUnits: number, locale: Locale = "ru") => formatPaymentNumber(minorUnits / 100, locale);

@@ -1,5 +1,10 @@
 "use client";
 
+import { SkeletonGrid, StateNotice, LoadingIndicator } from "@/components/ui/AsyncState/AsyncState";
+import { LoadFeedback } from "@/components/ui/AsyncState/LoadFeedback";
+import { useDictionary } from "@/i18n/LocaleProvider";
+
+
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 
 import { WorkspacePageFrame } from "@/components/layout/WorkspacePageFrame/WorkspacePageFrame";
@@ -15,7 +20,7 @@ import { FileTypeTabs, type FileCategory } from "@/features/files/FileTypeTabs/F
 import { useWorkspaceDataCache } from "@/features/workspace/WorkspaceDataCache/WorkspaceDataCache";
 import { recordWorkspaceDataLoad } from "@/features/workspace/WorkspaceNavigationMetrics/workspace-navigation-metrics";
 import { isTerminalImageJobStatus, nextImageJobPollDelay } from "@/features/image-generation/ImageJobTracker/image-job-polling";
-import { ru } from "@/i18n/ru";
+import type { Dictionary } from "@/i18n/dictionary";
 import type { ImageJob, ImageJobResult } from "@/lib/web-api/contracts";
 
 import {
@@ -261,16 +266,16 @@ function isImageCategory(category: FileCategory): category is "all" | "images" {
   return category === "all" || category === "images";
 }
 
-function futureCategoryDescription(category: Exclude<FileCategory, "all" | "images">): string {
+function futureCategoryDescription(category: Exclude<FileCategory, "all" | "images">, t: Dictionary): string {
   switch (category) {
     case "reports":
-      return ru.files.emptyReportsDescription;
+      return t.files.emptyReportsDescription;
     case "presentations":
-      return ru.files.emptyPresentationsDescription;
+      return t.files.emptyPresentationsDescription;
     case "video":
-      return ru.files.emptyVideoDescription;
+      return t.files.emptyVideoDescription;
     case "uploads":
-      return ru.files.emptyUploadsDescription;
+      return t.files.emptyUploadsDescription;
   }
 }
 
@@ -279,6 +284,7 @@ type FilesWorkspaceProps = {
 };
 
 export function FilesWorkspace({ initialCategory = "all" }: Readonly<FilesWorkspaceProps>) {
+  const t = useDictionary();
   const cache = useWorkspaceDataCache();
   const [cachedFirstPage] = useState(() => cache.getImageFilesFirstPage());
   const [cachedRetryReplacements] = useState(() => cache.getImageFileRetryReplacements());
@@ -288,11 +294,11 @@ export function FilesWorkspace({ initialCategory = "all" }: Readonly<FilesWorksp
   const [jobs, setJobs] = useState<ImageJob[]>(() => cachedFirstPage?.items ?? []);
   const [nextCursor, setNextCursor] = useState<string | null>(() => cachedFirstPage?.next_cursor ?? null);
   const [hasLoaded, setHasLoaded] = useState(() => cachedFirstPage !== undefined);
-  const [isLoading, setIsLoading] = useState(false);
+  const [isLoading, setIsLoading] = useState(cachedFirstPage === undefined);
   const [isLoadingMore, setIsLoadingMore] = useState(false);
   const [loadFailed, setLoadFailed] = useState(false);
   const [fileCategory, setFileCategory] = useState<FileCategory>(initialCategory);
-  const [resultsByJobID, setResultsByJobID] = useState<Record<string, ImageJobResult>>({});
+  const [resultsByJobID, setResultsByJobID] = useState<Record<string, ImageJobResult>>(() => cache.getImageResults());
   const [resultStatesByJobID, setResultStatesByJobID] = useState<Record<string, FileResultState>>({});
   const [selectedPreviewArtifactID, setSelectedPreviewArtifactID] = useState<string | null>(null);
   const [previewTrigger, setPreviewTrigger] = useState<HTMLButtonElement | null>(null);
@@ -319,11 +325,12 @@ export function FilesWorkspace({ initialCategory = "all" }: Readonly<FilesWorksp
         setResultStatesByJobID((currentStates) => ({ ...currentStates, [job.id]: "loading" }));
       },
       onSuccess: (job, result) => {
+        cache.setImageResult(result);
         setResultsByJobID((currentResults) => ({ ...currentResults, [job.id]: result }));
         setResultStatesByJobID((currentStates) => ({ ...currentStates, [job.id]: "idle" }));
       },
     }),
-  []);
+  [cache]);
   if (imagePreviewQueueRef.current === null) {
     imagePreviewQueueRef.current = createPreviewQueue();
   }
@@ -381,6 +388,7 @@ export function FilesWorkspace({ initialCategory = "all" }: Readonly<FilesWorksp
     setLoadFailed(false);
     try {
       const page = await fetchImageFilesPage(cursor);
+      if (!workspaceActiveRef.current) return;
       if (isFirstPage) {
         const reconciledPage = reconcileRetryReplacements(page.items, retryReplacementsRef.current);
         const latestPageJobs = reconcileLocallyActivatedImageJobs(
@@ -636,7 +644,7 @@ export function FilesWorkspace({ initialCategory = "all" }: Readonly<FilesWorksp
           <RetryJobPoller jobID={jobID} key={jobID} onJobUpdate={handleTrackedRetryJobUpdate} />
         ))}
         <header className={styles.header}>
-          <h1 id="files-title">{ru.files.title}</h1>
+          <h1 id="files-title">{t.files.title}</h1>
         </header>
 
         <FileTypeTabs onValueChange={setFileCategory} value={fileCategory} />
@@ -649,21 +657,19 @@ export function FilesWorkspace({ initialCategory = "all" }: Readonly<FilesWorksp
         >
           {!hasImageCategory ? (
             <FilesEmptyState
-              description={futureCategoryDescription(fileCategory)}
-              title={ru.files.emptyLibraryTitle}
+              description={futureCategoryDescription(fileCategory, t)}
+              title={t.files.emptyLibraryTitle}
             />
           ) : null}
 
-          {hasImageCategory && isLoading && !hasLoaded ? <p className={styles.state} role="status">{ru.files.loading}</p> : null}
+          {hasImageCategory ? <LoadFeedback pending={isLoading || isLoadingMore} hasData={hasLoaded} /> : null}
+          {hasImageCategory && isLoading && !hasLoaded ? <SkeletonGrid label={t.files.loading} /> : null}
           {hasImageCategory && loadFailed && !hasLoaded ? (
-            <div className={styles.failure}>
-              <p role="alert">{ru.files.loadFailure}</p>
-              <Button disabled={isLoading} onClick={() => void loadPage()}>{ru.files.retry}</Button>
-            </div>
+            <StateNotice kind="error" action={{ label: t.files.retry, disabled: isLoading, onClick: () => void loadPage() }}>{t.files.loadFailure}</StateNotice>
           ) : null}
 
           {hasImageCategory && hasLoaded && !hasImageJobs ? (
-            <FilesEmptyState description={ru.files.emptyAllDescription} title={ru.files.emptyLibraryTitle} />
+            <FilesEmptyState description={t.files.emptyAllDescription} title={t.files.emptyLibraryTitle} />
           ) : null}
           {hasImageCategory && hasLoaded && hasImageJobs ? (
             <FilesGrid
@@ -677,10 +683,10 @@ export function FilesWorkspace({ initialCategory = "all" }: Readonly<FilesWorksp
             />
           ) : null}
 
-          {hasImageCategory && loadFailed && hasLoaded ? <p className={styles.inlineFailure} role="alert">{ru.files.loadFailure}</p> : null}
+          {hasImageCategory && loadFailed && hasLoaded ? <StateNotice inline kind="error" action={{ label: t.files.retry, onClick: () => void loadPage() }}>{t.files.loadFailure}</StateNotice> : null}
           {hasImageCategory && nextCursor !== null ? (
-            <Button disabled={isLoadingMore} onClick={() => void loadPage(nextCursor)}>
-              {isLoadingMore ? ru.files.loadingMore : ru.files.loadMore}
+            <Button variant="outline" disabled={isLoadingMore} onClick={() => void loadPage(nextCursor)}>
+              {isLoadingMore ? <><LoadingIndicator label={t.files.loadingMore} />{t.files.loadingMore}</> : t.files.loadMore}
             </Button>
           ) : null}
         </section>

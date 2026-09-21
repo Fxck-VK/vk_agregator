@@ -8,7 +8,7 @@
   --color-text: var(--panel-surface-text);
   --color-text-muted: var(--panel-surface-text-muted);
 
-  color-scheme: dark;
+  color-scheme: var(--panel-surface-color-scheme, dark);
   color: var(--color-text);
   display: grid;
   grid-template-rows: auto minmax(0, 1fr);
@@ -51,10 +51,10 @@
   display: block;
   inline-size: 100%;
   overflow: hidden;
-  border: 0.0625rem solid var(--color-border);
+  border: 0.0625rem solid var(--color-card-border);
   border-radius: 1.5rem;
   padding: 0;
-  background: var(--color-surface-raised);
+  background: var(--color-panel);
   color: #fff;
   text-align: start;
   isolation: isolate;

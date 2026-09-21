@@ -1,17 +1,9 @@
-.images {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: flex-start;
-  gap: var(--space-4);
-  margin-block: var(--space-3);
-}
-
 .image {
-  --file-card-media-inline-size: auto;
-  --file-card-media-max-block-size: min(60dvh, 650px);
+  --file-card-media-inline-size: 100%;
+  --file-card-media-max-block-size: none;
 
-  inline-size: fit-content;
-  max-inline-size: min(100%, 600px);
+  inline-size: 100%;
+  max-inline-size: 100%;
   min-inline-size: 0;
 }
 

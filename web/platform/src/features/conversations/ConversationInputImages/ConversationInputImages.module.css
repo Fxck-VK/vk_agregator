@@ -1,0 +1,6 @@
+.images { display: flex; flex-wrap: wrap; gap: var(--space-2); margin-block-end: var(--space-2); }
+.image { display: grid; grid-template: minmax(0, 1fr) / minmax(0, 1fr); place-items: center; inline-size: 10rem; block-size: 10rem; max-inline-size: 100%; border-radius: var(--radius-sm); }
+.image .openPreview { display: flex; align-items: center; justify-content: center; inline-size: 100%; block-size: 100%; border: 0; border-radius: inherit; background: transparent; cursor: zoom-in; }
+.openPreview:focus-visible { outline: 2px solid var(--input-focus-border-color); outline-offset: 2px; }
+.image img { display: block; inline-size: auto; block-size: auto; max-inline-size: 100%; max-block-size: 100%; object-fit: contain; border-radius: var(--radius-sm); }
+.image button { display: grid; place-items: center; inline-size: 2.5rem; block-size: 2.5rem; padding: 0; cursor: pointer; }

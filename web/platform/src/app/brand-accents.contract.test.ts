@@ -15,10 +15,10 @@ describe("restrained brand accents", () => {
 
   it("uses gradient text only for the landing hero accent and balance", () => {
     expect(read("src/features/workspace/WorkspaceLanding/WorkspaceLanding.module.css")).toMatch(
-      /\.heroCopy h1 span\s*\{[^}]*background:\s*var\(--gradient-brand\)[^}]*background-clip:\s*text[^}]*color:\s*transparent/s,
+      /\.heroCopy h1 span\s*\{[^}]*background:\s*var\(--gradient-text, var\(--gradient-brand\)\)[^}]*background-clip:\s*text[^}]*color:\s*transparent/s,
     );
     expect(read("src/features/account/ProfileBalanceCard/ProfileBalanceCard.module.css")).toMatch(
-      /\.balance strong\s*\{[^}]*background:\s*var\(--gradient-brand\)[^}]*background-clip:\s*text[^}]*color:\s*transparent/s,
+      /\.balance strong\s*\{[^}]*background:\s*var\(--gradient-text, var\(--gradient-brand\)\)[^}]*background-clip:\s*text[^}]*color:\s*transparent/s,
     );
   });
 

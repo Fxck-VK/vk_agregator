@@ -12,7 +12,11 @@ func workspaceCapabilities(id string, op WorkspaceOperation) *providermodels.Mod
 		if op.Image == nil {
 			return nil
 		}
-		c := providermodels.ImageCapabilitiesForSurface(id, "web", op.Image.QualityOptions)
+		surface := "web"
+		if op.Inputs.Images.Enabled {
+			surface = "web-references"
+		}
+		c := providermodels.ImageCapabilitiesForSurface(id, surface, op.Image.QualityOptions)
 		if c != nil {
 			maximum := op.Image.MaxOutputCount
 			c.Application.Image.MaxOutputCount = &maximum

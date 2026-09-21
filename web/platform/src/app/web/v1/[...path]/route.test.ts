@@ -20,6 +20,8 @@ import {
 } from "../../../../lib/web-api/contracts";
 import { GET, POST } from "./route";
 import { parseModelCatalog, projectChatModelCatalog, projectImageModelCatalog } from "@/features/models/model-catalog-contract";
+import { createPreviewImage } from "@/features/local-development/preview-image";
+import sharp from "sharp";
 
 describe("web API route local workspace preview", () => {
   it.each(["development", "production"] as const)("keeps empty music history limited to local development: %s", async (environment) => {
@@ -37,6 +39,29 @@ describe("web API route local workspace preview", () => {
     }
   });
 
+  it("serves bounded image fixtures at the requested ratio only in local preview", async () => {
+    vi.stubEnv("NODE_ENV", "development");
+    vi.stubEnv("NEIROHUB_LOCAL_WORKSPACE_PREVIEW", "1");
+    const artifact = createPreviewImage("9:16");
+    const request = new Request(`http://localhost:7158/web/v1/image-artifacts/${artifact.id}`);
+    const response = await GET(request);
+    expect(response.headers.get("Content-Type")).toBe("image/jpeg");
+    const metadata = await sharp(Buffer.from(await response.arrayBuffer())).metadata();
+    expect(metadata).toMatchObject({ width: artifact.width, height: artifact.height });
+    expect((await GET(new Request("http://localhost:7158/web/v1/image-artifacts/f1000000-ffff-4fff-8000-000000000000"))).status).toBe(404);
+    expect(proxyWebApiRequest).not.toHaveBeenCalled();
+    vi.stubEnv("NODE_ENV", "production");
+    await GET(request);
+    expect(proxyWebApiRequest).toHaveBeenCalledTimes(1);
+  });
+  it.each(["input-artifacts", "image-jobs", "conversations", "unknown-preview-path"])("never forwards preview writes to %s to a real backend", async path => {
+    vi.stubEnv("NODE_ENV", "development");
+    vi.stubEnv("NEIROHUB_LOCAL_WORKSPACE_PREVIEW", "1");
+    const response = await POST(new Request(`http://localhost:7158/web/v1/${path}`, { method: "POST" }));
+    expect(response.status).toBe(503);
+    expect(response.headers.get("Cache-Control")).toBe("no-store");
+    expect(proxyWebApiRequest).not.toHaveBeenCalled();
+  });
   it("shows preview packages but never forwards a preview payment", async () => {
     vi.stubEnv("NODE_ENV", "development");
     vi.stubEnv("NEIROHUB_LOCAL_WORKSPACE_PREVIEW", "1");

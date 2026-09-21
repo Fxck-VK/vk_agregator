@@ -16,7 +16,7 @@
 }
 
 .action:hover {
-  background: var(--color-accent-strong);
+  background: var(--color-accent-hover, var(--color-accent-strong));
 }
 
 .action:active {

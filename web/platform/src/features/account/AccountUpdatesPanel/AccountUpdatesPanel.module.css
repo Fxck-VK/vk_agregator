@@ -11,7 +11,7 @@
   overflow: hidden;
   border: 0.0625rem solid var(--color-border);
   border-radius: var(--radius-lg);
-  background: color-mix(in srgb, var(--color-background) 96%, transparent);
+  background: var(--floating-dialog-background, color-mix(in srgb, var(--color-background) 96%, transparent));
   box-shadow: var(--shadow-overlay);
   color: var(--color-text);
   backdrop-filter: blur(1rem);

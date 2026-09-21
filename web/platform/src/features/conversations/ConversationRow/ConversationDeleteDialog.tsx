@@ -1,5 +1,9 @@
 "use client";
 
+import { StateNotice, LoadingIndicator } from "@/components/ui/AsyncState/AsyncState";
+import { useDictionary } from "@/i18n/LocaleProvider";
+
+
 import {
   type JSX,
   type RefObject,
@@ -10,7 +14,6 @@ import {
 import { createPortal } from "react-dom";
 
 import { ModalBackdrop } from "@/components/ui/ModalBackdrop/ModalBackdrop";
-import { ru } from "@/i18n/ru";
 
 import styles from "./ConversationRow.module.css";
 
@@ -31,6 +34,7 @@ export function ConversationDeleteDialog({
   onCancel,
   onConfirm,
 }: ConversationDeleteDialogProps): JSX.Element | null {
+  const t = useDictionary();
   const titleID = useId();
   const leadID = useId();
   const descriptionID = useId();
@@ -71,13 +75,13 @@ export function ConversationDeleteDialog({
         ref={dialogRef}
         role="dialog"
       >
-        <h2 id={titleID}>{ru.conversations.archiveDialogTitle}</h2>
-        <p id={leadID}>{ru.conversations.archiveDialogLead} <strong>{conversationTitle}</strong>.</p>
-        <p className={styles.dialogDescription} id={descriptionID}>{ru.conversations.archiveConfirmation}</p>
-        {errorMessage === undefined ? null : <p className={styles.dialogError} role="alert">{errorMessage}</p>}
+        <h2 id={titleID}>{t.conversations.archiveDialogTitle}</h2>
+        <p id={leadID}>{t.conversations.archiveDialogLead} <strong>{conversationTitle}</strong>.</p>
+        <p className={styles.dialogDescription} id={descriptionID}>{t.conversations.archiveConfirmation}</p>
+        {errorMessage === undefined ? null : <StateNotice inline kind="error">{errorMessage}</StateNotice>}
         <div className={styles.dialogActions}>
           <button className={styles.dialogCancel} disabled={isPending} onClick={requestClose} type="button">
-            {ru.conversations.cancelLabel}
+            {t.conversations.cancelLabel}
           </button>
           <button
             aria-describedby={`${leadID} ${descriptionID}`}
@@ -87,7 +91,7 @@ export function ConversationDeleteDialog({
             ref={confirmRef}
             type="button"
           >
-            {isPending ? ru.conversations.archivePending : ru.conversations.archiveConfirmLabel}
+            {isPending ? <><span aria-hidden="true"><LoadingIndicator label="" /></span>{t.conversations.archivePending}</> : t.conversations.archiveConfirmLabel}
           </button>
         </div>
       </section>}

@@ -1,5 +1,5 @@
 import type { ConversationHistoryData } from "@/features/conversations/conversation-history-data";
-import type { ImageJob, ImageJobList } from "@/lib/web-api/contracts";
+import type { ImageJob, ImageJobList, ImageJobResult } from "@/lib/web-api/contracts";
 
 export const maxCachedConversationHistoryPages = 8;
 
@@ -11,6 +11,8 @@ export type ImageFileRetryReplacement = {
 };
 
 export type WorkspaceDataCache = {
+  getImageResults: () => Record<string, ImageJobResult>;
+  setImageResult: (result: ImageJobResult) => void;
   getConversationHistory: (conversationId: string) => ReadyConversationHistory | undefined;
   setConversationHistory: (history: ConversationHistoryData) => void;
   deleteConversationHistory: (conversationId: string) => void;
@@ -24,8 +26,15 @@ export function createWorkspaceDataCache(): WorkspaceDataCache {
   const conversationHistories = new Map<string, ReadyConversationHistory>();
   const imageFileRetryReplacements = new Map<string, ImageJob>();
   let imageFilesFirstPage: ImageJobList | undefined;
+  const imageResults = new Map<string, ImageJobResult>();
 
   return {
+    getImageResults: () => Object.fromEntries(imageResults),
+    setImageResult(result) {
+      imageResults.delete(result.job_id);
+      imageResults.set(result.job_id, result);
+      if (imageResults.size > 60) imageResults.delete(imageResults.keys().next().value!);
+    },
     getConversationHistory(conversationId) {
       const history = conversationHistories.get(conversationId);
       if (history === undefined) {

@@ -14,7 +14,7 @@
 
 .link:hover {
   translate: 0 -0.1rem;
-  background: var(--color-accent-strong);
+  background: var(--color-accent-hover, var(--color-accent-strong));
 }
 
 .link:active {

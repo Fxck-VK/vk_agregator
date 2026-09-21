@@ -1,3 +1,4 @@
+/* eslint-disable @next/next/no-html-link-for-pages -- Native link fixtures and router mocks are intentional in these tests. */
 import { cleanup, fireEvent, render, screen } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
@@ -103,12 +104,12 @@ describe("WorkspaceHeader", () => {
     expect(balanceButton).toHaveAttribute("aria-expanded", "true");
     expect(screen.getByText("Выберите подходящий пакет токенов.")).toBeInTheDocument();
     expect(await screen.findAllByRole("radio")).toHaveLength(5);
-    expect(screen.getByRole("radio", { name: "20 000 токенов за 9 200 ₽" })).toBeChecked();
+    expect(screen.getByRole("radio", { name: /20\s000 звёзд за 9 200 ₽/ })).toBeChecked();
     expect(screen.getByRole("button", { name: "Купить за 9 200 ₽" })).toBeInTheDocument();
 
-    fireEvent.click(screen.getByRole("radio", { name: "10 000 токенов за 4 700 ₽" }));
+    fireEvent.click(screen.getByRole("radio", { name: /10\s000 звёзд за 4 700 ₽/ }));
 
-    expect(screen.getByRole("radio", { name: "10 000 токенов за 4 700 ₽" })).toBeChecked();
+    expect(screen.getByRole("radio", { name: /10\s000 звёзд за 4 700 ₽/ })).toBeChecked();
     expect(screen.getByRole("button", { name: "Купить за 4 700 ₽" })).toBeInTheDocument();
     expect(dialog).toBeInTheDocument();
   });

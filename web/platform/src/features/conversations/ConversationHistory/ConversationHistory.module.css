@@ -13,7 +13,6 @@
   padding-block-end: var(--space-8);
 }
 
-.empty,
 .messages,
 .userMessage > p {
   margin: 0;
@@ -32,24 +31,10 @@
   margin-block-end: var(--space-4);
 }
 
-.loadEarlierFailure {
-  margin: 0;
-  color: var(--color-text-muted);
-}
-
-.refreshStatus {
-  margin: 0 0 var(--space-4);
-  color: var(--color-text-muted);
-}
-
-.userMessage,
-.empty {
+.userMessage {
   border: 0.0625rem solid var(--color-border);
   border-radius: var(--radius-lg);
   padding: var(--space-4);
-}
-
-.userMessage {
   justify-self: end;
   inline-size: fit-content;
   max-inline-size: min(80%, 48rem);
@@ -66,28 +51,6 @@
   overflow-wrap: anywhere;
 }
 
-.empty {
-  margin-inline-end: min(12%, 6rem);
-  background: var(--color-surface);
-}
-
-.pendingTurnFailure {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: var(--space-3);
-  margin-block-start: var(--space-3);
-  font-size: 0.875rem;
-}
-
-.pendingTurnFailure > span {
-  font-weight: var(--font-weight-semibold);
-}
-
-.empty {
-  color: var(--color-text-muted);
-}
-
 .state {
   inline-size: min(100%, var(--workspace-page-shell-width));
   margin-inline: auto;
@@ -95,24 +58,9 @@
   padding-inline: var(--workspace-page-inline-gutter);
 }
 
-.stateSurface {
-  display: grid;
-  justify-items: start;
-  gap: var(--space-3);
-  border: 0.0625rem solid var(--color-border);
-  border-radius: var(--radius-lg);
-  padding: var(--space-4);
-  background: var(--color-surface);
-  color: var(--color-text-muted);
-}
-
-.stateSurface > p {
-  margin: 0;
-}
-
 @media (48rem <= width < 82rem) {
   .history,
   .state {
-    padding-inline-end: var(--space-4);
+    padding-inline: var(--space-4);
   }
 }

@@ -80,7 +80,7 @@ describe("SessionRefresh", () => {
 
       render(<SessionRefresh />);
 
-      await vi.waitFor(() => expect(replace).toHaveBeenCalledWith("/login"));
+      await vi.waitFor(() => expect(replace).toHaveBeenCalledWith("/ru/login"));
       expect(refresh).not.toHaveBeenCalled();
     },
   );

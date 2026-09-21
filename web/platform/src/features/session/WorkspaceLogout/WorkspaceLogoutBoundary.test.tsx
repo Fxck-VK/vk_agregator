@@ -105,7 +105,7 @@ describe("WorkspaceLogoutBoundary", () => {
     expect(replace).not.toHaveBeenCalled();
 
     resolveLogout();
-    await vi.waitFor(() => expect(replace).toHaveBeenCalledWith("/app"));
+    await vi.waitFor(() => expect(replace).toHaveBeenCalledWith("/ru/app"));
     expect(refresh).toHaveBeenCalledOnce();
   });
 
@@ -123,7 +123,7 @@ describe("WorkspaceLogoutBoundary", () => {
 
     fireEvent.click(screen.getByRole("button", { name: ru.account.logoutRetryLabel }));
 
-    await vi.waitFor(() => expect(replace).toHaveBeenCalledWith("/app"));
+    await vi.waitFor(() => expect(replace).toHaveBeenCalledWith("/ru/app"));
     expect(requestWorkspaceLogout).toHaveBeenCalledTimes(2);
   });
 
@@ -140,7 +140,7 @@ describe("WorkspaceLogoutBoundary", () => {
     expect(replace).not.toHaveBeenCalled();
 
     resolveLogout();
-    await vi.waitFor(() => expect(replace).toHaveBeenCalledWith("/login"));
+    await vi.waitFor(() => expect(replace).toHaveBeenCalledWith("/ru/login"));
     expect(refresh).toHaveBeenCalledOnce();
   });
 
@@ -158,7 +158,7 @@ describe("WorkspaceLogoutBoundary", () => {
     expect(screen.getByRole("status")).toHaveTextContent(ru.account.logoutServerFailure);
 
     act(() => channel.emit({ type: "logout-confirmed" }));
-    expect(replace).toHaveBeenCalledWith("/app");
+    expect(replace).toHaveBeenCalledWith("/ru/app");
     expect(refresh).toHaveBeenCalledOnce();
   });
 });

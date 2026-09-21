@@ -117,10 +117,10 @@ describe("WorkspaceHome", () => {
     expect(markup).not.toContain("Сообщество NeiroHub");
     expect(markup).not.toContain("Перейти во вдохновение");
     expect(markup).not.toContain("Открыть мои файлы");
-    expect(markup).toContain('href="/app/image"');
-    expect(markup).toContain('href="/app/models"');
-    expect(markup).toContain('href="/app/inspiration"');
-    expect(markup).toContain('href="/app/profile"');
+    expect(markup).toContain('href="/ru/app/image"');
+    expect(markup).toContain('href="/ru/app/models"');
+    expect(markup).toContain('href="/ru/app/inspiration"');
+    expect(markup).toContain('href="/ru/app/profile"');
     expect(markup).not.toContain("<main");
     expect(markup).not.toContain("image-generation-title");
     expect(markup).not.toContain("image-job-history-title");
@@ -265,7 +265,7 @@ describe("WorkspaceHome", () => {
     const shortcutLinks = within(shortcutsNavigation).getAllByRole("link");
 
     expect(cards).toHaveLength(4);
-    expect(cards[0]).toHaveAttribute("href", "/app/chats?model=nano-banana-2");
+    expect(cards[0]).toHaveAttribute("href", "/ru/app/chats?model=nano-banana-2");
     expect(cards[0]).toHaveTextContent("Nano Banana 2");
     expect(within(cards[0]).getByLabelText("55 звёзд")).toBeInTheDocument();
     expect(within(cards[0]).queryByLabelText("от 55 звёзд")).toBeNull();
@@ -283,7 +283,7 @@ describe("WorkspaceHome", () => {
     expect(cards).toHaveLength(6);
     expect(cards[4]).toHaveTextContent("Пятая модель");
     expect(cards[5]).toHaveTextContent("Шестая модель");
-    expect(within(region).getByRole("link", { name: "Все нейросети" })).toHaveAttribute("href", "/app/models");
+    expect(within(region).getByRole("link", { name: "Все нейросети" })).toHaveAttribute("href", "/ru/app/models");
     expect(region).not.toHaveTextContent("1K");
     expect(region).not.toHaveTextContent("2K");
     expect(region).not.toHaveTextContent("4K");
@@ -307,7 +307,7 @@ describe("WorkspaceHome", () => {
     expect(shortcutsNavigation).not.toHaveTextContent("Каталог нейросетей");
     expect(shortcutsNavigation).not.toHaveTextContent("Вдохновение");
     expect(shortcutLinks.at(-1)).toHaveTextContent("Все нейросети");
-    expect(shortcutLinks.at(-1)).toHaveAttribute("href", "/app/models");
+    expect(shortcutLinks.at(-1)).toHaveAttribute("href", "/ru/app/models");
   });
 
   it("renders the interactive inspiration example instead of a placeholder", () => {
@@ -332,8 +332,8 @@ describe("WorkspaceHome", () => {
     expect(markup).not.toContain(ru.workspace.sections.chats.description);
     expect(markup).not.toContain("Нейросети для разных задач");
     expect(markup).not.toContain("Частые вопросы");
-    expect(markup).not.toContain('href="/app/image"');
-    expect(markup).not.toContain('href="/app/models"');
+    expect(markup).not.toContain('href="/ru/app/image"');
+    expect(markup).not.toContain('href="/ru/app/models"');
   });
 
   it("keeps the new-chat heading and composer in one centered layout group", () => {

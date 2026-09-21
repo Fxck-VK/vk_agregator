@@ -3,9 +3,7 @@ import "server-only";
 import { cookies } from "next/headers";
 
 import {
-  parseAccountBalance,
   parseAccountProfile,
-  parseConversationList,
   type AccountProfile,
   type ConversationItem,
 } from "../../lib/web-api/contracts";
@@ -18,7 +16,7 @@ import {
 } from "./local-workspace-preview";
 
 export type WorkspaceSession =
-  | { kind: "authenticated"; profile: AccountProfile; conversations: ConversationItem[]; balance: number | null }
+  | { kind: "authenticated"; profile: AccountProfile; conversations: ConversationItem[]; balance: number | null; deferred?: boolean }
   | { kind: "unauthenticated" }
   | { kind: "refresh_required" }
   | { kind: "unavailable" };
@@ -47,23 +45,8 @@ export async function loadWorkspaceSession(): Promise<WorkspaceSession> {
     }
     const profile = parseAccountProfile(await profileResponse.json());
 
-    const [conversationsResponse, balanceResponse] = await Promise.all([
-      webServerFetch("/web/v1/conversations?limit=20"),
-      webServerFetch("/web/v1/balance"),
-    ]);
-    if (conversationsResponse.status !== 200) {
-      return { kind: "unavailable" };
-    }
-    const conversations = parseConversationList(await conversationsResponse.json());
-    let balance: number | null = null;
-    if (balanceResponse.status === 200) {
-      try {
-        balance = parseAccountBalance(await balanceResponse.json()).balance;
-      } catch {
-        // The workspace remains usable; the header must not invent a balance if a safe response cannot be parsed.
-      }
-    }
-    return { kind: "authenticated", profile, conversations: conversations.items, balance };
+    // Only identity gates private content. Sidebar and balance read independently.
+    return { kind: "authenticated", profile, conversations: [], balance: null, deferred: true };
   } catch {
     return { kind: "unavailable" };
   }

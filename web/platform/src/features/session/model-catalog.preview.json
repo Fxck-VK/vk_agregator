@@ -851,9 +851,27 @@
           "enabled": true,
           "inputs": {
             "images": {
-              "support": "unknown",
-              "enabled": false,
-              "max_count": 14
+              "support": "supported",
+              "enabled": true,
+              "processing": "native",
+              "formats": [
+                {
+                  "extension": ".png",
+                  "mime": "image/png"
+                },
+                {
+                  "extension": ".jpg",
+                  "mime": "image/jpeg"
+                },
+                {
+                  "extension": ".jpeg",
+                  "mime": "image/jpeg"
+                }
+              ],
+              "max_count": 14,
+              "max_bytes": 20971520,
+              "max_width": 4096,
+              "max_height": 4096
             },
             "video": {
               "support": "unknown",
@@ -867,7 +885,7 @@
               "support": "unknown",
               "enabled": false
             },
-            "max_total_bytes": 0
+            "max_total_bytes": 293601280
           },
           "image": {
             "quality_label": "Разрешение",
@@ -890,8 +908,8 @@
             ],
             "default_aspect_ratio": "16:9",
             "max_output_count": 15,
-            "supports_reference_image": false,
-            "max_reference_images": 0,
+            "supports_reference_image": true,
+            "max_reference_images": 14,
             "price_by_quality": {
               "2K": 20,
               "3K": 20,
@@ -963,9 +981,13 @@
         "application": {
           "image": {
             "images": {
-              "support": "unsupported",
-              "extensions": [],
-              "max_count": 0
+              "support": "supported",
+              "extensions": [
+                "jpg",
+                "jpeg",
+                "png"
+              ],
+              "max_count": 14
             },
             "aspect_ratios": [
               "1:1",
@@ -986,10 +1008,7 @@
             "speed_modes": [],
             "max_output_count": 15,
             "max_combined_images": 15
-          },
-          "notes": [
-            "На сайте загрузка фото в запрос генерации ещё не подключена."
-          ]
+          }
         }
       }
     },
@@ -1010,9 +1029,27 @@
           "enabled": true,
           "inputs": {
             "images": {
-              "support": "unknown",
-              "enabled": false,
-              "max_count": 10
+              "support": "supported",
+              "enabled": true,
+              "processing": "native",
+              "formats": [
+                {
+                  "extension": ".png",
+                  "mime": "image/png"
+                },
+                {
+                  "extension": ".jpg",
+                  "mime": "image/jpeg"
+                },
+                {
+                  "extension": ".jpeg",
+                  "mime": "image/jpeg"
+                }
+              ],
+              "max_count": 10,
+              "max_bytes": 20971520,
+              "max_width": 4096,
+              "max_height": 4096
             },
             "video": {
               "support": "unknown",
@@ -1026,7 +1063,7 @@
               "support": "unknown",
               "enabled": false
             },
-            "max_total_bytes": 0
+            "max_total_bytes": 209715200
           },
           "image": {
             "quality_label": "Разрешение",
@@ -1051,8 +1088,8 @@
             ],
             "default_aspect_ratio": "16:9",
             "max_output_count": 1,
-            "supports_reference_image": false,
-            "max_reference_images": 0,
+            "supports_reference_image": true,
+            "max_reference_images": 10,
             "price_by_quality": {
               "1.5K": 20,
               "1K": 20,
@@ -1131,9 +1168,13 @@
         "application": {
           "image": {
             "images": {
-              "support": "unsupported",
-              "extensions": [],
-              "max_count": 0
+              "support": "supported",
+              "extensions": [
+                "jpg",
+                "jpeg",
+                "png"
+              ],
+              "max_count": 10
             },
             "aspect_ratios": [
               "1:1",
@@ -1156,10 +1197,7 @@
             "speed_modes": [],
             "max_output_count": 1,
             "max_combined_images": null
-          },
-          "notes": [
-            "На сайте загрузка фото в запрос генерации ещё не подключена."
-          ]
+          }
         }
       }
     },
@@ -1180,9 +1218,27 @@
           "enabled": true,
           "inputs": {
             "images": {
-              "support": "unknown",
-              "enabled": false,
-              "max_count": 4
+              "support": "supported",
+              "enabled": true,
+              "processing": "native",
+              "formats": [
+                {
+                  "extension": ".png",
+                  "mime": "image/png"
+                },
+                {
+                  "extension": ".jpg",
+                  "mime": "image/jpeg"
+                },
+                {
+                  "extension": ".jpeg",
+                  "mime": "image/jpeg"
+                }
+              ],
+              "max_count": 4,
+              "max_bytes": 20971520,
+              "max_width": 4096,
+              "max_height": 4096
             },
             "video": {
               "support": "unknown",
@@ -1196,7 +1252,7 @@
               "support": "unknown",
               "enabled": false
             },
-            "max_total_bytes": 0
+            "max_total_bytes": 83886080
           },
           "image": {
             "quality_label": "Режим",
@@ -1221,8 +1277,8 @@
             ],
             "default_aspect_ratio": "16:9",
             "max_output_count": 1,
-            "supports_reference_image": false,
-            "max_reference_images": 0,
+            "supports_reference_image": true,
+            "max_reference_images": 4,
             "price_by_quality": {
               "fast": 35,
               "relax": 30,
@@ -1290,9 +1346,13 @@
         "application": {
           "image": {
             "images": {
-              "support": "unsupported",
-              "extensions": [],
-              "max_count": 0
+              "support": "supported",
+              "extensions": [
+                "jpg",
+                "jpeg",
+                "png"
+              ],
+              "max_count": 4
             },
             "aspect_ratios": [
               "16:9",
@@ -1317,8 +1377,7 @@
             "max_combined_images": null
           },
           "notes": [
-            "Relax/Fast/Turbo — скорость генерации. Один результат Imagine может содержать сетку изображений.",
-            "На сайте загрузка фото в запрос генерации ещё не подключена."
+            "Relax/Fast/Turbo — скорость генерации. Один результат Imagine может содержать сетку изображений."
           ]
         }
       }
@@ -1517,9 +1576,27 @@
           "enabled": true,
           "inputs": {
             "images": {
-              "support": "unknown",
-              "enabled": false,
-              "max_count": 14
+              "support": "supported",
+              "enabled": true,
+              "processing": "native",
+              "formats": [
+                {
+                  "extension": ".png",
+                  "mime": "image/png"
+                },
+                {
+                  "extension": ".jpg",
+                  "mime": "image/jpeg"
+                },
+                {
+                  "extension": ".jpeg",
+                  "mime": "image/jpeg"
+                }
+              ],
+              "max_count": 14,
+              "max_bytes": 20971520,
+              "max_width": 4096,
+              "max_height": 4096
             },
             "video": {
               "support": "unknown",
@@ -1533,7 +1610,7 @@
               "support": "unknown",
               "enabled": false
             },
-            "max_total_bytes": 0
+            "max_total_bytes": 293601280
           },
           "image": {
             "quality_label": "Разрешение",
@@ -1558,8 +1635,8 @@
             ],
             "default_aspect_ratio": "16:9",
             "max_output_count": 4,
-            "supports_reference_image": false,
-            "max_reference_images": 0,
+            "supports_reference_image": true,
+            "max_reference_images": 14,
             "price_by_quality": {
               "1K": 50,
               "2K": 60,
@@ -1632,9 +1709,13 @@
         "application": {
           "image": {
             "images": {
-              "support": "unsupported",
-              "extensions": [],
-              "max_count": 0
+              "support": "supported",
+              "extensions": [
+                "jpg",
+                "jpeg",
+                "png"
+              ],
+              "max_count": 14
             },
             "aspect_ratios": [
               "16:9",
@@ -1657,10 +1738,7 @@
             "speed_modes": [],
             "max_output_count": 4,
             "max_combined_images": null
-          },
-          "notes": [
-            "На сайте загрузка фото в запрос генерации ещё не подключена."
-          ]
+          }
         }
       }
     },
@@ -1681,9 +1759,27 @@
           "enabled": true,
           "inputs": {
             "images": {
-              "support": "unknown",
-              "enabled": false,
-              "max_count": 14
+              "support": "supported",
+              "enabled": true,
+              "processing": "native",
+              "formats": [
+                {
+                  "extension": ".png",
+                  "mime": "image/png"
+                },
+                {
+                  "extension": ".jpg",
+                  "mime": "image/jpeg"
+                },
+                {
+                  "extension": ".jpeg",
+                  "mime": "image/jpeg"
+                }
+              ],
+              "max_count": 14,
+              "max_bytes": 20971520,
+              "max_width": 4096,
+              "max_height": 4096
             },
             "video": {
               "support": "unknown",
@@ -1697,7 +1793,7 @@
               "support": "unknown",
               "enabled": false
             },
-            "max_total_bytes": 0
+            "max_total_bytes": 293601280
           },
           "image": {
             "quality_label": "Разрешение",
@@ -1722,8 +1818,8 @@
             ],
             "default_aspect_ratio": "16:9",
             "max_output_count": 4,
-            "supports_reference_image": false,
-            "max_reference_images": 0,
+            "supports_reference_image": true,
+            "max_reference_images": 14,
             "price_by_quality": {
               "1K": 50,
               "2K": 60,
@@ -1793,9 +1889,13 @@
         "application": {
           "image": {
             "images": {
-              "support": "unsupported",
-              "extensions": [],
-              "max_count": 0
+              "support": "supported",
+              "extensions": [
+                "jpg",
+                "jpeg",
+                "png"
+              ],
+              "max_count": 14
             },
             "aspect_ratios": [
               "16:9",
@@ -1818,10 +1918,7 @@
             "speed_modes": [],
             "max_output_count": 4,
             "max_combined_images": null
-          },
-          "notes": [
-            "На сайте загрузка фото в запрос генерации ещё не подключена."
-          ]
+          }
         }
       }
     },
@@ -1842,9 +1939,27 @@
           "enabled": true,
           "inputs": {
             "images": {
-              "support": "unknown",
-              "enabled": false,
-              "max_count": 16
+              "support": "supported",
+              "enabled": true,
+              "processing": "native",
+              "formats": [
+                {
+                  "extension": ".png",
+                  "mime": "image/png"
+                },
+                {
+                  "extension": ".jpg",
+                  "mime": "image/jpeg"
+                },
+                {
+                  "extension": ".jpeg",
+                  "mime": "image/jpeg"
+                }
+              ],
+              "max_count": 16,
+              "max_bytes": 20971520,
+              "max_width": 4096,
+              "max_height": 4096
             },
             "video": {
               "support": "unknown",
@@ -1858,7 +1973,7 @@
               "support": "unknown",
               "enabled": false
             },
-            "max_total_bytes": 0
+            "max_total_bytes": 335544320
           },
           "image": {
             "quality_label": "Разрешение",
@@ -1883,8 +1998,8 @@
             ],
             "default_aspect_ratio": "16:9",
             "max_output_count": 4,
-            "supports_reference_image": false,
-            "max_reference_images": 0,
+            "supports_reference_image": true,
+            "max_reference_images": 16,
             "price_by_quality": {
               "1K": 40,
               "2K": 50,
@@ -1958,9 +2073,13 @@
         "application": {
           "image": {
             "images": {
-              "support": "unsupported",
-              "extensions": [],
-              "max_count": 0
+              "support": "supported",
+              "extensions": [
+                "jpg",
+                "jpeg",
+                "png"
+              ],
+              "max_count": 16
             },
             "aspect_ratios": [
               "16:9",
@@ -1983,10 +2102,7 @@
             "speed_modes": [],
             "max_output_count": 4,
             "max_combined_images": null
-          },
-          "notes": [
-            "На сайте загрузка фото в запрос генерации ещё не подключена."
-          ]
+          }
         }
       }
     },
@@ -2007,9 +2123,27 @@
           "enabled": true,
           "inputs": {
             "images": {
-              "support": "unknown",
-              "enabled": false,
-              "max_count": 3
+              "support": "supported",
+              "enabled": true,
+              "processing": "native",
+              "formats": [
+                {
+                  "extension": ".png",
+                  "mime": "image/png"
+                },
+                {
+                  "extension": ".jpg",
+                  "mime": "image/jpeg"
+                },
+                {
+                  "extension": ".jpeg",
+                  "mime": "image/jpeg"
+                }
+              ],
+              "max_count": 3,
+              "max_bytes": 20971520,
+              "max_width": 4096,
+              "max_height": 4096
             },
             "video": {
               "support": "unknown",
@@ -2023,7 +2157,7 @@
               "support": "unknown",
               "enabled": false
             },
-            "max_total_bytes": 0
+            "max_total_bytes": 62914560
           },
           "image": {
             "quality_label": "Разрешение",
@@ -2044,8 +2178,8 @@
             ],
             "default_aspect_ratio": "16:9",
             "max_output_count": 1,
-            "supports_reference_image": false,
-            "max_reference_images": 0,
+            "supports_reference_image": true,
+            "max_reference_images": 3,
             "price_by_quality": {
               "1K": 15,
               "2K": 15
@@ -2095,9 +2229,13 @@
         "application": {
           "image": {
             "images": {
-              "support": "unsupported",
-              "extensions": [],
-              "max_count": 0
+              "support": "supported",
+              "extensions": [
+                "jpg",
+                "jpeg",
+                "png"
+              ],
+              "max_count": 3
             },
             "aspect_ratios": [
               "1:1",
@@ -2116,10 +2254,7 @@
             "speed_modes": [],
             "max_output_count": 1,
             "max_combined_images": null
-          },
-          "notes": [
-            "На сайте загрузка фото в запрос генерации ещё не подключена."
-          ]
+          }
         }
       }
     },
@@ -2140,9 +2275,27 @@
           "enabled": true,
           "inputs": {
             "images": {
-              "support": "unknown",
-              "enabled": false,
-              "max_count": 1
+              "support": "supported",
+              "enabled": true,
+              "processing": "native",
+              "formats": [
+                {
+                  "extension": ".png",
+                  "mime": "image/png"
+                },
+                {
+                  "extension": ".jpg",
+                  "mime": "image/jpeg"
+                },
+                {
+                  "extension": ".jpeg",
+                  "mime": "image/jpeg"
+                }
+              ],
+              "max_count": 1,
+              "max_bytes": 20971520,
+              "max_width": 4096,
+              "max_height": 4096
             },
             "video": {
               "support": "unknown",
@@ -2156,7 +2309,7 @@
               "support": "unknown",
               "enabled": false
             },
-            "max_total_bytes": 0
+            "max_total_bytes": 20971520
           },
           "image": {
             "quality_label": "Разрешение",
@@ -2174,8 +2327,8 @@
             ],
             "default_aspect_ratio": "16:9",
             "max_output_count": 1,
-            "supports_reference_image": false,
-            "max_reference_images": 0,
+            "supports_reference_image": true,
+            "max_reference_images": 1,
             "price_by_quality": {
               "standard": 10
             },
@@ -2220,9 +2373,13 @@
         "application": {
           "image": {
             "images": {
-              "support": "unsupported",
-              "extensions": [],
-              "max_count": 0
+              "support": "supported",
+              "extensions": [
+                "jpg",
+                "jpeg",
+                "png"
+              ],
+              "max_count": 1
             },
             "aspect_ratios": [
               "16:9",
@@ -2238,10 +2395,7 @@
             "speed_modes": [],
             "max_output_count": 1,
             "max_combined_images": null
-          },
-          "notes": [
-            "На сайте загрузка фото в запрос генерации ещё не подключена."
-          ]
+          }
         }
       }
     },
@@ -2391,9 +2545,27 @@
           "enabled": true,
           "inputs": {
             "images": {
-              "support": "unknown",
-              "enabled": false,
-              "max_count": 10
+              "support": "supported",
+              "enabled": true,
+              "processing": "native",
+              "formats": [
+                {
+                  "extension": ".png",
+                  "mime": "image/png"
+                },
+                {
+                  "extension": ".jpg",
+                  "mime": "image/jpeg"
+                },
+                {
+                  "extension": ".jpeg",
+                  "mime": "image/jpeg"
+                }
+              ],
+              "max_count": 10,
+              "max_bytes": 20971520,
+              "max_width": 4096,
+              "max_height": 4096
             },
             "video": {
               "support": "unknown",
@@ -2407,7 +2579,7 @@
               "support": "unknown",
               "enabled": false
             },
-            "max_total_bytes": 0
+            "max_total_bytes": 209715200
           },
           "image": {
             "quality_label": "Разрешение",
@@ -2429,8 +2601,8 @@
             ],
             "default_aspect_ratio": "16:9",
             "max_output_count": 4,
-            "supports_reference_image": false,
-            "max_reference_images": 0,
+            "supports_reference_image": true,
+            "max_reference_images": 10,
             "price_by_quality": {
               "2K": 30,
               "4K": 40
@@ -2482,9 +2654,13 @@
         "application": {
           "image": {
             "images": {
-              "support": "unsupported",
-              "extensions": [],
-              "max_count": 0
+              "support": "supported",
+              "extensions": [
+                "jpg",
+                "jpeg",
+                "png"
+              ],
+              "max_count": 10
             },
             "aspect_ratios": [
               "1:1",
@@ -2504,10 +2680,7 @@
             "speed_modes": [],
             "max_output_count": 4,
             "max_combined_images": null
-          },
-          "notes": [
-            "На сайте загрузка фото в запрос генерации ещё не подключена."
-          ]
+          }
         }
       }
     },

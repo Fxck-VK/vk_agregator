@@ -1,16 +1,27 @@
 "use client";
 
-import { useCallback, useEffect, useRef, useState, type ChangeEvent, type FormEvent, type ReactNode } from "react";
-import { useRouter } from "next/navigation";
+import { StateNotice } from "@/components/ui/AsyncState/AsyncState";
+import { RichMessage } from "@/i18n/RichMessage";
+
+import { useMessages, useDictionary } from "@/i18n/LocaleProvider";
+
+import type { Translator } from "@/i18n/messages";
+
+import { useCallback, useEffect, useMemo, useRef, useState, type ChangeEvent, type FormEvent, type ReactNode } from "react";
+import { useRouter } from "@/i18n/navigation";
 
 import { ChatComposer } from "@/components/chat/ChatComposer/ChatComposer";
+import { ReferenceQuoteNotice } from "@/components/chat/ReferenceQuoteNotice/ReferenceQuoteNotice";
+import { CreditAmount } from "@/components/ui/CreditAmount/CreditAmount";
 import { savePendingConversationBootstrap } from "@/features/conversations/pending-conversation-bootstrap";
 import { fallbackConversationTitle } from "@/features/conversations/pending-conversation-title-sync";
 import { useOptionalWorkspaceConversationList } from "@/features/conversations/WorkspaceConversationList/WorkspaceConversationList";
-import { ru } from "@/i18n/ru";
 import { useGenerationControls } from "@/features/models/generation-options";
 import type { GenerationModel } from "@/features/models/generation-model-catalog";
 import type { ChatModel } from "@/lib/web-api/contracts";
+
+import { useReferenceQuote } from "@/features/conversations/use-reference-quote";
+import { useChatAttachments } from "@/features/conversations/use-chat-attachments";
 
 import styles from "./WorkspacePrompt.module.css";
 
@@ -35,13 +46,17 @@ function normalizeChatModel(model: ChatModel): Extract<GenerationModel, { catego
   return { ...model, operations: undefined, category: "text" as const };
 }
 
-const heroPlaceholderPrefix = "Спросите NeiroHub или ";
-const heroPlaceholderSuggestions = [
-  "составьте план проекта",
-  "придумайте идею для поста",
-  "объясните сложную тему",
-  "помогите написать текст",
-] as const;
+function getHeroPlaceholderCopy(msg: Translator) {
+  const heroPlaceholderPrefix = msg("workspacePrompt.askNeirohubOr");
+  const heroPlaceholderSuggestions = [
+    msg("workspacePrompt.planAProject"),
+    msg("workspacePrompt.comeUpWithAPostIdea"),
+    msg("workspacePrompt.explainAComplexTopic"),
+    msg("workspacePrompt.helpWriteAText"),
+  ] as const;
+
+  return { heroPlaceholderPrefix, heroPlaceholderSuggestions };
+}
 
 type TypewriterPhase = "typing" | "holding" | "deleting" | "waiting";
 
@@ -64,7 +79,7 @@ const typewriterDelays: Record<TypewriterPhase, number> = {
   waiting: 350,
 };
 
-function advanceTypewriter(state: TypewriterState): TypewriterState {
+function advanceTypewriter(state: TypewriterState, heroPlaceholderSuggestions: readonly string[]): TypewriterState {
   const suggestion = heroPlaceholderSuggestions[state.suggestionIndex];
 
   if (state.phase === "typing") {
@@ -96,6 +111,8 @@ function advanceTypewriter(state: TypewriterState): TypewriterState {
 }
 
 function useHeroPlaceholder(enabled: boolean) {
+  const msg = useMessages();
+  const { heroPlaceholderPrefix, heroPlaceholderSuggestions } = useMemo(() => getHeroPlaceholderCopy(msg), [msg]);
   const [prefersReducedMotion, setPrefersReducedMotion] = useState(false);
   const [typewriter, setTypewriter] = useState<TypewriterState>(initialTypewriterState);
   const reset = useCallback(() => setTypewriter(initialTypewriterState), []);
@@ -121,11 +138,11 @@ function useHeroPlaceholder(enabled: boolean) {
     }
 
     const timeout = window.setTimeout(
-      () => setTypewriter((current) => advanceTypewriter(current)),
+      () => setTypewriter((current) => advanceTypewriter(current, heroPlaceholderSuggestions)),
       typewriterDelays[typewriter.phase],
     );
     return () => window.clearTimeout(timeout);
-  }, [enabled, prefersReducedMotion, typewriter]);
+  }, [enabled, prefersReducedMotion, typewriter, heroPlaceholderSuggestions]);
 
   if (!enabled) {
     return { placeholder: "", reset };
@@ -145,6 +162,8 @@ function useHeroPlaceholder(enabled: boolean) {
 }
 
 export function WorkspacePrompt({ access = "authenticated", variant = "workspace", promptValue, onPromptChange, leadingControls, submitAction, selectedChatModel: explicitChatModel, selectedGenerationModel, chatModelUnavailable = false }: WorkspacePromptProps) {
+  const msg = useMessages();
+  const t = useDictionary();
   const router = useRouter();
   const conversationList = useOptionalWorkspaceConversationList();
   const submissionStartedRef = useRef(false);
@@ -156,26 +175,31 @@ export function WorkspacePrompt({ access = "authenticated", variant = "workspace
   };
   const selectedModel = selectedGenerationModel ?? (explicitChatModel === undefined ? undefined : normalizeChatModel(explicitChatModel));
   const selectedChatModel = selectedModel?.category === "text" ? selectedModel : undefined;
+  const attachments = useChatAttachments(access === "authenticated" && !submitAction ? selectedModel : undefined);
   const generation = useGenerationControls(selectedModel, chatModelUnavailable, setPrompt);
+  const referenceQuote = useReferenceQuote(selectedModel, generation.options, {
+    count: attachments.items.length, ready: !attachments.blocked, artifactIds: attachments.ids,
+  });
+  const cost = referenceQuote.active ? referenceQuote.cost : generation.cost;
   const tooLong = selectedChatModel?.max_prompt_bytes !== undefined
     && new TextEncoder().encode(prompt.trim()).length > selectedChatModel.max_prompt_bytes;
-  const canSubmit = prompt.trim() !== "" && !tooLong && !chatModelUnavailable && (submitAction?.canSubmit ?? generation.canSubmit);
-  const disabled = chatModelUnavailable || (submitAction?.disabled ?? false);
+  const canSubmit = !attachments.blocked && referenceQuote.ready && prompt.trim() !== "" && !tooLong && !chatModelUnavailable && (submitAction?.canSubmit ?? generation.canSubmit);
+  const disabled = submitAction?.disabled ?? false;
   const isNewChat = variant === "newChat";
   const isHero = variant === "hero";
   const { placeholder: heroPlaceholder, reset: resetHeroPlaceholder } = useHeroPlaceholder(
     isHero && prompt === "",
   );
   const promptLabel = isHero
-    ? "Задайте вопрос NeiroHub"
+    ? msg("workspacePrompt.askNeirohubAQuestion")
     : isNewChat
-      ? ru.conversations.composerPlaceholder
-      : ru.workspace.promptLabel;
+      ? t.conversations.composerPlaceholder
+      : t.workspace.promptLabel;
   const promptPlaceholder = isHero
     ? heroPlaceholder
     : isNewChat
-      ? ru.conversations.composerPlaceholder
-      : ru.workspace.promptPlaceholder;
+      ? t.conversations.composerPlaceholder
+      : t.workspace.promptPlaceholder;
 
   const changePrompt = (event: ChangeEvent<HTMLTextAreaElement>) => {
     const nextPrompt = event.target.value;
@@ -218,7 +242,7 @@ export function WorkspacePrompt({ access = "authenticated", variant = "workspace
       prompt: normalizedPrompt,
       ...(selectedModel ? {
         modelId: selectedModel.id,
-        ...(selectedModel.category === "text" ? {} : { generationOptions: generation.options }),
+        ...(selectedModel.category === "text" ? {} : { generationOptions: { ...generation.options, ...(attachments.ids.length ? { reference_artifact_ids: attachments.ids } : {}) } }),
       } : {}),
     });
     conversationList.upsertConversation({
@@ -228,6 +252,7 @@ export function WorkspacePrompt({ access = "authenticated", variant = "workspace
       updated_at: createdAt,
       isPending: true,
     });
+    attachments.clear();
     setPrompt("");
     router.push(`/app/chat/${conversationKey}?pending=1`);
   };
@@ -240,34 +265,36 @@ export function WorkspacePrompt({ access = "authenticated", variant = "workspace
   return (
     <form className={styles.form} onSubmit={submitForm}>
       <ChatComposer
+        attachmentController={attachments}
         canSubmit={canSubmit}
         disabled={disabled}
         leadingControls={leadingControls ?? generation.controls}
         label={promptLabel}
-        mediaLabel={ru.conversations.composerMediaUpload}
+        mediaLabel={t.conversations.composerMediaUpload}
         mediaLibraryEnabled={access === "authenticated"}
         mediaMenuLabels={{
-          chooseGenerated: ru.conversations.composerMediaChooseGenerated,
-          chooseUploaded: ru.conversations.composerMediaChooseUploaded,
-          menu: ru.conversations.composerMediaMenu,
-          uploadFile: ru.conversations.composerMediaUploadFile,
+          chooseGenerated: t.conversations.composerMediaChooseGenerated,
+          chooseUploaded: t.conversations.composerMediaChooseUploaded,
+          menu: t.conversations.composerMediaMenu,
+          uploadFile: t.conversations.composerMediaUploadFile,
         }}
         note={selectedModel && selectedModel.category !== "text"
-          ? `${selectedModel.name} · Стоимость: ${generation.cost ?? "—"} токенов`
+          ? cost === undefined ? undefined : <>{selectedModel.name} · <CreditAmount prefix={`${t.imageGeneration.priceLabel}:`} value={cost} /></>
           : selectedChatModel
-          ? `${selectedChatModel.name}${selectedChatModel.estimate_credits !== undefined ? ` · ${selectedChatModel.estimate_credits} токенов за ответ` : ""}`
-          : isNewChat || isHero ? undefined : ru.workspace.promptSupport}
+          ? <>{selectedChatModel.name}{selectedChatModel.estimate_credits !== undefined ? <RichMessage id="workspacePrompt.valueTokensPerResponse" values={{ value1: <CreditAmount value={selectedChatModel.estimate_credits} /> }} /> : null}</>
+          : isNewChat || isHero ? undefined : t.workspace.promptSupport}
         onChange={changePrompt}
         onSend={submit}
         placeholder={promptPlaceholder}
-        submitLabel={submitAction?.label ?? ru.workspace.promptSubmit}
+        submitLabel={submitAction?.label ?? t.workspace.promptSubmit}
         value={prompt}
         variant={variant}
         wrapLeadingControls={isHero || selectedModel !== undefined}
         generatedMediaHref={access === "guest" ? "/login" : "/app/files?category=images"}
         uploadedMediaHref={access === "guest" ? "/login" : "/app/files?category=uploads"}
       />
-      {tooLong ? <p role="alert">Сообщение слишком длинное для выбранной модели.</p> : null}
+      <ReferenceQuoteNotice message={referenceQuote.error} onRetry={referenceQuote.retry} />
+      {tooLong ? <StateNotice inline kind="error">{msg("workspacePrompt.theMessageIsTooLongForThe")}</StateNotice> : null}
     </form>
   );
 }

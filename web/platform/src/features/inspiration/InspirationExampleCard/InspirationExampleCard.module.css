@@ -3,10 +3,10 @@
   display: block;
   inline-size: 100%;
   overflow: hidden;
-  border: 0.0625rem solid var(--color-border);
+  border: 0.0625rem solid var(--color-card-border);
   border-radius: 1.25rem;
   padding: 0;
-  background: var(--color-surface);
+  background: var(--color-panel);
   color: #fff;
   text-align: start;
   isolation: isolate;

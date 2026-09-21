@@ -43,7 +43,7 @@ describe("ModelsCatalog responsive styles", () => {
     );
     expect(modelCardStylesheet).toMatch(/\.card\s*\{[^}]*cursor:\s*pointer;/s);
     expect(modelCardStylesheet).toMatch(
-      /\.card\s*\{[^}]*border:\s*0\.0625rem solid var\(--color-border\);/s,
+      /\.card\s*\{[^}]*border:\s*0\.0625rem solid var\(--color-card-border\);/s,
     );
     expect(modelCardStylesheet).toMatch(
       /\.cardLink:not\(\.placeholder\):hover \.card\s*\{[^}]*border-color:\s*var\(--color-accent\);[^}]*transform:\s*translateY\(-0\.15rem\);/s,
@@ -89,15 +89,15 @@ describe("ModelsCatalog responsive styles", () => {
     );
     expect(toolbarSource).toContain('from "@/components/ui/ModeSwitchPanel/ModeSwitchPanel"');
     expect(toolbarSource).toContain("<ModeSwitchPanel");
-    expect(toolbarSource).toContain("className={styles.categoryPanel}");
+    expect(toolbarSource).toMatch(/<ModeSwitchPanel\s[^>]*\bfullWidth\b/s);
     expect(toolbarSource).toContain('semantics="tabs"');
     expect(toolbarSource).not.toContain('from "@/components/ui/ScrollArea/ScrollArea"');
     expect(toolbarStylesheet).not.toMatch(/\.(?:categoryScroll|categoryList|category)\b/);
     expect(toolbarStylesheet).not.toMatch(/overflow-x:\s*auto/);
     expect(toolbarStylesheet).not.toContain("scrollbar-width:");
     expect(toolbarStylesheet).not.toContain("::-webkit-scrollbar");
-    expect(toolbarStylesheet).toMatch(
-      /\.categoryPanel\s*\{[^}]*inline-size:\s*100%;/s,
+    expect(modeSwitchPanelStylesheet).toMatch(
+      /\.root\[data-full-width="true"\]\s*\{[^}]*inline-size:\s*100%;/s,
     );
   });
 

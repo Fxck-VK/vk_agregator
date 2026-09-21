@@ -1,7 +1,12 @@
 "use client";
 
-import Link from "next/link";
-import { usePathname, useRouter } from "next/navigation";
+import { RetryAction } from "@/components/ui/AsyncState/RetryAction";
+import { StateNotice } from "@/components/ui/AsyncState/AsyncState";
+import { useDictionary } from "@/i18n/LocaleProvider";
+
+
+import Link from "@/i18n/Link";
+import { usePathname, useRouter } from "@/i18n/navigation";
 import { type JSX, useCallback, useEffect, useLayoutEffect, useRef, useState } from "react";
 
 import { MoreIcon } from "@/components/icons/MoreIcon";
@@ -10,7 +15,6 @@ import {
   type WorkspaceConversationItem,
   useOptionalWorkspaceConversationList,
 } from "@/features/conversations/WorkspaceConversationList/WorkspaceConversationList";
-import { ru } from "@/i18n/ru";
 import { webBrowserMutation } from "@/lib/web-api/browser";
 import { parseConversationItem } from "@/lib/web-api/contracts";
 
@@ -61,10 +65,11 @@ export function ConversationRow({
   sidebarIsActive = true,
   sidebarSession,
 }: ConversationRowProps): JSX.Element | null {
+  const t = useDictionary();
   const router = useRouter();
   const pathname = usePathname();
   const conversationList = useOptionalWorkspaceConversationList();
-  const title = conversation.title.trim() || ru.conversations.unnamed;
+  const title = conversation.title.trim() || t.conversations.unnamed;
   const conversationPath = `/web/v1/conversations/${conversation.id}` as const;
   const [panel, setPanel] = useState<RowPanel>(null);
   const [nextTitle, setNextTitle] = useState(title);
@@ -388,9 +393,9 @@ export function ConversationRow({
           ref={inlineRenameFormRef}
         >
           <label className={styles.inlineRenameLabel}>
-            <span className={styles.visuallyHidden}>{ru.conversations.renameInputLabel}</span>
+            <span className={styles.visuallyHidden}>{t.conversations.renameInputLabel}</span>
             <input
-              aria-label={ru.conversations.renameInputLabel}
+              aria-label={t.conversations.renameInputLabel}
               className={styles.inlineRenameInput}
               maxLength={120}
               onChange={(event) => setNextTitle(event.target.value)}
@@ -449,7 +454,7 @@ export function ConversationRow({
         <button
           aria-hidden={isInlineRenaming || undefined}
           aria-expanded={panelIsVisible}
-          aria-label={`${ru.conversations.actionsLabel}: ${title}`}
+          aria-label={`${t.conversations.actionsLabel}: ${title}`}
           className={`${styles.actionToggle} ${isInlineRenaming ? styles.actionToggleRenaming : ""}`}
           disabled={isPending || isInlineRenaming}
           onClick={() => {
@@ -465,7 +470,7 @@ export function ConversationRow({
         </button>
         <FloatingConversationPanel
           anchorRef={actionToggleRef}
-          ariaLabel={`${ru.conversations.actionsLabel}: ${title}`}
+          ariaLabel={`${t.conversations.actionsLabel}: ${title}`}
           className={styles.floatingPanel}
           dismissible={!isPending}
           isOpen={panelIsVisible && panel === "actions"}
@@ -476,11 +481,11 @@ export function ConversationRow({
           <div className={styles.menu}>
             <button className={selectableStyles.control} disabled={isPending} onClick={() => openPanel("rename")} type="button">
               <svg aria-hidden="true" viewBox="0 0 24 24"><path d="m4 20 4.3-1 10-10a2.1 2.1 0 0 0-3-3l-10 10L4 20Zm10-12 3 3" /></svg>
-              {ru.conversations.renameLabel}
+              {t.conversations.renameLabel}
             </button>
             <button className={`${selectableStyles.control} ${styles.deleteMenuItem}`} disabled={isPending} onClick={() => openPanel("archive")} type="button">
               <svg aria-hidden="true" viewBox="0 0 24 24"><path d="M4 7h16m-10 4v6m4-6v6M9 4h6l1 3H8l1-3Zm-3 3 1 13h10l1-13" /></svg>
-              {ru.conversations.archiveLabel}
+              {t.conversations.archiveLabel}
             </button>
           </div>
         </FloatingConversationPanel>
@@ -488,23 +493,21 @@ export function ConversationRow({
       )}
       {panelIsVisible && panel === "rename" && hasError ? (
         <div className={styles.inlineRenameFeedback} data-conversation-rename-control="true">
-          <p className={styles.error} role="alert">{ru.conversations.renameFailure}</p>
-          <button className={styles.inlineRetryButton} disabled={isPending} onClick={() => void renameConversation()} type="button">
-            {ru.conversations.renameRetryLabel}
-          </button>
+          <StateNotice inline kind="error">{t.conversations.renameFailure}</StateNotice>
+          <RetryAction label={t.conversations.renameRetryLabel} disabled={isPending} onClick={() => void renameConversation()} />
         </div>
       ) : null}
       {panelIsVisible && panel === "archive" ? (
         <ConversationDeleteDialog
           confirmRef={archiveConfirmRef}
           conversationTitle={title}
-          errorMessage={hasError ? ru.conversations.archiveFailure : undefined}
+          errorMessage={hasError ? t.conversations.archiveFailure : undefined}
           isPending={isPending}
           onCancel={dismissPanel}
           onConfirm={() => void archiveConversation()}
         />
       ) : null}
-      {hasHiddenFailure ? <p className={styles.error} role="alert">{panel === "archive" ? ru.conversations.archiveFailure : ru.conversations.renameFailure}</p> : null}
+      {hasHiddenFailure ? <StateNotice inline kind="error">{panel === "archive" ? t.conversations.archiveFailure : t.conversations.renameFailure}</StateNotice> : null}
     </article>
   );
 }

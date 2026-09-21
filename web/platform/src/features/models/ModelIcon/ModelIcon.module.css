@@ -8,19 +8,21 @@
 }
 
 .fallback {
-  background-image: url("/assets/images/models/chip-silhouette.svg");
-  background-position: center;
-  background-repeat: no-repeat;
-  background-size: contain;
+  background-color: var(--color-model-icon);
+  mask-image: url("/assets/images/models/chip-silhouette.svg");
+  mask-mode: alpha;
+  mask-position: center;
+  mask-repeat: no-repeat;
+  mask-size: contain;
 }
 
 :global(:root[data-theme="light"]) .fallback {
-  background-image: url("/assets/images/models/chip-silhouette-dark.svg");
+  mask-image: url("/assets/images/models/chip-silhouette-dark.svg");
 }
 
 @media (prefers-color-scheme: light) {
   :global(:root[data-theme="system"]) .fallback {
-    background-image: url("/assets/images/models/chip-silhouette-dark.svg");
+    mask-image: url("/assets/images/models/chip-silhouette-dark.svg");
   }
 }
 

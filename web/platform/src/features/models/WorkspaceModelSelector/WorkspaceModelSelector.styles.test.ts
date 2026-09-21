@@ -122,7 +122,7 @@ describe("WorkspaceModelSelector layout", () => {
 
   it("insets the search surface so the complete focus ring remains visible", () => {
     expect(stylesheet).toMatch(
-      /\.searchRow\s*\{[^}]*margin:\s*var\(--space-3\) var\(--space-3\) 0;[^}]*border:\s*0\.0625rem solid var\(--color-border\);[^}]*border-radius:\s*var\(--radius-md\);/s,
+      /\.searchRow\s*\{[^}]*margin:\s*var\(--space-3\) var\(--space-3\) 0;[^}]*border:\s*0\.0625rem solid var\(--color-input-border, var\(--color-border\)\);[^}]*border-radius:\s*var\(--radius-md\);/s,
     );
   });
 

@@ -9,9 +9,9 @@ const lightThemePlaceholder = readFileSync(
 );
 
 describe("light-theme model placeholder asset", () => {
-  it("preserves the supplied masked chip geometry and color", () => {
+  it("preserves the supplied geometry as a neutral alpha mask", () => {
     expect(lightThemePlaceholder).toContain('<mask id="face-cutout">');
-    expect(lightThemePlaceholder).toContain('<g fill="#15161C">');
+    expect(lightThemePlaceholder).toContain('<g fill="white">');
     expect(lightThemePlaceholder).toMatch(
       /x="180"\s+y="180"\s+width="664"\s+height="664"\s+rx="154"/s,
     );

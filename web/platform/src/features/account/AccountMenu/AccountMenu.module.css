@@ -1,5 +1,6 @@
 .root {
   position: relative;
+  z-index: 50;
 }
 
 .trigger {
@@ -11,17 +12,18 @@
   min-block-size: 3.75rem;
   padding: var(--space-2);
   border: 0;
-  border-radius: var(--radius-lg);
+  border-radius: var(--radius-sm);
   background: transparent;
   color: var(--color-text);
   text-align: start;
-  transition: background-color var(--motion-fast);
+  transition: box-shadow var(--motion-fast);
 }
 
 .trigger:hover,
 .trigger:focus-visible,
 .trigger[data-open="true"] {
-  background: var(--color-surface-raised);
+  background: transparent;
+  box-shadow: inset 0 0 0 0.0625rem var(--color-accent);
 }
 
 .avatar {
@@ -113,6 +115,8 @@
 }
 
 .themeSection {
+  display: grid;
+  gap: var(--space-3);
   margin-block-start: var(--space-2);
   padding-block: var(--space-3);
   border-block: 0.0625rem solid color-mix(in srgb, var(--color-border) 60%, transparent);

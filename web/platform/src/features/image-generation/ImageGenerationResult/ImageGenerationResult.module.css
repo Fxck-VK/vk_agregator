@@ -49,7 +49,3 @@
   border: 0.0625rem solid var(--color-border);
   background: var(--color-surface-raised);
 }
-
-.error {
-  color: var(--color-danger);
-}

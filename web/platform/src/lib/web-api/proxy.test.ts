@@ -9,6 +9,19 @@ const maxProxyRequestBodyBytes = 64 * 1024;
 type StreamingRequestInit = RequestInit & { duplex: "half" };
 
 describe("proxyWebApiRequest", () => {
+  it("allows multipart-sized bodies only on the input upload route", async () => {
+    const upstream = vi.fn(async () => Response.json({ artifact_id: "synthetic" }));
+    vi.stubGlobal("fetch", upstream);
+    const body = new Uint8Array(70 * 1024);
+    for (const [path, status] of [["/web/v1/input-artifacts?model_id=nano_banana_2", 200], ["/web/v1/conversations", 413]] as const) {
+      const response = await proxyWebApiRequest(new Request(`https://platform.example${path}`, { method: "POST", body }), path, internalOrigin);
+      expect(response.status).toBe(status);
+    }
+    expect(upstream).toHaveBeenCalledTimes(1);
+    const oversized = new Request("https://platform.example/web/v1/input-artifacts", { method: "POST", headers: { "Content-Length": String(22 * 1024 * 1024) }, body: "x" });
+    expect((await proxyWebApiRequest(oversized, "/web/v1/input-artifacts", internalOrigin)).status).toBe(413);
+    expect(upstream).toHaveBeenCalledTimes(1);
+  });
   afterEach(() => {
     vi.unstubAllGlobals();
   });

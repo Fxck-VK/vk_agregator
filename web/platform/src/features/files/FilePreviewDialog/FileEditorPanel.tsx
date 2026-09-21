@@ -1,6 +1,12 @@
 "use client";
 
-/* eslint-disable @next/next/no-img-element */
+import { MediaImage } from "@/components/media/MediaImage/MediaImage";
+import { actionCreditAmount } from "@/i18n/counts";
+import { RichMessage } from "@/i18n/RichMessage";
+import { CreditAmount } from "@/components/ui/CreditAmount/CreditAmount";
+
+import { useMessages } from "@/i18n/LocaleProvider";
+
 
 import Image from "next/image";
 import {
@@ -160,20 +166,6 @@ function EraserIcon() {
   );
 }
 
-function CreditStar() {
-  return (
-    <Image
-      alt=""
-      aria-hidden="true"
-      className={styles.creditStar}
-      height={18}
-      src="/assets/icons/ui/star-white.svg"
-      unoptimized
-      width={18}
-    />
-  );
-}
-
 function getSelectedImageOptions(model: FileActionModel | null) {
   return model?.operation.image ?? null;
 }
@@ -207,6 +199,7 @@ function selectedImageCost(
 export function FileEditorPanel({
   controller,
 }: Readonly<{ controller: FileEditorController }>) {
+  const msg = useMessages();
   const { models, status } = useFileActionModels("edit");
   const [selectedModelId, setSelectedModelId] = useState("");
   const selectedModel = models.find((model) => model.id === selectedModelId) ?? models[0] ?? null;
@@ -222,9 +215,9 @@ export function FileEditorPanel({
   const selectedCost = selectedModel === null
     ? null
     : selectedImageCost(selectedModel, selectedImageQuality, selectedAspectRatio);
-  const submitLabel = selectedModel === null
-    ? "Редактировать недоступно"
-    : `Редактировать за ${selectedCost} звёзд`;
+  const submitLabel = selectedCost === null
+    ? msg("fileEditorPanel.editingUnavailable")
+    : msg("fileEditorPanel.editForValueStars", { value1: actionCreditAmount(msg, selectedCost) });
   const isBrushSizeVisible = controller.tool !== "lasso";
 
   useEffect(() => {
@@ -240,7 +233,7 @@ export function FileEditorPanel({
   }, [controller, selectedAspectRatio, selectedImageOptions, selectedImageQuality]);
 
   return (
-    <section aria-label="Настройки редактирования" className={styles.panel}>
+    <section aria-label={msg("fileEditorPanel.editingSettings")} className={styles.panel}>
       <header className={styles.title}>
         <Image
           alt=""
@@ -250,18 +243,18 @@ export function FileEditorPanel({
           unoptimized
           width={20}
         />
-        <h2>Редактировать</h2>
+        <h2>{msg("fileEditorPanel.edit")}</h2>
       </header>
 
       <ScrollArea
         className={styles.bodyScroll}
         viewportClassName={styles.bodyViewport}
-        viewportProps={{ "aria-label": "Параметры редактирования" }}
+        viewportProps={{ "aria-label": msg("fileEditorPanel.editingOptions") }}
       >
         <div className={styles.bodyContent}>
           <div className={styles.historyBar}>
             <button
-              aria-label="Ластик"
+              aria-label={msg("fileEditorPanel.eraser")}
               aria-pressed={!controller.view.isPanMode && controller.tool === "eraser"}
               className={styles.iconButton}
               data-active={!controller.view.isPanMode && controller.tool === "eraser"}
@@ -272,16 +265,15 @@ export function FileEditorPanel({
             </button>
             <div className={styles.historyActions}>
               <button
-                aria-label="Очистить выделение"
+                aria-label={msg("fileEditorPanel.clearSelection")}
                 className={styles.clearButton}
                 disabled={!controller.canClear}
                 onClick={controller.clear}
                 type="button"
               >
-                Очистить
-              </button>
+                {msg("fileEditorPanel.clear")}</button>
               <button
-                aria-label="Отменить выделение"
+                aria-label={msg("fileEditorPanel.undoSelection")}
                 className={styles.iconButton}
                 disabled={!controller.canUndo}
                 onClick={controller.undo}
@@ -290,7 +282,7 @@ export function FileEditorPanel({
                 <HistoryIcon direction="left" />
               </button>
               <button
-                aria-label="Повторить выделение"
+                aria-label={msg("fileEditorPanel.redoSelection")}
                 className={styles.iconButton}
                 disabled={!controller.canRedo}
                 onClick={controller.redo}
@@ -303,7 +295,7 @@ export function FileEditorPanel({
 
           <div>
             <section className={styles.controlSection}>
-              <h3>Выделение</h3>
+              <h3>{msg("fileEditorPanel.selection")}</h3>
               <div className={styles.selectionModes}>
                 <button
                   aria-pressed={!controller.view.isPanMode && controller.tool === "brush"}
@@ -315,8 +307,7 @@ export function FileEditorPanel({
                     aria-hidden="true"
                     className={`${styles.selectionToolIcon} ${styles.brushIcon}`}
                   />
-                  Кисть
-                </button>
+                  {msg("fileEditorPanel.brush")}</button>
                 <button
                   aria-pressed={!controller.view.isPanMode && controller.tool === "lasso"}
                   data-active={!controller.view.isPanMode && controller.tool === "lasso"}
@@ -327,8 +318,7 @@ export function FileEditorPanel({
                     aria-hidden="true"
                     className={`${styles.selectionToolIcon} ${styles.lassoIcon}`}
                   />
-                  Лассо
-                </button>
+                  {msg("fileEditorPanel.lasso")}</button>
               </div>
             </section>
 
@@ -340,9 +330,9 @@ export function FileEditorPanel({
             >
               <div className={styles.brushSizeClip}>
                 <label className={`${styles.field} ${styles.brushSizeField}`}>
-                  <span>Размер кисти</span>
+                  <span>{msg("fileEditorPanel.brushSize")}</span>
                   <RangeSlider
-                    aria-label="Размер кисти"
+                    aria-label={msg("fileEditorPanel.brushSize")}
                     disabled={!isBrushSizeVisible}
                     max={brushSizeMax}
                     min={brushSizeMin}
@@ -355,15 +345,15 @@ export function FileEditorPanel({
           </div>
 
           <label className={styles.field}>
-            <span>Промпт</span>
+            <span>{msg("fileEditorPanel.prompt")}</span>
             <InputSurface className={styles.promptSurface}>
               <ScrollArea
                 className={styles.promptScroll}
                 viewportAs="textarea"
                 viewportProps={{
-                  "aria-label": "Промпт редактирования",
+                  "aria-label": msg("fileEditorPanel.editingPrompt"),
                   onChange: (event) => controller.setPrompt(event.target.value),
-                  placeholder: "Опиши, что нужно изменить",
+                  placeholder: msg("fileEditorPanel.describeWhatYouWantToChange"),
                   value: controller.prompt,
                 }}
               />
@@ -371,7 +361,7 @@ export function FileEditorPanel({
           </label>
 
           <div className={`${styles.field} ${styles.modelField}`}>
-            <span>Модель</span>
+            <span>{msg("fileEditorPanel.model")}</span>
             <FileTaskModelSelector
               models={models}
               onSelect={setSelectedModelId}
@@ -383,7 +373,7 @@ export function FileEditorPanel({
 
           {selectedImageOptions !== null ? (
             <section className={styles.controlSection}>
-              <h3>Настройки генерации</h3>
+              <h3>{msg("fileEditorPanel.generationSettings")}</h3>
               <div className={styles.generationSettings}>
                 {allowedAspectRatios.length > 0 ? (
                   <ImageAspectRatioSelector
@@ -397,7 +387,7 @@ export function FileEditorPanel({
                 {qualityOptions.length > 0 ? (
                   <ImageQualitySelector
                     disabled={false}
-                    label={selectedImageOptions.quality_label ?? "Разрешение"}
+                    label={selectedImageOptions.quality_label ?? msg("fileEditorPanel.resolution")}
                     onChange={controller.setImageQuality}
                     options={qualityOptions}
                     portalLayer={170}
@@ -409,7 +399,7 @@ export function FileEditorPanel({
           ) : null}
 
           <section className={styles.howItWorks}>
-            <h3>Как работает</h3>
+            <h3>{msg("fileEditorPanel.howItWorks")}</h3>
             <div className={styles.howCard}>
               <Image
                 alt=""
@@ -420,8 +410,8 @@ export function FileEditorPanel({
                 width={520}
               />
               <div className={styles.howCardCopy}>
-                <strong>Изменяет часть изображения</strong>
-                <p>Выделяет нужную область и позволяет описать, что в ней изменить.</p>
+                <strong>{msg("fileEditorPanel.changesPartOfAnImage")}</strong>
+                <p>{msg("fileEditorPanel.selectAnAreaAndDescribeWhatShould")}</p>
               </div>
             </div>
           </section>
@@ -434,13 +424,10 @@ export function FileEditorPanel({
         disabled
         type="button"
       >
-        {selectedModel === null ? (
+        {selectedCost === null ? (
           submitLabel
         ) : (
-          <>
-            Редактировать за {selectedCost}
-            <CreditStar />
-          </>
+          <RichMessage id="fileEditorPanel.editForValueStars" values={{ value1: <CreditAmount aria-hidden="true" value={selectedCost} /> }} />
         )}
       </button>
     </section>
@@ -531,6 +518,7 @@ export function FileEditPreview({
   imageClassName,
   src,
 }: Readonly<FileEditPreviewProps>) {
+  const msg = useMessages();
   const [isBrushSizePreviewVisible, setIsBrushSizePreviewVisible] = useState(false);
   const [draftStroke, setDraftStroke] = useState<EditStrokeInput | null>(null);
   const [isToolCursorVisible, setIsToolCursorVisible] = useState(false);
@@ -663,7 +651,7 @@ export function FileEditPreview({
 
   return (
     <div
-      aria-label="Область редактирования изображения"
+      aria-label={msg("fileEditorPanel.imageEditingArea")}
       className={styles.editSurface}
       data-panning={isPanning}
       data-tool={isPanMode ? "pan" : controller.tool ?? "none"}
@@ -679,7 +667,7 @@ export function FileEditPreview({
         className={styles.editCanvas}
         style={{ transform: `translate(${offset.x}%, ${offset.y}%) scale(${zoom})` }}
       >
-        <img alt={alt} className={`${imageClassName} ${styles.editImage}`} src={src} />
+        <MediaImage fit="contain" alt={alt} className={`${imageClassName} ${styles.editImage}`} src={src} />
         <svg
           aria-hidden="true"
           className={styles.editMask}
@@ -744,7 +732,7 @@ export function FileEditPreview({
       >
         <button
           aria-hidden={zoom <= 1}
-          aria-label="Перемещать изображение"
+          aria-label={msg("fileEditorPanel.panImage")}
           aria-pressed={isPanMode}
           className={styles.zoomPanButton}
           disabled={zoom <= 1}
@@ -753,7 +741,7 @@ export function FileEditPreview({
             setIsToolCursorVisible(false);
           }}
           tabIndex={zoom > 1 ? 0 : -1}
-          title="Перемещать изображение"
+          title={msg("fileEditorPanel.panImage")}
           type="button"
         >
           <svg aria-hidden="true" className={styles.controlIcon} viewBox="0 0 24 24">
@@ -761,12 +749,12 @@ export function FileEditPreview({
           </svg>
         </button>
         <div
-          aria-label="Масштаб изображения"
+          aria-label={msg("fileEditorPanel.imageZoom")}
           className={styles.zoomActions}
           role="group"
         >
           <button
-            aria-label="Уменьшить масштаб"
+            aria-label={msg("fileEditorPanel.zoomOut")}
             disabled={zoom <= 1}
             onClick={() => changeZoom(-1)}
             type="button"
@@ -775,7 +763,7 @@ export function FileEditPreview({
           </button>
           <output aria-live="polite">{zoom}×</output>
           <button
-            aria-label="Увеличить масштаб"
+            aria-label={msg("fileEditorPanel.zoomIn")}
             disabled={zoom >= editZoomLevels[editZoomLevels.length - 1]}
             onClick={() => changeZoom(1)}
             type="button"

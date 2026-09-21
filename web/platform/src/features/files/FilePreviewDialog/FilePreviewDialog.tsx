@@ -1,6 +1,10 @@
 "use client";
 
-/* eslint-disable @next/next/no-img-element */
+import { MediaState, StateNotice } from "@/components/ui/AsyncState/AsyncState";
+import { MediaImage } from "@/components/media/MediaImage/MediaImage";
+import { useMessages, useDictionary } from "@/i18n/LocaleProvider";
+
+import { getTranslator, type Translator } from "@/i18n/messages";
 
 import { useEffect, useRef, useState } from "react";
 import Image from "next/image";
@@ -13,7 +17,7 @@ import {
 import { ModeSwitchPanel } from "@/components/ui/ModeSwitchPanel/ModeSwitchPanel";
 import { getModelPresentation } from "@/features/models/ModelCard/model-card-content";
 import { ModelIcon } from "@/features/models/ModelIcon/ModelIcon";
-import { ru } from "@/i18n/ru";
+
 import type { ImageJob, ImageJobResult } from "@/lib/web-api/contracts";
 
 import {
@@ -49,15 +53,7 @@ type ReadyFilePreviewDialogProps = FilePreviewDialogProps & {
 
 type ShareFeedback = "copied" | "copyFailure" | "failure" | null;
 
-const toolActions = [
-  { id: "general", label: ru.files.previewGeneral },
-  { id: "animate", label: "Оживить" },
-  { id: "enhance", label: "Улучшить" },
-  { id: "remove-background", label: "Удалить фон" },
-  { id: "edit", label: "Редактировать" },
-] as const;
-
-type PreviewToolID = (typeof toolActions)[number]["id"];
+type PreviewToolID = "general" | "animate" | "enhance" | "remove-background" | "edit";
 
 const toolIconSources: Record<PreviewToolID, string> = {
   animate: "/assets/icons/ui/animate-white.svg",
@@ -66,20 +62,6 @@ const toolIconSources: Record<PreviewToolID, string> = {
   general: "/assets/icons/ui/general-white.svg",
   "remove-background": "/assets/icons/ui/remove-background-white.svg",
 };
-
-const toolItems = toolActions.map((action) => ({
-  ...action,
-  icon: (
-    <Image
-      alt=""
-      aria-hidden="true"
-      height={20}
-      src={toolIconSources[action.id]}
-      unoptimized
-      width={20}
-    />
-  ),
-}));
 
 function isReadyPreviewItem(item: FilePreviewItem | undefined): item is ReadyFilePreviewItem {
   return item !== undefined && "artifact" in item;
@@ -92,8 +74,8 @@ function getReadyPreviewItem(item: FilePreviewItem): ReadyFilePreviewItem {
   return item;
 }
 
-function formatCreatedAt(value: string) {
-  return new Intl.DateTimeFormat("ru-RU", {
+function formatCreatedAt(value: string, msg: Translator) {
+  return new Intl.DateTimeFormat(msg.locale, {
     dateStyle: "medium",
     timeZone: "UTC",
   }).format(new Date(value));
@@ -103,10 +85,10 @@ function formatMimeType(value: string) {
   return value.split("/").at(-1)?.toUpperCase() ?? value.toUpperCase();
 }
 
-function formatFileSize(bytes: number) {
-  if (bytes < 1024) return `${bytes} Б`;
+function formatFileSize(bytes: number, msg: Translator = getTranslator("ru")) {
+  if (bytes < 1024) return msg("filePreviewDialog.valueB", { value1: bytes });
 
-  const units = ["КБ", "МБ", "ГБ"] as const;
+  const units = [msg("filePreviewDialog.kb"), msg("filePreviewDialog.mb"), msg("filePreviewDialog.gb")] as const;
   let value = bytes / 1024;
   let unitIndex = 0;
 
@@ -115,7 +97,7 @@ function formatFileSize(bytes: number) {
     unitIndex += 1;
   }
 
-  return `${new Intl.NumberFormat("ru-RU", { maximumFractionDigits: 1 }).format(value)} ${units[unitIndex]}`;
+  return `${new Intl.NumberFormat(msg.locale, { maximumFractionDigits: 1 }).format(value)} ${units[unitIndex]}`;
 }
 
 function getRecreateHref(item: ReadyFilePreviewItem) {
@@ -146,6 +128,29 @@ function ReadyFilePreviewDialog({
   selectedItem,
   selectedIndex,
 }: Readonly<ReadyFilePreviewDialogProps>) {
+  const msg = useMessages();
+  const t = useDictionary();
+  const toolActions = [
+    { id: "general", label: t.files.previewGeneral },
+    { id: "animate", label: msg("filePreviewDialog.animate") },
+    { id: "enhance", label: msg("filePreviewDialog.enhance") },
+    { id: "remove-background", label: msg("filePreviewDialog.removeBackground") },
+    { id: "edit", label: msg("filePreviewDialog.edit") },
+  ] as const;
+  const toolItems = toolActions.map((action) => ({
+    ...action,
+    icon: (
+      <Image
+        alt=""
+        aria-hidden="true"
+        height={20}
+        src={toolIconSources[action.id]}
+        unoptimized
+        width={20}
+      />
+    ),
+  }));
+
   const [shareFeedback, setShareFeedback] = useState<ShareFeedback>(null);
   const [isPromptCopied, setIsPromptCopied] = useState(false);
   const [isPromptExpanded, setIsPromptExpanded] = useState(false);
@@ -155,11 +160,11 @@ function ReadyFilePreviewDialog({
   const promptRef = useRef<HTMLParagraphElement>(null);
   const { artifact, job } = selectedItem;
   const feedbackText = shareFeedback === "copied"
-    ? ru.files.previewLinkCopied
+    ? t.files.previewLinkCopied
     : shareFeedback === "copyFailure"
-      ? ru.files.previewCopyFailure
+      ? t.files.previewCopyFailure
       : shareFeedback === "failure"
-        ? ru.files.previewShareFailure
+        ? t.files.previewShareFailure
         : null;
 
   const selectItem = (index: number) => {
@@ -223,13 +228,13 @@ function ReadyFilePreviewDialog({
     const siblingItems = items.filter((candidate) => candidate.job.id === item.job.id);
     const itemPosition = siblingItems.indexOf(item) + 1;
     const positionLabel = siblingItems.length > 1
-      ? ` (${itemPosition} из ${siblingItems.length})`
+      ? msg("filePreviewDialog.valueOfValue", { value1: itemPosition, value2: siblingItems.length })
       : "";
     const prefix = isReadyPreviewItem(item)
-      ? ru.files.previewSelectFile
+      ? t.files.previewSelectFile
       : item.state === "loading"
-        ? ru.files.previewLoadingFile
-        : ru.files.previewUnavailableFile;
+        ? t.files.previewLoadingFile
+        : t.files.previewUnavailableFile;
     return `${prefix}: ${item.job.prompt}${positionLabel}`;
   };
 
@@ -237,16 +242,15 @@ function ReadyFilePreviewDialog({
     item: FilePreviewItem,
     classes: MediaPreviewDialogRenderClasses,
   ) => isReadyPreviewItem(item) ? (
-    <img
+    <MediaImage
       alt=""
       aria-hidden="true"
-      className={classes.thumbnailMedia}
-      src={`/web/v1/image-artifacts/${item.artifact.id}`}
+      fit="cover" passive className={classes.thumbnailMedia}
+      src={`/web/v1/image-artifacts/${item.artifact.id}?preview=1`}
+      loading="lazy"
     />
   ) : (
-    <span aria-hidden="true" className={styles.thumbnailPlaceholderMark}>
-      {item.state === "loading" ? "…" : "!"}
-    </span>
+    <MediaState compact state={item.state === "loading" ? "loading" : "error"} label={item.state === "loading" ? t.files.previewLoading : t.files.previewFailure} />
   );
 
   const renderPreview = (
@@ -266,9 +270,9 @@ function ReadyFilePreviewDialog({
       );
     }
     return (
-      <img
+      <MediaImage
         alt={readyItem.job.prompt}
-        className={classes.previewMedia}
+        fit="contain" className={classes.previewMedia}
         src={imageSource}
       />
     );
@@ -277,7 +281,7 @@ function ReadyFilePreviewDialog({
   const renderToolRail = () => (
     <ModeSwitchPanel
       activeID={activeToolID}
-      ariaLabel={ru.files.previewToolsLabel}
+      ariaLabel={t.files.previewToolsLabel}
       className={styles.toolRail}
       items={toolItems}
       onChange={setActiveToolID}
@@ -289,7 +293,7 @@ function ReadyFilePreviewDialog({
     const presentation = getModelPresentation({
       id: readyItem.job.model_id,
       name: readyItem.job.model_name,
-    });
+    }, msg);
 
     return (
       <>
@@ -300,11 +304,11 @@ function ReadyFilePreviewDialog({
 
         <section>
           <MediaPreviewPromptHeader
-            copiedLabel={ru.files.previewPromptCopied}
-            copyLabel={ru.files.previewCopyPrompt}
+            copiedLabel={t.files.previewPromptCopied}
+            copyLabel={t.files.previewCopyPrompt}
             isCopied={isPromptCopied}
             onCopy={() => void copyPrompt(readyItem)}
-            title={ru.files.previewPromptTitle}
+            title={t.files.previewPromptTitle}
           />
           <div className={styles.promptBody}>
             <p
@@ -321,7 +325,7 @@ function ReadyFilePreviewDialog({
                 onClick={() => setIsPromptExpanded((current) => !current)}
                 type="button"
               >
-                {isPromptExpanded ? ru.files.previewPromptCollapse : ru.files.previewPromptShowMore}
+                {isPromptExpanded ? t.files.previewPromptCollapse : t.files.previewPromptShowMore}
               </button>
             ) : null}
           </div>
@@ -329,25 +333,25 @@ function ReadyFilePreviewDialog({
 
         <dl className={styles.metadata}>
           <div>
-            <dt>{ru.files.previewCreatedAt}</dt>
-            <dd>{formatCreatedAt(readyItem.job.created_at)}</dd>
+            <dt>{t.files.previewCreatedAt}</dt>
+            <dd>{formatCreatedAt(readyItem.job.created_at, msg)}</dd>
           </div>
           {readyItem.artifact.width > 0 && readyItem.artifact.height > 0 ? (
             <div>
-              <dt>{ru.files.previewResolution}</dt>
+              <dt>{t.files.previewResolution}</dt>
               <dd>{readyItem.artifact.width} × {readyItem.artifact.height}</dd>
             </div>
           ) : null}
           <div>
-            <dt>{ru.files.previewFormat}</dt>
+            <dt>{t.files.previewFormat}</dt>
             <dd>{formatMimeType(readyItem.artifact.mime_type)}</dd>
           </div>
           <div>
-            <dt>{ru.files.previewSize}</dt>
-            <dd>{formatFileSize(readyItem.artifact.size_bytes)}</dd>
+            <dt>{t.files.previewSize}</dt>
+            <dd>{formatFileSize(readyItem.artifact.size_bytes, msg)}</dd>
           </div>
           <div>
-            <dt>{ru.files.previewQuality}</dt>
+            <dt>{t.files.previewQuality}</dt>
             <dd>{readyItem.job.image_quality}</dd>
           </div>
         </dl>
@@ -358,9 +362,9 @@ function ReadyFilePreviewDialog({
 
   return (
     <MediaPreviewDialogTemplate
-      ariaLabel={`${ru.files.previewDialogLabel}: ${job.prompt}`}
+      ariaLabel={`${t.files.previewDialogLabel}: ${job.prompt}`}
       backdropTestId="file-preview-backdrop"
-      closeLabel={ru.files.closePreview}
+      closeLabel={t.files.closePreview}
       getActions={(item) => {
         if (
           activeToolID === "animate"
@@ -371,21 +375,21 @@ function ReadyFilePreviewDialog({
         const readyItem = getReadyPreviewItem(item);
         return {
           download: {
-            ariaLabel: ru.files.previewDownloadLabel,
+            ariaLabel: t.files.previewDownloadLabel,
             download: true,
             href: `/web/v1/image-artifacts/${readyItem.artifact.id}`,
-            label: ru.files.download,
+            label: t.files.download,
           },
           feedback: feedbackText
-            ? <p className={styles.feedback} role="status">{feedbackText}</p>
+            ? <StateNotice inline kind="success">{feedbackText}</StateNotice>
             : null,
           primary: {
             href: getRecreateHref(readyItem),
-            label: ru.files.previewRecreate,
+            label: t.files.previewRecreate,
           },
           share: {
-            ariaLabel: ru.files.previewShareLabel,
-            label: ru.files.previewShare,
+            ariaLabel: t.files.previewShareLabel,
+            label: t.files.previewShare,
             onClick: () => void shareFile(readyItem),
           },
         };
@@ -413,16 +417,16 @@ function ReadyFilePreviewDialog({
       infoPanelTestId="file-preview-info-viewport"
       isItemSelectable={isReadyPreviewItem}
       items={items}
-      nextLabel={ru.files.previewNextFile}
+      nextLabel={t.files.previewNextFile}
       onClose={onClose}
       onSelect={selectItem}
-      previousLabel={ru.files.previewPreviousFile}
+      previousLabel={t.files.previewPreviousFile}
       renderPreview={renderPreview}
       renderPreviewFooter={renderToolRail}
       renderThumbnail={renderThumbnail}
       selectedIndex={selectedIndex}
       testIdPrefix="file-preview"
-      thumbnailRailLabel={ru.files.previewFilesLabel}
+      thumbnailRailLabel={t.files.previewFilesLabel}
     />
   );
 }

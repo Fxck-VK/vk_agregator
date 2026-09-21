@@ -1,8 +1,11 @@
 "use client";
 
+import { StateNotice, LoadingIndicator } from "@/components/ui/AsyncState/AsyncState";
+import { useDictionary } from "@/i18n/LocaleProvider";
+
+
 import { Button } from "@/components/ui/Button/Button";
 import { CreditAmount } from "@/components/ui/CreditAmount/CreditAmount";
-import { ru } from "@/i18n/ru";
 import type { ImageJobPreparation } from "@/lib/web-api/contracts";
 
 import styles from "./ImageGenerationConfirmation.module.css";
@@ -20,36 +23,37 @@ export function ImageGenerationConfirmation({
   onConfirm,
   preparation,
 }: Readonly<ImageGenerationConfirmationProps>) {
+  const t = useDictionary();
   const balanceAfter = Math.max(0, preparation.balance - preparation.job.cost_estimate);
 
   return (
     <section aria-labelledby="image-confirmation-title" className={styles.confirmation}>
-      <h3 id="image-confirmation-title">{ru.imageGeneration.confirmationTitle}</h3>
+      <h3 id="image-confirmation-title">{t.imageGeneration.confirmationTitle}</h3>
       <dl>
         <div>
-          <dt>{ru.imageGeneration.costLabel}</dt>
+          <dt>{t.imageGeneration.costLabel}</dt>
           <dd><CreditAmount value={preparation.job.cost_estimate} /></dd>
         </div>
         <div>
-          <dt>{ru.imageGeneration.balanceLabel}</dt>
+          <dt>{t.imageGeneration.balanceLabel}</dt>
           <dd><CreditAmount value={preparation.balance} /></dd>
         </div>
         <div>
-          <dt>{ru.imageGeneration.balanceAfterLabel}</dt>
+          <dt>{t.imageGeneration.balanceAfterLabel}</dt>
           <dd><CreditAmount value={balanceAfter} /></dd>
         </div>
       </dl>
-      <Button disabled={isActivating} onClick={onConfirm}>
+      <Button variant="outline" disabled={isActivating} onClick={onConfirm}>
         {isActivating ? (
-          ru.imageGeneration.activating
+          <><LoadingIndicator label={t.imageGeneration.activating} />{t.imageGeneration.activating}</>
         ) : (
-          <>{ru.imageGeneration.confirm} · <CreditAmount value={preparation.job.cost_estimate} /></>
+          <>{t.imageGeneration.confirm} · <CreditAmount value={preparation.job.cost_estimate} /></>
         )}
       </Button>
       {errorMessage !== null ? (
-        <p className={styles.error} role="alert">
+        <StateNotice inline kind="error">
           {errorMessage}
-        </p>
+        </StateNotice>
       ) : null}
     </section>
   );

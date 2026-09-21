@@ -156,6 +156,7 @@ function New-ComposeValidationEnvFile {
         "MINIO_ROOT_PASSWORD=minio-config",
         "CLOUDFLARED_TUNNEL_TOKEN=compose-validate-token",
         "DEV_WEB_BASIC_AUTH_HTPASSWD=compose-validation-placeholder",
+        "WEB_ORIGIN=https://dev-web.neiirohub.ru",
         "COMPOSE_NETWORK_NAME=vk-ai-aggregator-prod"
     )
     [IO.File]::WriteAllLines($path, $lines, [Text.UTF8Encoding]::new($false))
@@ -317,7 +318,7 @@ function Assert-ReverseProxyConfig {
     }
     $platformProxy = Get-Content -LiteralPath $platformProxyPath -Raw
     foreach ($snippet in @(
-        'matcher: ["/", "/login", "/app/:path*"]',
+        'matcher: ["/((?!_next/|assets/|web/|api/|health$|favicon.ico$|robots.txt$|sitemap.xml$).*)"]',
         "crypto.getRandomValues",
         'requestHeaders.set("x-nonce", nonce)',
         'requestHeaders.set("Content-Security-Policy", contentSecurityPolicy)',

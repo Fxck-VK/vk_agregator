@@ -53,7 +53,14 @@ func WorkspaceCatalog(cfg WorkspaceConfig) WorkspaceModelList {
 			}
 		}
 		model.Categories = workspacePriceCategories(model.Categories, free)
-		model.Capabilities = workspaceCapabilities(id, op)
+		if cfg.ImageReferenceUploads && op.Image != nil && op.Image.SupportsReferenceImage && op.Image.MaxReferenceImages > 0 {
+			// Reuse the admitted runtime reference path. This adds a web transport,
+			// without enabling new provider formats, models, or reference-only routes.
+			input := modelcontract.Input{Support: modelcontract.Supported, Enabled: true, Processing: "native", MaxCount: op.Image.MaxReferenceImages, MaxBytes: WebReferenceMaxBytes, MaxWidth: WebReferenceMaxDimension, MaxHeight: WebReferenceMaxDimension, Formats: []modelcontract.FileFormat{{Extension: ".png", MIME: "image/png"}, {Extension: ".jpg", MIME: "image/jpeg"}, {Extension: ".jpeg", MIME: "image/jpeg"}}}
+			model.Operations[0].Inputs.Images = input
+			model.Operations[0].Inputs.MaxTotalBytes = int64(input.MaxCount) * input.MaxBytes
+		}
+		model.Capabilities = workspaceCapabilities(id, model.Operations[0])
 		out.Items = append(out.Items, model)
 	}
 	resolver := imagegeneration.NewResolver(cfg.ImageModels, cfg.Pricing)
@@ -63,6 +70,10 @@ func WorkspaceCatalog(cfg WorkspaceConfig) WorkspaceModelList {
 			continue
 		}
 		inputs := unknownWorkspaceInputs()
+		if cfg.ImageReferenceUploads {
+			controls.SupportsReferenceImage = image.SupportsReferenceImage
+			controls.MaxReferenceImages = image.MaxReferenceImages
+		}
 		inputs.Images.MaxCount = image.MaxReferenceImages
 		add(image.ID, image.Name, "Создание изображений по текстовому описанию.", WorkspaceOperation{ID: "generate", Kind: "image", Enabled: true, Inputs: inputs, Image: &controls}, false)
 	}

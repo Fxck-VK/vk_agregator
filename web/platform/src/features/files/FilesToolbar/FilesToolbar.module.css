@@ -17,9 +17,9 @@
 .filter select {
   min-block-size: 2.75rem;
   padding-inline: var(--space-3);
-  border: 0.0625rem solid var(--color-border);
+  border: 0.0625rem solid var(--color-input-border, var(--color-border));
   border-radius: var(--radius-sm);
-  background: var(--color-background);
+  background: var(--field-background, var(--color-background));
   color: var(--color-text);
   font: inherit;
 }

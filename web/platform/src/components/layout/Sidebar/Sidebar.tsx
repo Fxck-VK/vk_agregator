@@ -1,8 +1,11 @@
 "use client";
 
+import { useDictionary } from "@/i18n/LocaleProvider";
+
+
 import Image from "next/image";
-import Link from "next/link";
-import { usePathname } from "next/navigation";
+import Link from "@/i18n/Link";
+import { usePathname } from "@/i18n/navigation";
 import {
   type FocusEvent as ReactFocusEvent,
   type MouseEvent as ReactMouseEvent,
@@ -19,10 +22,11 @@ import { EditIcon } from "@/components/icons/EditIcon";
 import { FileIcon } from "@/components/icons/FileIcon";
 import { GridIcon } from "@/components/icons/GridIcon";
 import { ImageIcon } from "@/components/icons/ImageIcon";
+import { MenuIcon } from "@/components/icons/MenuIcon";
 import { Button } from "@/components/ui/Button/Button";
 import { TooltipBubble } from "@/components/ui/Tooltip/Tooltip";
 import { SidebarConversationsActivityProvider } from "@/features/conversations/SidebarConversations/SidebarConversationsActivity";
-import { ru } from "@/i18n/ru";
+import { getDictionary, type Dictionary } from "@/i18n/dictionary";
 
 import styles from "./Sidebar.module.css";
 
@@ -46,14 +50,16 @@ function BrandChip() {
   );
 }
 
-export const workspaceNavigationItems = [
-  { href: "/app/chats", icon: "edit", label: ru.navigation.chats, prefetch: true },
-  { href: "/app/files", icon: "file", label: ru.navigation.files, prefetch: true },
-  { href: "/app/models", icon: "grid", label: ru.navigation.models, prefetch: true },
-  { href: "/app/music", icon: "image", label: ru.navigation.music, prefetch: true },
-  { href: "/app/speech", icon: "edit", label: "Речь", prefetch: true },
-  { href: "/app/inspiration", icon: "image", label: ru.navigation.inspiration, prefetch: true },
+export const getWorkspaceNavigationItems = (t: Dictionary) => [
+  { href: "/app/chats", icon: "edit", label: t.navigation.chats, prefetch: true },
+  { href: "/app/files", icon: "file", label: t.navigation.files, prefetch: true },
+  { href: "/app/models", icon: "grid", label: t.navigation.models, prefetch: true },
+  { href: "/app/music", icon: "image", label: t.navigation.music, prefetch: true },
+  { href: "/app/speech", icon: "edit", label: t.navigation.speech, prefetch: true },
+  { href: "/app/inspiration", icon: "image", label: t.navigation.inspiration, prefetch: true },
 ] as const;
+
+export const workspaceNavigationItems = getWorkspaceNavigationItems(getDictionary("ru"));
 
 const workspaceNavigationIcons = {
   edit: EditIcon,
@@ -70,6 +76,8 @@ type SidebarProps = {
 };
 
 export function Sidebar({ account, conversations, isDesktopCollapsed = false, onDesktopToggle }: SidebarProps) {
+  const t = useDictionary();
+  const navigationItems = getWorkspaceNavigationItems(t);
   const pathname = usePathname();
   const [isNarrowViewport, setIsNarrowViewport] = useState<boolean | null>(null);
   const [isOpen, setIsOpen] = useState(false);
@@ -338,16 +346,17 @@ export function Sidebar({ account, conversations, isDesktopCollapsed = false, on
       <Button
         aria-controls={navigationId}
         aria-expanded={isOpen}
-        aria-label={ru.navigation.openMenuLabel}
+        aria-label={t.navigation.openMenuLabel}
         className={styles.menuTrigger}
+        hidden={isOpen}
         onClick={toggleNavigation}
         ref={triggerRef}
       >
-        <span aria-hidden="true">☰</span>
+        <MenuIcon className={styles.menuIcon} />
       </Button>
       {isNarrowViewport && isOpen ? (
         <button
-          aria-label={ru.navigation.closeMenuLabel}
+          aria-label={t.navigation.closeMenuLabel}
           className={styles.backdrop}
           onClick={() => closeNavigation(true)}
           type="button"
@@ -355,7 +364,7 @@ export function Sidebar({ account, conversations, isDesktopCollapsed = false, on
       ) : null}
       <div
         aria-hidden={panelIsInactive || undefined}
-        aria-label={isNarrowViewport && isOpen ? ru.navigation.label : undefined}
+        aria-label={isNarrowViewport && isOpen ? t.navigation.label : undefined}
         aria-modal={isNarrowViewport && isOpen ? true : undefined}
         className={styles.panel}
         data-desktop-collapsed={isDesktopCollapsed}
@@ -376,9 +385,9 @@ export function Sidebar({ account, conversations, isDesktopCollapsed = false, on
             <Button
               aria-controls="sidebar-panel"
               aria-expanded="false"
-              aria-label={ru.navigation.expandSidebarLabel}
+              aria-label={t.navigation.expandSidebarLabel}
               className={`${styles.desktopTrigger} ${styles.collapsedBrandControl}`}
-              data-sidebar-tooltip={ru.navigation.expandSidebarLabel}
+              data-sidebar-tooltip={t.navigation.expandSidebarLabel}
               disabled={desktopTransition !== null}
               onClick={toggleDesktopSidebar}
             >
@@ -403,19 +412,19 @@ export function Sidebar({ account, conversations, isDesktopCollapsed = false, on
               ref={firstLinkRef}
             >
               <BrandChip />
-              <span>{ru.brand.name}</span>
+              <span>{t.brand.name}</span>
             </Link>
           )}
-          {!desktopRailIsCollapsed && onDesktopToggle ? (
+          {(isNarrowViewport || (!desktopRailIsCollapsed && onDesktopToggle)) ? (
             <Button
               aria-controls="sidebar-panel"
-              aria-expanded="true"
-              aria-label={ru.navigation.collapseSidebarLabel}
-              className={styles.desktopTrigger}
-              data-sidebar-tooltip={ru.navigation.collapseSidebarTooltip}
-              data-sidebar-tooltip-always="true"
-              disabled={desktopTransition !== null}
-              onClick={toggleDesktopSidebar}
+              aria-expanded={isNarrowViewport ? isOpen : true}
+              aria-label={t.navigation.collapseSidebarLabel}
+              className={`${styles.desktopTrigger}${isNarrowViewport ? ` ${styles.mobileCloseTrigger}` : ""}`}
+              data-sidebar-tooltip={isNarrowViewport ? undefined : t.navigation.collapseSidebarTooltip}
+              data-sidebar-tooltip-always={isNarrowViewport ? undefined : "true"}
+              disabled={!isNarrowViewport && desktopTransition !== null}
+              onClick={isNarrowViewport ? () => closeNavigation(true) : toggleDesktopSidebar}
             >
               <Image
                 alt=""
@@ -430,9 +439,9 @@ export function Sidebar({ account, conversations, isDesktopCollapsed = false, on
           ) : null}
         </div>
         <div className={styles.scrollArea}>
-          <nav aria-label={ru.navigation.label} id={navigationId}>
+          <nav aria-label={t.navigation.label} id={navigationId}>
             <ul className={styles.navigationList}>
-              {workspaceNavigationItems.map((item) => {
+              {navigationItems.map((item) => {
                 const Icon = workspaceNavigationIcons[item.icon];
 
                 return (

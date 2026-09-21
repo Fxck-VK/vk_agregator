@@ -12,42 +12,58 @@ describe("global theme tokens", () => {
 
     for (const token of [
       "--color-background: #0c0c0f",
-      "--color-workspace: #111217",
-      "--color-panel: #15161c",
+      "--color-workspace: #0d1117",
+      "--color-panel: #151b23",
       "--color-surface: #1a1b22",
-      "--color-surface-raised: #20212a",
+      "--color-surface-raised: #1f232a",
       "--color-border: #2a2b35",
-      "--color-text: #f5f5f7",
-      "--color-text-muted: #9b9da8",
+      "--color-text: var(--color-text-on-dark)",
+      "--color-text-muted: var(--color-text-muted-on-dark)",
       "--color-brand-violet: #9a7cf5",
       "--color-brand-blue: #7c8ff7",
       "--color-brand-pink: #f09af0",
       "--color-focus: #a9cfff",
-      "--color-text-on-accent: #111217",
+      "--color-text-on-accent: var(--color-text-on-light)",
+      "--color-model-icon: var(--color-surface-light)",
     ]) {
       expect(darkTheme).toContain(token);
     }
 
     for (const token of [
-      "--color-background: #f7f7fa",
-      "--color-workspace: #ffffff",
-      "--color-panel: #f3f3f7",
-      "--color-surface: #eeeef4",
-      "--color-surface-raised: #e8e8f0",
-      "--color-border: #dedfe7",
-      "--color-text: #17171b",
-      "--color-text-muted: #6b6c76",
-      "--color-brand-violet: #7563e6",
-      "--color-brand-blue: #6678e6",
-      "--color-brand-pink: #d56dd9",
-      "--color-focus: #8475f0",
+      "--color-background: #edeae4",
+      "--color-workspace: #faf8f4",
+      "--color-panel: #fffdfa",
+      "--color-sidebar: #f1eee8",
+      "--color-model-icon-on-light: #9198a1",
+      "--panel-surface-background: rgb(255 253 250 / 92%)",
+      "--panel-surface-text: #29262e",
+      "--panel-surface-color-scheme: light",
+      "--color-surface: #f3f0ea",
+      "--color-surface-raised: #ebe7e0",
+      "--color-border: #d9d3ca",
+      "--color-text: #29262e",
+      "--color-text-muted: #635e69",
+      "--color-brand-violet: #704cc4",
+      "--color-brand-blue: #4b5fb5",
+      "--color-brand-pink: #9f3e96",
+      "--color-focus: #704cc4",
       "--color-text-on-accent: #ffffff",
+      "--color-model-icon: var(--color-model-icon-on-light)",
     ]) {
       expect(lightTheme).toContain(token);
     }
 
     expect(stylesheet).toContain("--color-accent: var(--color-brand-violet)");
     expect(stylesheet).toContain("--color-accent-strong: var(--color-brand-blue)");
+    expect(stylesheet).toContain("--color-text-on-light: #0d1117");
+    expect(stylesheet).toContain("--color-text-on-dark: #f0f6fc");
+    expect(stylesheet).toContain("--color-text-muted-on-dark: #9198a1");
+    expect(stylesheet).toContain("--panel-surface-text: var(--color-text-on-dark)");
+    expect(stylesheet).toContain("--panel-surface-text-muted: var(--color-text-muted-on-dark)");
+    expect(stylesheet).toContain("--color-surface-light: #fff");
+    expect(stylesheet).toContain("--color-qr-foreground: var(--color-text-on-light)");
+    expect(stylesheet).toContain("--color-qr-background: var(--color-surface-light)");
+    expect(stylesheet).toContain("--color-model-icon-on-light: #151b23");
     expect(stylesheet).toContain(
       "--gradient-brand: linear-gradient(120deg, #f29af3 0%, #b983f6 48%, #7c8ff7 100%)",
     );
@@ -58,10 +74,11 @@ describe("global theme tokens", () => {
 
     expect(systemLightMedia).toBeDefined();
     expect(systemLightMedia ?? "").toContain(':root[data-theme="system"]');
-    expect(systemLightMedia ?? "").toContain("--color-background: #f7f7fa");
-    expect(systemLightMedia ?? "").toContain("--color-workspace: #ffffff");
-    expect(systemLightMedia ?? "").toContain("--color-panel: #f3f3f7");
-    expect(systemLightMedia ?? "").toContain("--color-brand-violet: #7563e6");
+    expect(systemLightMedia ?? "").toContain("--color-background: #edeae4");
+    expect(systemLightMedia ?? "").toContain("--color-workspace: #faf8f4");
+    expect(systemLightMedia ?? "").toContain("--color-panel: #fffdfa");
+    expect(systemLightMedia ?? "").toContain("--color-model-icon: var(--color-model-icon-on-light)");
+    expect(systemLightMedia ?? "").toContain("--color-brand-violet: #704cc4");
     expect(systemLightMedia ?? "").toContain("color-scheme: light");
   });
 

@@ -1,6 +1,9 @@
 import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { describe, expect, it, vi } from "vitest";
 
+import { LocaleProvider } from "@/i18n/LocaleProvider";
+
+import { MusicApiError } from "../music-api";
 import { MusicWorkspaceController, type MusicWorkspaceAPI } from "./MusicWorkspaceController";
 import type { MusicModelCatalog } from "../music-model-catalog";
 
@@ -120,6 +123,75 @@ describe("MusicWorkspaceController", () => {
       sources: [],
     }, "11111111-1111-4111-8111-111111111111");
     expect(screen.getByLabelText("Стоимость: 37 звёзд")).toBeInTheDocument();
+  });
+
+  it("relocalizes a visible confirmation without reloading the catalog or preparing again", async () => {
+    const api = apiStub({
+      prepareMusicJob: vi.fn().mockResolvedValue({
+        balance: 100,
+        can_afford: true,
+        job: {
+          action: "generate",
+          cost_estimate: 37,
+          created_at: "2026-09-16T10:00:00Z",
+          id: "33333333-3333-4333-8333-333333333333",
+          model_id: "suno_v6",
+          status: "prepared",
+        },
+      }),
+    });
+    const catalogLoader = vi.fn().mockResolvedValue(enabledCatalog);
+    const keys = ["11111111-1111-4111-8111-111111111111", "22222222-2222-4222-8222-222222222222"];
+    const view = (locale: "ru" | "en") => (
+      <LocaleProvider locale={locale}>
+        <MusicWorkspaceController
+          api={api}
+          catalogLoader={catalogLoader}
+          uuidFactory={() => keys.shift() ?? "44444444-4444-4444-8444-444444444444"}
+        />
+      </LocaleProvider>
+    );
+    const { rerender } = render(view("ru"));
+
+    fireEvent.change(await screen.findByRole("textbox", { name: "Описание трека" }), {
+      target: { value: "ambient pop" },
+    });
+    fireEvent.click(screen.getByRole("button", { name: "Сгенерировать" }));
+    await screen.findByRole("heading", { name: "Подтверждение запуска" });
+
+    rerender(view("en"));
+
+    expect(await screen.findByRole("heading", { name: "Run confirmation" })).toBeVisible();
+    expect(screen.getByRole("textbox", { name: "Track description" })).toHaveValue("ambient pop");
+    expect(api.prepareMusicJob).toHaveBeenCalledTimes(1);
+    expect(catalogLoader).toHaveBeenCalledTimes(1);
+  });
+
+  it("relocalizes a visible prepare error without retrying prepare", async () => {
+    const api = apiStub({
+      prepareMusicJob: vi.fn().mockRejectedValue(new MusicApiError("invalid music request", 400)),
+    });
+    const catalogLoader = vi.fn().mockResolvedValue(enabledCatalog);
+    const view = (locale: "ru" | "en") => (
+      <LocaleProvider locale={locale}>
+        <MusicWorkspaceController api={api} catalogLoader={catalogLoader} />
+      </LocaleProvider>
+    );
+    const { rerender } = render(view("ru"));
+
+    fireEvent.change(await screen.findByRole("textbox", { name: "Описание трека" }), {
+      target: { value: "ambient pop" },
+    });
+    fireEvent.click(screen.getByRole("button", { name: "Сгенерировать" }));
+    await screen.findByRole("alert", { name: "" });
+    expect(screen.getByRole("alert")).toHaveTextContent("Сервер отклонил параметры музыкального запуска.");
+
+    rerender(view("en"));
+
+    expect(screen.getByRole("alert")).toHaveTextContent("The server rejected the music run parameters.");
+    expect(screen.getByRole("textbox", { name: "Track description" })).toHaveValue("ambient pop");
+    expect(api.prepareMusicJob).toHaveBeenCalledTimes(1);
+    expect(catalogLoader).toHaveBeenCalledTimes(1);
   });
 
   it("renders text results and artifact downloads loaded from completed history", async () => {

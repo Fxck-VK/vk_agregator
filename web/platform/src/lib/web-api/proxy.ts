@@ -1,6 +1,7 @@
 import "server-only";
 
 import { canonicalizeWebApiPath } from "./path";
+import { readSignal } from "./read-signal";
 
 const forwardedRequestHeaders = [
   "Accept",
@@ -179,8 +180,13 @@ export async function proxyWebApiRequest(
   const safePath = canonicalizeWebApiPath(rawPath);
   let body: ArrayBuffer | undefined;
   if (request.method !== "GET" && request.method !== "HEAD") {
-    const isMusicUpload = request.method === "POST" && safePath.split("?", 1)[0] === "/web/v1/music-inputs";
-    const proxyBody = await readProxyRequestBody(request, isMusicUpload ? MAX_MUSIC_UPLOAD_BODY_BYTES : MAX_PROXY_REQUEST_BODY_BYTES);
+    const pathname = safePath.split("?", 1)[0];
+    let bodyLimit = MAX_PROXY_REQUEST_BODY_BYTES;
+    if (request.method === "POST") {
+      if (pathname === "/web/v1/music-inputs") bodyLimit = MAX_MUSIC_UPLOAD_BODY_BYTES;
+      if (pathname === "/web/v1/input-artifacts") bodyLimit = 21 * 1024 * 1024;
+    }
+    const proxyBody = await readProxyRequestBody(request, bodyLimit);
     if (proxyBody.kind === "too_large") {
       return requestBodyTooLargeResponse();
     }
@@ -194,6 +200,7 @@ export async function proxyWebApiRequest(
   try {
     upstream = await fetch(new URL(safePath, internalOrigin).toString(), {
       method: request.method,
+      signal: readSignal({ method: request.method, signal: request.signal }),
       body,
       cache: "no-store",
       headers: proxyRequestHeaders(request.headers),

@@ -1,5 +1,9 @@
 import { loadModelCatalog } from "@/features/models/model-catalog-cache";
 import type { PublicCatalog, PublicCatalogModel, PublicOperation } from "@/features/models/model-catalog-contract";
+import { translateCatalogText } from "@/i18n/catalog";
+import { defaultLocale } from "@/i18n/locales";
+import { getTranslator, type Translator } from "@/i18n/messages";
+import { messagesMusicCatalogRu } from "@/i18n/music-catalog";
 
 import type {
   MusicModelID,
@@ -15,6 +19,7 @@ export type MusicCatalogModel = MusicWorkspaceModel & {
 export type MusicModelCatalog = {
   defaultModelId: MusicModelID;
   models: readonly MusicCatalogModel[];
+  source?: PublicCatalog;
 };
 
 const musicModelIds = ["suno_v6", "suno_v6_wild", "suno_v6_mini", "lyria_3_5"] as const satisfies readonly MusicModelID[];
@@ -66,26 +71,30 @@ export function isMusicOperationId(id: string): id is MusicOperationID {
   return musicOperationIdSet.has(id);
 }
 
-export function projectMusicModelCatalog(catalog: PublicCatalog): MusicModelCatalog {
-  const models = catalog.items.flatMap((model) => projectMusicModel(model));
+export function projectMusicModelCatalog(catalog: PublicCatalog, msg: Translator = getTranslator(defaultLocale)): MusicModelCatalog {
+  const models = catalog.items.flatMap((model) => projectMusicModel(model, msg));
   const defaultModelId = models.some((model) => model.id === catalog.default_model_id) && isMusicModelId(catalog.default_model_id)
     ? catalog.default_model_id
     : models[0]?.id ?? "suno_v6";
 
-  return { defaultModelId, models };
+  return { defaultModelId, models, source: catalog };
+}
+
+export function localizeMusicModelCatalog(catalog: MusicModelCatalog, msg: Translator): MusicModelCatalog {
+  return catalog.source ? projectMusicModelCatalog(catalog.source, msg) : catalog;
 }
 
 export async function loadMusicModelCatalog(): Promise<MusicModelCatalog> {
   return projectMusicModelCatalog(await loadModelCatalog());
 }
 
-function projectMusicModel(model: PublicCatalogModel): MusicCatalogModel[] {
+function projectMusicModel(model: PublicCatalogModel, msg: Translator): MusicCatalogModel[] {
   if (model.kind !== "audio" || !isMusicModelId(model.id)) return [];
 
-  const operations = model.operations.flatMap((operation) => projectMusicOperation(operation));
+  const operations = model.operations.flatMap((operation) => projectMusicOperation(operation, msg));
   const pendingVerification = model.verification === "pending-verification";
   const hasEnabledOperation = operations.some((operation) => operation.enabled);
-  const unavailableReason = firstUnavailableReason(model.operations);
+  const unavailableReason = firstUnavailableReason(model.operations, msg);
   const availability: MusicWorkspaceModel["availability"] = pendingVerification
     ? "unverified"
     : hasEnabledOperation
@@ -94,33 +103,33 @@ function projectMusicModel(model: PublicCatalogModel): MusicCatalogModel[] {
 
   return [{
     availability,
-    description: model.description,
+    description: translateCatalogText(model.description, msg),
     enabled: availability === "available" && hasEnabledOperation,
     id: model.id,
     name: model.name,
-    operationDetails: modelOperationDetails(operations),
+    operationDetails: modelOperationDetails(operations, msg),
     statusReason: pendingVerification
-      ? unavailableReason ?? "Модель ждёт отдельной проверки перед запуском."
+      ? unavailableReason ?? msg("musicCatalog.modelPending")
       : availability === "available"
         ? undefined
-        : unavailableReason ?? "Сервер не включил музыкальные операции для этой модели.",
+        : unavailableReason ?? msg("musicCatalog.modelDisabled"),
     operations,
   }];
 }
 
-function projectMusicOperation(operation: PublicOperation): MusicWorkspaceOperation[] {
+function projectMusicOperation(operation: PublicOperation, msg: Translator): MusicWorkspaceOperation[] {
   if (operation.kind !== "audio" || operation.music === undefined || !isMusicOperationId(operation.id)) return [];
 
   const music = operation.music;
-  const statusReason = music.unavailable_reason;
+  const statusReason = music.unavailable_reason ? translateMusicCatalogText(music.unavailable_reason, msg) : undefined;
 
   return [{
-    description: music.title,
-    details: operationDetails(operation),
+    description: translateMusicCatalogText(music.title, msg),
+    details: operationDetails(operation, msg),
     enabled: operation.enabled && statusReason === undefined,
     estimateCredits: music.estimate_credits,
     id: operation.id,
-    label: music.title,
+    label: translateMusicCatalogText(music.title, msg),
     maxEstimateCredits: music.max_estimate_credits ?? null,
     outputKind: music.output_kind,
     requirement: {
@@ -139,36 +148,36 @@ function projectMusicOperation(operation: PublicOperation): MusicWorkspaceOperat
   }];
 }
 
-function firstUnavailableReason(operations: readonly PublicOperation[]): string | undefined {
+function firstUnavailableReason(operations: readonly PublicOperation[], msg: Translator): string | undefined {
   for (const operation of operations) {
-    if (operation.music?.unavailable_reason) return operation.music.unavailable_reason;
+    if (operation.music?.unavailable_reason) return translateMusicCatalogText(operation.music.unavailable_reason, msg);
   }
   return undefined;
 }
 
-function modelOperationDetails(operations: readonly MusicWorkspaceOperation[]) {
+function modelOperationDetails(operations: readonly MusicWorkspaceOperation[], msg: Translator) {
   return operations.slice(0, 6).map((operation) => {
     const price = operation.maxEstimateCredits !== null && operation.maxEstimateCredits !== undefined
-      ? `до ${operation.maxEstimateCredits}`
+      ? msg("musicCatalog.upTo", { value: operation.maxEstimateCredits })
       : operation.estimateCredits !== null && operation.estimateCredits !== undefined
         ? `${operation.estimateCredits}`
-        : "без оценки";
-    return `${operation.label ?? operation.id}: ${operation.enabled ? "доступно" : "недоступно"}, оценка ${price}`;
+        : msg("musicCatalog.noEstimate");
+    return msg("musicCatalog.operationDetails", { label: operation.label ?? operation.id, availability: msg(operation.enabled ? "musicCatalog.available" : "musicCatalog.unavailable"), price });
   });
 }
 
-function operationDetails(operation: PublicOperation): string[] {
+function operationDetails(operation: PublicOperation, msg: Translator): string[] {
   const music = operation.music;
   if (music === undefined) return [];
 
-  const details = [`Результат: ${outputKindLabel(music.output_kind)}`];
-  if (music.max_sources > 0) details.push(`Исходные треки: ${formatRange(music.min_sources, music.max_sources)}`);
-  if (music.max_uploads > 0) details.push(`Загружаемые аудио: ${formatRange(music.min_uploads, music.max_uploads)}`);
-  if (music.supports_max) details.push("Поддерживает max mode");
-  if (music.supports_custom_model) details.push("Пользовательская модель: доступна после создания модели");
-  if (music.supports_persona) details.push("Persona: доступна после создания persona");
-  if (music.supports_audio_format) details.push("Можно выбрать формат");
-  if (music.unavailable_reason) details.push(music.unavailable_reason);
+  const details = [msg("musicCatalog.result", { kind: outputKindLabel(music.output_kind, msg) })];
+  if (music.max_sources > 0) details.push(msg("musicCatalog.sourceTracks", { range: formatRange(music.min_sources, music.max_sources) }));
+  if (music.max_uploads > 0) details.push(msg("musicCatalog.uploads", { range: formatRange(music.min_uploads, music.max_uploads) }));
+  if (music.supports_max) details.push(msg("musicCatalog.maxMode"));
+  if (music.supports_custom_model) details.push(msg("musicCatalog.customModel"));
+  if (music.supports_persona) details.push(msg("musicCatalog.persona"));
+  if (music.supports_audio_format) details.push(msg("musicCatalog.format"));
+  if (music.unavailable_reason) details.push(translateMusicCatalogText(music.unavailable_reason, msg));
   return details;
 }
 
@@ -176,27 +185,34 @@ function formatRange(minimum: number, maximum: number) {
   return minimum === maximum ? `${minimum}` : `${minimum}–${maximum}`;
 }
 
-function outputKindLabel(outputKind: string) {
+function outputKindLabel(outputKind: string, msg: Translator) {
   switch (outputKind) {
     case "audio":
-      return "аудио";
+      return msg("musicCatalog.audio");
     case "video":
-      return "видео";
+      return msg("musicCatalog.video");
     case "lyrics":
-      return "текст";
+    case "text":
+      return msg("musicCatalog.text");
     case "tags":
-      return "теги";
+      return msg("musicCatalog.tags");
     case "metadata":
-      return "данные";
+      return msg("musicCatalog.metadata");
     case "model":
-      return "модель";
+      return msg("musicCatalog.model");
     case "persona":
       return "persona";
     case "reference":
-      return "референс";
+      return msg("musicCatalog.reference");
     case "voice":
-      return "голос";
+      return msg("musicCatalog.voice");
     default:
-      return "файл";
+      return msg("musicCatalog.file");
   }
+}
+
+function translateMusicCatalogText(value: string, msg: Translator): string {
+  const key = (Object.keys(messagesMusicCatalogRu) as (keyof typeof messagesMusicCatalogRu)[])
+    .find(key => messagesMusicCatalogRu[key] === value);
+  return key ? msg(key) : value;
 }

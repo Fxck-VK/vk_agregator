@@ -647,7 +647,7 @@ describe("ConversationHistory", () => {
     expect(screen.queryByRole("status", { name: ru.conversations.composerAwaitingResponse })).toBeNull();
   });
 
-  it("shows typing dots in the circular dock control until the assistant reply completes", async () => {
+  it("shows dock typing dots only above the bottom and restores the arrow after the reply", async () => {
     const workspaceScroll = addWorkspaceScrollRegion();
     let resolveRefresh: (response: Response) => void = () => {};
     vi.mocked(webBrowserMutation).mockResolvedValueOnce(Response.json(queuedJob, { status: 201 }));
@@ -662,8 +662,12 @@ describe("ConversationHistory", () => {
     fireEvent.keyDown(textarea, { key: "Enter" });
 
     await vi.waitFor(() => {
-      expect(screen.getAllByRole("status", { name: ru.conversations.composerAwaitingResponse })).toHaveLength(2);
+      expect(screen.getAllByRole("status", { name: ru.conversations.composerAwaitingResponse })).toHaveLength(1);
     });
+    expect(screen.queryByRole("button", { name: ru.conversations.scrollToLatest })).toBeNull();
+    workspaceScroll.region.scrollTop = 100;
+    fireEvent.scroll(workspaceScroll.region);
+    expect(screen.getAllByRole("status", { name: ru.conversations.composerAwaitingResponse })).toHaveLength(2);
     expect(screen.getByRole("button", { name: ru.conversations.scrollToLatest })).toBeVisible();
 
     resolveRefresh(
@@ -701,8 +705,8 @@ describe("ConversationHistory", () => {
     const textarea = await setComposerPrompt("Оптимистичный вопрос");
     fireEvent.keyDown(textarea, { key: "Enter" });
 
-    expect(textarea).toHaveValue("");
-    expect(screen.getByText("Оптимистичный вопрос")).toBeVisible();
+    expect(textarea).toHaveValue("Оптимистичный вопрос");
+    expect(screen.getByText("Оптимистичный вопрос", { selector: "p" })).toBeVisible();
     expect(screen.getByRole("status", { name: ru.conversations.composerAwaitingResponse })).toBeVisible();
 
     rejectMutation(new Error("network detail"));
@@ -1043,7 +1047,54 @@ function addWorkspaceScrollRegion() {
   };
 }
 
-afterEach(() => { cleanup(); vi.clearAllMocks(); window.sessionStorage.clear(); });
+afterEach(() => { cleanup(); vi.clearAllMocks(); window.sessionStorage.clear(); vi.useRealTimers(); });
+
+it("keeps four placeholders through acceptance, persisted prompt and reload, then replaces them with results", async () => {
+  vi.useFakeTimers();
+  const history = { ...initialHistory, messages: initialHistory.messages.map(message => ({ ...message, rating: null })) };
+  const model = { id: "nano_banana_2", name: "Nano Banana 2", default_quality: "2K", quality_options: ["2K"], price_by_quality: { "2K": 60 }, supports_reference_image: false, max_reference_images: 0, max_output_count: 4, allowed_aspect_ratios: ["9:16"] };
+  vi.mocked(loadGenerationModelCatalog).mockResolvedValue(makeGenerationModelCatalog({ images: [model] }));
+  window.sessionStorage.setItem(`neirohub:conversation-model:${conversationId}`, model.id);
+  let accept!: (response: Response) => void;
+  vi.mocked(webBrowserMutation).mockReturnValueOnce(new Promise(resolve => { accept = resolve; }));
+  const user = { id: "55555555-5555-4555-8555-555555555555", seq: 104, role: "user" as const, text: "Четыре кадра", rating: null, created_at: "2026-09-20T09:00:00Z" };
+  const images = Array.from({ length: 4 }, (_, index) => ({
+    job: { id: queuedJob.job_id, status: "succeeded", prompt: user.text, model_id: model.id, model_name: model.name, image_quality: "2K", cost_estimate: 240, created_at: user.created_at, updated_at: user.created_at },
+    artifact: { id: `40000000-0000-4000-8000-00000000000${index + 1}`, width: 900, height: 1600, mime_type: "image/png", size_bytes: 1024 },
+  }));
+  const assistant = { ...user, id: "66666666-6666-4666-8666-666666666666", seq: 105, role: "assistant", text: "Готово", images };
+  let ready = false;
+  vi.mocked(webBrowserFetch).mockImplementation(async path => path.includes("/jobs/")
+    ? Response.json({ ...queuedJob, status: ready ? "succeeded" : "queued" })
+    : Response.json({ items: ready ? [user, assistant] : [user], has_more_before: false }));
+  const view = render(<ConversationHistory history={history} />);
+  await setComposerPrompt(user.text);
+  for (let index = 0; index < 3; index++) fireEvent.click(screen.getByRole("button", { name: ru.imageGeneration.increaseOutputCount }));
+  fireEvent.click(screen.getByRole("button", { name: ru.conversations.composerSubmit }));
+  expect(screen.getAllByRole("progressbar", { name: /Генерируем изображение/ })).toHaveLength(4);
+  await act(async () => { accept(Response.json(queuedJob, { status: 201 })); });
+  expect(view.container.querySelector('[data-chat-pending="user"]')).toBeNull();
+  expect(screen.getAllByRole("progressbar", { name: /Генерируем изображение/ })).toHaveLength(4);
+  view.unmount();
+  const resumed = render(<ConversationHistory history={{ ...history, messages: [...history.messages, user] }} />);
+  await act(async () => {});
+  expect(screen.getAllByRole("progressbar", { name: /Генерируем изображение/ })).toHaveLength(4);
+  expect(resumed.container.querySelector('[data-ui="image-generation-grid"]')).toHaveStyle({ "--generation-aspect-ratio": "0.5625" });
+  ready = true;
+  await act(async () => { await vi.advanceTimersByTimeAsync(2000); });
+  expect(screen.queryByRole("progressbar", { name: /Генерируем изображение/ })).toBeNull();
+  expect(screen.getAllByRole("img", { name: ru.files.generatedImageAlt })).toHaveLength(4);
+  expect(window.sessionStorage.getItem(`neirohub:conversation-pending-media:${conversationId}`)).toBeNull();
+});
+
+it("removes a resumed image grid when the server reports terminal failure", async () => {
+  window.sessionStorage.setItem(`neirohub:conversation-pending-media:${conversationId}`, JSON.stringify({ jobID: queuedJob.job_id, baselineSeq: 103, startedAt: Date.now(), image: { count: 4, aspectRatio: "1:1" } }));
+  vi.mocked(webBrowserFetch).mockResolvedValueOnce(Response.json({ ...queuedJob, status: "failed_terminal" }));
+  const { container } = render(<ConversationHistory history={{ ...initialHistory, messages: initialHistory.messages.map(message => ({ ...message, rating: null })) }} />);
+  await act(async () => {});
+  expect(container.querySelector('[data-ui="image-generation-grid"]')).toBeNull();
+  expect(window.sessionStorage.getItem(`neirohub:conversation-pending-media:${conversationId}`)).toBeNull();
+});
 
 it("switches the existing dialogue to an image model, keeps the draft, and freezes image options on retry", async () => {
  mockModelCatalog({ images: [{id:"nano_banana_2",name:"Nano Banana 2",default_quality:"2K",quality_options:["2K"],price_by_quality:{"2K":60},supports_reference_image:false,max_reference_images:0,max_output_count:4,allowed_aspect_ratios:["16:9","9:16"]}] });
@@ -1060,7 +1111,7 @@ it("switches the existing dialogue to an image model, keeps the draft, and freez
  expect(input).toHaveValue("Журавль на облаке");
  expect(window.location.href).toBe(url);
  expect(screen.getByText("message 103")).toBeVisible();
- expect(screen.getByText("Стоимость: 60 токенов")).toBeVisible();
+ expect(screen.getByLabelText("Стоимость: 60 звёзд")).toBeVisible();
  fireEvent.click(screen.getByRole("button",{name:ru.conversations.composerSubmit}));
  fireEvent.click(await screen.findByRole("button",{name:ru.conversations.messageRetryLabel}));
  const calls = vi.mocked(webBrowserMutation).mock.calls;

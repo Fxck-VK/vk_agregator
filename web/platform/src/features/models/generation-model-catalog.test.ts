@@ -8,10 +8,25 @@ import { loadGenerationModelCatalog } from "./generation-model-catalog";
 import { resetModelCatalogCacheForTests } from "./model-catalog-cache";
 import type { PublicCatalog } from "./model-catalog-contract";
 import { publicModelCatalog } from "./model-catalog-test-fixtures";
+import { getModelPresentation } from "./ModelCard/model-card-content";
+import { getTranslator } from "@/i18n/messages";
 
 afterEach(() => {
   resetModelCatalogCacheForTests();
   vi.resetAllMocks();
+});
+
+it("preserves optional editorial translations through projection and keeps the shared cache language neutral", async () => {
+ const payload = publicModelCatalog();
+ const description_translations = { ru: "Описание модели", en: "Localized model description" };
+ vi.mocked(webBrowserFetch).mockResolvedValue(Response.json({ ...payload, items: payload.items.map(model => ({ ...model, description_translations })) }));
+ const catalog = await loadGenerationModelCatalog();
+ for (const model of catalog.items) {
+  expect(getModelPresentation(model, getTranslator("en")).description).toBe(description_translations.en);
+  expect(getModelPresentation(model, getTranslator("ru")).description).toBe(description_translations.ru);
+  expect(model.description).toMatch(/^Server /);
+ }
+ expect(webBrowserFetch).toHaveBeenCalledTimes(1);
 });
 
 it("projects image, text and video models from one unified request", async () => {
@@ -58,7 +73,8 @@ it("returns failures for every selector category without rejecting when the unif
   popular: expect.any(String),
   images: expect.any(String),
   text: expect.any(String),
-  "video-audio": expect.any(String),
+  video: expect.any(String),
+  audio: expect.any(String),
   free: expect.any(String),
   "study-work": expect.any(String),
  });

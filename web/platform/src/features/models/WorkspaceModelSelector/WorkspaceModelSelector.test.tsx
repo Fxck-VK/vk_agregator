@@ -2,6 +2,7 @@ import { cleanup, fireEvent, render, screen, waitFor, within } from "@testing-li
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 vi.mock("next/navigation", () => ({
+  usePathname: vi.fn(),
   useRouter: vi.fn(),
   useSearchParams: vi.fn(),
 }));
@@ -11,6 +12,7 @@ vi.mock("@/features/models/generation-model-catalog", () => ({
 }));
 
 import { chatModelForSelector } from "@/features/models/chat-model-selector";
+import { ConversationModelSelector, useConversationModelSelection } from "@/features/conversations/ConversationModelSelector/ConversationModelSelector";
 import {
   loadGenerationModelCatalog,
   type GenerationModelCatalog,
@@ -23,7 +25,7 @@ import {
 import { ru } from "@/i18n/ru";
 import type { ChatModel, ImageModel, ImageModelList } from "@/lib/web-api/contracts";
 import { makeModelCatalogFixture } from "@/test/model-catalog";
-import { useRouter, useSearchParams } from "next/navigation";
+import { usePathname, useRouter, useSearchParams } from "next/navigation";
 
 import {
   useWorkspaceModelSelection,
@@ -117,6 +119,24 @@ function categoryOptions(name = "Популярные") {
   return within(screen.getByRole("region", { name }));
 }
 
+function ConversationEditor({ conversationId }: { conversationId: string }) {
+  const selection = useConversationModelSelection(conversationId);
+  return (
+    <section aria-label="Conversation editor">
+      <ConversationModelSelector disabled={false} selection={selection} />
+    </section>
+  );
+}
+
+function workspaceWithConversation(conversationId: string | null) {
+  return (
+    <WorkspaceModelSelectionProvider>
+      <header><WorkspaceModelSelector /></header>
+      {conversationId ? <ConversationEditor conversationId={conversationId} key={conversationId} /> : null}
+    </WorkspaceModelSelectionProvider>
+  );
+}
+
 describe("WorkspaceModelSelector", () => {
   const push = vi.fn();
 
@@ -126,12 +146,65 @@ describe("WorkspaceModelSelector", () => {
     vi.mocked(useSearchParams).mockReset();
     vi.mocked(loadGenerationModelCatalog).mockReset();
     vi.mocked(useRouter).mockReturnValue({ push } as never);
+    vi.mocked(usePathname).mockReturnValue("/app");
     vi.mocked(useSearchParams).mockReturnValue(new URLSearchParams() as never);
     vi.mocked(loadGenerationModelCatalog).mockResolvedValue(makeGenerationCatalog());
   });
 
   afterEach(() => {
     cleanup();
+    window.sessionStorage.clear();
+  });
+
+  it("reflects composer changes in the header without navigating, even with an old URL model", async () => {
+    vi.mocked(usePathname).mockReturnValue("/app/chat/first");
+    vi.mocked(useSearchParams).mockReturnValue(new URLSearchParams("model=nano-banana-2") as never);
+    render(workspaceWithConversation("first"));
+    const editor = within(screen.getByRole("region", { name: "Conversation editor" }));
+    fireEvent.click(await editor.findByRole("button", { name: /Nano Banana 2/ }));
+    const dialog = within(screen.getByRole("dialog", { name: "Выбор модели для диалога" }));
+    fireEvent.click(within(dialog.getByRole("region", { name: "Изображения" })).getByRole("button", { name: /GPT Image 2/ }));
+
+    expect(await within(screen.getByRole("banner")).findByRole("button", { name: /GPT Image 2/ })).toBeInTheDocument();
+    expect(editor.getByRole("button", { name: /GPT Image 2/ })).toBeInTheDocument();
+    expect(window.sessionStorage.getItem("neirohub:conversation-model:first")).toBe("gpt-image-2");
+    expect(push).not.toHaveBeenCalled();
+  });
+
+  it("opens a new chat from the header without changing the current conversation model", async () => {
+    window.sessionStorage.setItem("neirohub:conversation-model:first", "gpt_5_5");
+    vi.mocked(usePathname).mockReturnValue("/app/chat/first");
+    const view = render(workspaceWithConversation("first"));
+    const header = within(screen.getByRole("banner"));
+    fireEvent.click(await header.findByRole("button", { name: /GPT-5.5/ }));
+    fireEvent.click(categoryOptions("Изображения").getByRole("button", { name: /GPT Image 2/ }));
+
+    expect(push).toHaveBeenCalledExactlyOnceWith("/ru/app/chats?model=gpt-image-2");
+    expect(within(screen.getByRole("region", { name: "Conversation editor" })).getByRole("button", { name: /GPT-5.5/ })).toBeInTheDocument();
+    expect(window.sessionStorage.getItem("neirohub:conversation-model:first")).toBe("gpt_5_5");
+
+    vi.mocked(usePathname).mockReturnValue("/app/chats");
+    vi.mocked(useSearchParams).mockReturnValue(new URLSearchParams("model=gpt-image-2") as never);
+    view.rerender(workspaceWithConversation(null));
+    expect(await header.findByRole("button", { name: /GPT Image 2/ })).toBeInTheDocument();
+  });
+
+  it("restores each conversation model in the header when switching chats", async () => {
+    window.sessionStorage.setItem("neirohub:conversation-model:first", "gpt-image-2");
+    window.sessionStorage.setItem("neirohub:conversation-model:second", "gpt_5_5");
+    vi.mocked(usePathname).mockReturnValue("/app/chat/first");
+    const view = render(workspaceWithConversation("first"));
+    const header = within(screen.getByRole("banner"));
+    await header.findByRole("button", { name: /GPT Image 2/ });
+
+    vi.mocked(usePathname).mockReturnValue("/app/chat/second");
+    view.rerender(workspaceWithConversation("second"));
+    await header.findByRole("button", { name: /GPT-5.5/ });
+
+    vi.mocked(usePathname).mockReturnValue("/app/chat/first");
+    view.rerender(workspaceWithConversation("first"));
+    await header.findByRole("button", { name: /GPT Image 2/ });
+    expect(push).not.toHaveBeenCalled();
   });
 
   it("loads the safe catalogue once and opens a searchable image-model list", async () => {
@@ -170,7 +243,7 @@ describe("WorkspaceModelSelector", () => {
     expect(selectedOption).not.toHaveTextContent("●");
     expect(categoryOptions().getAllByTestId("model-icon-fallback")).toHaveLength(5);
     const catalogueLink = screen.getByRole("link", { name: ru.modelSelector.openCatalogue });
-    expect(catalogueLink).toHaveAttribute("href", "/app/models");
+    expect(catalogueLink).toHaveAttribute("href", "/ru/app/models");
   });
 
   it("loads text models from the chat catalogue and opens a draft with the chosen model", async () => {
@@ -184,7 +257,7 @@ describe("WorkspaceModelSelector", () => {
     expect(categoryOptions("Бесплатные").getByRole("button", { name: /NeiroHub Chat/ })).toBeVisible();
     fireEvent.click(screen.getByRole("button", { name: "Текст" }));
     fireEvent.click(categoryOptions("Текст").getByRole("button", { name: /GPT-5.5/ }));
-    expect(push).toHaveBeenCalledExactlyOnceWith("/app/chats?model=gpt_5_5");
+    expect(push).toHaveBeenCalledExactlyOnceWith("/ru/app/chats?model=gpt_5_5");
     expect(loadGenerationModelCatalog).toHaveBeenCalledTimes(1);
   });
 
@@ -214,8 +287,8 @@ describe("WorkspaceModelSelector", () => {
     for (const model of catalogue.items) {
       expect(categoryOptions("Изображения").getAllByRole("button", { name: new RegExp(model.name) })).toHaveLength(1);
     }
-    expect(within(dialog).queryByRole("button", { name: "Видео и аудио" })).not.toBeInTheDocument();
-    expect(within(dialog).queryByRole("region", { name: "Видео и аудио" })).not.toBeInTheDocument();
+    expect(within(dialog).queryByRole("button", { name: "Видео" })).not.toBeInTheDocument();
+    expect(within(dialog).queryByRole("region", { name: "Видео" })).not.toBeInTheDocument();
   });
 
   it("filters locally, selects a model, closes, and navigates without a reload", async () => {
@@ -232,7 +305,7 @@ describe("WorkspaceModelSelector", () => {
     expect(option).not.toHaveTextContent("✦");
     fireEvent.click(option);
 
-    expect(push).toHaveBeenCalledExactlyOnceWith("/app/chats?model=gpt-image-2");
+    expect(push).toHaveBeenCalledExactlyOnceWith("/ru/app/chats?model=gpt-image-2");
     const closingDialog = document.getElementById("workspace-model-selector-dialog");
     expect(closingDialog).toHaveAttribute("data-state", "closing");
     expect(closingDialog).toHaveAttribute("aria-hidden", "true");
@@ -322,7 +395,8 @@ describe("WorkspaceModelSelector", () => {
         popular: ru.modelsCatalog.loadFailure,
         images: ru.modelsCatalog.loadFailure,
         text: ru.modelsCatalog.loadFailure,
-        "video-audio": ru.modelsCatalog.loadFailure,
+        video: ru.modelsCatalog.loadFailure,
+        audio: ru.modelsCatalog.loadFailure,
         free: ru.modelsCatalog.loadFailure,
         "study-work": ru.modelsCatalog.loadFailure,
       },

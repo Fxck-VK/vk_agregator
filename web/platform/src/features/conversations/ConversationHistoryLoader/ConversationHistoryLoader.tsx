@@ -1,5 +1,8 @@
 "use client";
 
+import { useDictionary } from "@/i18n/LocaleProvider";
+
+
 import type { ReactNode } from "react";
 import { useEffect, useRef, useState } from "react";
 import { z } from "zod";
@@ -12,9 +15,10 @@ import {
 import { SessionProgressBar } from "@/features/session/SessionProgressBar/SessionProgressBar";
 import { useWorkspaceDataCache } from "@/features/workspace/WorkspaceDataCache/WorkspaceDataCache";
 import { recordWorkspaceDataLoad } from "@/features/workspace/WorkspaceNavigationMetrics/workspace-navigation-metrics";
-import { ru } from "@/i18n/ru";
 import { parseConversationMessageList } from "@/lib/web-api/contracts";
 import { webBrowserFetch } from "@/lib/web-api/browser";
+
+import { LoadFeedback } from "@/components/ui/AsyncState/LoadFeedback";
 
 const conversationIDSchema = z.string().uuid();
 const progressDelayMs = 150;
@@ -47,11 +51,14 @@ function ConversationHistoryLoaderContent({
   conversationId: string;
   initialRefresh: boolean;
 }): ReactNode {
+  const t = useDictionary();
   const cache = useWorkspaceDataCache();
   const [initialHistory] = useState<ConversationHistoryData>(
     () => cache.getConversationHistory(conversationId) ?? { kind: "loading" },
   );
   const [state, setState] = useState<LoaderState>(() => ({ history: initialHistory, readyRevision: 0 }));
+  const [pending, setPending] = useState(true);
+  const [failed, setFailed] = useState(false);
   const [requestRevision, setRequestRevision] = useState(0);
   const [isProgressVisible, setIsProgressVisible] = useState(false);
   const hasRecordedCacheLoad = useRef(false);
@@ -87,6 +94,7 @@ function ConversationHistoryLoaderContent({
       queueMicrotask(() => {
         if (active) {
           setState((current) => ({ ...current, history: { kind: "not_found" } }));
+          setPending(false);
         }
       });
       return () => {
@@ -106,17 +114,12 @@ function ConversationHistoryLoaderContent({
         if (request.signal.aborted) {
           return;
         }
-        if (response.status === 404) {
+        if ([401, 403, 404].includes(response.status)) {
           cache.deleteConversationHistory(parsedConversationID.data);
           setState((current) => ({ ...current, history: { kind: "not_found" } }));
           return;
         }
-        if (response.status !== 200) {
-          if (!hasCachedReadyHistory) {
-            setState((current) => ({ ...current, history: { kind: "unavailable" } }));
-          }
-          return;
-        }
+        if (response.status !== 200) throw new Error("History unavailable");
 
         const page = parseConversationMessageList(await response.json());
         if (request.signal.aborted) {
@@ -132,11 +135,13 @@ function ConversationHistoryLoaderContent({
         cache.setConversationHistory(history);
         setState((current) => ({ history, readyRevision: current.readyRevision + 1 }));
       } catch {
-        if (!request.signal.aborted && !hasCachedReadyHistory) {
-          setState((current) => ({ ...current, history: { kind: "unavailable" } }));
+        if (!request.signal.aborted) {
+          setFailed(true);
+          setState(current => current.history.kind === "ready" ? current : { ...current, history: { kind: "unavailable" } });
         }
       } finally {
         if (!request.signal.aborted) {
+          setPending(false);
           recordWorkspaceDataLoad({
             type: "data",
             target: "conversation",
@@ -153,18 +158,22 @@ function ConversationHistoryLoaderContent({
   }, [cache, conversationId, hasCachedReadyHistory, requestRevision]);
 
   const retryHistoryLoad = () => {
-    setState((current) => ({ ...current, history: { kind: "loading" } }));
+    setFailed(false);
+    setPending(true);
+    setState((current) => current.history.kind === "ready" ? current : ({ ...current, history: { kind: "loading" } }));
     setRequestRevision((current) => current + 1);
   };
 
   return (
     <>
       <SessionProgressBar
-        label={ru.conversations.historyProgressLabel}
+        label={t.conversations.historyProgressLabel}
         visible={isColdLoading && isProgressVisible}
       />
       <ConversationHistory
-        key={`${conversationId}:${state.readyRevision}`}
+        notice={<LoadFeedback pending={pending} failed={failed && state.history.kind === "ready"} hasData={state.history.kind === "ready"} onRetry={retryHistoryLoad} />}
+        key={conversationId}
+        conversationId={conversationId}
         history={state.history}
         initialRefresh={initialRefresh}
         onRetry={retryHistoryLoad}

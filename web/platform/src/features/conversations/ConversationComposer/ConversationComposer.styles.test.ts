@@ -32,16 +32,16 @@ describe("shared ChatComposer layout", () => {
 
   it("uses one rounded composer surface with embedded controls", () => {
     expect(inputSurfaceStylesheet).toMatch(
-      /\.surface\s*\{[^}]*border:\s*0\.0625rem solid var\(--color-border\);[^}]*border-radius:\s*var\(--radius-lg\);/s,
+      /\.surface\s*\{[^}]*border:\s*0\.0625rem solid var\(--color-input-border, var\(--color-border\)\);[^}]*border-radius:\s*var\(--radius-lg\);/s,
     );
     expect(composerStylesheet).toMatch(/\.controls\s*\{[^}]*display:\s*flex;/s);
   });
 
-  it("uses a hollow field inside the shared ninety-two-percent tinted surface", () => {
+  it("uses a hollow field inside the shared theme-aware surface", () => {
     const surfaceRule = inputSurfaceStylesheet.match(/\.surface\s*\{[^}]*\}/s)?.[0] ?? "";
     const composerInputRule = inputStylesheet.match(/\.composer\s*\{[^}]*\}/s)?.[0] ?? "";
 
-    expect(surfaceRule).toContain("background: rgb(8 8 12 / 92%)");
+    expect(surfaceRule).toContain("background: var(--panel-surface-background)");
     expect(composerInputRule).toContain("background: transparent");
   });
 

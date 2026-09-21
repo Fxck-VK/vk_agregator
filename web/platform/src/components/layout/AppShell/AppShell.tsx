@@ -1,7 +1,11 @@
+"use client";
+
+import { useDictionary } from "@/i18n/LocaleProvider";
+
 import type { ReactNode } from "react";
 
+import { WorkspaceFileDropZone } from "@/components/chat/WorkspaceFileDropZone/WorkspaceFileDropZone";
 import { ScrollArea } from "@/components/ui/ScrollArea/ScrollArea";
-import { ru } from "@/i18n/ru";
 
 import styles from "./AppShell.module.css";
 
@@ -13,6 +17,7 @@ type AppShellProps = {
 };
 
 export function AppShell({ sidebar, header, children, isDesktopSidebarCollapsed = false }: AppShellProps) {
+  const t = useDictionary();
   return (
     <div
       className={styles.shell}
@@ -21,13 +26,13 @@ export function AppShell({ sidebar, header, children, isDesktopSidebarCollapsed 
       data-testid="app-shell"
     >
       <aside
-        aria-label={ru.navigation.regionLabel}
+        aria-label={t.navigation.regionLabel}
         className={styles.sidebar}
         data-desktop-sidebar-collapsed={isDesktopSidebarCollapsed}
       >
         {sidebar}
       </aside>
-      <div className={styles.workspace}>
+      <WorkspaceFileDropZone className={styles.workspace}>
         {header}
         <ScrollArea
           className={styles.workspaceScroller}
@@ -36,7 +41,7 @@ export function AppShell({ sidebar, header, children, isDesktopSidebarCollapsed 
         >
           {children}
         </ScrollArea>
-      </div>
+      </WorkspaceFileDropZone>
     </div>
   );
 }

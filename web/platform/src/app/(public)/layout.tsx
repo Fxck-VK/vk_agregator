@@ -1,8 +1,7 @@
 import type { Metadata } from "next";
 import type { ReactNode } from "react";
 
-import { PublicShell } from "@/components/public/PublicShell/PublicShell";
-import { publicDictionaryRu } from "@/i18n/public/ru";
+import { LocalizedPublicShell } from "@/i18n/public/LocalizedPublicShell";
 
 export const metadata: Metadata = {
   robots: {
@@ -11,6 +10,6 @@ export const metadata: Metadata = {
   },
 };
 
-export default function PublicLayout({ children }: Readonly<{ children: ReactNode }>) {
-  return <PublicShell dictionary={publicDictionaryRu}>{children}</PublicShell>;
+export default async function PublicLayout({ children }: Readonly<{ children: ReactNode }>) {
+  return <LocalizedPublicShell>{children}</LocalizedPublicShell>;
 }

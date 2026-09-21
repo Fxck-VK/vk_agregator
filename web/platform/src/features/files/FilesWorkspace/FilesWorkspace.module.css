@@ -9,10 +9,7 @@
   margin-block-end: var(--space-1);
 }
 
-.header h1,
-.state,
-.failure p,
-.inlineFailure {
+.header h1 {
   margin: 0;
 }
 
@@ -23,29 +20,6 @@
   line-height: var(--line-height-display);
 }
 
-.state {
-  color: var(--color-text-muted);
-}
-
 .panel {
   min-inline-size: 0;
-}
-
-.state,
-.failure {
-  padding: var(--space-5);
-  border: 0.0625rem solid var(--color-border);
-  border-radius: var(--radius-md);
-  background: var(--color-surface);
-}
-
-.failure {
-  display: grid;
-  gap: var(--space-3);
-  justify-items: start;
-}
-
-.failure p,
-.inlineFailure {
-  color: var(--color-danger, #ef4444);
 }

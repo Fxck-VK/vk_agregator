@@ -1,3 +1,4 @@
+/* eslint-disable @next/next/no-html-link-for-pages -- Native link fixtures and router mocks are intentional in these tests. */
 import { act, cleanup, fireEvent, render } from "@testing-library/react";
 import { usePathname } from "next/navigation";
 import { afterEach, describe, expect, it, vi } from "vitest";

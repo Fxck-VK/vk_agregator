@@ -1,6 +1,9 @@
 "use client";
 
-import Link from "next/link";
+import { useDictionary, useLocale } from "@/i18n/LocaleProvider";
+
+
+import Link from "@/i18n/Link";
 import { useState } from "react";
 
 import { InputSurface } from "@/components/ui/InputSurface/InputSurface";
@@ -10,7 +13,6 @@ import selectableStyles from "@/components/ui/selectable-control.module.css";
 import { InspirationExampleCard } from "@/features/inspiration/InspirationExampleCard/InspirationExampleCard";
 import { selectInspirationExamples } from "@/features/inspiration/inspiration-examples";
 import { useWorkspaceModelSelection } from "@/features/models/WorkspaceModelSelection/WorkspaceModelSelection";
-import { ru } from "@/i18n/ru";
 
 import styles from "./ImageGenerationGuide.module.css";
 
@@ -35,18 +37,19 @@ function AspectIcon() {
 }
 
 function PromptPreview({ compact = false }: { compact?: boolean }) {
+  const t = useDictionary();
   return (
     <InputSurface className={`${styles.promptPreview} ${compact ? styles.promptPreviewCompact : ""}`}>
-      <p>{compact ? ru.imageGeneration.guide.promptExampleShort : ru.imageGeneration.guide.promptExampleLong}</p>
+      <p>{compact ? t.imageGeneration.guide.promptExampleShort : t.imageGeneration.guide.promptExampleLong}</p>
       {compact ? (
         <div className={styles.previewControls}>
           <span className={styles.previewControl}>
             <MediaIcon />
-            {ru.imageGeneration.guide.mediaControl}
+            {t.imageGeneration.guide.mediaControl}
           </span>
           <span className={styles.previewControl}>
             <AspectIcon />
-            {ru.imageGeneration.guide.aspectControl}
+            {t.imageGeneration.guide.aspectControl}
           </span>
         </div>
       ) : null}
@@ -55,8 +58,9 @@ function PromptPreview({ compact = false }: { compact?: boolean }) {
 }
 
 function ResultPreview() {
+  const t = useDictionary();
   return (
-    <div aria-label={ru.imageGeneration.guide.resultPreviewLabel} className={styles.resultPreview} role="img">
+    <div aria-label={t.imageGeneration.guide.resultPreviewLabel} className={styles.resultPreview} role="img">
       <span className={styles.resultLayerBack} />
       <span className={styles.resultLayerFront}>
         <span className={styles.resultSun} />
@@ -67,14 +71,17 @@ function ResultPreview() {
 }
 
 export function ImageGenerationGuide() {
+  const t = useDictionary();
   const [activeTab, setActiveTab] = useState<GuideTab>("guide");
   const workspaceModelSelection = useWorkspaceModelSelection();
-  const guide = ru.imageGeneration.guide;
+  const locale = useLocale();
+  const guide = t.imageGeneration.guide;
   const examples = selectInspirationExamples(
     workspaceModelSelection?.selectedModelId,
     6,
     "image",
     { fillFromCollection: true },
+    locale,
   );
 
   return (

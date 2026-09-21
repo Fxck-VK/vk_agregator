@@ -1,5 +1,20 @@
-.menuTrigger {
+.menuTrigger,
+.menuTrigger[hidden] {
   display: none;
+}
+
+.menuTrigger[aria-expanded],
+.menuTrigger[aria-expanded]:hover:not(:disabled) {
+  background: transparent;
+}
+
+.menuTrigger[aria-expanded]:is(:hover, :focus-visible) {
+  box-shadow: inset 0 0 0 0.0625rem var(--color-accent);
+}
+
+.menuIcon {
+  inline-size: 1.5rem;
+  block-size: 1.5rem;
 }
 
 .desktopTrigger {
@@ -25,9 +40,18 @@
   display: block;
   inline-size: 0.875rem;
   block-size: auto;
+  filter: var(--themed-icon-filter, none);
 }
 
 .collapseMark {
+  transform: rotate(90deg);
+}
+
+.collapseMark:dir(rtl) {
+  transform: rotate(-90deg);
+}
+
+.collapsedBrandControl .expandMark:dir(rtl) {
   transform: rotate(90deg);
 }
 
@@ -38,7 +62,7 @@
   inline-size: 100%;
   padding: var(--space-4);
   border-radius: 0;
-  background: var(--color-panel);
+  background: var(--color-sidebar, var(--color-panel));
   box-shadow: var(--shadow-card);
   overflow: hidden;
   transition:
@@ -137,16 +161,18 @@
   font-weight: var(--font-weight-medium);
   line-height: var(--line-height-navigation);
   text-decoration: none;
-  transition: background-color var(--motion-fast), color var(--motion-fast);
-}
-
-.navigationList a:hover {
-  background: var(--color-surface-raised);
-  color: var(--color-text);
+  transition: background-color var(--motion-fast), color var(--motion-fast), box-shadow var(--motion-fast);
 }
 
 .navigationList a[aria-current="page"] {
-  background: var(--color-surface-raised);
+  background: transparent;
+  box-shadow: inset 0 0 0 0.0625rem var(--color-accent);
+  color: var(--color-selected-text, var(--color-text));
+}
+
+.navigationList a:is(:hover, :focus-visible) {
+  background: transparent;
+  box-shadow: inset 0 0 0 0.0625rem var(--color-accent);
   color: var(--color-text);
 }
 
@@ -154,6 +180,7 @@
   flex: 0 0 auto;
   inline-size: 1.5rem;
   block-size: 1.5rem;
+  transition: color var(--motion-fast);
 }
 
 .scrollArea {
@@ -231,37 +258,48 @@
     display: none;
   }
 
+  .mobileCloseTrigger {
+    display: inline-flex;
+  }
+
   .menuTrigger {
     position: fixed;
-    z-index: 31;
-    inset: var(--space-3) auto auto var(--space-3);
+    z-index: 29;
+    inset-block-start: var(--space-3);
+    inset-inline-start: var(--space-3);
     display: inline-flex;
     align-items: center;
     justify-content: center;
     inline-size: 2.75rem;
     block-size: 2.75rem;
     padding: 0;
-    box-shadow: 0 0.5rem 1.5rem rgb(0 0 0 / 25%);
+    border-radius: var(--radius-sm);
+    box-shadow: none;
+    transition: box-shadow var(--motion-fast), color var(--motion-fast);
   }
 
   .panel {
     position: fixed;
     z-index: 30;
-    inset: 0 auto 0 0;
+    inset-block: 0;
+    inset-inline-start: 0;
     inline-size: var(--sidebar-width);
     block-size: 100dvh;
     border-radius: 0;
     visibility: hidden;
     pointer-events: none;
     box-shadow: 0 0.75rem 2rem rgb(0 0 0 / 35%);
-    transform: translateX(-105%);
-    transition: transform var(--sidebar-motion-duration) var(--sidebar-motion-easing);
+    transform: translateX(var(--sidebar-hidden-offset, -105%));
+    transition:
+      transform var(--sidebar-motion-duration) var(--sidebar-motion-easing),
+      visibility 0s linear var(--sidebar-motion-duration);
   }
 
   .panel[data-open="true"] {
     visibility: visible;
     pointer-events: auto;
     transform: translateX(0);
+    transition-delay: 0s;
   }
 
   .backdrop {
@@ -270,13 +308,17 @@
     inset: 0;
     display: block;
     border: 0;
-    background: rgb(0 0 0 / 45%);
+    background: var(--sidebar-backdrop-background, rgb(0 0 0 / 45%));
   }
 }
 
 @media (prefers-reduced-motion: reduce) {
   .panel {
     transition: none;
+  }
+
+  .panel:dir(rtl) {
+    --sidebar-hidden-offset: 105%;
   }
 
   .panel[data-desktop-transition] .brandRow,
@@ -312,9 +354,24 @@
     padding: 0;
   }
 
+  .panel[data-desktop-collapsed="true"] .navigationList a:hover {
+    background: transparent;
+    box-shadow: none;
+    color: var(--color-text-muted);
+  }
+
+  .panel[data-desktop-collapsed="true"] .navigationList a:focus-visible {
+    box-shadow: none;
+  }
+
+  .panel[data-desktop-collapsed="true"] .navigationList a:is(:hover, :focus-visible, [aria-current="page"]) .navigationIcon {
+    color: var(--color-accent);
+  }
+
   .panel[data-desktop-collapsed="true"] .navigationList a[aria-current="page"] {
     border-radius: var(--radius-sm);
-    background: var(--color-surface-raised);
+    background: transparent;
+    box-shadow: none;
   }
 
   .panel[data-desktop-collapsed="true"] .navigationList a > span {
@@ -350,6 +407,13 @@
     margin-inline: auto;
     place-items: center;
     border-radius: var(--radius-sm);
+    background: transparent;
+    box-shadow: inset 0 0 0 0.0625rem transparent;
+    transition: box-shadow var(--motion-fast);
+  }
+
+  .panel[data-desktop-collapsed="true"] [data-sidebar-conversation-row="true"]:is(:hover, :focus-within, [data-active="true"]) {
+    box-shadow: inset 0 0 0 0.0625rem var(--color-accent);
   }
 
   .panel[data-desktop-collapsed="true"] [data-sidebar-conversation-link="true"] {
@@ -358,6 +422,10 @@
     block-size: 100%;
     padding: 0;
     place-items: center;
+  }
+
+  .panel[data-desktop-collapsed="true"] [data-sidebar-conversation-link="true"]:focus-visible {
+    box-shadow: none;
   }
 
   .panel[data-desktop-collapsed="true"] [data-sidebar-conversation-title="true"],

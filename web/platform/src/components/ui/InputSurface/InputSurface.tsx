@@ -1,8 +1,8 @@
-import type { ComponentPropsWithoutRef } from "react";
+import type { ComponentPropsWithRef } from "react";
 
 import styles from "./InputSurface.module.css";
 
-type InputSurfaceProps = ComponentPropsWithoutRef<"div">;
+type InputSurfaceProps = ComponentPropsWithRef<"div">;
 
 export function InputSurface({ className, ...props }: InputSurfaceProps) {
   const classNames = [styles.surface, className].filter(Boolean).join(" ");

@@ -7,10 +7,6 @@ const programStylesheet = readFileSync(
   resolve(process.cwd(), "src/features/account/ProfileReferralProgram/ProfileReferralProgram.module.css"),
   "utf8",
 );
-const faqStylesheet = readFileSync(
-  resolve(process.cwd(), "src/features/account/ProfileReferralFaq/ProfileReferralFaq.module.css"),
-  "utf8",
-);
 
 describe("ProfileReferralProgram responsive styles", () => {
   it("uses a restrained brand accent treatment for the launch card", () => {
@@ -35,12 +31,4 @@ describe("ProfileReferralProgram responsive styles", () => {
     );
   });
 
-  it("keeps FAQ rows full-width with a distinct disclosure affordance", () => {
-    expect(faqStylesheet).toMatch(
-      /\.item\s*\{[^}]*inline-size:\s*100%;[^}]*background:\s*var\(--color-surface\);/s,
-    );
-    expect(faqStylesheet).toMatch(
-      /\.indicator\s*\{[^}]*border:\s*0\.0625rem solid var\(--color-border\);[^}]*border-radius:\s*999px;/s,
-    );
-  });
 });

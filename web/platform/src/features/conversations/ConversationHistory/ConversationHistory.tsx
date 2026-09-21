@@ -1,8 +1,14 @@
 "use client";
 
-import { useCallback, useEffect, useLayoutEffect, useRef, useState } from "react";
+import { Skeleton, StateNotice } from "@/components/ui/AsyncState/AsyncState";
+import { useDictionary } from "@/i18n/LocaleProvider";
 
-import { AssistantTypingIndicator } from "@/components/chat/AssistantTypingIndicator/AssistantTypingIndicator";
+import { ConversationInputImages } from "@/features/conversations/ConversationInputImages/ConversationInputImages";
+import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, type ReactNode } from "react";
+
+import { PendingGenerationIndicator } from "../PendingGenerationIndicator";
+import { useOptionalWorkspaceDataCache } from "@/features/workspace/WorkspaceDataCache/WorkspaceDataCache";
+import type { PendingImagePreview } from "@/features/image-generation/ImageGenerationGrid/ImageGenerationGrid";
 import { ConversationAssistantMessage, ConversationImageGallery } from "@/features/conversations/ConversationImageGallery/ConversationImageGallery";
 import { Button } from "@/components/ui/Button/Button";
 import {
@@ -24,7 +30,6 @@ import {
   savePendingConversationTitleSync,
 } from "@/features/conversations/pending-conversation-title-sync";
 import { useOptionalWorkspaceConversationList } from "@/features/conversations/WorkspaceConversationList/WorkspaceConversationList";
-import { ru } from "@/i18n/ru";
 import {
   isSafeWebChatAcceptedResponse,
   parseConversationMessageList,
@@ -36,13 +41,15 @@ import { webBrowserFetch, webBrowserMutation } from "@/lib/web-api/browser";
 
 import type { GenerationOptions } from "@/features/models/generation-options";
 
-import { readPendingMediaJob, savePendingMediaJob, clearPendingMediaJob } from "../pending-media-job";
+import { readPendingMediaJob, savePendingMediaJob, clearPendingMediaJob, pendingImagePreview } from "../pending-media-job";
 import styles from "./ConversationHistory.module.css";
 
 type ConversationHistoryProps = {
   history: ConversationHistoryData;
+  conversationId?: string;
   initialRefresh?: boolean;
   onRetry?: () => void;
+  notice?: ReactNode;
 };
 
 type PollRequest = {
@@ -50,6 +57,7 @@ type PollRequest = {
   baselineSeq: number;
   jobID?: string;
   media?: boolean;
+  image?: PendingImagePreview;
 };
 
 type PendingTurn = PollRequest & {
@@ -69,35 +77,29 @@ const conversationRefreshIntervalMs = 2_000;
 const conversationRefreshDeadlineMs = 30_000;
 const conversationRefreshMaxAttempts = 15;
 
-export function ConversationHistory({ history, initialRefresh = false, onRetry }: ConversationHistoryProps) {
-  if (history.kind === "loading") {
-    return null;
-  }
-
-  if (history.kind === "not_found") {
-    return <ConversationHistoryState message={ru.conversations.historyUnavailable} />;
-  }
-
-  if (history.kind === "unavailable") {
-    return (
-      <ConversationHistoryState
-        actionLabel={onRetry ? ru.conversations.messageRetryLabel : undefined}
-        message={ru.conversations.historyLoadFailure}
-        onAction={onRetry}
-      />
-    );
-  }
-
-  return <ConversationHistoryReady key={history.conversationId} history={history} initialRefresh={initialRefresh} />;
+export function ConversationHistory({ history, conversationId, initialRefresh = false, onRetry, notice }: ConversationHistoryProps) {
+  const t = useDictionary();
+  const ready = useMemo(() => history.kind === "ready" ? history : conversationId ? {
+    kind: "ready" as const, conversationId, messages: [], hasMoreBefore: false,
+  } : null, [conversationId, history]);
+  if (history.kind === "not_found") return <ConversationHistoryState message={t.conversations.historyUnavailable} />;
+  if (!ready) return history.kind === "loading" ? <Skeleton style={{ height: "12rem", width: "100%" }} />
+    : <ConversationHistoryState actionLabel={onRetry ? t.conversations.messageRetryLabel : undefined} message={t.conversations.historyLoadFailure} onAction={onRetry} />;
+  return <ConversationHistoryReady key={ready.conversationId} history={ready} initialRefresh={initialRefresh}
+    loading={history.kind === "loading"} failed={history.kind === "unavailable"} onRetry={onRetry} notice={notice} />;
 }
 
 function ConversationHistoryReady({
   history,
-  initialRefresh,
+  initialRefresh, loading = false, failed = false, onRetry, notice,
 }: Readonly<{
   history: Extract<ConversationHistoryData, { kind: "ready" }>;
   initialRefresh: boolean;
+  loading?: boolean; failed?: boolean; onRetry?: () => void;
+  notice?: ReactNode;
 }>) {
+  const t = useDictionary();
+  const cache = useOptionalWorkspaceDataCache();
   const workspaceConversationList = useOptionalWorkspaceConversationList();
   const modelSelection = useConversationModelSelection(history.conversationId);
   const replaceConversation = workspaceConversationList?.replaceConversation;
@@ -105,16 +107,33 @@ function ConversationHistoryReady({
   const [savedMediaJob] = useState(() => readPendingMediaJob(history.conversationId));
   const resumeMedia = savedMediaJob !== null && !history.messages.some(message => message.role === "assistant" && message.seq > savedMediaJob.baselineSeq);
   const initialRefreshBaselineSeq = resumeMedia ? savedMediaJob.baselineSeq : history.messages.at(-1)?.seq ?? 0;
-  const shouldStartInitialRefresh = resumeMedia || initialRefresh && !history.messages.some((message) => message.role === "assistant");
+  const shouldStartInitialRefresh = !loading && !failed && (resumeMedia || initialRefresh && !history.messages.some((message) => message.role === "assistant"));
   const initialRefreshRequest = shouldStartInitialRefresh
-    ? { id: 1, baselineSeq: initialRefreshBaselineSeq, ...(resumeMedia ? {jobID:savedMediaJob.jobID,media:true} : {}) }
+    ? { id: 1, baselineSeq: initialRefreshBaselineSeq, ...(resumeMedia ? {jobID:savedMediaJob.jobID,media:true,image:savedMediaJob.image} : {}) }
     : null;
   const [messages, setMessages] = useState(history.messages);
+  const [previousHistory, setPreviousHistory] = useState(history);
   const [hasMoreBefore, setHasMoreBefore] = useState(history.hasMoreBefore);
+  if (previousHistory !== history) {
+    setPreviousHistory(history);
+    if (!loading && !failed) {
+      const previousIds = new Set(previousHistory.messages.map(message => message.id));
+      const byId = new Map(messages.filter(message => !previousIds.has(message.id)).map(message => [message.id, message]));
+      history.messages.forEach(message => byId.set(message.id, message));
+      setMessages([...byId.values()].sort((a, b) => a.seq - b.seq));
+      if (messages.length === 0) setHasMoreBefore(history.hasMoreBefore);
+    }
+  }
   const [isLoadingEarlier, setIsLoadingEarlier] = useState(false);
   const [loadEarlierFailed, setLoadEarlierFailed] = useState(false);
   const [pollRequest, setPollRequest] = useState<PollRequest | null>(initialRefreshRequest);
   const [activeRefreshID, setActiveRefreshID] = useState<number | null>(initialRefreshRequest?.id ?? null);
+  const [initialRefreshStarted, setInitialRefreshStarted] = useState(!!initialRefreshRequest);
+  if (!initialRefreshStarted && shouldStartInitialRefresh && initialRefreshRequest) {
+    setInitialRefreshStarted(true);
+    setPollRequest(initialRefreshRequest);
+    setActiveRefreshID(initialRefreshRequest.id);
+  }
   const [refreshDelayed, setRefreshDelayed] = useState(false);
   const [pendingTurn, setPendingTurn] = useState<PendingTurn | null>(null);
   const [forceScrollRequest, setForceScrollRequest] = useState(0);
@@ -123,6 +142,14 @@ function ConversationHistoryReady({
   const [titleSyncFallback, setTitleSyncFallback] = useState(() => readPendingConversationTitleSync(history.conversationId));
   const refreshSequenceRef = useRef(initialRefreshRequest?.id ?? 0);
   const composerDraftRequestSequenceRef = useRef(0);
+
+  useEffect(() => {
+    if (!loading && !failed) cache?.setConversationHistory({
+      kind: "ready", conversationId: history.conversationId,
+      messages: messages.slice(-conversationHistoryPageLimit),
+      hasMoreBefore: hasMoreBefore || messages.length > conversationHistoryPageLimit,
+    });
+  }, [cache, failed, hasMoreBefore, history.conversationId, loading, messages]);
 
   const recreateMessage = useCallback((messageText: string) => {
     composerDraftRequestSequenceRef.current += 1;
@@ -187,7 +214,7 @@ function ConversationHistoryReady({
   };
 
   const submitPendingTurn = async (turn: PendingTurn) => {
-    if (turn.idempotencyKey === null) return;
+    if (turn.idempotencyKey === null) return false;
 
     setRefreshDelayed(false);
     setPendingTurn({ ...turn, status: "sending" });
@@ -214,13 +241,15 @@ function ConversationHistoryReady({
       setPendingTurn((currentTurn) => currentTurn?.id === turn.id
         ? { ...currentTurn, status: "accepted" }
         : currentTurn);
-      if (turn.generationOptions) savePendingMediaJob(history.conversationId, job.job_id, turn.baselineSeq);
-      setPollRequest({ id: turn.id, baselineSeq: turn.baselineSeq, jobID: turn.generationOptions ? job.job_id : undefined, media: turn.generationOptions !== undefined });
+      if (turn.generationOptions) savePendingMediaJob(history.conversationId, job.job_id, turn.baselineSeq, turn.generationOptions);
+      setPollRequest({ id: turn.id, baselineSeq: turn.baselineSeq, jobID: turn.generationOptions ? job.job_id : undefined, media: turn.generationOptions !== undefined, image: turn.image });
+      return true;
     } catch {
       setActiveRefreshID((currentID) => currentID === turn.id ? null : currentID);
       setPendingTurn((currentTurn) => currentTurn?.id === turn.id
         ? { ...currentTurn, status: "failed" }
         : currentTurn);
+      return false;
     }
   };
 
@@ -239,11 +268,12 @@ function ConversationHistoryReady({
       id: refreshSequenceRef.current,
       baselineSeq,
     };
-    void submitPendingTurn({
+    return submitPendingTurn({
       ...request,
       idempotencyKey: crypto.randomUUID(),
       modelId: modelSelection.selectedModelId,
       generationOptions,
+      image: pendingImagePreview(generationOptions),
       prompt,
       status: "sending",
     });
@@ -251,7 +281,9 @@ function ConversationHistoryReady({
 
   const retryPendingTurn = () => {
     if (pendingTurn?.status !== "failed" || pendingTurn.idempotencyKey === null) return;
-    void submitPendingTurn(pendingTurn);
+    void submitPendingTurn(pendingTurn).then(accepted => {
+      if (accepted) { composerDraftRequestSequenceRef.current += 1; setComposerDraftRequest({ id: composerDraftRequestSequenceRef.current, text: "" }); }
+    });
   };
 
   useEffect(() => {
@@ -286,6 +318,7 @@ function ConversationHistoryReady({
           modelId: "",
           prompt,
           status: "accepted",
+          image: savedMediaJob?.image,
         });
       }
     });
@@ -293,7 +326,7 @@ function ConversationHistoryReady({
     return () => {
       active = false;
     };
-  }, [activeRefreshID, history.conversationId, initialRefresh, initialRefreshBaselineSeq, messages, pendingTurn]);
+  }, [activeRefreshID, history.conversationId, initialRefresh, initialRefreshBaselineSeq, messages, pendingTurn, savedMediaJob]);
 
   useEffect(() => {
     if (pollRequest === null) {
@@ -421,7 +454,7 @@ function ConversationHistoryReady({
   const contentVersion = `${messages.at(-1)?.id ?? ""}:${pendingTurn?.id ?? ""}:${pendingTurn?.status ?? ""}:${activeRefreshID ?? ""}`;
 
   return (
-    <section aria-label={ru.conversations.historyTitle} className={styles.content}>
+    <section aria-label={t.conversations.historyTitle} className={styles.content}>
       <ConversationImageGallery conversationID={history.conversationId} hasMoreBefore={hasMoreBefore} messages={messages}>
       {titleSyncFallback !== null ? (
         <ConversationTitleSync
@@ -432,26 +465,27 @@ function ConversationHistoryReady({
         />
       ) : null}
       <div className={styles.history}>
+        {notice}
         {refreshDelayed ? (
-          <p className={styles.refreshStatus} role="status">
-            {ru.conversations.refreshDelayed}
-          </p>
+          <StateNotice inline kind="loading">
+            {t.conversations.refreshDelayed}
+          </StateNotice>
         ) : null}
-        {!hasVisibleMessages ? (
-          <p className={styles.empty} role="status">
-            {ru.conversations.historyEmpty}
-          </p>
+        {loading ? <div aria-busy="true" style={{ display: "grid", gap: "1.5rem" }}><Skeleton style={{ height: "5rem", width: "45%", justifySelf: "end" }} /><Skeleton style={{ height: "12rem", width: "75%" }} /></div> : failed ? <ConversationHistoryState message={t.conversations.historyLoadFailure} actionLabel={t.files.retry} onAction={onRetry} /> : !hasVisibleMessages ? (
+          <StateNotice inline kind="empty">
+            {t.conversations.historyEmpty}
+          </StateNotice>
         ) : (
           <>
             {hasMoreBefore ? (
               <div className={styles.loadEarlier}>
-                <Button disabled={isLoadingEarlier} onClick={loadEarlier}>
-                  {isLoadingEarlier ? ru.conversations.historyLoadEarlierPending : ru.conversations.historyLoadEarlier}
+                <Button variant="outline" disabled={isLoadingEarlier} onClick={loadEarlier}>
+                  {isLoadingEarlier ? t.conversations.historyLoadEarlierPending : t.conversations.historyLoadEarlier}
                 </Button>
                 {loadEarlierFailed ? (
-                  <p className={styles.loadEarlierFailure} role="alert">
-                    {ru.conversations.historyLoadEarlierFailure}
-                  </p>
+                  <StateNotice inline kind="error">
+                    {t.conversations.historyLoadEarlierFailure}
+                  </StateNotice>
                 ) : null}
               </div>
             ) : null}
@@ -462,7 +496,7 @@ function ConversationHistoryReady({
                   key={message.id}
                 >
                   {message.role === "user" ? (
-                    <p>{message.text}</p>
+                    <><ConversationInputImages ids={message.input_images} /><p dir="auto">{message.text}</p></>
                   ) : (
                     <ConversationAssistantMessage message={message} />
                   )}
@@ -489,7 +523,7 @@ function ConversationHistoryReady({
               ) : null}
               {pendingTurn === null && activeRefreshID !== null ? (
                 <li className={styles.assistantMessage} data-chat-pending="assistant">
-                  <AssistantTypingIndicator label={ru.conversations.composerAwaitingResponse} />
+                  <PendingGenerationIndicator image={pollRequest?.image} />
                 </li>
               ) : null}
             </ol>
@@ -500,6 +534,7 @@ function ConversationHistoryReady({
         selectedModel={modelSelection.catalog?.items.find((model) => model.id === modelSelection.selectedModelId && model.category === "text")}
         generationModel={modelSelection.catalog?.items.find((model) => model.id === modelSelection.selectedModelId)}
         contentVersion={contentVersion}
+        submitDisabled={loading || failed || modelSelection.status !== "ready"}
         disabled={pendingTurn !== null || activeRefreshID !== null}
         forceScrollRequest={forceScrollRequest}
         initialDraft={composerDraftRequest?.text}
@@ -530,21 +565,20 @@ function PendingTurnItems({
   pendingTurn: PendingTurn;
   showIndicator: boolean;
 }>) {
+  const t = useDictionary();
   return (
     <>
       <li className={styles.userMessage} data-chat-pending="user">
-        <p>{pendingTurn.prompt}</p>
+        <ConversationInputImages ids={pendingTurn.generationOptions?.reference_artifact_ids} />
+        <p dir="auto">{pendingTurn.prompt}</p>
         <ConversationMessageActions kind="user" messageText={pendingTurn.prompt} onRecreate={onRecreate} />
         {pendingTurn.status === "failed" ? (
-          <div className={styles.pendingTurnFailure}>
-            <span role="alert">{ru.conversations.messageNotSent}</span>
-            <Button onClick={onRetry}>{ru.conversations.messageRetryLabel}</Button>
-          </div>
+          <StateNotice inline kind="error" action={{ label: t.conversations.messageRetryLabel, onClick: onRetry }}>{t.conversations.messageNotSent}</StateNotice>
         ) : null}
       </li>
       {showIndicator ? (
         <li className={styles.assistantMessage} data-chat-pending="assistant">
-          <AssistantTypingIndicator label={ru.conversations.composerAwaitingResponse} />
+          <PendingGenerationIndicator image={pendingTurn.image} />
         </li>
       ) : null}
     </>
@@ -581,12 +615,10 @@ function ConversationHistoryState({
   message: string;
   onAction?: () => void;
 }>) {
+  const t = useDictionary();
   return (
-    <section aria-label={ru.conversations.historyTitle} className={`${styles.content} ${styles.state}`}>
-      <div className={styles.stateSurface} role="status">
-        <p>{message}</p>
-        {actionLabel && onAction ? <Button onClick={onAction}>{actionLabel}</Button> : null}
-      </div>
+    <section aria-label={t.conversations.historyTitle} className={`${styles.content} ${styles.state}`}>
+      <StateNotice role="status" kind="error" action={actionLabel && onAction ? { label: actionLabel, onClick: onAction } : undefined}>{message}</StateNotice>
     </section>
   );
 }

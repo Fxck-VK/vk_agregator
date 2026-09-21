@@ -1,3 +1,5 @@
+vi.mock("server-only", () => ({}));
+vi.mock("next/headers", () => ({ headers: vi.fn(async () => new Headers()), cookies: vi.fn(async () => ({ get: () => undefined })) }));
 import { describe, expect, it, vi } from "vitest";
 
 vi.mock("next/navigation", () => ({
@@ -15,7 +17,7 @@ import { metadata as publicMetadata } from "./(public)/layout";
 import PublicLayout from "./(public)/layout";
 import {
   dynamic as privateDynamic,
-  metadata as privateMetadata,
+  generateMetadata as generatePrivateMetadata,
   revalidate as privateRevalidate,
 } from "./app/layout";
 
@@ -24,16 +26,16 @@ describe("route surface boundaries", () => {
     expect(publicMetadata.robots).toEqual({ index: true, follow: true });
   });
 
-  it("keeps the public surface inside the public shell", () => {
-    const layout = PublicLayout({ children: "Public content" });
+  it("keeps the public surface inside the public shell", async () => {
+    const layout = await PublicLayout({ children: "Public content" });
 
-    expect(layout.type.name).toBe("PublicShell");
+    expect(layout.type.name).toBe("LocalizedPublicShell");
     expect(layout.props.children).toBe("Public content");
   });
 
-  it("keeps the authenticated app dynamic and non-indexable", () => {
+  it("keeps the authenticated app dynamic and non-indexable", async () => {
     expect(privateDynamic).toBe("force-dynamic");
     expect(privateRevalidate).toBe(0);
-    expect(privateMetadata.robots).toEqual({ index: false, follow: false });
+    expect((await generatePrivateMetadata()).robots).toEqual({ index: false, follow: false });
   });
 });

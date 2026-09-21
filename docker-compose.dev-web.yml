@@ -18,6 +18,7 @@ services:
     mem_limit: 512m
     environment:
       WEB_API_INTERNAL_ORIGIN: http://api:8080
+      WEB_ORIGIN: ${WEB_ORIGIN:?WEB_ORIGIN is required for localized canonical URLs}
     healthcheck:
       test: ["CMD", "node", "-e", "fetch('http://127.0.0.1:3000/health').then((response) => { if (!response.ok) process.exit(1); }).catch(() => process.exit(1))"]
       interval: 10s

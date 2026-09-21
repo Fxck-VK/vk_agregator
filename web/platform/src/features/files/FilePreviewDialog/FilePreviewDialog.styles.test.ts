@@ -94,7 +94,7 @@ describe("FilePreviewDialog shared-template composition", () => {
     expect(panelViewportRule).toContain("justify-content: safe center");
     expect(toolRailRule).not.toContain("background:");
     expect(toolRailRule).not.toContain("border:");
-    expect(panelViewportRule).toContain("background: var(--panel-surface-background)");
+    expect(panelViewportRule).toContain("background: var(--control-group-background, var(--panel-surface-background))");
     expect(panelViewportRule).toContain("border: var(--panel-surface-border)");
     expect(panelButtonRule).toContain("flex: 0 0 auto");
     expect(panelButtonRule).toContain("justify-content: center");

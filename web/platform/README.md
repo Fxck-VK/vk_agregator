@@ -22,12 +22,32 @@ docker build -f Dockerfile.platform -t neirohub-platform:local .
 
 ## Local platform setup
 
+For UI work without a backend, run `npm --prefix web/platform run dev:preview`
+from the repository root and open `http://localhost:7158/ru/app`. The local-only
+"Локальная проверка" panel controls upload success, errors, slow progress and
+quote errors, message sending and delayed test replies. Attached photos remain
+visible in local message history until the tab reloads. See [local UI scenarios](docs/local-development.md) for a complete
+manual check and the isolation boundary. This mode never forwards unknown API
+requests or mutations to a backend. The regular `dev` command remains available
+for real backend integration (unset `NEIROHUB_LOCAL_WORKSPACE_PREVIEW`).
+
 The platform and the shared Go API are two separate local processes. Start the
 configured development API first, then run the platform process. Set
 `WEB_API_INTERNAL_ORIGIN` to that API's local HTTP(S) origin; this is a
 server-only platform setting and must never use a `NEXT_PUBLIC_` name.
 `config.example` documents the safe local value; copy it only into an ignored
 local environment file when needed.
+
+UI pages use language prefixes: `http://localhost:7158/ru/app` and
+`http://localhost:7158/en/app`. The URL determines language; old unprefixed page
+links redirect using the saved preference. See [locale routing](docs/locale-routing.md)
+and [the dictionary guide](docs/localization.md).
+
+Set the server-only `WEB_ORIGIN` to this frontend's public HTTP(S) origin.
+Production runtime requires it for canonical URLs, language alternates,
+`sitemap.xml` and `robots.txt`; development defaults to `http://localhost:7158`.
+The remote DEV overlay passes its existing `WEB_ORIGIN` to the platform as well
+as the API. Request Host headers are never used to generate public SEO URLs.
 
 Browser requests stay same-origin and use only `/web/v1/*`. The platform route
 handler forwards those requests to `WEB_API_INTERNAL_ORIGIN`; browser code does

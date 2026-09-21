@@ -3,6 +3,10 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 
 const logout = vi.hoisted(() => vi.fn());
 
+vi.mock("next/navigation", () => ({
+  useRouter: vi.fn(() => ({ push: vi.fn(), replace: vi.fn(), refresh: vi.fn() })),
+}));
+
 vi.mock("@/features/session/WorkspaceLogout/WorkspaceLogoutBoundary", () => ({
   useWorkspaceLogout: () => ({ logout }),
 }));
@@ -60,7 +64,7 @@ describe("AccountControl", () => {
     const supportAction = screen.getByRole("link", { name: "Поддержка" });
     const updatesAction = screen.getByRole("button", { name: "Что нового?" });
 
-    expect(profileAction).toHaveAttribute("href", "/app/profile");
+    expect(profileAction).toHaveAttribute("href", "/ru/app/profile");
     expect(profileAction.querySelector('[data-icon="profile"]')).toBeInTheDocument();
     expect(supportAction).toHaveAttribute("href", "https://vk.me/neirohub_help");
     expect(supportAction).toHaveAttribute("target", "_blank");

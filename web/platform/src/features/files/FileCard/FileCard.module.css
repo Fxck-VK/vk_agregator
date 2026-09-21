@@ -1,9 +1,9 @@
 .card {
   display: grid;
   overflow: hidden;
-  border: 0.0625rem solid var(--color-border);
+  border: 0.0625rem solid var(--color-card-border);
   border-radius: var(--radius-md);
-  background: var(--color-surface);
+  background: var(--color-panel);
 }
 
 .mediaCard {
@@ -93,8 +93,8 @@
   opacity: 0;
   border: 0;
   border-radius: var(--radius-sm);
-  background: rgb(8 8 12 / 0.56);
-  color: #fff;
+  background: var(--media-action-background, rgb(8 8 12 / 0.56));
+  color: var(--overlay-action-text, #fff);
   cursor: not-allowed;
   transform: translateY(-0.25rem);
   transition: opacity 160ms ease, transform 160ms ease, background-color 160ms ease;
@@ -160,59 +160,7 @@
   white-space: nowrap;
 }
 
-.preview {
-  display: grid;
-  min-block-size: 12rem;
-  place-items: center;
-  padding: var(--space-3);
-  background: var(--color-background);
-  color: var(--color-text-muted);
-  text-align: center;
-}
-
-.previewFailure {
-  display: grid;
-  gap: var(--space-3);
-  justify-items: center;
-}
-
-.previewFailure p {
-  margin: 0;
-  color: var(--color-danger, #ef4444);
-}
-
-.jobState {
-  display: grid;
-  gap: var(--space-3);
-  justify-items: center;
-}
-
-.jobState p {
-  margin: 0;
-}
-
-.retryState {
-  display: inline-flex;
-  align-items: center;
-  gap: var(--space-2);
-  color: var(--color-text);
-}
-
-.retrySpinner {
-  inline-size: 1rem;
-  block-size: 1rem;
-  flex: 0 0 auto;
-  border: 0.125rem solid var(--color-border);
-  border-block-start-color: var(--color-primary);
-  border-radius: 50%;
-  animation: retry-spin 0.75s linear infinite;
-}
-
-@keyframes retry-spin {
-  to {
-    transform: rotate(360deg);
-  }
-}
+.pendingMedia { aspect-ratio: 3 / 4; }
 
 .content {
   display: grid;

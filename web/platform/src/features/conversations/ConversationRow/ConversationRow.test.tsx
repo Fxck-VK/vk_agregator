@@ -392,7 +392,7 @@ describe("ConversationRow", () => {
     fireEvent.click(screen.getByRole("button", { name: ru.conversations.archiveLabel }));
     fireEvent.click(screen.getByRole("button", { name: ru.conversations.archiveConfirmLabel }));
 
-    await vi.waitFor(() => expect(replace).toHaveBeenCalledWith("/app"));
+    await vi.waitFor(() => expect(replace).toHaveBeenCalledWith("/ru/app"));
     expect(refresh).not.toHaveBeenCalled();
   });
 

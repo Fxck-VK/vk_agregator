@@ -83,8 +83,8 @@
   gap: var(--space-1);
   border-radius: var(--radius-sm);
   padding: var(--space-4);
-  border: 0.0625rem solid var(--color-border);
-  background: var(--color-surface);
+  border: 0.0625rem solid var(--color-card-border);
+  background: var(--color-panel);
   color: var(--color-text);
   text-decoration: none;
 }
@@ -100,7 +100,7 @@
 
 .quickAction:hover {
   border-color: var(--color-accent);
-  background: color-mix(in srgb, var(--color-surface) 90%, var(--color-accent));
+  background: color-mix(in srgb, var(--color-panel) 90%, var(--color-accent));
 }
 
 @media (48rem <= width < 82rem) {

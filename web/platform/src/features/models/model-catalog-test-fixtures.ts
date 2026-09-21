@@ -1,3 +1,4 @@
+
 import type { PublicCatalog, PublicOperation } from "./model-catalog-contract";
 
 type PublicImageControlsFixture =

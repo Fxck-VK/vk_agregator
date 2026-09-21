@@ -19,7 +19,8 @@ describe("confirmed payment status", () => {
   expect(refresh).not.toHaveBeenCalled();
   expect(sessionStorage.getItem("neirohub:pending-payment")).toBe(id);
   await act(async () => { await vi.advanceTimersByTimeAsync(3000); });
-  expect(screen.getByText("Начислено 800 токенов.")).toBeInTheDocument();
+  expect(screen.getByLabelText("800 звёзд")).toContainElement(screen.getByTestId("credit-star-icon"));
+  expect(screen.getByRole("status")).toHaveTextContent("Начислено 800.");
   expect(refresh).toHaveBeenCalledTimes(1);
   expect(sessionStorage.getItem("neirohub:pending-payment")).toBeNull();
  });

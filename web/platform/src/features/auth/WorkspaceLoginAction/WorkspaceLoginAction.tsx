@@ -1,7 +1,10 @@
-import Link from "next/link";
+"use client";
+
+import { useDictionary } from "@/i18n/LocaleProvider";
+
+import Link from "@/i18n/Link";
 
 import { useOptionalWorkspaceLogout } from "@/features/session/WorkspaceLogout/WorkspaceLogoutBoundary";
-import { ru } from "@/i18n/ru";
 
 import styles from "./WorkspaceLoginAction.module.css";
 
@@ -10,6 +13,7 @@ type WorkspaceLoginActionProps = {
 };
 
 export function WorkspaceLoginAction({ placement }: WorkspaceLoginActionProps) {
+  const t = useDictionary();
   const workspaceLogout = useOptionalWorkspaceLogout();
   const className = `${styles.action} ${styles[placement]}`;
 
@@ -21,7 +25,7 @@ export function WorkspaceLoginAction({ placement }: WorkspaceLoginActionProps) {
         onClick={workspaceLogout.requestLogin}
         type="button"
       >
-        {ru.login.submitLabel}
+        {t.login.submitLabel}
       </button>
     );
   }
@@ -33,7 +37,7 @@ export function WorkspaceLoginAction({ placement }: WorkspaceLoginActionProps) {
       href="/login"
       prefetch
     >
-      {ru.login.submitLabel}
+      {t.login.submitLabel}
     </Link>
   );
 }

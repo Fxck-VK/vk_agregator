@@ -1,6 +1,11 @@
 "use client";
 
-import { usePathname } from "next/navigation";
+import { Skeleton, StateNotice } from "@/components/ui/AsyncState/AsyncState";
+import { LoadFeedback } from "@/components/ui/AsyncState/LoadFeedback";
+import { useDictionary } from "@/i18n/LocaleProvider";
+
+
+import { usePathname } from "@/i18n/navigation";
 import { useLayoutEffect, useRef, useState } from "react";
 
 import { ScrollArea } from "@/components/ui/ScrollArea/ScrollArea";
@@ -9,7 +14,6 @@ import {
   type WorkspaceConversationItem,
   useOptionalWorkspaceConversationList,
 } from "@/features/conversations/WorkspaceConversationList/WorkspaceConversationList";
-import { ru } from "@/i18n/ru";
 
 import styles from "./SidebarConversations.module.css";
 import { useSidebarConversationsActive } from "./SidebarConversationsActivity";
@@ -19,6 +23,7 @@ type SidebarConversationsProps = {
 };
 
 export function SidebarConversations({ conversations }: SidebarConversationsProps) {
+  const t = useDictionary();
   const workspaceConversationList = useOptionalWorkspaceConversationList();
   const pathname = usePathname();
   const { isActive: sidebarIsActive, onPendingPanelChange, onVisiblePanelChange, session: sidebarSession } = useSidebarConversationsActive();
@@ -72,9 +77,10 @@ export function SidebarConversations({ conversations }: SidebarConversationsProp
 
   return (
     <section aria-labelledby="recent-conversations-title" className={styles.conversations} data-sidebar-conversations="true">
-      <h2 data-sidebar-conversations-title="true" id="recent-conversations-title">{ru.conversations.recentHeading}</h2>
-      {visibleConversations.length === 0 ? (
-        <p className={styles.empty}>{ru.conversations.empty}</p>
+      <h2 data-sidebar-conversations-title="true" id="recent-conversations-title">{t.conversations.recentHeading}</h2>
+      <LoadFeedback pending={workspaceConversationList?.pending ?? false} failed={workspaceConversationList?.failed} hasData={visibleConversations.length > 0} onRetry={workspaceConversationList?.retry} />
+      {visibleConversations.length === 0 && workspaceConversationList?.pending ? <div aria-busy="true">{[0, 1, 2].map(index => <Skeleton key={index} style={{ display: "block", height: "2.5rem", marginBlock: ".5rem" }} />)}</div> : visibleConversations.length === 0 && !workspaceConversationList?.failed ? (
+        <StateNotice inline role="note">{t.conversations.empty}</StateNotice>
       ) : (
         <ScrollArea
           className={styles.listScrollArea}

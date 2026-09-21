@@ -14,6 +14,7 @@
   inline-size: var(--chat-media-menu-icon-size);
   block-size: var(--chat-media-menu-icon-size);
   flex: 0 0 auto;
+  filter: var(--themed-icon-filter, none);
 }
 
 .fileInput {

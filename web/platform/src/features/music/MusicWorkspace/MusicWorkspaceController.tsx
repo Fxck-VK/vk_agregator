@@ -2,7 +2,11 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState, type ChangeEvent } from "react";
 
-import { loadMusicModelCatalog, type MusicModelCatalog } from "../music-model-catalog";
+import { renderMessage, type MessageReference } from "@/i18n/errors";
+import { useMessages } from "@/i18n/LocaleProvider";
+import type { Translator } from "@/i18n/messages";
+
+import { loadMusicModelCatalog, localizeMusicModelCatalog, type MusicModelCatalog } from "../music-model-catalog";
 import {
   buildMusicPrepareBody,
   musicApi,
@@ -11,7 +15,6 @@ import {
   musicTracksFromResult,
   quoteFromPreparation,
   type MusicJob,
-  type MusicJobPreparation,
   type MusicPrepareBody,
   type MusicJobResult,
 } from "../music-api";
@@ -62,6 +65,19 @@ type PreparedMusicJob = {
   signature: string;
 };
 
+type ControllerConfirmation =
+  | {
+      balance: number;
+      canAfford: boolean;
+      kind: "preparation";
+      quote: MusicOperationQuote;
+      request: MusicWorkspaceActionRequest;
+    }
+  | {
+      kind: "retry";
+      preparedJob: PreparedMusicJob;
+    };
+
 const defaultDraft: MusicWorkspaceDraft = {
   actionParameters: {},
   descriptionPrompt: "",
@@ -87,9 +103,10 @@ export function MusicWorkspaceController({
   pollIntervalMs = 4_000,
   uuidFactory = () => crypto.randomUUID(),
 }: Readonly<MusicWorkspaceControllerProps>) {
+  const msg = useMessages();
   const [catalog, setCatalog] = useState<MusicModelCatalog>({ defaultModelId: "suno_v6", models: [] });
   const [modelsStatus, setModelsStatus] = useState<MusicWorkspaceState["modelsStatus"]>("loading");
-  const [modelsMessage, setModelsMessage] = useState<string | null>("Загружаем модели музыки...");
+  const [modelsMessage, setModelsMessage] = useState<string | null>(null);
   const [selectedModelId, setSelectedModelId] = useState<MusicModelID>("suno_v6");
   const [activeOperationId, setActiveOperationId] = useState<MusicOperationID | null>(null);
   const [mode, setMode] = useState<MusicCreationMode>("description");
@@ -99,16 +116,18 @@ export function MusicWorkspaceController({
   const [results, setResults] = useState<readonly MusicResultSummary[]>([]);
   const [prepareIntent, setPrepareIntent] = useState<PrepareIntent | null>(null);
   const [preparedJob, setPreparedJob] = useState<PreparedMusicJob | null>(null);
-  const [confirmation, setConfirmation] = useState<MusicWorkspaceState["confirmation"]>(null);
+  const [confirmationState, setConfirmationState] = useState<ControllerConfirmation | null>(null);
   const [preparing, setPreparing] = useState(false);
   const [uploading, setUploading] = useState(false);
   const [pollingJobId, setPollingJobId] = useState<string | null>(null);
   const [historyCursor, setHistoryCursor] = useState<string | null>(null);
   const [historyHasMore, setHistoryHasMore] = useState(false);
   const [historyLoading, setHistoryLoading] = useState(false);
-  const [errorMessage, setErrorMessage] = useState<string | null>(null);
+  const [errorMessage, setErrorMessage] = useState<MessageReference | null>(null);
   const uploadInputRef = useRef<HTMLInputElement>(null);
+  const localizedCatalog = useMemo(() => localizeMusicModelCatalog(catalog, msg), [catalog, msg]);
   const reusableAssets = useMemo(() => reusableAssetsFromResults(results), [results]);
+  const confirmation = useMemo(() => confirmationFromState(confirmationState, msg), [confirmationState, msg]);
 
   useEffect(() => {
     let active = true;
@@ -124,7 +143,7 @@ export function MusicWorkspaceController({
       setActiveOperationId(null);
       if (loadedCatalog.models.length === 0) {
         setModelsStatus("empty");
-        setModelsMessage("Сервер не передал модели музыки.");
+        setModelsMessage(null);
       } else {
         setModelsStatus("ready");
         setModelsMessage(null);
@@ -132,7 +151,7 @@ export function MusicWorkspaceController({
     }).catch(() => {
       if (!active) return;
       setModelsStatus("error");
-      setModelsMessage("Не удалось загрузить каталог музыки.");
+      setModelsMessage(null);
     });
 
     return () => {
@@ -141,8 +160,8 @@ export function MusicWorkspaceController({
   }, [catalogLoader]);
 
   const selectedModel = useMemo(
-    () => catalog.models.find((model) => model.id === selectedModelId) ?? catalog.models[0],
-    [catalog.models, selectedModelId],
+    () => localizedCatalog.models.find((model) => model.id === selectedModelId) ?? localizedCatalog.models[0],
+    [localizedCatalog.models, selectedModelId],
   );
   const operations = selectedModel?.operations ?? emptyOperations;
   const uploadsEnabled = operations.some((operation) => operation.enabled && operation.supportsUploads === true);
@@ -209,14 +228,14 @@ export function MusicWorkspaceController({
           return;
         }
         if (isTerminalFailure(job.status)) {
-          setErrorMessage("Музыкальная задача завершилась без результата.");
+          setErrorMessage({ key: "music.error.noResult" });
           setPollingJobId(null);
           return;
         }
         timer = window.setTimeout(poll, pollIntervalMs);
       } catch {
         if (!cancelled) {
-          setErrorMessage("Не удалось получить статус музыкальной задачи.");
+          setErrorMessage({ key: "music.error.poll" });
           setPollingJobId(null);
         }
       }
@@ -232,7 +251,7 @@ export function MusicWorkspaceController({
   const selectModel = useCallback((modelId: MusicModelID) => {
     setSelectedModelId(modelId);
     setActiveOperationId(null);
-    setConfirmation(null);
+    setConfirmationState(null);
     setPreparedJob(null);
     setErrorMessage(null);
   }, []);
@@ -252,7 +271,7 @@ export function MusicWorkspaceController({
 
     setPrepareIntent(intent);
     setPreparedJob(null);
-    setConfirmation(null);
+    setConfirmationState(null);
     setErrorMessage(null);
     setPreparing(true);
     try {
@@ -262,7 +281,13 @@ export function MusicWorkspaceController({
       }
       const quote = quoteFromPreparation(preparation);
       setPreparedJob({ activationKey: intent.activationKey, job: preparation.job, request, signature: intent.signature });
-      setConfirmation(confirmationFromPreparation(request, quote, preparation));
+      setConfirmationState({
+        balance: preparation.balance,
+        canAfford: preparation.can_afford,
+        kind: "preparation",
+        quote,
+        request,
+      });
     } catch (error) {
       if (error instanceof MusicApiError && error.status === 409) {
         setPrepareIntent(null);
@@ -280,7 +305,7 @@ export function MusicWorkspaceController({
     const signature = JSON.stringify(buildMusicPrepareBody(request, tracks, operation));
     if (signature !== preparedJob.signature) return;
 
-    setConfirmation(null);
+    setConfirmationState(null);
     setErrorMessage(null);
     setPollingJobId(preparedJob.job.id);
     try {
@@ -294,14 +319,14 @@ export function MusicWorkspaceController({
         });
         setPollingJobId(null);
       } else if (isTerminalFailure(activation.job.status)) {
-        setErrorMessage("Музыкальная задача завершилась без результата.");
+        setErrorMessage({ key: "music.error.noResult" });
         setPollingJobId(null);
       }
       setPreparedJob(null);
       void refreshTracks();
     } catch (error) {
       setPollingJobId(null);
-      setConfirmation((current) => current ?? confirmationFromPreparedJob(preparedJob));
+      setConfirmationState((current) => current ?? { kind: "retry", preparedJob });
       setErrorMessage(errorMessageForActivation(error));
     }
   }, [api, operations, preparedJob, refreshTracks, tracks]);
@@ -349,7 +374,7 @@ export function MusicWorkspaceController({
 
   const state: MusicWorkspaceState = {
     confirmation,
-    errorMessage,
+    errorMessage: renderMessage(msg, errorMessage),
     modelsMessage,
     modelsStatus,
     historyHasMore,
@@ -373,18 +398,18 @@ export function MusicWorkspaceController({
         activeOperationId={activeOperationId}
         draft={draft}
         mode={mode}
-        models={catalog.models}
+        models={localizedCatalog.models}
         onActiveOperationChange={setActiveOperationId}
-        onCancelConfirmation={() => setConfirmation(null)}
+        onCancelConfirmation={() => setConfirmationState(null)}
         onConfirmAction={confirmAction}
         onDraftChange={(nextDraft) => {
           setDraft(nextDraft);
-          setConfirmation(null);
+          setConfirmationState(null);
           setErrorMessage(null);
         }}
         onModeChange={(nextMode) => {
           setMode(nextMode);
-          setConfirmation(null);
+          setConfirmationState(null);
           setErrorMessage(null);
         }}
         onModelChange={selectModel}
@@ -405,57 +430,56 @@ export function MusicWorkspaceController({
   );
 }
 
-function confirmationFromPreparation(
-  request: MusicWorkspaceActionRequest,
-  quote: MusicOperationQuote,
-  preparation: MusicJobPreparation,
-): NonNullable<MusicWorkspaceState["confirmation"]> {
+function confirmationFromState(
+  confirmation: ControllerConfirmation | null,
+  msg: Translator,
+): NonNullable<MusicWorkspaceState["confirmation"]> | null {
+  if (confirmation === null) return null;
+  if (confirmation.kind === "retry") {
+    return {
+      message: msg("music.confirm.retry"),
+      quote: { credits: confirmation.preparedJob.job.cost_estimate },
+      request: confirmation.preparedJob.request,
+      title: msg("music.confirm.title"),
+    };
+  }
   return {
-    confirmLabel: preparation.can_afford ? "Подтвердить" : "Попробовать подтвердить",
-    message: preparation.can_afford
-      ? "Сервер подготовил запуск и точную стоимость. Подтвердите списание."
-      : `Точная стоимость ${quote.credits} звёзд, текущий баланс ${preparation.balance} звёзд.`,
-    quote,
-    request,
-    title: "Подтверждение запуска",
+    confirmLabel: confirmation.canAfford ? msg("music.confirm.confirm") : msg("music.confirm.confirmAnyway"),
+    message: confirmation.canAfford
+      ? msg("music.confirm.prepared")
+      : msg("music.confirm.unaffordable", { credits: confirmation.quote.credits, balance: confirmation.balance }),
+    quote: confirmation.quote,
+    request: confirmation.request,
+    title: msg("music.confirm.title"),
   };
 }
 
-function confirmationFromPreparedJob(preparedJob: PreparedMusicJob): NonNullable<MusicWorkspaceState["confirmation"]> {
-  return {
-    message: "Подготовленный запуск не активирован. Можно повторить подтверждение с той же точной стоимостью.",
-    quote: { credits: preparedJob.job.cost_estimate },
-    request: preparedJob.request,
-    title: "Подтверждение запуска",
-  };
+function errorMessageForPrepare(error: unknown): MessageReference {
+  if (error instanceof MusicApiError) {
+    if (error.status === 400) return { key: "music.error.prepare.invalid" };
+    if (error.status === 409) return { key: "music.error.prepare.stale" };
+    if (error.status === 429) return { key: "music.error.prepare.rateLimited" };
+    if (error.status === 503) return { key: "music.error.prepare.notAdmitted" };
+  }
+  return { key: "music.error.prepare.default" };
 }
 
-function errorMessageForPrepare(error: unknown) {
+function errorMessageForActivation(error: unknown): MessageReference {
   if (error instanceof MusicApiError) {
-    if (error.status === 400) return "Сервер отклонил параметры музыкального запуска.";
-    if (error.status === 409) return "Подготовка устарела, повторите запуск.";
-    if (error.status === 429) return "Слишком много подготовок музыки, попробуйте позже.";
-    if (error.status === 503) return "Операция музыки ждёт проверки или временно недоступна.";
+    if (error.status === 402) return { key: "music.error.activate.insufficientFunds" };
+    if (error.status === 409) return { key: "music.error.activate.stale" };
+    if (error.status === 503) return { key: "music.error.activate.notAdmitted" };
   }
-  return "Не удалось подготовить музыкальный запуск.";
+  return { key: "music.error.activate.default" };
 }
 
-function errorMessageForActivation(error: unknown) {
+function errorMessageForUpload(error: unknown): MessageReference {
   if (error instanceof MusicApiError) {
-    if (error.status === 402) return "Недостаточно звёзд для подготовленного запуска.";
-    if (error.status === 409) return "Подготовленный запуск уже изменился, подготовьте его заново.";
-    if (error.status === 503) return "Операция музыки пока не допущена к запуску.";
+    if (error.status === 400) return { key: "music.error.upload.invalid" };
+    if (error.status === 413) return { key: "music.error.upload.tooLarge" };
+    if (error.status === 503) return { key: "music.error.upload.unavailable" };
   }
-  return "Не удалось запустить музыкальную задачу.";
-}
-
-function errorMessageForUpload(error: unknown) {
-  if (error instanceof MusicApiError) {
-    if (error.status === 400) return "Сервер отклонил аудиофайл.";
-    if (error.status === 413) return "Аудиофайл слишком большой для загрузки.";
-    if (error.status === 503) return "Загрузка аудио временно недоступна.";
-  }
-  return "Не удалось загрузить аудиофайл.";
+  return { key: "music.error.upload.default" };
 }
 
 function canLoadResult(status: MusicJob["status"]) {

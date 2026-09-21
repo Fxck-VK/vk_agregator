@@ -1,12 +1,15 @@
 "use client";
 
+import { useDictionary } from "@/i18n/LocaleProvider";
+
+
 /* eslint-disable @next/next/no-img-element */
 
 import { useMemo, useState } from "react";
 
 import { Button } from "@/components/ui/Button/Button";
 import { CreditAmount } from "@/components/ui/CreditAmount/CreditAmount";
-import { ru } from "@/i18n/ru";
+import type { Dictionary } from "@/i18n/dictionary";
 import {
   parseImageJobList,
   parseImageJobResult,
@@ -37,6 +40,7 @@ type ImageJobHistoryProps = {
 };
 
 export function ImageJobHistory({ latestJob = null }: Readonly<ImageJobHistoryProps>) {
+  const t = useDictionary();
   const [jobs, setJobs] = useState<ImageJob[]>([]);
   const [nextCursor, setNextCursor] = useState<string | null>(null);
   const [hasLoaded, setHasLoaded] = useState(false);
@@ -118,28 +122,28 @@ export function ImageJobHistory({ latestJob = null }: Readonly<ImageJobHistoryPr
   return (
     <section aria-labelledby="image-job-history-title" className={styles.panel}>
       <header className={styles.header}>
-        <h2 id="image-job-history-title">{ru.imageHistory.title}</h2>
-        <p>{ru.imageHistory.description}</p>
+        <h2 id="image-job-history-title">{t.imageHistory.title}</h2>
+        <p>{t.imageHistory.description}</p>
       </header>
 
       {!hasLoaded ? (
         <div className={styles.actions}>
           <Button disabled={isLoading} onClick={loadFirstPage}>
-            {isLoading ? ru.imageHistory.loading : ru.imageHistory.load}
+            {isLoading ? t.imageHistory.loading : t.imageHistory.load}
           </Button>
-          {loadFailed ? <p className={styles.error} role="alert">{ru.imageHistory.loadFailure}</p> : null}
+          {loadFailed ? <p className={styles.error} role="alert">{t.imageHistory.loadFailure}</p> : null}
         </div>
       ) : (
         <>
           <div className={styles.actions}>
             <Button disabled={isLoading} onClick={loadFirstPage}>
-              {isLoading ? ru.imageHistory.loading : ru.imageHistory.refresh}
+              {isLoading ? t.imageHistory.loading : t.imageHistory.refresh}
             </Button>
-            {loadFailed ? <p className={styles.error} role="alert">{ru.imageHistory.loadFailure}</p> : null}
+            {loadFailed ? <p className={styles.error} role="alert">{t.imageHistory.loadFailure}</p> : null}
           </div>
 
           {visibleJobs.length === 0 ? (
-            <p className={styles.empty} role="status">{ru.imageHistory.empty}</p>
+            <p className={styles.empty} role="status">{t.imageHistory.empty}</p>
           ) : (
             <ol className={styles.jobs}>
               {visibleJobs.map((job) => {
@@ -153,15 +157,15 @@ export function ImageJobHistory({ latestJob = null }: Readonly<ImageJobHistoryPr
                         <strong>{job.model_name}</strong>
                         <p>{job.prompt}</p>
                       </div>
-                      <span>{historyStatusLabel(job.status)}</span>
+                      <span>{historyStatusLabel(job.status, t)}</span>
                     </div>
                     <dl className={styles.metadata}>
                       <div>
-                        <dt>{ru.imageHistory.statusLabel}</dt>
-                        <dd>{historyStatusLabel(job.status)}</dd>
+                        <dt>{t.imageHistory.statusLabel}</dt>
+                        <dd>{historyStatusLabel(job.status, t)}</dd>
                       </div>
                       <div>
-                        <dt>{ru.imageHistory.costLabel}</dt>
+                        <dt>{t.imageHistory.costLabel}</dt>
                         <dd><CreditAmount value={job.cost_estimate} /></dd>
                       </div>
                     </dl>
@@ -170,22 +174,22 @@ export function ImageJobHistory({ latestJob = null }: Readonly<ImageJobHistoryPr
                       <div className={styles.resultActions}>
                         <Button disabled={isLoadingResult} onClick={() => void openResult(job)}>
                           {isLoadingResult
-                            ? ru.imageHistory.openingResult
+                            ? t.imageHistory.openingResult
                             : result === null
-                              ? ru.imageHistory.openResult
-                              : ru.imageHistory.refreshResult}
+                              ? t.imageHistory.openResult
+                              : t.imageHistory.refreshResult}
                         </Button>
-                        {resultFailed ? <p className={styles.error} role="alert">{ru.imageHistory.resultFailure}</p> : null}
+                        {resultFailed ? <p className={styles.error} role="alert">{t.imageHistory.resultFailure}</p> : null}
                       </div>
                     ) : null}
 
                     {result !== null ? (
-                      <section aria-label={ru.imageHistory.resultTitle} className={styles.result}>
-                        <h3>{ru.imageHistory.resultTitle}</h3>
+                      <section aria-label={t.imageHistory.resultTitle} className={styles.result}>
+                        <h3>{t.imageHistory.resultTitle}</h3>
                         <div className={styles.artifacts}>
                           {result.artifacts.map((artifact) => (
                             <img
-                              alt={ru.imageHistory.resultImageAlt}
+                              alt={t.imageHistory.resultImageAlt}
                               height={artifact.height || undefined}
                               key={artifact.id}
                               src={`/web/v1/image-artifacts/${artifact.id}`}
@@ -203,7 +207,7 @@ export function ImageJobHistory({ latestJob = null }: Readonly<ImageJobHistoryPr
 
           {nextCursor !== null ? (
             <Button disabled={isLoadingMore} onClick={loadMore}>
-              {isLoadingMore ? ru.imageHistory.loadingMore : ru.imageHistory.loadMore}
+              {isLoadingMore ? t.imageHistory.loadingMore : t.imageHistory.loadMore}
             </Button>
           ) : null}
         </>
@@ -237,12 +241,12 @@ export function upsertImageJob(currentJobs: ImageJob[], nextJob: ImageJob): Imag
   return currentJobs.map((job) => (job.id === nextJob.id ? nextJob : job));
 }
 
-function historyStatusLabel(status: ImageJob["status"]): string {
+function historyStatusLabel(status: ImageJob["status"], t: Dictionary): string {
   if (status === "succeeded") {
-    return ru.imageHistory.statusReady;
+    return t.imageHistory.statusReady;
   }
   if (attentionStatuses.has(status)) {
-    return ru.imageHistory.statusAttention;
+    return t.imageHistory.statusAttention;
   }
-  return ru.imageHistory.statusInProgress;
+  return t.imageHistory.statusInProgress;
 }

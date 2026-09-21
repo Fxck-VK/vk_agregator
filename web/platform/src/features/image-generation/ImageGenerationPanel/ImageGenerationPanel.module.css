@@ -3,14 +3,3 @@
   gap: var(--space-5);
   inline-size: 100%;
 }
-
-.loadFailure {
-  display: grid;
-  gap: var(--space-3);
-  justify-items: start;
-}
-
-.error {
-  margin: 0;
-  color: var(--color-danger);
-}

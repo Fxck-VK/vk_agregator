@@ -107,3 +107,100 @@ describe("webBrowserFetch", () => {
     );
   });
 });
+
+describe("upload progress transport", () => {
+  class UploadRequest extends EventTarget {
+    upload = new EventTarget();
+    open = vi.fn();
+    send = vi.fn();
+    setRequestHeader = vi.fn<(name: string, value: string) => void>();
+    getAllResponseHeaders = () => "Content-Type: application/json\r\n";
+    abort = vi.fn(() => this.dispatchEvent(new Event("abort")));
+    withCredentials = false;
+    status = 200;
+    statusText = "OK";
+    responseText = '{"artifact_id":"test"}';
+  }
+  let request: UploadRequest;
+  const setup = () => {
+    request = new UploadRequest();
+    vi.stubGlobal("XMLHttpRequest", function () { return request; });
+    vi.stubGlobal("fetch", vi.fn());
+    document.cookie = "nh_csrf=browser-issued-csrf; Path=/";
+  };
+  afterEach(() => {
+    vi.unstubAllGlobals();
+    document.cookie = "nh_csrf=; Max-Age=0; Path=/";
+  });
+
+  it("reports byte progress, preserves CSRF and waits for the server response after sending all bytes", async () => {
+    setup();
+    const progress = vi.fn();
+    const body = new FormData(); body.set("file", new File(["image"], "photo.png"));
+    const pending = webBrowserMutation("/web/v1/input-artifacts?model_id=example", {
+      method: "POST", body, onUploadProgress: progress,
+      headers: { Authorization: "forged", "X-Account-ID": "forged", "X-CSRF-Token": "forged" },
+    });
+    expect(request.open).toHaveBeenCalledWith("POST", "/web/v1/input-artifacts?model_id=example", true);
+    expect(request.send).toHaveBeenCalledWith(body);
+    expect(request.withCredentials).toBe(true);
+    const headers = new Headers(request.setRequestHeader.mock.calls);
+    expect(headers.get("x-csrf-token")).toBe("browser-issued-csrf");
+    expect(headers.has("authorization")).toBe(false);
+    expect(headers.has("x-account-id")).toBe(false);
+    expect(headers.has("content-type")).toBe(false);
+    request.upload.dispatchEvent(new ProgressEvent("progress", { lengthComputable: true, loaded: 40, total: 100 }));
+    expect(progress).toHaveBeenLastCalledWith(40);
+    request.upload.dispatchEvent(new ProgressEvent("progress", { lengthComputable: false }));
+    expect(progress).toHaveBeenLastCalledWith(null);
+    request.upload.dispatchEvent(new Event("load"));
+    expect(progress).toHaveBeenLastCalledWith(100);
+    const completed = vi.fn(); void pending.then(completed);
+    await Promise.resolve(); expect(completed).not.toHaveBeenCalled();
+    request.dispatchEvent(new Event("load"));
+    expect(await (await pending).json()).toEqual({ artifact_id: "test" });
+    expect(fetch).not.toHaveBeenCalled();
+  });
+
+  it("aborts the transport and detaches progress listeners", async () => {
+    setup();
+    const controller = new AbortController(); const progress = vi.fn();
+    const pending = webBrowserMutation("/web/v1/input-artifacts", { method: "POST", body: new FormData(), signal: controller.signal, onUploadProgress: progress });
+    const rejected = expect(pending).rejects.toMatchObject({ name: "AbortError" });
+    controller.abort();
+    await rejected;
+    expect(request.abort).toHaveBeenCalledOnce();
+    request.upload.dispatchEvent(new ProgressEvent("progress", { lengthComputable: true, loaded: 10, total: 100 }));
+    expect(progress).not.toHaveBeenCalled();
+  });
+
+  it.each(["error", "timeout"])("rejects a transport %s", async event => {
+    setup();
+    const pending = webBrowserMutation("/web/v1/input-artifacts", { method: "POST", body: new FormData(), onUploadProgress: vi.fn() });
+    const rejected = expect(pending).rejects.toMatchObject({ name: "WebNetworkError" });
+    request.dispatchEvent(new Event(event)); await rejected;
+  });
+
+  it("rejects missing CSRF and already cancelled uploads before sending", async () => {
+    setup(); document.cookie = "nh_csrf=; Max-Age=0; Path=/";
+    await expect(webBrowserMutation("/web/v1/input-artifacts", { method: "POST", body: new FormData(), onUploadProgress: vi.fn() })).rejects.toThrow();
+    expect(request.send).not.toHaveBeenCalled();
+    document.cookie = "nh_csrf=browser-issued-csrf; Path=/";
+    await expect(webBrowserMutation("/web/v1/input-artifacts", { method: "POST", body: new FormData(), signal: AbortSignal.abort(), onUploadProgress: vi.fn() })).rejects.toMatchObject({ name: "AbortError" });
+    expect(request.send).not.toHaveBeenCalled();
+  });
+
+  it("keeps rejected HTTP responses available for localized upload errors", async () => {
+    setup(); request.status = 413; request.responseText = '{"error":"too_large"}';
+    const pending = webBrowserMutation("/web/v1/input-artifacts", { method: "POST", body: new FormData(), onUploadProgress: vi.fn() });
+    request.dispatchEvent(new Event("load"));
+    const response = await pending;
+    expect(response.status).toBe(413); expect(response.ok).toBe(false);
+  });
+
+  it("does not send progress uploads outside the same-origin web API", () => {
+    setup();
+    expect(() => webBrowserMutation("https://untrusted.example" as "/web/v1/me", { method: "POST", body: new FormData(), onUploadProgress: vi.fn() })).toThrow("same-origin");
+    expect(request.send).not.toHaveBeenCalled();
+  });
+});

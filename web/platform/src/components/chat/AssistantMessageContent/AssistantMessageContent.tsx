@@ -1,3 +1,8 @@
+"use client";
+
+import { MediaImage } from "@/components/media/MediaImage/MediaImage";
+import { useMessages } from "@/i18n/LocaleProvider";
+
 import Markdown from "react-markdown";
 
 import { ScrollArea } from "@/components/ui/ScrollArea/ScrollArea";
@@ -32,13 +37,14 @@ const allowedElements = [
 ];
 
 export function AssistantMessageContent({ markdown, omitImageArtifactIDs = [] }: Readonly<AssistantMessageContentProps>) {
+  const msg = useMessages();
   const omittedPaths = new Set(omitImageArtifactIDs.map((id) => `/web/v1/image-artifacts/${id}`));
   const safeMarkdown = markdown
     .replace(/<script\b[^>]*>[\s\S]*?<\/script\s*>/gi, "")
     .replace(/<style\b[^>]*>[\s\S]*?<\/style\s*>/gi, "");
 
   return (
-    <div className={styles.content}>
+    <div className={styles.content} dir="auto">
       <Markdown
         allowedElements={allowedElements}
         components={{
@@ -52,8 +58,7 @@ export function AssistantMessageContent({ markdown, omitImageArtifactIDs = [] }:
             if (typeof src !== "string" || !imageArtifactPathPattern.test(src)) return null;
             if (omittedPaths.has(src)) return null;
             return (
-              // eslint-disable-next-line @next/next/no-img-element
-              <img alt={alt || "Сгенерированное изображение"} className={styles.image} decoding="async" loading="lazy" src={src} />
+              <MediaImage alt={alt || msg("assistantMessageContent.generatedImage")} className={styles.image} decoding="async" loading="lazy" src={src} />
             );
           },
           pre({ children }) {
@@ -62,6 +67,7 @@ export function AssistantMessageContent({ markdown, omitImageArtifactIDs = [] }:
                 className={styles.codeScroll}
                 orientation="horizontal"
                 viewportAs="pre"
+                viewportProps={{ dir: "ltr" }}
                 viewportClassName={styles.codeBlock}
               >
                 {children}

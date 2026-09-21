@@ -2,7 +2,7 @@
   position: fixed;
   z-index: 160;
   inset: 0;
-  background: rgb(3 3 6 / 80%);
+  background: var(--modal-backdrop-background, rgb(3 3 6 / 80%));
   backdrop-filter: blur(0.55rem);
   pointer-events: auto;
   animation: modalBackdropIn var(--motion-normal) both;

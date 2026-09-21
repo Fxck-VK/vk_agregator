@@ -90,9 +90,7 @@ describe("ModelCatalogToolbar", () => {
     const tablist = screen.getByRole("tablist");
     expect(tablist).toHaveAccessibleName("Категории нейросетей");
     expect(tablist).toHaveAttribute("data-scroll-area-viewport", "true");
-    expect(tablist.closest('[data-mode-switch-panel="true"]')?.className).toContain(
-      "categoryPanel",
-    );
+    expect(tablist.closest('[data-mode-switch-panel="true"]')).toHaveAttribute("data-full-width", "true");
     expect(tablist.closest('[data-orientation="horizontal"]')).not.toBeNull();
     for (const category of categories) {
       expect(screen.getByRole("tab", { name: category.label })).toHaveAttribute("id", `model-category-tab-${category.id}`);

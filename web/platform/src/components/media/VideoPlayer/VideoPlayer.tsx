@@ -1,5 +1,9 @@
 "use client";
 
+import { MediaState } from "@/components/ui/AsyncState/AsyncState";
+import { useMessages } from "@/i18n/LocaleProvider";
+
+
 import { type CSSProperties, useEffect, useRef, useState } from "react";
 
 import styles from "./VideoPlayer.module.css";
@@ -16,7 +20,9 @@ type VideoPlayerProps = {
 };
 
 export function VideoPlayer({ poster, source, title }: Readonly<VideoPlayerProps>) {
+  const msg = useMessages();
   const [hasPlaybackError, setHasPlaybackError] = useState(false);
+  const [isWaiting, setIsWaiting] = useState(false);
   const [hasStarted, setHasStarted] = useState(false);
   const [isPaused, setIsPaused] = useState(false);
   const spacePauseActiveRef = useRef(false);
@@ -115,6 +121,9 @@ export function VideoPlayer({ poster, source, title }: Readonly<VideoPlayerProps
           aria-label={title}
           className={styles.video}
           controls={hasStarted}
+          onWaiting={() => setIsWaiting(true)}
+          onPlaying={() => setIsWaiting(false)}
+          onCanPlay={() => setIsWaiting(false)}
           onEnded={() => {
             setIsPaused(true);
           }}
@@ -136,11 +145,11 @@ export function VideoPlayer({ poster, source, title }: Readonly<VideoPlayerProps
           ref={videoRef}
         >
           <source src={source.src} type={source.type} />
-          Ваш браузер не поддерживает воспроизведение видео.
-        </video>
+          {msg("videoPlayer.yourBrowserDoesNotSupportVideoPlayback")}</video>
+        {hasStarted && isWaiting ? <div className={styles.waiting}><MediaState label={title} /></div> : null}
         {!hasStarted ? (
           <button
-            aria-label={`Воспроизвести: ${title}`}
+            aria-label={msg("videoPlayer.playValue", { value1: title })}
             className={styles.posterOverlay}
             data-testid="video-poster-overlay"
             onClick={startPlayback}
@@ -155,7 +164,7 @@ export function VideoPlayer({ poster, source, title }: Readonly<VideoPlayerProps
         {hasStarted && isPaused ? (
           <div className={styles.pauseOverlay} data-testid="video-pause-overlay">
             <button
-              aria-label={`Продолжить: ${title}`}
+              aria-label={msg("videoPlayer.resumeValue", { value1: title })}
               className={styles.playButton}
               onClick={startPlayback}
               type="button"
@@ -168,7 +177,9 @@ export function VideoPlayer({ poster, source, title }: Readonly<VideoPlayerProps
     );
   }
 
-  const placeholder = hasPlaybackError ? "Видео временно недоступно" : "Видео скоро появится";
+  if (hasPlaybackError) return <div className={styles.frame}><MediaState state="error" label={msg("videoPlayer.videoIsTemporarilyUnavailable")} retry={{ label: msg("chatComposer.uploadFailedRetry"), onClick: () => { setHasPlaybackError(false); setHasStarted(false); setIsPaused(false); setIsWaiting(false); } }} /></div>;
+
+  const placeholder = hasPlaybackError ? msg("videoPlayer.videoIsTemporarilyUnavailable") : msg("videoPlayer.videoIsComingSoon");
 
   return (
     <div

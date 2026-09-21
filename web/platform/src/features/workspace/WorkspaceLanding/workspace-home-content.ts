@@ -1,3 +1,5 @@
+import { getTranslator, type Translator } from "@/i18n/messages";
+
 import { assetPaths } from "@/assets/asset-paths";
 
 export type WorkspaceHomeFaq = {
@@ -5,39 +7,49 @@ export type WorkspaceHomeFaq = {
   question: string;
 };
 
-export const capabilityLinks = [
-  { href: "/app/chats", label: "Ответы на вопросы", icon: assetPaths.icons.features.answers },
-  { href: "/app/image", label: "Генерация изображений", icon: assetPaths.icons.features.generateImage },
-  { href: "/app/image", label: "Работа с референсами", icon: assetPaths.icons.features.references },
-  { href: "/app/files", label: "Библиотека файлов", icon: assetPaths.icons.features.fileLibrary },
-  { href: "/app/models", label: "Выбор нейросети", icon: assetPaths.icons.features.selectAi },
-  { href: "/app/inspiration", label: "Идеи для промптов", icon: assetPaths.icons.features.promptIdeas },
-] as const;
+export function getCapabilityLinks(msg: Translator = getTranslator("ru")) {
 
-export const frequentlyAskedQuestions: WorkspaceHomeFaq[] = [
-  {
-    question: "Что такое NeiroHub?",
-    answer:
-      "NeiroHub — единое рабочее пространство для диалогов с нейросетями, генерации изображений и хранения результатов.",
-  },
-  {
-    question: "Что такое собственные нейросети NeiroHub?",
-    answer:
-      "Так мы называем модели, доступные через единый интерфейс NeiroHub. Для каждой модели показаны её возможности, параметры и актуальная стоимость запуска.",
-  },
-  {
-    question: "Что такое токены и подписка?",
-    answer:
-      "В NeiroHub звёзды используются как единицы баланса для запуска нейросетей. Отдельная подписка для базовой работы с платформой сейчас не требуется.",
-  },
-  {
-    question: "Как купить подписку?",
-    answer:
-      "Сейчас подписка не продаётся. Для платных запусков достаточно пополнить баланс в профиле и выбрать подходящую модель.",
-  },
-  {
-    question: "Есть ли бесплатный доступ?",
-    answer:
-      "Открывать рабочее пространство и изучать каталог можно бесплатно. Для запуска платных моделей потребуется достаточный баланс.",
-  },
-];
+  return [
+    { href: "/app/chats", label: msg("workspaceHomeContent.answersToQuestions"), icon: assetPaths.icons.features.answers },
+    { href: "/app/image", label: msg("workspaceHomeContent.imageGeneration"), icon: assetPaths.icons.features.generateImage },
+    { href: "/app/image", label: msg("workspaceHomeContent.workingWithReferences"), icon: assetPaths.icons.features.references },
+    { href: "/app/files", label: msg("workspaceHomeContent.fileLibrary"), icon: assetPaths.icons.features.fileLibrary },
+    { href: "/app/models", label: msg("workspaceHomeContent.chooseAnAiModel"), icon: assetPaths.icons.features.selectAi },
+    { href: "/app/inspiration", label: msg("workspaceHomeContent.promptIdeas"), icon: assetPaths.icons.features.promptIdeas },
+  ] as const;
+}
+
+export const capabilityLinks = getCapabilityLinks();
+
+export function getFrequentlyAskedQuestions(msg: Translator = getTranslator("ru")): WorkspaceHomeFaq[] {
+
+  return [
+    {
+      question: msg("workspaceHomeContent.whatIsNeirohub"),
+      answer:
+        msg("workspaceHomeContent.neirohubIsOneWorkspaceForChattingWith"),
+    },
+    {
+      question: msg("workspaceHomeContent.whatAreNeirohubSOwnAiModels"),
+      answer:
+        msg("workspaceHomeContent.thisIsWhatWeCallModelsAvailable"),
+    },
+    {
+      question: msg("workspaceHomeContent.whatAreTokensAndSubscriptions"),
+      answer:
+        msg("workspaceHomeContent.inNeirohubStarsAreBalanceUnitsUsed"),
+    },
+    {
+      question: msg("workspaceHomeContent.howDoIBuyASubscription"),
+      answer:
+        msg("workspaceHomeContent.subscriptionsAreNotCurrentlySoldToRun"),
+    },
+    {
+      question: msg("workspaceHomeContent.isThereFreeAccess"),
+      answer:
+        msg("workspaceHomeContent.youCanOpenTheWorkspaceAndExplore"),
+    },
+  ];
+}
+
+export const frequentlyAskedQuestions = getFrequentlyAskedQuestions();

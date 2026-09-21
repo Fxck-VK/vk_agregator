@@ -39,7 +39,7 @@ describe("ImageGenerationGuide", () => {
     expect(screen.queryByTestId("image-generation-example-placeholder")).not.toBeInTheDocument();
     expect(screen.getByRole("link", { name: ru.imageGeneration.guide.viewMoreExamples })).toHaveAttribute(
       "href",
-      "/app/inspiration",
+      "/ru/app/inspiration",
     );
     expect(screen.queryByTestId("image-generation-guide-step")).not.toBeInTheDocument();
   });

@@ -1,5 +1,8 @@
 "use client";
 
+import { useMessages } from "@/i18n/LocaleProvider";
+
+
 import { useState } from "react";
 import type { GenerationOptions } from "./generation-options-contract";
 export type { GenerationOptions } from "./generation-options-contract";
@@ -34,6 +37,7 @@ export function resolveGenerationOptions(model: GenerationModel | undefined, sav
 }
 
 export function useGenerationControls(model: GenerationModel | undefined, disabled: boolean, onPromptChange: (prompt:string)=>void) {
+  const msg = useMessages();
  const [byModel,setByModel] = useState<Record<string,GenerationOptions>>({});
  const {options,cost} = resolveGenerationOptions(model,model ? byModel[model.id] : undefined);
  const change = (patch:GenerationOptions) => {
@@ -49,8 +53,8 @@ export function useGenerationControls(model: GenerationModel | undefined, disabl
  />;
  if (model?.category === "video") controls = <>
   <ImageAspectRatioSelector disabled={disabled} value={options.aspect_ratio!} options={videoAspectRatios(model, options)} onChange={aspect_ratio=>change({aspect_ratio})}/>
-  <ImageQualitySelector disabled={disabled} label="Разрешение" value={options.resolution!} options={model.allowed_resolutions} onChange={resolution=>change({resolution})}/>
-  <ImageQualitySelector disabled={disabled} label="Длительность" value={`${options.duration_sec} с`} options={model.allowed_durations_sec.filter(value=>model.price_by_option[`${options.resolution}:${value}`] > 0 && (!model.variants || model.variants.some(variant=>variant.resolution===options.resolution && variant.duration_sec===value))).map(value=>`${value} с`)} onChange={value=>change({duration_sec:parseInt(value,10)})}/>
+  <ImageQualitySelector disabled={disabled} label={msg("generationOptions.resolution")} value={options.resolution!} options={model.allowed_resolutions} onChange={resolution=>change({resolution})}/>
+  <ImageQualitySelector disabled={disabled} label={msg("generationOptions.duration")} value={msg("generationOptions.valueS", { value1: options.duration_sec ?? "—" })} options={model.allowed_durations_sec.filter(value=>model.price_by_option[`${options.resolution}:${value}`] > 0 && (!model.variants || model.variants.some(variant=>variant.resolution===options.resolution && variant.duration_sec===value))).map(value=>msg("generationOptions.valueS", { value1: value }))} onChange={value=>change({duration_sec:parseInt(value,10)})}/>
  </>;
  return {options,controls,cost,canSubmit:model !== undefined && (model.category === "text" || (cost ?? 0)>0)};
 }

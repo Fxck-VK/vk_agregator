@@ -4,6 +4,7 @@ import { SpeechWorkspace } from "./SpeechWorkspace";
 import { loadModelCatalog } from "@/features/models/model-catalog-cache";
 import { activateSpeech, loadSpeechJob, prepareSpeech } from "./speech-api";
 import type { PublicCatalog } from "@/features/models/model-catalog-contract";
+import { LocaleProvider } from "@/i18n/LocaleProvider";
 
 vi.mock("@/features/models/model-catalog-cache", () => ({ loadModelCatalog: vi.fn(), resetModelCatalogCacheForTests: vi.fn() }));
 vi.mock("./speech-api", () => ({ prepareSpeech: vi.fn(), activateSpeech: vi.fn(), loadSpeechJob: vi.fn(), loadSpeechResult: vi.fn() }));
@@ -25,6 +26,20 @@ describe("Speech workspace admission", () => {
     fireEvent.change(screen.getByRole("combobox", { name: "Модель" }), { target: { value: "whisper_1" } });
     await waitFor(() => expect(screen.getByLabelText("Аудиозапись")).toBeDisabled());
     expect(screen.getByText(/MP3 или WAV/)).toBeInTheDocument();
+  });
+
+  it("switches labels and safe errors without resetting the speech draft or refetching", async () => {
+    vi.mocked(loadModelCatalog).mockRejectedValue(new Error("private upstream detail"));
+    const { rerender } = render(<LocaleProvider locale="ru"><SpeechWorkspace /></LocaleProvider>);
+    fireEvent.change(screen.getByRole("textbox", { name: "Текст" }), { target: { value: "Мой текст" } });
+    await screen.findByText("Не удалось загрузить модели.");
+    rerender(<LocaleProvider locale="en"><SpeechWorkspace /></LocaleProvider>);
+    expect(screen.getByRole("alert")).toHaveTextContent("Could not load models.");
+    expect(screen.getByRole("heading", { name: "Speech generation and transcription" })).toBeInTheDocument();
+    expect(screen.getByRole("textbox", { name: "Text" })).toHaveValue("Мой текст");
+    expect(screen.getByRole("button", { name: "Calculate cost" })).toBeDisabled();
+    expect(loadModelCatalog).toHaveBeenCalledTimes(1);
+    expect(screen.queryByText("private upstream detail")).not.toBeInTheDocument();
   });
 
   it("retries an uncertain activation with the same prepared job and no second preparation", async () => {

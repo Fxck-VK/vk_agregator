@@ -16,7 +16,7 @@ describe("AppShell palette roles", () => {
     expect(shell.toLowerCase()).not.toContain("#9494f8");
     expect(shell).toMatch(/--app-shell-canvas:\s*var\(--color-background\)/);
     expect(shell).toMatch(/\.workspace\s*\{[^}]*background:\s*var\(--color-workspace\)/s);
-    expect(sidebar).toMatch(/\.panel\s*\{[^}]*background:\s*var\(--color-panel\)/s);
-    expect(restoration).toMatch(/\.sidebar\s*\{[^}]*background:\s*var\(--color-panel\)/s);
+    expect(sidebar).toMatch(/\.panel\s*\{[^}]*background:\s*var\(--color-sidebar, var\(--color-panel\)\)/s);
+    expect(restoration).toMatch(/\.sidebar\s*\{[^}]*background:\s*var\(--color-sidebar, var\(--color-panel\)\)/s);
   });
 });

@@ -33,6 +33,21 @@ const result: ImageJobResult = {
 describe("FileCard", () => {
   afterEach(cleanup);
 
+  it("uses a media placeholder while the result is pending, without technical copy or a ready label", () => {
+    render(<FileCard isRetrying={false} job={succeededJob} onOpenPreview={vi.fn()} onRequestResult={vi.fn()} onRetryJob={vi.fn()} result={null} resultState="loading" />);
+    expect(screen.queryByText(ru.files.previewPending)).not.toBeInTheDocument();
+    expect(screen.queryByText(ru.files.statusReady)).not.toBeInTheDocument();
+    expect(screen.getByRole("progressbar", { name: ru.files.previewLoading })).toBeInTheDocument();
+  });
+
+  it("retries fetching the result from the common media error", () => {
+    const retry = vi.fn();
+    render(<FileCard isRetrying={false} job={succeededJob} onOpenPreview={vi.fn()} onRequestResult={retry} onRetryJob={vi.fn()} result={null} resultState="error" />);
+    fireEvent.click(screen.getByRole("button", { name: ru.files.previewRetry }));
+    expect(retry).toHaveBeenCalledExactlyOnceWith(succeededJob);
+    expect(screen.queryByText(ru.files.statusReady)).not.toBeInTheDocument();
+  });
+
   it("opens a completed result from the media surface and keeps download as a separate action", () => {
     const onOpenPreview = vi.fn();
 
@@ -110,5 +125,27 @@ describe("FileCard", () => {
     expect(screen.getByRole("button", { name: ru.files.retry })).toBeInTheDocument();
     expect(screen.getByRole("heading", { name: paymentJob.prompt })).toBeInTheDocument();
     expect(screen.queryByTestId("file-card-accessible-metadata")).toBeNull();
+  });
+
+  it("attaches the chosen artifact in selection mode without download or delete actions", () => {
+    const onSelect = vi.fn();
+    const secondArtifact = { ...result.artifacts[0]!, id: "second-artifact" };
+    render(
+      <FileCard
+        isRetrying={false}
+        job={succeededJob}
+        onRequestResult={vi.fn()}
+        onRetryJob={vi.fn()}
+        result={{ ...result, artifacts: [...result.artifacts, secondArtifact] }}
+        resultState="idle"
+        selectionAction={{ label: "Прикрепить", onSelect }}
+      />,
+    );
+
+    const buttons = screen.getAllByRole("button", { name: `Прикрепить «${succeededJob.prompt}»` });
+    fireEvent.click(buttons[1]!);
+    expect(onSelect).toHaveBeenCalledExactlyOnceWith(succeededJob, secondArtifact);
+    expect(screen.queryByRole("link")).not.toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: ru.files.deleteUnavailable })).not.toBeInTheDocument();
   });
 });

@@ -1,3 +1,4 @@
+/* eslint-disable @next/next/no-html-link-for-pages -- Native link fixtures and router mocks are intentional in these tests. */
 import { act, cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
@@ -70,7 +71,7 @@ describe("WorkspaceHero model selection", () => {
     fireEvent.change(screen.getByRole("textbox"), { target: { value: "Помоги с планом" } });
     fireEvent.click(screen.getByRole("button", { name: ru.workspace.promptSubmit }));
 
-    expect(push).toHaveBeenCalledExactlyOnceWith(`/app/chat/${requestId}?pending=1`);
+    expect(push).toHaveBeenCalledExactlyOnceWith(`/ru/app/chat/${requestId}?pending=1`);
     expect(readPendingConversationBootstrap(requestId)).toMatchObject({
       modelId: chatModel.id,
       prompt: "Помоги с планом",
@@ -143,8 +144,9 @@ describe("WorkspaceHero model selection", () => {
     expect(container.querySelector('[aria-label^="Разрешение:"]')).toBeNull();
   });
 
-  it("keeps the same textarea, surface, caret and attachment when only model controls change", async () => {
+  it("keeps the same textarea, surface and caret after a rejected file and model changes", async () => {
     const { container } = renderHero();
+    await selectModel("NeiroHub Chat");
     const input = screen.getByRole("textbox") as HTMLTextAreaElement;
     const surface = input.closest('[data-ui="input-surface"]');
     const form = input.closest("form");
@@ -153,7 +155,8 @@ describe("WorkspaceHero model selection", () => {
     input.setSelectionRange(2, 8);
     const upload = container.querySelector('input[type="file"]')!;
     fireEvent.change(upload, { target: { files: [new File(["brief"], "brief.txt", { type: "text/plain" })] } });
-    expect(screen.getByRole("button", { name: "Убрать brief.txt" })).toBeVisible();
+    expect(screen.queryByRole("button", { name: "Убрать brief.txt" })).toBeNull();
+    expect(webBrowserMutation).not.toHaveBeenCalled();
 
     for (const model of ["Nano Banana Pro", "Nano Banana 2", "NeiroHub Chat"]) {
       await selectModel(model);
@@ -162,9 +165,9 @@ describe("WorkspaceHero model selection", () => {
       expect(input.closest("form")).toBe(form);
       expect(input.selectionStart).toBe(2);
       expect(input.selectionEnd).toBe(8);
-      expect(screen.getByRole("button", { name: "Убрать brief.txt" })).toBeVisible();
+      expect(screen.queryByRole("button", { name: "Убрать brief.txt" })).toBeNull();
       expect(container.querySelectorAll('[data-ui="input-surface"]')).toHaveLength(1);
-      expect(screen.queryByLabelText(/^Стоимость:/)).toBeNull();
+      expect(screen.queryAllByLabelText(/^Стоимость:/)).toHaveLength(model === "NeiroHub Chat" ? 0 : 1);
     }
   });
 
@@ -237,7 +240,7 @@ describe("WorkspaceHero model selection", () => {
     expect(push).not.toHaveBeenCalled();
     fireEvent.change(screen.getByRole("textbox"), { target: { value: "Пример" } });
     fireEvent.click(screen.getByRole("button", { name: ru.imageGeneration.generate }));
-    expect(push).toHaveBeenCalledExactlyOnceWith("/login");
+    expect(push).toHaveBeenCalledExactlyOnceWith("/ru/login");
     expect(webBrowserMutation).not.toHaveBeenCalled();
   });
 
@@ -247,7 +250,7 @@ describe("WorkspaceHero model selection", () => {
     await selectModel("NeiroHub Chat");
     fireEvent.change(screen.getByRole("textbox"), { target: { value: "Помоги с текстом" } });
     fireEvent.click(screen.getByRole("button", { name: ru.workspace.promptSubmit }));
-    expect(push).toHaveBeenCalledExactlyOnceWith(`/app/chat/${requestId}?pending=1`);
+    expect(push).toHaveBeenCalledExactlyOnceWith(`/ru/app/chat/${requestId}?pending=1`);
     expect(readPendingConversationBootstrap(requestId)).toMatchObject({
       modelId: chatModel.id,
       prompt: "Помоги с текстом",

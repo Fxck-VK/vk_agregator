@@ -112,7 +112,8 @@
 
 .root[data-orientation="horizontal"] > .frame > .track > .thumb {
   inset-block: 0;
-  inset-inline-start: 0;
+  /* Pointer coordinates and the normalized scroll position are physical. */
+  left: 0;
   inline-size: var(--scroll-area-thumb-size, 0px);
   transform: translateX(var(--scroll-area-thumb-offset, 0px));
 }

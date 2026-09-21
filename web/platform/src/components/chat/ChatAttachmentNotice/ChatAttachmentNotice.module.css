@@ -1,0 +1,31 @@
+.dialog {
+  inline-size: min(32rem, calc(100% - 1.5rem));
+  padding: clamp(1.5rem, 4vw, 2rem);
+  border: var(--panel-surface-border);
+  border-radius: var(--radius-xl);
+  background: var(--panel-surface-background);
+  box-shadow: var(--panel-surface-shadow);
+  color: var(--panel-surface-text);
+  color-scheme: var(--panel-surface-color-scheme, dark);
+  text-align: center;
+}
+
+.dialog h2 {
+  margin: 0;
+  font-size: 1.5rem;
+  line-height: 1.35;
+  font-weight: var(--font-weight-semibold);
+}
+
+.dialog p {
+  margin: var(--space-4) 0 var(--space-6);
+  color: var(--panel-surface-text-muted);
+  line-height: 1.5;
+}
+
+.dismiss {
+  inline-size: 100%;
+  min-block-size: 3rem;
+  cursor: pointer;
+  font: inherit;
+}

@@ -27,7 +27,12 @@
   align-items: center;
 }
 
+.controls .searchField {
+  background: var(--control-group-background, var(--panel-surface-background));
+}
+
 .searchIcon {
+  filter: var(--themed-icon-filter, none);
   position: absolute;
   inset-block-start: 50%;
   inset-inline-start: var(--space-5);
@@ -50,15 +55,11 @@
 }
 
 .search::placeholder {
-  color: var(--color-text-muted);
+  color: var(--color-placeholder, var(--color-text-muted));
 }
 
 .search:focus {
   outline: 0;
-}
-
-.categoryPanel {
-  inline-size: 100%;
 }
 
 @media (max-width: 42rem) {

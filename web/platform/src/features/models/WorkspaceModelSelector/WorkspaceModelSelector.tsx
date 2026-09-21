@@ -1,50 +1,36 @@
 "use client";
 
-import { useRouter, useSearchParams } from "next/navigation";
-import { useEffect, useState } from "react";
+import { useDictionary } from "@/i18n/LocaleProvider";
+import { usePathname, useRouter, useSearchParams } from "@/i18n/navigation";
+import { useState } from "react";
 
-import { ru } from "@/i18n/ru";
-import { loadGenerationModelCatalog, type GenerationModelCatalog } from "../generation-model-catalog";
-
-
-
-
+import { useGenerationCatalog } from "../GenerationCatalogProvider";
+import { RetryAction } from "@/components/ui/AsyncState/RetryAction";
 
 import { useWorkspaceModelSelection } from "../WorkspaceModelSelection/WorkspaceModelSelection";
 import {
   ModelSelector,
   type ModelSelectorModel,
-  type ModelSelectorStatus,
 } from "./ModelSelector";
 
 export function WorkspaceModelSelector() {
+  const t = useDictionary();
+  const pathname = usePathname();
   const router = useRouter();
   const searchParams = useSearchParams();
   const requestedModelId = searchParams.get("model");
   const workspaceSelection = useWorkspaceModelSelection();
+  const conversationModel = workspaceSelection?.conversationModel;
+  const conversationModelId = conversationModel && pathname === `/app/chat/${conversationModel.conversationId}`
+    ? conversationModel.modelId
+    : null;
   const workspaceSelectedModelId = workspaceSelection?.selectedModelId ?? null;
   const setWorkspaceModelId = workspaceSelection?.setSelectedModelId;
-  const [status, setStatus] = useState<ModelSelectorStatus>("loading");
-  const [models, setModels] = useState<ModelSelectorModel[]>([]);
+  const { catalog, status, failed, retry } = useGenerationCatalog();
+  const models = catalog?.items ?? [];
   const [selectedModelId, setSelectedModelId] = useState("");
-  const [catalogFailures, setCatalogFailures] = useState<GenerationModelCatalog["categoryErrors"]>({});
 
-  useEffect(() => {
-    let active = true;
-
-    void loadGenerationModelCatalog().then((catalog) => {
-      if (!active) return;
-      setModels(catalog.items);
-      setCatalogFailures(catalog.categoryErrors);
-      setStatus(catalog.items.length > 0 ? "ready" : "failure");
-    });
-
-    return () => {
-      active = false;
-    };
-  }, []);
-
-  const activeSelectedModelId = [requestedModelId, workspaceSelectedModelId, selectedModelId]
+  const activeSelectedModelId = [conversationModelId, requestedModelId, workspaceSelectedModelId, selectedModelId]
     .find((id) => models.some((model) => model.id === id)) ?? models[0]?.id ?? "";
 
   const selectModel = (model: ModelSelectorModel) => {
@@ -54,14 +40,17 @@ export function WorkspaceModelSelector() {
   };
 
   return (
-    <ModelSelector
-      dialogId="workspace-model-selector-dialog"
-      categoryErrors={catalogFailures}
-      models={models}
-      onSelect={selectModel}
-      selectedModelId={activeSelectedModelId}
-      status={status}
-      triggerAriaLabel={(name) => ru.modelSelector.triggerLabel(name)}
-    />
+    <div style={{ display: "flex", alignItems: "center", gap: "var(--space-2)", minWidth: 0 }}>
+      <ModelSelector
+        dialogId="workspace-model-selector-dialog"
+        categoryErrors={catalog?.categoryErrors}
+        models={models}
+        onSelect={selectModel}
+        selectedModelId={activeSelectedModelId}
+        status={status}
+        triggerAriaLabel={(name) => t.modelSelector.triggerLabel(name)}
+      />
+      {failed ? <RetryAction iconOnly label={`${t.modelsCatalog.loadFailure} ${t.files.retry}`} onClick={retry} /> : null}
+    </div>
   );
 }

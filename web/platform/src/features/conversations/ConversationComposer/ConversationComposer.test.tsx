@@ -1,7 +1,9 @@
-import { cleanup, fireEvent, render, screen, within } from "@testing-library/react";
+import { act, cleanup, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
 import { ru } from "@/i18n/ru";
+import catalog from "@/features/session/model-catalog.preview.json";
+import { parseModelCatalog, projectImageModelCatalog } from "@/features/models/model-catalog-contract";
 
 import { ConversationComposer } from "./ConversationComposer";
 
@@ -18,11 +20,36 @@ const textGenerationModel = {
   id: "chatgpt",
   name: "NeiroHub Chat",
 };
+const parsedCatalog = parseModelCatalog(catalog);
+const referenceModel = {
+  ...projectImageModelCatalog(parsedCatalog).items.find(model => model.id === "seedream_5_0_pro")!,
+  category: "images" as const,
+  operations: parsedCatalog.items.find(model => model.id === "seedream_5_0_pro")!.operations,
+};
 
 describe("ConversationComposer", () => {
+  it("does not show an unknown price or quote failure on entry", () => {
+    render(<ConversationComposer {...chatScrollProps} generationModel={{ ...referenceModel, price_by_quality: undefined, price_by_variant: undefined }} onSubmit={vi.fn()} />);
+    expect(screen.queryByText(/Стоимость: —/)).toBeNull();
+    expect(screen.queryByRole("alert")).toBeNull();
+    expect(screen.getByRole("button", { name: ru.conversations.composerSubmit })).toBeDisabled();
+  });
   afterEach(() => {
     cleanup();
     vi.clearAllMocks();
+  });
+
+  it("exposes the shared upload menu only for models with enabled reference inputs, preserving the draft", () => {
+    const rendered = render(<ConversationComposer {...chatScrollProps} generationModel={textGenerationModel} onSubmit={vi.fn()} />);
+    const textarea = screen.getByLabelText(ru.conversations.composerLabel);
+    fireEvent.change(textarea, { target: { value: "Опиши изменения" } });
+    expect(screen.queryByRole("button", { name: ru.conversations.composerMediaUpload })).toBeNull();
+    rendered.rerender(<ConversationComposer {...chatScrollProps} generationModel={referenceModel} onSubmit={vi.fn()} />);
+    fireEvent.click(screen.getByRole("button", { name: ru.conversations.composerMediaUpload }));
+    expect(screen.getByRole("menuitem", { name: ru.conversations.composerMediaUploadFile })).toBeVisible();
+    expect(textarea).toHaveValue("Опиши изменения");
+    rendered.rerender(<ConversationComposer {...chatScrollProps} generationModel={{ ...referenceModel, supports_reference_image: false }} onSubmit={vi.fn()} />);
+    expect(screen.queryByRole("button", { name: ru.conversations.composerMediaUpload })).toBeNull();
   });
 
   it("uses the exact NeiroHub question placeholder", () => {
@@ -48,7 +75,7 @@ describe("ConversationComposer", () => {
     expect(screen.getByText("Стоимость зависит от выбранной нейросети. Нейросеть может ошибаться")).toBeVisible();
   });
 
-  it("clears and submits a normalized draft immediately when Enter is pressed", () => {
+  it("clears a normalized draft after acceptance when Enter is pressed", async () => {
     const onSubmit = vi.fn();
     render(<ConversationComposer {...chatScrollProps} generationModel={textGenerationModel} onSubmit={onSubmit} />);
 
@@ -59,10 +86,10 @@ describe("ConversationComposer", () => {
 
     expect(event.defaultPrevented).toBe(true);
     expect(onSubmit).toHaveBeenCalledWith("Вопрос с клавиатуры");
-    expect(textarea).toHaveValue("");
+    await waitFor(() => expect(textarea).toHaveValue(""));
   });
 
-  it("clears and submits from the button without waiting for a promise", () => {
+  it("clears an accepted submission from the button", async () => {
     const onSubmit = vi.fn();
     render(<ConversationComposer {...chatScrollProps} generationModel={textGenerationModel} onSubmit={onSubmit} />);
 
@@ -71,7 +98,19 @@ describe("ConversationComposer", () => {
     fireEvent.click(screen.getByRole("button", { name: ru.conversations.composerSubmit }));
 
     expect(onSubmit).toHaveBeenCalledWith("Продолжи диалог");
-    expect(textarea).toHaveValue("");
+    await waitFor(() => expect(textarea).toHaveValue(""));
+  });
+
+  it("retains a draft while sending and after a rejected submission", async () => {
+    let finish!: (accepted: boolean) => void;
+    const onSubmit = vi.fn(() => new Promise<boolean>(resolve => { finish = resolve; }));
+    render(<ConversationComposer {...chatScrollProps} generationModel={textGenerationModel} onSubmit={onSubmit} />);
+    const input = screen.getByLabelText(ru.conversations.composerLabel);
+    fireEvent.change(input, { target: { value: "Сохранённый черновик" } });
+    fireEvent.click(screen.getByRole("button", { name: ru.conversations.composerSubmit }));
+    expect(input).toHaveValue("Сохранённый черновик");
+    await act(async () => finish(false));
+    expect(input).toHaveValue("Сохранённый черновик");
   });
 
   it("leaves Shift+Enter to the textarea without submitting", () => {
@@ -145,7 +184,9 @@ it("keeps one input while switching text, image and video controls and submits v
  expect(screen.getByLabelText(ru.conversations.composerLabel)).toBe(input);
  expect(input).toHaveValue("Движущийся журавль");
  expect(screen.getByRole("button",{name:"Длительность: 8 с"})).toBeEnabled();
- expect(screen.getByText("Стоимость: 100 токенов")).toBeVisible();
+ expect(screen.getByLabelText("Стоимость: 100 звёзд")).toBeVisible();
+ expect(screen.getByText("Стоимость: 100")).toBeVisible();
+ expect(screen.getByTestId("credit-star-icon")).toBeVisible();
  fireEvent.submit(input.closest("form")!);
  expect(send).toHaveBeenCalledWith("Движущийся журавль",{resolution:"720p",duration_sec:8,aspect_ratio:"16:9"});
  unmount();

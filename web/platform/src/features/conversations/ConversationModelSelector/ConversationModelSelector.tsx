@@ -1,58 +1,42 @@
 "use client";
 
-import { useEffect, useState } from "react";
-
-import { ModelSelector, type ModelSelectorStatus } from "@/features/models/WorkspaceModelSelector/ModelSelector";
-import { loadGenerationModelCatalog, type GenerationModelCatalog } from "@/features/models/generation-model-catalog";
+import { useMessages } from "@/i18n/LocaleProvider";
 
 
+import { useCallback, useEffect, useState, useSyncExternalStore } from "react";
+
+import { ModelSelector } from "@/features/models/WorkspaceModelSelector/ModelSelector";
+import { useGenerationCatalog } from "@/features/models/GenerationCatalogProvider";
+import { useWorkspaceModelSelection } from "@/features/models/WorkspaceModelSelection/WorkspaceModelSelection";
 
 import styles from "./ConversationModelSelector.module.css";
 
-type ModelSelection = {
-  catalog: GenerationModelCatalog | null;
-  selectedModelId: string;
-  status: ModelSelectorStatus;
-};
+const subscribePreference = () => () => {};
+const serverPreference = () => "";
 
 export function useConversationModelSelection(conversationId: string) {
-  const [selection, setSelection] = useState<ModelSelection>({
-    catalog: null,
-    selectedModelId: "",
-    status: "loading",
-  });
+  const { catalog, status } = useGenerationCatalog();
+  const workspaceSelection = useWorkspaceModelSelection();
+  const setConversationModel = workspaceSelection?.setConversationModel;
+  const [preference, setPreference] = useState<{ conversationId: string; modelId: string } | null>(null);
   const storageKey = `neirohub:conversation-model:${conversationId}`;
-
-  useEffect(() => {
-    let active = true;
-    void loadGenerationModelCatalog().then((catalog) => {
-      if (!active) return;
-      let savedModel: string | null = null;
-      try {
-        savedModel = window.sessionStorage.getItem(storageKey);
-      } catch {
-        // Storage is optional; the current dialogue still works without it.
-      }
-      const selectedModelId = catalog.items.find((model) => model.id === savedModel)?.id
-        ?? catalog.default_model_id;
-      setSelection({ catalog, selectedModelId, status: catalog.items.length > 0 ? "ready" : "failure" });
-    }).catch(() => {
-      if (active) setSelection((current) => ({ ...current, status: "failure" }));
-    });
-    return () => { active = false; };
+  const readPreference = useCallback(() => {
+    try { return window.sessionStorage.getItem(storageKey) ?? ""; } catch { return ""; }
   }, [storageKey]);
-
+  const savedPreference = useSyncExternalStore(subscribePreference, readPreference, serverPreference);
+  const preferredId = preference?.conversationId === conversationId ? preference.modelId : savedPreference;
+  const selectedModelId = catalog?.items.find(model => model.id === preferredId)?.id
+    ?? catalog?.default_model_id ?? "";
+  useEffect(() => {
+    setConversationModel?.(conversationId, selectedModelId || null);
+    return () => { setConversationModel?.(conversationId, null); };
+  }, [conversationId, selectedModelId, setConversationModel]);
   const selectModel = (modelId: string) => {
-    if (!selection.catalog?.items.some((model) => model.id === modelId)) return;
-    setSelection((current) => ({ ...current, selectedModelId: modelId }));
-    try {
-      window.sessionStorage.setItem(storageKey, modelId);
-    } catch {
-      // Persist only the public model preference, never message contents.
-    }
+    if (!catalog?.items.some(model => model.id === modelId)) return;
+    setPreference({ conversationId, modelId });
+    try { window.sessionStorage.setItem(storageKey, modelId); } catch { /* No private contents in storage. */ }
   };
-
-  return { ...selection, selectModel };
+  return { catalog, status, selectedModelId, selectModel };
 }
 
 type ConversationModelSelectorProps = {
@@ -61,11 +45,12 @@ type ConversationModelSelectorProps = {
 };
 
 export function ConversationModelSelector({ disabled, selection }: Readonly<ConversationModelSelectorProps>) {
+  const msg = useMessages();
   return (
     <ModelSelector
       className={styles.selector}
       descriptionMode="tooltip"
-      dialogLabel="Выбор модели для диалога"
+      dialogLabel={msg("conversationModelSelector.chooseAModelForThisChat")}
       disabled={disabled}
       categoryErrors={selection.catalog?.categoryErrors}
       key={disabled ? "busy" : "ready"}

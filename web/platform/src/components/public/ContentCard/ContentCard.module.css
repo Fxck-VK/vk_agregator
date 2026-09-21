@@ -1,6 +1,6 @@
 .card {
-  border: 0.0625rem solid var(--color-border);
+  border: 0.0625rem solid var(--color-card-border);
   border-radius: var(--radius-xl);
-  background: var(--color-surface);
+  background: var(--color-panel);
   box-shadow: var(--shadow-card);
 }

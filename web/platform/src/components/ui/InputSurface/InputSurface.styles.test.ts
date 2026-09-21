@@ -16,10 +16,10 @@ const tokens = readFileSync(resolve(process.cwd(), "src/app/globals.css"), "utf8
 describe("InputSurface styles", () => {
   it("owns the shared shell, border, radius, and focus state", () => {
     expect(stylesheet).toMatch(
-      /\.surface\s*\{[^}]*border:\s*0\.0625rem solid var\(--color-border\);[^}]*border-radius:\s*var\(--radius-lg\);[^}]*background:\s*rgb\(8 8 12 \/ 92%\);/s,
+      /\.surface\s*\{[^}]*border:\s*0\.0625rem solid var\(--color-input-border, var\(--color-border\)\);[^}]*border-radius:\s*var\(--radius-lg\);[^}]*background:\s*var\(--panel-surface-background\);/s,
     );
     expect(modeSwitchStylesheet).toMatch(
-      /\.viewport\s*\{[^}]*background:\s*var\(--panel-surface-background\);/s,
+      /\.viewport\s*\{[^}]*background:\s*var\(--control-group-background, var\(--panel-surface-background\)\);/s,
     );
     expect(tokens).toContain("--panel-surface-background: rgb(8 8 12 / 92%);");
     expect(stylesheet).toMatch(

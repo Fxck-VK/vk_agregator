@@ -1,6 +1,8 @@
 "use client";
 
-import { ru } from "@/i18n/ru";
+import { useDictionary } from "@/i18n/LocaleProvider";
+
+
 import { InputControlChip } from "@/components/ui/InputControlChip/InputControlChip";
 
 import styles from "./ImageOutputCountSelector.module.css";
@@ -18,18 +20,19 @@ export function ImageOutputCountSelector({
   onChange,
   value,
 }: Readonly<ImageOutputCountSelectorProps>) {
+  const t = useDictionary();
   const safeMax = Math.max(1, max);
   const safeValue = Math.min(safeMax, Math.max(1, value));
 
   return (
     <InputControlChip
       as="div"
-      aria-label={ru.imageGeneration.outputCountLabel}
+      aria-label={t.imageGeneration.outputCountLabel}
       className={styles.root}
       role="group"
     >
       <button
-        aria-label={ru.imageGeneration.decreaseOutputCount}
+        aria-label={t.imageGeneration.decreaseOutputCount}
         className={styles.button}
         disabled={disabled || safeValue <= 1}
         onClick={() => onChange(safeValue - 1)}
@@ -39,7 +42,7 @@ export function ImageOutputCountSelector({
       </button>
       <span className={styles.value}>{safeValue} / {safeMax}</span>
       <button
-        aria-label={ru.imageGeneration.increaseOutputCount}
+        aria-label={t.imageGeneration.increaseOutputCount}
         className={styles.button}
         disabled={disabled || safeValue >= safeMax}
         onClick={() => onChange(safeValue + 1)}

@@ -1,16 +1,19 @@
 "use client";
 
+import { useDictionary } from "@/i18n/LocaleProvider";
+
+
 import { useState } from "react";
-import { useRouter } from "next/navigation";
+import { useRouter } from "@/i18n/navigation";
 
 import { Button } from "@/components/ui/Button/Button";
-import { ru } from "@/i18n/ru";
 import { webBrowserMutation } from "@/lib/web-api/browser";
 import { parseConversationList } from "@/lib/web-api/contracts";
 
 import styles from "./NewConversationButton.module.css";
 
 export function NewConversationButton() {
+  const t = useDictionary();
   const router = useRouter();
   const [isPending, setIsPending] = useState(false);
   const [hasError, setHasError] = useState(false);
@@ -46,11 +49,11 @@ export function NewConversationButton() {
   return (
     <div className={styles.create}>
       <Button disabled={isPending} onClick={createConversation}>
-        {isPending ? ru.conversations.createPending : ru.conversations.createLabel}
+        {isPending ? t.conversations.createPending : t.conversations.createLabel}
       </Button>
       {hasError ? (
         <p className={styles.error} role="alert">
-          {ru.conversations.createFailure}
+          {t.conversations.createFailure}
         </p>
       ) : null}
     </div>

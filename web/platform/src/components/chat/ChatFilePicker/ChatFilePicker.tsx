@@ -1,23 +1,31 @@
 "use client";
 
-/* eslint-disable @next/next/no-img-element */
+import { SkeletonGrid, StateNotice } from "@/components/ui/AsyncState/AsyncState";
+import { useDictionary } from "@/i18n/LocaleProvider";
+
 
 import {
+  useCallback,
   useEffect,
+  useId,
   useRef,
   useState,
   type ChangeEvent,
 } from "react";
 
+import { Button } from "@/components/ui/Button/Button";
+import { MasonryGrid } from "@/components/ui/MasonryGrid/MasonryGrid";
 import { ModalBackdrop } from "@/components/ui/ModalBackdrop/ModalBackdrop";
+import { ModalCloseButton } from "@/components/ui/ModalCloseButton/ModalCloseButton";
+import { ModeSwitchPanel } from "@/components/ui/ModeSwitchPanel/ModeSwitchPanel";
 import { ScrollArea } from "@/components/ui/ScrollArea/ScrollArea";
+import { FileCard, type FileResultState } from "@/features/files/FileCard/FileCard";
 import {
   createImageFilePreviewQueue,
   fetchImageFileResult,
   fetchImageFilesPage,
 } from "@/features/files/FilesWorkspace/files-data";
 import { useOptionalWorkspaceDataCache } from "@/features/workspace/WorkspaceDataCache/WorkspaceDataCache";
-import { ru } from "@/i18n/ru";
 import type { ImageJob, ImageJobResult } from "@/lib/web-api/contracts";
 
 import styles from "./ChatFilePicker.module.css";
@@ -52,21 +60,31 @@ export function attachmentFromFile(file: File): ChatMediaAttachment {
 }
 
 export function ChatFilePicker({ initialSource, onClose, onSelect }: Readonly<ChatFilePickerProps>) {
+  const t = useDictionary();
   const cache = useOptionalWorkspaceDataCache();
   const [source, setSource] = useState<ChatFileSource>(initialSource);
   const [jobs, setJobs] = useState<ImageJob[]>(() => cache?.getImageFilesFirstPage()?.items ?? []);
-  const [resultsByJobID, setResultsByJobID] = useState<Record<string, ImageJobResult>>({});
+  const [resultsByJobID, setResultsByJobID] = useState<Record<string, ImageJobResult>>(() => cache?.getImageResults() ?? {});
+  const [resultStatesByJobID, setResultStatesByJobID] = useState<Record<string, FileResultState>>({});
   const [isLoading, setIsLoading] = useState(jobs.length === 0);
+  const [attempt, setAttempt] = useState(0);
   const [loadFailed, setLoadFailed] = useState(false);
   const inputRef = useRef<HTMLInputElement>(null);
   const closeButtonRef = useRef<HTMLButtonElement>(null);
+  const previewQueueRef = useRef<ReturnType<typeof createImageFilePreviewQueue> | null>(null);
+  const titleID = useId();
+  const panelID = useId();
 
   const requestClose = () => {
     onClose();
   };
 
   useEffect(() => {
+    const previous = document.activeElement;
     closeButtonRef.current?.focus();
+    return () => {
+      if (previous instanceof HTMLElement && previous.isConnected) previous.focus({ preventScroll: true });
+    };
   }, []);
 
   useEffect(() => {
@@ -96,24 +114,38 @@ export function ChatFilePicker({ initialSource, onClose, onSelect }: Readonly<Ch
     return () => {
       active = false;
     };
-  }, [cache, source]);
+  }, [cache, source, attempt]);
 
-  useEffect(() => {
-    if (source === "uploaded" || jobs.length === 0) {
-      return;
-    }
-
-    const queue = createImageFilePreviewQueue({
+  const createPreviewQueue = useCallback(() => createImageFilePreviewQueue({
       fetchResult: fetchImageFileResult,
-      onFailure: () => undefined,
-      onStart: () => undefined,
+      onFailure: (job) => setResultStatesByJobID((current) => ({ ...current, [job.id]: "error" })),
+      onStart: (job) => setResultStatesByJobID((current) => ({ ...current, [job.id]: "loading" })),
       onSuccess: (job, result) => {
+        cache?.setImageResult(result);
         setResultsByJobID((current) => ({ ...current, [job.id]: result }));
+        setResultStatesByJobID((current) => ({ ...current, [job.id]: "idle" }));
       },
+    }), [cache]);
+  useEffect(() => {
+    return () => {
+      previewQueueRef.current?.dispose();
+      previewQueueRef.current = null;
+    };
+  }, []);
+
+  const requestResult = useCallback((job: ImageJob) => {
+    previewQueueRef.current ??= createPreviewQueue();
+    previewQueueRef.current.enqueue(job);
+  }, [createPreviewQueue]);
+  const selectArtifact = (job: ImageJob, artifact: ImageJobResult["artifacts"][number]) => {
+    onSelect({
+      id: artifact.id,
+      mimeType: artifact.mime_type,
+      name: job.prompt,
+      previewUrl: `/web/v1/image-artifacts/${artifact.id}`,
+      source: "generated",
     });
-    jobs.filter((job) => job.status === "succeeded").forEach((job) => queue.enqueue(job));
-    return () => queue.dispose();
-  }, [jobs, source]);
+  };
 
   const selectFile = (event: ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0];
@@ -134,113 +166,97 @@ export function ChatFilePicker({ initialSource, onClose, onSelect }: Readonly<Ch
   const showGenerated = source === "all" || source === "generated";
   const content = (
     <ModalBackdrop onClose={requestClose}>
-      {(requestAnimatedClose) => <section aria-labelledby="chat-file-picker-title" aria-modal="true" className={styles.dialog} role="dialog">
+      {(requestAnimatedClose) => <section
+        aria-labelledby={titleID}
+        aria-modal="true"
+        className={styles.dialog}
+        onKeyDown={(event) => {
+          if (event.key !== "Tab") return;
+          const controls = Array.from(event.currentTarget.querySelectorAll<HTMLElement>(
+            'button:not(:disabled):not([tabindex="-1"]), [tabindex="0"]',
+          ));
+          const first = controls[0];
+          const last = controls.at(-1);
+          if (event.shiftKey && document.activeElement === first) {
+            event.preventDefault();
+            last?.focus();
+          } else if (!event.shiftKey && document.activeElement === last) {
+            event.preventDefault();
+            first?.focus();
+          }
+        }}
+        role="dialog"
+      >
         <header className={styles.header}>
-          <h2 id="chat-file-picker-title">{ru.conversations.mediaLibraryTitle}</h2>
-          <button
-            aria-label={ru.conversations.mediaLibraryClose}
+          <h2 id={titleID}>{t.conversations.mediaLibraryTitle}</h2>
+          <ModalCloseButton
+            aria-label={t.conversations.mediaLibraryClose}
             className={styles.close}
             onClick={requestAnimatedClose}
             ref={closeButtonRef}
-            type="button"
-          >
-            <svg aria-hidden="true" viewBox="0 0 24 24">
-              <path d="m6 6 12 12M18 6 6 18" fill="none" stroke="currentColor" strokeLinecap="round" strokeWidth="1.7" />
-            </svg>
-          </button>
+          />
         </header>
 
-        <ScrollArea
-          className={styles.tabsScroll}
-          orientation="horizontal"
-          viewportClassName={styles.tabs}
-          viewportProps={{
-            "aria-label": ru.conversations.mediaLibraryTabs,
-            role: "tablist",
-          }}
-        >
-          {(["all", "generated", "uploaded"] as const).map((tab) => (
-            <button
-              aria-controls="chat-file-picker-panel"
-              aria-selected={source === tab}
-              className={styles.tab}
-              key={tab}
-              onClick={() => selectSource(tab)}
-              role="tab"
-              type="button"
-            >
-              {tab === "all"
-                ? ru.conversations.mediaLibraryAll
-                : tab === "generated"
-                  ? ru.conversations.mediaLibraryGenerated
-                  : ru.conversations.mediaLibraryUploaded}
-            </button>
-          ))}
-        </ScrollArea>
+        <div className={styles.tabs}>
+          <ModeSwitchPanel
+            activeID={source}
+            ariaLabel={t.conversations.mediaLibraryTabs}
+            items={([
+              ["all", t.conversations.mediaLibraryAll],
+              ["generated", t.conversations.mediaLibraryGenerated],
+              ["uploaded", t.conversations.mediaLibraryUploaded],
+            ] as const).map(([id, label]) => ({
+              id, label, ariaControls: panelID, elementID: `${panelID}-${id}`,
+            }))}
+            onChange={selectSource}
+            semantics="tabs"
+          />
+        </div>
 
-        <ScrollArea className={styles.panel} id="chat-file-picker-panel" role="tabpanel">
-          {showGenerated && isLoading ? <p className={styles.state} role="status">{ru.files.loading}</p> : null}
-          {showGenerated && loadFailed ? <p className={styles.state} role="alert">{ru.files.loadFailure}</p> : null}
+        <ScrollArea
+          aria-labelledby={`${panelID}-${source}`}
+          className={styles.panel}
+          id={panelID}
+          role="tabpanel"
+          trackPlacement="outside"
+        >
+          {showGenerated && isLoading && jobs.length === 0 ? <SkeletonGrid count={3} label={t.files.loading} /> : null}
+          {showGenerated && loadFailed ? <StateNotice kind="error" action={{ label: t.files.retry, onClick: () => { setLoadFailed(false); setIsLoading(true); setAttempt(value => value + 1); } }}>{t.files.loadFailure}</StateNotice> : null}
           {showGenerated && !isLoading && !loadFailed && generatedJobs.length === 0 ? (
-            <p className={styles.state}>{ru.conversations.mediaLibraryEmptyGenerated}</p>
+            <StateNotice>{t.conversations.mediaLibraryEmptyGenerated}</StateNotice>
           ) : null}
           {showGenerated && generatedJobs.length > 0 ? (
-            <ol className={styles.grid}>
-              {generatedJobs.flatMap((job) => {
-                const result = resultsByJobID[job.id];
-                if (result === undefined) {
-                  return [
-                    <li className={styles.card} key={job.id}>
-                      <div aria-hidden="true" className={styles.skeleton} />
-                      <span>{job.prompt}</span>
-                    </li>,
-                  ];
-                }
-                return result.artifacts.map((artifact) => {
-                  const previewUrl = `/web/v1/image-artifacts/${artifact.id}`;
-                  const attachment: ChatMediaAttachment = {
-                    id: artifact.id,
-                    mimeType: artifact.mime_type,
-                    name: job.prompt,
-                    previewUrl,
-                    source: "generated",
-                  };
-                  return (
-                    <li className={styles.card} key={artifact.id}>
-                      <img alt={job.prompt} src={previewUrl} />
-                      <div className={styles.cardMeta}>
-                        <span>{job.prompt}</span>
-                        <small>{job.model_name} · {job.image_quality}</small>
-                      </div>
-                      <button
-                        aria-label={`${ru.conversations.mediaLibraryChoose} «${job.prompt}»`}
-                        className={styles.choose}
-                        onClick={() => onSelect(attachment)}
-                        type="button"
-                      >
-                        {ru.conversations.mediaLibraryChoose}
-                      </button>
-                    </li>
-                  );
-                });
-              })}
-            </ol>
+            <MasonryGrid>
+              {generatedJobs.map((job) => (
+                <li key={job.id}>
+                  <FileCard
+                    isRetrying={false}
+                    job={job}
+                    onRequestResult={requestResult}
+                    onRetryJob={() => undefined}
+                    result={resultsByJobID[job.id] ?? null}
+                    resultState={resultStatesByJobID[job.id] ?? "idle"}
+                    selectionAction={{ label: t.conversations.mediaLibraryChoose, onSelect: selectArtifact }}
+                  />
+                </li>
+              ))}
+            </MasonryGrid>
           ) : null}
           {source === "uploaded" ? (
-            <p className={styles.state}>{ru.conversations.mediaLibraryEmptyUploaded}</p>
+            <StateNotice>{t.conversations.mediaLibraryEmptyUploaded}</StateNotice>
           ) : null}
         </ScrollArea>
 
         <footer className={styles.footer}>
-          <button className={styles.upload} onClick={() => inputRef.current?.click()} type="button">
+          <Button className={styles.upload} onClick={() => inputRef.current?.click()} variant="outline">
             <svg aria-hidden="true" viewBox="0 0 24 24">
               <path d="M12 15V4m0 0L8 8m4-4 4 4M5 14v4a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2v-4" fill="none" stroke="currentColor" strokeLinecap="round" strokeLinejoin="round" strokeWidth="1.7" />
             </svg>
-            {ru.conversations.mediaLibraryUpload}
-          </button>
+            {t.conversations.mediaLibraryUpload}
+          </Button>
           <input
             accept={acceptedMediaTypes}
-            aria-label={ru.conversations.mediaLibraryUpload}
+            aria-label={t.conversations.mediaLibraryUpload}
             className={styles.fileInput}
             onChange={selectFile}
             ref={inputRef}

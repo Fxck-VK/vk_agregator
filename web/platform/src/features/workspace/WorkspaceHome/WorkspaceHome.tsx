@@ -1,4 +1,8 @@
-import { ru } from "@/i18n/ru";
+"use client";
+
+import { useDictionary } from "@/i18n/LocaleProvider";
+
+import type { Dictionary } from "@/i18n/dictionary";
 import { InspirationGallery } from "@/features/inspiration/InspirationGallery/InspirationGallery";
 
 import { WorkspaceLanding } from "../WorkspaceLanding/WorkspaceLanding";
@@ -7,7 +11,7 @@ import { NewChatPrompt } from "../WorkspacePrompt/NewChatPrompt";
 
 import styles from "./WorkspaceHome.module.css";
 
-type WorkspaceSection = keyof typeof ru.workspace.sections;
+type WorkspaceSection = keyof Dictionary["workspace"]["sections"];
 
 type WorkspaceHomeProps = {
   access?: "authenticated" | "guest";
@@ -16,7 +20,8 @@ type WorkspaceHomeProps = {
 };
 
 export function WorkspaceHome({ access = "authenticated", section = "home", chatModelId }: WorkspaceHomeProps) {
-  const content = ru.workspace.sections[section];
+  const t = useDictionary();
+  const content = t.workspace.sections[section];
 
   if (section === "inspiration") {
     return <InspirationGallery />;
@@ -34,7 +39,7 @@ export function WorkspaceHome({ access = "authenticated", section = "home", chat
       >
         <div aria-labelledby="new-chat-title" className={styles.newChatContent} role="group">
           <div className={styles.welcome}>
-            <h1 id="new-chat-title">{ru.workspace.startTitle}</h1>
+            <h1 id="new-chat-title">{t.workspace.startTitle}</h1>
           </div>
           {chatModelId && access === "authenticated"
             ? <NewChatPrompt modelId={chatModelId} />

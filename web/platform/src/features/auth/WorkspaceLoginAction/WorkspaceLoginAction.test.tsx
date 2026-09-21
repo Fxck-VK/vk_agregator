@@ -25,7 +25,7 @@ describe("WorkspaceLoginAction", () => {
   it.each(["header", "sidebar"] as const)("links the %s guest action to the existing login page", (placement) => {
     render(<WorkspaceLoginAction placement={placement} />);
 
-    expect(screen.getByRole("link", { name: ru.login.submitLabel })).toHaveAttribute("href", "/login");
+    expect(screen.getByRole("link", { name: ru.login.submitLabel })).toHaveAttribute("href", "/ru/login");
     expect(screen.getByRole("link", { name: ru.login.submitLabel })).toHaveAttribute("data-placement", placement);
   });
 

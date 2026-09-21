@@ -1,6 +1,6 @@
 import type { ReactNode } from "react";
 
-import { cleanup, fireEvent, render, screen, within } from "@testing-library/react";
+import { cleanup, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
 vi.mock("next/link", () => ({
@@ -99,10 +99,10 @@ describe("ModelsCatalog", () => {
     vi.mocked(loadGenerationModelCatalog).mockResolvedValue(modelsResponse);
     render(<ModelsCatalog />);
 
-    expect(loadGenerationModelCatalog).toHaveBeenCalledTimes(1);
+    await waitFor(() => expect(loadGenerationModelCatalog).toHaveBeenCalledTimes(1));
     expect(await screen.findByRole("link", { name: `${ru.modelsCatalog.openGeneratorLabel}: Nano Banana` })).toHaveAttribute(
       "href",
-      "/app/chats?model=nano%20banana%2F2%26preview",
+      "/ru/app/chats?model=nano%20banana%2F2%26preview",
     );
     expect(screen.getByRole("link", { name: `${ru.modelsCatalog.openGeneratorLabel}: Nano Banana` })).toHaveAttribute(
       "data-next-link",
@@ -159,7 +159,7 @@ describe("ModelsCatalog", () => {
     vi.mocked(loadGenerationModelCatalog).mockReturnValue(new Promise(() => {}));
     render(<ModelsCatalog />);
 
-    expect(screen.getByRole("status")).toHaveTextContent(ru.modelsCatalog.loading);
+    expect(screen.getByRole("status")).toHaveAccessibleName(ru.modelsCatalog.loading);
   });
 
   it.each([
@@ -187,7 +187,7 @@ describe("ModelsCatalog", () => {
     await screen.findByText("Nano Banana");
     expect(screen.getByRole("heading", { name: "Популярные" })).toBeInTheDocument();
     expect(screen.getByRole("tabpanel", { name: "Популярные" })).toHaveAttribute("id", "models-catalog-panel");
-    for (const category of ["Популярные", "Изображения", "Текст", "Видео и аудио", "Бесплатные", "Учёба и работа"]) {
+    for (const category of ["Популярные", "Изображения", "Текст", "Видео", "Аудио", "Бесплатные", "Учёба и работа"]) {
       expect(screen.getByRole("tab", { name: category })).toBeInTheDocument();
     }
     expect(screen.getByText("Nano Banana")).toBeInTheDocument();

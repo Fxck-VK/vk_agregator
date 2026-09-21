@@ -15,7 +15,7 @@ describe("PublicShell", () => {
     expect(screen.queryByTestId("app-shell")).not.toBeInTheDocument();
     expect(screen.getByRole("link", { name: publicDictionaryRu.navigation.openWorkspace })).toHaveAttribute(
       "href",
-      "/app",
+      "/ru/app",
     );
   });
 });

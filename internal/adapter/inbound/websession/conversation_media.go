@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"errors"
 	"net/http"
+	"reflect"
 	"slices"
 	"strings"
 
@@ -18,13 +19,14 @@ import (
 )
 
 type conversationGenerationRequest struct {
-	Prompt       string `json:"prompt"`
-	ModelID      string `json:"model_id,omitempty"`
-	ImageQuality string `json:"image_quality,omitempty"`
-	AspectRatio  string `json:"aspect_ratio,omitempty"`
-	OutputCount  int    `json:"output_count,omitempty"`
-	Resolution   string `json:"resolution,omitempty"`
-	DurationSec  int    `json:"duration_sec,omitempty"`
+	ReferenceArtifactIDs []uuid.UUID `json:"reference_artifact_ids,omitempty"`
+	Prompt               string      `json:"prompt"`
+	ModelID              string      `json:"model_id,omitempty"`
+	ImageQuality         string      `json:"image_quality,omitempty"`
+	AspectRatio          string      `json:"aspect_ratio,omitempty"`
+	OutputCount          int         `json:"output_count,omitempty"`
+	Resolution           string      `json:"resolution,omitempty"`
+	DurationSec          int         `json:"duration_sec,omitempty"`
 }
 
 type safeVideoModel struct {
@@ -96,7 +98,7 @@ func (h *Handler) resolveConversationMedia(req conversationGenerationRequest) (d
 		if req.Resolution != "" || req.DurationSec != 0 {
 			break
 		}
-		resolution, err := imagegeneration.NewResolver(h.cfg.ImageModels, h.deps.ImagePricing).Resolve(imagegeneration.Request{Prompt: req.Prompt, ModelID: req.ModelID, Quality: req.ImageQuality, AspectRatio: req.AspectRatio, OutputCount: req.OutputCount})
+		resolution, err := imagegeneration.NewResolver(h.cfg.ImageModels, h.deps.ImagePricing).Resolve(imagegeneration.Request{Prompt: req.Prompt, ModelID: req.ModelID, Quality: req.ImageQuality, AspectRatio: req.AspectRatio, OutputCount: req.OutputCount, ReferenceCount: len(req.ReferenceArtifactIDs)})
 		if err != nil {
 			return "", "", nil, pricingcatalog.PricingSnapshot{}, err
 		}
@@ -104,13 +106,16 @@ func (h *Handler) resolveConversationMedia(req conversationGenerationRequest) (d
 		raw, _ := json.Marshal(params)
 		values := make(map[string]any)
 		_ = json.Unmarshal(raw, &values)
+		if len(req.ReferenceArtifactIDs) > 0 {
+			values["reference_artifact_ids"] = req.ReferenceArtifactIDs
+		}
 		return domain.OperationImageGenerate, domain.ModalityImage, values, resolution.PricingSnapshot, nil
 	}
 	for _, route := range h.conversationVideoRoutes() {
 		if route.Alias != req.ModelID {
 			continue
 		}
-		if req.ImageQuality != "" || req.OutputCount != 0 {
+		if len(req.ReferenceArtifactIDs) > 0 || req.ImageQuality != "" || req.OutputCount != 0 {
 			break
 		}
 		if req.Resolution == "" {
@@ -153,6 +158,9 @@ func (h *Handler) createConversationMedia(w http.ResponseWriter, r *http.Request
 		writeError(w, http.StatusBadRequest, "invalid media model options")
 		return
 	}
+	if !h.validateConversationInputs(w, r, accountID, req) {
+		return
+	}
 	params["conversation_id"] = conversation.ID.String()
 	params["conversation_source"] = string(domain.ConversationSourceWeb)
 	raw, _ := json.Marshal(params)
@@ -185,7 +193,7 @@ func (h *Handler) createConversationMedia(w http.ResponseWriter, r *http.Request
 	var expected map[string]any
 	_ = json.Unmarshal(raw, &expected)
 	for key, value := range expected {
-		if persisted[key] != value {
+		if !reflect.DeepEqual(persisted[key], value) {
 			writeError(w, http.StatusConflict, "idempotency key belongs to another message")
 			return
 		}

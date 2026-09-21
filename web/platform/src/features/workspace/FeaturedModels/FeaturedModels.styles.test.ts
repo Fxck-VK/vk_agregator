@@ -31,9 +31,9 @@ describe("FeaturedModels card geometry", () => {
     expect(stylesheet).not.toMatch(/(?:^|\n)\.copy\s*\{/);
   });
 
-  it("uses a light catalogue action label with enough definition over the glossy background", () => {
-    expect(catalogActionRule).toContain("color: #f5f5f7");
-    expect(catalogActionRule).toContain("text-shadow: 0 0.0625rem 0.2rem rgb(0 0 0 / 45%)");
+  it("uses theme-aware catalogue action text over the glossy background", () => {
+    expect(catalogActionRule).toContain("color: var(--color-text-on-gradient, var(--color-text-on-dark))");
+    expect(catalogActionRule).toContain("text-shadow: var(--gradient-text-shadow, 0 0.0625rem 0.2rem rgb(0 0 0 / 45%))");
     expect(catalogActionRule).not.toContain("color: var(--color-text-on-accent)");
   });
 });

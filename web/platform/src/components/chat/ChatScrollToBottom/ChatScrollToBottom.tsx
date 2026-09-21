@@ -1,9 +1,11 @@
 "use client";
 
+import { useDictionary } from "@/i18n/LocaleProvider";
+
+
 import { useCallback, useEffect, useRef, useState } from "react";
 
 import { AssistantTypingIndicator } from "@/components/chat/AssistantTypingIndicator/AssistantTypingIndicator";
-import { ru } from "@/i18n/ru";
 
 import styles from "./ChatScrollToBottom.module.css";
 
@@ -28,6 +30,7 @@ export function ChatScrollToBottom({
   isAwaitingResponse = false,
   scrollContainer,
 }: ChatScrollToBottomProps) {
+  const t = useDictionary();
   const [atBottom, setAtBottom] = useState(() => !scrollContainer || isAtBottom(scrollContainer));
   const followLatestRef = useRef(atBottom);
   const programmaticScrollRef = useRef(false);
@@ -150,7 +153,7 @@ export function ChatScrollToBottom({
     [],
   );
 
-  if (!scrollContainer) {
+  if (!scrollContainer || atBottom) {
     return null;
   }
 
@@ -162,23 +165,19 @@ export function ChatScrollToBottom({
   if (isAwaitingResponse) {
     return (
       <button
-        aria-label={ru.conversations.scrollToLatest}
+        aria-label={t.conversations.scrollToLatest}
         className={styles.button}
         onClick={handleScrollToLatest}
         type="button"
       >
-        <AssistantTypingIndicator label={ru.conversations.composerAwaitingResponse} />
+        <AssistantTypingIndicator label={t.conversations.composerAwaitingResponse} />
       </button>
     );
   }
 
-  if (atBottom) {
-    return null;
-  }
-
   return (
     <button
-      aria-label={ru.conversations.scrollToLatest}
+      aria-label={t.conversations.scrollToLatest}
       className={styles.button}
       onClick={handleScrollToLatest}
       type="button"

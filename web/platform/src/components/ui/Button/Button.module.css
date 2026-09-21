@@ -19,3 +19,28 @@
   cursor: not-allowed;
   opacity: 0.5;
 }
+
+.button.outline {
+  border: 0.0625rem solid var(--color-border);
+  background: transparent;
+  transition: border-color var(--motion-fast);
+}
+
+.button.outline:hover:not(:disabled),
+.button.outline:focus-visible {
+  border-color: var(--input-focus-border-color);
+  background: transparent;
+  outline: none;
+}
+
+.button.outline:active:not(:disabled) {
+  transform: none;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .button.outline {
+    transition: none;
+  }
+}
+
+.button [role="progressbar"] { --loading-indicator-size: 1.1em; }

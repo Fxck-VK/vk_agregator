@@ -412,7 +412,7 @@ describe("InspirationGallery", () => {
 
     const recreate = screen.getByRole("link", { name: ru.inspiration.recreate });
     const recreateUrl = new URL(recreate.getAttribute("href")!, "https://neirohub.test");
-    expect(recreateUrl.pathname).toBe("/app/image");
+    expect(recreateUrl.pathname).toBe("/ru/app/image");
     expect(recreateUrl.searchParams.get("model")).toBe("gpt_image_2");
     expect(recreateUrl.searchParams.get("quality")).toBe("1K");
     expect(recreateUrl.searchParams.get("prompt")).toBe(ru.inspiration.prompt);

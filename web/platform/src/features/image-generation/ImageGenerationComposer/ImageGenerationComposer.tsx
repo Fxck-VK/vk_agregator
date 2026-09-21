@@ -1,8 +1,10 @@
 "use client";
 
+import { StateNotice } from "@/components/ui/AsyncState/AsyncState";
+import { useMessages, useDictionary } from "@/i18n/LocaleProvider";
+
 import { ChatComposer } from "@/components/chat/ChatComposer/ChatComposer";
 import { CreditAmount } from "@/components/ui/CreditAmount/CreditAmount";
-import { ru } from "@/i18n/ru";
 
 import { ImageGenerationControls, type ImageGenerationControlsProps } from "./ImageGenerationControls";
 
@@ -41,6 +43,8 @@ export function ImageGenerationComposer({
   prompt,
   qualityOptions,
 }: Readonly<ImageGenerationComposerProps>) {
+  const msg = useMessages();
+  const t = useDictionary();
   return (
     <form
       className={styles.root}
@@ -70,24 +74,24 @@ export function ImageGenerationComposer({
         )}
         canSubmit={canSubmit}
         disabled={isSubmitting}
-        label={ru.imageGeneration.promptLabel}
-        mediaLabel="Загрузить медиа"
+        label={t.imageGeneration.promptLabel}
+        mediaLabel={msg("imageGenerationComposer.uploadMedia")}
         mediaLibraryEnabled={access === "authenticated"}
         generatedMediaHref={access === "guest" ? "/login" : undefined}
         uploadedMediaHref={access === "guest" ? "/login" : undefined}
         note={priceNote ?? (price === null
-          ? ru.imageGeneration.priceUnavailable
-          : <CreditAmount prefix={`${ru.imageGeneration.priceLabel}:`} value={price} />)}
+          ? t.imageGeneration.priceUnavailable
+          : <CreditAmount prefix={`${t.imageGeneration.priceLabel}:`} value={price} />)}
         onChange={(event) => onPromptChange(event.target.value)}
         onSend={onSubmit}
-        placeholder={ru.imageGeneration.promptPlaceholder}
-        submitLabel={isSubmitting ? ru.imageGeneration.preparing : ru.imageGeneration.generate}
+        placeholder={t.imageGeneration.promptPlaceholder}
+        submitLabel={isSubmitting ? t.imageGeneration.preparing : t.imageGeneration.generate}
         value={prompt}
         variant="hero"
         wrapLeadingControls
       />
       {errorMessage === null ? null : (
-        <p className={styles.error} role="alert">{errorMessage}</p>
+        <StateNotice inline kind="error">{errorMessage}</StateNotice>
       )}
     </form>
   );

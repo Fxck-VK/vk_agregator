@@ -892,7 +892,7 @@ describe("FilePreviewDialog", () => {
     const recreate = screen.getByRole("link", { name: "Пересоздать" });
     const url = new URL(recreate.getAttribute("href")!, window.location.origin);
 
-    expect(url.pathname).toBe("/app/image");
+    expect(url.pathname).toBe("/ru/app/image");
     expect(url.searchParams.get("model")).toBe(job.model_id);
     expect(url.searchParams.get("prompt")).toBe(job.prompt);
     expect(url.searchParams.get("quality")).toBe(job.image_quality);

@@ -1,9 +1,11 @@
 "use client";
 
+import { useDictionary } from "@/i18n/LocaleProvider";
+
+
 import { useRef, useState } from "react";
 
 import { ModelIcon } from "@/features/models/ModelIcon/ModelIcon";
-import { ru } from "@/i18n/ru";
 
 import { InspirationExampleMedia } from "../InspirationExampleMedia/InspirationExampleMedia";
 import type { InspirationExample } from "../inspiration-examples";
@@ -21,6 +23,7 @@ export function InspirationExampleCard({
   onOpen,
   priority = false,
 }: InspirationExampleCardProps) {
+  const t = useDictionary();
   const [isOpen, setIsOpen] = useState(false);
   const cardRef = useRef<HTMLButtonElement>(null);
   const cardVideoRef = useRef<HTMLVideoElement>(null);
@@ -70,7 +73,7 @@ export function InspirationExampleCard({
           videoRef={cardVideoRef}
         />
         <span className={styles.cardShade} />
-        <span className={styles.cardAction}>{ru.inspiration.details}</span>
+        <span className={styles.cardAction}>{t.inspiration.details}</span>
         <span className={styles.cardMeta}>
           <ModelIcon className={styles.modelMark} />
           <span>{example.modelName}</span>

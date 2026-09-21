@@ -2,6 +2,7 @@ import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/re
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import { fetchImageFileResult, fetchImageFilesPage } from "@/features/files/FilesWorkspace/files-data";
+import { ru } from "@/i18n/ru";
 
 import { ChatFilePicker } from "./ChatFilePicker";
 
@@ -62,7 +63,7 @@ describe("ChatFilePicker", () => {
     expect(screen.getByRole("dialog", { name: "Мои файлы" })).toBeVisible();
     expect(screen.getByRole("tab", { name: "Сгенерированные" })).toHaveAttribute("aria-selected", "true");
 
-    fireEvent.click(await screen.findByRole("button", { name: "Выбрать «Город после дождя»" }));
+    fireEvent.click(await screen.findByRole("button", { name: "Прикрепить «Город после дождя»" }));
 
     expect(onSelect).toHaveBeenCalledWith({
       id: artifactID,
@@ -71,6 +72,21 @@ describe("ChatFilePicker", () => {
       previewUrl: `/web/v1/image-artifacts/${artifactID}`,
       source: "generated",
     });
+  });
+
+  it("lets the user retry a failed preview before attaching it", async () => {
+    vi.mocked(fetchImageFileResult).mockRejectedValueOnce(new Error("Unavailable"));
+    const onSelect = vi.fn();
+    render(<ChatFilePicker initialSource="generated" onClose={vi.fn()} onSelect={onSelect} />);
+
+    const error = await screen.findByRole("alert");
+    expect(error).toHaveTextContent(ru.files.previewFailure);
+    expect(screen.queryByRole("button", { name: /Прикрепить/ })).not.toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: /Повторить/ }));
+    fireEvent.click(await screen.findByRole("button", { name: "Прикрепить «Город после дождя»" }));
+
+    expect(fetchImageFileResult).toHaveBeenCalledTimes(2);
+    expect(onSelect).toHaveBeenCalledOnce();
   });
 
   it("opens on uploaded files and lets the user upload from the empty state", () => {

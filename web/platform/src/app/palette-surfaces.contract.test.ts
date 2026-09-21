@@ -18,9 +18,9 @@ function rule(stylesheet: string, selector: string) {
 describe("palette surface roles", () => {
   it.each([
     ["src/features/models/ModelCard/ModelCard.module.css", "\\.card", "--color-panel"],
-    ["src/features/files/FileCard/FileCard.module.css", "\\.card", "--color-surface"],
-    ["src/features/account/ProfileBalanceCard/ProfileBalanceCard.module.css", "\\.card", "--color-surface"],
-    ["src/features/account/ProfileIdentityCard/ProfileIdentityCard.module.css", "\\.card", "--color-surface"],
+    ["src/features/files/FileCard/FileCard.module.css", "\\.card", "--color-panel"],
+    ["src/features/account/ProfileBalanceCard/ProfileBalanceCard.module.css", "\\.card", "--color-panel"],
+    ["src/features/account/ProfileIdentityCard/ProfileIdentityCard.module.css", "\\.card", "--color-panel"],
   ])("uses the assigned surface in %s", (path, selector, surface) => {
     expect(rule(read(path), selector)).toContain(`background: var(${surface})`);
   });

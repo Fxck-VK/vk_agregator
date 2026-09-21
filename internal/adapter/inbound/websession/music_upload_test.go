@@ -5,6 +5,7 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"io"
 	"net/http"
 	"net/http/httptest"
 	"testing"
@@ -113,17 +114,13 @@ func TestUploadMusicInputRejectsProbeFailure(t *testing.T) {
 func musicUploadRequest(t *testing.T, sessions *sessionStub, accountID uuid.UUID, contentType string, body []byte) *http.Request {
 	t.Helper()
 	req := authenticatedConversationRequest(t, http.MethodPost, "/web/v1/music-inputs", sessions, accountID)
-	req.Body = ioNopCloser{Reader: bytes.NewReader(body)}
+	req.Body = io.NopCloser(bytes.NewReader(body))
 	req.Header.Set("Content-Type", contentType)
 	req.Header.Set("Origin", "https://app.example.test")
 	req.Header.Set("X-CSRF-Token", "csrf")
 	req.AddCookie(&http.Cookie{Name: csrfCookieName, Value: "csrf"})
 	return req
 }
-
-type ioNopCloser struct{ *bytes.Reader }
-
-func (c ioNopCloser) Close() error { return nil }
 
 func validMP3Bytes() []byte { return []byte{'I', 'D', '3', 4, 0, 0, 0, 0, 0, 0, 'd', 'a', 't', 'a'} }
 

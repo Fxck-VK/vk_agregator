@@ -56,7 +56,7 @@ describe("FeaturedModels", () => {
     expect(screen.queryByRole("button", { name: "Показать ещё" })).toBeNull();
     expect(screen.getByRole("link", { name: "Все нейросети" })).toHaveAttribute(
       "href",
-      "/app/models",
+      "/ru/app/models",
     );
     expect(screen.getByRole("link", { name: "Все нейросети" })).toHaveAttribute(
       "data-revealed",
@@ -77,7 +77,7 @@ describe("FeaturedModels", () => {
     expect(screen.queryByRole("button", { name: "Показать ещё" })).toBeNull();
     expect(screen.getByRole("link", { name: "Все нейросети" })).toHaveAttribute(
       "href",
-      "/app/models",
+      "/ru/app/models",
     );
   });
 });

@@ -9,19 +9,19 @@ describe("ProfileReferralFaq", () => {
   it("opens one answer with an accessible disclosure control", () => {
     render(<ProfileReferralFaq />);
 
-    const question = screen.getByRole("button", { name: ru.profile.referralFaqItems[0].question });
-    const answerId = question.getAttribute("aria-controls");
+    const question = screen.getByText(ru.profile.referralFaqItems[0].question).closest("summary")!;
+    const disclosure = question.closest("details")!;
 
-    expect(question).toHaveAttribute("aria-expanded", "false");
-    expect(answerId).not.toBeNull();
-    expect(document.getElementById(answerId ?? "")).toHaveAttribute("role", "region");
-    expect(document.getElementById(answerId ?? "")).toHaveAttribute("hidden");
+    expect(disclosure).not.toHaveAttribute("open");
+    expect(disclosure).toHaveAttribute("name", "profile-referral-faq");
 
     fireEvent.click(question);
 
-    expect(question).toHaveAttribute("aria-expanded", "true");
-    expect(question).toHaveAttribute("aria-controls");
-    expect(screen.getByText(ru.profile.referralFaqItems[0].answer)).toBeInTheDocument();
-    expect(document.getElementById(answerId ?? "")).not.toHaveAttribute("hidden");
+    expect(disclosure).toHaveAttribute("open");
+    expect(screen.getByText(ru.profile.referralFaqItems[0].answer)).toBeVisible();
+
+    fireEvent.click(question);
+
+    expect(disclosure).not.toHaveAttribute("open");
   });
 });

@@ -31,6 +31,7 @@ type ModeSwitchPanelProps<ID extends string> = Omit<
 > & {
   activeID: ID;
   ariaLabel: string;
+  fullWidth?: boolean;
   iconOnly?: boolean;
   items: readonly ModeSwitchPanelItem<ID>[];
   onChange: (id: ID) => void;
@@ -41,6 +42,7 @@ export function ModeSwitchPanel<ID extends string>({
   activeID,
   ariaLabel,
   className,
+  fullWidth = false,
   iconOnly = false,
   items,
   onChange,
@@ -61,7 +63,10 @@ export function ModeSwitchPanel<ID extends string>({
 
     const targetRect = activeButton.getBoundingClientRect();
     const viewportRect = viewport.getBoundingClientRect();
-    const targetOffset = targetRect.left - viewportRect.left + viewport.scrollLeft;
+    const isRTL = getComputedStyle(viewport).direction === "rtl";
+    const targetOffset = isRTL
+      ? targetRect.right - viewportRect.right + viewport.scrollLeft
+      : targetRect.left - viewportRect.left + viewport.scrollLeft;
 
     // Place the first frame instantly; later updates use the CSS transitions.
     indicator.style.transition = indicator.dataset.ready === "true" ? "" : "none";
@@ -74,9 +79,9 @@ export function ModeSwitchPanel<ID extends string>({
     if (previousLayout?.activeID !== activeID || previousLayout.width !== viewportRect.width) {
       revealedLayoutRef.current = { activeID, width: viewportRect.width };
       if (targetRect.left < viewportRect.left) {
-        viewport.scrollLeft = Math.max(0, targetOffset);
+        viewport.scrollLeft += targetRect.left - viewportRect.left;
       } else if (targetRect.right > viewportRect.right) {
-        viewport.scrollLeft = Math.max(0, targetOffset + targetRect.width - viewportRect.width);
+        viewport.scrollLeft += targetRect.right - viewportRect.right;
       }
     }
   }, [activeID, items]);
@@ -116,7 +121,8 @@ export function ModeSwitchPanel<ID extends string>({
     } else if (event.key === "End") {
       nextIndex = enabledIndices.at(-1)!;
     } else {
-      const direction = event.key === "ArrowRight" ? 1 : -1;
+      const isRTL = viewportRef.current && getComputedStyle(viewportRef.current).direction === "rtl";
+      const direction = (event.key === "ArrowRight" ? 1 : -1) * (isRTL ? -1 : 1);
       const nextEnabledIndex = (
         currentEnabledIndex + direction + enabledIndices.length
       ) % enabledIndices.length;
@@ -131,6 +137,7 @@ export function ModeSwitchPanel<ID extends string>({
     <ScrollArea
       {...rootProps}
       className={[styles.root, className].filter(Boolean).join(" ")}
+      data-full-width={fullWidth || undefined}
       data-icon-only={iconOnly || undefined}
       data-mode-switch-panel="true"
       orientation="horizontal"

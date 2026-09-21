@@ -24,10 +24,10 @@
   padding: var(--space-3) var(--space-8);
   overflow: hidden;
   background: transparent;
-  color: #f5f5f7;
+  color: var(--color-text-on-gradient, var(--color-text-on-dark));
   font: inherit;
   font-weight: var(--font-weight-semibold);
-  text-shadow: 0 0.0625rem 0.2rem rgb(0 0 0 / 45%);
+  text-shadow: var(--gradient-text-shadow, 0 0.0625rem 0.2rem rgb(0 0 0 / 45%));
   text-decoration: none;
   cursor: pointer;
   transition: translate var(--motion-fast);
@@ -68,44 +68,7 @@
   animation-delay: 90ms;
 }
 
-.empty {
-  min-block-size: 8rem;
-  margin: 0;
-  border: 0.0625rem solid var(--color-border);
-  border-radius: 1.25rem;
-  padding: var(--space-6);
-  color: var(--color-text-muted);
-  background: var(--color-surface);
-}
-
-.skeletonCard {
-  position: relative;
-  min-block-size: 11.5rem;
-  border: 0.0625rem solid var(--color-border);
-  border-radius: 1.25rem;
-  overflow: hidden;
-  background: var(--color-surface);
-}
-
-.skeletonCard::after {
-  position: absolute;
-  inset: 0;
-  background: linear-gradient(
-    105deg,
-    transparent 30%,
-    color-mix(in srgb, var(--color-text) 7%, transparent) 45%,
-    transparent 60%
-  );
-  content: "";
-  translate: -100% 0;
-  animation: featured-model-shimmer 1.4s ease-in-out infinite;
-}
-
-@keyframes featured-model-shimmer {
-  to {
-    translate: 100% 0;
-  }
-}
+.skeletonCard { min-block-size: 11.5rem; }
 
 @keyframes featured-model-card-reveal {
   from {
@@ -138,9 +101,6 @@
 }
 
 @media (prefers-reduced-motion: reduce) {
-  .skeletonCard::after {
-    animation: none;
-  }
 
   .revealedCard,
   .revealedCatalogAction {

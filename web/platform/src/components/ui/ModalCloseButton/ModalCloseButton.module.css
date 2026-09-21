@@ -3,9 +3,9 @@
   inline-size: 3rem;
   block-size: 3rem;
   place-items: center;
-  border: 0.0625rem solid rgb(255 255 255 / 20%);
+  border: 0.0625rem solid var(--close-button-border, rgb(255 255 255 / 20%));
   border-radius: 0.875rem;
-  background: rgb(11 12 15 / 70%);
+  background: var(--close-button-background, rgb(11 12 15 / 70%));
   color: var(--panel-surface-text-muted);
   transition: border-color var(--motion-fast), color var(--motion-fast);
 }
@@ -13,7 +13,7 @@
 .button:hover,
 .button:focus-visible {
   border-color: var(--input-focus-border-color);
-  color: #fff;
+  color: var(--close-button-hover-text, #fff);
   outline: none;
 }
 
@@ -42,6 +42,31 @@
 
 .icon::after {
   transform: translate(-50%, -50%) rotate(-45deg);
+}
+
+.button.compact {
+  inline-size: 1.5rem;
+  block-size: 1.5rem;
+  padding: 0;
+  border-radius: var(--radius-sm);
+  cursor: pointer;
+}
+
+.compact .icon {
+  inline-size: 1rem;
+  block-size: 1rem;
+}
+
+.compact .icon::before,
+.compact .icon::after {
+  inline-size: 0.875rem;
+}
+
+@media (hover: none), (pointer: coarse) {
+  .button.compact {
+    inline-size: 2rem;
+    block-size: 2rem;
+  }
 }
 
 @media (prefers-reduced-motion: reduce) {

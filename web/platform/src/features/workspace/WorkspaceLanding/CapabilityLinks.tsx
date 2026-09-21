@@ -1,15 +1,21 @@
-import Link from "next/link";
+"use client";
+
+import { useMessages } from "@/i18n/LocaleProvider";
+
+import Link from "@/i18n/Link";
 import type { CSSProperties } from "react";
-import { capabilityLinks } from "./workspace-home-content";
+import { getCapabilityLinks } from "./workspace-home-content";
 import styles from "./CapabilityLinks.module.css";
 
 export function CapabilityLinks() {
+  const msg = useMessages();
+  const capabilityLinks = getCapabilityLinks(msg);
   return (
     <div className={styles.wrapper}>
       <h3 className={styles.divider}>
-        <span>И многое другое</span>
+        <span>{msg("capabilityLinks.andMuchMore")}</span>
       </h3>
-      <nav aria-label="Дополнительные возможности" className={styles.list}>
+      <nav aria-label={msg("capabilityLinks.moreFeatures")} className={styles.list}>
         {capabilityLinks.map((item) => (
           <Link
             className={styles.link}

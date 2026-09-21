@@ -187,7 +187,6 @@ describe("workspace control typography", () => {
   it.each([
     ["src/components/layout/WorkspaceHeader/WorkspaceHeader.module.css", ".balance"],
     ["src/features/conversations/ConversationRow/ConversationRow.module.css", ".link"],
-    ["src/components/chat/ChatComposer/ChatComposer.module.css", ".attachment > span:not(.fileIcon)"],
     ["src/features/account/AccountMenu/AccountMenu.module.css", ".identity"],
   ])("uses the compact UI role in %s", (path, selector) => {
     const uiRule = rule(path, selector);

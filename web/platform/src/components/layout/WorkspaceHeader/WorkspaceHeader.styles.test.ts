@@ -48,7 +48,7 @@ describe("WorkspaceHeader styles", () => {
       /\.trailing\s*\{[^}]*display:\s*flex;[^}]*gap:\s*var\(--space-3\);/s,
     );
     expect(headerStylesheet).toMatch(
-      /\.tariffButton\s*\{[^}]*background:\s*var\(--gradient-brand\);[^}]*color:\s*#fff;/s,
+      /\.tariffButton\s*\{[^}]*background:\s*var\(--gradient-brand\);[^}]*color:\s*var\(--color-text-on-gradient, #fff\);/s,
     );
   });
 

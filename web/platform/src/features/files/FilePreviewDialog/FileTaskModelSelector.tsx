@@ -1,5 +1,8 @@
 "use client";
 
+import { useMessages } from "@/i18n/LocaleProvider";
+
+
 import {
   ModelSelector,
   type ModelSelectorModel,
@@ -7,7 +10,7 @@ import {
 } from "@/features/models/WorkspaceModelSelector/ModelSelector";
 
 import {
-  fileModelTaskConfiguration,
+  getFileModelTaskConfiguration,
   type FileActionModel,
   type FileModelTask,
 } from "./file-action-models";
@@ -27,7 +30,8 @@ export function FileTaskModelSelector({
   status,
   task,
 }: Readonly<FileTaskModelSelectorProps>) {
-  const configuration = fileModelTaskConfiguration[task];
+  const msg = useMessages();
+  const configuration = getFileModelTaskConfiguration(msg)[task];
 
   const selectModel = (model: ModelSelectorModel) => {
     onSelect(model.id);
@@ -35,14 +39,14 @@ export function FileTaskModelSelector({
 
   return (
     <ModelSelector
-      dialogLabel={`Выбор нейросети для «${configuration.label}»`}
+      dialogLabel={msg("fileTaskModelSelector.chooseAnAiModelForValue", { value1: configuration.label })}
       models={models}
       onSelect={selectModel}
       renderInPortal
       selectedModelId={selectedModelId}
       status={status}
       triggerAriaLabel={(name, isOpen) => (
-        `Выбрана модель ${name}. ${isOpen ? "Закрыть" : "Открыть"} список`
+        msg("fileTaskModelSelector.selectedModelValueValueList", { value1: name, value2: isOpen ? msg("fileTaskModelSelector.close") : msg("fileTaskModelSelector.open") })
       )}
       variant="panel"
     />

@@ -78,7 +78,8 @@ it.each(paidModels)("selects the curated paid model %s and uses its server price
   await screen.findByRole("button", { name: /Выбрана нейросеть NeiroHub Chat/ });
   const input = screen.getByRole("textbox");
   await choose(name);
-  expect(screen.getByText(new RegExp(`^${price} токенов за ответ`))).toBeVisible();
+  expect(screen.getByTestId("credit-star-icon")).toBeVisible();
+  expect(screen.getByTestId("credit-star-icon").closest("p")).toHaveTextContent(`${price} за ответ · до 2 048 токенов ответа`);
   expect(screen.getByRole("textbox")).toBe(input);
   expect(screen.queryByRole("combobox")).not.toBeInTheDocument();
   fireEvent.change(input, { target: { value: "Synthetic prompt" } });

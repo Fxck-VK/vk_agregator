@@ -1,11 +1,12 @@
 "use client";
 
+import { useMessages, useDictionary } from "@/i18n/LocaleProvider";
+
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { useRouter } from "next/navigation";
+import { useRouter } from "@/i18n/navigation";
 
 import { loadImageModelCatalog } from "@/features/models/image-model-catalog-cache";
 import { useWorkspaceModelSelection } from "@/features/models/WorkspaceModelSelection/WorkspaceModelSelection";
-import { ru } from "@/i18n/ru";
 import {
   parseImageJobActivation,
   parseImageJobPreparation,
@@ -49,6 +50,8 @@ export type ImageGenerationOptions = {
 };
 
 export function useImageGeneration({ access = "authenticated", model, promptValue, onPromptChange, onBusyChange, onJobChange, initialValues }: Readonly<ImageGenerationOptions>) {
+  const msg = useMessages();
+  const t = useDictionary();
   const router = useRouter();
   const workspaceModelSelection = useWorkspaceModelSelection();
   const setWorkspaceModelId = workspaceModelSelection?.setSelectedModelId;
@@ -323,14 +326,14 @@ export function useImageGeneration({ access = "authenticated", model, promptValu
   }, [setPrompt]);
 
   const editorError = promptTooLong && promptByteLimit !== null
-    ? `Промпт для ${selectedModel?.name}: ${promptByteLength.toLocaleString("ru-RU")} / ${promptByteLimit.toLocaleString("ru-RU")} байт UTF-8`
-    : error === "prepare" ? ru.imageGeneration.prepareFailure : null;
+    ? msg("useImageGeneration.promptForValueValueValueUtf8", { value1: selectedModel?.name ?? "", value2: promptByteLength.toLocaleString(msg.locale), value3: promptByteLimit.toLocaleString(msg.locale) })
+    : error === "prepare" ? t.imageGeneration.prepareFailure : null;
   const confirmationError = error === "insufficient"
-    ? ru.imageGeneration.insufficientBalance
+    ? t.imageGeneration.insufficientBalance
     : error === "activation"
-      ? ru.imageGeneration.activationFailure
+      ? t.imageGeneration.activationFailure
       : null;
-  const loadFailure = error === "noModels" ? ru.imageGeneration.noModels : ru.imageGeneration.loadingFailure;
+  const loadFailure = error === "noModels" ? t.imageGeneration.noModels : t.imageGeneration.loadingFailure;
 
   const reset = useCallback(() => {
     if (busy) return;

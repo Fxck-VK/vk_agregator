@@ -1,118 +1,61 @@
 "use client";
 
-import { type KeyboardEvent, useRef, useState } from "react";
+import { useState } from "react";
 
-import { ScrollArea } from "@/components/ui/ScrollArea/ScrollArea";
+import { ModeSwitchPanel } from "@/components/ui/ModeSwitchPanel/ModeSwitchPanel";
 import { ProfileBalanceCard } from "@/features/account/ProfileBalanceCard/ProfileBalanceCard";
 import { ProfileIdentityCard } from "@/features/account/ProfileIdentityCard/ProfileIdentityCard";
 import { ProfileLoginMethods } from "@/features/account/ProfileLoginMethods/ProfileLoginMethods";
 import { ProfileReferralProgram } from "@/features/account/ProfileReferralProgram/ProfileReferralProgram";
 import { useWorkspaceAccountSnapshot } from "@/features/account/WorkspaceAccount/WorkspaceAccount";
-import { ru } from "@/i18n/ru";
+import type { Dictionary } from "@/i18n/dictionary";
+import { useDictionary } from "@/i18n/LocaleProvider";
 
 import styles from "./ProfileWorkspace.module.css";
 
 const overviewTabId = "profile-overview-tab";
 const referralTabId = "profile-referral-tab";
 const profilePanelId = "profile-content-panel";
-const profileTabs = ["overview", "referral"] as const;
-
-type ProfileTab = (typeof profileTabs)[number];
+type ProfileTab = "overview" | "referral";
 
 type PrimaryIdentity = {
   hasVerifiedIdentity: boolean;
   label: string;
 };
 
-function getPrimaryIdentity(identityRefs: ReturnType<typeof useWorkspaceAccountSnapshot>["profile"]["identity_refs"]): PrimaryIdentity {
+function getPrimaryIdentity(identityRefs: ReturnType<typeof useWorkspaceAccountSnapshot>["profile"]["identity_refs"], t: Dictionary): PrimaryIdentity {
   const primaryIdentity = identityRefs.find((identity) => identity.verified && identity.label.trim() !== "");
 
   return {
     hasVerifiedIdentity: primaryIdentity !== undefined,
-    label: primaryIdentity?.label.trim() ?? ru.account.unavailableLabel,
+    label: primaryIdentity?.label.trim() ?? t.account.unavailableLabel,
   };
 }
 
 export function ProfileWorkspace() {
+  const t = useDictionary();
   const { balance, profile } = useWorkspaceAccountSnapshot();
-  const primaryIdentity = getPrimaryIdentity(profile.identity_refs);
+  const primaryIdentity = getPrimaryIdentity(profile.identity_refs, t);
   const [activeTab, setActiveTab] = useState<ProfileTab>("overview");
-  const tabRefs = useRef<Array<HTMLButtonElement | null>>([]);
-
-  function selectTab(tab: ProfileTab) {
-    setActiveTab(tab);
-  }
-
-  function handleTabKeyDown(event: KeyboardEvent<HTMLButtonElement>, currentTab: ProfileTab) {
-    const currentIndex = profileTabs.indexOf(currentTab);
-    let nextIndex: number | null = null;
-
-    if (event.key === "ArrowRight" || event.key === "ArrowDown") {
-      nextIndex = (currentIndex + 1) % profileTabs.length;
-    } else if (event.key === "ArrowLeft" || event.key === "ArrowUp") {
-      nextIndex = (currentIndex - 1 + profileTabs.length) % profileTabs.length;
-    } else if (event.key === "Home") {
-      nextIndex = 0;
-    } else if (event.key === "End") {
-      nextIndex = profileTabs.length - 1;
-    }
-
-    if (nextIndex === null) {
-      return;
-    }
-
-    event.preventDefault();
-    selectTab(profileTabs[nextIndex]);
-    tabRefs.current[nextIndex]?.focus();
-  }
 
   return (
     <section aria-labelledby="profile-title" className={styles.workspace}>
-      <h1 className={styles.screenReaderOnly} id="profile-title">{ru.profile.title}</h1>
+      <h1 className={styles.screenReaderOnly} id="profile-title">{t.profile.title}</h1>
       <ProfileIdentityCard
         hasVerifiedIdentity={primaryIdentity.hasVerifiedIdentity}
         identityLabel={primaryIdentity.label}
       />
 
-      <ScrollArea
-        className={styles.tabsScroll}
-        orientation="horizontal"
-        viewportClassName={styles.tabs}
-        viewportProps={{ "aria-label": ru.profile.tabsLabel, role: "tablist" }}
-      >
-        <button
-          aria-controls={profilePanelId}
-          aria-selected={activeTab === "overview"}
-          className={styles.tab}
-          id={overviewTabId}
-          onClick={() => selectTab("overview")}
-          onKeyDown={(event) => handleTabKeyDown(event, "overview")}
-          ref={(element) => {
-            tabRefs.current[0] = element;
-          }}
-          role="tab"
-          tabIndex={activeTab === "overview" ? 0 : -1}
-          type="button"
-        >
-          {ru.profile.overviewTabLabel}
-        </button>
-        <button
-          aria-controls={profilePanelId}
-          aria-selected={activeTab === "referral"}
-          className={styles.tab}
-          id={referralTabId}
-          onClick={() => selectTab("referral")}
-          onKeyDown={(event) => handleTabKeyDown(event, "referral")}
-          ref={(element) => {
-            tabRefs.current[1] = element;
-          }}
-          role="tab"
-          tabIndex={activeTab === "referral" ? 0 : -1}
-          type="button"
-        >
-          {ru.profile.referralTabLabel}
-        </button>
-      </ScrollArea>
+      <ModeSwitchPanel<ProfileTab>
+        activeID={activeTab}
+        ariaLabel={t.profile.tabsLabel}
+        items={[
+          { id: "overview", label: t.profile.overviewTabLabel, elementID: overviewTabId, ariaControls: profilePanelId },
+          { id: "referral", label: t.profile.referralTabLabel, elementID: referralTabId, ariaControls: profilePanelId },
+        ]}
+        onChange={setActiveTab}
+        semantics="tabs"
+      />
 
       <div
         aria-labelledby={activeTab === "overview" ? overviewTabId : referralTabId}
@@ -123,24 +66,24 @@ export function ProfileWorkspace() {
         {activeTab === "overview" ? (
           <>
             <section aria-labelledby="profile-tariff-title" className={styles.section}>
-              <h2 id="profile-tariff-title">{ru.profile.tariffSectionTitle}</h2>
+              <h2 id="profile-tariff-title">{t.profile.tariffSectionTitle}</h2>
               <ProfileBalanceCard balance={balance} />
             </section>
 
             <section aria-labelledby="profile-promo-title" className={styles.section}>
-              <h2 id="profile-promo-title">{ru.profile.promoTitle}</h2>
+              <h2 id="profile-promo-title">{t.profile.promoTitle}</h2>
               <div className={styles.placeholderCard}>
-                <p>{ru.profile.promoDescription}</p>
-                <button disabled type="button">{ru.profile.promoActionLabel}</button>
+                <p>{t.profile.promoDescription}</p>
+                <button disabled type="button">{t.profile.promoActionLabel}</button>
               </div>
             </section>
 
             <ProfileLoginMethods identityRefs={profile.identity_refs} />
 
             <section aria-labelledby="profile-billing-title" className={styles.section}>
-              <h2 id="profile-billing-title">{ru.profile.billingTitle}</h2>
+              <h2 id="profile-billing-title">{t.profile.billingTitle}</h2>
               <div className={styles.placeholderCard}>
-                <p>{ru.profile.billingPlaceholder}</p>
+                <p>{t.profile.billingPlaceholder}</p>
               </div>
             </section>
           </>

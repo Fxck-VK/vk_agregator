@@ -14,6 +14,10 @@ import { PopoverOption } from "@/components/ui/PopoverOption/PopoverOption";
 import { PopoverPanel } from "@/components/ui/PopoverPanel/PopoverPanel";
 import { RangeSlider } from "@/components/ui/RangeSlider/RangeSlider";
 import { ScrollArea } from "@/components/ui/ScrollArea/ScrollArea";
+import { useMessages } from "@/i18n/LocaleProvider";
+import type { MessageKey, Translator } from "@/i18n/messages";
+
+import { musicArtifactLabel } from "../music-api";
 
 import styles from "./MusicWorkspace.module.css";
 
@@ -263,21 +267,20 @@ export type MusicWorkspaceProps = {
 };
 
 type OperationGroup = {
-  id: string;
-  label: string;
+  id: "edit" | "extract" | "ideas" | "improve";
   operationIds: readonly MusicOperationID[];
 };
 
-const creationModeItems: readonly ModeSwitchPanelItem<MusicCreationMode>[] = [
-  { id: "description", label: "Описание" },
-  { id: "own_lyrics", label: "Свой текст" },
-  { id: "upload", label: "Загрузка" },
-];
+const creationModeLabels: Record<MusicCreationMode, MessageKey> = {
+  description: "music.mode.description",
+  own_lyrics: "music.mode.ownLyrics",
+  upload: "music.mode.upload",
+};
 
-const durationModeItems: readonly ModeSwitchPanelItem<MusicDurationMode>[] = [
-  { id: "auto", label: "Авто" },
-  { id: "custom", label: "Своя длина" },
-];
+const durationModeLabels: Record<MusicDurationMode, MessageKey> = {
+  auto: "music.duration.auto",
+  custom: "music.duration.custom",
+};
 
 const outputFormats: readonly MusicOutputFormat[] = ["mp3", "m4a", "wav"];
 const emptyReusableAssets: MusicReusableAssets = { customModels: [], personas: [], voices: [] };
@@ -285,60 +288,56 @@ const emptyReusableAssets: MusicReusableAssets = { customModels: [], personas: [
 const operationGroups: readonly OperationGroup[] = [
   {
     id: "ideas",
-    label: "Идея и подготовка",
     operationIds: ["lyrics", "inspo", "sounds", "upload", "upload_cover", "upload_extend", "create_model"],
   },
   {
     id: "improve",
-    label: "Развитие трека",
     operationIds: ["extend", "cover", "remaster", "upsample_tags", "add_vocals", "add_instrumental", "add_stem", "voice", "persona"],
   },
   {
     id: "edit",
-    label: "Монтаж",
     operationIds: ["replace_section", "remove_section", "crop", "fade_in", "fade_out", "adjust_speed", "concat", "mashup", "sample"],
   },
   {
     id: "extract",
-    label: "Разбор и экспорт",
     operationIds: ["stems", "stems_all", "midi", "aligned_lyrics", "bpm", "generate_video", "export"],
   },
 ];
 
-const operationLabels: Record<MusicOperationID, string> = {
-  add_instrumental: "Добавить инструментал",
-  add_stem: "Добавить stem",
-  add_vocals: "Добавить вокал",
-  adjust_speed: "Скорость",
-  aligned_lyrics: "Текст по таймингу",
-  bpm: "BPM",
-  concat: "Склеить",
-  cover: "Кавер",
-  create_model: "Создать модель",
-  crop: "Обрезать",
-  export: "Экспорт",
-  extend: "Продлить",
-  fade_in: "Fade in",
-  fade_out: "Fade out",
-  generate: "Сгенерировать",
-  generate_video: "Видео",
-  inspo: "Идеи",
-  lyrics: "Текст песни",
-  mashup: "Mashup",
-  midi: "MIDI",
-  persona: "Persona",
-  remaster: "Ремастер",
-  remove_section: "Удалить часть",
-  replace_section: "Заменить часть",
-  sample: "Сэмпл",
-  sounds: "Звуки",
-  stems: "Stem",
-  stems_all: "Все stems",
-  upload: "Загрузить",
-  upload_cover: "Кавер из загрузки",
-  upload_extend: "Продлить загрузку",
-  upsample_tags: "Улучшить теги",
-  voice: "Голос",
+const operationLabelKeys: Record<MusicOperationID, MessageKey> = {
+  add_instrumental: "music.action.addInstrumental",
+  add_stem: "music.action.addStem",
+  add_vocals: "music.action.addVocals",
+  adjust_speed: "music.action.adjustSpeed",
+  aligned_lyrics: "music.action.alignedLyrics",
+  bpm: "music.action.bpm",
+  concat: "music.action.concat",
+  cover: "music.action.cover",
+  create_model: "music.action.createModel",
+  crop: "music.action.crop",
+  export: "music.action.export",
+  extend: "music.action.extend",
+  fade_in: "music.action.fadeIn",
+  fade_out: "music.action.fadeOut",
+  generate: "music.action.generate",
+  generate_video: "music.action.generateVideo",
+  inspo: "music.action.inspo",
+  lyrics: "music.action.lyrics",
+  mashup: "music.action.mashup",
+  midi: "music.action.midi",
+  persona: "music.action.persona",
+  remaster: "music.action.remaster",
+  remove_section: "music.action.removeSection",
+  replace_section: "music.action.replaceSection",
+  sample: "music.action.sample",
+  sounds: "music.action.sounds",
+  stems: "music.action.stems",
+  stems_all: "music.action.stemsAll",
+  upload: "music.action.upload",
+  upload_cover: "music.action.uploadCover",
+  upload_extend: "music.action.uploadExtend",
+  upsample_tags: "music.action.upsampleTags",
+  voice: "music.action.voice",
 };
 
 const operationsWithoutSource = new Set<MusicOperationID>([
@@ -393,15 +392,27 @@ function normalizeUnitInterval(value: number) {
   return Math.round(clamp(value, 0, 1) * 100) / 100;
 }
 
-function durationLabel(durationSec?: number) {
-  if (durationSec === undefined) return "длина не указана";
+function creationModeItems(msg: Translator): readonly ModeSwitchPanelItem<MusicCreationMode>[] {
+  return (Object.keys(creationModeLabels) as MusicCreationMode[]).map((id) => ({ id, label: msg(creationModeLabels[id]) }));
+}
+
+function durationModeItems(msg: Translator): readonly ModeSwitchPanelItem<MusicDurationMode>[] {
+  return (Object.keys(durationModeLabels) as MusicDurationMode[]).map((id) => ({ id, label: msg(durationModeLabels[id]) }));
+}
+
+function operationGroupLabel(groupId: OperationGroup["id"], msg: Translator) {
+  return msg(`music.group.${groupId}` as MessageKey);
+}
+
+function durationLabel(durationSec: number | undefined, msg: Translator) {
+  if (durationSec === undefined) return msg("music.track.noDuration");
   const minutes = Math.floor(durationSec / 60);
   const seconds = Math.round(durationSec % 60).toString().padStart(2, "0");
   return `${minutes}:${seconds}`;
 }
 
-function operationLabel(operation: MusicWorkspaceOperation | undefined, operationId: MusicOperationID) {
-  return operation?.label ?? operationLabels[operationId];
+function operationLabel(operation: MusicWorkspaceOperation | undefined, operationId: MusicOperationID, msg: Translator) {
+  return operation?.label ?? msg(operationLabelKeys[operationId]);
 }
 
 function isSameOriginArtifactPlaybackURL(url: string) {
@@ -455,44 +466,45 @@ function getDisabledReason(
   selectedTrackIds: readonly string[],
   draft: MusicWorkspaceDraft,
   busy: boolean,
+  msg: Translator,
   blockedReason?: string | null,
   mode: MusicCreationMode = "description",
 ) {
   if (blockedReason) return blockedReason;
-  if (operation === undefined) return "Операция не передана сервером";
-  if (!operation.enabled) return operation.statusReason ?? "Операция отключена сервером";
-  if (busy) return "Дождитесь завершения текущего действия";
+  if (operation === undefined) return msg("music.disabled.noOperation");
+  if (!operation.enabled) return operation.statusReason ?? msg("music.disabled.operationOff");
+  if (busy) return msg("music.disabled.busy");
 
   const requirement = getRequirement(operation);
   const selectedTrackCount = operationConsumesSelectedTracks(operation) ? selectedTrackIds.length : 0;
   if (selectedTrackCount < requirement.minTracks) {
-    return requirement.minTracks === 2 ? "Нужен второй трек" : "Выберите исходный трек";
+    return requirement.minTracks === 2 ? msg("music.disabled.secondTrack") : msg("music.disabled.noTrack");
   }
-  if (selectedTrackCount > requirement.maxTracks) return "Выбрано слишком много треков";
+  if (selectedTrackCount > requirement.maxTracks) return msg("music.disabled.tooManyTracks");
   const ownedUploads = operationConsumesOwnedUploads(operation) ? getOwnedUploads(draft) : [];
   const minUploads = requirement.minUploads;
   const maxUploads = requirement.maxUploads;
   if (ownedUploads.length < minUploads) {
-    return minUploads > 1 ? `Нужно аудиофайлов: ${minUploads}` : "Сначала выберите аудиофайл";
+    return minUploads > 1 ? msg("music.disabled.uploadMin", { count: minUploads }) : msg("music.disabled.uploadFirst");
   }
-  if (ownedUploads.length > maxUploads) return `Аудиофайлов должно быть не больше ${maxUploads}`;
+  if (ownedUploads.length > maxUploads) return msg("music.disabled.audioTooMany", { count: maxUploads });
   if (descriptionRequiredOperations.has(operation.id)) {
     const parameters = draft.actionParameters?.[operation.id] ?? {};
     const description = parameters.description?.trim() || parameters.prompt?.trim() || draft.descriptionPrompt.trim();
-    if (description.length === 0) return "Нужно описание операции";
+    if (description.length === 0) return msg("music.disabled.descriptionRequired");
   }
   if (nameRequiredOperations.has(operation.id)) {
     const parameters = draft.actionParameters?.[operation.id] ?? {};
     const name = parameters.name?.trim() || draft.title.trim();
-    if (name.length === 0) return "Укажите название";
+    if (name.length === 0) return msg("music.disabled.nameRequired");
   }
   if (operation.id === "generate") {
-    if (mode === "own_lyrics" && draft.lyrics.trim().length === 0) return "Вставьте свой текст песни";
-    if (mode !== "own_lyrics" && draft.descriptionPrompt.trim().length === 0) return "Нужно описание трека";
+    if (mode === "own_lyrics" && draft.lyrics.trim().length === 0) return msg("music.disabled.ownLyricsRequired");
+    if (mode !== "own_lyrics" && draft.descriptionPrompt.trim().length === 0) return msg("music.disabled.trackDescriptionRequired");
     const customAssetSelected = (operation.supportsPersona === true && (draft.personaJobId?.trim() ?? "") !== "")
       || (operation.supportsCustomModel === true && (draft.customModelJobId?.trim() ?? "") !== "");
     if (mode === "description" && !draft.instrumental && ((operation.supportsMaxMode === true && draft.maxMode) || customAssetSelected)) {
-      return "Max mode, persona и пользовательская модель требуют свой текст или инструментал";
+      return msg("music.disabled.customModeRequiresInput");
     }
   }
 
@@ -507,14 +519,15 @@ function getOwnedUploads(draft: MusicWorkspaceDraft): readonly MusicOwnedUpload[
 function getModelDisabledReason(
   model: MusicWorkspaceModel | undefined,
   state: MusicWorkspaceState | undefined,
+  msg: Translator,
 ) {
-  if (state?.modelsStatus === "loading") return state.modelsMessage ?? "Каталог моделей загружается";
-  if (state?.modelsStatus === "error") return state.modelsMessage ?? "Каталог моделей недоступен";
-  if (state?.modelsStatus === "empty") return state.modelsMessage ?? "Сервер не передал модели музыки";
-  if (model === undefined) return "Выбранная модель не передана сервером";
-  if (!model.enabled) return model.statusReason ?? "Модель отключена сервером";
-  if (model.availability === "unverified") return model.statusReason ?? "Модель ждёт отдельной проверки";
-  if (model.availability === "unavailable") return model.statusReason ?? "Модель недоступна";
+  if (state?.modelsStatus === "loading") return state.modelsMessage ?? msg("music.catalog.loadingShort");
+  if (state?.modelsStatus === "error") return state.modelsMessage ?? msg("music.catalog.unavailableShort");
+  if (state?.modelsStatus === "empty") return state.modelsMessage ?? msg("music.catalog.empty");
+  if (model === undefined) return msg("music.catalog.missing");
+  if (!model.enabled) return model.statusReason ?? msg("music.catalog.disabled");
+  if (model.availability === "unverified") return model.statusReason ?? msg("music.catalog.unverified");
+  if (model.availability === "unavailable") return model.statusReason ?? msg("music.catalog.unavailable");
   return null;
 }
 
@@ -607,13 +620,14 @@ export function MusicWorkspace({
   tracks,
   uploadsEnabled = false,
 }: Readonly<MusicWorkspaceProps>) {
+  const msg = useMessages();
   const operationById = new Map(operations.map((operation) => [operation.id, operation]));
   const selectedModel = models.find((model) => model.id === selectedModelId);
   const activeOperation = activeOperationId === null ? undefined : operationById.get(activeOperationId);
   const generateOperation = operationById.get("generate");
   const busy = state?.preparing === true || state?.polling === true;
-  const modelDisabledReason = getModelDisabledReason(selectedModel, state);
-  const generateDisabledReason = getDisabledReason(generateOperation, [], draft, busy, modelDisabledReason, mode);
+  const modelDisabledReason = getModelDisabledReason(selectedModel, state, msg);
+  const generateDisabledReason = getDisabledReason(generateOperation, [], draft, busy, msg, modelDisabledReason, mode);
   const canGenerate = generateDisabledReason === null;
 
   const requestConfirmation = (operationId: MusicOperationID) => {
@@ -624,6 +638,7 @@ export function MusicWorkspace({
       requestTrackIds,
       draft,
       busy,
+      msg,
       modelDisabledReason,
       operationId === "generate" ? mode : "description",
     );
@@ -673,15 +688,15 @@ export function MusicWorkspace({
   })).filter((group) => group.operations.length > 0);
 
   return (
-    <section aria-label="Музыкальная студия" className={styles.workspace}>
+    <section aria-label={msg("music.studio.aria")} className={styles.workspace}>
       <div className={styles.header}>
         <div>
-          <p className={styles.eyebrow}>Музыкальная студия</p>
-          <h1>Создание музыки</h1>
+          <p className={styles.eyebrow}>{msg("music.studio.title")}</p>
+          <h1>{msg("music.studio.heading")}</h1>
         </div>
         <ModeSwitchPanel
           activeID={selectedModelId}
-          ariaLabel="Модель генерации музыки"
+          ariaLabel={msg("music.studio.modelAria")}
           className={styles.modelSwitch}
           items={models.map((model) => ({
             disabled: !model.enabled || model.availability !== "available" || busy,
@@ -708,11 +723,11 @@ export function MusicWorkspace({
         >
           <ModeSwitchPanel
             activeID={mode}
-            ariaLabel="Способ создания трека"
-            items={creationModeItems.map((item) => ({
+            ariaLabel={msg("music.workspace.descriptionLabel")}
+            items={creationModeItems(msg).map((item) => ({
               ...item,
               disabled: busy || (item.id === "upload" && !uploadsEnabled),
-              title: item.id === "upload" && !uploadsEnabled ? "Загрузка аудио пока недоступна" : item.title,
+              title: item.id === "upload" && !uploadsEnabled ? msg("music.workspace.uploadDisabled") : item.title,
             }))}
             onChange={onModeChange}
             semantics="tabs"
@@ -750,19 +765,19 @@ export function MusicWorkspace({
             attachmentsEnabled={false}
             canSubmit={canGenerate}
             disabled={busy}
-            label={mode === "upload" ? "Описание задачи для загрузки" : "Описание трека"}
-            mediaLabel="Загрузить медиа"
+            label={mode === "upload" ? msg("music.workspace.promptUploadLabel") : msg("music.workspace.descriptionLabel")}
+            mediaLabel={msg("music.workspace.mediaLabel")}
             note={<GenerationPriceNote disabledReason={generateDisabledReason} operation={generateOperation} />}
             onChange={(event) => updateDraft({ descriptionPrompt: event.target.value })}
             onSend={() => requestConfirmation("generate")}
-            placeholder={mode === "own_lyrics" ? "Опиши настроение и аранжировку для своего текста" : "Опиши жанр, настроение, вокал и сцену"}
-            submitLabel={busy ? "Готовим..." : "Сгенерировать"}
+            placeholder={mode === "own_lyrics" ? msg("music.workspace.ownLyricsComposerPlaceholder") : msg("music.workspace.promptPlaceholder")}
+            submitLabel={busy ? msg("music.workspace.submitBusy") : msg("music.workspace.readySubmit")}
             value={draft.descriptionPrompt}
             variant="workspace"
           />
         </form>
 
-        <aside aria-label="Источники и операции" className={styles.sidePanel}>
+        <aside aria-label={msg("music.operation.panelAria")} className={styles.sidePanel}>
           <TrackSourceList
             busy={busy}
             hasMore={state?.historyHasMore === true}
@@ -808,20 +823,21 @@ function ModelAvailabilitySummary({
   selectedModel: MusicWorkspaceModel | undefined;
   state?: MusicWorkspaceState;
 }>) {
+  const msg = useMessages();
   if (state?.modelsStatus === "loading") {
-    return <p className={styles.catalogStatus} role="status">{state.modelsMessage ?? "Загружаем модели музыки..."}</p>;
+    return <p className={styles.catalogStatus} role="status">{state.modelsMessage ?? msg("music.catalog.loading")}</p>;
   }
 
   if (state?.modelsStatus === "error" || state?.modelsStatus === "empty" || models.length === 0) {
     return (
       <p className={styles.catalogStatus} role={state?.modelsStatus === "error" ? "alert" : "status"}>
-        {state?.modelsMessage ?? "Сервер не передал доступные модели музыки."}
+        {state?.modelsMessage ?? msg("music.catalog.noAvailable")}
       </p>
     );
   }
 
   if (!selectedModel) {
-    return <p className={styles.catalogStatus} role="status">Выбранная модель отсутствует в серверном каталоге.</p>;
+    return <p className={styles.catalogStatus} role="status">{msg("music.catalog.notInCatalog")}</p>;
   }
 
   return (
@@ -829,7 +845,7 @@ function ModelAvailabilitySummary({
       <p>
         <strong>{selectedModel.name}</strong>
         {selectedModel.availability && selectedModel.availability !== "available"
-          ? ` · ${selectedModel.availability === "unverified" ? "ждёт проверки" : "недоступна"}`
+          ? ` · ${selectedModel.availability === "unverified" ? msg("music.catalog.unverifiedBadge") : msg("music.catalog.unavailableBadge")}`
           : null}
       </p>
       {selectedModel.description ? <p>{selectedModel.description}</p> : null}
@@ -850,19 +866,20 @@ function GenerationPriceNote({
   disabledReason: string | null;
   operation: MusicWorkspaceOperation | undefined;
 }>) {
+  const msg = useMessages();
   if (disabledReason) {
     return <span>{disabledReason}</span>;
   }
   if (operation?.quote) {
-    return <CreditAmount prefix="Стоимость:" value={operation.quote.credits} />;
+    return <CreditAmount prefix={msg("music.price.cost")} value={operation.quote.credits} />;
   }
   if (operation?.maxEstimateCredits !== undefined && operation.maxEstimateCredits !== null) {
-    return <CreditAmount prefix="Оценка до:" value={operation.maxEstimateCredits} />;
+    return <CreditAmount prefix={msg("music.price.estimateUpTo")} value={operation.maxEstimateCredits} />;
   }
   if (operation?.estimateCredits !== undefined && operation.estimateCredits !== null) {
-    return <CreditAmount prefix="Оценка:" value={operation.estimateCredits} />;
+    return <CreditAmount prefix={msg("music.price.estimate")} value={operation.estimateCredits} />;
   }
-  return <span>{disabledReason ?? "Точную стоимость покажем после подготовки запуска"}</span>;
+  return <span>{disabledReason ?? msg("music.price.prepareFirst")}</span>;
 }
 
 function SharedSongFields({
@@ -880,28 +897,29 @@ function SharedSongFields({
   onRequestSuggestedLyrics?: () => void;
   updateDraft: (patch: Partial<MusicWorkspaceDraft>) => void;
 }>) {
+  const msg = useMessages();
   return (
-    <section aria-label="Основные параметры" className={styles.card}>
+    <section aria-label={msg("music.shared.mainParameters")} className={styles.card}>
       <div className={styles.fieldGrid}>
         <label className={styles.field}>
-          <span>Название</span>
+          <span>{msg("music.shared.title")}</span>
           <InputSurface className={styles.inputSurface}>
             <input
               disabled={busy}
               onChange={(event) => updateDraft({ title: event.target.value })}
-              placeholder="Необязательно"
+              placeholder={msg("music.shared.optional")}
               type="text"
               value={draft.title}
             />
           </InputSurface>
         </label>
         <label className={styles.field}>
-          <span>Стиль</span>
+          <span>{msg("music.shared.style")}</span>
           <InputSurface className={styles.inputSurface}>
             <input
               disabled={busy}
               onChange={(event) => updateDraft({ style: event.target.value })}
-              placeholder="Например: indie pop, warm synths"
+              placeholder={msg("music.shared.stylePlaceholder")}
               type="text"
               value={draft.style}
             />
@@ -916,21 +934,21 @@ function SharedSongFields({
             onChange={(event) => updateDraft({ instrumental: event.target.checked })}
             type="checkbox"
           />
-          <span>Инструментал</span>
-        </label> : <span>Для инструментального трека укажите это в описании.</span>}
+          <span>{msg("music.shared.instrumental")}</span>
+        </label> : <span>{msg("music.shared.instrumentalInPrompt")}</span>}
         <Button
           disabled={busy || onRequestSuggestedLyrics === undefined}
           onClick={onRequestSuggestedLyrics}
           type="button"
         >
-          Предложить текст
+          {msg("music.shared.suggestLyrics")}
         </Button>
         <Button
           disabled={busy || onEnhanceStyle === undefined || draft.style.trim().length === 0}
           onClick={() => onEnhanceStyle?.(draft.style)}
           type="button"
         >
-          Усилить стиль
+          {msg("music.shared.enhanceStyle")}
         </Button>
       </div>
       {draft.suggestedLyrics ? (
@@ -941,7 +959,7 @@ function SharedSongFields({
             onClick={() => updateDraft({ lyrics: draft.suggestedLyrics ?? "" })}
             type="button"
           >
-            Вставить текст
+            {msg("music.shared.insertLyrics")}
           </Button>
         </div>
       ) : null}
@@ -964,19 +982,20 @@ function ModeSpecificFields({
   uploadsEnabled: boolean;
   updateDraft: (patch: Partial<MusicWorkspaceDraft>) => void;
 }>) {
+  const msg = useMessages();
   if (mode === "own_lyrics") {
     return (
       <label className={`${styles.field} ${styles.card}`}>
-        <span>Текст песни</span>
+        <span>{msg("music.workspace.ownLyricsLabel")}</span>
         <InputSurface className={styles.textareaSurface}>
           <ScrollArea
             className={styles.textareaScroll}
             viewportAs="textarea"
             viewportProps={{
-              "aria-label": "Свой текст песни",
+              "aria-label": msg("music.workspace.ownLyricsAria"),
               disabled: busy,
               onChange: (event) => updateDraft({ lyrics: event.target.value }),
-              placeholder: "Вставь куплеты, припев и пометки по вокалу",
+              placeholder: msg("music.workspace.ownLyricsPlaceholder"),
               value: draft.lyrics,
             }}
           />
@@ -988,18 +1007,18 @@ function ModeSpecificFields({
   if (mode === "upload") {
     const ownedUploads = getOwnedUploads(draft);
     return (
-      <section aria-label="Owned upload" className={styles.card}>
+      <section aria-label={msg("music.upload.heading")} className={styles.card}>
         <div className={styles.uploadBox}>
           <div>
-            <h2>Исходные аудио</h2>
-            <p>{ownedUploads.length > 0 ? `Выбрано файлов: ${ownedUploads.length}` : uploadsEnabled ? "Выберите аудиофайл для операции." : "Загрузка аудио пока не поддерживается сервером."}</p>
+            <h2>{msg("music.upload.heading")}</h2>
+            <p>{ownedUploads.length > 0 ? msg("music.upload.count", { count: ownedUploads.length }) : uploadsEnabled ? msg("music.upload.select") : msg("music.upload.unavailable")}</p>
           </div>
           <Button
             disabled={busy || !uploadsEnabled || onRequestOwnedUpload === undefined}
             onClick={onRequestOwnedUpload}
             type="button"
           >
-            Выбрать аудио
+            {msg("music.upload.choose")}
           </Button>
         </div>
         {ownedUploads.length > 0 ? (
@@ -1008,7 +1027,7 @@ function ModeSpecificFields({
               <li key={upload.id}>
                 <div>
                   <span>{upload.label}</span>
-                  {upload.durationSec ? <span>{durationLabel(upload.durationSec)}</span> : null}
+                  {upload.durationSec ? <span>{durationLabel(upload.durationSec, msg)}</span> : null}
                 </div>
                 <Button
                   disabled={busy}
@@ -1021,7 +1040,7 @@ function ModeSpecificFields({
                   }}
                   type="button"
                 >
-                  Удалить
+                  {msg("music.upload.remove")}
                 </Button>
               </li>
             ))}
@@ -1051,13 +1070,14 @@ function AdvancedControls({
   reusableAssets: MusicReusableAssets;
   updateDraft: (patch: Partial<MusicWorkspaceDraft>) => void;
 }>) {
+  const msg = useMessages();
   const showPersonaSelector = personaEnabled && reusableAssets.personas.length > 0;
   const showCustomModelSelector = customModelEnabled && reusableAssets.customModels.length > 0;
 
   return (
-    <section aria-label="Расширенные параметры" className={styles.card}>
+    <section aria-label={msg("music.advanced.aria")} className={styles.card}>
       <div className={styles.sectionTitle}>
-        <h2>Расширенные параметры</h2>
+        <h2>{msg("music.advanced.heading")}</h2>
         {!lyria ? <OutputFormatSelector
           disabled={busy}
           onChange={(outputFormat) => updateDraft({ outputFormat })}
@@ -1067,19 +1087,19 @@ function AdvancedControls({
       {!lyria ? <div className={styles.sliders}>
         <WeightControl
           disabled={busy}
-          label="Вес описания"
+          label={msg("music.advanced.descriptionWeight")}
           onChange={(promptWeight) => updateDraft({ promptWeight })}
           value={draft.promptWeight}
         />
         <WeightControl
           disabled={busy}
-          label="Вес стиля"
+          label={msg("music.advanced.styleWeight")}
           onChange={(styleWeight) => updateDraft({ styleWeight })}
           value={draft.styleWeight}
         />
         <WeightControl
           disabled={busy}
-          label="Вариативность"
+          label={msg("music.advanced.variety")}
           onChange={(variety) => updateDraft({ variety })}
           value={draft.variety}
         />
@@ -1087,8 +1107,8 @@ function AdvancedControls({
       <div className={styles.durationRow}>
         <ModeSwitchPanel
           activeID={draft.targetDurationMode}
-          ariaLabel="Длительность трека"
-          items={durationModeItems.map((item) => ({ ...item, disabled: busy }))}
+          ariaLabel={msg("music.advanced.durationAria")}
+          items={durationModeItems(msg).map((item) => ({ ...item, disabled: busy }))}
           onChange={(targetDurationMode) => updateDraft({ targetDurationMode })}
         />
         {!lyria ? <label className={styles.checkboxRow}>
@@ -1098,14 +1118,14 @@ function AdvancedControls({
             onChange={(event) => updateDraft({ maxMode: event.target.checked })}
             type="checkbox"
           />
-          <span>Max mode</span>
+          <span>{msg("music.advanced.maxMode")}</span>
         </label> : null}
       </div>
       {draft.targetDurationMode === "custom" ? (
         <div className={styles.durationSlider}>
-          <span>Целевая длительность: {clamp(draft.targetDurationSec, lyria ? 1 : 10, lyria ? 240 : 360)} сек.</span>
+          <span>{msg("music.advanced.targetDurationValue", { value: clamp(draft.targetDurationSec, lyria ? 1 : 10, lyria ? 240 : 360) })}</span>
           <RangeSlider
-            aria-label="Целевая длительность"
+            aria-label={msg("music.advanced.targetDuration")}
             disabled={busy}
             max={lyria ? 240 : 360}
             min={lyria ? 1 : 10}
@@ -1121,7 +1141,7 @@ function AdvancedControls({
             <ReusableAssetSelect
               assets={reusableAssets.personas}
               busy={busy}
-              label="Persona"
+              label={msg("music.action.persona")}
               onChange={(personaJobId) => updateDraft({ customModelJobId: null, personaJobId })}
               value={draft.personaJobId ?? null}
             />
@@ -1130,7 +1150,7 @@ function AdvancedControls({
             <ReusableAssetSelect
               assets={reusableAssets.customModels}
               busy={busy}
-              label="Пользовательская модель"
+              label={msg("music.advanced.customModel")}
               onChange={(customModelJobId) => updateDraft({ customModelJobId, personaJobId: null })}
               value={draft.customModelJobId ?? null}
             />
@@ -1154,6 +1174,7 @@ function ReusableAssetSelect({
   onChange: (jobId: string | null) => void;
   value: string | null;
 }>) {
+  const msg = useMessages();
   return (
     <label className={styles.field}>
       <span>{label}</span>
@@ -1163,7 +1184,7 @@ function ReusableAssetSelect({
           onChange={(event) => onChange(event.target.value || null)}
           value={value ?? ""}
         >
-          <option value="">Не использовать</option>
+          <option value="">{msg("music.advanced.noReusableAsset")}</option>
           {assets.map((asset) => (
             <option key={asset.jobId} value={asset.jobId}>{asset.name}</option>
           ))}
@@ -1213,6 +1234,7 @@ function OutputFormatSelector({
   const [isOpen, setIsOpen] = useState(false);
   const triggerRef = useRef<HTMLButtonElement>(null);
   const panelId = useId();
+  const msg = useMessages();
 
   return (
     <>
@@ -1220,7 +1242,7 @@ function OutputFormatSelector({
         aria-controls={isOpen ? panelId : undefined}
         aria-expanded={isOpen}
         aria-haspopup="dialog"
-        aria-label={`Формат: ${value.toUpperCase()}`}
+        aria-label={msg("music.advanced.formatValue", { value: value.toUpperCase() })}
         className={styles.formatTrigger}
         disabled={disabled}
         onClick={() => setIsOpen((current) => !current)}
@@ -1233,11 +1255,11 @@ function OutputFormatSelector({
         anchorRef={triggerRef}
         id={panelId}
         isOpen={isOpen}
-        label="Формат файла"
+        label={msg("music.advanced.fileFormat")}
         onClose={() => setIsOpen(false)}
         width={216}
       >
-        <div aria-label="Формат файла" className={styles.formatOptions} role="radiogroup">
+        <div aria-label={msg("music.advanced.fileFormat")} className={styles.formatOptions} role="radiogroup">
           {outputFormats.map((format) => (
             <PopoverOption
               key={format}
@@ -1274,14 +1296,15 @@ function TrackSourceList({
   selectedTrackIds: readonly string[];
   tracks: readonly MusicTrack[];
 }>) {
+  const msg = useMessages();
   return (
     <section aria-labelledby="music-sources-title" className={styles.card}>
       <div className={styles.sectionTitle}>
-        <h2 id="music-sources-title">Источники</h2>
-        <span>{selectedTrackIds.length} выбрано</span>
+        <h2 id="music-sources-title">{msg("music.track.heading")}</h2>
+        <span>{msg("music.track.selectedCount", { count: selectedTrackIds.length })}</span>
       </div>
       {tracks.length === 0 ? (
-        <p className={styles.muted}>Готовые треки появятся после завершения генерации.</p>
+        <p className={styles.muted}>{msg("music.track.empty")}</p>
       ) : (
         <ul className={styles.trackList}>
           {tracks.map((track) => {
@@ -1299,27 +1322,27 @@ function TrackSourceList({
                     <div aria-hidden="true" className={styles.coverPlaceholder}>♪</div>
                   )}
                   <div className={styles.trackBody}>
-                    <p>Трек {track.originalIndex + 1}</p>
-                    <h3>{track.title || "Без названия"}</h3>
-                    <p>{durationLabel(track.durationSec)}</p>
+                    <p>{msg("music.track.track", { index: track.originalIndex + 1 })}</p>
+                    <h3>{track.title || msg("music.track.titleFallback")}</h3>
+                    <p>{durationLabel(track.durationSec, msg)}</p>
                     {playbackUrl ? (
                       <audio controls preload="none" src={playbackUrl}>
-                        <a href={playbackUrl}>Открыть аудио</a>
+                        <a href={playbackUrl}>{msg("music.track.openAudio")}</a>
                       </audio>
                     ) : (
-                      <p role="status">Источник недоступен для воспроизведения</p>
+                      <p role="status">{msg("music.track.sourceUnavailable")}</p>
                     )}
                     {track.lyrics ? <p className={styles.trackLyrics}>{track.lyrics}</p> : null}
                   </div>
                   <button
-                    aria-label={`${selected ? "Убрать" : "Выбрать"} трек ${track.originalIndex + 1}`}
+                    aria-label={selected ? msg("music.track.unchooseAria", { index: track.originalIndex + 1 }) : msg("music.track.chooseAria", { index: track.originalIndex + 1 })}
                     aria-pressed={selected}
                     className={styles.selectTrack}
                     disabled={busy}
                     onClick={() => onToggle(track.id)}
                     type="button"
                   >
-                    {selected ? "Выбран" : "Выбрать"}
+                    {selected ? msg("music.track.selected") : msg("music.track.choose")}
                   </button>
                 </article>
               </li>
@@ -1333,7 +1356,7 @@ function TrackSourceList({
           onClick={onLoadMore}
           type="button"
         >
-          {loadingMore ? "Загружаем..." : "Загрузить ещё"}
+          {loadingMore ? msg("music.track.loadingMore") : msg("music.track.loadMore")}
         </Button>
       ) : null}
     </section>
@@ -1365,6 +1388,7 @@ function OperationsPanel({
   selectedTrackIds: readonly string[];
   tracks: readonly MusicTrack[];
 }>) {
+  const msg = useMessages();
   const activeSelectedTrackIds = activeOperation !== undefined && operationConsumesSelectedTracks(activeOperation)
     ? selectedTrackIds
     : [];
@@ -1372,22 +1396,23 @@ function OperationsPanel({
   return (
     <section aria-labelledby="music-actions-title" className={styles.card}>
       <div className={styles.sectionTitle}>
-        <h2 id="music-actions-title">Операции</h2>
-        <span>точная цена после подготовки</span>
+        <h2 id="music-actions-title">{msg("music.operation.heading")}</h2>
+        <span>{msg("music.operation.exactPriceAfterPrepare")}</span>
       </div>
       {groups.length === 0 ? (
-        <p className={styles.muted}>Сервер не передал доступные операции.</p>
+        <p className={styles.muted}>{msg("music.operation.noOperations")}</p>
       ) : groups.map((group) => (
         <div className={styles.operationGroup} key={group.id}>
-          <h3>{group.label}</h3>
+          <h3>{operationGroupLabel(group.id, msg)}</h3>
           <div className={styles.operationGrid}>
             {group.operations.map((operation) => {
-              const disabledReason = getDisabledReason(operation, selectedTrackIds, draft, busy, modelDisabledReason);
+              const disabledReason = getDisabledReason(operation, selectedTrackIds, draft, busy, msg, modelDisabledReason);
               const isActive = activeOperationId === operation.id;
+              const label = operationLabel(operation, operation.id, msg);
 
               return (
                 <button
-                  aria-label={`${operationLabel(operation, operation.id)}${disabledReason ? `: ${disabledReason}` : ""}`}
+                  aria-label={`${label}${disabledReason ? `: ${disabledReason}` : ""}`}
                   aria-pressed={isActive}
                   className={styles.operationButton}
                   data-active={isActive || undefined}
@@ -1396,15 +1421,15 @@ function OperationsPanel({
                   title={[disabledReason ?? operation.description, ...(operation.details ?? [])].filter(Boolean).join("\n")}
                   type="button"
                 >
-                  <span>{operationLabel(operation, operation.id)}</span>
+                  <span>{label}</span>
                   {operation.quote ? (
                     <CreditAmount value={operation.quote.credits} />
                   ) : operation.maxEstimateCredits !== undefined && operation.maxEstimateCredits !== null ? (
-                    <CreditAmount prefix="до" value={operation.maxEstimateCredits} />
+                    <CreditAmount prefix={msg("music.operation.upTo")} value={operation.maxEstimateCredits} />
                   ) : operation.estimateCredits !== undefined && operation.estimateCredits !== null ? (
                     <CreditAmount value={operation.estimateCredits} />
                   ) : (
-                    <span>после подготовки</span>
+                    <span>{msg("music.operation.afterPreparation")}</span>
                   )}
                 </button>
               );
@@ -1417,7 +1442,7 @@ function OperationsPanel({
         <ActionParameterForm
           busy={busy}
           draft={draft.actionParameters?.[activeOperationId] ?? {}}
-          disabledReason={getDisabledReason(activeOperation, activeSelectedTrackIds, draft, busy, modelDisabledReason)}
+          disabledReason={getDisabledReason(activeOperation, activeSelectedTrackIds, draft, busy, msg, modelDisabledReason)}
           onChange={(patch) => onUpdateActionDraft(activeOperationId, patch)}
           onRun={() => onRequestConfirmation(activeOperationId)}
           operation={activeOperation}
@@ -1448,13 +1473,15 @@ function ActionParameterForm({
   selectedTrackIds: readonly string[];
   tracks: readonly MusicTrack[];
 }>) {
-  const runLabel = `Подготовить ${operationLabel(operation, operation.id)}`;
+  const msg = useMessages();
+  const label = operationLabel(operation, operation.id, msg);
+  const runLabel = msg("music.operation.prepare", { name: label });
   const disabled = disabledReason !== null;
   const selectedTracks = selectedTracksById(tracks, selectedTrackIds);
 
   return (
     <div className={styles.actionForm}>
-      <h3>{operationLabel(operation, operation.id)}</h3>
+      <h3>{label}</h3>
       {operation.description ? <p className={styles.muted}>{operation.description}</p> : null}
       {operation.details && operation.details.length > 0 ? (
         <ul className={styles.operationDetails}>
@@ -1464,24 +1491,24 @@ function ActionParameterForm({
       <div className={styles.actionFields}>
         {selectedTracks.length > 0 ? (
           <p className={styles.muted}>
-            Источник: {selectedTracks.map((track) => `трек ${track.originalIndex + 1}`).join(", ")}
+            {msg("music.operation.source", { value: selectedTracks.map((track) => msg("music.operation.sourceTrack", { index: track.originalIndex + 1 })).join(", ") })}
           </p>
         ) : null}
 
         {operation.id === "mashup" ? (
           <label className={styles.field}>
-            <span>Второй трек</span>
+            <span>{msg("music.parameters.secondTrack")}</span>
             <InputSurface className={styles.inputSurface}>
               <select
-                aria-label="Второй трек для mashup"
+                aria-label={msg("music.parameters.secondTrackAria")}
                 disabled={busy || tracks.length < 2}
                 onChange={(event) => onChange({ secondaryTrackId: event.target.value })}
                 value={draft.secondaryTrackId ?? selectedTrackIds[1] ?? ""}
               >
-                <option value="">Выбери второй трек</option>
+                <option value="">{msg("music.parameters.secondTrackPlaceholder")}</option>
                 {tracks.map((track) => (
                   <option key={track.id} value={track.id}>
-                    Трек {track.originalIndex + 1}
+                    {msg("music.track.track", { index: track.originalIndex + 1 })}
                   </option>
                 ))}
               </select>
@@ -1491,12 +1518,12 @@ function ActionParameterForm({
 
         {operation.id === "create_model" || operation.id === "persona" || operation.id === "voice" ? (
           <label className={styles.field}>
-            <span>Название</span>
+            <span>{msg("music.parameters.name")}</span>
             <InputSurface className={styles.inputSurface}>
               <input
                 disabled={busy}
                 onChange={(event) => onChange({ name: event.target.value })}
-                placeholder="Название для результата"
+                placeholder={msg("music.parameters.namePlaceholder")}
                 type="text"
                 value={draft.name ?? ""}
               />
@@ -1506,13 +1533,13 @@ function ActionParameterForm({
 
         {operation.id === "persona" || operation.id === "voice" || operation.id === "create_model" ? (
           <label className={styles.field}>
-            <span>Описание</span>
+            <span>{msg("music.parameters.variationCategory")}</span>
             <InputSurface className={styles.textareaSurfaceSmall}>
               <textarea
-                aria-label="Описание операции"
+                aria-label={msg("music.parameters.descriptionAria")}
                 disabled={busy}
                 onChange={(event) => onChange({ description: event.target.value })}
-                placeholder="Кратко опиши голос, модель или persona"
+                placeholder={msg("music.parameters.descriptionPlaceholder")}
                 value={draft.description ?? ""}
               />
             </InputSurface>
@@ -1522,12 +1549,12 @@ function ActionParameterForm({
         {operation.id === "persona" ? (
           <>
             <label className={styles.field}>
-              <span>Стили persona</span>
+              <span>{msg("music.parameters.personaStyles")}</span>
               <InputSurface className={styles.inputSurface}>
                 <input
                   disabled={busy}
                   onChange={(event) => onChange({ styles: event.target.value })}
-                  placeholder="Например: pop, bright vocal"
+                  placeholder={msg("music.parameters.personaStylesPlaceholder")}
                   type="text"
                   value={draft.styles ?? ""}
                 />
@@ -1536,7 +1563,7 @@ function ActionParameterForm({
             <div className={styles.rangeGrid}>
               <NumberField
                 disabled={busy}
-                label="Вокал от, сек."
+                label={msg("music.parameters.vocalStart")}
                 max={360}
                 min={0}
                 onChange={(vocalStartSec) => onChange({ vocalStartSec })}
@@ -1544,7 +1571,7 @@ function ActionParameterForm({
               />
               <NumberField
                 disabled={busy}
-                label="Вокал до, сек."
+                label={msg("music.parameters.vocalEnd")}
                 max={360}
                 min={0}
                 onChange={(vocalEndSec) => onChange({ vocalEndSec })}
@@ -1557,7 +1584,7 @@ function ActionParameterForm({
         {isSeekAction(operation.id) ? (
           <NumberField
             disabled={busy}
-            label="Старт, сек."
+            label={msg("music.parameters.seek")}
             max={360}
             min={0}
             onChange={(seekSec) => onChange({ seekSec })}
@@ -1569,7 +1596,7 @@ function ActionParameterForm({
           <div className={styles.rangeGrid}>
             <NumberField
               disabled={busy}
-              label="Начало, сек."
+              label={msg("music.parameters.start")}
               max={360}
               min={0}
               onChange={(rangeStartSec) => onChange({ rangeStartSec })}
@@ -1577,7 +1604,7 @@ function ActionParameterForm({
             />
             <NumberField
               disabled={busy}
-              label="Конец, сек."
+              label={msg("music.parameters.end")}
               max={360}
               min={0}
               onChange={(rangeEndSec) => onChange({ rangeEndSec })}
@@ -1589,7 +1616,7 @@ function ActionParameterForm({
         {operation.id === "fade_in" || operation.id === "fade_out" ? (
           <NumberField
             disabled={busy}
-            label="Длительность fade, сек."
+            label={msg("music.parameters.durationFade")}
             max={60}
             min={1}
             onChange={(fadeSeconds) => onChange({ fadeSeconds })}
@@ -1599,9 +1626,9 @@ function ActionParameterForm({
 
         {operation.id === "adjust_speed" ? (
           <label className={styles.sliderField}>
-            <span>Скорость: {(draft.speed ?? 1).toFixed(2)}×</span>
+            <span>{msg("music.parameters.speedValue", { value: (draft.speed ?? 1).toFixed(2) })}</span>
             <RangeSlider
-              aria-label="Скорость"
+              aria-label={msg("music.parameters.speed")}
               disabled={busy}
               max={150}
               min={50}
@@ -1613,13 +1640,13 @@ function ActionParameterForm({
 
         {promptOperations.has(operation.id) ? (
           <label className={styles.field}>
-            <span>Промпт операции</span>
+            <span>{msg("music.parameters.prompt")}</span>
             <InputSurface className={styles.textareaSurfaceSmall}>
               <textarea
-                aria-label="Промпт операции"
+                aria-label={msg("music.parameters.promptAria")}
                 disabled={busy}
                 onChange={(event) => onChange({ prompt: event.target.value })}
-                placeholder="Что изменить или добавить"
+                placeholder={msg("music.parameters.promptPlaceholder")}
                 value={draft.prompt ?? ""}
               />
             </InputSurface>
@@ -1628,13 +1655,13 @@ function ActionParameterForm({
 
         {operation.id === "replace_section" ? (
           <label className={styles.field}>
-            <span>Текст для вставки</span>
+            <span>{msg("music.parameters.infillLyrics")}</span>
             <InputSurface className={styles.textareaSurfaceSmall}>
               <textarea
-                aria-label="Текст для замены фрагмента"
+                aria-label={msg("music.parameters.infillLyricsAria")}
                 disabled={busy}
                 onChange={(event) => onChange({ infillLyrics: event.target.value })}
-                placeholder="Новый текст или вокальная пометка для выбранного участка"
+                placeholder={msg("music.parameters.infillLyricsPlaceholder")}
                 value={draft.infillLyrics ?? ""}
               />
             </InputSurface>
@@ -1644,12 +1671,12 @@ function ActionParameterForm({
         {operation.id === "sounds" ? (
           <>
             <label className={styles.field}>
-              <span>Тип звука</span>
+              <span>{msg("music.parameters.soundType")}</span>
               <InputSurface className={styles.inputSurface}>
                 <input
                   disabled={busy}
                   onChange={(event) => onChange({ soundType: event.target.value })}
-                  placeholder="Например: loop, percussion"
+                  placeholder={msg("music.parameters.soundTypePlaceholder")}
                   type="text"
                   value={draft.soundType ?? ""}
                 />
@@ -1658,19 +1685,19 @@ function ActionParameterForm({
             <div className={styles.rangeGrid}>
               <NumberField
                 disabled={busy}
-                label="BPM"
+                label={msg("music.action.bpm")}
                 max={240}
                 min={1}
                 onChange={(bpm) => onChange({ bpm })}
                 value={draft.bpm ?? 120}
               />
               <label className={styles.field}>
-                <span>Тональность</span>
+                <span>{msg("music.parameters.key")}</span>
                 <InputSurface className={styles.inputSurface}>
                   <input
                     disabled={busy}
                     onChange={(event) => onChange({ musicalKey: event.target.value })}
-                    placeholder="Например: Am"
+                    placeholder={msg("music.parameters.keyPlaceholder")}
                     type="text"
                     value={draft.musicalKey ?? ""}
                   />
@@ -1682,12 +1709,12 @@ function ActionParameterForm({
 
         {operation.id === "lyrics" ? (
           <label className={styles.field}>
-            <span>Модель текста</span>
+            <span>{msg("music.parameters.lyricsModel")}</span>
             <InputSurface className={styles.inputSurface}>
               <input
                 disabled={busy}
                 onChange={(event) => onChange({ lyricsModel: event.target.value })}
-                placeholder="Необязательно"
+                placeholder={msg("music.parameters.optional")}
                 type="text"
                 value={draft.lyricsModel ?? ""}
               />
@@ -1697,12 +1724,12 @@ function ActionParameterForm({
 
         {operation.id === "remaster" ? (
           <label className={styles.field}>
-            <span>Категория вариации</span>
+            <span>{msg("music.parameters.description")}</span>
             <InputSurface className={styles.inputSurface}>
               <input
                 disabled={busy}
                 onChange={(event) => onChange({ variationCategory: event.target.value })}
-                placeholder="Необязательно"
+                placeholder={msg("music.parameters.optional")}
                 type="text"
                 value={draft.variationCategory ?? ""}
               />
@@ -1712,12 +1739,12 @@ function ActionParameterForm({
 
         {operation.id === "stems" || operation.id === "add_stem" ? (
           <label className={styles.field}>
-            <span>Тип stem</span>
+            <span>{msg("music.parameters.stemKind")}</span>
             <InputSurface className={styles.inputSurface}>
               <input
                 disabled={busy}
                 onChange={(event) => onChange({ stemKind: event.target.value })}
-                placeholder="Например: vocals, drums"
+                placeholder={msg("music.parameters.stemKindPlaceholder")}
                 type="text"
                 value={draft.stemKind ?? ""}
               />
@@ -1727,12 +1754,12 @@ function ActionParameterForm({
 
         {operation.id === "generate" || operation.id === "cover" || operation.id === "replace_section" ? (
           <label className={styles.field}>
-            <span>Нежелательные теги</span>
+            <span>{msg("music.parameters.negativeTags")}</span>
             <InputSurface className={styles.inputSurface}>
               <input
                 disabled={busy}
                 onChange={(event) => onChange({ negativeTags: event.target.value })}
-                placeholder="Необязательно"
+                placeholder={msg("music.parameters.optional")}
                 type="text"
                 value={draft.negativeTags ?? ""}
               />
@@ -1741,11 +1768,11 @@ function ActionParameterForm({
         ) : null}
 
         {operation.id === "export" ? (
-          <p className={styles.muted}>Экспорт использует формат из расширенных параметров.</p>
+          <p className={styles.muted}>{msg("music.parameters.exportUsesFormat")}</p>
         ) : null}
 
         {!operationHasParameterControls(operation.id) ? (
-            <p className={styles.muted}>Дополнительные параметры для этой операции не нужны.</p>
+            <p className={styles.muted}>{msg("music.operation.noControls")}</p>
           ) : null}
       </div>
       {disabledReason ? <p className={styles.warning} role="status">{disabledReason}</p> : null}
@@ -1793,32 +1820,33 @@ function NumberField({
 }
 
 function MusicResultsPanel({ results }: Readonly<{ results: readonly MusicResultSummary[] }>) {
+  const msg = useMessages();
   if (results.length === 0) return null;
 
   return (
     <section aria-labelledby="music-results-title" className={styles.card}>
       <div className={styles.sectionTitle}>
-        <h2 id="music-results-title">Результаты инструментов</h2>
+        <h2 id="music-results-title">{msg("music.result.heading")}</h2>
         <span>{results.length}</span>
       </div>
       <div className={styles.resultList}>
         {results.map((result, index) => (
           <article className={styles.resultCard} key={result.id}>
-            <h3>{result.title ?? `Результат ${index + 1}`}</h3>
-            {result.tags ? <p className={styles.muted}>Теги: {result.tags}</p> : null}
+            <h3>{result.title ?? msg("music.result.result", { index: index + 1 })}</h3>
+            {result.tags ? <p className={styles.muted}>{msg("music.result.tags", { value: result.tags })}</p> : null}
             {result.bpm ? (
               <p className={styles.muted}>
-                BPM: {formatBpm(result.bpm.average)}
+                {msg("music.action.bpm")}: {formatBpm(result.bpm.average)}
                 {result.bpm.minimum || result.bpm.maximum
-                  ? ` · диапазон ${formatBpm(result.bpm.minimum)}–${formatBpm(result.bpm.maximum)}`
+                  ? msg("music.result.bpmRange", { min: formatBpm(result.bpm.minimum), max: formatBpm(result.bpm.maximum) })
                   : null}
               </p>
             ) : null}
             {result.lyrics.length > 0 ? (
               <div className={styles.lyricsList}>
                 {result.lyrics.map((lyric, lyricIndex) => (
-                  <section aria-label={lyric.title ?? `Текст ${lyricIndex + 1}`} className={styles.lyricBlock} key={`${result.id}:lyric:${lyricIndex}`}>
-                    <h4>{lyric.title ?? `Текст ${lyricIndex + 1}`}</h4>
+                  <section aria-label={lyric.title ?? msg("music.result.lyric", { index: lyricIndex + 1 })} className={styles.lyricBlock} key={`${result.id}:lyric:${lyricIndex}`}>
+                    <h4>{lyric.title ?? msg("music.result.lyric", { index: lyricIndex + 1 })}</h4>
                     {lyric.tags ? <p>{lyric.tags}</p> : null}
                     <pre>{lyric.text}</pre>
                   </section>
@@ -1827,9 +1855,9 @@ function MusicResultsPanel({ results }: Readonly<{ results: readonly MusicResult
             ) : null}
             {result.persona || result.model || result.voice ? (
               <ul className={styles.artifactList}>
-                {result.persona ? <li>Persona создана: {result.persona.name}</li> : null}
-                {result.model ? <li>Пользовательская модель создана: {result.model.name}</li> : null}
-                {result.voice ? <li>Голос создан: {result.voice.name}</li> : null}
+                {result.persona ? <li>{msg("music.result.personaCreated", { name: result.persona.name })}</li> : null}
+                {result.model ? <li>{msg("music.result.modelCreated", { name: result.model.name })}</li> : null}
+                {result.voice ? <li>{msg("music.result.voiceCreated", { name: result.voice.name })}</li> : null}
               </ul>
             ) : null}
             {result.artifacts.length > 0 ? (
@@ -1837,7 +1865,7 @@ function MusicResultsPanel({ results }: Readonly<{ results: readonly MusicResult
                 {result.artifacts.map((artifact, artifactIndex) => (
                   <li key={`${result.id}:artifact:${artifactIndex}`}>
                     <a className={styles.artifactLink} download href={artifact.url}>
-                      {artifact.label}
+                      {musicArtifactLabel(artifact.kind, artifact.format, msg)}
                     </a>
                   </li>
                 ))}
@@ -1855,12 +1883,13 @@ function formatBpm(value: number | null | undefined) {
 }
 
 function WorkspaceStatus({ state }: Readonly<{ state?: MusicWorkspaceState }>) {
+  const msg = useMessages();
   if (!state?.preparing && !state?.polling && !state?.errorMessage) return null;
 
   return (
     <div className={styles.statusLine}>
-      {state.preparing ? <p role="status">Готовим запрос...</p> : null}
-      {state.polling ? <p role="status">Ждём результат...</p> : null}
+      {state.preparing ? <p role="status">{msg("music.status.preparing")}</p> : null}
+      {state.polling ? <p role="status">{msg("music.status.polling")}</p> : null}
       {state.errorMessage ? <p role="alert">{state.errorMessage}</p> : null}
     </div>
   );
@@ -1875,6 +1904,7 @@ function ConfirmationDialog({
   onCancel: () => void;
   onConfirm: (request: MusicWorkspaceActionRequest, quote: MusicOperationQuote) => void;
 }>) {
+  const msg = useMessages();
   if (confirmation === null) return null;
 
   return (
@@ -1886,19 +1916,19 @@ function ConfirmationDialog({
         role="alertdialog"
       >
         <h2 id="music-confirmation-title">
-          {confirmation.title ?? operationLabels[confirmation.request.operationId]}
+          {confirmation.title ?? operationLabel(undefined, confirmation.request.operationId, msg)}
         </h2>
-        <p>{confirmation.message ?? "Подтвердите списание перед запуском."}</p>
-        <CreditAmount prefix="Стоимость:" value={confirmation.quote.credits} />
+        <p>{confirmation.message ?? msg("music.confirm.defaultMessage")}</p>
+        <CreditAmount prefix={msg("music.price.cost")} value={confirmation.quote.credits} />
         <div className={styles.confirmationActions}>
           <Button onClick={onCancel} type="button">
-            {confirmation.cancelLabel ?? "Отмена"}
+            {confirmation.cancelLabel ?? msg("music.confirm.cancel")}
           </Button>
           <Button
             onClick={() => onConfirm(confirmation.request, confirmation.quote)}
             type="button"
           >
-            {confirmation.confirmLabel ?? "Подтвердить"}
+            {confirmation.confirmLabel ?? msg("music.confirm.confirm")}
           </Button>
         </div>
       </section>

@@ -1,4 +1,4 @@
-import { existsSync, readFileSync } from "node:fs";
+import { readFileSync } from "node:fs";
 import { resolve } from "node:path";
 
 import { describe, expect, it } from "vitest";
@@ -27,7 +27,7 @@ describe("WorkspaceLanding background", () => {
   it("uses a flat workspace background without an accent glow", () => {
     const pageRule = stylesheet.match(/\.page\s*\{[^}]*\}/s)?.[0] ?? "";
 
-    expect(pageRule).toContain("background: var(--color-background)");
+    expect(pageRule).toContain("background: var(--color-workspace)");
     expect(pageRule).not.toContain("radial-gradient");
   });
 });
@@ -100,8 +100,8 @@ describe("WorkspaceLanding hero", () => {
     expect(featuredModelsSource).toMatch(
       /<Image[^>]*alt=""[^>]*className=\{styles\.catalogActionBackground\}[^>]*fill[^>]*sizes="12rem"[^>]*src=\{assetPaths\.images\.workspace\.allModelsButtonBackground\}/s,
     );
-    expect(featuredModelsSource).toContain('<CatalogActionContent label="Показать ещё" />');
-    expect(featuredModelsSource).toContain('<CatalogActionContent label="Все нейросети" />');
+    expect(featuredModelsSource).toContain('<CatalogActionContent label={msg("featuredModels.showMore")} />');
+    expect(featuredModelsSource).toContain('<CatalogActionContent label={msg("featuredModels.allAiModels")} />');
     expect(actionRule).toContain("position: relative");
     expect(actionRule).toContain("background: transparent");
     expect(actionRule).toContain("min-block-size: 3.25rem");
@@ -146,41 +146,6 @@ describe("WorkspaceLanding hero", () => {
     expect(stylesheet).not.toContain(".promptImage");
   });
 
-  it("styles FAQ rows like the approved rounded reference", () => {
-    const listRule = stylesheet.match(/\.faqList\s*\{[^}]*\}/s)?.[0] ?? "";
-    const detailsRule = stylesheet.match(/\.faqList details\s*\{[^}]*\}/s)?.[0] ?? "";
-    const summaryRule = stylesheet.match(/\.faqList summary\s*\{[^}]*\}/s)?.[0] ?? "";
-    const arrowRule = stylesheet.match(/\.faqArrow\s*\{[^}]*\}/s)?.[0] ?? "";
-    const contentRule = stylesheet.match(/\.faqList details::details-content\s*\{[^}]*\}/s)?.[0] ?? "";
-    const openContentRule = stylesheet.match(/\.faqList details\[open\]::details-content\s*\{[^}]*\}/s)?.[0] ?? "";
-
-    expect(listRule).toContain("interpolate-size: allow-keywords");
-    expect(detailsRule).toContain("border: 0.0625rem solid transparent");
-    expect(detailsRule).toContain("border-radius: 1.5rem");
-    expect(detailsRule).toContain("overflow: hidden");
-    expect(summaryRule).toContain("min-block-size: 5rem");
-    expect(summaryRule).toContain("font-size: var(--font-size-supporting)");
-    expect(summaryRule).toContain("font-weight: var(--font-weight-semibold)");
-    expect(componentSource).toContain("assetPaths.icons.ui.faqArrow");
-    expect(componentSource).not.toContain('<span aria-hidden="true">⌄</span>');
-    expect(arrowRule).toContain("align-self: center");
-    expect(arrowRule).toContain("inline-size: 1.125rem");
-    expect(arrowRule).toContain("block-size: auto");
-    expect(arrowRule).toContain("transition: rotate var(--faq-motion)");
-    expect(contentRule).toContain("block-size: 0");
-    expect(contentRule).toContain("opacity: 0");
-    expect(contentRule).toContain("translate: 0 -0.35rem");
-    expect(contentRule).toContain("transition-behavior: allow-discrete");
-    expect(openContentRule).toContain("block-size: auto");
-    expect(openContentRule).toContain("opacity: 1");
-    expect(openContentRule).toContain("translate: 0 0");
-    expect(stylesheet).toMatch(/\.faqList details\[open\] \.faqArrow\s*\{[^}]*rotate:\s*180deg;/s);
-    expect(existsSync(resolve(process.cwd(), "public/assets/icons/ui/faq-arrow.svg"))).toBe(true);
-    expect(stylesheet).toMatch(
-      /\.faqList details:hover,\s*\.faqList details:focus-within\s*\{[^}]*border-color:\s*var\(--color-border\);/s,
-    );
-  });
-
   it("lays out capability previews as one tall tile beside two stacked tiles with captions below", () => {
     const mosaicRule = stylesheet.match(/\.capabilityMosaic\s*\{[^}]*\}/s)?.[0] ?? "";
     const cardRule = stylesheet.match(/\.capabilityCard\s*\{[^}]*\}/s)?.[0] ?? "";
@@ -203,21 +168,22 @@ describe("WorkspaceLanding hero", () => {
     const priceRule = stylesheet.match(/\.planPrice\s*\{[^}]*\}/s)?.[0] ?? "";
 
     expect(cardRule).toContain("grid-template-columns: minmax(18rem, 0.82fr) 1.38fr");
-    expect(cardRule).toContain("background: var(--color-surface)");
-    expect(offerRule).toContain("background: var(--gradient-brand)");
+    expect(cardRule).toContain("background: var(--color-panel)");
+    expect(componentSource).toContain("assetPaths.images.workspace.litePlanBackground");
+    expect(offerRule).toContain("background-size: cover");
     expect(priceRule).toContain("font-size: clamp(2.75rem, 6vw, 4rem)");
     expect(componentSource).toContain("styles.planBalance");
-    expect(componentSource).toContain("assetPaths.images.credits.star");
+    expect(componentSource).toContain('<CreditAmount className={styles.planBalance} value={400} />');
     expect(componentSource.match(/styles\.planBenefitIcon/g)).toHaveLength(3);
   });
 
-  it("builds the footer as a black three-level navigation area", () => {
+  it("builds the footer on the shared workspace canvas with three navigation levels", () => {
     const footerRule = stylesheet.match(/\.footer\s*\{[^}]*\}/s)?.[0] ?? "";
     const topRule = stylesheet.match(/\.footerTop\s*\{[^}]*\}/s)?.[0] ?? "";
     const columnsRule = stylesheet.match(/\.footerColumns\s*\{[^}]*\}/s)?.[0] ?? "";
     const metaRule = stylesheet.match(/\.footerMeta\s*\{[^}]*\}/s)?.[0] ?? "";
 
-    expect(footerRule).toContain("background: var(--color-background)");
+    expect(footerRule).toContain("background: var(--color-workspace)");
     expect(footerRule).not.toContain("background: var(--color-surface)");
     expect(topRule).toContain("grid-template-columns: 1fr auto 1fr");
     expect(columnsRule).toContain("grid-template-columns: repeat(3, minmax(0, 1fr))");
@@ -226,7 +192,7 @@ describe("WorkspaceLanding hero", () => {
     expect(componentSource.match(/styles\.footerColumn\}/g)).toHaveLength(3);
     expect(componentSource).toContain("styles.footerMeta");
     expect(componentSource).toContain("https://vk.me/neirohub_help");
-    expect(componentSource).toContain("© 2026 NeiroHub. Все права защищены.");
+    expect(componentSource).toContain('msg("workspaceLanding.2026NeirohubAllRightsReserved")');
   });
 
   it("keeps the gap between the final section and footer compact", () => {
@@ -249,11 +215,12 @@ describe("WorkspaceLanding hero", () => {
     const buttonRule = stylesheet.match(/\.communityButton\s*\{[^}]*\}/s)?.[0] ?? "";
     const phoneRule = stylesheet.match(/\.socialPhone\s*\{[^}]*\}/s)?.[0] ?? "";
 
-    expect(cardRule).toContain("background: var(--color-surface)");
-    expect(cardRule).toContain("border: 0.0625rem solid var(--color-border)");
+    expect(cardRule).toContain("background: var(--color-panel)");
+    expect(cardRule).toContain("border: 0.0625rem solid var(--color-card-border)");
     expect(cardRule).toContain("overflow: hidden");
     expect(visualRule).toContain("position: relative");
-    expect(buttonRule).toContain("background: #fff");
+    expect(buttonRule).toContain("background: var(--color-surface-light)");
+    expect(buttonRule).toContain("color: var(--color-text-on-light)");
     expect(phoneRule).toContain("position: absolute");
     expect(componentSource).toContain("styles.communityPreviewLeft");
     expect(componentSource).toContain("styles.communityPreviewRight");

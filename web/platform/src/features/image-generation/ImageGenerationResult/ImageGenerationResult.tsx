@@ -1,11 +1,13 @@
 "use client";
 
-/* eslint-disable @next/next/no-img-element */
+import { StateNotice } from "@/components/ui/AsyncState/AsyncState";
+import { MediaImage } from "@/components/media/MediaImage/MediaImage";
+import { useDictionary } from "@/i18n/LocaleProvider";
+
 
 import { useState } from "react";
 
 import { Button } from "@/components/ui/Button/Button";
-import { ru } from "@/i18n/ru";
 import type { ImageJobResult } from "@/lib/web-api/contracts";
 
 import styles from "./ImageGenerationResult.module.css";
@@ -17,6 +19,7 @@ type ImageGenerationResultProps = {
 };
 
 export function ImageGenerationResult({ onCreateAnother, prompt, result }: Readonly<ImageGenerationResultProps>) {
+  const t = useDictionary();
   const [copyState, setCopyState] = useState<"idle" | "copied" | "failure">("idle");
 
   const copyPrompt = async () => {
@@ -34,23 +37,23 @@ export function ImageGenerationResult({ onCreateAnother, prompt, result }: Reado
   return (
     <section aria-labelledby="image-result-title" className={styles.result}>
       <header>
-        <h3 id="image-result-title">{ru.imageGeneration.resultTitle}</h3>
-        <p>{ru.imageGeneration.resultReadyDescription}</p>
+        <h3 id="image-result-title">{t.imageGeneration.resultTitle}</h3>
+        <p>{t.imageGeneration.resultReadyDescription}</p>
       </header>
       <div className={styles.artifacts}>
         {result.artifacts.map((artifact) => {
           const artifactPath = `/web/v1/image-artifacts/${artifact.id}`;
           return (
             <figure key={artifact.id}>
-              <img
-                alt={ru.imageGeneration.resultImageAlt}
+              <MediaImage
+                alt={t.imageGeneration.resultImageAlt}
                 height={artifact.height || undefined}
                 src={artifactPath}
                 width={artifact.width || undefined}
               />
               <figcaption>
                 <a download href={artifactPath}>
-                  {ru.imageGeneration.downloadResult}
+                  {t.imageGeneration.downloadResult}
                 </a>
               </figcaption>
             </figure>
@@ -58,16 +61,16 @@ export function ImageGenerationResult({ onCreateAnother, prompt, result }: Reado
         })}
       </div>
       <div className={styles.actions}>
-        <Button onClick={() => onCreateAnother(prompt)}>{ru.imageGeneration.createAnother}</Button>
+        <Button onClick={() => onCreateAnother(prompt)}>{t.imageGeneration.createAnother}</Button>
         <Button className={styles.secondaryAction} onClick={() => void copyPrompt()}>
-          {ru.imageGeneration.copyPrompt}
+          {t.imageGeneration.copyPrompt}
         </Button>
       </div>
-      {copyState === "copied" ? <p aria-live="polite">{ru.imageGeneration.promptCopied}</p> : null}
+      {copyState === "copied" ? <p aria-live="polite">{t.imageGeneration.promptCopied}</p> : null}
       {copyState === "failure" ? (
-        <p className={styles.error} role="alert">
-          {ru.imageGeneration.copyPromptFailure}
-        </p>
+        <StateNotice inline kind="error">
+          {t.imageGeneration.copyPromptFailure}
+        </StateNotice>
       ) : null}
     </section>
   );

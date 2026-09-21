@@ -61,6 +61,7 @@ export const chatModelListSchema = z.object({
     id: z.string().trim().min(1),
     name: z.string().trim().min(1),
     description: z.string().trim().min(1).optional(),
+    description_translations: z.record(z.string(), z.string().trim().min(1)).optional(),
     categories: z.array(z.string().trim().min(1)).optional(),
     operations: z.array(z.unknown()).optional(),
     estimate_credits: z.number().int().nonnegative().optional(),
@@ -86,6 +87,7 @@ export const imageModelSchema = z
     id: z.string().trim().min(1),
     name: z.string().trim().min(1),
     description: z.string().trim().min(1).optional(),
+    description_translations: z.record(z.string(), z.string().trim().min(1)).optional(),
     categories: z.array(z.string().trim().min(1)).optional(),
     operations: z.array(z.unknown()).optional(),
     quality_options: z.array(z.string().trim().min(1)),
@@ -150,6 +152,8 @@ export const imageJobSchema = z
     model_id: z.string().trim().min(1),
     model_name: z.string().trim().min(1),
     image_quality: z.string().trim().min(1),
+    aspect_ratio: z.string().regex(/^\d{1,2}:\d{1,2}$/).optional(),
+    output_count: z.number().int().min(1).max(15).optional(),
     cost_estimate: z.number().int().positive(),
     created_at: z.string().datetime({ offset: true }),
     updated_at: z.string().datetime({ offset: true }),
@@ -227,6 +231,7 @@ export const conversationMessageSchema = z.object({
   rating: z.enum(["like", "dislike"]).nullable().optional().default(null),
   created_at: z.string().datetime({ offset: true }),
   images: z.array(conversationImageSchema).optional(),
+  input_images: z.array(z.string().uuid()).max(16).optional(),
 }).strict();
 
 export const conversationMessageListSchema = z.object({

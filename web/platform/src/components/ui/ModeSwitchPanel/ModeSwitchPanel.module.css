@@ -4,6 +4,10 @@
   max-inline-size: 100%;
 }
 
+.root[data-full-width="true"] {
+  inline-size: 100%;
+}
+
 .viewport {
   position: relative;
   display: flex;
@@ -11,7 +15,7 @@
   padding: 0.25rem;
   border: var(--panel-surface-border);
   border-radius: var(--radius-md);
-  background: var(--panel-surface-background);
+  background: var(--control-group-background, var(--panel-surface-background));
 }
 
 .indicator {
@@ -58,7 +62,7 @@
 }
 
 .icon,
-.icon > * {
+.viewport .icon > * {
   display: block;
   inline-size: 1.25rem;
   block-size: 1.25rem;

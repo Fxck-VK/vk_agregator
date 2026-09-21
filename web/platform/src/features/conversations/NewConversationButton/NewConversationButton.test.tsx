@@ -46,7 +46,7 @@ describe("NewConversationButton", () => {
     fireEvent.click(screen.getByRole("button", { name: ru.conversations.createLabel }));
 
     await vi.waitFor(() =>
-      expect(push).toHaveBeenCalledWith("/app/chat/d7c979f5-24e5-4f88-924b-a592d6e5a906"),
+      expect(push).toHaveBeenCalledWith("/ru/app/chat/d7c979f5-24e5-4f88-924b-a592d6e5a906"),
     );
     expect(refresh).toHaveBeenCalledTimes(1);
     expect(refresh.mock.invocationCallOrder[0]).toBeLessThan(push.mock.invocationCallOrder[0]);

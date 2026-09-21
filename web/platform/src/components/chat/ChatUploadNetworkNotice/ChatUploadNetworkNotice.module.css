@@ -1,0 +1,71 @@
+.notice {
+  position: fixed;
+  z-index: 60;
+  inset-block-start: max(var(--space-4), env(safe-area-inset-top));
+  max-inline-size: none;
+  padding: var(--space-4);
+  backdrop-filter: blur(12px);
+}
+
+.notice[data-in-workspace="true"] { position: absolute; }
+
+@property --chat-notice-sweep-angle {
+  syntax: "<angle>";
+  initial-value: 0deg;
+  inherits: false;
+}
+
+.notice::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  padding: 1px;
+  border-radius: inherit;
+  pointer-events: none;
+  background: conic-gradient(
+    from var(--chat-notice-sweep-angle),
+    transparent 0deg 260deg,
+    color-mix(in srgb, var(--color-accent) 35%, transparent) 300deg,
+    var(--color-accent) 342deg,
+    transparent 360deg
+  );
+  -webkit-mask: linear-gradient(#fff 0 0) content-box, linear-gradient(#fff 0 0);
+  mask: linear-gradient(#fff 0 0) content-box, linear-gradient(#fff 0 0);
+  -webkit-mask-composite: xor;
+  mask-composite: exclude;
+  opacity: 0;
+  animation: borderSweep 2.4s linear 2, borderSweepPresence 4.8s ease-in-out forwards;
+}
+
+@keyframes borderSweep {
+  to { --chat-notice-sweep-angle: 360deg; }
+}
+
+@keyframes borderSweepPresence {
+  0%, 100% { opacity: 0; }
+  5%, 95% { opacity: 1; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .notice::after { animation: none; }
+}
+
+.content {
+  display: grid;
+  grid-template-columns: 1.25rem minmax(0, 1fr) auto;
+  align-items: center;
+  gap: var(--space-3);
+}
+
+.content p {
+  margin: 0;
+  color: var(--panel-surface-text);
+  font-size: var(--font-size-ui);
+  line-height: 1.5;
+  overflow-wrap: anywhere;
+}
+
+.warning {
+  inline-size: 1.25rem;
+  block-size: 1.25rem;
+}

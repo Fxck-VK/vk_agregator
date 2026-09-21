@@ -1,0 +1,74 @@
+.indicator {
+  display: inline-flex;
+  flex: 0 0 auto;
+  inline-size: var(--loading-indicator-size, 1.25rem);
+  block-size: var(--loading-indicator-size, 1.25rem);
+  color: var(--loading-indicator-color, var(--color-text));
+  vertical-align: middle;
+}
+.indicator svg { display: block; inline-size: 100%; block-size: 100%; transform: rotate(-90deg); }
+.indicator circle { fill: none; stroke-width: 3; }
+.track { stroke: currentColor; opacity: 0.25; }
+.fill { stroke: currentColor; stroke-linecap: round; transition: stroke-dashoffset var(--motion-fast); }
+.indicator[data-indeterminate] { animation: state-spin var(--state-spin-duration, 1s) linear infinite; }
+.indicator[data-processing] { animation: state-pulse var(--state-pulse-duration, 1.6s) ease-in-out infinite; }
+.skeleton {
+  display: block;
+  min-inline-size: 0;
+  min-block-size: 1em;
+  overflow: hidden;
+  border: 1px solid var(--state-border, var(--color-card-border));
+  border-radius: var(--state-radius, var(--radius-md));
+  background: linear-gradient(100deg, transparent 20%, color-mix(in srgb, var(--color-text-muted) 10%, transparent) 50%, transparent 80%) var(--state-background, var(--state-placeholder-background, var(--color-panel)));
+  background-size: 240% 100%;
+  animation: state-shimmer var(--state-shimmer-duration, 1.8s) ease-in-out infinite;
+}
+.cardSkeleton { inline-size: 100%; }
+.notice {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-wrap: wrap;
+  gap: var(--space-3);
+  min-inline-size: 0;
+  padding: var(--space-6);
+  border: 1px solid var(--state-border, var(--color-border));
+  border-radius: var(--state-radius, var(--radius-md));
+  background: var(--state-background, var(--state-notice-background, var(--panel-surface-background)));
+  color: var(--color-text-muted);
+  font-size: var(--font-size-ui);
+  line-height: var(--line-height-ui);
+  text-align: center;
+  overflow-wrap: anywhere;
+  --loading-indicator-size: 1.25rem;
+}
+.notice[data-kind="error"] { color: var(--color-text); }
+.message { min-inline-size: 0; }
+.message > :first-child { margin-block-start: 0; }
+.message > :last-child { margin-block-end: 0; }
+.inline { justify-content: flex-start; padding: var(--space-2) 0; border: 0; background: transparent; text-align: start; }
+.errorIcon { flex: 0 0 auto; inline-size: 1.25rem; block-size: 1.25rem; color: var(--color-danger); }
+.retry.retry { display: inline-flex; align-items: center; justify-content: center; gap: var(--space-2); cursor: pointer; }
+.retry > svg, .retry > [data-icon] { inline-size: 1.25rem; block-size: 1.25rem; }
+.iconRetry.iconRetry { inline-size: var(--retry-action-size, 2.5rem); block-size: var(--retry-action-size, 2.5rem); padding: 0; }
+.media {
+  --loading-indicator-size: 2.5rem;
+  position: relative;
+  display: grid;
+  place-items: center;
+  inline-size: 100%;
+  block-size: 100%;
+  min-block-size: var(--media-state-min-size, 10rem);
+  overflow: hidden;
+  border-radius: inherit;
+  background: var(--state-background, var(--state-placeholder-background, var(--color-panel)));
+}
+.media[data-compact] { --loading-indicator-size: 1.25rem; --media-state-min-size: 0; }
+.srOnly { position: absolute; inline-size: 1px; block-size: 1px; overflow: hidden; clip-path: inset(50%); white-space: nowrap; }
+@keyframes state-spin { to { transform: rotate(360deg); } }
+@keyframes state-pulse { 50% { opacity: 0.45; } }
+@keyframes state-shimmer { from { background-position: 120% 0; } to { background-position: -120% 0; } }
+@media (prefers-reduced-motion: reduce) {
+  .indicator[data-indeterminate], .indicator[data-processing], .skeleton { animation: none; }
+  .fill { transition: none; }
+}

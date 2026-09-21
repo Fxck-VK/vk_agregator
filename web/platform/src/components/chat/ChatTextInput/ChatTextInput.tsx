@@ -1,3 +1,7 @@
+"use client";
+
+import { useMessages } from "@/i18n/LocaleProvider";
+
 import {
   useCallback,
   useEffect,
@@ -44,6 +48,7 @@ export function ChatTextInput({
   size,
   value,
 }: ChatTextInputProps) {
+  const msg = useMessages();
   const [hasMultipleLines, setHasMultipleLines] = useState(false);
   const [isManuallyExpanded, setIsManuallyExpanded] = useState(false);
   const [isManualTransitioning, setIsManualTransitioning] = useState(false);
@@ -57,9 +62,16 @@ export function ChatTextInput({
     const textarea = textareaRef.current;
     if (!root || !textarea) return;
 
-    root.style.removeProperty("--chat-text-input-height");
-    if (isManuallyExpanded) return;
+    if (isManuallyExpanded) {
+      root.style.removeProperty("--chat-text-input-height");
+      return;
+    }
 
+    const currentHeight = root.getBoundingClientRect().height;
+    const previousTransition = root.style.transition;
+    // Measure the natural size without sampling the expansion/collapse animation.
+    root.style.transition = "none";
+    root.style.removeProperty("--chat-text-input-height");
     const minimumHeight = root.getBoundingClientRect().height;
     root.style.setProperty("--chat-text-input-height", "0px");
     const textareaStyles = window.getComputedStyle(textarea);
@@ -80,6 +92,10 @@ export function ChatTextInput({
       maximumHeight,
     );
 
+    // Resume the animation from the visible height after the synchronous measurement.
+    root.style.setProperty("--chat-text-input-height", `${currentHeight}px`);
+    root.getBoundingClientRect();
+    root.style.transition = previousTransition;
     root.style.setProperty("--chat-text-input-height", `${nextHeight}px`);
   }, [isManuallyExpanded, value]);
 
@@ -152,6 +168,7 @@ export function ChatTextInput({
         viewportAs="textarea"
         viewportClassName={`${styles.input} ${styles[appearance]} ${styles[size]}`}
         viewportProps={{
+          dir: "auto",
           disabled,
           onChange,
           onKeyDown: submitOnEnter,
@@ -166,7 +183,7 @@ export function ChatTextInput({
       {hasMultipleLines || isManuallyExpanded ? (
         <button
           aria-expanded={isManuallyExpanded}
-          aria-label={isManuallyExpanded ? "Свернуть поле ввода" : "Развернуть поле ввода"}
+          aria-label={isManuallyExpanded ? msg("chatTextInput.collapseInput") : msg("chatTextInput.expandInput")}
           className={styles.expandButton}
           data-state={isManuallyExpanded ? "expanded" : "collapsed"}
           disabled={disabled}

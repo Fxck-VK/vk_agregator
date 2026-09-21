@@ -1,5 +1,9 @@
 "use client";
 
+import { StateNotice } from "@/components/ui/AsyncState/AsyncState";
+import { useDictionary, useLocale } from "@/i18n/LocaleProvider";
+
+
 import Image from "next/image";
 import { useEffect, useRef, useState } from "react";
 
@@ -14,7 +18,6 @@ import {
   type InspirationExample,
 } from "@/features/inspiration/inspiration-examples";
 import { InspirationExampleMedia } from "@/features/inspiration/InspirationExampleMedia/InspirationExampleMedia";
-import { ru } from "@/i18n/ru";
 
 import styles from "./ImageTemplatePicker.module.css";
 
@@ -22,8 +25,6 @@ type ImageTemplatePickerProps = {
   disabled?: boolean;
   onSelect: (template: InspirationExample) => void;
 };
-
-const imageTemplates = selectInspirationExamples(null, Number.POSITIVE_INFINITY, "image");
 
 function TemplateIcon() {
   return (
@@ -40,6 +41,8 @@ function TemplateIcon() {
 }
 
 export function ImageTemplatePicker({ disabled = false, onSelect }: Readonly<ImageTemplatePickerProps>) {
+  const t = useDictionary();
+  const imageTemplates = selectInspirationExamples(null, Number.POSITIVE_INFINITY, "image", {}, useLocale());
   const [isOpen, setIsOpen] = useState(false);
   const triggerRef = useRef<HTMLButtonElement>(null);
   const closeButtonRef = useRef<HTMLButtonElement>(null);
@@ -73,7 +76,7 @@ export function ImageTemplatePicker({ disabled = false, onSelect }: Readonly<Ima
         ref={triggerRef}
       >
         <TemplateIcon />
-        <span>{ru.imageGeneration.templatePicker.open}</span>
+        <span>{t.imageGeneration.templatePicker.open}</span>
       </InputControlChip>
 
       {isOpen ? (
@@ -85,9 +88,9 @@ export function ImageTemplatePicker({ disabled = false, onSelect }: Readonly<Ima
             role="dialog"
           >
             <header className={styles.header}>
-              <h2 id="image-template-picker-title">{ru.imageGeneration.templatePicker.title}</h2>
+              <h2 id="image-template-picker-title">{t.imageGeneration.templatePicker.title}</h2>
               <ModalCloseButton
-                aria-label={ru.imageGeneration.templatePicker.close}
+                aria-label={t.imageGeneration.templatePicker.close}
                 className={styles.closeButtonPlacement}
                 onClick={requestClose}
                 ref={closeButtonRef}
@@ -96,13 +99,13 @@ export function ImageTemplatePicker({ disabled = false, onSelect }: Readonly<Ima
 
             <ScrollArea className={styles.content} trackPlacement="outside">
               {imageTemplates.length === 0 ? (
-                <p className={styles.empty}>{ru.imageGeneration.templatePicker.empty}</p>
+                <StateNotice>{t.imageGeneration.templatePicker.empty}</StateNotice>
               ) : (
                 <MasonryGrid>
                   {imageTemplates.map((template) => (
                     <li key={template.id}>
                       <button
-                        aria-label={`${ru.imageGeneration.templatePicker.select} ${template.title}`}
+                        aria-label={`${t.imageGeneration.templatePicker.select} ${template.title}`}
                         className={styles.card}
                         onClick={() => chooseTemplate(template, requestClose)}
                         type="button"
@@ -116,7 +119,7 @@ export function ImageTemplatePicker({ disabled = false, onSelect }: Readonly<Ima
                           <strong>{template.title}</strong>
                           <small>{template.modelName}</small>
                         </span>
-                        <span className={styles.cardAction}>{ru.imageGeneration.templatePicker.select}</span>
+                        <span className={styles.cardAction}>{t.imageGeneration.templatePicker.select}</span>
                       </button>
                     </li>
                   ))}

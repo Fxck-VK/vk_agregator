@@ -1,5 +1,8 @@
 "use client";
 
+import { StateNotice } from "@/components/ui/AsyncState/AsyncState";
+import { useMessages, useDictionary } from "@/i18n/LocaleProvider";
+
 import {
   useEffect,
   useId,
@@ -14,7 +17,6 @@ import {
   type MediaPreviewDialogRenderClasses,
 } from "@/components/media/MediaPreviewDialogTemplate/MediaPreviewDialogTemplate";
 import { ModelIcon } from "@/features/models/ModelIcon/ModelIcon";
-import { ru } from "@/i18n/ru";
 
 import { InspirationExampleMedia } from "../InspirationExampleMedia/InspirationExampleMedia";
 import type { InspirationExample } from "../inspiration-examples";
@@ -35,6 +37,8 @@ export function InspirationExampleDialog({
   onSelect,
   selectedIndex,
 }: Readonly<InspirationExampleDialogProps>) {
+  const msg = useMessages();
+  const t = useDictionary();
   const [feedback, setFeedback] = useState<Feedback>(null);
   const [isPromptCopied, setIsPromptCopied] = useState(false);
   const [isPromptExpanded, setIsPromptExpanded] = useState(false);
@@ -135,9 +139,9 @@ export function InspirationExampleDialog({
 
   const feedbackText = feedback
     ? {
-        copyFailure: ru.inspiration.copyFailure,
-        linkCopied: ru.inspiration.linkCopied,
-        shareFailure: ru.inspiration.shareFailure,
+        copyFailure: t.inspiration.copyFailure,
+        linkCopied: t.inspiration.linkCopied,
+        shareFailure: t.inspiration.shareFailure,
       }[feedback]
     : null;
 
@@ -148,7 +152,7 @@ export function InspirationExampleDialog({
     <InspirationExampleMedia
       className={classes.thumbnailMedia}
       example={item}
-      videoProps={{ muted: true, playsInline: true, preload: "metadata" }}
+      videoProps={{ muted: true, playsInline: true, preload: "none" }}
     />
   );
 
@@ -157,7 +161,7 @@ export function InspirationExampleDialog({
     classes: MediaPreviewDialogRenderClasses,
   ) => (
     <InspirationExampleMedia
-      className={classes.previewMedia}
+      className={classes.previewMedia} fit="contain" passive={false}
       example={item}
       key={item.id}
       priority
@@ -177,11 +181,11 @@ export function InspirationExampleDialog({
 
       <MediaPreviewPromptHeader
         className={styles.promptHeaderSlot}
-        copiedLabel={ru.inspiration.copied}
-        copyLabel={ru.inspiration.copyPrompt}
+        copiedLabel={t.inspiration.copied}
+        copyLabel={t.inspiration.copyPrompt}
         isCopied={isPromptCopied}
         onCopy={() => void copyPrompt()}
-        title={ru.inspiration.promptTitle}
+        title={t.inspiration.promptTitle}
       />
       <div className={styles.promptBlock}>
         <p
@@ -205,7 +209,7 @@ export function InspirationExampleDialog({
                 onClick={() => setIsPromptExpanded((expanded) => !expanded)}
                 type="button"
               >
-                {isPromptExpanded ? ru.inspiration.promptCollapse : ru.inspiration.promptShowMore}
+                {isPromptExpanded ? t.inspiration.promptCollapse : t.inspiration.promptShowMore}
               </button>
             </>
           ) : null}
@@ -216,25 +220,25 @@ export function InspirationExampleDialog({
 
   return (
     <MediaPreviewDialogTemplate
-      ariaLabel={ru.inspiration.dialogLabel}
-      closeLabel={ru.inspiration.close}
+      ariaLabel={t.inspiration.dialogLabel}
+      closeLabel={t.inspiration.close}
       getActions={(item) => ({
         download: {
           download: item.downloadName,
           href: item.mediaPath,
-          label: ru.inspiration.download,
+          label: t.inspiration.download,
         },
         feedback: feedbackText
-          ? <p className={styles.feedback} role="status">{feedbackText}</p>
+          ? <StateNotice inline kind="success">{feedbackText}</StateNotice>
           : null,
         primary: recreateHref
           ? {
               href: recreateHref,
-              label: ru.inspiration.recreate,
+              label: t.inspiration.recreate,
             }
           : undefined,
         share: {
-          label: ru.inspiration.share,
+          label: t.inspiration.share,
           onClick: () => void shareExample(),
         },
       })}
@@ -243,18 +247,18 @@ export function InspirationExampleDialog({
         height: item.mediaHeight,
         width: item.mediaWidth,
       })}
-      getThumbnailLabel={(item) => `Показать пример «${item.title}»`}
+      getThumbnailLabel={(item) => msg("inspirationExampleDialogTemplate.showTheValueExample", { value1: item.title })}
       infoPanel={renderInfoPanel}
       items={examples}
-      nextLabel={ru.inspiration.nextExample}
+      nextLabel={t.inspiration.nextExample}
       onClose={onClose}
       onSelect={selectExample}
-      previousLabel={ru.inspiration.previousExample}
+      previousLabel={t.inspiration.previousExample}
       renderPreview={renderPreview}
       renderThumbnail={renderThumbnail}
       selectedIndex={selectedIndex}
       testIdPrefix="inspiration"
-      thumbnailRailLabel={ru.inspiration.examplesLabel}
+      thumbnailRailLabel={t.inspiration.examplesLabel}
     />
   );
 }

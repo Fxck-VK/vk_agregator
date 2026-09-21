@@ -1,10 +1,12 @@
 "use client";
 
+import { useDictionary } from "@/i18n/LocaleProvider";
+
+
 import { useEffect, useRef, useState } from "react";
 
 import { CheckIcon } from "@/components/icons/CheckIcon";
 import { CopyIcon } from "@/components/icons/CopyIcon";
-import { ru } from "@/i18n/ru";
 import { webBrowserMutation } from "@/lib/web-api/browser";
 import {
   parseConversationMessageRatingResponse,
@@ -36,6 +38,7 @@ type RatingMutation = {
 };
 
 export function ConversationMessageActions(props: Readonly<ConversationMessageActionsProps>) {
+  const t = useDictionary();
   const { kind, messageText } = props;
   const [copied, setCopied] = useState(false);
   const initialRating = kind === "assistant" ? props.initialRating : null;
@@ -84,7 +87,7 @@ export function ConversationMessageActions(props: Readonly<ConversationMessageAc
     }
   };
 
-  const copyLabel = copied ? ru.conversations.copiedMessage : ru.conversations.copyMessage;
+  const copyLabel = copied ? t.conversations.copiedMessage : t.conversations.copyMessage;
 
   const processRatingQueue = async () => {
     if (kind !== "assistant" || ratingProcessingRef.current) {
@@ -153,9 +156,9 @@ export function ConversationMessageActions(props: Readonly<ConversationMessageAc
       </button>
       {kind === "user" ? (
         <button
-          aria-label={ru.conversations.recreateMessage}
+          aria-label={t.conversations.recreateMessage}
           className={styles.action}
-          data-tooltip={ru.conversations.recreateMessage}
+          data-tooltip={t.conversations.recreateMessage}
           onClick={() => props.onRecreate(messageText)}
           type="button"
         >
@@ -164,20 +167,20 @@ export function ConversationMessageActions(props: Readonly<ConversationMessageAc
       ) : (
         <>
           <button
-            aria-label={ru.conversations.likeMessage}
+            aria-label={t.conversations.likeMessage}
             aria-pressed={rating === "like"}
             className={styles.action}
-            data-tooltip={ru.conversations.likeMessage}
+            data-tooltip={t.conversations.likeMessage}
             onClick={() => changeRating("like")}
             type="button"
           >
             <LikeIcon />
           </button>
           <button
-            aria-label={ru.conversations.dislikeMessage}
+            aria-label={t.conversations.dislikeMessage}
             aria-pressed={rating === "dislike"}
             className={styles.action}
-            data-tooltip={ru.conversations.dislikeMessage}
+            data-tooltip={t.conversations.dislikeMessage}
             onClick={() => changeRating("dislike")}
             type="button"
           >

@@ -5,13 +5,18 @@
   align-items: center;
   gap: var(--space-1);
   border-radius: var(--radius-sm);
+  transition: box-shadow var(--motion-fast);
+}
+
+.row[data-panel-open="true"] {
+  background: var(--color-surface-raised);
 }
 
 .row:hover,
 .row:focus-within,
-.row[data-active="true"],
-.row[data-panel-open="true"] {
-  background: var(--color-surface-raised);
+.row[data-active="true"] {
+  background: transparent;
+  box-shadow: inset 0 0 0 0.0625rem var(--color-accent);
 }
 
 .link {
@@ -30,11 +35,14 @@
 }
 
 .link:hover,
+.link:focus-visible,
 .link[aria-current="page"] {
   color: var(--color-text);
 }
 
-.link[aria-current="page"] { font-weight: var(--font-weight-semibold); }
+.link:focus-visible {
+  box-shadow: none;
+}
 
 .railIcon {
   display: none;

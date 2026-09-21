@@ -1,11 +1,15 @@
 "use client";
 
+import { MediaVideo } from "@/components/media/MediaVideo/MediaVideo";
+import { StateNotice } from "@/components/ui/AsyncState/AsyncState";
+import { useMessages, useDictionary } from "@/i18n/LocaleProvider";
+
 import { createContext, useContext, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 
 import { AssistantMessageContent } from "@/components/chat/AssistantMessageContent/AssistantMessageContent";
 import { FileCard } from "@/features/files/FileCard/FileCard";
 import { FilePreviewDialog } from "@/features/files/FilePreviewDialog/FilePreviewDialog";
-import { ru } from "@/i18n/ru";
+import { ImageGenerationGrid } from "@/features/image-generation/ImageGenerationGrid/ImageGenerationGrid";
 import type { ConversationImage, ConversationMessage } from "@/lib/web-api/contracts";
 
 import { collectConversationImages, loadEarlierConversationImages } from "./conversation-images";
@@ -83,18 +87,20 @@ export function ConversationImageGallery({ children, conversationID, hasMoreBefo
 }
 
 export function ConversationAssistantMessage({ message }: Readonly<{ message: ConversationMessage }>) {
+  const msg = useMessages();
+  const t = useDictionary();
   const gallery = useContext(GalleryContext);
   const images = collectConversationImages([message]);
 
   return (
     <>
       <AssistantMessageContent markdown={message.text} omitImageArtifactIDs={images.map((image) => image.artifact.id)} />
-      {message.videos?.map(video => <video
-        aria-label="Сгенерированное видео" className={styles.video} controls playsInline preload="metadata"
+      {message.videos?.map(video => <MediaVideo
+        aria-label={msg("conversationImageGallery.generatedVideo")} className={styles.video} controls playsInline preload="metadata"
         key={video.id} src={`/web/v1/video-artifacts/${video.id}`}
       />)}
       {images.length > 0 && gallery ? (
-        <div className={styles.images}>
+        <ImageGenerationGrid count={images.length} aspectRatio={`${images[0].artifact.width || 1}:${images[0].artifact.height || 1}`}>
           {images.map((image) => (
             <div className={styles.image} key={image.artifact.id}>
               <FileCard
@@ -107,11 +113,11 @@ export function ConversationAssistantMessage({ message }: Readonly<{ message: Co
                 resultState="idle"
                 showDeleteControl={false}
               />
-              {gallery.pendingArtifactID === image.artifact.id ? <p role="status">{ru.conversations.imagesLoading}</p> : null}
-              {gallery.failedArtifactID === image.artifact.id ? <p role="alert">{ru.conversations.imagesLoadFailure}</p> : null}
+              {gallery.pendingArtifactID === image.artifact.id ? <StateNotice inline kind="loading">{t.conversations.imagesLoading}</StateNotice> : null}
+              {gallery.failedArtifactID === image.artifact.id ? <StateNotice inline kind="error">{t.conversations.imagesLoadFailure}</StateNotice> : null}
             </div>
           ))}
-        </div>
+        </ImageGenerationGrid>
       ) : null}
     </>
   );

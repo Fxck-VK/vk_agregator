@@ -1,5 +1,8 @@
+"use client";
+
+import { useDictionary } from "@/i18n/LocaleProvider";
+
 import { CreditAmount } from "@/components/ui/CreditAmount/CreditAmount";
-import { ru } from "@/i18n/ru";
 
 import styles from "./ProfileBalanceCard.module.css";
 
@@ -8,21 +11,22 @@ type ProfileBalanceCardProps = {
 };
 
 export function ProfileBalanceCard({ balance }: ProfileBalanceCardProps) {
+  const t = useDictionary();
   const isBalanceAvailable = balance !== null;
 
   return (
-    <section aria-label={ru.profile.tariffSectionTitle} className={styles.card}>
+    <section aria-label={t.profile.tariffSectionTitle} className={styles.card}>
       <div className={styles.plan}>
-        <p>{ru.profile.planLabel}</p>
-        <strong>{ru.profile.planPlaceholder}</strong>
+        <p>{t.profile.planLabel}</p>
+        <strong>{t.profile.planPlaceholder}</strong>
       </div>
       <div
         aria-busy={!isBalanceAvailable || undefined}
-        aria-label={isBalanceAvailable ? undefined : ru.profile.balanceUnavailable}
+        aria-label={isBalanceAvailable ? undefined : t.profile.balanceUnavailable}
         className={styles.balance}
       >
-        <span>{ru.profile.balanceLabel}</span>
-        <strong>{isBalanceAvailable ? <CreditAmount value={balance} /> : ru.profile.balanceUnavailable}</strong>
+        <span>{t.profile.balanceLabel}</span>
+        <strong>{isBalanceAvailable ? <CreditAmount value={balance} /> : t.profile.balanceUnavailable}</strong>
       </div>
     </section>
   );

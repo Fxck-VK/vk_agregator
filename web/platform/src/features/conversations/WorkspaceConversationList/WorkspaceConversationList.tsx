@@ -2,13 +2,18 @@
 
 import { createContext, type ReactNode, useCallback, useContext, useMemo, useState } from "react";
 
-import type { ConversationItem } from "@/lib/web-api/contracts";
+import { parseConversationList, type ConversationItem } from "@/lib/web-api/contracts";
+import { webBrowserFetch } from "@/lib/web-api/browser";
+import { useReadResource } from "@/lib/use-read-resource";
 
 export type WorkspaceConversationItem = ConversationItem & {
   isPending?: true;
 };
 
 type WorkspaceConversationList = {
+  pending: boolean;
+  failed: boolean;
+  retry: () => void;
   conversations: WorkspaceConversationItem[];
   discardPendingConversation: (conversationID: string) => void;
   resolvePendingConversation: (pendingConversationID: string, conversation: ConversationItem) => void;
@@ -21,6 +26,7 @@ type WorkspaceConversationListProviderProps = {
   accountId: string;
   children: ReactNode;
   initialConversations: ConversationItem[];
+  deferred?: boolean;
 };
 
 type WorkspaceConversationListState = {
@@ -56,7 +62,15 @@ function reconcileServerConversations(
   return [...pendingConversations, ...reconciledServerConversations];
 }
 
-export function WorkspaceConversationListProvider({ accountId, children, initialConversations }: WorkspaceConversationListProviderProps) {
+async function loadConversations(signal: AbortSignal) {
+  const response = await webBrowserFetch("/web/v1/conversations?limit=20", { signal });
+  if (!response.ok) throw new Error("Conversations unavailable");
+  return parseConversationList(await response.json()).items;
+}
+
+export function WorkspaceConversationListProvider({ accountId, children, initialConversations: seed, deferred = false }: WorkspaceConversationListProviderProps) {
+  const resource = useReadResource(loadConversations, deferred ? null : seed, deferred, seed);
+  const initialConversations = deferred ? resource.data ?? seed : seed;
   const [conversationListState, setConversationListState] = useState<WorkspaceConversationListState>({
     accountId,
     initialConversations,
@@ -152,8 +166,8 @@ export function WorkspaceConversationListProvider({ accountId, children, initial
   }, []);
 
   const value = useMemo(
-    () => ({ conversations, discardPendingConversation, replaceConversation, resolvePendingConversation, updateConversationTitle, upsertConversation }),
-    [conversations, discardPendingConversation, replaceConversation, resolvePendingConversation, updateConversationTitle, upsertConversation],
+    () => ({ conversations, pending: resource.pending, failed: resource.failed, retry: resource.retry, discardPendingConversation, replaceConversation, resolvePendingConversation, updateConversationTitle, upsertConversation }),
+    [conversations, resource.pending, resource.failed, resource.retry, discardPendingConversation, replaceConversation, resolvePendingConversation, updateConversationTitle, upsertConversation],
   );
 
   return (

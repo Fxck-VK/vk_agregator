@@ -2,6 +2,7 @@ import { cleanup, fireEvent, render, screen } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
 import { ChatComposer } from "./ChatComposer";
+import type { ChatAttachments } from "@/features/conversations/use-chat-attachments";
 
 describe("ChatComposer", () => {
   afterEach(() => {
@@ -150,7 +151,7 @@ describe("ChatComposer", () => {
     expect(container.querySelector("[data-control-radius]")).not.toBeInTheDocument();
   });
 
-  it("shows a selected local file in the composer and lets the user remove it", () => {
+  it("rejects attachments when no supported model controller is connected", () => {
     const { container } = render(
       <ChatComposer
         canSubmit
@@ -172,8 +173,77 @@ describe("ChatComposer", () => {
     const input = container.querySelector('input[type="file"]');
     fireEvent.change(input as HTMLInputElement, { target: { files: [file] } });
 
-    expect(screen.getByText("reference.png")).toBeVisible();
-    fireEvent.click(screen.getByRole("button", { name: "Убрать reference.png" }));
+    expect(screen.getByRole("alert")).toHaveTextContent("Выбранная модель не поддерживает вложения");
     expect(screen.queryByText("reference.png")).not.toBeInTheDocument();
+  });
+});
+
+describe("attachment previews", () => {
+  afterEach(cleanup);
+  const remove = vi.fn(); const retry = vi.fn();
+  function composer(status: "uploading" | "ready" | "failed", progress: number | null = 40) {
+    const attachments: ChatAttachments = {
+      enabled: true, items: [{ id: "photo", fingerprint: "test", name: "diagram.png", mimeType: "image/png", source: "uploaded", previewUrl: "blob:photo", status, progress, error: status === "failed" ? "Не удалось загрузить файл." : undefined }],
+      duplicateNotice: false, dismissDuplicateNotice: vi.fn(),
+      networkNotice: false, dismissNetworkNotice: vi.fn(),
+      add: vi.fn(), remove, retry, clear: vi.fn(), error: null, blocked: status !== "ready", ids: status === "ready" ? ["photo"] : [],
+    };
+    return <ChatComposer attachmentController={attachments} canSubmit disabled={false} label="Диалог" mediaLabel="Загрузить медиа" onChange={vi.fn()} onSend={vi.fn()} placeholder="Вопрос" submitLabel="Отправить" value="Черновик" variant="conversation" />;
+  }
+  it("places a photo before the draft, offers a remove tooltip and removes the exact file", () => {
+    render(composer("ready"));
+    const image = screen.getByRole("img", { name: "diagram.png" });
+    fireEvent.load(image);
+    expect(image.compareDocumentPosition(screen.getByRole("textbox")) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+    expect(screen.queryByText("diagram.png")).toBeNull();
+    expect(screen.getByRole("tooltip", { name: "Удалить файл", hidden: true })).toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: "Удалить файл: diagram.png" }));
+    expect(remove).toHaveBeenCalledWith("photo");
+    expect(screen.queryByRole("progressbar")).toBeNull();
+  });
+  it("shows measured progress until ready and keeps retry available on failure", () => {
+    const { rerender } = render(composer("uploading"));
+    expect(screen.getByRole("progressbar")).toHaveAttribute("aria-valuenow", "40");
+    expect(screen.getByRole("button", { name: "Отправить" })).toBeDisabled();
+    rerender(composer("uploading", null));
+    expect(screen.getByRole("progressbar")).not.toHaveAttribute("aria-valuenow");
+    rerender(composer("uploading", 100));
+    expect(screen.getByRole("progressbar")).toHaveAttribute("aria-valuetext", "Обработка файла…");
+    expect(screen.getByRole("button", { name: "Отправить" })).toBeDisabled();
+    rerender(composer("failed"));
+    expect(screen.queryByRole("progressbar")).toBeNull();
+    expect(screen.getByRole("alert")).toHaveTextContent("Не удалось загрузить файл.");
+    const retryButton = screen.getByRole("button", { name: "Повторить загрузку: diagram.png" });
+    expect(retryButton.textContent).toBe("");
+    expect(retryButton).toHaveAccessibleDescription("Не удалось загрузить файл.");
+    expect(screen.getByRole("tooltip", { name: "Повторить", hidden: true })).toBeInTheDocument();
+    fireEvent.click(retryButton);
+    expect(retry).toHaveBeenCalledWith("photo");
+    rerender(composer("ready"));
+    expect(screen.queryByRole("alert")).toBeNull();
+    expect(screen.getByRole("button", { name: "Отправить" })).toBeEnabled();
+    expect(screen.getByRole("textbox")).toHaveValue("Черновик");
+  });
+  it("keeps the local photo open across upload states and preserves the draft", () => {
+    const view = render(composer("uploading"));
+    const trigger = screen.getByRole("button", { name: "Просмотр файла: diagram.png" });
+    trigger.focus();
+    fireEvent.click(trigger);
+    expect(screen.getByRole("dialog", { name: "Просмотр файла" })).toBeInTheDocument();
+    expect(screen.queryByRole("complementary")).toBeNull();
+    expect(screen.queryByRole("button", { name: "Следующий файл" })).toBeNull();
+    expect(screen.getByRole("dialog").querySelector("img")).toHaveAttribute("src", "blob:photo");
+    for (const status of ["failed", "uploading", "ready"] as const) {
+      view.rerender(composer(status));
+      expect(screen.getByRole("dialog", { name: "Просмотр файла" })).toBeInTheDocument();
+      expect(screen.getByRole("dialog").querySelector("img")).toHaveAttribute("src", "blob:photo");
+    }
+    fireEvent.click(screen.getByRole("button", { name: "Закрыть предпросмотр" }));
+    fireEvent.animationEnd(screen.getByTestId("attachment-preview-backdrop"));
+    expect(screen.queryByRole("dialog")).toBeNull();
+    expect(trigger).toHaveFocus();
+    expect(screen.getByRole("textbox")).toHaveValue("Черновик");
+    fireEvent.click(screen.getByRole("button", { name: "Удалить файл: diagram.png" }));
+    expect(screen.queryByRole("dialog")).toBeNull();
   });
 });

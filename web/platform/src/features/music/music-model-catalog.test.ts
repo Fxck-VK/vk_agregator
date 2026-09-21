@@ -3,7 +3,9 @@ import { describe, expect, it } from "vitest";
 import { parseModelCatalog } from "@/features/models/model-catalog-contract";
 import { publicInputs, publicModelCatalog } from "@/features/models/model-catalog-test-fixtures";
 
-import { projectMusicModelCatalog } from "./music-model-catalog";
+import { projectMusicModelCatalog, localizeMusicModelCatalog } from "./music-model-catalog";
+import { getTranslator } from "@/i18n/messages";
+import previewCatalog from "@/features/session/model-catalog.preview.json";
 
 function pendingMusicCatalog() {
   const payload = publicModelCatalog();
@@ -75,6 +77,18 @@ function pendingMusicCatalog() {
 }
 
 describe("music model catalog projection", () => {
+  it("translates cached music metadata without changing admission, quotes or source catalog", () => {
+    const source = parseModelCatalog(previewCatalog);
+    const russian = projectMusicModelCatalog(source);
+    const english = localizeMusicModelCatalog(russian, getTranslator("en"));
+    expect(english.source).toBe(source);
+    expect(english.defaultModelId).toBe(russian.defaultModelId);
+    expect(JSON.stringify(english.models)).not.toMatch(/[А-Яа-яЁё]/);
+    expect(english.models.map(model => [model.id, model.enabled, model.operations.map(op => [op.id, op.enabled, op.estimateCredits])]))
+      .toEqual(russian.models.map(model => [model.id, model.enabled, model.operations.map(op => [op.id, op.enabled, op.estimateCredits])]));
+    expect(localizeMusicModelCatalog(english, getTranslator("ru")).models).toEqual(russian.models);
+  });
+
   it("projects pending disabled audio candidates without making them look runnable", () => {
     const catalog = parseModelCatalog(pendingMusicCatalog());
 

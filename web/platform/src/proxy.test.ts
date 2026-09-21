@@ -4,7 +4,7 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 import { config, proxy } from "./proxy";
 
 const returnCookieName = "__Host-nh-return-to";
-const privatePath = "/app/chat/d7c979f5-24e5-4f88-924b-a592d6e5a906";
+const privatePath = "/en/app/chat/d7c979f5-24e5-4f88-924b-a592d6e5a906";
 
 describe("platform return-path proxy", () => {
   afterEach(() => {
@@ -12,10 +12,10 @@ describe("platform return-path proxy", () => {
   });
 
   it("matches rendered UI requests and leaves BFF and health routes alone", () => {
-    expect(config).toEqual({ matcher: ["/", "/login", "/app/:path*"] });
+    expect(config.matcher).toEqual(["/((?!_next/|assets/|web/|api/|health$|favicon.ico$|robots.txt$|sitemap.xml$).*)"]);
   });
 
-  it.each(["/", "/login", privatePath])("sets a fresh strict nonce CSP for the rendered UI route %s", (pathname) => {
+  it.each(["/ru", "/en/login", privatePath])("sets a fresh strict nonce CSP for the rendered UI route %s", (pathname) => {
     const response = proxy(new NextRequest(`https://platform.example${pathname}`));
     const csp = response.headers.get("Content-Security-Policy");
     const nonce = response.headers.get("x-middleware-request-x-nonce");
@@ -43,7 +43,7 @@ describe("platform return-path proxy", () => {
   it("allows only the development style elements and eval required by React and Next.js Dev Tools", () => {
     vi.stubEnv("NODE_ENV", "development");
 
-    const response = proxy(new NextRequest("https://platform.example/app/files"));
+    const response = proxy(new NextRequest("https://platform.example/ru/app/files"));
     const csp = response.headers.get("Content-Security-Policy");
 
     expect(csp).toMatch(/script-src [^;]*'unsafe-eval'/);
@@ -53,7 +53,7 @@ describe("platform return-path proxy", () => {
   it.each(["production", "test"])("keeps executable CSP directives strict in %s", (environment) => {
     vi.stubEnv("NODE_ENV", environment);
 
-    const response = proxy(new NextRequest("https://platform.example/app/files"));
+    const response = proxy(new NextRequest("https://platform.example/ru/app/files"));
     const csp = response.headers.get("Content-Security-Policy")!;
     const directives = csp.split(";").map((directive) => directive.trim());
     const attributeStyles = directives.filter((directive) => directive.startsWith("style-src-attr "));
@@ -68,8 +68,8 @@ describe("platform return-path proxy", () => {
   });
 
   it("generates a different nonce for each rendered UI response", () => {
-    const first = proxy(new NextRequest("https://platform.example/login"));
-    const second = proxy(new NextRequest("https://platform.example/login"));
+    const first = proxy(new NextRequest("https://platform.example/ru/login"));
+    const second = proxy(new NextRequest("https://platform.example/ru/login"));
 
     expect(first.headers.get("x-middleware-request-x-nonce")).not.toBe(
       second.headers.get("x-middleware-request-x-nonce"),
@@ -83,7 +83,7 @@ describe("platform return-path proxy", () => {
     const cookie = response.cookies.get(returnCookieName);
 
     expect(response.headers.get("Location")).toBeNull();
-    expect(response.headers.get("x-middleware-rewrite")).toBeNull();
+    expect(response.headers.get("x-middleware-rewrite")).toBe(`https://platform.example${privatePath.slice(3)}?ignored=query`);
     expect(await response.text()).toBe("");
     expect(cookie).toMatchObject({
       name: returnCookieName,
@@ -94,9 +94,9 @@ describe("platform return-path proxy", () => {
       path: "/",
       maxAge: 300,
     });
-    const browserCookies = response.headers.getSetCookie();
+    const browserCookies = response.headers.getSetCookie().filter(cookie => cookie.startsWith(returnCookieName));
     expect(browserCookies).toHaveLength(1);
-    expect(browserCookies[0]).toContain("__Host-nh-return-to=%2Fapp%2Fchat%2F");
+    expect(browserCookies[0]).toContain("__Host-nh-return-to=%2Fen%2Fapp%2Fchat%2F");
     expect(browserCookies[0]).toContain("Path=/");
     expect(browserCookies[0]).toContain("Max-Age=300");
     expect(browserCookies[0]).toContain("Secure");
@@ -105,7 +105,7 @@ describe("platform return-path proxy", () => {
     expect(browserCookies[0]).not.toContain("Domain=");
     expect(browserCookies[0]).not.toContain("ignored=query");
     const middlewareCookie = response.headers.get("x-middleware-set-cookie");
-    expect(middlewareCookie).toContain("__Host-nh-return-to=%2Fapp%2Fchat%2F");
+    expect(middlewareCookie).toContain("__Host-nh-return-to=%2Fen%2Fapp%2Fchat%2F");
     expect(middlewareCookie).toContain("Path=/");
     expect(middlewareCookie).toContain("Max-Age=300");
     expect(middlewareCookie).toContain("Secure");

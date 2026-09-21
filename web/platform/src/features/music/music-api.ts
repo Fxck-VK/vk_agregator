@@ -1,4 +1,6 @@
 import { z } from "zod";
+import { defaultLocale } from "@/i18n/locales";
+import { getTranslator, type Translator } from "@/i18n/messages";
 
 import { webBrowserFetch, webBrowserMutation } from "@/lib/web-api/browser";
 
@@ -322,7 +324,7 @@ export function musicSummaryFromResult(result: MusicJobResult): MusicResultSumma
     return [{
       format: artifact.format ?? null,
       kind: artifact.kind,
-      label: artifactLabel(artifact.kind, artifact.format),
+      label: musicArtifactLabel(artifact.kind, artifact.format),
       url,
     }];
   });
@@ -425,17 +427,17 @@ function compactRecord(values: Record<string, unknown>): Record<string, unknown>
   return Object.fromEntries(Object.entries(values).filter(([, value]) => value !== undefined && value !== ""));
 }
 
-function artifactLabel(kind: string, format: string | undefined) {
+export function musicArtifactLabel(kind: string, format: string | null | undefined, msg: Translator = getTranslator(defaultLocale)) {
   const normalizedKind = kind.trim().toLowerCase();
   const normalizedFormat = format?.trim().toUpperCase();
   const kindLabel = normalizedKind === "audio"
-    ? "аудио"
+    ? msg("musicCatalog.audio")
     : normalizedKind === "video"
-      ? "видео"
+      ? msg("musicCatalog.video")
       : normalizedKind === "image"
-        ? "обложку"
-        : "файл";
-  return ["Скачать", kindLabel, normalizedFormat].filter(Boolean).join(" ");
+        ? msg("musicCatalog.cover")
+        : msg("musicCatalog.file");
+  return [msg("musicCatalog.download", { kind: kindLabel }), normalizedFormat].filter(Boolean).join(" ");
 }
 
 function nonEmpty(value: string | undefined): string | undefined {

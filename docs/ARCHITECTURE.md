@@ -199,11 +199,25 @@ Current durable shared chat context:
   imagegeneration, productcatalog and pricingcatalog services. The orchestrator
   owns reservations and idempotency; workers own provider execution.
 - GET /web/v1/video-models exposes enabled, priced text-to-video routes only.
-  Reference-only routes stay unavailable until Web reference uploads exist.
+  Reference-only video routes remain unavailable; web uploads currently serve
+  the existing image-generation reference path only.
   Both selectors share one frontend catalogue adapter for text, image and video.
   Header selection opens a new-chat form; composer selection preserves the
   current conversation, its messages and draft. Model/options are frozen with
   the original idempotency key across submission retries.
+- Web image references use POST /web/v1/input-artifacts?model_id=... with one
+  multipart file, cookie authentication, Origin/CSRF and account rate limiting.
+  MEDIA_REFERENCE_UPLOADS_ENABLED and configured object storage gate availability.
+  PNG/JPEG bytes are decoded before storage (20 MiB, 4096 pixels per dimension).
+  artifactservice owns account-scoped hash reuse and storage. Conversation
+  messages accept reference_artifact_ids for enabled image models and validate
+  ownership/state/bytes and counts before queuing. Existing workers sanitize
+  and pass these inputs to providers. Text/video requests reject attachments.
+  GET /web/v1/image-reference-quote resolves the reference count through the same
+  pricing resolver. User-message input_images come from the persisted owned job;
+  GET /web/v1/input-artifacts/{artifactID} authorizes private byte delivery.
+  The Next proxy raises its 64 KiB cap to 21 MiB only for this upload endpoint.
+  Local demo preview never fakes uploads or paid generation.
 - Workers persist media prompts and assistant completion messages through the
   existing dialogcontext repository and job/role deduplication. Media providers
   receive the explicit prompt without text history. History attachments derive
@@ -3174,3 +3188,28 @@ GPT-4o Mini TTS and Whisper-1 remain disabled until audio metering and live
 outputs are verified; token price tables alone are not per-job quotes. All six
 models remain outside active bindings/runtime prices until canonical admission.
 See runbooks/MODEL_CATALOG.md for application limits and remaining rollout gates.
+## Platform localization ownership (2026-09-16)
+
+`web/platform/src/i18n` owns UI dictionaries, formatting and locale resolution. All UI URLs use `/ru` or `/en`; `src/proxy.ts` validates the prefix, overwrites the page-locale request header and rewrites to the shared internal App Router tree. Server dictionaries use this header; the root client boundary follows URL/history. Shared Link/router adapters own localized navigation. The stable route tree preserves draft, model and File/blob state during locale switches. The `neirohub-locale` cookie remembers preference only for legacy unprefixed redirects; it never overrides a localized URL and is not account identity or authorization. There is no mutable process-global language.
+
+Public canonical URLs, reciprocal hreflang and sitemap derive only from configured server-side `WEB_ORIGIN`, required in production. Private/login pages remain noindex, private pages session-checked. API, callbacks, health and assets retain technical URLs. Safe auth returns retain only allowlisted navigation identifiers; legacy payment return URLs remain compatible. Full route contract: `web/platform/docs/locale-routing.md`.
+
+Catalog IDs, capabilities, prices and cached payloads remain language independent. The frontend accepts optional `description_translations` on catalog models and resolves editorial copy at the presentation boundary. Existing API descriptions retain a source-language fallback. Error state uses codes/parameters, while user conversations, prompts and filenames preserve their original content. Billing and provider admission contracts are unchanged.
+
+Implementation, adding languages and verification: `web/platform/docs/localization.md`.
+
+Unknown localized page URLs use the dynamic, noindex `[...missing]` route with the existing workspace frame and a 404 in its content area. Its layout may show account/history only after the normal server session check; otherwise it renders the guest frame. Root not-found fallback and missing technical resources perform no account reads, keeping public-page fallback payloads free of private session data. See `docs/WEB_PLATFORM_ROUTE_BOUNDARIES.md`.
+
+
+### Web workspace preloading (2026-09-20)
+
+The web shell streams before identity resolution; only an authenticated /me unlocks private content. Balance and conversation navigation load independently in account-owned resources. A normalized, non-personal model catalog may be cached for 60 seconds and seeded into a shared client provider; authorization failures and user data are never shared. Catalog seed wait is bounded to 200 ms. Private history, file-result metadata and drafts remain client-owner scoped. Backend acceptance, availability and billing remain authoritative. Private image previews reuse artifact authorization and verified storage redirects, constrain input/processing, omit shared byte caches, and preserve original URLs for viewing/download. Public ImageJob geometry is explicitly projected without worker fields. Contract and tests: web/platform/docs/preloading.md.
+
+Web image references now use the account-owned /web/v1/input-artifacts route:
+PNG/JPEG content is decoded and bounded to 20 MiB and 4096 pixels per side.
+The image catalog advertises uploads only when storage dependencies, model
+readiness and reference pricing are available. Owner checks and reference-count
+quotes remain server-owned; pending media candidates stay disabled. BFF body
+limits are separate for image multipart uploads and music/speech audio uploads.
+Music and speech UI use the same locale provider as the workspace; switching
+language preserves drafts, prepared Jobs and retry keys without resubmission.

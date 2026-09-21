@@ -3,9 +3,9 @@
   gap: var(--space-4);
   inline-size: min(100%, 26rem);
   padding: var(--space-6);
-  border: 0.0625rem solid var(--color-border);
+  border: 0.0625rem solid var(--color-card-border);
   border-radius: var(--radius-lg);
-  background: var(--color-surface);
+  background: var(--color-panel);
 }
 
 .field {
@@ -15,10 +15,10 @@
 
 .field input {
   inline-size: 100%;
-  border: 0.0625rem solid var(--color-border);
+  border: 0.0625rem solid var(--color-input-border, var(--color-border));
   border-radius: var(--radius-sm);
   padding: var(--space-3);
-  background: var(--color-background);
+  background: var(--field-background, var(--color-background));
   color: var(--color-text);
 }
 

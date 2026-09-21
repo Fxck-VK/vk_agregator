@@ -5,7 +5,7 @@ import type { ReactNode } from "react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
 vi.mock("next/navigation", () => ({
-  usePathname: vi.fn(),
+  usePathname: vi.fn(() => "/app"),
   useRouter: vi.fn(),
 }));
 
@@ -135,7 +135,7 @@ describe("Sidebar", () => {
     render(<Sidebar />);
 
     const brandLink = screen.getByRole("link", { name: ru.brand.name });
-    expect(brandLink).toHaveAttribute("href", "/app");
+    expect(brandLink).toHaveAttribute("href", "/ru/app");
     expect(within(brandLink).getByTestId("neirohub-brand-chip")).toHaveAttribute(
       "src",
       expect.stringContaining("neirohub-chip.png"),
@@ -186,19 +186,23 @@ describe("Sidebar", () => {
     expect(screen.queryByText(ru.accountPreview.title)).not.toBeInTheDocument();
   });
 
-  it("toggles the narrow drawer and restores focus to its trigger when closed", () => {
+  it("replaces the burger with a close arrow and restores the burger and focus after closing", () => {
     const { panel, trigger } = renderNarrowSidebar();
 
     const firstLink = openNavigation(trigger);
 
     expect(trigger).toHaveAttribute("aria-expanded", "true");
+    expect(trigger).not.toBeVisible();
     expect(panel).toHaveAttribute("data-open", "true");
     expect(firstLink).toHaveFocus();
     expect(screen.getByRole("dialog", { name: ru.navigation.label })).toHaveAttribute("aria-modal", "true");
 
-    fireEvent.click(trigger);
+    const closeControl = within(panel).getByRole("button", { name: ru.navigation.collapseSidebarLabel });
+    expect(closeControl.querySelector('img[src="/assets/icons/ui/faq-arrow.svg"]')).toBeInTheDocument();
+    fireEvent.click(closeControl);
 
     expect(trigger).toHaveAttribute("aria-expanded", "false");
+    expect(trigger).toBeVisible();
     expect(panel).toHaveAttribute("aria-hidden", "true");
     expect(trigger).toHaveFocus();
   });
@@ -264,7 +268,7 @@ describe("Sidebar", () => {
     openNavigation(trigger);
     const chatsLink = screen.getByRole("link", { name: ru.navigation.chats });
 
-    expect(chatsLink).toHaveAttribute("href", "/app/chats");
+    expect(chatsLink).toHaveAttribute("href", "/ru/app/chats");
     expect(chatsLink).toHaveAttribute("id", "sidebar-new-chat");
     expect(chatsLink).toHaveTextContent(ru.navigation.chats);
     expect(screen.queryByRole("button", { name: ru.conversations.createLabel })).not.toBeInTheDocument();
@@ -307,7 +311,7 @@ describe("Sidebar", () => {
     expect(panel).toHaveAttribute("aria-hidden", "true");
     expect(panel).toHaveAttribute("inert");
     expect(trigger).not.toHaveFocus();
-    expect(replace).toHaveBeenCalledWith("/app");
+    expect(replace).toHaveBeenCalledWith("/ru/app");
     expect(refresh).not.toHaveBeenCalled();
     expect(screen.queryByRole("link", { name: "Recent chat 1" })).not.toBeInTheDocument();
     expect(panel.contains(document.activeElement)).toBe(false);
@@ -843,7 +847,7 @@ describe("Sidebar", () => {
     const contentArea = conversationsSlot?.parentElement;
 
     expect(recentLinks).toHaveLength(20);
-    expect(finalRecentLink).toHaveAttribute("href", "/app/chat/d7c979f5-24e5-4f88-924b-a592d6e5a019");
+    expect(finalRecentLink).toHaveAttribute("href", "/ru/app/chat/d7c979f5-24e5-4f88-924b-a592d6e5a019");
     expect(logoutControl).toBeInTheDocument();
     logoutControl.focus();
     expect(logoutControl).toHaveFocus();
