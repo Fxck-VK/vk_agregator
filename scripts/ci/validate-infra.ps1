@@ -156,6 +156,7 @@ function New-ComposeValidationEnvFile {
         "MINIO_ROOT_PASSWORD=minio-config",
         "CLOUDFLARED_TUNNEL_TOKEN=compose-validate-token",
         "DEV_WEB_BASIC_AUTH_HTPASSWD=compose-validation-placeholder",
+        "WEB_ORIGIN=https://dev-web.neiirohub.ru",
         "COMPOSE_NETWORK_NAME=vk-ai-aggregator-prod"
     )
     [IO.File]::WriteAllLines($path, $lines, [Text.UTF8Encoding]::new($false))
