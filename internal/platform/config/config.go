@@ -329,6 +329,7 @@ type Config struct {
 	FeatureImageModelSeedream45Enabled       bool
 	FeatureImageModelMockEnabled             bool
 	FeatureVideoRouterEnabled                bool
+	FeatureDEVModelSmokeEnabled              bool
 	FeatureVideoRouteHailuo23FastEnabled     bool
 	FeatureVideoRouteHailuo23StandardEnabled bool
 	FeatureVideoRouteKlingO3StandardEnabled  bool
@@ -660,6 +661,9 @@ func (c Config) PaymentWebhookHTTPSRequired() bool {
 // Validate fails closed: in production, secrets that protect inbound webhooks
 // and the admin API must be set. Returns a descriptive error otherwise.
 func (c Config) Validate() error {
+	if c.FeatureDEVModelSmokeEnabled && (c.Env != "development" || !c.APIMartProviderEnabled || strings.TrimSpace(c.APIMartAPIKey) == "" || strings.TrimSpace(c.APIMartBaseURL) == "" || !c.FeatureVideoRouterEnabled) {
+		return fmt.Errorf("config: FEATURE_DEV_MODEL_SMOKE_ENABLED requires development, configured APIMart and video router")
+	}
 	if err := providermodels.StaticRegistry().Validate(); err != nil {
 		return fmt.Errorf("config: model onboarding: %w", err)
 	}
@@ -1423,6 +1427,7 @@ func Load() Config {
 		FeatureImageModelSeedream45Enabled:        envBool("FEATURE_IMAGE_MODEL_SEEDREAM_4_5_ENABLED", false),
 		FeatureImageModelMockEnabled:              envBool("FEATURE_IMAGE_MODEL_MOCK_ENABLED", false),
 		FeatureVideoRouterEnabled:                 envBool("FEATURE_VIDEO_ROUTER_ENABLED", false),
+		FeatureDEVModelSmokeEnabled:               envBool("FEATURE_DEV_MODEL_SMOKE_ENABLED", false),
 		FeatureVideoRouteHailuo23FastEnabled:      envBool("FEATURE_VIDEO_ROUTE_HAILUO_2_3_FAST_ENABLED", false),
 		FeatureVideoRouteHailuo23StandardEnabled:  envBool("FEATURE_VIDEO_ROUTE_HAILUO_2_3_STANDARD_ENABLED", false),
 		FeatureVideoRouteKlingO3StandardEnabled: envBool(

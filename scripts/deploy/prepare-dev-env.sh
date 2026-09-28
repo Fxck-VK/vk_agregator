@@ -319,6 +319,7 @@ apimart_feature_enabled() {
 }
 
 image_gpt_image_2_5_flare_enabled="$(apimart_feature_enabled FEATURE_APIMART_GPT_IMAGE_2_5_FLARE_ENABLED)"
+dev_model_smoke_enabled="$(apimart_feature_enabled FEATURE_DEV_MODEL_SMOKE_ENABLED)"
 image_gpt_image_2_5_sunburst_enabled="$(apimart_feature_enabled FEATURE_APIMART_GPT_IMAGE_2_5_SUNBURST_ENABLED)"
 image_seedream_5_0_lite_enabled="$(apimart_feature_enabled FEATURE_APIMART_SEEDREAM_5_0_LITE_ENABLED)"
 image_seedream_5_0_pro_enabled="$(apimart_feature_enabled FEATURE_APIMART_SEEDREAM_5_0_PRO_ENABLED)"
@@ -449,6 +450,7 @@ sed \
   printf 'RUNTIME_PRICING_REFRESH_INTERVAL=0\n'
   printf 'PROVIDER_BALANCE_BOT_ENABLED=%s\n' "${provider_balance_bot_enabled}"
   printf 'APIMART_PROVIDER_ENABLED=%s\n' "${apimart_provider_enabled}"
+  printf 'FEATURE_DEV_MODEL_SMOKE_ENABLED=%s\n' "${dev_model_smoke_enabled}"
   if [[ -n "${apimart_base_url}" ]]; then
     printf 'APIMART_BASE_URL=%s\n' "${apimart_base_url}"
   fi

@@ -209,3 +209,68 @@ TTS до 4096 символов, шесть документированных г
 пользовательские данные не изменяются. Проверка файлов использует существующие
 S3 и `FFPROBE_PATH`. Допуск, реальные случаи и DEV smoke выполняются по
 MODEL_ONBOARDING отдельно от офлайн-тестов.
+
+## Nano Banana, Grok Video, Kling 2.6 и Seedance 2.0 — 28 сентября 2026
+
+Подготовлены пять APIMart-кандидатов: `nano_banana`, `grok_imagine_1_5_video`,
+`kling_2_6`, `seedance_2_0`, `seedance_2_0_mini`. Точные provider ID и
+датированные источники находятся в `providermodels/catalog_expansion.go`.
+Статус — `pending-verification`: операции отключены до реальных проверок
+и допуска по MODEL_ONBOARDING. Существующий Seedance 2.0 Fast через PoYo
+не меняется. Новых env-флагов, секретов или миграций эта подготовка не требует.
+
+Контракты сверены с официальными страницами:
+[Nano Banana](https://docs.apimart.ai/ru/api-reference/images/gemini-2.5-flash/generation),
+[Grok Video](https://docs.apimart.ai/ru/api-reference/videos/grok-imagine/generation),
+[Kling 2.6](https://docs.apimart.ai/ru/api-reference/videos/kling-v2-6/generation),
+[Seedance 2.0](https://docs.apimart.ai/ru/api-reference/videos/seedance-2-0/generation).
+
+Публичный сценарий кандидатов — генерация по тексту. Nano Banana: одно
+изображение 1K, десять пропорций, промпт до 1000 символов; автоматический
+платный `official_fallback` запрещён. Grok: 6–15 с, 480p/720p. Kling:
+ровно 5 или 10 с, Std/720p либо Pro/1080p. Seedance Standard: 4–15 с,
+480p/720p/1080p/4k; Mini: 4–15 с, 480p/720p. Лимит приложения для
+Grok/Mini — 4000 символов; он не объявляется лимитом API. Адаптер Kling
+ограничивает промпт 2500 символами, Seedance Standard — 4000.
+
+Возможности вложений API сохранены отдельно: Nano до 14 фото, Grok до 7,
+Kling до 2, Seedance до 9 фото и до 3 видео. Публичная загрузка для этих
+маршрутов пока выключена. Нативные контракты кадров Kling/Seedance проверяются
+офлайн; Seedance передаёт роли через `image_with_roles`. Последний кадр Kling
+доступен только в Pro и исключает звук. Публичный переключатель звука закрыт;
+Seedance явно отправляет `generate_audio=false`, Kling — `audio=false`,
+у Grok недокументированный параметр звука не отправляется.
+
+Котировки получены 2026-09-28 из публичного
+[pricing API APIMart](https://api.apimart.ai/api/pricing/model?model=seedance-2.0)
+для точных provider ID (Grok: `grok-imagine-1.5-video-ext`). Используется
+опубликованная скидка 20%, затем ×3 и округление вверх до 5 кредитов.
+Индивидуальная группа API-ключа и фактические списания ещё не проверены.
+
+| Модель | Публичная себестоимость | Котировка приложения |
+| --- | --- | --- |
+| Nano Banana | $0.0125/изображение | 10 кредитов |
+| Grok Video | 480p $0.0102/с; 720p $0.01912/с | 6 с, 720p: 70 кредитов |
+| Kling 2.6 | Std $0.0368/с; Pro $0.0625/с; Pro со звуком $0.125/с | 5 с, Std: 115 кредитов |
+| Seedance 2.0 | 480p $0.066/с; 720p $0.142/с; 1080p $0.3544/с; 4k $0.722/с | 5 с, 720p: 430 кредитов |
+| Seedance 2.0 Mini | 480p $0.01056/с; 720p $0.02288/с | 5 с, 720p: 70 кредитов |
+
+Входные видео Seedance имеют иной тариф и требуют пробированной длительности;
+этот путь не включён. Подстановка URL/режима через произвольные параметры
+отклоняется до HTTP. Резервирование и долговечное намерение отправки остаются
+в worker; повторное получение задания не создаёт новую платную отправку.
+
+Офлайн-проверки: точные тела/endpoint, отрицательные случаи до HTTP, все
+каталожные сочетания и их цены, отключённые публичные операции, подготовка
+запроса worker и сохранение уникального намерения при потере процесса.
+`live-output`, проверка реального списания и обычный DEV smoke не запускались:
+нужно отдельное разрешение провайдера, сценариев и бюджета.
+
+## DEV manual smoke (2026-09-28)
+
+An explicitly configured DEV runtime exposes 16 priced media candidates as
+`verification: dev-smoke`. This status permits the enabled operation without
+claiming completed onboarding. Static preview and production keep candidates
+pending. Candidate input restrictions and server quotes remain authoritative.
+Speech without bounded billing remains disabled. Scope and rollback:
+[DEV runbook](DEV.md#manual-model-smoke-on-dev).

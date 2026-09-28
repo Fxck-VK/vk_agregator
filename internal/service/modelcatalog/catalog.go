@@ -185,7 +185,7 @@ func orderedMiniAppModels(op domain.OperationType) []Model {
 			return []Model{model}
 		}
 	case domain.OperationImageGenerate:
-		registry := providermodels.StaticRegistry()
+		registry := providermodels.RuntimeRegistry()
 		models := make([]Model, 0, len(registry.PublicImageModels())+len(registry.LoadTestImageModels))
 		for _, registryModel := range registry.PublicImageModels() {
 			models = append(models, modelFromRegistryImage(registryModel))
@@ -200,7 +200,7 @@ func orderedMiniAppModels(op domain.OperationType) []Model {
 
 func miniAppTextModels() map[string]Model {
 	models := map[string]Model{}
-	for _, alias := range providermodels.StaticRegistry().TextAliasModels() {
+	for _, alias := range providermodels.RuntimeRegistry().TextAliasModels() {
 		model := Model{
 			ModelID:   alias.PublicID,
 			ModelName: alias.DisplayName,
@@ -221,7 +221,7 @@ func miniAppTextModels() map[string]Model {
 }
 
 func miniAppImageModels() map[string]Model {
-	registry := providermodels.StaticRegistry()
+	registry := providermodels.RuntimeRegistry()
 	models := map[string]Model{}
 	for _, registryModel := range registry.PublicImageModels() {
 		model := modelFromRegistryImage(registryModel)

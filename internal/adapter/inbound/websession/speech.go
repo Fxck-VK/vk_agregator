@@ -63,7 +63,7 @@ func (h *Handler) prepareSpeechJob(w http.ResponseWriter, r *http.Request) {
 		writeError(w, 503, "speech unavailable")
 		return
 	}
-	params, price, err := speechgeneration.Resolve(request, providermodels.StaticRegistry(), h.deps.ImagePricing)
+	params, price, err := speechgeneration.Resolve(request, providermodels.RuntimeRegistry(), h.deps.ImagePricing)
 	if err != nil {
 		writeError(w, 503, "speech awaits verification and pricing")
 		return
@@ -187,7 +187,7 @@ func (h *Handler) activateSpeechJob(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	params, _ := speechgeneration.DecodeJob(job)
-	if h.deps.ImageJobs == nil || !providermodels.StaticRegistry().MediaCandidateAdmitted(params.ModelID, params.Action()) {
+	if h.deps.ImageJobs == nil || !providermodels.RuntimeRegistry().MediaCandidateAdmitted(params.ModelID, params.Action()) {
 		writeError(w, 503, "speech awaits verification")
 		return
 	}

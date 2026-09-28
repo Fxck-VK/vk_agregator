@@ -6,6 +6,7 @@
 # dev/prod public URLs are validated by check-dev-env.sh and check-prod-env.sh.
 
 [dev-only]
+^FEATURE_DEV_MODEL_SMOKE_ENABLED$
 ^DEV_
 ^DEV_DEPLOY_
 ^VK_BOT_TUNNEL_

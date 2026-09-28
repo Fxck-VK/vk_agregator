@@ -52,6 +52,7 @@ func MediaCandidates() []MediaCandidate {
 		out = append(out, MediaCandidate{PublicID: v.id, Name: v.name, Kind: "audio", Provider: domain.ProviderAPIMart, ModelCode: v.native, Documentation: "https://docs.apimart.ai/ru/api-reference/audios/suno/overview", CheckedAt: "2026-09-16", Capabilities: ModelCapabilities{SchemaVersion: 1, API: CapabilityProfile{Audio: &AudioCapabilities{Audio: inputCapability(Supported, nil), Videos: noInput(), Output: "music"}, Notes: []string{"Лимиты входа зависят от операции: вдохновение — 1–4 записи, обучение модели — 6–24, загрузка для кавера/продолжения — менее 8 минут.", "Количество выходных треков определяется фактическим ответом. Форматы и режим Max доступны не во всех операциях."}}, Application: CapabilityProfile{Audio: &AudioCapabilities{Audio: noInput(), Videos: noInput(), Output: "music"}, Notes: []string{"Ожидает допуска; платные операции и загрузка выключены."}}}})
 	}
 	out = append(out, nextMediaCandidates()...)
+	out = append(out, catalogExpansionCandidates()...)
 	return out
 }
 

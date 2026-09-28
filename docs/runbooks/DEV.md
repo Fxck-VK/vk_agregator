@@ -3,6 +3,32 @@
 The DEV contour mirrors production architecture with separate secrets, domains,
 VK community, YooKassa/test settings and Cloudflare tunnel.
 
+## Manual model smoke on DEV
+
+At the user's request, `FEATURE_DEV_MODEL_SMOKE_ENABLED=true` exposes priced
+APIMart candidates for manual smoke on the DEV site. The DEV env renderer enables
+it when APIMart has credentials; explicit `false` disables it. Application defaults
+remain false. API and worker reject this flag outside `APP_ENV=development` and
+require APIMart readiness plus the video router. Deploy both processes together.
+
+This adds 16 candidates: Nano Banana, Imagen 4.0; HappyHorse 1.0/1.1, SkyReels V4
+Fast/Standard, Wan 3.0, Vidu Q3 Pro, Grok Imagine 1.5 Video, Kling 2.6, Seedance 2.0
+Standard/Mini; Suno V6/Wild/Mini and Lyria 3.5. Images and videos accept text only;
+music exposes `generate` only. GPT-4o Mini TTS and Whisper remain disabled until
+bounded per-job billing is implemented. Reference-only legacy routes remain subject
+to their existing surface/input restrictions.
+
+`GET /web/v1/models` marks these models `dev-smoke`, never verified. Auth, owned
+Jobs/artifacts, reservations, idempotency, moderation and capture/release remain
+mandatory. Candidate prices supplement missing catalog entries without overriding
+primary prices and survive runtime price refresh. Video/image prices use the
+documented floor, x3 and rounding up to five credits. Check actual provider charges
+and produced media during manual smoke; offline tests do not establish live success.
+
+The user runs paid smoke manually. Deploy and infrastructure checks submit no
+generations. Setting the flag false hides new selections and blocks candidate
+execution; drain or resolve active smoke jobs before switching it off.
+
 ## Platform language URLs
 
 The platform serves existing UI pages under `/ru` and `/en`. Legacy page URLs

@@ -261,7 +261,7 @@ const publicCatalogModelSchema = z.object({
     description_translations: z.record(z.string(), z.string().trim().min(1)).optional(),
   kind: publicKindSchema,
   categories: z.array(publicCategorySchema).min(1),
-  verification: z.enum(["legacy-unverified", "pending-verification", "verified-contract"]),
+  verification: z.enum(["legacy-unverified", "pending-verification", "verified-contract", "dev-smoke"]),
   version: nonEmptyString.optional(),
   operations: z.array(publicOperationSchema).min(1),
 }).strict().superRefine((model, ctx) => {

@@ -40,6 +40,9 @@ type nextVisualImageRequest struct {
 }
 
 func isNextVisualModel(model string) bool {
+	if catalogExpansionID(model) != "" {
+		return true
+	}
 	switch strings.TrimSpace(model) {
 	case ModelWan30Video, ModelViduQ3Pro, ModelImagen40:
 		return true
@@ -49,6 +52,10 @@ func isNextVisualModel(model string) bool {
 }
 
 func validateNextVisualRequest(req domain.ProviderRequest) error {
+	if catalogExpansionID(req.ModelCode) != "" {
+		_, err := buildCatalogExpansionBody(req)
+		return err
+	}
 	switch strings.TrimSpace(req.ModelCode) {
 	case ModelWan30Video:
 		return validateNextVisualWan(req)
@@ -62,6 +69,9 @@ func validateNextVisualRequest(req domain.ProviderRequest) error {
 }
 
 func buildNextVisualBody(req domain.ProviderRequest) ([]byte, error) {
+	if catalogExpansionID(req.ModelCode) != "" {
+		return buildCatalogExpansionBody(req)
+	}
 	if err := validateNextVisualRequest(req); err != nil {
 		return nil, err
 	}
@@ -122,7 +132,7 @@ func (p *Provider) submitNextVisual(ctx context.Context, req domain.ProviderRequ
 		return domain.ProviderTask{}, err
 	}
 	path := "/videos/generations"
-	if strings.TrimSpace(req.ModelCode) == ModelImagen40 {
+	if strings.TrimSpace(req.ModelCode) == ModelImagen40 || req.ModelCode == ModelNanoBanana {
 		path = "/images/generations"
 	}
 	return p.postUnversionedTask(ctx, req, path, body)
@@ -326,8 +336,11 @@ func validateNextVisualVideoParams(req domain.ProviderRequest, duration int, res
 	if err := nextVisualMatchIntParam(params, "duration_sec", duration); err != nil {
 		return err
 	}
-	if err := nextVisualMatchStringParam(params, "resolution", resolution); err != nil {
-		return err
+	if raw, ok := params["resolution"]; ok {
+		var actual string
+		if json.Unmarshal(raw, &actual) != nil || !strings.EqualFold(strings.TrimSpace(actual), resolution) {
+			return nextVisualInvalid("inconsistent APIMart video resolution")
+		}
 	}
 	if err := nextVisualMatchStringParam(params, "aspect_ratio", aspect); err != nil {
 		return err
@@ -351,7 +364,7 @@ func validateNextVisualVideoParams(req domain.ProviderRequest, duration int, res
 	if snapshot.DurationSec != 0 && snapshot.DurationSec != duration {
 		return nextVisualInvalid("resolved route duration does not match APIMart next visual request")
 	}
-	if strings.TrimSpace(snapshot.Resolution) != "" && strings.TrimSpace(snapshot.Resolution) != resolution {
+	if strings.TrimSpace(snapshot.Resolution) != "" && !strings.EqualFold(strings.TrimSpace(snapshot.Resolution), resolution) {
 		return nextVisualInvalid("resolved route resolution does not match APIMart next visual request")
 	}
 	if strings.TrimSpace(snapshot.AspectRatio) != "" && strings.TrimSpace(snapshot.AspectRatio) != aspect {
@@ -392,7 +405,11 @@ func validateNextVisualImageParams(req domain.ProviderRequest) error {
 			return err
 		}
 	}
-	ratio := nextVisualRatioValue(req, imagen40AspectRatios, "16:9")
+	ratios := imagen40AspectRatios
+	if req.ModelCode == ModelNanoBanana {
+		ratios = catalogExpansionRatios(ModelNanoBanana)
+	}
+	ratio := nextVisualRatioValue(req, ratios, "16:9")
 	if err := nextVisualMatchStringParam(params, "size", ratio); err != nil {
 		return err
 	}

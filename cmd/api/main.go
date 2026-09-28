@@ -71,6 +71,10 @@ func main() {
 		os.Exit(1)
 	}
 
+	if err := providermodels.ConfigureDEVSmoke(cfg.Env, cfg.FeatureDEVModelSmokeEnabled); err != nil {
+		logger.Error("model smoke configuration failed", logging.ErrorAttr(err))
+		os.Exit(1)
+	}
 	ctx := context.Background()
 	shutdownTracing, err := tracing.Init(ctx, tracing.Config{
 		ServiceName:         cfg.TracingServiceName + "-api",
@@ -121,6 +125,10 @@ func main() {
 	pricingCatalog, pricingSelection, err := pricingCache.Current()
 	if err != nil {
 		logger.Error("runtime pricing cache unavailable", logging.ErrorAttr(err))
+		os.Exit(1)
+	}
+	if err := pricingCatalog.AddSupplemental(providermodels.RuntimeRegistry().DEVSmokePrices()); err != nil {
+		logger.Error("model smoke pricing failed", logging.ErrorAttr(err))
 		os.Exit(1)
 	}
 	if cfg.RuntimePricingRefreshInterval > 0 {

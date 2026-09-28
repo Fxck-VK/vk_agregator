@@ -21,7 +21,7 @@ func (p *processor) buildSpeechRequest(ctx context.Context, job *domain.Job, att
 	if err != nil {
 		return domain.ProviderRequest{}, musicInvalidRequestError("invalid speech job")
 	}
-	if !providermodels.StaticRegistry().MediaCandidateAdmitted(params.ModelID, params.Action()) {
+	if !providermodels.RuntimeRegistry().MediaCandidateRunnable(params.ModelID, params.Action()) {
 		return domain.ProviderRequest{}, musicBuildError(domain.ProviderErrModelUnavailable, "speech admission pending")
 	}
 	speech := params.Speech

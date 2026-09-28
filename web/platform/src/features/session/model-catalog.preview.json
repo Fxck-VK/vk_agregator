@@ -25574,6 +25574,4806 @@
           ]
         }
       }
+    },
+    {
+      "id": "nano_banana",
+      "name": "Nano Banana",
+      "description": "Ожидает проверки перед запуском. Референсы и редактирование выключены.",
+      "kind": "image",
+      "categories": [
+        "images"
+      ],
+      "verification": "pending-verification",
+      "operations": [
+        {
+          "id": "generate",
+          "kind": "image",
+          "enabled": false,
+          "inputs": {
+            "images": {
+              "support": "unknown",
+              "enabled": false
+            },
+            "video": {
+              "support": "unknown",
+              "enabled": false
+            },
+            "audio": {
+              "support": "unknown",
+              "enabled": false
+            },
+            "documents": {
+              "support": "unknown",
+              "enabled": false
+            },
+            "max_total_bytes": 0
+          },
+          "image": {
+            "quality_label": "Вариант",
+            "show_output_count": false,
+            "quality_options": [
+              "1K"
+            ],
+            "default_quality": "1K",
+            "allowed_aspect_ratios": [
+              "1:1",
+              "2:3",
+              "3:2",
+              "3:4",
+              "4:3",
+              "4:5",
+              "5:4",
+              "9:16",
+              "16:9",
+              "21:9"
+            ],
+            "default_aspect_ratio": "16:9",
+            "max_output_count": 1,
+            "supports_reference_image": false,
+            "max_reference_images": 0,
+            "price_by_quality": {
+              "1K": 10
+            },
+            "price_by_variant": {
+              "1K:16:9": 10,
+              "1K:1:1": 10,
+              "1K:21:9": 10,
+              "1K:2:3": 10,
+              "1K:3:2": 10,
+              "1K:3:4": 10,
+              "1K:4:3": 10,
+              "1K:4:5": 10,
+              "1K:5:4": 10,
+              "1K:9:16": 10
+            }
+          }
+        }
+      ],
+      "capabilities": {
+        "schema_version": 1,
+        "api": {
+          "image": {
+            "images": {
+              "support": "supported",
+              "extensions": [
+                "jpg",
+                "jpeg",
+                "png",
+                "webp"
+              ],
+              "max_count": 14
+            },
+            "aspect_ratios": [
+              "1:1",
+              "2:3",
+              "3:2",
+              "3:4",
+              "4:3",
+              "4:5",
+              "5:4",
+              "9:16",
+              "16:9",
+              "21:9"
+            ],
+            "resolutions": [
+              "1K"
+            ],
+            "quality_modes": null,
+            "speed_modes": null,
+            "max_output_count": 1,
+            "max_combined_images": null
+          },
+          "notes": [
+            "Промпт до 1000 символов; до 14 изображений, JPEG/PNG/WebP, до 10 МБ каждое. Выход: одно изображение 1K."
+          ]
+        },
+        "application": {
+          "image": {
+            "images": {
+              "support": "unsupported",
+              "extensions": [],
+              "max_count": 0
+            },
+            "aspect_ratios": [
+              "1:1",
+              "2:3",
+              "3:2",
+              "3:4",
+              "4:3",
+              "4:5",
+              "5:4",
+              "9:16",
+              "16:9",
+              "21:9"
+            ],
+            "resolutions": [
+              "1K"
+            ],
+            "quality_modes": null,
+            "speed_modes": null,
+            "max_output_count": 1,
+            "max_combined_images": null
+          },
+          "notes": [
+            "Ожидает допуска. Подготовлена генерация по тексту; загрузка референсов не подключена."
+          ]
+        }
+      }
+    },
+    {
+      "id": "grok_imagine_1_5_video",
+      "name": "Grok Imagine 1.5 Video",
+      "description": "Ожидает проверки перед запуском.",
+      "kind": "video",
+      "categories": [
+        "video-audio"
+      ],
+      "verification": "pending-verification",
+      "operations": [
+        {
+          "id": "generate",
+          "kind": "video",
+          "enabled": false,
+          "inputs": {
+            "images": {
+              "support": "unknown",
+              "enabled": false
+            },
+            "video": {
+              "support": "unknown",
+              "enabled": false
+            },
+            "audio": {
+              "support": "unknown",
+              "enabled": false
+            },
+            "documents": {
+              "support": "unknown",
+              "enabled": false
+            },
+            "max_total_bytes": 0
+          },
+          "video": {
+            "allowed_resolutions": [
+              "480p",
+              "720p"
+            ],
+            "allowed_durations_sec": [
+              6,
+              7,
+              8,
+              9,
+              10,
+              11,
+              12,
+              13,
+              14,
+              15
+            ],
+            "allowed_aspect_ratios": [
+              "16:9",
+              "9:16",
+              "1:1",
+              "3:2",
+              "2:3"
+            ],
+            "default_resolution": "720p",
+            "default_duration_sec": 6,
+            "default_aspect_ratio": "16:9",
+            "price_by_option": {
+              "480p:10": 65,
+              "480p:11": 70,
+              "480p:12": 75,
+              "480p:13": 80,
+              "480p:14": 90,
+              "480p:15": 95,
+              "480p:6": 40,
+              "480p:7": 45,
+              "480p:8": 50,
+              "480p:9": 60,
+              "720p:10": 115,
+              "720p:11": 130,
+              "720p:12": 140,
+              "720p:13": 150,
+              "720p:14": 165,
+              "720p:15": 175,
+              "720p:6": 70,
+              "720p:7": 85,
+              "720p:8": 95,
+              "720p:9": 105
+            },
+            "variants": [
+              {
+                "duration_sec": 6,
+                "resolution": "480p",
+                "aspect_ratio": "16:9",
+                "fps": null,
+                "audio": null
+              },
+              {
+                "duration_sec": 6,
+                "resolution": "480p",
+                "aspect_ratio": "9:16",
+                "fps": null,
+                "audio": null
+              },
+              {
+                "duration_sec": 6,
+                "resolution": "480p",
+                "aspect_ratio": "1:1",
+                "fps": null,
+                "audio": null
+              },
+              {
+                "duration_sec": 6,
+                "resolution": "480p",
+                "aspect_ratio": "3:2",
+                "fps": null,
+                "audio": null
+              },
+              {
+                "duration_sec": 6,
+                "resolution": "480p",
+                "aspect_ratio": "2:3",
+                "fps": null,
+                "audio": null
+              },
+              {
+                "duration_sec": 6,
+                "resolution": "720p",
+                "aspect_ratio": "16:9",
+                "fps": null,
+                "audio": null
+              },
+              {
+                "duration_sec": 6,
+                "resolution": "720p",
+                "aspect_ratio": "9:16",
+                "fps": null,
+                "audio": null
+              },
+              {
+                "duration_sec": 6,
+                "resolution": "720p",
+                "aspect_ratio": "1:1",
+                "fps": null,
+                "audio": null
+              },
+              {
+                "duration_sec": 6,
+                "resolution": "720p",
+                "aspect_ratio": "3:2",
+                "fps": null,
+                "audio": null
+              },
+              {
+                "duration_sec": 6,
+                "resolution": "720p",
+                "aspect_ratio": "2:3",
+                "fps": null,
+                "audio": null
+              },
+              {
+                "duration_sec": 7,
+                "resolution": "480p",
+                "aspect_ratio": "16:9",
+                "fps": null,
+                "audio": null
+              },
+              {
+                "duration_sec": 7,
+                "resolution": "480p",
+                "aspect_ratio": "9:16",
+                "fps": null,
+                "audio": null
+              },
+              {
+                "duration_sec": 7,
+                "resolution": "480p",
+                "aspect_ratio": "1:1",
+                "fps": null,
+                "audio": null
+              },
+              {
+                "duration_sec": 7,
+                "resolution": "480p",
+                "aspect_ratio": "3:2",
+                "fps": null,
+                "audio": null
+              },
+              {
+                "duration_sec": 7,
+                "resolution": "480p",
+                "aspect_ratio": "2:3",
+                "fps": null,
+                "audio": null
+              },
+              {
+                "duration_sec": 7,
+                "resolution": "720p",
+                "aspect_ratio": "16:9",
+                "fps": null,
+                "audio": null
+              },
+              {
+                "duration_sec": 7,
+                "resolution": "720p",
+                "aspect_ratio": "9:16",
+                "fps": null,
+                "audio": null
+              },
+              {
+                "duration_sec": 7,
+                "resolution": "720p",
+                "aspect_ratio": "1:1",
+                "fps": null,
+                "audio": null
+              },
+              {
+                "duration_sec": 7,
+                "resolution": "720p",
+                "aspect_ratio": "3:2",
+                "fps": null,
+                "audio": null
+              },
+              {
+                "duration_sec": 7,
+                "resolution": "720p",
+                "aspect_ratio": "2:3",
+                "fps": null,
+                "audio": null
+              },
+              {
+                "duration_sec": 8,
+                "resolution": "480p",
+                "aspect_ratio": "16:9",
+                "fps": null,
+                "audio": null
+              },
+              {
+                "duration_sec": 8,
+                "resolution": "480p",
+                "aspect_ratio": "9:16",
+                "fps": null,
+                "audio": null
+              },
+              {
+                "duration_sec": 8,
+                "resolution": "480p",
+                "aspect_ratio": "1:1",
+                "fps": null,
+                "audio": null
+              },
+              {
+                "duration_sec": 8,
+                "resolution": "480p",
+                "aspect_ratio": "3:2",
+                "fps": null,
+                "audio": null
+              },
+              {
+                "duration_sec": 8,
+                "resolution": "480p",
+                "aspect_ratio": "2:3",
+                "fps": null,
+                "audio": null
+              },
+              {
+                "duration_sec": 8,
+                "resolution": "720p",
+                "aspect_ratio": "16:9",
+                "fps": null,
+                "audio": null
+              },
+              {
+                "duration_sec": 8,
+                "resolution": "720p",
+                "aspect_ratio": "9:16",
+                "fps": null,
+                "audio": null
+              },
+              {
+                "duration_sec": 8,
+                "resolution": "720p",
+                "aspect_ratio": "1:1",
+                "fps": null,
+                "audio": null
+              },
+              {
+                "duration_sec": 8,
+                "resolution": "720p",
+                "aspect_ratio": "3:2",
+                "fps": null,
+                "audio": null
+              },
+              {
+                "duration_sec": 8,
+                "resolution": "720p",
+                "aspect_ratio": "2:3",
+                "fps": null,
+                "audio": null
+              },
+              {
+                "duration_sec": 9,
+                "resolution": "480p",
+                "aspect_ratio": "16:9",
+                "fps": null,
+                "audio": null
+              },
+              {
+                "duration_sec": 9,
+                "resolution": "480p",
+                "aspect_ratio": "9:16",
+                "fps": null,
+                "audio": null
+              },
+              {
+                "duration_sec": 9,
+                "resolution": "480p",
+                "aspect_ratio": "1:1",
+                "fps": null,
+                "audio": null
+              },
+              {
+                "duration_sec": 9,
+                "resolution": "480p",
+                "aspect_ratio": "3:2",
+                "fps": null,
+                "audio": null
+              },
+              {
+                "duration_sec": 9,
+                "resolution": "480p",
+                "aspect_ratio": "2:3",
+                "fps": null,
+                "audio": null
+              },
+              {
+                "duration_sec": 9,
+                "resolution": "720p",
+                "aspect_ratio": "16:9",
+                "fps": null,
+                "audio": null
+              },
+              {
+                "duration_sec": 9,
+                "resolution": "720p",
+                "aspect_ratio": "9:16",
+                "fps": null,
+                "audio": null
+              },
+              {
+                "duration_sec": 9,
+                "resolution": "720p",
+                "aspect_ratio": "1:1",
+                "fps": null,
+                "audio": null
+              },
+              {
+                "duration_sec": 9,
+                "resolution": "720p",
+                "aspect_ratio": "3:2",
+                "fps": null,
+                "audio": null
+              },
+              {
+                "duration_sec": 9,
+                "resolution": "720p",
+                "aspect_ratio": "2:3",
+                "fps": null,
+                "audio": null
+              },
+              {
+                "duration_sec": 10,
+                "resolution": "480p",
+                "aspect_ratio": "16:9",
+                "fps": null,
+                "audio": null
+              },
+              {
+                "duration_sec": 10,
+                "resolution": "480p",
+                "aspect_ratio": "9:16",
+                "fps": null,
+                "audio": null
+              },
+              {
+                "duration_sec": 10,
+                "resolution": "480p",
+                "aspect_ratio": "1:1",
+                "fps": null,
+                "audio": null
+              },
+              {
+                "duration_sec": 10,
+                "resolution": "480p",
+                "aspect_ratio": "3:2",
+                "fps": null,
+                "audio": null
+              },
+              {
+                "duration_sec": 10,
+                "resolution": "480p",
+                "aspect_ratio": "2:3",
+                "fps": null,
+                "audio": null
+              },
+              {
+                "duration_sec": 10,
+                "resolution": "720p",
+                "aspect_ratio": "16:9",
+                "fps": null,
+                "audio": null
+              },
+              {
+                "duration_sec": 10,
+                "resolution": "720p",
+                "aspect_ratio": "9:16",
+                "fps": null,
+                "audio": null
+              },
+              {
+                "duration_sec": 10,
+                "resolution": "720p",
+                "aspect_ratio": "1:1",
+                "fps": null,
+                "audio": null
+              },
+              {
+                "duration_sec": 10,
+                "resolution": "720p",
+                "aspect_ratio": "3:2",
+                "fps": null,
+                "audio": null
+              },
+              {
+                "duration_sec": 10,
+                "resolution": "720p",
+                "aspect_ratio": "2:3",
+                "fps": null,
+                "audio": null
+              },
+              {
+                "duration_sec": 11,
+                "resolution": "480p",
+                "aspect_ratio": "16:9",
+                "fps": null,
+                "audio": null
+              },
+              {
+                "duration_sec": 11,
+                "resolution": "480p",
+                "aspect_ratio": "9:16",
+                "fps": null,
+                "audio": null
+              },
+              {
+                "duration_sec": 11,
+                "resolution": "480p",
+                "aspect_ratio": "1:1",
+                "fps": null,
+                "audio": null
+              },
+              {
+                "duration_sec": 11,
+                "resolution": "480p",
+                "aspect_ratio": "3:2",
+                "fps": null,
+                "audio": null
+              },
+              {
+                "duration_sec": 11,
+                "resolution": "480p",
+                "aspect_ratio": "2:3",
+                "fps": null,
+                "audio": null
+              },
+              {
+                "duration_sec": 11,
+                "resolution": "720p",
+                "aspect_ratio": "16:9",
+                "fps": null,
+                "audio": null
+              },
+              {
+                "duration_sec": 11,
+                "resolution": "720p",
+                "aspect_ratio": "9:16",
+                "fps": null,
+                "audio": null
+              },
+              {
+                "duration_sec": 11,
+                "resolution": "720p",
+                "aspect_ratio": "1:1",
+                "fps": null,
+                "audio": null
+              },
+              {
+                "duration_sec": 11,
+                "resolution": "720p",
+                "aspect_ratio": "3:2",
+                "fps": null,
+                "audio": null
+              },
+              {
+                "duration_sec": 11,
+                "resolution": "720p",
+                "aspect_ratio": "2:3",
+                "fps": null,
+                "audio": null
+              },
+              {
+                "duration_sec": 12,
+                "resolution": "480p",
+                "aspect_ratio": "16:9",
+                "fps": null,
+                "audio": null
+              },
+              {
+                "duration_sec": 12,
+                "resolution": "480p",
+                "aspect_ratio": "9:16",
+                "fps": null,
+                "audio": null
+              },
+              {
+                "duration_sec": 12,
+                "resolution": "480p",
+                "aspect_ratio": "1:1",
+                "fps": null,
+                "audio": null
+              },
+              {
+                "duration_sec": 12,
+                "resolution": "480p",
+                "aspect_ratio": "3:2",
+                "fps": null,
+                "audio": null
+              },
+              {
+                "duration_sec": 12,
+                "resolution": "480p",
+                "aspect_ratio": "2:3",
+                "fps": null,
+                "audio": null
+              },
+              {
+                "duration_sec": 12,
+                "resolution": "720p",
+                "aspect_ratio": "16:9",
+                "fps": null,
+                "audio": null
+              },
+              {
+                "duration_sec": 12,
+                "resolution": "720p",
+                "aspect_ratio": "9:16",
+                "fps": null,
+                "audio": null
+              },
+              {
+                "duration_sec": 12,
+                "resolution": "720p",
+                "aspect_ratio": "1:1",
+                "fps": null,
+                "audio": null
+              },
+              {
+                "duration_sec": 12,
+                "resolution": "720p",
+                "aspect_ratio": "3:2",
+                "fps": null,
+                "audio": null
+              },
+              {
+                "duration_sec": 12,
+                "resolution": "720p",
+                "aspect_ratio": "2:3",
+                "fps": null,
+                "audio": null
+              },
+              {
+                "duration_sec": 13,
+                "resolution": "480p",
+                "aspect_ratio": "16:9",
+                "fps": null,
+                "audio": null
+              },
+              {
+                "duration_sec": 13,
+                "resolution": "480p",
+                "aspect_ratio": "9:16",
+                "fps": null,
+                "audio": null
+              },
+              {
+                "duration_sec": 13,
+                "resolution": "480p",
+                "aspect_ratio": "1:1",
+                "fps": null,
+                "audio": null
+              },
+              {
+                "duration_sec": 13,
+                "resolution": "480p",
+                "aspect_ratio": "3:2",
+                "fps": null,
+                "audio": null
+              },
+              {
+                "duration_sec": 13,
+                "resolution": "480p",
+                "aspect_ratio": "2:3",
+                "fps": null,
+                "audio": null
+              },
+              {
+                "duration_sec": 13,
+                "resolution": "720p",
+                "aspect_ratio": "16:9",
+                "fps": null,
+                "audio": null
+              },
+              {
+                "duration_sec": 13,
+                "resolution": "720p",
+                "aspect_ratio": "9:16",
+                "fps": null,
+                "audio": null
+              },
+              {
+                "duration_sec": 13,
+                "resolution": "720p",
+                "aspect_ratio": "1:1",
+                "fps": null,
+                "audio": null
+              },
+              {
+                "duration_sec": 13,
+                "resolution": "720p",
+                "aspect_ratio": "3:2",
+                "fps": null,
+                "audio": null
+              },
+              {
+                "duration_sec": 13,
+                "resolution": "720p",
+                "aspect_ratio": "2:3",
+                "fps": null,
+                "audio": null
+              },
+              {
+                "duration_sec": 14,
+                "resolution": "480p",
+                "aspect_ratio": "16:9",
+                "fps": null,
+                "audio": null
+              },
+              {
+                "duration_sec": 14,
+                "resolution": "480p",
+                "aspect_ratio": "9:16",
+                "fps": null,
+                "audio": null
+              },
+              {
+                "duration_sec": 14,
+                "resolution": "480p",
+                "aspect_ratio": "1:1",
+                "fps": null,
+                "audio": null
+              },
+              {
+                "duration_sec": 14,
+                "resolution": "480p",
+                "aspect_ratio": "3:2",
+                "fps": null,
+                "audio": null
+              },
+              {
+                "duration_sec": 14,
+                "resolution": "480p",
+                "aspect_ratio": "2:3",
+                "fps": null,
+                "audio": null
+              },
+              {
+                "duration_sec": 14,
+                "resolution": "720p",
+                "aspect_ratio": "16:9",
+                "fps": null,
+                "audio": null
+              },
+              {
+                "duration_sec": 14,
+                "resolution": "720p",
+                "aspect_ratio": "9:16",
+                "fps": null,
+                "audio": null
+              },
+              {
+                "duration_sec": 14,
+                "resolution": "720p",
+                "aspect_ratio": "1:1",
+                "fps": null,
+                "audio": null
+              },
+              {
+                "duration_sec": 14,
+                "resolution": "720p",
+                "aspect_ratio": "3:2",
+                "fps": null,
+                "audio": null
+              },
+              {
+                "duration_sec": 14,
+                "resolution": "720p",
+                "aspect_ratio": "2:3",
+                "fps": null,
+                "audio": null
+              },
+              {
+                "duration_sec": 15,
+                "resolution": "480p",
+                "aspect_ratio": "16:9",
+                "fps": null,
+                "audio": null
+              },
+              {
+                "duration_sec": 15,
+                "resolution": "480p",
+                "aspect_ratio": "9:16",
+                "fps": null,
+                "audio": null
+              },
+              {
+                "duration_sec": 15,
+                "resolution": "480p",
+                "aspect_ratio": "1:1",
+                "fps": null,
+                "audio": null
+              },
+              {
+                "duration_sec": 15,
+                "resolution": "480p",
+                "aspect_ratio": "3:2",
+                "fps": null,
+                "audio": null
+              },
+              {
+                "duration_sec": 15,
+                "resolution": "480p",
+                "aspect_ratio": "2:3",
+                "fps": null,
+                "audio": null
+              },
+              {
+                "duration_sec": 15,
+                "resolution": "720p",
+                "aspect_ratio": "16:9",
+                "fps": null,
+                "audio": null
+              },
+              {
+                "duration_sec": 15,
+                "resolution": "720p",
+                "aspect_ratio": "9:16",
+                "fps": null,
+                "audio": null
+              },
+              {
+                "duration_sec": 15,
+                "resolution": "720p",
+                "aspect_ratio": "1:1",
+                "fps": null,
+                "audio": null
+              },
+              {
+                "duration_sec": 15,
+                "resolution": "720p",
+                "aspect_ratio": "3:2",
+                "fps": null,
+                "audio": null
+              },
+              {
+                "duration_sec": 15,
+                "resolution": "720p",
+                "aspect_ratio": "2:3",
+                "fps": null,
+                "audio": null
+              }
+            ],
+            "start_image": "unsupported",
+            "end_image": "unsupported"
+          }
+        }
+      ],
+      "capabilities": {
+        "schema_version": 1,
+        "api": {
+          "video": {
+            "images": {
+              "support": "supported",
+              "extensions": [],
+              "max_count": 7
+            },
+            "videos": {
+              "support": "unsupported",
+              "extensions": [],
+              "max_count": 0
+            },
+            "allowed_image_counts": [
+              0,
+              1,
+              2,
+              3,
+              4,
+              5,
+              6,
+              7
+            ],
+            "duration": {
+              "mode": "selected",
+              "min_seconds": 6,
+              "max_seconds": 15,
+              "allowed_seconds": [
+                6,
+                7,
+                8,
+                9,
+                10,
+                11,
+                12,
+                13,
+                14,
+                15
+              ]
+            },
+            "resolutions": [
+              "480p",
+              "720p"
+            ],
+            "quality_modes": null,
+            "aspect_ratios": [
+              "16:9",
+              "9:16",
+              "1:1",
+              "3:2",
+              "2:3"
+            ],
+            "audio": {
+              "mode": "unknown",
+              "selectable": false
+            },
+            "start_frame": "unknown",
+            "end_frame": "unknown"
+          },
+          "notes": [
+            "До 7 изображений по публичным URL, без Base64. Режим звука и семантика первого/последнего кадра не документированы."
+          ]
+        },
+        "application": {
+          "video": {
+            "images": {
+              "support": "unsupported",
+              "extensions": [],
+              "max_count": 0
+            },
+            "videos": {
+              "support": "unsupported",
+              "extensions": [],
+              "max_count": 0
+            },
+            "allowed_image_counts": null,
+            "duration": {
+              "mode": "selected",
+              "min_seconds": 6,
+              "max_seconds": 15,
+              "allowed_seconds": [
+                6,
+                7,
+                8,
+                9,
+                10,
+                11,
+                12,
+                13,
+                14,
+                15
+              ]
+            },
+            "resolutions": [
+              "480p",
+              "720p"
+            ],
+            "quality_modes": null,
+            "aspect_ratios": [
+              "16:9",
+              "9:16",
+              "1:1",
+              "3:2",
+              "2:3"
+            ],
+            "audio": {
+              "mode": "unknown",
+              "selectable": false
+            },
+            "start_frame": "unsupported",
+            "end_frame": "unsupported"
+          },
+          "notes": [
+            "Ожидает допуска. Подготовлена генерация по тексту; вложения и переключение звука не подключены. FPS и фактический результат требуют платной live-проверки."
+          ]
+        }
+      }
+    },
+    {
+      "id": "kling_2_6",
+      "name": "Kling 2.6",
+      "description": "Ожидает проверки перед запуском.",
+      "kind": "video",
+      "categories": [
+        "video-audio"
+      ],
+      "verification": "pending-verification",
+      "operations": [
+        {
+          "id": "generate",
+          "kind": "video",
+          "enabled": false,
+          "inputs": {
+            "images": {
+              "support": "unknown",
+              "enabled": false
+            },
+            "video": {
+              "support": "unknown",
+              "enabled": false
+            },
+            "audio": {
+              "support": "unknown",
+              "enabled": false
+            },
+            "documents": {
+              "support": "unknown",
+              "enabled": false
+            },
+            "max_total_bytes": 0
+          },
+          "video": {
+            "allowed_resolutions": [
+              "720p",
+              "1080p"
+            ],
+            "allowed_durations_sec": [
+              5,
+              10
+            ],
+            "allowed_aspect_ratios": [
+              "16:9",
+              "9:16",
+              "1:1"
+            ],
+            "default_resolution": "720p",
+            "default_duration_sec": 5,
+            "default_aspect_ratio": "16:9",
+            "price_by_option": {
+              "1080p:10": 375,
+              "1080p:5": 190,
+              "720p:10": 225,
+              "720p:5": 115
+            },
+            "variants": [
+              {
+                "duration_sec": 5,
+                "resolution": "720p",
+                "aspect_ratio": "16:9",
+                "fps": null,
+                "audio": null
+              },
+              {
+                "duration_sec": 5,
+                "resolution": "720p",
+                "aspect_ratio": "9:16",
+                "fps": null,
+                "audio": null
+              },
+              {
+                "duration_sec": 5,
+                "resolution": "720p",
+                "aspect_ratio": "1:1",
+                "fps": null,
+                "audio": null
+              },
+              {
+                "duration_sec": 5,
+                "resolution": "1080p",
+                "aspect_ratio": "16:9",
+                "fps": null,
+                "audio": null
+              },
+              {
+                "duration_sec": 5,
+                "resolution": "1080p",
+                "aspect_ratio": "9:16",
+                "fps": null,
+                "audio": null
+              },
+              {
+                "duration_sec": 5,
+                "resolution": "1080p",
+                "aspect_ratio": "1:1",
+                "fps": null,
+                "audio": null
+              },
+              {
+                "duration_sec": 10,
+                "resolution": "720p",
+                "aspect_ratio": "16:9",
+                "fps": null,
+                "audio": null
+              },
+              {
+                "duration_sec": 10,
+                "resolution": "720p",
+                "aspect_ratio": "9:16",
+                "fps": null,
+                "audio": null
+              },
+              {
+                "duration_sec": 10,
+                "resolution": "720p",
+                "aspect_ratio": "1:1",
+                "fps": null,
+                "audio": null
+              },
+              {
+                "duration_sec": 10,
+                "resolution": "1080p",
+                "aspect_ratio": "16:9",
+                "fps": null,
+                "audio": null
+              },
+              {
+                "duration_sec": 10,
+                "resolution": "1080p",
+                "aspect_ratio": "9:16",
+                "fps": null,
+                "audio": null
+              },
+              {
+                "duration_sec": 10,
+                "resolution": "1080p",
+                "aspect_ratio": "1:1",
+                "fps": null,
+                "audio": null
+              }
+            ],
+            "start_image": "unsupported",
+            "end_image": "unsupported"
+          }
+        }
+      ],
+      "capabilities": {
+        "schema_version": 1,
+        "api": {
+          "video": {
+            "images": {
+              "support": "supported",
+              "extensions": [],
+              "max_count": 2
+            },
+            "videos": {
+              "support": "unsupported",
+              "extensions": [],
+              "max_count": 0
+            },
+            "allowed_image_counts": [
+              0,
+              1,
+              2
+            ],
+            "duration": {
+              "mode": "selected",
+              "min_seconds": 5,
+              "max_seconds": 10,
+              "allowed_seconds": [
+                5,
+                10
+              ]
+            },
+            "resolutions": [
+              "720p",
+              "1080p"
+            ],
+            "quality_modes": [
+              "std",
+              "pro"
+            ],
+            "aspect_ratios": [
+              "16:9",
+              "9:16",
+              "1:1"
+            ],
+            "audio": {
+              "mode": "optional",
+              "selectable": true
+            },
+            "start_frame": "optional",
+            "end_frame": "optional"
+          },
+          "notes": [
+            "Промпт до 2500 символов. Std: 720p без звука. Pro: 1080p, опциональный звук. Последний кадр только в Pro и несовместим со звуком."
+          ]
+        },
+        "application": {
+          "video": {
+            "images": {
+              "support": "unsupported",
+              "extensions": [],
+              "max_count": 0
+            },
+            "videos": {
+              "support": "unsupported",
+              "extensions": [],
+              "max_count": 0
+            },
+            "allowed_image_counts": null,
+            "duration": {
+              "mode": "selected",
+              "min_seconds": 5,
+              "max_seconds": 10,
+              "allowed_seconds": [
+                5,
+                10
+              ]
+            },
+            "resolutions": [
+              "720p",
+              "1080p"
+            ],
+            "quality_modes": [
+              "std",
+              "pro"
+            ],
+            "aspect_ratios": [
+              "16:9",
+              "9:16",
+              "1:1"
+            ],
+            "audio": {
+              "mode": "unknown",
+              "selectable": false
+            },
+            "start_frame": "unsupported",
+            "end_frame": "unsupported"
+          },
+          "notes": [
+            "Ожидает допуска. Подготовлена генерация по тексту; вложения и переключение звука не подключены. FPS и фактический результат требуют платной live-проверки."
+          ]
+        }
+      }
+    },
+    {
+      "id": "seedance_2_0",
+      "name": "Seedance 2.0",
+      "description": "Ожидает проверки перед запуском.",
+      "kind": "video",
+      "categories": [
+        "video-audio"
+      ],
+      "verification": "pending-verification",
+      "operations": [
+        {
+          "id": "generate",
+          "kind": "video",
+          "enabled": false,
+          "inputs": {
+            "images": {
+              "support": "unknown",
+              "enabled": false
+            },
+            "video": {
+              "support": "unknown",
+              "enabled": false
+            },
+            "audio": {
+              "support": "unknown",
+              "enabled": false
+            },
+            "documents": {
+              "support": "unknown",
+              "enabled": false
+            },
+            "max_total_bytes": 0
+          },
+          "video": {
+            "allowed_resolutions": [
+              "480p",
+              "720p",
+              "1080p",
+              "4k"
+            ],
+            "allowed_durations_sec": [
+              4,
+              5,
+              6,
+              7,
+              8,
+              9,
+              10,
+              11,
+              12,
+              13,
+              14,
+              15
+            ],
+            "allowed_aspect_ratios": [
+              "16:9",
+              "9:16",
+              "1:1",
+              "4:3",
+              "3:4",
+              "21:9"
+            ],
+            "default_resolution": "720p",
+            "default_duration_sec": 5,
+            "default_aspect_ratio": "16:9",
+            "price_by_option": {
+              "1080p:10": 2130,
+              "1080p:11": 2340,
+              "1080p:12": 2555,
+              "1080p:13": 2765,
+              "1080p:14": 2980,
+              "1080p:15": 3190,
+              "1080p:4": 855,
+              "1080p:5": 1065,
+              "1080p:6": 1280,
+              "1080p:7": 1490,
+              "1080p:8": 1705,
+              "1080p:9": 1915,
+              "480p:10": 400,
+              "480p:11": 440,
+              "480p:12": 480,
+              "480p:13": 515,
+              "480p:14": 555,
+              "480p:15": 595,
+              "480p:4": 160,
+              "480p:5": 200,
+              "480p:6": 240,
+              "480p:7": 280,
+              "480p:8": 320,
+              "480p:9": 360,
+              "4k:10": 4335,
+              "4k:11": 4770,
+              "4k:12": 5200,
+              "4k:13": 5635,
+              "4k:14": 6065,
+              "4k:15": 6500,
+              "4k:4": 1735,
+              "4k:5": 2170,
+              "4k:6": 2600,
+              "4k:7": 3035,
+              "4k:8": 3470,
+              "4k:9": 3900,
+              "720p:10": 855,
+              "720p:11": 940,
+              "720p:12": 1025,
+              "720p:13": 1110,
+              "720p:14": 1195,
+              "720p:15": 1280,
+              "720p:4": 345,
+              "720p:5": 430,
+              "720p:6": 515,
+              "720p:7": 600,
+              "720p:8": 685,
+              "720p:9": 770
+            },
+            "variants": [
+              {
+                "duration_sec": 4,
+                "resolution": "480p",
+                "aspect_ratio": "16:9",
+                "fps": null,
+                "audio": null
+              },
+              {
+                "duration_sec": 4,
+                "resolution": "480p",
+                "aspect_ratio": "9:16",
+                "fps": null,
+                "audio": null
+              },
+              {
+                "duration_sec": 4,
+                "resolution": "480p",
+                "aspect_ratio": "1:1",
+                "fps": null,
+                "audio": null
+              },
+              {
+                "duration_sec": 4,
+                "resolution": "480p",
+                "aspect_ratio": "4:3",
+                "fps": null,
+                "audio": null
+              },
+              {
+                "duration_sec": 4,
+                "resolution": "480p",
+                "aspect_ratio": "3:4",
+                "fps": null,
+                "audio": null
+              },
+              {
+                "duration_sec": 4,
+                "resolution": "480p",
+                "aspect_ratio": "21:9",
+                "fps": null,
+                "audio": null
+              },
+              {
+                "duration_sec": 4,
+                "resolution": "720p",
+                "aspect_ratio": "16:9",
+                "fps": null,
+                "audio": null
+              },
+              {
+                "duration_sec": 4,
+                "resolution": "720p",
+                "aspect_ratio": "9:16",
+                "fps": null,
+                "audio": null
+              },
+              {
+                "duration_sec": 4,
+                "resolution": "720p",
+                "aspect_ratio": "1:1",
+                "fps": null,
+                "audio": null
+              },
+              {
+                "duration_sec": 4,
+                "resolution": "720p",
+                "aspect_ratio": "4:3",
+                "fps": null,
+                "audio": null
+              },
+              {
+                "duration_sec": 4,
+                "resolution": "720p",
+                "aspect_ratio": "3:4",
+                "fps": null,
+                "audio": null
+              },
+              {
+                "duration_sec": 4,
+                "resolution": "720p",
+                "aspect_ratio": "21:9",
+                "fps": null,
+                "audio": null
+              },
+              {
+                "duration_sec": 4,
+                "resolution": "1080p",
+                "aspect_ratio": "16:9",
+                "fps": null,
+                "audio": null
+              },
+              {
+                "duration_sec": 4,
+                "resolution": "1080p",
+                "aspect_ratio": "9:16",
+                "fps": null,
+                "audio": null
+              },
+              {
+                "duration_sec": 4,
+                "resolution": "1080p",
+                "aspect_ratio": "1:1",
+                "fps": null,
+                "audio": null
+              },
+              {
+                "duration_sec": 4,
+                "resolution": "1080p",
+                "aspect_ratio": "4:3",
+                "fps": null,
+                "audio": null
+              },
+              {
+                "duration_sec": 4,
+                "resolution": "1080p",
+                "aspect_ratio": "3:4",
+                "fps": null,
+                "audio": null
+              },
+              {
+                "duration_sec": 4,
+                "resolution": "1080p",
+                "aspect_ratio": "21:9",
+                "fps": null,
+                "audio": null
+              },
+              {
+                "duration_sec": 4,
+                "resolution": "4k",
+                "aspect_ratio": "16:9",
+                "fps": null,
+                "audio": null
+              },
+              {
+                "duration_sec": 4,
+                "resolution": "4k",
+                "aspect_ratio": "9:16",
+                "fps": null,
+                "audio": null
+              },
+              {
+                "duration_sec": 4,
+                "resolution": "4k",
+                "aspect_ratio": "1:1",
+                "fps": null,
+                "audio": null
+              },
+              {
+                "duration_sec": 4,
+                "resolution": "4k",
+                "aspect_ratio": "4:3",
+                "fps": null,
+                "audio": null
+              },
+              {
+                "duration_sec": 4,
+                "resolution": "4k",
+                "aspect_ratio": "3:4",
+                "fps": null,
+                "audio": null
+              },
+              {
+                "duration_sec": 4,
+                "resolution": "4k",
+                "aspect_ratio": "21:9",
+                "fps": null,
+                "audio": null
+              },
+              {
+                "duration_sec": 5,
+                "resolution": "480p",
+                "aspect_ratio": "16:9",
+                "fps": null,
+                "audio": null
+              },
+              {
+                "duration_sec": 5,
+                "resolution": "480p",
+                "aspect_ratio": "9:16",
+                "fps": null,
+                "audio": null
+              },
+              {
+                "duration_sec": 5,
+                "resolution": "480p",
+                "aspect_ratio": "1:1",
+                "fps": null,
+                "audio": null
+              },
+              {
+                "duration_sec": 5,
+                "resolution": "480p",
+                "aspect_ratio": "4:3",
+                "fps": null,
+                "audio": null
+              },
+              {
+                "duration_sec": 5,
+                "resolution": "480p",
+                "aspect_ratio": "3:4",
+                "fps": null,
+                "audio": null
+              },
+              {
+                "duration_sec": 5,
+                "resolution": "480p",
+                "aspect_ratio": "21:9",
+                "fps": null,
+                "audio": null
+              },
+              {
+                "duration_sec": 5,
+                "resolution": "720p",
+                "aspect_ratio": "16:9",
+                "fps": null,
+                "audio": null
+              },
+              {
+                "duration_sec": 5,
+                "resolution": "720p",
+                "aspect_ratio": "9:16",
+                "fps": null,
+                "audio": null
+              },
+              {
+                "duration_sec": 5,
+                "resolution": "720p",
+                "aspect_ratio": "1:1",
+                "fps": null,
+                "audio": null
+              },
+              {
+                "duration_sec": 5,
+                "resolution": "720p",
+                "aspect_ratio": "4:3",
+                "fps": null,
+                "audio": null
+              },
+              {
+                "duration_sec": 5,
+                "resolution": "720p",
+                "aspect_ratio": "3:4",
+                "fps": null,
+                "audio": null
+              },
+              {
+                "duration_sec": 5,
+                "resolution": "720p",
+                "aspect_ratio": "21:9",
+                "fps": null,
+                "audio": null
+              },
+              {
+                "duration_sec": 5,
+                "resolution": "1080p",
+                "aspect_ratio": "16:9",
+                "fps": null,
+                "audio": null
+              },
+              {
+                "duration_sec": 5,
+                "resolution": "1080p",
+                "aspect_ratio": "9:16",
+                "fps": null,
+                "audio": null
+              },
+              {
+                "duration_sec": 5,
+                "resolution": "1080p",
+                "aspect_ratio": "1:1",
+                "fps": null,
+                "audio": null
+              },
+              {
+                "duration_sec": 5,
+                "resolution": "1080p",
+                "aspect_ratio": "4:3",
+                "fps": null,
+                "audio": null
+              },
+              {
+                "duration_sec": 5,
+                "resolution": "1080p",
+                "aspect_ratio": "3:4",
+                "fps": null,
+                "audio": null
+              },
+              {
+                "duration_sec": 5,
+                "resolution": "1080p",
+                "aspect_ratio": "21:9",
+                "fps": null,
+                "audio": null
+              },
+              {
+                "duration_sec": 5,
+                "resolution": "4k",
+                "aspect_ratio": "16:9",
+                "fps": null,
+                "audio": null
+              },
+              {
+                "duration_sec": 5,
+                "resolution": "4k",
+                "aspect_ratio": "9:16",
+                "fps": null,
+                "audio": null
+              },
+              {
+                "duration_sec": 5,
+                "resolution": "4k",
+                "aspect_ratio": "1:1",
+                "fps": null,
+                "audio": null
+              },
+              {
+                "duration_sec": 5,
+                "resolution": "4k",
+                "aspect_ratio": "4:3",
+                "fps": null,
+                "audio": null
+              },
+              {
+                "duration_sec": 5,
+                "resolution": "4k",
+                "aspect_ratio": "3:4",
+                "fps": null,
+                "audio": null
+              },
+              {
+                "duration_sec": 5,
+                "resolution": "4k",
+                "aspect_ratio": "21:9",
+                "fps": null,
+                "audio": null
+              },
+              {
+                "duration_sec": 6,
+                "resolution": "480p",
+                "aspect_ratio": "16:9",
+                "fps": null,
+                "audio": null
+              },
+              {
+                "duration_sec": 6,
+                "resolution": "480p",
+                "aspect_ratio": "9:16",
+                "fps": null,
+                "audio": null
+              },
+              {
+                "duration_sec": 6,
+                "resolution": "480p",
+                "aspect_ratio": "1:1",
+                "fps": null,
+                "audio": null
+              },
+              {
+                "duration_sec": 6,
+                "resolution": "480p",
+                "aspect_ratio": "4:3",
+                "fps": null,
+                "audio": null
+              },
+              {
+                "duration_sec": 6,
+                "resolution": "480p",
+                "aspect_ratio": "3:4",
+                "fps": null,
+                "audio": null
+              },
+              {
+                "duration_sec": 6,
+                "resolution": "480p",
+                "aspect_ratio": "21:9",
+                "fps": null,
+                "audio": null
+              },
+              {
+                "duration_sec": 6,
+                "resolution": "720p",
+                "aspect_ratio": "16:9",
+                "fps": null,
+                "audio": null
+              },
+              {
+                "duration_sec": 6,
+                "resolution": "720p",
+                "aspect_ratio": "9:16",
+                "fps": null,
+                "audio": null
+              },
+              {
+                "duration_sec": 6,
+                "resolution": "720p",
+                "aspect_ratio": "1:1",
+                "fps": null,
+                "audio": null
+              },
+              {
+                "duration_sec": 6,
+                "resolution": "720p",
+                "aspect_ratio": "4:3",
+                "fps": null,
+                "audio": null
+              },
+              {
+                "duration_sec": 6,
+                "resolution": "720p",
+                "aspect_ratio": "3:4",
+                "fps": null,
+                "audio": null
+              },
+              {
+                "duration_sec": 6,
+                "resolution": "720p",
+                "aspect_ratio": "21:9",
+                "fps": null,
+                "audio": null
+              },
+              {
+                "duration_sec": 6,
+                "resolution": "1080p",
+                "aspect_ratio": "16:9",
+                "fps": null,
+                "audio": null
+              },
+              {
+                "duration_sec": 6,
+                "resolution": "1080p",
+                "aspect_ratio": "9:16",
+                "fps": null,
+                "audio": null
+              },
+              {
+                "duration_sec": 6,
+                "resolution": "1080p",
+                "aspect_ratio": "1:1",
+                "fps": null,
+                "audio": null
+              },
+              {
+                "duration_sec": 6,
+                "resolution": "1080p",
+                "aspect_ratio": "4:3",
+                "fps": null,
+                "audio": null
+              },
+              {
+                "duration_sec": 6,
+                "resolution": "1080p",
+                "aspect_ratio": "3:4",
+                "fps": null,
+                "audio": null
+              },
+              {
+                "duration_sec": 6,
+                "resolution": "1080p",
+                "aspect_ratio": "21:9",
+                "fps": null,
+                "audio": null
+              },
+              {
+                "duration_sec": 6,
+                "resolution": "4k",
+                "aspect_ratio": "16:9",
+                "fps": null,
+                "audio": null
+              },
+              {
+                "duration_sec": 6,
+                "resolution": "4k",
+                "aspect_ratio": "9:16",
+                "fps": null,
+                "audio": null
+              },
+              {
+                "duration_sec": 6,
+                "resolution": "4k",
+                "aspect_ratio": "1:1",
+                "fps": null,
+                "audio": null
+              },
+              {
+                "duration_sec": 6,
+                "resolution": "4k",
+                "aspect_ratio": "4:3",
+                "fps": null,
+                "audio": null
+              },
+              {
+                "duration_sec": 6,
+                "resolution": "4k",
+                "aspect_ratio": "3:4",
+                "fps": null,
+                "audio": null
+              },
+              {
+                "duration_sec": 6,
+                "resolution": "4k",
+                "aspect_ratio": "21:9",
+                "fps": null,
+                "audio": null
+              },
+              {
+                "duration_sec": 7,
+                "resolution": "480p",
+                "aspect_ratio": "16:9",
+                "fps": null,
+                "audio": null
+              },
+              {
+                "duration_sec": 7,
+                "resolution": "480p",
+                "aspect_ratio": "9:16",
+                "fps": null,
+                "audio": null
+              },
+              {
+                "duration_sec": 7,
+                "resolution": "480p",
+                "aspect_ratio": "1:1",
+                "fps": null,
+                "audio": null
+              },
+              {
+                "duration_sec": 7,
+                "resolution": "480p",
+                "aspect_ratio": "4:3",
+                "fps": null,
+                "audio": null
+              },
+              {
+                "duration_sec": 7,
+                "resolution": "480p",
+                "aspect_ratio": "3:4",
+                "fps": null,
+                "audio": null
+              },
+              {
+                "duration_sec": 7,
+                "resolution": "480p",
+                "aspect_ratio": "21:9",
+                "fps": null,
+                "audio": null
+              },
+              {
+                "duration_sec": 7,
+                "resolution": "720p",
+                "aspect_ratio": "16:9",
+                "fps": null,
+                "audio": null
+              },
+              {
+                "duration_sec": 7,
+                "resolution": "720p",
+                "aspect_ratio": "9:16",
+                "fps": null,
+                "audio": null
+              },
+              {
+                "duration_sec": 7,
+                "resolution": "720p",
+                "aspect_ratio": "1:1",
+                "fps": null,
+                "audio": null
+              },
+              {
+                "duration_sec": 7,
+                "resolution": "720p",
+                "aspect_ratio": "4:3",
+                "fps": null,
+                "audio": null
+              },
+              {
+                "duration_sec": 7,
+                "resolution": "720p",
+                "aspect_ratio": "3:4",
+                "fps": null,
+                "audio": null
+              },
+              {
+                "duration_sec": 7,
+                "resolution": "720p",
+                "aspect_ratio": "21:9",
+                "fps": null,
+                "audio": null
+              },
+              {
+                "duration_sec": 7,
+                "resolution": "1080p",
+                "aspect_ratio": "16:9",
+                "fps": null,
+                "audio": null
+              },
+              {
+                "duration_sec": 7,
+                "resolution": "1080p",
+                "aspect_ratio": "9:16",
+                "fps": null,
+                "audio": null
+              },
+              {
+                "duration_sec": 7,
+                "resolution": "1080p",
+                "aspect_ratio": "1:1",
+                "fps": null,
+                "audio": null
+              },
+              {
+                "duration_sec": 7,
+                "resolution": "1080p",
+                "aspect_ratio": "4:3",
+                "fps": null,
+                "audio": null
+              },
+              {
+                "duration_sec": 7,
+                "resolution": "1080p",
+                "aspect_ratio": "3:4",
+                "fps": null,
+                "audio": null
+              },
+              {
+                "duration_sec": 7,
+                "resolution": "1080p",
+                "aspect_ratio": "21:9",
+                "fps": null,
+                "audio": null
+              },
+              {
+                "duration_sec": 7,
+                "resolution": "4k",
+                "aspect_ratio": "16:9",
+                "fps": null,
+                "audio": null
+              },
+              {
+                "duration_sec": 7,
+                "resolution": "4k",
+                "aspect_ratio": "9:16",
+                "fps": null,
+                "audio": null
+              },
+              {
+                "duration_sec": 7,
+                "resolution": "4k",
+                "aspect_ratio": "1:1",
+                "fps": null,
+                "audio": null
+              },
+              {
+                "duration_sec": 7,
+                "resolution": "4k",
+                "aspect_ratio": "4:3",
+                "fps": null,
+                "audio": null
+              },
+              {
+                "duration_sec": 7,
+                "resolution": "4k",
+                "aspect_ratio": "3:4",
+                "fps": null,
+                "audio": null
+              },
+              {
+                "duration_sec": 7,
+                "resolution": "4k",
+                "aspect_ratio": "21:9",
+                "fps": null,
+                "audio": null
+              },
+              {
+                "duration_sec": 8,
+                "resolution": "480p",
+                "aspect_ratio": "16:9",
+                "fps": null,
+                "audio": null
+              },
+              {
+                "duration_sec": 8,
+                "resolution": "480p",
+                "aspect_ratio": "9:16",
+                "fps": null,
+                "audio": null
+              },
+              {
+                "duration_sec": 8,
+                "resolution": "480p",
+                "aspect_ratio": "1:1",
+                "fps": null,
+                "audio": null
+              },
+              {
+                "duration_sec": 8,
+                "resolution": "480p",
+                "aspect_ratio": "4:3",
+                "fps": null,
+                "audio": null
+              },
+              {
+                "duration_sec": 8,
+                "resolution": "480p",
+                "aspect_ratio": "3:4",
+                "fps": null,
+                "audio": null
+              },
+              {
+                "duration_sec": 8,
+                "resolution": "480p",
+                "aspect_ratio": "21:9",
+                "fps": null,
+                "audio": null
+              },
+              {
+                "duration_sec": 8,
+                "resolution": "720p",
+                "aspect_ratio": "16:9",
+                "fps": null,
+                "audio": null
+              },
+              {
+                "duration_sec": 8,
+                "resolution": "720p",
+                "aspect_ratio": "9:16",
+                "fps": null,
+                "audio": null
+              },
+              {
+                "duration_sec": 8,
+                "resolution": "720p",
+                "aspect_ratio": "1:1",
+                "fps": null,
+                "audio": null
+              },
+              {
+                "duration_sec": 8,
+                "resolution": "720p",
+                "aspect_ratio": "4:3",
+                "fps": null,
+                "audio": null
+              },
+              {
+                "duration_sec": 8,
+                "resolution": "720p",
+                "aspect_ratio": "3:4",
+                "fps": null,
+                "audio": null
+              },
+              {
+                "duration_sec": 8,
+                "resolution": "720p",
+                "aspect_ratio": "21:9",
+                "fps": null,
+                "audio": null
+              },
+              {
+                "duration_sec": 8,
+                "resolution": "1080p",
+                "aspect_ratio": "16:9",
+                "fps": null,
+                "audio": null
+              },
+              {
+                "duration_sec": 8,
+                "resolution": "1080p",
+                "aspect_ratio": "9:16",
+                "fps": null,
+                "audio": null
+              },
+              {
+                "duration_sec": 8,
+                "resolution": "1080p",
+                "aspect_ratio": "1:1",
+                "fps": null,
+                "audio": null
+              },
+              {
+                "duration_sec": 8,
+                "resolution": "1080p",
+                "aspect_ratio": "4:3",
+                "fps": null,
+                "audio": null
+              },
+              {
+                "duration_sec": 8,
+                "resolution": "1080p",
+                "aspect_ratio": "3:4",
+                "fps": null,
+                "audio": null
+              },
+              {
+                "duration_sec": 8,
+                "resolution": "1080p",
+                "aspect_ratio": "21:9",
+                "fps": null,
+                "audio": null
+              },
+              {
+                "duration_sec": 8,
+                "resolution": "4k",
+                "aspect_ratio": "16:9",
+                "fps": null,
+                "audio": null
+              },
+              {
+                "duration_sec": 8,
+                "resolution": "4k",
+                "aspect_ratio": "9:16",
+                "fps": null,
+                "audio": null
+              },
+              {
+                "duration_sec": 8,
+                "resolution": "4k",
+                "aspect_ratio": "1:1",
+                "fps": null,
+                "audio": null
+              },
+              {
+                "duration_sec": 8,
+                "resolution": "4k",
+                "aspect_ratio": "4:3",
+                "fps": null,
+                "audio": null
+              },
+              {
+                "duration_sec": 8,
+                "resolution": "4k",
+                "aspect_ratio": "3:4",
+                "fps": null,
+                "audio": null
+              },
+              {
+                "duration_sec": 8,
+                "resolution": "4k",
+                "aspect_ratio": "21:9",
+                "fps": null,
+                "audio": null
+              },
+              {
+                "duration_sec": 9,
+                "resolution": "480p",
+                "aspect_ratio": "16:9",
+                "fps": null,
+                "audio": null
+              },
+              {
+                "duration_sec": 9,
+                "resolution": "480p",
+                "aspect_ratio": "9:16",
+                "fps": null,
+                "audio": null
+              },
+              {
+                "duration_sec": 9,
+                "resolution": "480p",
+                "aspect_ratio": "1:1",
+                "fps": null,
+                "audio": null
+              },
+              {
+                "duration_sec": 9,
+                "resolution": "480p",
+                "aspect_ratio": "4:3",
+                "fps": null,
+                "audio": null
+              },
+              {
+                "duration_sec": 9,
+                "resolution": "480p",
+                "aspect_ratio": "3:4",
+                "fps": null,
+                "audio": null
+              },
+              {
+                "duration_sec": 9,
+                "resolution": "480p",
+                "aspect_ratio": "21:9",
+                "fps": null,
+                "audio": null
+              },
+              {
+                "duration_sec": 9,
+                "resolution": "720p",
+                "aspect_ratio": "16:9",
+                "fps": null,
+                "audio": null
+              },
+              {
+                "duration_sec": 9,
+                "resolution": "720p",
+                "aspect_ratio": "9:16",
+                "fps": null,
+                "audio": null
+              },
+              {
+                "duration_sec": 9,
+                "resolution": "720p",
+                "aspect_ratio": "1:1",
+                "fps": null,
+                "audio": null
+              },
+              {
+                "duration_sec": 9,
+                "resolution": "720p",
+                "aspect_ratio": "4:3",
+                "fps": null,
+                "audio": null
+              },
+              {
+                "duration_sec": 9,
+                "resolution": "720p",
+                "aspect_ratio": "3:4",
+                "fps": null,
+                "audio": null
+              },
+              {
+                "duration_sec": 9,
+                "resolution": "720p",
+                "aspect_ratio": "21:9",
+                "fps": null,
+                "audio": null
+              },
+              {
+                "duration_sec": 9,
+                "resolution": "1080p",
+                "aspect_ratio": "16:9",
+                "fps": null,
+                "audio": null
+              },
+              {
+                "duration_sec": 9,
+                "resolution": "1080p",
+                "aspect_ratio": "9:16",
+                "fps": null,
+                "audio": null
+              },
+              {
+                "duration_sec": 9,
+                "resolution": "1080p",
+                "aspect_ratio": "1:1",
+                "fps": null,
+                "audio": null
+              },
+              {
+                "duration_sec": 9,
+                "resolution": "1080p",
+                "aspect_ratio": "4:3",
+                "fps": null,
+                "audio": null
+              },
+              {
+                "duration_sec": 9,
+                "resolution": "1080p",
+                "aspect_ratio": "3:4",
+                "fps": null,
+                "audio": null
+              },
+              {
+                "duration_sec": 9,
+                "resolution": "1080p",
+                "aspect_ratio": "21:9",
+                "fps": null,
+                "audio": null
+              },
+              {
+                "duration_sec": 9,
+                "resolution": "4k",
+                "aspect_ratio": "16:9",
+                "fps": null,
+                "audio": null
+              },
+              {
+                "duration_sec": 9,
+                "resolution": "4k",
+                "aspect_ratio": "9:16",
+                "fps": null,
+                "audio": null
+              },
+              {
+                "duration_sec": 9,
+                "resolution": "4k",
+                "aspect_ratio": "1:1",
+                "fps": null,
+                "audio": null
+              },
+              {
+                "duration_sec": 9,
+                "resolution": "4k",
+                "aspect_ratio": "4:3",
+                "fps": null,
+                "audio": null
+              },
+              {
+                "duration_sec": 9,
+                "resolution": "4k",
+                "aspect_ratio": "3:4",
+                "fps": null,
+                "audio": null
+              },
+              {
+                "duration_sec": 9,
+                "resolution": "4k",
+                "aspect_ratio": "21:9",
+                "fps": null,
+                "audio": null
+              },
+              {
+                "duration_sec": 10,
+                "resolution": "480p",
+                "aspect_ratio": "16:9",
+                "fps": null,
+                "audio": null
+              },
+              {
+                "duration_sec": 10,
+                "resolution": "480p",
+                "aspect_ratio": "9:16",
+                "fps": null,
+                "audio": null
+              },
+              {
+                "duration_sec": 10,
+                "resolution": "480p",
+                "aspect_ratio": "1:1",
+                "fps": null,
+                "audio": null
+              },
+              {
+                "duration_sec": 10,
+                "resolution": "480p",
+                "aspect_ratio": "4:3",
+                "fps": null,
+                "audio": null
+              },
+              {
+                "duration_sec": 10,
+                "resolution": "480p",
+                "aspect_ratio": "3:4",
+                "fps": null,
+                "audio": null
+              },
+              {
+                "duration_sec": 10,
+                "resolution": "480p",
+                "aspect_ratio": "21:9",
+                "fps": null,
+                "audio": null
+              },
+              {
+                "duration_sec": 10,
+                "resolution": "720p",
+                "aspect_ratio": "16:9",
+                "fps": null,
+                "audio": null
+              },
+              {
+                "duration_sec": 10,
+                "resolution": "720p",
+                "aspect_ratio": "9:16",
+                "fps": null,
+                "audio": null
+              },
+              {
+                "duration_sec": 10,
+                "resolution": "720p",
+                "aspect_ratio": "1:1",
+                "fps": null,
+                "audio": null
+              },
+              {
+                "duration_sec": 10,
+                "resolution": "720p",
+                "aspect_ratio": "4:3",
+                "fps": null,
+                "audio": null
+              },
+              {
+                "duration_sec": 10,
+                "resolution": "720p",
+                "aspect_ratio": "3:4",
+                "fps": null,
+                "audio": null
+              },
+              {
+                "duration_sec": 10,
+                "resolution": "720p",
+                "aspect_ratio": "21:9",
+                "fps": null,
+                "audio": null
+              },
+              {
+                "duration_sec": 10,
+                "resolution": "1080p",
+                "aspect_ratio": "16:9",
+                "fps": null,
+                "audio": null
+              },
+              {
+                "duration_sec": 10,
+                "resolution": "1080p",
+                "aspect_ratio": "9:16",
+                "fps": null,
+                "audio": null
+              },
+              {
+                "duration_sec": 10,
+                "resolution": "1080p",
+                "aspect_ratio": "1:1",
+                "fps": null,
+                "audio": null
+              },
+              {
+                "duration_sec": 10,
+                "resolution": "1080p",
+                "aspect_ratio": "4:3",
+                "fps": null,
+                "audio": null
+              },
+              {
+                "duration_sec": 10,
+                "resolution": "1080p",
+                "aspect_ratio": "3:4",
+                "fps": null,
+                "audio": null
+              },
+              {
+                "duration_sec": 10,
+                "resolution": "1080p",
+                "aspect_ratio": "21:9",
+                "fps": null,
+                "audio": null
+              },
+              {
+                "duration_sec": 10,
+                "resolution": "4k",
+                "aspect_ratio": "16:9",
+                "fps": null,
+                "audio": null
+              },
+              {
+                "duration_sec": 10,
+                "resolution": "4k",
+                "aspect_ratio": "9:16",
+                "fps": null,
+                "audio": null
+              },
+              {
+                "duration_sec": 10,
+                "resolution": "4k",
+                "aspect_ratio": "1:1",
+                "fps": null,
+                "audio": null
+              },
+              {
+                "duration_sec": 10,
+                "resolution": "4k",
+                "aspect_ratio": "4:3",
+                "fps": null,
+                "audio": null
+              },
+              {
+                "duration_sec": 10,
+                "resolution": "4k",
+                "aspect_ratio": "3:4",
+                "fps": null,
+                "audio": null
+              },
+              {
+                "duration_sec": 10,
+                "resolution": "4k",
+                "aspect_ratio": "21:9",
+                "fps": null,
+                "audio": null
+              },
+              {
+                "duration_sec": 11,
+                "resolution": "480p",
+                "aspect_ratio": "16:9",
+                "fps": null,
+                "audio": null
+              },
+              {
+                "duration_sec": 11,
+                "resolution": "480p",
+                "aspect_ratio": "9:16",
+                "fps": null,
+                "audio": null
+              },
+              {
+                "duration_sec": 11,
+                "resolution": "480p",
+                "aspect_ratio": "1:1",
+                "fps": null,
+                "audio": null
+              },
+              {
+                "duration_sec": 11,
+                "resolution": "480p",
+                "aspect_ratio": "4:3",
+                "fps": null,
+                "audio": null
+              },
+              {
+                "duration_sec": 11,
+                "resolution": "480p",
+                "aspect_ratio": "3:4",
+                "fps": null,
+                "audio": null
+              },
+              {
+                "duration_sec": 11,
+                "resolution": "480p",
+                "aspect_ratio": "21:9",
+                "fps": null,
+                "audio": null
+              },
+              {
+                "duration_sec": 11,
+                "resolution": "720p",
+                "aspect_ratio": "16:9",
+                "fps": null,
+                "audio": null
+              },
+              {
+                "duration_sec": 11,
+                "resolution": "720p",
+                "aspect_ratio": "9:16",
+                "fps": null,
+                "audio": null
+              },
+              {
+                "duration_sec": 11,
+                "resolution": "720p",
+                "aspect_ratio": "1:1",
+                "fps": null,
+                "audio": null
+              },
+              {
+                "duration_sec": 11,
+                "resolution": "720p",
+                "aspect_ratio": "4:3",
+                "fps": null,
+                "audio": null
+              },
+              {
+                "duration_sec": 11,
+                "resolution": "720p",
+                "aspect_ratio": "3:4",
+                "fps": null,
+                "audio": null
+              },
+              {
+                "duration_sec": 11,
+                "resolution": "720p",
+                "aspect_ratio": "21:9",
+                "fps": null,
+                "audio": null
+              },
+              {
+                "duration_sec": 11,
+                "resolution": "1080p",
+                "aspect_ratio": "16:9",
+                "fps": null,
+                "audio": null
+              },
+              {
+                "duration_sec": 11,
+                "resolution": "1080p",
+                "aspect_ratio": "9:16",
+                "fps": null,
+                "audio": null
+              },
+              {
+                "duration_sec": 11,
+                "resolution": "1080p",
+                "aspect_ratio": "1:1",
+                "fps": null,
+                "audio": null
+              },
+              {
+                "duration_sec": 11,
+                "resolution": "1080p",
+                "aspect_ratio": "4:3",
+                "fps": null,
+                "audio": null
+              },
+              {
+                "duration_sec": 11,
+                "resolution": "1080p",
+                "aspect_ratio": "3:4",
+                "fps": null,
+                "audio": null
+              },
+              {
+                "duration_sec": 11,
+                "resolution": "1080p",
+                "aspect_ratio": "21:9",
+                "fps": null,
+                "audio": null
+              },
+              {
+                "duration_sec": 11,
+                "resolution": "4k",
+                "aspect_ratio": "16:9",
+                "fps": null,
+                "audio": null
+              },
+              {
+                "duration_sec": 11,
+                "resolution": "4k",
+                "aspect_ratio": "9:16",
+                "fps": null,
+                "audio": null
+              },
+              {
+                "duration_sec": 11,
+                "resolution": "4k",
+                "aspect_ratio": "1:1",
+                "fps": null,
+                "audio": null
+              },
+              {
+                "duration_sec": 11,
+                "resolution": "4k",
+                "aspect_ratio": "4:3",
+                "fps": null,
+                "audio": null
+              },
+              {
+                "duration_sec": 11,
+                "resolution": "4k",
+                "aspect_ratio": "3:4",
+                "fps": null,
+                "audio": null
+              },
+              {
+                "duration_sec": 11,
+                "resolution": "4k",
+                "aspect_ratio": "21:9",
+                "fps": null,
+                "audio": null
+              },
+              {
+                "duration_sec": 12,
+                "resolution": "480p",
+                "aspect_ratio": "16:9",
+                "fps": null,
+                "audio": null
+              },
+              {
+                "duration_sec": 12,
+                "resolution": "480p",
+                "aspect_ratio": "9:16",
+                "fps": null,
+                "audio": null
+              },
+              {
+                "duration_sec": 12,
+                "resolution": "480p",
+                "aspect_ratio": "1:1",
+                "fps": null,
+                "audio": null
+              },
+              {
+                "duration_sec": 12,
+                "resolution": "480p",
+                "aspect_ratio": "4:3",
+                "fps": null,
+                "audio": null
+              },
+              {
+                "duration_sec": 12,
+                "resolution": "480p",
+                "aspect_ratio": "3:4",
+                "fps": null,
+                "audio": null
+              },
+              {
+                "duration_sec": 12,
+                "resolution": "480p",
+                "aspect_ratio": "21:9",
+                "fps": null,
+                "audio": null
+              },
+              {
+                "duration_sec": 12,
+                "resolution": "720p",
+                "aspect_ratio": "16:9",
+                "fps": null,
+                "audio": null
+              },
+              {
+                "duration_sec": 12,
+                "resolution": "720p",
+                "aspect_ratio": "9:16",
+                "fps": null,
+                "audio": null
+              },
+              {
+                "duration_sec": 12,
+                "resolution": "720p",
+                "aspect_ratio": "1:1",
+                "fps": null,
+                "audio": null
+              },
+              {
+                "duration_sec": 12,
+                "resolution": "720p",
+                "aspect_ratio": "4:3",
+                "fps": null,
+                "audio": null
+              },
+              {
+                "duration_sec": 12,
+                "resolution": "720p",
+                "aspect_ratio": "3:4",
+                "fps": null,
+                "audio": null
+              },
+              {
+                "duration_sec": 12,
+                "resolution": "720p",
+                "aspect_ratio": "21:9",
+                "fps": null,
+                "audio": null
+              },
+              {
+                "duration_sec": 12,
+                "resolution": "1080p",
+                "aspect_ratio": "16:9",
+                "fps": null,
+                "audio": null
+              },
+              {
+                "duration_sec": 12,
+                "resolution": "1080p",
+                "aspect_ratio": "9:16",
+                "fps": null,
+                "audio": null
+              },
+              {
+                "duration_sec": 12,
+                "resolution": "1080p",
+                "aspect_ratio": "1:1",
+                "fps": null,
+                "audio": null
+              },
+              {
+                "duration_sec": 12,
+                "resolution": "1080p",
+                "aspect_ratio": "4:3",
+                "fps": null,
+                "audio": null
+              },
+              {
+                "duration_sec": 12,
+                "resolution": "1080p",
+                "aspect_ratio": "3:4",
+                "fps": null,
+                "audio": null
+              },
+              {
+                "duration_sec": 12,
+                "resolution": "1080p",
+                "aspect_ratio": "21:9",
+                "fps": null,
+                "audio": null
+              },
+              {
+                "duration_sec": 12,
+                "resolution": "4k",
+                "aspect_ratio": "16:9",
+                "fps": null,
+                "audio": null
+              },
+              {
+                "duration_sec": 12,
+                "resolution": "4k",
+                "aspect_ratio": "9:16",
+                "fps": null,
+                "audio": null
+              },
+              {
+                "duration_sec": 12,
+                "resolution": "4k",
+                "aspect_ratio": "1:1",
+                "fps": null,
+                "audio": null
+              },
+              {
+                "duration_sec": 12,
+                "resolution": "4k",
+                "aspect_ratio": "4:3",
+                "fps": null,
+                "audio": null
+              },
+              {
+                "duration_sec": 12,
+                "resolution": "4k",
+                "aspect_ratio": "3:4",
+                "fps": null,
+                "audio": null
+              },
+              {
+                "duration_sec": 12,
+                "resolution": "4k",
+                "aspect_ratio": "21:9",
+                "fps": null,
+                "audio": null
+              },
+              {
+                "duration_sec": 13,
+                "resolution": "480p",
+                "aspect_ratio": "16:9",
+                "fps": null,
+                "audio": null
+              },
+              {
+                "duration_sec": 13,
+                "resolution": "480p",
+                "aspect_ratio": "9:16",
+                "fps": null,
+                "audio": null
+              },
+              {
+                "duration_sec": 13,
+                "resolution": "480p",
+                "aspect_ratio": "1:1",
+                "fps": null,
+                "audio": null
+              },
+              {
+                "duration_sec": 13,
+                "resolution": "480p",
+                "aspect_ratio": "4:3",
+                "fps": null,
+                "audio": null
+              },
+              {
+                "duration_sec": 13,
+                "resolution": "480p",
+                "aspect_ratio": "3:4",
+                "fps": null,
+                "audio": null
+              },
+              {
+                "duration_sec": 13,
+                "resolution": "480p",
+                "aspect_ratio": "21:9",
+                "fps": null,
+                "audio": null
+              },
+              {
+                "duration_sec": 13,
+                "resolution": "720p",
+                "aspect_ratio": "16:9",
+                "fps": null,
+                "audio": null
+              },
+              {
+                "duration_sec": 13,
+                "resolution": "720p",
+                "aspect_ratio": "9:16",
+                "fps": null,
+                "audio": null
+              },
+              {
+                "duration_sec": 13,
+                "resolution": "720p",
+                "aspect_ratio": "1:1",
+                "fps": null,
+                "audio": null
+              },
+              {
+                "duration_sec": 13,
+                "resolution": "720p",
+                "aspect_ratio": "4:3",
+                "fps": null,
+                "audio": null
+              },
+              {
+                "duration_sec": 13,
+                "resolution": "720p",
+                "aspect_ratio": "3:4",
+                "fps": null,
+                "audio": null
+              },
+              {
+                "duration_sec": 13,
+                "resolution": "720p",
+                "aspect_ratio": "21:9",
+                "fps": null,
+                "audio": null
+              },
+              {
+                "duration_sec": 13,
+                "resolution": "1080p",
+                "aspect_ratio": "16:9",
+                "fps": null,
+                "audio": null
+              },
+              {
+                "duration_sec": 13,
+                "resolution": "1080p",
+                "aspect_ratio": "9:16",
+                "fps": null,
+                "audio": null
+              },
+              {
+                "duration_sec": 13,
+                "resolution": "1080p",
+                "aspect_ratio": "1:1",
+                "fps": null,
+                "audio": null
+              },
+              {
+                "duration_sec": 13,
+                "resolution": "1080p",
+                "aspect_ratio": "4:3",
+                "fps": null,
+                "audio": null
+              },
+              {
+                "duration_sec": 13,
+                "resolution": "1080p",
+                "aspect_ratio": "3:4",
+                "fps": null,
+                "audio": null
+              },
+              {
+                "duration_sec": 13,
+                "resolution": "1080p",
+                "aspect_ratio": "21:9",
+                "fps": null,
+                "audio": null
+              },
+              {
+                "duration_sec": 13,
+                "resolution": "4k",
+                "aspect_ratio": "16:9",
+                "fps": null,
+                "audio": null
+              },
+              {
+                "duration_sec": 13,
+                "resolution": "4k",
+                "aspect_ratio": "9:16",
+                "fps": null,
+                "audio": null
+              },
+              {
+                "duration_sec": 13,
+                "resolution": "4k",
+                "aspect_ratio": "1:1",
+                "fps": null,
+                "audio": null
+              },
+              {
+                "duration_sec": 13,
+                "resolution": "4k",
+                "aspect_ratio": "4:3",
+                "fps": null,
+                "audio": null
+              },
+              {
+                "duration_sec": 13,
+                "resolution": "4k",
+                "aspect_ratio": "3:4",
+                "fps": null,
+                "audio": null
+              },
+              {
+                "duration_sec": 13,
+                "resolution": "4k",
+                "aspect_ratio": "21:9",
+                "fps": null,
+                "audio": null
+              },
+              {
+                "duration_sec": 14,
+                "resolution": "480p",
+                "aspect_ratio": "16:9",
+                "fps": null,
+                "audio": null
+              },
+              {
+                "duration_sec": 14,
+                "resolution": "480p",
+                "aspect_ratio": "9:16",
+                "fps": null,
+                "audio": null
+              },
+              {
+                "duration_sec": 14,
+                "resolution": "480p",
+                "aspect_ratio": "1:1",
+                "fps": null,
+                "audio": null
+              },
+              {
+                "duration_sec": 14,
+                "resolution": "480p",
+                "aspect_ratio": "4:3",
+                "fps": null,
+                "audio": null
+              },
+              {
+                "duration_sec": 14,
+                "resolution": "480p",
+                "aspect_ratio": "3:4",
+                "fps": null,
+                "audio": null
+              },
+              {
+                "duration_sec": 14,
+                "resolution": "480p",
+                "aspect_ratio": "21:9",
+                "fps": null,
+                "audio": null
+              },
+              {
+                "duration_sec": 14,
+                "resolution": "720p",
+                "aspect_ratio": "16:9",
+                "fps": null,
+                "audio": null
+              },
+              {
+                "duration_sec": 14,
+                "resolution": "720p",
+                "aspect_ratio": "9:16",
+                "fps": null,
+                "audio": null
+              },
+              {
+                "duration_sec": 14,
+                "resolution": "720p",
+                "aspect_ratio": "1:1",
+                "fps": null,
+                "audio": null
+              },
+              {
+                "duration_sec": 14,
+                "resolution": "720p",
+                "aspect_ratio": "4:3",
+                "fps": null,
+                "audio": null
+              },
+              {
+                "duration_sec": 14,
+                "resolution": "720p",
+                "aspect_ratio": "3:4",
+                "fps": null,
+                "audio": null
+              },
+              {
+                "duration_sec": 14,
+                "resolution": "720p",
+                "aspect_ratio": "21:9",
+                "fps": null,
+                "audio": null
+              },
+              {
+                "duration_sec": 14,
+                "resolution": "1080p",
+                "aspect_ratio": "16:9",
+                "fps": null,
+                "audio": null
+              },
+              {
+                "duration_sec": 14,
+                "resolution": "1080p",
+                "aspect_ratio": "9:16",
+                "fps": null,
+                "audio": null
+              },
+              {
+                "duration_sec": 14,
+                "resolution": "1080p",
+                "aspect_ratio": "1:1",
+                "fps": null,
+                "audio": null
+              },
+              {
+                "duration_sec": 14,
+                "resolution": "1080p",
+                "aspect_ratio": "4:3",
+                "fps": null,
+                "audio": null
+              },
+              {
+                "duration_sec": 14,
+                "resolution": "1080p",
+                "aspect_ratio": "3:4",
+                "fps": null,
+                "audio": null
+              },
+              {
+                "duration_sec": 14,
+                "resolution": "1080p",
+                "aspect_ratio": "21:9",
+                "fps": null,
+                "audio": null
+              },
+              {
+                "duration_sec": 14,
+                "resolution": "4k",
+                "aspect_ratio": "16:9",
+                "fps": null,
+                "audio": null
+              },
+              {
+                "duration_sec": 14,
+                "resolution": "4k",
+                "aspect_ratio": "9:16",
+                "fps": null,
+                "audio": null
+              },
+              {
+                "duration_sec": 14,
+                "resolution": "4k",
+                "aspect_ratio": "1:1",
+                "fps": null,
+                "audio": null
+              },
+              {
+                "duration_sec": 14,
+                "resolution": "4k",
+                "aspect_ratio": "4:3",
+                "fps": null,
+                "audio": null
+              },
+              {
+                "duration_sec": 14,
+                "resolution": "4k",
+                "aspect_ratio": "3:4",
+                "fps": null,
+                "audio": null
+              },
+              {
+                "duration_sec": 14,
+                "resolution": "4k",
+                "aspect_ratio": "21:9",
+                "fps": null,
+                "audio": null
+              },
+              {
+                "duration_sec": 15,
+                "resolution": "480p",
+                "aspect_ratio": "16:9",
+                "fps": null,
+                "audio": null
+              },
+              {
+                "duration_sec": 15,
+                "resolution": "480p",
+                "aspect_ratio": "9:16",
+                "fps": null,
+                "audio": null
+              },
+              {
+                "duration_sec": 15,
+                "resolution": "480p",
+                "aspect_ratio": "1:1",
+                "fps": null,
+                "audio": null
+              },
+              {
+                "duration_sec": 15,
+                "resolution": "480p",
+                "aspect_ratio": "4:3",
+                "fps": null,
+                "audio": null
+              },
+              {
+                "duration_sec": 15,
+                "resolution": "480p",
+                "aspect_ratio": "3:4",
+                "fps": null,
+                "audio": null
+              },
+              {
+                "duration_sec": 15,
+                "resolution": "480p",
+                "aspect_ratio": "21:9",
+                "fps": null,
+                "audio": null
+              },
+              {
+                "duration_sec": 15,
+                "resolution": "720p",
+                "aspect_ratio": "16:9",
+                "fps": null,
+                "audio": null
+              },
+              {
+                "duration_sec": 15,
+                "resolution": "720p",
+                "aspect_ratio": "9:16",
+                "fps": null,
+                "audio": null
+              },
+              {
+                "duration_sec": 15,
+                "resolution": "720p",
+                "aspect_ratio": "1:1",
+                "fps": null,
+                "audio": null
+              },
+              {
+                "duration_sec": 15,
+                "resolution": "720p",
+                "aspect_ratio": "4:3",
+                "fps": null,
+                "audio": null
+              },
+              {
+                "duration_sec": 15,
+                "resolution": "720p",
+                "aspect_ratio": "3:4",
+                "fps": null,
+                "audio": null
+              },
+              {
+                "duration_sec": 15,
+                "resolution": "720p",
+                "aspect_ratio": "21:9",
+                "fps": null,
+                "audio": null
+              },
+              {
+                "duration_sec": 15,
+                "resolution": "1080p",
+                "aspect_ratio": "16:9",
+                "fps": null,
+                "audio": null
+              },
+              {
+                "duration_sec": 15,
+                "resolution": "1080p",
+                "aspect_ratio": "9:16",
+                "fps": null,
+                "audio": null
+              },
+              {
+                "duration_sec": 15,
+                "resolution": "1080p",
+                "aspect_ratio": "1:1",
+                "fps": null,
+                "audio": null
+              },
+              {
+                "duration_sec": 15,
+                "resolution": "1080p",
+                "aspect_ratio": "4:3",
+                "fps": null,
+                "audio": null
+              },
+              {
+                "duration_sec": 15,
+                "resolution": "1080p",
+                "aspect_ratio": "3:4",
+                "fps": null,
+                "audio": null
+              },
+              {
+                "duration_sec": 15,
+                "resolution": "1080p",
+                "aspect_ratio": "21:9",
+                "fps": null,
+                "audio": null
+              },
+              {
+                "duration_sec": 15,
+                "resolution": "4k",
+                "aspect_ratio": "16:9",
+                "fps": null,
+                "audio": null
+              },
+              {
+                "duration_sec": 15,
+                "resolution": "4k",
+                "aspect_ratio": "9:16",
+                "fps": null,
+                "audio": null
+              },
+              {
+                "duration_sec": 15,
+                "resolution": "4k",
+                "aspect_ratio": "1:1",
+                "fps": null,
+                "audio": null
+              },
+              {
+                "duration_sec": 15,
+                "resolution": "4k",
+                "aspect_ratio": "4:3",
+                "fps": null,
+                "audio": null
+              },
+              {
+                "duration_sec": 15,
+                "resolution": "4k",
+                "aspect_ratio": "3:4",
+                "fps": null,
+                "audio": null
+              },
+              {
+                "duration_sec": 15,
+                "resolution": "4k",
+                "aspect_ratio": "21:9",
+                "fps": null,
+                "audio": null
+              }
+            ],
+            "start_image": "unsupported",
+            "end_image": "unsupported"
+          }
+        }
+      ],
+      "capabilities": {
+        "schema_version": 1,
+        "api": {
+          "video": {
+            "images": {
+              "support": "supported",
+              "extensions": [],
+              "max_count": 9
+            },
+            "videos": {
+              "support": "supported",
+              "extensions": [],
+              "max_count": 3
+            },
+            "allowed_image_counts": [
+              0,
+              1,
+              2,
+              3,
+              4,
+              5,
+              6,
+              7,
+              8,
+              9
+            ],
+            "duration": {
+              "mode": "selected",
+              "min_seconds": 4,
+              "max_seconds": 15,
+              "allowed_seconds": [
+                4,
+                5,
+                6,
+                7,
+                8,
+                9,
+                10,
+                11,
+                12,
+                13,
+                14,
+                15
+              ]
+            },
+            "resolutions": [
+              "480p",
+              "720p",
+              "1080p",
+              "4k"
+            ],
+            "quality_modes": null,
+            "aspect_ratios": [
+              "16:9",
+              "9:16",
+              "1:1",
+              "4:3",
+              "3:4",
+              "21:9"
+            ],
+            "audio": {
+              "mode": "optional",
+              "selectable": true
+            },
+            "start_frame": "optional",
+            "end_frame": "optional"
+          },
+          "notes": [
+            "До 9 изображений или до 3 референсных видео; также есть референсное аудио. Первый/последний кадры исключают видео и аудиовход. Standard: промпт до 4000 символов. Для Mini точный лимит символов не указан."
+          ]
+        },
+        "application": {
+          "video": {
+            "images": {
+              "support": "unsupported",
+              "extensions": [],
+              "max_count": 0
+            },
+            "videos": {
+              "support": "unsupported",
+              "extensions": [],
+              "max_count": 0
+            },
+            "allowed_image_counts": null,
+            "duration": {
+              "mode": "selected",
+              "min_seconds": 4,
+              "max_seconds": 15,
+              "allowed_seconds": [
+                4,
+                5,
+                6,
+                7,
+                8,
+                9,
+                10,
+                11,
+                12,
+                13,
+                14,
+                15
+              ]
+            },
+            "resolutions": [
+              "480p",
+              "720p",
+              "1080p",
+              "4k"
+            ],
+            "quality_modes": null,
+            "aspect_ratios": [
+              "16:9",
+              "9:16",
+              "1:1",
+              "4:3",
+              "3:4",
+              "21:9"
+            ],
+            "audio": {
+              "mode": "unknown",
+              "selectable": false
+            },
+            "start_frame": "unsupported",
+            "end_frame": "unsupported"
+          },
+          "notes": [
+            "Ожидает допуска. Подготовлена генерация по тексту; вложения и переключение звука не подключены. FPS и фактический результат требуют платной live-проверки."
+          ]
+        }
+      }
+    },
+    {
+      "id": "seedance_2_0_mini",
+      "name": "Seedance 2.0 Mini",
+      "description": "Ожидает проверки перед запуском.",
+      "kind": "video",
+      "categories": [
+        "video-audio"
+      ],
+      "verification": "pending-verification",
+      "operations": [
+        {
+          "id": "generate",
+          "kind": "video",
+          "enabled": false,
+          "inputs": {
+            "images": {
+              "support": "unknown",
+              "enabled": false
+            },
+            "video": {
+              "support": "unknown",
+              "enabled": false
+            },
+            "audio": {
+              "support": "unknown",
+              "enabled": false
+            },
+            "documents": {
+              "support": "unknown",
+              "enabled": false
+            },
+            "max_total_bytes": 0
+          },
+          "video": {
+            "allowed_resolutions": [
+              "480p",
+              "720p"
+            ],
+            "allowed_durations_sec": [
+              4,
+              5,
+              6,
+              7,
+              8,
+              9,
+              10,
+              11,
+              12,
+              13,
+              14,
+              15
+            ],
+            "allowed_aspect_ratios": [
+              "16:9",
+              "9:16",
+              "1:1",
+              "4:3",
+              "3:4",
+              "21:9"
+            ],
+            "default_resolution": "720p",
+            "default_duration_sec": 5,
+            "default_aspect_ratio": "16:9",
+            "price_by_option": {
+              "480p:10": 65,
+              "480p:11": 70,
+              "480p:12": 80,
+              "480p:13": 85,
+              "480p:14": 90,
+              "480p:15": 100,
+              "480p:4": 30,
+              "480p:5": 35,
+              "480p:6": 40,
+              "480p:7": 45,
+              "480p:8": 55,
+              "480p:9": 60,
+              "720p:10": 140,
+              "720p:11": 155,
+              "720p:12": 165,
+              "720p:13": 180,
+              "720p:14": 195,
+              "720p:15": 210,
+              "720p:4": 55,
+              "720p:5": 70,
+              "720p:6": 85,
+              "720p:7": 100,
+              "720p:8": 110,
+              "720p:9": 125
+            },
+            "variants": [
+              {
+                "duration_sec": 4,
+                "resolution": "480p",
+                "aspect_ratio": "16:9",
+                "fps": null,
+                "audio": null
+              },
+              {
+                "duration_sec": 4,
+                "resolution": "480p",
+                "aspect_ratio": "9:16",
+                "fps": null,
+                "audio": null
+              },
+              {
+                "duration_sec": 4,
+                "resolution": "480p",
+                "aspect_ratio": "1:1",
+                "fps": null,
+                "audio": null
+              },
+              {
+                "duration_sec": 4,
+                "resolution": "480p",
+                "aspect_ratio": "4:3",
+                "fps": null,
+                "audio": null
+              },
+              {
+                "duration_sec": 4,
+                "resolution": "480p",
+                "aspect_ratio": "3:4",
+                "fps": null,
+                "audio": null
+              },
+              {
+                "duration_sec": 4,
+                "resolution": "480p",
+                "aspect_ratio": "21:9",
+                "fps": null,
+                "audio": null
+              },
+              {
+                "duration_sec": 4,
+                "resolution": "720p",
+                "aspect_ratio": "16:9",
+                "fps": null,
+                "audio": null
+              },
+              {
+                "duration_sec": 4,
+                "resolution": "720p",
+                "aspect_ratio": "9:16",
+                "fps": null,
+                "audio": null
+              },
+              {
+                "duration_sec": 4,
+                "resolution": "720p",
+                "aspect_ratio": "1:1",
+                "fps": null,
+                "audio": null
+              },
+              {
+                "duration_sec": 4,
+                "resolution": "720p",
+                "aspect_ratio": "4:3",
+                "fps": null,
+                "audio": null
+              },
+              {
+                "duration_sec": 4,
+                "resolution": "720p",
+                "aspect_ratio": "3:4",
+                "fps": null,
+                "audio": null
+              },
+              {
+                "duration_sec": 4,
+                "resolution": "720p",
+                "aspect_ratio": "21:9",
+                "fps": null,
+                "audio": null
+              },
+              {
+                "duration_sec": 5,
+                "resolution": "480p",
+                "aspect_ratio": "16:9",
+                "fps": null,
+                "audio": null
+              },
+              {
+                "duration_sec": 5,
+                "resolution": "480p",
+                "aspect_ratio": "9:16",
+                "fps": null,
+                "audio": null
+              },
+              {
+                "duration_sec": 5,
+                "resolution": "480p",
+                "aspect_ratio": "1:1",
+                "fps": null,
+                "audio": null
+              },
+              {
+                "duration_sec": 5,
+                "resolution": "480p",
+                "aspect_ratio": "4:3",
+                "fps": null,
+                "audio": null
+              },
+              {
+                "duration_sec": 5,
+                "resolution": "480p",
+                "aspect_ratio": "3:4",
+                "fps": null,
+                "audio": null
+              },
+              {
+                "duration_sec": 5,
+                "resolution": "480p",
+                "aspect_ratio": "21:9",
+                "fps": null,
+                "audio": null
+              },
+              {
+                "duration_sec": 5,
+                "resolution": "720p",
+                "aspect_ratio": "16:9",
+                "fps": null,
+                "audio": null
+              },
+              {
+                "duration_sec": 5,
+                "resolution": "720p",
+                "aspect_ratio": "9:16",
+                "fps": null,
+                "audio": null
+              },
+              {
+                "duration_sec": 5,
+                "resolution": "720p",
+                "aspect_ratio": "1:1",
+                "fps": null,
+                "audio": null
+              },
+              {
+                "duration_sec": 5,
+                "resolution": "720p",
+                "aspect_ratio": "4:3",
+                "fps": null,
+                "audio": null
+              },
+              {
+                "duration_sec": 5,
+                "resolution": "720p",
+                "aspect_ratio": "3:4",
+                "fps": null,
+                "audio": null
+              },
+              {
+                "duration_sec": 5,
+                "resolution": "720p",
+                "aspect_ratio": "21:9",
+                "fps": null,
+                "audio": null
+              },
+              {
+                "duration_sec": 6,
+                "resolution": "480p",
+                "aspect_ratio": "16:9",
+                "fps": null,
+                "audio": null
+              },
+              {
+                "duration_sec": 6,
+                "resolution": "480p",
+                "aspect_ratio": "9:16",
+                "fps": null,
+                "audio": null
+              },
+              {
+                "duration_sec": 6,
+                "resolution": "480p",
+                "aspect_ratio": "1:1",
+                "fps": null,
+                "audio": null
+              },
+              {
+                "duration_sec": 6,
+                "resolution": "480p",
+                "aspect_ratio": "4:3",
+                "fps": null,
+                "audio": null
+              },
+              {
+                "duration_sec": 6,
+                "resolution": "480p",
+                "aspect_ratio": "3:4",
+                "fps": null,
+                "audio": null
+              },
+              {
+                "duration_sec": 6,
+                "resolution": "480p",
+                "aspect_ratio": "21:9",
+                "fps": null,
+                "audio": null
+              },
+              {
+                "duration_sec": 6,
+                "resolution": "720p",
+                "aspect_ratio": "16:9",
+                "fps": null,
+                "audio": null
+              },
+              {
+                "duration_sec": 6,
+                "resolution": "720p",
+                "aspect_ratio": "9:16",
+                "fps": null,
+                "audio": null
+              },
+              {
+                "duration_sec": 6,
+                "resolution": "720p",
+                "aspect_ratio": "1:1",
+                "fps": null,
+                "audio": null
+              },
+              {
+                "duration_sec": 6,
+                "resolution": "720p",
+                "aspect_ratio": "4:3",
+                "fps": null,
+                "audio": null
+              },
+              {
+                "duration_sec": 6,
+                "resolution": "720p",
+                "aspect_ratio": "3:4",
+                "fps": null,
+                "audio": null
+              },
+              {
+                "duration_sec": 6,
+                "resolution": "720p",
+                "aspect_ratio": "21:9",
+                "fps": null,
+                "audio": null
+              },
+              {
+                "duration_sec": 7,
+                "resolution": "480p",
+                "aspect_ratio": "16:9",
+                "fps": null,
+                "audio": null
+              },
+              {
+                "duration_sec": 7,
+                "resolution": "480p",
+                "aspect_ratio": "9:16",
+                "fps": null,
+                "audio": null
+              },
+              {
+                "duration_sec": 7,
+                "resolution": "480p",
+                "aspect_ratio": "1:1",
+                "fps": null,
+                "audio": null
+              },
+              {
+                "duration_sec": 7,
+                "resolution": "480p",
+                "aspect_ratio": "4:3",
+                "fps": null,
+                "audio": null
+              },
+              {
+                "duration_sec": 7,
+                "resolution": "480p",
+                "aspect_ratio": "3:4",
+                "fps": null,
+                "audio": null
+              },
+              {
+                "duration_sec": 7,
+                "resolution": "480p",
+                "aspect_ratio": "21:9",
+                "fps": null,
+                "audio": null
+              },
+              {
+                "duration_sec": 7,
+                "resolution": "720p",
+                "aspect_ratio": "16:9",
+                "fps": null,
+                "audio": null
+              },
+              {
+                "duration_sec": 7,
+                "resolution": "720p",
+                "aspect_ratio": "9:16",
+                "fps": null,
+                "audio": null
+              },
+              {
+                "duration_sec": 7,
+                "resolution": "720p",
+                "aspect_ratio": "1:1",
+                "fps": null,
+                "audio": null
+              },
+              {
+                "duration_sec": 7,
+                "resolution": "720p",
+                "aspect_ratio": "4:3",
+                "fps": null,
+                "audio": null
+              },
+              {
+                "duration_sec": 7,
+                "resolution": "720p",
+                "aspect_ratio": "3:4",
+                "fps": null,
+                "audio": null
+              },
+              {
+                "duration_sec": 7,
+                "resolution": "720p",
+                "aspect_ratio": "21:9",
+                "fps": null,
+                "audio": null
+              },
+              {
+                "duration_sec": 8,
+                "resolution": "480p",
+                "aspect_ratio": "16:9",
+                "fps": null,
+                "audio": null
+              },
+              {
+                "duration_sec": 8,
+                "resolution": "480p",
+                "aspect_ratio": "9:16",
+                "fps": null,
+                "audio": null
+              },
+              {
+                "duration_sec": 8,
+                "resolution": "480p",
+                "aspect_ratio": "1:1",
+                "fps": null,
+                "audio": null
+              },
+              {
+                "duration_sec": 8,
+                "resolution": "480p",
+                "aspect_ratio": "4:3",
+                "fps": null,
+                "audio": null
+              },
+              {
+                "duration_sec": 8,
+                "resolution": "480p",
+                "aspect_ratio": "3:4",
+                "fps": null,
+                "audio": null
+              },
+              {
+                "duration_sec": 8,
+                "resolution": "480p",
+                "aspect_ratio": "21:9",
+                "fps": null,
+                "audio": null
+              },
+              {
+                "duration_sec": 8,
+                "resolution": "720p",
+                "aspect_ratio": "16:9",
+                "fps": null,
+                "audio": null
+              },
+              {
+                "duration_sec": 8,
+                "resolution": "720p",
+                "aspect_ratio": "9:16",
+                "fps": null,
+                "audio": null
+              },
+              {
+                "duration_sec": 8,
+                "resolution": "720p",
+                "aspect_ratio": "1:1",
+                "fps": null,
+                "audio": null
+              },
+              {
+                "duration_sec": 8,
+                "resolution": "720p",
+                "aspect_ratio": "4:3",
+                "fps": null,
+                "audio": null
+              },
+              {
+                "duration_sec": 8,
+                "resolution": "720p",
+                "aspect_ratio": "3:4",
+                "fps": null,
+                "audio": null
+              },
+              {
+                "duration_sec": 8,
+                "resolution": "720p",
+                "aspect_ratio": "21:9",
+                "fps": null,
+                "audio": null
+              },
+              {
+                "duration_sec": 9,
+                "resolution": "480p",
+                "aspect_ratio": "16:9",
+                "fps": null,
+                "audio": null
+              },
+              {
+                "duration_sec": 9,
+                "resolution": "480p",
+                "aspect_ratio": "9:16",
+                "fps": null,
+                "audio": null
+              },
+              {
+                "duration_sec": 9,
+                "resolution": "480p",
+                "aspect_ratio": "1:1",
+                "fps": null,
+                "audio": null
+              },
+              {
+                "duration_sec": 9,
+                "resolution": "480p",
+                "aspect_ratio": "4:3",
+                "fps": null,
+                "audio": null
+              },
+              {
+                "duration_sec": 9,
+                "resolution": "480p",
+                "aspect_ratio": "3:4",
+                "fps": null,
+                "audio": null
+              },
+              {
+                "duration_sec": 9,
+                "resolution": "480p",
+                "aspect_ratio": "21:9",
+                "fps": null,
+                "audio": null
+              },
+              {
+                "duration_sec": 9,
+                "resolution": "720p",
+                "aspect_ratio": "16:9",
+                "fps": null,
+                "audio": null
+              },
+              {
+                "duration_sec": 9,
+                "resolution": "720p",
+                "aspect_ratio": "9:16",
+                "fps": null,
+                "audio": null
+              },
+              {
+                "duration_sec": 9,
+                "resolution": "720p",
+                "aspect_ratio": "1:1",
+                "fps": null,
+                "audio": null
+              },
+              {
+                "duration_sec": 9,
+                "resolution": "720p",
+                "aspect_ratio": "4:3",
+                "fps": null,
+                "audio": null
+              },
+              {
+                "duration_sec": 9,
+                "resolution": "720p",
+                "aspect_ratio": "3:4",
+                "fps": null,
+                "audio": null
+              },
+              {
+                "duration_sec": 9,
+                "resolution": "720p",
+                "aspect_ratio": "21:9",
+                "fps": null,
+                "audio": null
+              },
+              {
+                "duration_sec": 10,
+                "resolution": "480p",
+                "aspect_ratio": "16:9",
+                "fps": null,
+                "audio": null
+              },
+              {
+                "duration_sec": 10,
+                "resolution": "480p",
+                "aspect_ratio": "9:16",
+                "fps": null,
+                "audio": null
+              },
+              {
+                "duration_sec": 10,
+                "resolution": "480p",
+                "aspect_ratio": "1:1",
+                "fps": null,
+                "audio": null
+              },
+              {
+                "duration_sec": 10,
+                "resolution": "480p",
+                "aspect_ratio": "4:3",
+                "fps": null,
+                "audio": null
+              },
+              {
+                "duration_sec": 10,
+                "resolution": "480p",
+                "aspect_ratio": "3:4",
+                "fps": null,
+                "audio": null
+              },
+              {
+                "duration_sec": 10,
+                "resolution": "480p",
+                "aspect_ratio": "21:9",
+                "fps": null,
+                "audio": null
+              },
+              {
+                "duration_sec": 10,
+                "resolution": "720p",
+                "aspect_ratio": "16:9",
+                "fps": null,
+                "audio": null
+              },
+              {
+                "duration_sec": 10,
+                "resolution": "720p",
+                "aspect_ratio": "9:16",
+                "fps": null,
+                "audio": null
+              },
+              {
+                "duration_sec": 10,
+                "resolution": "720p",
+                "aspect_ratio": "1:1",
+                "fps": null,
+                "audio": null
+              },
+              {
+                "duration_sec": 10,
+                "resolution": "720p",
+                "aspect_ratio": "4:3",
+                "fps": null,
+                "audio": null
+              },
+              {
+                "duration_sec": 10,
+                "resolution": "720p",
+                "aspect_ratio": "3:4",
+                "fps": null,
+                "audio": null
+              },
+              {
+                "duration_sec": 10,
+                "resolution": "720p",
+                "aspect_ratio": "21:9",
+                "fps": null,
+                "audio": null
+              },
+              {
+                "duration_sec": 11,
+                "resolution": "480p",
+                "aspect_ratio": "16:9",
+                "fps": null,
+                "audio": null
+              },
+              {
+                "duration_sec": 11,
+                "resolution": "480p",
+                "aspect_ratio": "9:16",
+                "fps": null,
+                "audio": null
+              },
+              {
+                "duration_sec": 11,
+                "resolution": "480p",
+                "aspect_ratio": "1:1",
+                "fps": null,
+                "audio": null
+              },
+              {
+                "duration_sec": 11,
+                "resolution": "480p",
+                "aspect_ratio": "4:3",
+                "fps": null,
+                "audio": null
+              },
+              {
+                "duration_sec": 11,
+                "resolution": "480p",
+                "aspect_ratio": "3:4",
+                "fps": null,
+                "audio": null
+              },
+              {
+                "duration_sec": 11,
+                "resolution": "480p",
+                "aspect_ratio": "21:9",
+                "fps": null,
+                "audio": null
+              },
+              {
+                "duration_sec": 11,
+                "resolution": "720p",
+                "aspect_ratio": "16:9",
+                "fps": null,
+                "audio": null
+              },
+              {
+                "duration_sec": 11,
+                "resolution": "720p",
+                "aspect_ratio": "9:16",
+                "fps": null,
+                "audio": null
+              },
+              {
+                "duration_sec": 11,
+                "resolution": "720p",
+                "aspect_ratio": "1:1",
+                "fps": null,
+                "audio": null
+              },
+              {
+                "duration_sec": 11,
+                "resolution": "720p",
+                "aspect_ratio": "4:3",
+                "fps": null,
+                "audio": null
+              },
+              {
+                "duration_sec": 11,
+                "resolution": "720p",
+                "aspect_ratio": "3:4",
+                "fps": null,
+                "audio": null
+              },
+              {
+                "duration_sec": 11,
+                "resolution": "720p",
+                "aspect_ratio": "21:9",
+                "fps": null,
+                "audio": null
+              },
+              {
+                "duration_sec": 12,
+                "resolution": "480p",
+                "aspect_ratio": "16:9",
+                "fps": null,
+                "audio": null
+              },
+              {
+                "duration_sec": 12,
+                "resolution": "480p",
+                "aspect_ratio": "9:16",
+                "fps": null,
+                "audio": null
+              },
+              {
+                "duration_sec": 12,
+                "resolution": "480p",
+                "aspect_ratio": "1:1",
+                "fps": null,
+                "audio": null
+              },
+              {
+                "duration_sec": 12,
+                "resolution": "480p",
+                "aspect_ratio": "4:3",
+                "fps": null,
+                "audio": null
+              },
+              {
+                "duration_sec": 12,
+                "resolution": "480p",
+                "aspect_ratio": "3:4",
+                "fps": null,
+                "audio": null
+              },
+              {
+                "duration_sec": 12,
+                "resolution": "480p",
+                "aspect_ratio": "21:9",
+                "fps": null,
+                "audio": null
+              },
+              {
+                "duration_sec": 12,
+                "resolution": "720p",
+                "aspect_ratio": "16:9",
+                "fps": null,
+                "audio": null
+              },
+              {
+                "duration_sec": 12,
+                "resolution": "720p",
+                "aspect_ratio": "9:16",
+                "fps": null,
+                "audio": null
+              },
+              {
+                "duration_sec": 12,
+                "resolution": "720p",
+                "aspect_ratio": "1:1",
+                "fps": null,
+                "audio": null
+              },
+              {
+                "duration_sec": 12,
+                "resolution": "720p",
+                "aspect_ratio": "4:3",
+                "fps": null,
+                "audio": null
+              },
+              {
+                "duration_sec": 12,
+                "resolution": "720p",
+                "aspect_ratio": "3:4",
+                "fps": null,
+                "audio": null
+              },
+              {
+                "duration_sec": 12,
+                "resolution": "720p",
+                "aspect_ratio": "21:9",
+                "fps": null,
+                "audio": null
+              },
+              {
+                "duration_sec": 13,
+                "resolution": "480p",
+                "aspect_ratio": "16:9",
+                "fps": null,
+                "audio": null
+              },
+              {
+                "duration_sec": 13,
+                "resolution": "480p",
+                "aspect_ratio": "9:16",
+                "fps": null,
+                "audio": null
+              },
+              {
+                "duration_sec": 13,
+                "resolution": "480p",
+                "aspect_ratio": "1:1",
+                "fps": null,
+                "audio": null
+              },
+              {
+                "duration_sec": 13,
+                "resolution": "480p",
+                "aspect_ratio": "4:3",
+                "fps": null,
+                "audio": null
+              },
+              {
+                "duration_sec": 13,
+                "resolution": "480p",
+                "aspect_ratio": "3:4",
+                "fps": null,
+                "audio": null
+              },
+              {
+                "duration_sec": 13,
+                "resolution": "480p",
+                "aspect_ratio": "21:9",
+                "fps": null,
+                "audio": null
+              },
+              {
+                "duration_sec": 13,
+                "resolution": "720p",
+                "aspect_ratio": "16:9",
+                "fps": null,
+                "audio": null
+              },
+              {
+                "duration_sec": 13,
+                "resolution": "720p",
+                "aspect_ratio": "9:16",
+                "fps": null,
+                "audio": null
+              },
+              {
+                "duration_sec": 13,
+                "resolution": "720p",
+                "aspect_ratio": "1:1",
+                "fps": null,
+                "audio": null
+              },
+              {
+                "duration_sec": 13,
+                "resolution": "720p",
+                "aspect_ratio": "4:3",
+                "fps": null,
+                "audio": null
+              },
+              {
+                "duration_sec": 13,
+                "resolution": "720p",
+                "aspect_ratio": "3:4",
+                "fps": null,
+                "audio": null
+              },
+              {
+                "duration_sec": 13,
+                "resolution": "720p",
+                "aspect_ratio": "21:9",
+                "fps": null,
+                "audio": null
+              },
+              {
+                "duration_sec": 14,
+                "resolution": "480p",
+                "aspect_ratio": "16:9",
+                "fps": null,
+                "audio": null
+              },
+              {
+                "duration_sec": 14,
+                "resolution": "480p",
+                "aspect_ratio": "9:16",
+                "fps": null,
+                "audio": null
+              },
+              {
+                "duration_sec": 14,
+                "resolution": "480p",
+                "aspect_ratio": "1:1",
+                "fps": null,
+                "audio": null
+              },
+              {
+                "duration_sec": 14,
+                "resolution": "480p",
+                "aspect_ratio": "4:3",
+                "fps": null,
+                "audio": null
+              },
+              {
+                "duration_sec": 14,
+                "resolution": "480p",
+                "aspect_ratio": "3:4",
+                "fps": null,
+                "audio": null
+              },
+              {
+                "duration_sec": 14,
+                "resolution": "480p",
+                "aspect_ratio": "21:9",
+                "fps": null,
+                "audio": null
+              },
+              {
+                "duration_sec": 14,
+                "resolution": "720p",
+                "aspect_ratio": "16:9",
+                "fps": null,
+                "audio": null
+              },
+              {
+                "duration_sec": 14,
+                "resolution": "720p",
+                "aspect_ratio": "9:16",
+                "fps": null,
+                "audio": null
+              },
+              {
+                "duration_sec": 14,
+                "resolution": "720p",
+                "aspect_ratio": "1:1",
+                "fps": null,
+                "audio": null
+              },
+              {
+                "duration_sec": 14,
+                "resolution": "720p",
+                "aspect_ratio": "4:3",
+                "fps": null,
+                "audio": null
+              },
+              {
+                "duration_sec": 14,
+                "resolution": "720p",
+                "aspect_ratio": "3:4",
+                "fps": null,
+                "audio": null
+              },
+              {
+                "duration_sec": 14,
+                "resolution": "720p",
+                "aspect_ratio": "21:9",
+                "fps": null,
+                "audio": null
+              },
+              {
+                "duration_sec": 15,
+                "resolution": "480p",
+                "aspect_ratio": "16:9",
+                "fps": null,
+                "audio": null
+              },
+              {
+                "duration_sec": 15,
+                "resolution": "480p",
+                "aspect_ratio": "9:16",
+                "fps": null,
+                "audio": null
+              },
+              {
+                "duration_sec": 15,
+                "resolution": "480p",
+                "aspect_ratio": "1:1",
+                "fps": null,
+                "audio": null
+              },
+              {
+                "duration_sec": 15,
+                "resolution": "480p",
+                "aspect_ratio": "4:3",
+                "fps": null,
+                "audio": null
+              },
+              {
+                "duration_sec": 15,
+                "resolution": "480p",
+                "aspect_ratio": "3:4",
+                "fps": null,
+                "audio": null
+              },
+              {
+                "duration_sec": 15,
+                "resolution": "480p",
+                "aspect_ratio": "21:9",
+                "fps": null,
+                "audio": null
+              },
+              {
+                "duration_sec": 15,
+                "resolution": "720p",
+                "aspect_ratio": "16:9",
+                "fps": null,
+                "audio": null
+              },
+              {
+                "duration_sec": 15,
+                "resolution": "720p",
+                "aspect_ratio": "9:16",
+                "fps": null,
+                "audio": null
+              },
+              {
+                "duration_sec": 15,
+                "resolution": "720p",
+                "aspect_ratio": "1:1",
+                "fps": null,
+                "audio": null
+              },
+              {
+                "duration_sec": 15,
+                "resolution": "720p",
+                "aspect_ratio": "4:3",
+                "fps": null,
+                "audio": null
+              },
+              {
+                "duration_sec": 15,
+                "resolution": "720p",
+                "aspect_ratio": "3:4",
+                "fps": null,
+                "audio": null
+              },
+              {
+                "duration_sec": 15,
+                "resolution": "720p",
+                "aspect_ratio": "21:9",
+                "fps": null,
+                "audio": null
+              }
+            ],
+            "start_image": "unsupported",
+            "end_image": "unsupported"
+          }
+        }
+      ],
+      "capabilities": {
+        "schema_version": 1,
+        "api": {
+          "video": {
+            "images": {
+              "support": "supported",
+              "extensions": [],
+              "max_count": 9
+            },
+            "videos": {
+              "support": "supported",
+              "extensions": [],
+              "max_count": 3
+            },
+            "allowed_image_counts": [
+              0,
+              1,
+              2,
+              3,
+              4,
+              5,
+              6,
+              7,
+              8,
+              9
+            ],
+            "duration": {
+              "mode": "selected",
+              "min_seconds": 4,
+              "max_seconds": 15,
+              "allowed_seconds": [
+                4,
+                5,
+                6,
+                7,
+                8,
+                9,
+                10,
+                11,
+                12,
+                13,
+                14,
+                15
+              ]
+            },
+            "resolutions": [
+              "480p",
+              "720p"
+            ],
+            "quality_modes": null,
+            "aspect_ratios": [
+              "16:9",
+              "9:16",
+              "1:1",
+              "4:3",
+              "3:4",
+              "21:9"
+            ],
+            "audio": {
+              "mode": "optional",
+              "selectable": true
+            },
+            "start_frame": "optional",
+            "end_frame": "optional"
+          },
+          "notes": [
+            "До 9 изображений или до 3 референсных видео; также есть референсное аудио. Первый/последний кадры исключают видео и аудиовход. Standard: промпт до 4000 символов. Для Mini точный лимит символов не указан."
+          ]
+        },
+        "application": {
+          "video": {
+            "images": {
+              "support": "unsupported",
+              "extensions": [],
+              "max_count": 0
+            },
+            "videos": {
+              "support": "unsupported",
+              "extensions": [],
+              "max_count": 0
+            },
+            "allowed_image_counts": null,
+            "duration": {
+              "mode": "selected",
+              "min_seconds": 4,
+              "max_seconds": 15,
+              "allowed_seconds": [
+                4,
+                5,
+                6,
+                7,
+                8,
+                9,
+                10,
+                11,
+                12,
+                13,
+                14,
+                15
+              ]
+            },
+            "resolutions": [
+              "480p",
+              "720p"
+            ],
+            "quality_modes": null,
+            "aspect_ratios": [
+              "16:9",
+              "9:16",
+              "1:1",
+              "4:3",
+              "3:4",
+              "21:9"
+            ],
+            "audio": {
+              "mode": "unknown",
+              "selectable": false
+            },
+            "start_frame": "unsupported",
+            "end_frame": "unsupported"
+          },
+          "notes": [
+            "Ожидает допуска. Подготовлена генерация по тексту; вложения и переключение звука не подключены. FPS и фактический результат требуют платной live-проверки."
+          ]
+        }
+      }
     }
   ]
 }

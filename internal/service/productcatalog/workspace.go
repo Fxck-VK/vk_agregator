@@ -15,7 +15,7 @@ import (
 func WorkspaceCatalog(cfg WorkspaceConfig) WorkspaceModelList {
 	out := WorkspaceModelList{SchemaVersion: 1, Items: []WorkspaceModel{}}
 	seen := map[string]bool{}
-	registry := providermodels.StaticRegistry()
+	registry := providermodels.RuntimeRegistry()
 	add := func(id, name, description string, op WorkspaceOperation, free bool) {
 		if seen[id] || id == "" || name == "" {
 			return
@@ -61,6 +61,10 @@ func WorkspaceCatalog(cfg WorkspaceConfig) WorkspaceModelList {
 			model.Operations[0].Inputs.MaxTotalBytes = int64(input.MaxCount) * input.MaxBytes
 		}
 		model.Capabilities = workspaceCapabilities(id, model.Operations[0])
+		if registry.IsDEVSmokeModel(id) {
+			model.Verification = "dev-smoke"
+			model.Description = "Доступна для ручного тестирования на DEV. Проверка модели не завершена."
+		}
 		out.Items = append(out.Items, model)
 	}
 	resolver := imagegeneration.NewResolver(cfg.ImageModels, cfg.Pricing)
@@ -97,7 +101,11 @@ func WorkspaceCatalog(cfg WorkspaceConfig) WorkspaceModelList {
 		out.DefaultModelID = out.Items[0].ID
 	}
 	if cfg.IncludePendingMedia {
-		out.Items = append(out.Items, pendingMediaWorkspaceModels()...)
+		for _, m := range pendingMediaWorkspaceModels() {
+			if !seen[m.ID] {
+				out.Items = append(out.Items, m)
+			}
+		}
 	}
 	return out
 }
@@ -183,7 +191,7 @@ func WorkspaceVideoControls(route VideoRoute, prices imagegeneration.SnapshotCat
 	if prices == nil || !route.Enabled || route.RequiresStartImage || route.RequiresReferenceVideo || route.AutomaticDuration || len(route.AllowedReferenceImageCounts) > 0 && !slices.Contains(route.AllowedReferenceImageCounts, 0) {
 		return out, false
 	}
-	registered, known := providermodels.StaticRegistry().VideoRoute(domain.VideoRouteAlias(route.Alias))
+	registered, known := providermodels.RuntimeRegistry().VideoRoute(domain.VideoRouteAlias(route.Alias))
 	for _, resolution := range route.AllowedResolutions {
 		if known && !slices.Contains(registered.Spec.AllowedResolutions, resolution) {
 			continue

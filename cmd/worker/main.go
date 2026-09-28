@@ -82,6 +82,10 @@ func main() {
 		os.Exit(1)
 	}
 
+	if err := providermodels.ConfigureDEVSmoke(cfg.Env, cfg.FeatureDEVModelSmokeEnabled); err != nil {
+		logger.Error("model smoke configuration failed", logging.ErrorAttr(err))
+		os.Exit(1)
+	}
 	rootCtx := context.Background()
 	shutdownTracing, err := tracing.Init(rootCtx, tracing.Config{
 		ServiceName:         cfg.TracingServiceName + "-worker",
@@ -172,6 +176,10 @@ func main() {
 	pricingCatalog, pricingSelection, err := pricingCache.Current()
 	if err != nil {
 		logger.Error("runtime pricing cache unavailable", logging.ErrorAttr(err))
+		os.Exit(1)
+	}
+	if err := pricingCatalog.AddSupplemental(providermodels.RuntimeRegistry().DEVSmokePrices()); err != nil {
+		logger.Error("model smoke pricing failed", logging.ErrorAttr(err))
 		os.Exit(1)
 	}
 	if cfg.RuntimePricingRefreshInterval > 0 {
@@ -771,7 +779,7 @@ func defaultProviderMediaContracts(cfg config.Config) []domain.ProviderMediaCont
 	if maxBytes <= 0 {
 		maxBytes = 256 << 20
 	}
-	return providermodels.StaticRegistry().ProviderMediaContracts(providermodels.MediaContractRuntime{
+	return providermodels.RuntimeRegistry().ProviderMediaContracts(providermodels.MediaContractRuntime{
 		ExpectedMaxVideoBytes: maxBytes,
 		RequireVideoProbe:     cfg.MediaVideoProbeRequired(),
 		VideoTranscodeAllowed: cfg.MediaVideoTranscodeEnabled(),

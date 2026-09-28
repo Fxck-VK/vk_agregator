@@ -71,7 +71,7 @@ func (h *Handler) prepareMusicJob(w http.ResponseWriter, r *http.Request) {
 		writeError(w, 503, "music unavailable")
 		return
 	}
-	params, price, err := musicgeneration.Resolve(request, providermodels.StaticRegistry())
+	params, price, err := musicgeneration.Resolve(request, providermodels.RuntimeRegistry())
 	if err != nil {
 		writeError(w, 503, "music operation pending verification")
 		return
@@ -250,7 +250,7 @@ func (h *Handler) activateMusicJob(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	p, _ := musicgeneration.DecodeJob(job)
-	if h.deps.ImageJobs == nil || !providermodels.StaticRegistry().MediaCandidateAdmitted(p.ModelID, string(p.Music.Action)) {
+	if h.deps.ImageJobs == nil || !providermodels.RuntimeRegistry().MediaCandidateRunnable(p.ModelID, string(p.Music.Action)) {
 		writeError(w, 503, "music operation pending verification")
 		return
 	}

@@ -19,7 +19,7 @@ import (
 )
 
 var musicCandidateAdmitted = func(modelID string, action domain.MusicAction) bool {
-	return providermodels.StaticRegistry().MediaCandidateAdmitted(modelID, string(action))
+	return providermodels.RuntimeRegistry().MediaCandidateRunnable(modelID, string(action))
 }
 
 func musicInvalidRequestError(message string) error {

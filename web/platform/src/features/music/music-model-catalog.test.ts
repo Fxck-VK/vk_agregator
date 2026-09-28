@@ -77,6 +77,19 @@ function pendingMusicCatalog() {
 }
 
 describe("music model catalog projection", () => {
+  it("allows only explicitly enabled DEV smoke operations and keeps their status", () => {
+    const payload = pendingMusicCatalog();
+    const model = payload.items[payload.items.length - 1];
+    model.verification = "dev-smoke";
+    model.operations[0].enabled = true;
+    if (model.operations[0].music) delete model.operations[0].music.unavailable_reason;
+    const catalog = parseModelCatalog(payload);
+    expect(catalog.items.at(-1)?.verification).toBe("dev-smoke");
+    const music = projectMusicModelCatalog(catalog);
+    expect(music.models[0].enabled).toBe(true);
+    expect(music.models[0].operations.filter(operation => operation.enabled).map(operation => operation.id)).toEqual(["generate"]);
+  });
+
   it("translates cached music metadata without changing admission, quotes or source catalog", () => {
     const source = parseModelCatalog(previewCatalog);
     const russian = projectMusicModelCatalog(source);

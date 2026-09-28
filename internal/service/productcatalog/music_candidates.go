@@ -42,6 +42,18 @@ func pendingMediaWorkspaceModels() []WorkspaceModel {
 			model.Operations = append(model.Operations, pendingVideoOperation(c))
 		}
 		out = append(out, model)
+		if providermodels.RuntimeRegistry().MediaCandidateRunnable(c.PublicID, "generate") && c.Kind == "audio" {
+			model.Verification = "dev-smoke"
+			model.Description = "Доступна для ручного тестирования на DEV. Проверка модели не завершена."
+			for i := range model.Operations {
+				op := &model.Operations[i]
+				if op.ID == "generate" && op.Music != nil {
+					op.Enabled = true
+					op.Music.UnavailableReason = ""
+				}
+			}
+			out[len(out)-1] = model
+		}
 	}
 	return out
 }
@@ -71,12 +83,16 @@ func pendingMusicOperation(c providermodels.MediaCandidate, op musicgeneration.O
 }
 
 func pendingImageOperation(c providermodels.MediaCandidate) WorkspaceOperation {
-	image := WorkspaceImage{QualityLabel: "Вариант", ShowOutputCount: false, MaxOutputCount: 1, QualityOptions: []string{"standard"}, DefaultQuality: "standard", AllowedAspectRatios: append([]string(nil), c.Capabilities.API.Image.AspectRatios...), DefaultAspectRatio: "16:9", PriceByQuality: map[string]int64{}, PriceByVariant: map[string]int64{}}
+	quality := "standard"
+	if c.PublicID == "nano_banana" {
+		quality = "1K"
+	}
+	image := WorkspaceImage{QualityLabel: "Вариант", ShowOutputCount: false, MaxOutputCount: 1, QualityOptions: []string{quality}, DefaultQuality: quality, AllowedAspectRatios: append([]string(nil), c.Capabilities.Application.Image.AspectRatios...), DefaultAspectRatio: "16:9", PriceByQuality: map[string]int64{}, PriceByVariant: map[string]int64{}}
 	quote, err := pricingcatalog.ImageCandidateQuote(c.PublicID)
 	if err == nil {
-		image.PriceByQuality["standard"] = quote.InternalCredits
+		image.PriceByQuality[quality] = quote.InternalCredits
 		for _, ratio := range image.AllowedAspectRatios {
-			image.PriceByVariant["standard:"+ratio] = quote.InternalCredits
+			image.PriceByVariant[quality+":"+ratio] = quote.InternalCredits
 		}
 	}
 	return WorkspaceOperation{ID: "generate", Kind: "image", Enabled: false, Inputs: unknownWorkspaceInputs(), Image: &image}

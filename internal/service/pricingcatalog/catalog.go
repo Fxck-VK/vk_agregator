@@ -365,8 +365,25 @@ func (s PricingSnapshot) Valid() bool {
 // to it in a later PR; this package does not call providers or trust frontend
 // price input.
 type Catalog struct {
-	mu     sync.RWMutex
-	prices map[ProductKey]ProductPrice
+	mu           sync.RWMutex
+	prices       map[ProductKey]ProductPrice
+	supplemental map[ProductKey]ProductPrice
+}
+
+// AddSupplemental installs server-owned candidate prices without overriding any
+// runtime price (including a disabled one). A DB refresh preserves this overlay.
+func (c *Catalog) AddSupplemental(prices []ProductPrice) error {
+	if c == nil {
+		return ErrInvalidRuntimePrice
+	}
+	validated, err := NewCatalog(prices)
+	if err != nil {
+		return err
+	}
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	c.supplemental = validated.prices
+	return nil
 }
 
 // NewCatalog validates and indexes backend-owned price entries by public
@@ -405,6 +422,9 @@ func (c *Catalog) Lookup(key ProductKey) (ProductPrice, error) {
 	}
 	price, ok := c.prices[key]
 	if !ok {
+		price, ok = c.supplemental[key]
+	}
+	if !ok {
 		return ProductPrice{}, fmt.Errorf("%w: %+v", ErrPriceNotFound, key)
 	}
 	if err := validateProductPrice(price); err != nil {
@@ -424,6 +444,11 @@ func (c *Catalog) Prices() []ProductPrice {
 	prices := make([]ProductPrice, 0, len(c.prices))
 	for _, price := range c.prices {
 		prices = append(prices, price)
+	}
+	for key, price := range c.supplemental {
+		if _, exists := c.prices[key]; !exists {
+			prices = append(prices, price)
+		}
 	}
 	c.mu.RUnlock()
 	sort.Slice(prices, func(i, j int) bool {

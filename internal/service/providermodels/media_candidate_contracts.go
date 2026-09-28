@@ -54,7 +54,7 @@ func MediaCandidateOperationFacts(publicID string) []MediaCandidateOperationFact
 	case "whisper_1":
 		return whisper1OperationFacts(candidate.ModelCode)
 	default:
-		return nil
+		return catalogExpansionFacts(candidate)
 	}
 }
 
@@ -444,6 +444,14 @@ func mediaCandidateSources(candidate MediaCandidate, facts []MediaCandidateOpera
 
 func mediaCandidateSourceURL(sourceID string) string {
 	switch sourceID {
+	case "nano_banana_generation":
+		return apimartDocsBase + "images/gemini-2.5-flash/generation"
+	case "grok_imagine_1_5_video_generation":
+		return apimartDocsBase + "videos/grok-imagine/generation"
+	case "kling_2_6_generation":
+		return apimartDocsBase + "videos/kling-v2-6/generation"
+	case "seedance_2_0_generation", "seedance_2_0_mini_generation":
+		return apimartDocsBase + "videos/seedance-2-0/generation"
 	case "wan_3_0_generation":
 		return "https://docs.apimart.ai/en/api-reference/videos/wan3.0-video/generation"
 	case "vidu_q3_pro_generation":
@@ -557,9 +565,18 @@ func mediaCandidateOperations(candidate MediaCandidate, facts []MediaCandidateOp
 
 func mediaCandidateImageOperation(candidate MediaCandidate, fact MediaCandidateOperationFact) modelcontract.Operation {
 	inputs := explicitUnsupportedInputs()
-	variants := make([]modelcontract.ImageVariant, 0, len(nextImagenAspectRatios()))
-	for _, ratio := range nextImagenAspectRatios() {
-		variants = append(variants, modelcontract.ImageVariant{AspectRatio: ratio})
+	image := candidate.Capabilities.Application.Image
+	variants := make([]modelcontract.ImageVariant, 0, len(image.AspectRatios))
+	defaultVariant := 0
+	for i, ratio := range image.AspectRatios {
+		resolution := ""
+		if len(image.Resolutions) == 1 {
+			resolution = image.Resolutions[0]
+		}
+		variants = append(variants, modelcontract.ImageVariant{AspectRatio: ratio, Resolution: resolution})
+		if ratio == "16:9" {
+			defaultVariant = i
+		}
 	}
 	return modelcontract.Operation{
 		ID:     fact.ID,
@@ -567,7 +584,7 @@ func mediaCandidateImageOperation(candidate MediaCandidate, fact MediaCandidateO
 		Inputs: inputs,
 		Image: &modelcontract.ImageOutput{
 			Variants:       variants,
-			DefaultVariant: 3,
+			DefaultVariant: defaultVariant,
 			MaxOutputCount: 1,
 			Mask:           "unsupported",
 		},
@@ -699,6 +716,21 @@ func mediaCandidateVideoVariants(modelCode, operationID string) []modelcontract.
 	var aspects []string
 	var durations []int
 	switch strings.ToLower(strings.TrimSpace(modelCode)) {
+	case "grok-imagine-1.5-video-ext":
+		resolutions = []string{"480p", "720p"}
+		aspects = []string{"16:9", "9:16", "1:1", "3:2", "2:3"}
+		durations = integerRange(6, 15)
+	case "kling-v2-6":
+		resolutions = []string{"720p", "1080p"}
+		aspects = []string{"16:9", "9:16", "1:1"}
+		durations = []int{5, 10}
+	case "seedance-2.0", "seedance-2.0-mini":
+		resolutions = []string{"480p", "720p"}
+		if modelCode == "seedance-2.0" {
+			resolutions = append(resolutions, "1080p", "4k")
+		}
+		aspects = []string{"16:9", "9:16", "1:1", "4:3", "3:4", "21:9"}
+		durations = integerRange(4, 15)
 	case "wan3.0-video":
 		resolutions = []string{"480p", "720p", "1080p"}
 		aspects = []string{"16:9", "4:3", "1:1", "3:4", "9:16"}

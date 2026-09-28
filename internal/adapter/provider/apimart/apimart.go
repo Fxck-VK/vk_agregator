@@ -105,6 +105,11 @@ func (p *Provider) Capabilities(ctx context.Context) ([]domain.Capability, error
 		return nil, err
 	}
 	return append(textCaps, []domain.Capability{
+		{Operation: domain.OperationImageGenerate, Modality: domain.ModalityImage, ModelCode: ModelNanoBanana, SupportsPolling: true},
+		{Operation: domain.OperationVideoGenerate, Modality: domain.ModalityVideo, ModelCode: ModelGrokImagineVideo, SupportsPolling: true, MaxDurationSec: 15},
+		{Operation: domain.OperationVideoGenerate, Modality: domain.ModalityVideo, ModelCode: ModelKling26, SupportsPolling: true, MaxDurationSec: 10},
+		{Operation: domain.OperationVideoGenerate, Modality: domain.ModalityVideo, ModelCode: ModelSeedance20, SupportsPolling: true, MaxDurationSec: 15},
+		{Operation: domain.OperationVideoGenerate, Modality: domain.ModalityVideo, ModelCode: ModelSeedance20Mini, SupportsPolling: true, MaxDurationSec: 15},
 		{Operation: domain.OperationVideoGenerate, Modality: domain.ModalityVideo, ModelCode: ModelWan30Video, SupportsPolling: true, MaxDurationSec: 30},
 		{Operation: domain.OperationVideoGenerate, Modality: domain.ModalityVideo, ModelCode: ModelViduQ3Pro, SupportsPolling: true, MaxDurationSec: 16},
 		{Operation: domain.OperationImageGenerate, Modality: domain.ModalityImage, ModelCode: ModelImagen40, SupportsPolling: true},

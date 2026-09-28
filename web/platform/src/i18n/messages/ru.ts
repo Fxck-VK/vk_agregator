@@ -7,6 +7,7 @@ export const messagesRu = {
   ...messagesMusicCatalogRu,
   ...messagesMusicRu,
   "catalog.pendingDescription": "Ожидает проверки перед запуском.",
+  "catalog.devSmokeDescription": "Доступна для ручного тестирования на DEV. Проверка модели не завершена.",
   "catalog.pendingImageDescription": "Ожидает проверки перед запуском. Референсы и редактирование выключены.",
   "catalog.pendingSpeechDescription": "Ожидает проверки тарификации перед запуском.",
   "catalog.musicDescription": "Создание музыки, работа с треками и музыкальные инструменты.",

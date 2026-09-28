@@ -7,6 +7,10 @@ import "vk-ai-aggregator/internal/domain"
 // Candidate quotes are deliberately not inserted into StaticProductPrices.
 func ImageCandidateQuote(model string) (PricingSnapshot, error) {
 	switch model {
+	case "nano_banana":
+		// APIMart public discounted price, checked 2026-09-28:
+		// https://api.apimart.ai/api/pricing/model?model=gemini-2.5-flash-image-preview
+		return candidateUSDQuote(ProductKey{Operation: domain.OperationImageGenerate, Modality: domain.ModalityImage, ImageModelID: model}, 12500)
 	case "imagen_4_0":
 		return candidateUSDQuote(ProductKey{Operation: domain.OperationImageGenerate, Modality: domain.ModalityImage, ImageModelID: model}, 40000)
 	default:

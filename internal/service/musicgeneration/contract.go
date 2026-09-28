@@ -195,13 +195,12 @@ func boolPtrFalse(v *bool) bool {
 	return v != nil && !*v
 }
 
-// Resolve is deliberately fail-closed for researched candidates until an exact
-// verified operation is admitted through the canonical registry.
+// Resolve requires verified admission or explicitly configured manual DEV smoke.
 func Resolve(r Request, registry providermodels.Registry) (JobParams, pricingcatalog.PricingSnapshot, error) {
 	if err := r.Validate(); err != nil {
 		return JobParams{}, pricingcatalog.PricingSnapshot{}, err
 	}
-	if !registry.MediaCandidateAdmitted(r.ModelID, string(r.Music.Action)) {
+	if !registry.MediaCandidateRunnable(r.ModelID, string(r.Music.Action)) {
 		return JobParams{}, pricingcatalog.PricingSnapshot{}, ErrUnavailable
 	}
 	c, _ := providermodels.MediaCandidateByID(r.ModelID)

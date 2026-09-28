@@ -11,6 +11,14 @@
 ---
 
 # Current implementation addendum: app surfaces and backend core
+Manual model testing on DEV uses `providermodels.RuntimeRegistry`, configured
+once by API/worker bootstrap after config validation. The explicitly enabled
+development flag adds priced text-input media candidates with pinned runtime
+bindings and a public `dev-smoke` status. Static admission and the frozen legacy
+baseline remain unchanged; production/loadtest reject this mode. A supplemental
+pricing layer fills missing candidate keys, preserves primary prices and survives
+DB refresh. Existing worker, Job, moderation and ledger boundaries still apply.
+See [DEV manual smoke](runbooks/DEV.md#manual-model-smoke-on-dev).
 
 The current implementation is a production-shaped modular monolith. It has one
 shared backend core and two user-facing app surfaces:

@@ -16,6 +16,38 @@ func MediaVideoCandidateQuote(model, mode, resolution string, seconds int) (Pric
 	minSeconds, maxSeconds := 3, 15
 	resolution = strings.ToLower(strings.TrimSpace(resolution))
 	switch model {
+	// Public discounted USD/second, checked 2026-09-28 at the endpoint above
+	// for grok-imagine-1.5-video-ext, kling-v2-6, seedance-2.0 and seedance-2.0-mini.
+	// Input-video tariffs require separately probed duration and are not enabled.
+	case "grok_imagine_1_5_video":
+		if mode != "" {
+			return PricingSnapshot{}, ErrPriceNotFound
+		}
+		minSeconds = 6
+		rates = map[string]int64{"480p": 10200, "720p": 19120}
+	case "kling_2_6":
+		if seconds != 5 && seconds != 10 {
+			return PricingSnapshot{}, ErrPriceNotFound
+		}
+		if mode == "pro-sound" && resolution == "1080p" {
+			rates = map[string]int64{"1080p": 125000}
+		} else if mode == "" {
+			rates = map[string]int64{"720p": 36800, "1080p": 62500}
+		} else {
+			return PricingSnapshot{}, ErrPriceNotFound
+		}
+	case "seedance_2_0":
+		if mode != "" {
+			return PricingSnapshot{}, ErrPriceNotFound
+		}
+		minSeconds = 4
+		rates = map[string]int64{"480p": 66000, "720p": 142000, "1080p": 354400, "4k": 722000}
+	case "seedance_2_0_mini":
+		if mode != "" {
+			return PricingSnapshot{}, ErrPriceNotFound
+		}
+		minSeconds = 4
+		rates = map[string]int64{"480p": 10560, "720p": 22880}
 	case "wan_3_0":
 		if mode != "" {
 			return PricingSnapshot{}, ErrPriceNotFound

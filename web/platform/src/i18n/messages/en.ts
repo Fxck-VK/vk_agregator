@@ -8,6 +8,7 @@ export const messagesEn = {
   ...messagesMusicCatalogEn,
   ...messagesMusicEn,
   "catalog.pendingDescription": "Awaiting verification before launch.",
+  "catalog.devSmokeDescription": "Available for manual testing on DEV. Model verification is incomplete.",
   "catalog.pendingImageDescription": "Awaiting verification before launch. References and editing are disabled.",
   "catalog.pendingSpeechDescription": "Awaiting billing verification before launch.",
   "catalog.musicDescription": "Music generation, track editing and music tools.",

@@ -265,10 +265,13 @@ func (r *Registry) ForRequest(ctx context.Context, req domain.ProviderRequest) (
 			continue
 		}
 		action := "text_to_video"
+		if req.Modality == domain.ModalityImage {
+			action = "generate"
+		}
 		if req.Music != nil {
 			action = string(req.Music.Action)
 		}
-		if !providermodels.StaticRegistry().MediaCandidateAdmitted(candidate.PublicID, action) {
+		if !providermodels.RuntimeRegistry().MediaCandidateRunnable(candidate.PublicID, action) {
 			return nil, providerResultError{class: domain.ProviderErrModelUnavailable, message: "model admission pending"}
 		}
 	}
@@ -1411,6 +1414,23 @@ func (p *processor) buildRequest(ctx context.Context, job *domain.Job, attempt i
 		providerParams = safeVideoProviderParams(durationSec, resolution, pp.AspectRatio, draft, pp.ResolvedVideoRoute)
 	}
 	keepOriginalSound := pp.KeepOriginalSound == nil || *pp.KeepOriginalSound
+	if job.Modality == domain.ModalityImage && providermodels.IsPendingMediaRoute(pp.Provider, modelCode) {
+		if len(job.InputArtifactIDs) > 0 || len(pp.ReferenceArtifactIDs) > 0 || len(inputURLs) > 0 {
+			return domain.ProviderRequest{}, providerResultError{class: domain.ProviderErrInvalidRequest, message: "image references are not enabled"}
+		}
+		keepOriginalSound = false
+		if pp.Size == "" {
+			size = pp.AspectRatio
+			if size == "" {
+				size = "16:9"
+			}
+		}
+		providerParams, _ = json.Marshal(struct {
+			Size        string `json:"size"`
+			AspectRatio string `json:"aspect_ratio,omitempty"`
+			OutputCount int    `json:"output_count"`
+		}{size, pp.AspectRatio, pp.OutputCount})
+	}
 	if job.Modality == domain.ModalityVideo && providermodels.IsPendingMediaRoute(pp.Provider, modelCode) {
 		// The first application route is text-only. Advanced native modes have
 		// adapter contracts but need separate owned-input hydration and admission.
