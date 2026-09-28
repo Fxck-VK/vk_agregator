@@ -71,7 +71,7 @@ func PaidTextModels() []TextAlias {
 }
 
 func PaidTextModel(id string) (TextAlias, bool) {
-	for _, m := range PaidTextModels() {
+	for _, m := range KnownPaidTextModels() {
 		if m.PublicID == id {
 			return m, true
 		}
@@ -80,7 +80,7 @@ func PaidTextModel(id string) (TextAlias, bool) {
 }
 
 func IsPaidTextRoute(provider domain.ProviderName, code string) bool {
-	for _, m := range PaidTextModels() {
+	for _, m := range KnownPaidTextModels() {
 		if m.Provider == provider && m.ProviderModelID == code {
 			return true
 		}

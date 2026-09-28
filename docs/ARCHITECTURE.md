@@ -13,7 +13,7 @@
 # Current implementation addendum: app surfaces and backend core
 Manual model testing on DEV uses `providermodels.RuntimeRegistry`, configured
 once by API/worker bootstrap after config validation. The explicitly enabled
-development flag adds priced text-input media candidates with pinned runtime
+development flag adds priced text replies and text-input media candidates with pinned runtime
 bindings and a public `dev-smoke` status. Static admission and the frozen legacy
 baseline remain unchanged; production/loadtest reject this mode. A supplemental
 pricing layer fills missing candidate keys, preserves primary prices and survives

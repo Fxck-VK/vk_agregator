@@ -36,6 +36,7 @@ func ConfigureDEVSmoke(environment string, enabled bool) error {
 func RuntimeRegistry() Registry {
 	if configured := devSmokeRegistry.Load(); configured != nil {
 		r := *configured
+		r.TextAliases = configured.TextAliasModels()
 		r.ImageModels = append([]ImageModel(nil), configured.ImageModels...)
 		for i := range r.ImageModels {
 			r.ImageModels[i].Limits = copyImageLimits(r.ImageModels[i].Limits)
@@ -52,6 +53,14 @@ func buildDEVSmokeRegistry() Registry {
 	r := StaticRegistry()
 	r.devSmoke = true
 	r.smokeFingerprints = map[string]string{}
+	for _, c := range TextCandidates() {
+		q, err := pricingcatalog.TextCandidateQuote(c.PublicID)
+		if err != nil {
+			continue
+		}
+		r.TextAliases = append(r.TextAliases, c.Alias())
+		r.smokePrices = append(r.smokePrices, smokePrice(q))
+	}
 	for _, c := range MediaCandidates() {
 		switch c.Kind {
 		case "image":
@@ -97,6 +106,9 @@ func buildDEVSmokeRegistry() Registry {
 		}
 	}
 	for _, b := range r.Bindings() {
+		if _, ok := TextCandidateByID(b.PublicID); ok {
+			r.smokeFingerprints[b.PublicID] = b.Fingerprint
+		}
 		if _, ok := MediaCandidateByID(b.PublicID); ok {
 			r.smokeFingerprints[b.PublicID] = b.Fingerprint
 		}
@@ -115,6 +127,9 @@ func (r Registry) DEVSmokePrices() []pricingcatalog.ProductPrice {
 func (r Registry) IsDEVSmokeModel(id string) bool {
 	if !r.devSmoke {
 		return false
+	}
+	if _, ok := TextCandidateByID(id); ok {
+		return r.smokeFingerprints[id] != ""
 	}
 	c, ok := MediaCandidateByID(id)
 	if !ok {
@@ -136,7 +151,10 @@ func (r Registry) MediaCandidateRunnable(id, operation string) bool {
 	if !r.IsDEVSmokeModel(id) {
 		return false
 	}
-	c, _ := MediaCandidateByID(id)
+	c, ok := MediaCandidateByID(id)
+	if !ok {
+		return false
+	}
 	if c.Kind == "video" {
 		return operation == "text_to_video"
 	}

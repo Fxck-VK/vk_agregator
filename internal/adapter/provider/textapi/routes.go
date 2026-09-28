@@ -1,6 +1,9 @@
 package textapi
 
-import "vk-ai-aggregator/internal/service/providermodels"
+import (
+	"vk-ai-aggregator/internal/service/pricingcatalog"
+	"vk-ai-aggregator/internal/service/providermodels"
+)
 
 type protocol uint8
 
@@ -19,6 +22,16 @@ type modelRoute struct {
 
 // Exact upstream contracts; similar names never imply interchangeable routes.
 func route(model string) (modelRoute, bool) {
+	for _, c := range providermodels.TextCandidates() {
+		if c.ModelCode != model {
+			continue
+		}
+		q, err := pricingcatalog.TextCandidateQuote(c.PublicID)
+		if err != nil {
+			return modelRoute{}, false
+		}
+		return modelRoute{"/chat/completions", openAIChat, (q.Floor.Amount + 99999) / 100000}, true
+	}
 	switch model {
 	case providermodels.ModelGPT55:
 		return modelRoute{"/codex/v1/responses", responses, 6}, true

@@ -13,6 +13,7 @@ const WebReferenceMaxDimension = 4096
 
 type WorkspaceConfig struct {
 	IncludePendingMedia   bool
+	IncludePendingText    bool
 	ImageReferenceUploads bool
 	TextModels            []textgeneration.PublicModel
 	ImageModels           []imagegeneration.PublicModel

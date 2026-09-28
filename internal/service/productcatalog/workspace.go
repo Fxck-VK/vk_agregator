@@ -107,6 +107,13 @@ func WorkspaceCatalog(cfg WorkspaceConfig) WorkspaceModelList {
 			}
 		}
 	}
+	if cfg.IncludePendingText {
+		for _, m := range pendingTextWorkspaceModels() {
+			if !seen[m.ID] {
+				out.Items = append(out.Items, m)
+			}
+		}
+	}
 	return out
 }
 

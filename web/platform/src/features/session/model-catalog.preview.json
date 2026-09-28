@@ -30374,6 +30374,1875 @@
           ]
         }
       }
+    },
+    {
+      "id": "gpt_5",
+      "name": "GPT-5",
+      "description": "Ожидает проверки перед запуском.",
+      "kind": "text",
+      "categories": [
+        "text",
+        "study-work"
+      ],
+      "verification": "pending-verification",
+      "operations": [
+        {
+          "id": "reply",
+          "kind": "text",
+          "enabled": false,
+          "inputs": {
+            "images": {
+              "support": "unknown",
+              "enabled": false
+            },
+            "video": {
+              "support": "unknown",
+              "enabled": false
+            },
+            "audio": {
+              "support": "unknown",
+              "enabled": false
+            },
+            "documents": {
+              "support": "unknown",
+              "enabled": false
+            },
+            "max_total_bytes": 0
+          },
+          "text": {
+            "estimate_credits": 15,
+            "max_prompt_bytes": 7680,
+            "max_output_tokens": 2048
+          }
+        }
+      ],
+      "capabilities": {
+        "schema_version": 1,
+        "api": {
+          "text": {
+            "images": {
+              "support": "unknown",
+              "extensions": [],
+              "max_count": null
+            },
+            "videos": {
+              "support": "unknown",
+              "extensions": [],
+              "max_count": null
+            },
+            "files": {
+              "support": "unknown",
+              "extensions": [],
+              "max_count": null
+            }
+          },
+          "notes": [
+            "Возможности работы с вложениями у провайдера пока не подтверждены."
+          ]
+        },
+        "application": {
+          "text": {
+            "images": {
+              "support": "unsupported",
+              "extensions": [],
+              "max_count": 0
+            },
+            "videos": {
+              "support": "unsupported",
+              "extensions": [],
+              "max_count": 0
+            },
+            "files": {
+              "support": "unsupported",
+              "extensions": [],
+              "max_count": 0
+            }
+          },
+          "notes": [
+            "Сейчас можно отправить только текст. Фото, видео, аудио, PDF и другие файлы в запрос не передаются."
+          ]
+        }
+      }
+    },
+    {
+      "id": "gpt_5_1",
+      "name": "GPT-5.1",
+      "description": "Ожидает проверки перед запуском.",
+      "kind": "text",
+      "categories": [
+        "text",
+        "study-work"
+      ],
+      "verification": "pending-verification",
+      "operations": [
+        {
+          "id": "reply",
+          "kind": "text",
+          "enabled": false,
+          "inputs": {
+            "images": {
+              "support": "unknown",
+              "enabled": false
+            },
+            "video": {
+              "support": "unknown",
+              "enabled": false
+            },
+            "audio": {
+              "support": "unknown",
+              "enabled": false
+            },
+            "documents": {
+              "support": "unknown",
+              "enabled": false
+            },
+            "max_total_bytes": 0
+          },
+          "text": {
+            "estimate_credits": 15,
+            "max_prompt_bytes": 7680,
+            "max_output_tokens": 2048
+          }
+        }
+      ],
+      "capabilities": {
+        "schema_version": 1,
+        "api": {
+          "text": {
+            "images": {
+              "support": "unknown",
+              "extensions": [],
+              "max_count": null
+            },
+            "videos": {
+              "support": "unknown",
+              "extensions": [],
+              "max_count": null
+            },
+            "files": {
+              "support": "unknown",
+              "extensions": [],
+              "max_count": null
+            }
+          },
+          "notes": [
+            "Возможности работы с вложениями у провайдера пока не подтверждены."
+          ]
+        },
+        "application": {
+          "text": {
+            "images": {
+              "support": "unsupported",
+              "extensions": [],
+              "max_count": 0
+            },
+            "videos": {
+              "support": "unsupported",
+              "extensions": [],
+              "max_count": 0
+            },
+            "files": {
+              "support": "unsupported",
+              "extensions": [],
+              "max_count": 0
+            }
+          },
+          "notes": [
+            "Сейчас можно отправить только текст. Фото, видео, аудио, PDF и другие файлы в запрос не передаются."
+          ]
+        }
+      }
+    },
+    {
+      "id": "gpt_5_chat_latest",
+      "name": "GPT-5 Chat Latest",
+      "description": "Ожидает проверки перед запуском.",
+      "kind": "text",
+      "categories": [
+        "text",
+        "study-work"
+      ],
+      "verification": "pending-verification",
+      "operations": [
+        {
+          "id": "reply",
+          "kind": "text",
+          "enabled": false,
+          "inputs": {
+            "images": {
+              "support": "unknown",
+              "enabled": false
+            },
+            "video": {
+              "support": "unknown",
+              "enabled": false
+            },
+            "audio": {
+              "support": "unknown",
+              "enabled": false
+            },
+            "documents": {
+              "support": "unknown",
+              "enabled": false
+            },
+            "max_total_bytes": 0
+          },
+          "text": {
+            "estimate_credits": 15,
+            "max_prompt_bytes": 7680,
+            "max_output_tokens": 2048
+          }
+        }
+      ],
+      "capabilities": {
+        "schema_version": 1,
+        "api": {
+          "text": {
+            "images": {
+              "support": "unknown",
+              "extensions": [],
+              "max_count": null
+            },
+            "videos": {
+              "support": "unknown",
+              "extensions": [],
+              "max_count": null
+            },
+            "files": {
+              "support": "unknown",
+              "extensions": [],
+              "max_count": null
+            }
+          },
+          "notes": [
+            "Возможности работы с вложениями у провайдера пока не подтверждены."
+          ]
+        },
+        "application": {
+          "text": {
+            "images": {
+              "support": "unsupported",
+              "extensions": [],
+              "max_count": 0
+            },
+            "videos": {
+              "support": "unsupported",
+              "extensions": [],
+              "max_count": 0
+            },
+            "files": {
+              "support": "unsupported",
+              "extensions": [],
+              "max_count": 0
+            }
+          },
+          "notes": [
+            "Сейчас можно отправить только текст. Фото, видео, аудио, PDF и другие файлы в запрос не передаются."
+          ]
+        }
+      }
+    },
+    {
+      "id": "gpt_5_mini",
+      "name": "GPT-5 Mini",
+      "description": "Ожидает проверки перед запуском.",
+      "kind": "text",
+      "categories": [
+        "text",
+        "study-work"
+      ],
+      "verification": "pending-verification",
+      "operations": [
+        {
+          "id": "reply",
+          "kind": "text",
+          "enabled": false,
+          "inputs": {
+            "images": {
+              "support": "unknown",
+              "enabled": false
+            },
+            "video": {
+              "support": "unknown",
+              "enabled": false
+            },
+            "audio": {
+              "support": "unknown",
+              "enabled": false
+            },
+            "documents": {
+              "support": "unknown",
+              "enabled": false
+            },
+            "max_total_bytes": 0
+          },
+          "text": {
+            "estimate_credits": 5,
+            "max_prompt_bytes": 7680,
+            "max_output_tokens": 2048
+          }
+        }
+      ],
+      "capabilities": {
+        "schema_version": 1,
+        "api": {
+          "text": {
+            "images": {
+              "support": "unknown",
+              "extensions": [],
+              "max_count": null
+            },
+            "videos": {
+              "support": "unknown",
+              "extensions": [],
+              "max_count": null
+            },
+            "files": {
+              "support": "unknown",
+              "extensions": [],
+              "max_count": null
+            }
+          },
+          "notes": [
+            "Возможности работы с вложениями у провайдера пока не подтверждены."
+          ]
+        },
+        "application": {
+          "text": {
+            "images": {
+              "support": "unsupported",
+              "extensions": [],
+              "max_count": 0
+            },
+            "videos": {
+              "support": "unsupported",
+              "extensions": [],
+              "max_count": 0
+            },
+            "files": {
+              "support": "unsupported",
+              "extensions": [],
+              "max_count": 0
+            }
+          },
+          "notes": [
+            "Сейчас можно отправить только текст. Фото, видео, аудио, PDF и другие файлы в запрос не передаются."
+          ]
+        }
+      }
+    },
+    {
+      "id": "claude_opus_4_6",
+      "name": "Claude Opus 4.6",
+      "description": "Ожидает проверки перед запуском.",
+      "kind": "text",
+      "categories": [
+        "text",
+        "study-work"
+      ],
+      "verification": "pending-verification",
+      "operations": [
+        {
+          "id": "reply",
+          "kind": "text",
+          "enabled": false,
+          "inputs": {
+            "images": {
+              "support": "unknown",
+              "enabled": false
+            },
+            "video": {
+              "support": "unknown",
+              "enabled": false
+            },
+            "audio": {
+              "support": "unknown",
+              "enabled": false
+            },
+            "documents": {
+              "support": "unknown",
+              "enabled": false
+            },
+            "max_total_bytes": 0
+          },
+          "text": {
+            "estimate_credits": 30,
+            "max_prompt_bytes": 7680,
+            "max_output_tokens": 2048
+          }
+        }
+      ],
+      "capabilities": {
+        "schema_version": 1,
+        "api": {
+          "text": {
+            "images": {
+              "support": "unknown",
+              "extensions": [],
+              "max_count": null
+            },
+            "videos": {
+              "support": "unknown",
+              "extensions": [],
+              "max_count": null
+            },
+            "files": {
+              "support": "unknown",
+              "extensions": [],
+              "max_count": null
+            }
+          },
+          "notes": [
+            "Возможности работы с вложениями у провайдера пока не подтверждены."
+          ]
+        },
+        "application": {
+          "text": {
+            "images": {
+              "support": "unsupported",
+              "extensions": [],
+              "max_count": 0
+            },
+            "videos": {
+              "support": "unsupported",
+              "extensions": [],
+              "max_count": 0
+            },
+            "files": {
+              "support": "unsupported",
+              "extensions": [],
+              "max_count": 0
+            }
+          },
+          "notes": [
+            "Сейчас можно отправить только текст. Фото, видео, аудио, PDF и другие файлы в запрос не передаются."
+          ]
+        }
+      }
+    },
+    {
+      "id": "claude_sonnet_4_6",
+      "name": "Claude Sonnet 4.6",
+      "description": "Ожидает проверки перед запуском.",
+      "kind": "text",
+      "categories": [
+        "text",
+        "study-work"
+      ],
+      "verification": "pending-verification",
+      "operations": [
+        {
+          "id": "reply",
+          "kind": "text",
+          "enabled": false,
+          "inputs": {
+            "images": {
+              "support": "unknown",
+              "enabled": false
+            },
+            "video": {
+              "support": "unknown",
+              "enabled": false
+            },
+            "audio": {
+              "support": "unknown",
+              "enabled": false
+            },
+            "documents": {
+              "support": "unknown",
+              "enabled": false
+            },
+            "max_total_bytes": 0
+          },
+          "text": {
+            "estimate_credits": 30,
+            "max_prompt_bytes": 7680,
+            "max_output_tokens": 2048
+          }
+        }
+      ],
+      "capabilities": {
+        "schema_version": 1,
+        "api": {
+          "text": {
+            "images": {
+              "support": "unknown",
+              "extensions": [],
+              "max_count": null
+            },
+            "videos": {
+              "support": "unknown",
+              "extensions": [],
+              "max_count": null
+            },
+            "files": {
+              "support": "unknown",
+              "extensions": [],
+              "max_count": null
+            }
+          },
+          "notes": [
+            "Возможности работы с вложениями у провайдера пока не подтверждены."
+          ]
+        },
+        "application": {
+          "text": {
+            "images": {
+              "support": "unsupported",
+              "extensions": [],
+              "max_count": 0
+            },
+            "videos": {
+              "support": "unsupported",
+              "extensions": [],
+              "max_count": 0
+            },
+            "files": {
+              "support": "unsupported",
+              "extensions": [],
+              "max_count": 0
+            }
+          },
+          "notes": [
+            "Сейчас можно отправить только текст. Фото, видео, аудио, PDF и другие файлы в запрос не передаются."
+          ]
+        }
+      }
+    },
+    {
+      "id": "claude_opus_4_5_20251101",
+      "name": "Claude Opus 4.5 (20251101)",
+      "description": "Ожидает проверки перед запуском.",
+      "kind": "text",
+      "categories": [
+        "text",
+        "study-work"
+      ],
+      "verification": "pending-verification",
+      "operations": [
+        {
+          "id": "reply",
+          "kind": "text",
+          "enabled": false,
+          "inputs": {
+            "images": {
+              "support": "unknown",
+              "enabled": false
+            },
+            "video": {
+              "support": "unknown",
+              "enabled": false
+            },
+            "audio": {
+              "support": "unknown",
+              "enabled": false
+            },
+            "documents": {
+              "support": "unknown",
+              "enabled": false
+            },
+            "max_total_bytes": 0
+          },
+          "text": {
+            "estimate_credits": 45,
+            "max_prompt_bytes": 7680,
+            "max_output_tokens": 2048
+          }
+        }
+      ],
+      "capabilities": {
+        "schema_version": 1,
+        "api": {
+          "text": {
+            "images": {
+              "support": "unknown",
+              "extensions": [],
+              "max_count": null
+            },
+            "videos": {
+              "support": "unknown",
+              "extensions": [],
+              "max_count": null
+            },
+            "files": {
+              "support": "unknown",
+              "extensions": [],
+              "max_count": null
+            }
+          },
+          "notes": [
+            "Возможности работы с вложениями у провайдера пока не подтверждены."
+          ]
+        },
+        "application": {
+          "text": {
+            "images": {
+              "support": "unsupported",
+              "extensions": [],
+              "max_count": 0
+            },
+            "videos": {
+              "support": "unsupported",
+              "extensions": [],
+              "max_count": 0
+            },
+            "files": {
+              "support": "unsupported",
+              "extensions": [],
+              "max_count": 0
+            }
+          },
+          "notes": [
+            "Сейчас можно отправить только текст. Фото, видео, аудио, PDF и другие файлы в запрос не передаются."
+          ]
+        }
+      }
+    },
+    {
+      "id": "gemini_3_5_flash",
+      "name": "Gemini 3.5 Flash",
+      "description": "Ожидает проверки перед запуском.",
+      "kind": "text",
+      "categories": [
+        "text",
+        "study-work"
+      ],
+      "verification": "pending-verification",
+      "operations": [
+        {
+          "id": "reply",
+          "kind": "text",
+          "enabled": false,
+          "inputs": {
+            "images": {
+              "support": "unknown",
+              "enabled": false
+            },
+            "video": {
+              "support": "unknown",
+              "enabled": false
+            },
+            "audio": {
+              "support": "unknown",
+              "enabled": false
+            },
+            "documents": {
+              "support": "unknown",
+              "enabled": false
+            },
+            "max_total_bytes": 0
+          },
+          "text": {
+            "estimate_credits": 15,
+            "max_prompt_bytes": 7680,
+            "max_output_tokens": 2048
+          }
+        }
+      ],
+      "capabilities": {
+        "schema_version": 1,
+        "api": {
+          "text": {
+            "images": {
+              "support": "unknown",
+              "extensions": [],
+              "max_count": null
+            },
+            "videos": {
+              "support": "unknown",
+              "extensions": [],
+              "max_count": null
+            },
+            "files": {
+              "support": "unknown",
+              "extensions": [],
+              "max_count": null
+            }
+          },
+          "notes": [
+            "Возможности работы с вложениями у провайдера пока не подтверждены."
+          ]
+        },
+        "application": {
+          "text": {
+            "images": {
+              "support": "unsupported",
+              "extensions": [],
+              "max_count": 0
+            },
+            "videos": {
+              "support": "unsupported",
+              "extensions": [],
+              "max_count": 0
+            },
+            "files": {
+              "support": "unsupported",
+              "extensions": [],
+              "max_count": 0
+            }
+          },
+          "notes": [
+            "Сейчас можно отправить только текст. Фото, видео, аудио, PDF и другие файлы в запрос не передаются."
+          ]
+        }
+      }
+    },
+    {
+      "id": "gemini_3_1_pro_preview",
+      "name": "Gemini 3.1 Pro Preview",
+      "description": "Ожидает проверки перед запуском.",
+      "kind": "text",
+      "categories": [
+        "text",
+        "study-work"
+      ],
+      "verification": "pending-verification",
+      "operations": [
+        {
+          "id": "reply",
+          "kind": "text",
+          "enabled": false,
+          "inputs": {
+            "images": {
+              "support": "unknown",
+              "enabled": false
+            },
+            "video": {
+              "support": "unknown",
+              "enabled": false
+            },
+            "audio": {
+              "support": "unknown",
+              "enabled": false
+            },
+            "documents": {
+              "support": "unknown",
+              "enabled": false
+            },
+            "max_total_bytes": 0
+          },
+          "text": {
+            "estimate_credits": 20,
+            "max_prompt_bytes": 7680,
+            "max_output_tokens": 2048
+          }
+        }
+      ],
+      "capabilities": {
+        "schema_version": 1,
+        "api": {
+          "text": {
+            "images": {
+              "support": "unknown",
+              "extensions": [],
+              "max_count": null
+            },
+            "videos": {
+              "support": "unknown",
+              "extensions": [],
+              "max_count": null
+            },
+            "files": {
+              "support": "unknown",
+              "extensions": [],
+              "max_count": null
+            }
+          },
+          "notes": [
+            "Возможности работы с вложениями у провайдера пока не подтверждены."
+          ]
+        },
+        "application": {
+          "text": {
+            "images": {
+              "support": "unsupported",
+              "extensions": [],
+              "max_count": 0
+            },
+            "videos": {
+              "support": "unsupported",
+              "extensions": [],
+              "max_count": 0
+            },
+            "files": {
+              "support": "unsupported",
+              "extensions": [],
+              "max_count": 0
+            }
+          },
+          "notes": [
+            "Сейчас можно отправить только текст. Фото, видео, аудио, PDF и другие файлы в запрос не передаются."
+          ]
+        }
+      }
+    },
+    {
+      "id": "gemini_3_pro_preview",
+      "name": "Gemini 3 Pro Preview",
+      "description": "Ожидает проверки перед запуском.",
+      "kind": "text",
+      "categories": [
+        "text",
+        "study-work"
+      ],
+      "verification": "pending-verification",
+      "operations": [
+        {
+          "id": "reply",
+          "kind": "text",
+          "enabled": false,
+          "inputs": {
+            "images": {
+              "support": "unknown",
+              "enabled": false
+            },
+            "video": {
+              "support": "unknown",
+              "enabled": false
+            },
+            "audio": {
+              "support": "unknown",
+              "enabled": false
+            },
+            "documents": {
+              "support": "unknown",
+              "enabled": false
+            },
+            "max_total_bytes": 0
+          },
+          "text": {
+            "estimate_credits": 20,
+            "max_prompt_bytes": 7680,
+            "max_output_tokens": 2048
+          }
+        }
+      ],
+      "capabilities": {
+        "schema_version": 1,
+        "api": {
+          "text": {
+            "images": {
+              "support": "unknown",
+              "extensions": [],
+              "max_count": null
+            },
+            "videos": {
+              "support": "unknown",
+              "extensions": [],
+              "max_count": null
+            },
+            "files": {
+              "support": "unknown",
+              "extensions": [],
+              "max_count": null
+            }
+          },
+          "notes": [
+            "Возможности работы с вложениями у провайдера пока не подтверждены."
+          ]
+        },
+        "application": {
+          "text": {
+            "images": {
+              "support": "unsupported",
+              "extensions": [],
+              "max_count": 0
+            },
+            "videos": {
+              "support": "unsupported",
+              "extensions": [],
+              "max_count": 0
+            },
+            "files": {
+              "support": "unsupported",
+              "extensions": [],
+              "max_count": 0
+            }
+          },
+          "notes": [
+            "Сейчас можно отправить только текст. Фото, видео, аудио, PDF и другие файлы в запрос не передаются."
+          ]
+        }
+      }
+    },
+    {
+      "id": "gemini_3_pro_preview_thinking",
+      "name": "Gemini 3 Pro Preview Thinking",
+      "description": "Ожидает проверки перед запуском.",
+      "kind": "text",
+      "categories": [
+        "text",
+        "study-work"
+      ],
+      "verification": "pending-verification",
+      "operations": [
+        {
+          "id": "reply",
+          "kind": "text",
+          "enabled": false,
+          "inputs": {
+            "images": {
+              "support": "unknown",
+              "enabled": false
+            },
+            "video": {
+              "support": "unknown",
+              "enabled": false
+            },
+            "audio": {
+              "support": "unknown",
+              "enabled": false
+            },
+            "documents": {
+              "support": "unknown",
+              "enabled": false
+            },
+            "max_total_bytes": 0
+          },
+          "text": {
+            "estimate_credits": 20,
+            "max_prompt_bytes": 7680,
+            "max_output_tokens": 2048
+          }
+        }
+      ],
+      "capabilities": {
+        "schema_version": 1,
+        "api": {
+          "text": {
+            "images": {
+              "support": "unknown",
+              "extensions": [],
+              "max_count": null
+            },
+            "videos": {
+              "support": "unknown",
+              "extensions": [],
+              "max_count": null
+            },
+            "files": {
+              "support": "unknown",
+              "extensions": [],
+              "max_count": null
+            }
+          },
+          "notes": [
+            "Возможности работы с вложениями у провайдера пока не подтверждены."
+          ]
+        },
+        "application": {
+          "text": {
+            "images": {
+              "support": "unsupported",
+              "extensions": [],
+              "max_count": 0
+            },
+            "videos": {
+              "support": "unsupported",
+              "extensions": [],
+              "max_count": 0
+            },
+            "files": {
+              "support": "unsupported",
+              "extensions": [],
+              "max_count": 0
+            }
+          },
+          "notes": [
+            "Сейчас можно отправить только текст. Фото, видео, аудио, PDF и другие файлы в запрос не передаются."
+          ]
+        }
+      }
+    },
+    {
+      "id": "gemini_3_flash_preview",
+      "name": "Gemini 3 Flash Preview",
+      "description": "Ожидает проверки перед запуском.",
+      "kind": "text",
+      "categories": [
+        "text",
+        "study-work"
+      ],
+      "verification": "pending-verification",
+      "operations": [
+        {
+          "id": "reply",
+          "kind": "text",
+          "enabled": false,
+          "inputs": {
+            "images": {
+              "support": "unknown",
+              "enabled": false
+            },
+            "video": {
+              "support": "unknown",
+              "enabled": false
+            },
+            "audio": {
+              "support": "unknown",
+              "enabled": false
+            },
+            "documents": {
+              "support": "unknown",
+              "enabled": false
+            },
+            "max_total_bytes": 0
+          },
+          "text": {
+            "estimate_credits": 5,
+            "max_prompt_bytes": 7680,
+            "max_output_tokens": 2048
+          }
+        }
+      ],
+      "capabilities": {
+        "schema_version": 1,
+        "api": {
+          "text": {
+            "images": {
+              "support": "unknown",
+              "extensions": [],
+              "max_count": null
+            },
+            "videos": {
+              "support": "unknown",
+              "extensions": [],
+              "max_count": null
+            },
+            "files": {
+              "support": "unknown",
+              "extensions": [],
+              "max_count": null
+            }
+          },
+          "notes": [
+            "Возможности работы с вложениями у провайдера пока не подтверждены."
+          ]
+        },
+        "application": {
+          "text": {
+            "images": {
+              "support": "unsupported",
+              "extensions": [],
+              "max_count": 0
+            },
+            "videos": {
+              "support": "unsupported",
+              "extensions": [],
+              "max_count": 0
+            },
+            "files": {
+              "support": "unsupported",
+              "extensions": [],
+              "max_count": 0
+            }
+          },
+          "notes": [
+            "Сейчас можно отправить только текст. Фото, видео, аудио, PDF и другие файлы в запрос не передаются."
+          ]
+        }
+      }
+    },
+    {
+      "id": "gemini_2_5_pro",
+      "name": "Gemini 2.5 Pro",
+      "description": "Ожидает проверки перед запуском.",
+      "kind": "text",
+      "categories": [
+        "text",
+        "study-work"
+      ],
+      "verification": "pending-verification",
+      "operations": [
+        {
+          "id": "reply",
+          "kind": "text",
+          "enabled": false,
+          "inputs": {
+            "images": {
+              "support": "unknown",
+              "enabled": false
+            },
+            "video": {
+              "support": "unknown",
+              "enabled": false
+            },
+            "audio": {
+              "support": "unknown",
+              "enabled": false
+            },
+            "documents": {
+              "support": "unknown",
+              "enabled": false
+            },
+            "max_total_bytes": 0
+          },
+          "text": {
+            "estimate_credits": 15,
+            "max_prompt_bytes": 7680,
+            "max_output_tokens": 2048
+          }
+        }
+      ],
+      "capabilities": {
+        "schema_version": 1,
+        "api": {
+          "text": {
+            "images": {
+              "support": "unknown",
+              "extensions": [],
+              "max_count": null
+            },
+            "videos": {
+              "support": "unknown",
+              "extensions": [],
+              "max_count": null
+            },
+            "files": {
+              "support": "unknown",
+              "extensions": [],
+              "max_count": null
+            }
+          },
+          "notes": [
+            "Возможности работы с вложениями у провайдера пока не подтверждены."
+          ]
+        },
+        "application": {
+          "text": {
+            "images": {
+              "support": "unsupported",
+              "extensions": [],
+              "max_count": 0
+            },
+            "videos": {
+              "support": "unsupported",
+              "extensions": [],
+              "max_count": 0
+            },
+            "files": {
+              "support": "unsupported",
+              "extensions": [],
+              "max_count": 0
+            }
+          },
+          "notes": [
+            "Сейчас можно отправить только текст. Фото, видео, аудио, PDF и другие файлы в запрос не передаются."
+          ]
+        }
+      }
+    },
+    {
+      "id": "gemini_2_5_flash",
+      "name": "Gemini 2.5 Flash",
+      "description": "Ожидает проверки перед запуском.",
+      "kind": "text",
+      "categories": [
+        "text",
+        "study-work"
+      ],
+      "verification": "pending-verification",
+      "operations": [
+        {
+          "id": "reply",
+          "kind": "text",
+          "enabled": false,
+          "inputs": {
+            "images": {
+              "support": "unknown",
+              "enabled": false
+            },
+            "video": {
+              "support": "unknown",
+              "enabled": false
+            },
+            "audio": {
+              "support": "unknown",
+              "enabled": false
+            },
+            "documents": {
+              "support": "unknown",
+              "enabled": false
+            },
+            "max_total_bytes": 0
+          },
+          "text": {
+            "estimate_credits": 5,
+            "max_prompt_bytes": 7680,
+            "max_output_tokens": 2048
+          }
+        }
+      ],
+      "capabilities": {
+        "schema_version": 1,
+        "api": {
+          "text": {
+            "images": {
+              "support": "unknown",
+              "extensions": [],
+              "max_count": null
+            },
+            "videos": {
+              "support": "unknown",
+              "extensions": [],
+              "max_count": null
+            },
+            "files": {
+              "support": "unknown",
+              "extensions": [],
+              "max_count": null
+            }
+          },
+          "notes": [
+            "Возможности работы с вложениями у провайдера пока не подтверждены."
+          ]
+        },
+        "application": {
+          "text": {
+            "images": {
+              "support": "unsupported",
+              "extensions": [],
+              "max_count": 0
+            },
+            "videos": {
+              "support": "unsupported",
+              "extensions": [],
+              "max_count": 0
+            },
+            "files": {
+              "support": "unsupported",
+              "extensions": [],
+              "max_count": 0
+            }
+          },
+          "notes": [
+            "Сейчас можно отправить только текст. Фото, видео, аудио, PDF и другие файлы в запрос не передаются."
+          ]
+        }
+      }
+    },
+    {
+      "id": "gemini_2_5_flash_lite",
+      "name": "Gemini 2.5 Flash Lite",
+      "description": "Ожидает проверки перед запуском.",
+      "kind": "text",
+      "categories": [
+        "text",
+        "study-work"
+      ],
+      "verification": "pending-verification",
+      "operations": [
+        {
+          "id": "reply",
+          "kind": "text",
+          "enabled": false,
+          "inputs": {
+            "images": {
+              "support": "unknown",
+              "enabled": false
+            },
+            "video": {
+              "support": "unknown",
+              "enabled": false
+            },
+            "audio": {
+              "support": "unknown",
+              "enabled": false
+            },
+            "documents": {
+              "support": "unknown",
+              "enabled": false
+            },
+            "max_total_bytes": 0
+          },
+          "text": {
+            "estimate_credits": 5,
+            "max_prompt_bytes": 7680,
+            "max_output_tokens": 2048
+          }
+        }
+      ],
+      "capabilities": {
+        "schema_version": 1,
+        "api": {
+          "text": {
+            "images": {
+              "support": "unknown",
+              "extensions": [],
+              "max_count": null
+            },
+            "videos": {
+              "support": "unknown",
+              "extensions": [],
+              "max_count": null
+            },
+            "files": {
+              "support": "unknown",
+              "extensions": [],
+              "max_count": null
+            }
+          },
+          "notes": [
+            "Возможности работы с вложениями у провайдера пока не подтверждены."
+          ]
+        },
+        "application": {
+          "text": {
+            "images": {
+              "support": "unsupported",
+              "extensions": [],
+              "max_count": 0
+            },
+            "videos": {
+              "support": "unsupported",
+              "extensions": [],
+              "max_count": 0
+            },
+            "files": {
+              "support": "unsupported",
+              "extensions": [],
+              "max_count": 0
+            }
+          },
+          "notes": [
+            "Сейчас можно отправить только текст. Фото, видео, аудио, PDF и другие файлы в запрос не передаются."
+          ]
+        }
+      }
+    },
+    {
+      "id": "deepseek_v4_pro",
+      "name": "DeepSeek V4 Pro",
+      "description": "Ожидает проверки перед запуском.",
+      "kind": "text",
+      "categories": [
+        "text",
+        "study-work"
+      ],
+      "verification": "pending-verification",
+      "operations": [
+        {
+          "id": "reply",
+          "kind": "text",
+          "enabled": false,
+          "inputs": {
+            "images": {
+              "support": "unknown",
+              "enabled": false
+            },
+            "video": {
+              "support": "unknown",
+              "enabled": false
+            },
+            "audio": {
+              "support": "unknown",
+              "enabled": false
+            },
+            "documents": {
+              "support": "unknown",
+              "enabled": false
+            },
+            "max_total_bytes": 0
+          },
+          "text": {
+            "estimate_credits": 10,
+            "max_prompt_bytes": 7680,
+            "max_output_tokens": 2048
+          }
+        }
+      ],
+      "capabilities": {
+        "schema_version": 1,
+        "api": {
+          "text": {
+            "images": {
+              "support": "unknown",
+              "extensions": [],
+              "max_count": null
+            },
+            "videos": {
+              "support": "unknown",
+              "extensions": [],
+              "max_count": null
+            },
+            "files": {
+              "support": "unknown",
+              "extensions": [],
+              "max_count": null
+            }
+          },
+          "notes": [
+            "Возможности работы с вложениями у провайдера пока не подтверждены."
+          ]
+        },
+        "application": {
+          "text": {
+            "images": {
+              "support": "unsupported",
+              "extensions": [],
+              "max_count": 0
+            },
+            "videos": {
+              "support": "unsupported",
+              "extensions": [],
+              "max_count": 0
+            },
+            "files": {
+              "support": "unsupported",
+              "extensions": [],
+              "max_count": 0
+            }
+          },
+          "notes": [
+            "Сейчас можно отправить только текст. Фото, видео, аудио, PDF и другие файлы в запрос не передаются."
+          ]
+        }
+      }
+    },
+    {
+      "id": "deepseek_v4_flash",
+      "name": "DeepSeek V4 Flash",
+      "description": "Ожидает проверки перед запуском.",
+      "kind": "text",
+      "categories": [
+        "text",
+        "study-work"
+      ],
+      "verification": "pending-verification",
+      "operations": [
+        {
+          "id": "reply",
+          "kind": "text",
+          "enabled": false,
+          "inputs": {
+            "images": {
+              "support": "unknown",
+              "enabled": false
+            },
+            "video": {
+              "support": "unknown",
+              "enabled": false
+            },
+            "audio": {
+              "support": "unknown",
+              "enabled": false
+            },
+            "documents": {
+              "support": "unknown",
+              "enabled": false
+            },
+            "max_total_bytes": 0
+          },
+          "text": {
+            "estimate_credits": 5,
+            "max_prompt_bytes": 7680,
+            "max_output_tokens": 2048
+          }
+        }
+      ],
+      "capabilities": {
+        "schema_version": 1,
+        "api": {
+          "text": {
+            "images": {
+              "support": "unknown",
+              "extensions": [],
+              "max_count": null
+            },
+            "videos": {
+              "support": "unknown",
+              "extensions": [],
+              "max_count": null
+            },
+            "files": {
+              "support": "unknown",
+              "extensions": [],
+              "max_count": null
+            }
+          },
+          "notes": [
+            "Возможности работы с вложениями у провайдера пока не подтверждены."
+          ]
+        },
+        "application": {
+          "text": {
+            "images": {
+              "support": "unsupported",
+              "extensions": [],
+              "max_count": 0
+            },
+            "videos": {
+              "support": "unsupported",
+              "extensions": [],
+              "max_count": 0
+            },
+            "files": {
+              "support": "unsupported",
+              "extensions": [],
+              "max_count": 0
+            }
+          },
+          "notes": [
+            "Сейчас можно отправить только текст. Фото, видео, аудио, PDF и другие файлы в запрос не передаются."
+          ]
+        }
+      }
+    },
+    {
+      "id": "deepseek_v3_2",
+      "name": "DeepSeek V3.2",
+      "description": "Ожидает проверки перед запуском.",
+      "kind": "text",
+      "categories": [
+        "text",
+        "study-work"
+      ],
+      "verification": "pending-verification",
+      "operations": [
+        {
+          "id": "reply",
+          "kind": "text",
+          "enabled": false,
+          "inputs": {
+            "images": {
+              "support": "unknown",
+              "enabled": false
+            },
+            "video": {
+              "support": "unknown",
+              "enabled": false
+            },
+            "audio": {
+              "support": "unknown",
+              "enabled": false
+            },
+            "documents": {
+              "support": "unknown",
+              "enabled": false
+            },
+            "max_total_bytes": 0
+          },
+          "text": {
+            "estimate_credits": 5,
+            "max_prompt_bytes": 7680,
+            "max_output_tokens": 2048
+          }
+        }
+      ],
+      "capabilities": {
+        "schema_version": 1,
+        "api": {
+          "text": {
+            "images": {
+              "support": "unknown",
+              "extensions": [],
+              "max_count": null
+            },
+            "videos": {
+              "support": "unknown",
+              "extensions": [],
+              "max_count": null
+            },
+            "files": {
+              "support": "unknown",
+              "extensions": [],
+              "max_count": null
+            }
+          },
+          "notes": [
+            "Возможности работы с вложениями у провайдера пока не подтверждены."
+          ]
+        },
+        "application": {
+          "text": {
+            "images": {
+              "support": "unsupported",
+              "extensions": [],
+              "max_count": 0
+            },
+            "videos": {
+              "support": "unsupported",
+              "extensions": [],
+              "max_count": 0
+            },
+            "files": {
+              "support": "unsupported",
+              "extensions": [],
+              "max_count": 0
+            }
+          },
+          "notes": [
+            "Сейчас можно отправить только текст. Фото, видео, аудио, PDF и другие файлы в запрос не передаются."
+          ]
+        }
+      }
+    },
+    {
+      "id": "deepseek_v3_2_exp",
+      "name": "DeepSeek V3.2 Exp",
+      "description": "Ожидает проверки перед запуском.",
+      "kind": "text",
+      "categories": [
+        "text",
+        "study-work"
+      ],
+      "verification": "pending-verification",
+      "operations": [
+        {
+          "id": "reply",
+          "kind": "text",
+          "enabled": false,
+          "inputs": {
+            "images": {
+              "support": "unknown",
+              "enabled": false
+            },
+            "video": {
+              "support": "unknown",
+              "enabled": false
+            },
+            "audio": {
+              "support": "unknown",
+              "enabled": false
+            },
+            "documents": {
+              "support": "unknown",
+              "enabled": false
+            },
+            "max_total_bytes": 0
+          },
+          "text": {
+            "estimate_credits": 5,
+            "max_prompt_bytes": 7680,
+            "max_output_tokens": 2048
+          }
+        }
+      ],
+      "capabilities": {
+        "schema_version": 1,
+        "api": {
+          "text": {
+            "images": {
+              "support": "unknown",
+              "extensions": [],
+              "max_count": null
+            },
+            "videos": {
+              "support": "unknown",
+              "extensions": [],
+              "max_count": null
+            },
+            "files": {
+              "support": "unknown",
+              "extensions": [],
+              "max_count": null
+            }
+          },
+          "notes": [
+            "Возможности работы с вложениями у провайдера пока не подтверждены."
+          ]
+        },
+        "application": {
+          "text": {
+            "images": {
+              "support": "unsupported",
+              "extensions": [],
+              "max_count": 0
+            },
+            "videos": {
+              "support": "unsupported",
+              "extensions": [],
+              "max_count": 0
+            },
+            "files": {
+              "support": "unsupported",
+              "extensions": [],
+              "max_count": 0
+            }
+          },
+          "notes": [
+            "Сейчас можно отправить только текст. Фото, видео, аудио, PDF и другие файлы в запрос не передаются."
+          ]
+        }
+      }
+    },
+    {
+      "id": "deepseek_r1_250528",
+      "name": "DeepSeek R1 (250528)",
+      "description": "Ожидает проверки перед запуском.",
+      "kind": "text",
+      "categories": [
+        "text",
+        "study-work"
+      ],
+      "verification": "pending-verification",
+      "operations": [
+        {
+          "id": "reply",
+          "kind": "text",
+          "enabled": false,
+          "inputs": {
+            "images": {
+              "support": "unknown",
+              "enabled": false
+            },
+            "video": {
+              "support": "unknown",
+              "enabled": false
+            },
+            "audio": {
+              "support": "unknown",
+              "enabled": false
+            },
+            "documents": {
+              "support": "unknown",
+              "enabled": false
+            },
+            "max_total_bytes": 0
+          },
+          "text": {
+            "estimate_credits": 5,
+            "max_prompt_bytes": 7680,
+            "max_output_tokens": 2048
+          }
+        }
+      ],
+      "capabilities": {
+        "schema_version": 1,
+        "api": {
+          "text": {
+            "images": {
+              "support": "unknown",
+              "extensions": [],
+              "max_count": null
+            },
+            "videos": {
+              "support": "unknown",
+              "extensions": [],
+              "max_count": null
+            },
+            "files": {
+              "support": "unknown",
+              "extensions": [],
+              "max_count": null
+            }
+          },
+          "notes": [
+            "Возможности работы с вложениями у провайдера пока не подтверждены."
+          ]
+        },
+        "application": {
+          "text": {
+            "images": {
+              "support": "unsupported",
+              "extensions": [],
+              "max_count": 0
+            },
+            "videos": {
+              "support": "unsupported",
+              "extensions": [],
+              "max_count": 0
+            },
+            "files": {
+              "support": "unsupported",
+              "extensions": [],
+              "max_count": 0
+            }
+          },
+          "notes": [
+            "Сейчас можно отправить только текст. Фото, видео, аудио, PDF и другие файлы в запрос не передаются."
+          ]
+        }
+      }
+    },
+    {
+      "id": "deepseek_v3_0324",
+      "name": "DeepSeek V3 (0324)",
+      "description": "Ожидает проверки перед запуском.",
+      "kind": "text",
+      "categories": [
+        "text",
+        "study-work"
+      ],
+      "verification": "pending-verification",
+      "operations": [
+        {
+          "id": "reply",
+          "kind": "text",
+          "enabled": false,
+          "inputs": {
+            "images": {
+              "support": "unknown",
+              "enabled": false
+            },
+            "video": {
+              "support": "unknown",
+              "enabled": false
+            },
+            "audio": {
+              "support": "unknown",
+              "enabled": false
+            },
+            "documents": {
+              "support": "unknown",
+              "enabled": false
+            },
+            "max_total_bytes": 0
+          },
+          "text": {
+            "estimate_credits": 5,
+            "max_prompt_bytes": 7680,
+            "max_output_tokens": 2048
+          }
+        }
+      ],
+      "capabilities": {
+        "schema_version": 1,
+        "api": {
+          "text": {
+            "images": {
+              "support": "unknown",
+              "extensions": [],
+              "max_count": null
+            },
+            "videos": {
+              "support": "unknown",
+              "extensions": [],
+              "max_count": null
+            },
+            "files": {
+              "support": "unknown",
+              "extensions": [],
+              "max_count": null
+            }
+          },
+          "notes": [
+            "Возможности работы с вложениями у провайдера пока не подтверждены."
+          ]
+        },
+        "application": {
+          "text": {
+            "images": {
+              "support": "unsupported",
+              "extensions": [],
+              "max_count": 0
+            },
+            "videos": {
+              "support": "unsupported",
+              "extensions": [],
+              "max_count": 0
+            },
+            "files": {
+              "support": "unsupported",
+              "extensions": [],
+              "max_count": 0
+            }
+          },
+          "notes": [
+            "Сейчас можно отправить только текст. Фото, видео, аудио, PDF и другие файлы в запрос не передаются."
+          ]
+        }
+      }
     }
   ]
 }

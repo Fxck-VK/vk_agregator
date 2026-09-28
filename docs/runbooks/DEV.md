@@ -11,12 +11,33 @@ it when APIMart has credentials; explicit `false` disables it. Application defau
 remain false. API and worker reject this flag outside `APP_ENV=development` and
 require APIMart readiness plus the video router. Deploy both processes together.
 
-This adds 16 candidates: Nano Banana, Imagen 4.0; HappyHorse 1.0/1.1, SkyReels V4
+This adds 16 media candidates: Nano Banana, Imagen 4.0; HappyHorse 1.0/1.1, SkyReels V4
 Fast/Standard, Wan 3.0, Vidu Q3 Pro, Grok Imagine 1.5 Video, Kling 2.6, Seedance 2.0
 Standard/Mini; Suno V6/Wild/Mini and Lyria 3.5. Images and videos accept text only;
 music exposes `generate` only. GPT-4o Mini TTS and Whisper remain disabled until
 bounded per-job billing is implemented. Reference-only legacy routes remain subject
 to their existing surface/input restrictions.
+
+It also exposes 21 text candidates from APIMart's documented Chat Completions
+list (checked 2026-09-28): GPT-5/5.1/5 Chat Latest/5 Mini; Claude Opus 4.6,
+Sonnet 4.6 and Opus 4.5 (20251101); Gemini 3.5 Flash, 3.1 Pro Preview,
+3 Pro Preview/Thinking, 3 Flash Preview, 2.5 Pro/Flash/Flash Lite; DeepSeek
+V4 Pro/Flash, V3.2/Exp, R1 (250528) and V3 (0324). Existing KIE routes, including
+Opus 4.7/4.8 and Gemini 3.1 Pro, are preserved. Preview has its own exact ID.
+
+New text routes use `POST /v1/chat/completions`, `stream:false` and `max_tokens:2048`.
+The application reserves a fixed bounded reply: at most 8192 input tokens including
+trusted framing, with a 7680 UTF-8-byte prompt/context budget, and 2048 output tokens.
+The full provider context window is unknown; pricing metadata's input ceiling is
+not advertised as that window. All attachments remain disabled. Rates use the
+public default-group effective price, without cache or membership discounts,
+then x3 rounded up to five internal credits. Source facts are recorded in
+`internal/service/pricingcatalog/testdata/apimart-text-20260928.json`.
+These candidates do not inherit `APIMART_TEXT_LIMITS_VERIFIED`: live limit/usage
+checks remain outstanding. That flag still gates the existing Fable 5.1 route.
+Check every candidate's usable answer, usage bounds and actual charge manually;
+in particular, thinking/reasoning must fit the total output budget. Missing usage,
+an over-budget answer or an ambiguous response fails without automatic resubmission.
 
 `GET /web/v1/models` marks these models `dev-smoke`, never verified. Auth, owned
 Jobs/artifacts, reservations, idempotency, moderation and capture/release remain

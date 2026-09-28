@@ -22,10 +22,13 @@ func TestWorkspaceCapabilitiesDescribeActualSubmissionSurface(t *testing.T) {
 			expected := providermodels.Capabilities(model.ID)
 			if model.Verification == "pending-verification" {
 				candidate, ok := providermodels.MediaCandidateByID(model.ID)
-				if !ok {
+				_, textCandidate := providermodels.TextCandidateByID(model.ID)
+				if !ok && !textCandidate {
 					t.Fatal("pending model lacks source-backed candidate metadata")
 				}
-				expected = &candidate.Capabilities
+				if ok {
+					expected = &candidate.Capabilities
+				}
 				for _, operation := range model.Operations {
 					if operation.Enabled {
 						t.Fatal("pending operation became executable")

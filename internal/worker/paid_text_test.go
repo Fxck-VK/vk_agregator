@@ -27,6 +27,26 @@ type interruptedTextCheckpoint struct {
 	interrupt bool
 }
 
+func allTextTestPrices(t *testing.T) *pricingcatalog.Catalog {
+	t.Helper()
+	prices, err := pricingcatalog.NewStaticCatalog()
+	if err != nil {
+		t.Fatal(err)
+	}
+	var extra []pricingcatalog.ProductPrice
+	for _, c := range providermodels.TextCandidates() {
+		q, err := pricingcatalog.TextCandidateQuote(c.PublicID)
+		if err != nil {
+			t.Fatal(err)
+		}
+		extra = append(extra, pricingcatalog.ProductPrice{Key: q.Key, Version: q.Version, Source: q.Source, Enabled: true, Floor: q.Floor, Multiplier: q.Multiplier, UnitConversion: q.UnitConversion, Caps: pricingcatalog.SafetyCaps{InternalCreditCap: q.InternalCreditCap, FloorAmountCap: q.FloorAmountCap}})
+	}
+	if err := prices.AddSupplemental(extra); err != nil {
+		t.Fatal(err)
+	}
+	return prices
+}
+
 func (r *interruptedTextCheckpoint) Update(ctx context.Context, task *domain.ProviderTask) error {
 	if r.interrupt && task.ExternalID != "" {
 		r.interrupt = false
@@ -36,7 +56,7 @@ func (r *interruptedTextCheckpoint) Update(ctx context.Context, task *domain.Pro
 }
 
 func TestPaidTextRestartUsesArtifactWithoutSecondProviderCall(t *testing.T) {
-	for _, model := range providermodels.PaidTextModels() {
+	for _, model := range providermodels.KnownPaidTextModels() {
 		t.Run(model.PublicID, func(t *testing.T) {
 			ctx := context.Background()
 			calls := 0
@@ -73,7 +93,7 @@ func TestPaidTextRestartUsesArtifactWithoutSecondProviderCall(t *testing.T) {
 				d.Tasks = &interruptedTextCheckpoint{ProviderTaskRepository: d.Tasks, interrupt: true}
 				deps = *d
 			})
-			prices, _ := pricingcatalog.NewStaticCatalog()
+			prices := allTextTestPrices(t)
 			snapshot, _ := prices.Snapshot(textgeneration.Key(model.PublicID))
 			raw, _ := json.Marshal(snapshot)
 			owner := uuid.New()
@@ -129,7 +149,7 @@ func TestPaidTextRestartUsesArtifactWithoutSecondProviderCall(t *testing.T) {
 }
 
 func TestPaidTextMissingReserveNeverCallsProvider(t *testing.T) {
-	for _, model := range providermodels.PaidTextModels() {
+	for _, model := range providermodels.KnownPaidTextModels() {
 		t.Run(model.PublicID, func(t *testing.T) {
 			calls := 0
 			srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) { calls++ }))
@@ -157,7 +177,7 @@ func TestPaidTextMissingReserveNeverCallsProvider(t *testing.T) {
 }
 
 func TestPaidTextAmbiguousResponseReleasesReserveWithoutRetry(t *testing.T) {
-	for _, id := range []string{"gpt_6_astra", "claude_fable_5_1"} {
+	for _, id := range []string{"gpt_6_astra", "claude_fable_5_1", "gpt_5", "deepseek_r1_250528"} {
 		t.Run(id, func(t *testing.T) {
 			model, _ := providermodels.PaidTextModel(id)
 			calls := 0
@@ -175,7 +195,7 @@ func TestPaidTextAmbiguousResponseReleasesReserveWithoutRetry(t *testing.T) {
 			billingRepo := memory.NewBillingRepo()
 			billing := billingservice.New(billingRepo, billingservice.WithStartingBalance(1000))
 			h := newHarnessWithProvider(t, provider, func(d *worker.Deps) { d.Releaser = billing })
-			prices, _ := pricingcatalog.NewStaticCatalog()
+			prices := allTextTestPrices(t)
 			snapshot, _ := prices.Snapshot(textgeneration.Key(id))
 			raw, _ := json.Marshal(snapshot)
 			params, _ := json.Marshal(map[string]string{"prompt": "Synthetic", "provider": string(model.Provider), "model_id": id, "model_code": model.ProviderModelID})

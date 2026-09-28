@@ -71,22 +71,37 @@ func (c Config) TextModelEnabled(publicID string) bool {
 	case providermodels.PublicTextGemini36Flash:
 		return c.FeatureTextGemini36FlashEnabled
 	}
+	if _, ok := providermodels.TextCandidateByID(publicID); ok {
+		return c.Env == "development" && c.FeatureDEVModelSmokeEnabled
+	}
 	return false
 }
 
 func (c Config) APIMartTextModels() []string {
-	if !c.FeatureTextClaudeFable51Enabled || !c.APIMartProviderEnabled || !c.APIMartTextLimitsVerified || strings.TrimSpace(c.APIMartAPIKey) == "" || strings.TrimSpace(c.APIMartBaseURL) == "" {
+	if !c.APIMartProviderEnabled || strings.TrimSpace(c.APIMartAPIKey) == "" || strings.TrimSpace(c.APIMartBaseURL) == "" {
 		return nil
 	}
-	return []string{providermodels.ModelClaudeFable51}
+	var out []string
+	if c.FeatureTextClaudeFable51Enabled && c.APIMartTextLimitsVerified {
+		out = append(out, providermodels.ModelClaudeFable51)
+	}
+	if c.Env == "development" && c.FeatureDEVModelSmokeEnabled {
+		for _, model := range providermodels.TextCandidates() {
+			out = append(out, model.ModelCode)
+		}
+	}
+	return out
 }
 
 func (c Config) validateAPIMartText() error {
-	if !c.FeatureTextClaudeFable51Enabled {
+	if !c.FeatureTextClaudeFable51Enabled && !c.FeatureDEVModelSmokeEnabled {
 		return nil
 	}
-	if !c.APIMartProviderEnabled || strings.TrimSpace(c.APIMartAPIKey) == "" || !c.APIMartTextLimitsVerified {
-		return fmt.Errorf("config: APIMart text requires enabled provider, API key and APIMART_TEXT_LIMITS_VERIFIED")
+	if !c.APIMartProviderEnabled || strings.TrimSpace(c.APIMartAPIKey) == "" {
+		return fmt.Errorf("config: APIMart text requires enabled provider and API key")
+	}
+	if c.FeatureTextClaudeFable51Enabled && !c.APIMartTextLimitsVerified {
+		return fmt.Errorf("config: Fable 5.1 requires APIMART_TEXT_LIMITS_VERIFIED")
 	}
 	u, err := url.Parse(c.APIMartBaseURL)
 	if err != nil || u.Scheme != "https" || u.Host != "api.apimart.ai" || u.User != nil || u.RawQuery != "" || u.Fragment != "" || strings.TrimRight(u.Path, "/") != "/v1" {

@@ -96,6 +96,9 @@ func unknownInput() InputCapability { return inputCapability(Unknown, nil) }
 // Capabilities returns a fresh, safe metadata value with no provider identifiers,
 // secrets, URLs, or prices. It does not enable models or broaden accepted input.
 func Capabilities(publicID string) *ModelCapabilities {
+	if c, ok := TextCandidateByID(publicID); ok {
+		return textCapabilities(c.Alias())
+	}
 	r := StaticRegistry()
 	for _, m := range r.TextAliases {
 		if m.PublicID == publicID {
