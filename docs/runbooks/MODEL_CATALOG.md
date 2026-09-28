@@ -273,4 +273,4 @@ An explicitly configured DEV runtime exposes 16 priced media candidates as
 claiming completed onboarding. Static preview and production keep candidates
 pending. Candidate input restrictions and server quotes remain authoritative.
 Speech without bounded billing remains disabled. Scope and rollback:
-[DEV runbook](DEV.md#manual-model-smoke-on-dev).
+[DEV runbook](../../docs/runbooks/DEV.md#manual-model-smoke-on-dev).
