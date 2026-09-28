@@ -1,4 +1,5 @@
 import type { ChatModel, ImageModel } from "@/lib/web-api/contracts";
+import { projectMusicModelCatalog } from "@/features/music/music-model-catalog";
 
 import type { VideoModel } from "./video-model-catalog";
 import { chatModelForSelector } from "./chat-model-selector";
@@ -21,8 +22,10 @@ export type GenerationModel = ModelSelectorModel & GenerationModelMetadata & (
  (ChatModel & { category: "text" }) | (ImageModel & { category: "images" }) | (VideoModel & { category: "video" })
 );
 
+export type WorkspaceCatalogModel = GenerationModel | (ModelSelectorModel & GenerationModelMetadata & { category: "audio" });
+
 export type GenerationModelCatalog = {
- items: GenerationModel[];
+ items: WorkspaceCatalogModel[];
  default_model_id: string;
  categoryErrors: Partial<Record<ModelSelectorCategoryId, string>>;
 };
@@ -39,10 +42,12 @@ export function projectGenerationModelCatalog(catalog: PublicCatalog) {
  const images = projectOrError(() => projectImageModelCatalog(catalog));
  const text = projectOrError(() => projectChatModelCatalog(catalog));
  const video = projectOrError(() => projectVideoModelCatalog(catalog));
+ const music = projectOrError(() => projectMusicModelCatalog(catalog));
  const imageByID = new Map((images.value?.items ?? []).map((model) => [model.id, model]));
  const textByID = new Map((text.value?.items ?? []).map((model) => [model.id, model]));
  const videoByID = new Map((video.value?.items ?? []).map((model) => [model.id, model]));
- const items = catalog.items.flatMap((catalogModel): GenerationModel[] => {
+ const musicByID = new Map((music.value?.models ?? []).filter(model => model.enabled).map(model => [model.id as string, model]));
+ const items = catalog.items.flatMap((catalogModel): WorkspaceCatalogModel[] => {
   if (catalogModel.kind === "text") {
    const chat = textByID.get(catalogModel.id);
    return chat ? [{ ...chat, ...chatModelForSelector(chat), category: "text" as const, operations: catalogModel.operations }] : [];
@@ -55,6 +60,16 @@ export function projectGenerationModelCatalog(catalog: PublicCatalog) {
    const videoModel = videoByID.get(catalogModel.id);
    return videoModel ? [{ ...videoModel, category: "video" as const, operations: catalogModel.operations }] : [];
   }
+  if (catalogModel.kind === "audio") {
+   const musicModel = musicByID.get(catalogModel.id);
+   const generate = musicModel?.operations.find(operation => operation.id === "generate" && operation.enabled);
+   return generate ? [{
+    id: catalogModel.id, name: catalogModel.name, category: "audio" as const,
+    categories: catalogModel.categories, description: catalogModel.description,
+    description_translations: catalogModel.description_translations,
+    estimate_credits: generate.estimateCredits ?? undefined, operations: catalogModel.operations,
+   }] : [];
+  }
   return [];
  });
  return {
@@ -64,6 +79,7 @@ export function projectGenerationModelCatalog(catalog: PublicCatalog) {
    ...(images.error ? { images: "models_load_failed" } : {}),
    ...(text.error ? { text: "models_load_failed", free: "models_load_failed", "study-work": "models_load_failed" } : {}),
    ...(video.error ? { video: "models_load_failed" } : {}),
+   ...(music.error ? { audio: "models_load_failed" } : {}),
   },
  };
 }
@@ -81,8 +97,8 @@ function allCategoryErrors() {
  };
 }
 
-// Both pickers and the new-chat form consume this exact adapter. Ordering,
-// categories and partial failures must not vary with picker placement.
+// Workspace discovery shares one adapter. Conversation consumers narrow items
+// to GenerationModel; music uses its separate editor and job API.
 export async function loadGenerationModelCatalog(): Promise<GenerationModelCatalog> {
  try {
   return projectGenerationModelCatalog(await loadModelCatalog());

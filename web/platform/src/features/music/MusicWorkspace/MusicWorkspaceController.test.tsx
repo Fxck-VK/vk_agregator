@@ -67,6 +67,23 @@ const pendingCatalog: MusicModelCatalog = {
 };
 
 describe("MusicWorkspaceController", () => {
+  it("selects a linked catalog model and responds to music-to-music navigation without starting jobs", async () => {
+    const api = apiStub();
+    const catalog: MusicModelCatalog = {
+      ...enabledCatalog,
+      models: [...enabledCatalog.models, { ...enabledCatalog.models[0], id: "lyria_3_5", name: "Lyria 3.5" }],
+    };
+    const loader = () => Promise.resolve(catalog);
+    const { rerender } = render(<MusicWorkspaceController api={api} catalogLoader={loader} requestedModelId="lyria_3_5" />);
+    await waitFor(() => expect(screen.getByRole("button", { name: "Lyria 3.5" })).toHaveAttribute("aria-pressed", "true"));
+    rerender(<MusicWorkspaceController api={api} catalogLoader={loader} requestedModelId="suno_v6" />);
+    await waitFor(() => expect(screen.getByRole("button", { name: "Suno V6" })).toHaveAttribute("aria-pressed", "true"));
+    rerender(<MusicWorkspaceController api={api} catalogLoader={loader} requestedModelId="not-a-model" />);
+    await waitFor(() => expect(screen.getByRole("button", { name: "Suno V6" })).toHaveAttribute("aria-pressed", "true"));
+    expect(api.prepareMusicJob).not.toHaveBeenCalled();
+    expect(api.activateMusicJob).not.toHaveBeenCalled();
+  });
+
   it("keeps pending catalog candidates visible but not runnable", async () => {
     const api = apiStub();
     render(<MusicWorkspaceController api={api} catalogLoader={() => Promise.resolve(pendingCatalog)} />);

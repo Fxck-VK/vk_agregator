@@ -6,7 +6,7 @@ import { useMessages } from "@/i18n/LocaleProvider";
 
 import { useEffect } from "react";
 
-import { type GenerationModel } from "@/features/models/generation-model-catalog";
+import type { GenerationModel, WorkspaceCatalogModel } from "@/features/models/generation-model-catalog";
 import { getModelPresentation } from "@/features/models/ModelCard/model-card-content";
 import { ModelIcon } from "@/features/models/ModelIcon/ModelIcon";
 
@@ -25,22 +25,22 @@ type FeaturedModelShortcutsProps = {
   disabled?: boolean;
 };
 
-function hasCategory(model: GenerationModel, category: string) {
+function hasCategory(model: WorkspaceCatalogModel, category: string) {
   return model.categories?.includes(category) ?? false;
 }
 
-function isImageModel(model: GenerationModel) {
-  return hasCategory(model, "images");
+function isImageModel(model: WorkspaceCatalogModel): model is Extract<GenerationModel, { category: "images" }> {
+  return model.category === "images" && hasCategory(model, "images");
 }
 
-function isTextModel(model: GenerationModel) {
-  return hasCategory(model, "text");
+function isTextModel(model: WorkspaceCatalogModel): model is Extract<GenerationModel, { category: "text" }> {
+  return model.category === "text" && hasCategory(model, "text");
 }
 
 export function FeaturedModelShortcuts({ selectedModelId, onSelect, onTextModelLoad, disabled = false }: FeaturedModelShortcutsProps) {
   const msg = useMessages();
   const { catalog, status } = useGenerationCatalog();
-  const chatModel = catalog?.items.find(model => model.id === catalog.default_model_id && isTextModel(model))
+  const chatModel = catalog?.items.find((model): model is Extract<GenerationModel, { category: "text" }> => model.id === catalog.default_model_id && isTextModel(model))
     ?? catalog?.items.find(isTextModel) ?? null;
   const models = catalog?.items.filter(isImageModel).slice(0, featuredModelShortcutLimit) ?? [];
   const loadState = status === "failure" ? "failed" : status;

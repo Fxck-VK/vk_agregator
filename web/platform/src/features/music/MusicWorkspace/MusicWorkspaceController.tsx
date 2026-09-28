@@ -48,6 +48,7 @@ export type MusicWorkspaceControllerProps = {
   api?: MusicWorkspaceAPI;
   catalogLoader?: () => Promise<MusicModelCatalog>;
   pollIntervalMs?: number;
+  requestedModelId?: string;
   uuidFactory?: () => string;
 };
 
@@ -101,6 +102,7 @@ export function MusicWorkspaceController({
   api = defaultMusicApi,
   catalogLoader = loadMusicModelCatalog,
   pollIntervalMs = 4_000,
+  requestedModelId,
   uuidFactory = () => crypto.randomUUID(),
 }: Readonly<MusicWorkspaceControllerProps>) {
   const msg = useMessages();
@@ -136,11 +138,13 @@ export function MusicWorkspaceController({
       if (!active) return;
       setCatalog(loadedCatalog);
       const firstModel = loadedCatalog.models[0];
-      const nextModelId = loadedCatalog.models.some((model) => model.id === loadedCatalog.defaultModelId)
-        ? loadedCatalog.defaultModelId
-        : firstModel?.id ?? "suno_v6";
+      const nextModelId = loadedCatalog.models.find((model) => model.id === requestedModelId)?.id
+        ?? loadedCatalog.models.find((model) => model.id === loadedCatalog.defaultModelId)?.id
+        ?? firstModel?.id ?? "suno_v6";
       setSelectedModelId(nextModelId);
       setActiveOperationId(null);
+      setConfirmationState(null);
+      setPreparedJob(null);
       if (loadedCatalog.models.length === 0) {
         setModelsStatus("empty");
         setModelsMessage(null);
@@ -157,7 +161,7 @@ export function MusicWorkspaceController({
     return () => {
       active = false;
     };
-  }, [catalogLoader]);
+  }, [catalogLoader, requestedModelId]);
 
   const selectedModel = useMemo(
     () => localizedCatalog.models.find((model) => model.id === selectedModelId) ?? localizedCatalog.models[0],

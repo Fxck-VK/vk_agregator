@@ -3,10 +3,11 @@
 import { useMessages } from "@/i18n/LocaleProvider";
 
 
-import { useCallback, useEffect, useState, useSyncExternalStore } from "react";
+import { useCallback, useEffect, useMemo, useState, useSyncExternalStore } from "react";
 
 import { ModelSelector } from "@/features/models/WorkspaceModelSelector/ModelSelector";
 import { useGenerationCatalog } from "@/features/models/GenerationCatalogProvider";
+import type { GenerationModel } from "@/features/models/generation-model-catalog";
 import { useWorkspaceModelSelection } from "@/features/models/WorkspaceModelSelection/WorkspaceModelSelection";
 
 import styles from "./ConversationModelSelector.module.css";
@@ -15,7 +16,14 @@ const subscribePreference = () => () => {};
 const serverPreference = () => "";
 
 export function useConversationModelSelection(conversationId: string) {
-  const { catalog, status } = useGenerationCatalog();
+  const { catalog: workspaceCatalog, status } = useGenerationCatalog();
+  const catalog = useMemo(() => {
+    if (!workspaceCatalog) return null;
+    const items = workspaceCatalog.items.filter((model): model is GenerationModel => model.category !== "audio");
+    const default_model_id = items.some(model => model.id === workspaceCatalog.default_model_id)
+      ? workspaceCatalog.default_model_id : items[0]?.id ?? "";
+    return { ...workspaceCatalog, items, default_model_id };
+  }, [workspaceCatalog]);
   const workspaceSelection = useWorkspaceModelSelection();
   const setConversationModel = workspaceSelection?.setConversationModel;
   const [preference, setPreference] = useState<{ conversationId: string; modelId: string } | null>(null);

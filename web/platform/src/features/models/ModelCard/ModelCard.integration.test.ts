@@ -2,6 +2,7 @@ import { readFileSync } from "node:fs";
 import { resolve } from "node:path";
 
 import { describe, expect, it } from "vitest";
+import { getModelPresentation } from "./model-card-content";
 
 function readSource(path: string) {
   return readFileSync(resolve(process.cwd(), path), "utf8");
@@ -28,7 +29,8 @@ describe("shared model-card integration", () => {
 
     expect(presentation).toContain("getModelPresentation");
     expect(presentation).not.toContain("modelPresentationById");
-    expect(presentation).toContain("/app/chats?model=${encodeURIComponent(model.id)}");
+    expect(getModelPresentation({ id: "image/1", name: "Image", category: "images" }).href).toBe("/app/chats?model=image%2F1");
+    expect(getModelPresentation({ id: "suno_v6", name: "Suno", category: "audio" }).href).toBe("/app/music?model=suno_v6");
     expect(card).toContain("getModelPresentation(model, msg)");
     expect(selector).toContain('<ModelSelectorOption');
     expect(selectorOption).toContain('<ModelCard');

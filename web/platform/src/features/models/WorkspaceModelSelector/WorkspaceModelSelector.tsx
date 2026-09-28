@@ -5,6 +5,7 @@ import { usePathname, useRouter, useSearchParams } from "@/i18n/navigation";
 import { useState } from "react";
 
 import { useGenerationCatalog } from "../GenerationCatalogProvider";
+import { modelWorkspaceHref } from "../ModelCard/model-card-content";
 import { RetryAction } from "@/components/ui/AsyncState/RetryAction";
 
 import { useWorkspaceModelSelection } from "../WorkspaceModelSelection/WorkspaceModelSelection";
@@ -36,7 +37,7 @@ export function WorkspaceModelSelector() {
   const selectModel = (model: ModelSelectorModel) => {
     setSelectedModelId(model.id);
     if (model.category === "images") setWorkspaceModelId?.(model.id);
-    router.push(`/app/chats?model=${encodeURIComponent(model.id)}`);
+    router.push(modelWorkspaceHref(model));
   };
 
   return (
