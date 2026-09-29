@@ -18,7 +18,7 @@ afterEach(cleanup);
 it("shows every new DEV text model under Text and makes the same models available to chat", () => {
   const source = parseModelCatalog(fixture);
   const candidates = source.items.filter(model => model.kind === "text" && model.verification === "pending-verification");
-  expect(candidates).toHaveLength(21);
+  expect(candidates).toHaveLength(34);
   const pendingIds = projectGenerationModelCatalog(source).items.map(model => model.id);
   for (const model of candidates) {
     expect(pendingIds).not.toContain(model.id);

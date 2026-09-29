@@ -32243,6 +32243,1163 @@
           ]
         }
       }
+    },
+    {
+      "id": "gpt_6_sol",
+      "name": "GPT-6 Sol",
+      "description": "Ожидает проверки перед запуском.",
+      "kind": "text",
+      "categories": [
+        "text",
+        "study-work"
+      ],
+      "verification": "pending-verification",
+      "operations": [
+        {
+          "id": "reply",
+          "kind": "text",
+          "enabled": false,
+          "inputs": {
+            "images": {
+              "support": "unknown",
+              "enabled": false
+            },
+            "video": {
+              "support": "unknown",
+              "enabled": false
+            },
+            "audio": {
+              "support": "unknown",
+              "enabled": false
+            },
+            "documents": {
+              "support": "unknown",
+              "enabled": false
+            },
+            "max_total_bytes": 0
+          },
+          "text": {
+            "estimate_credits": 20,
+            "max_prompt_bytes": 7680,
+            "max_output_tokens": 2048
+          }
+        }
+      ],
+      "capabilities": {
+        "schema_version": 1,
+        "api": {
+          "text": {
+            "images": {
+              "support": "unknown",
+              "extensions": [],
+              "max_count": null
+            },
+            "videos": {
+              "support": "unknown",
+              "extensions": [],
+              "max_count": null
+            },
+            "files": {
+              "support": "unknown",
+              "extensions": [],
+              "max_count": null
+            }
+          },
+          "notes": [
+            "Возможности работы с вложениями у провайдера пока не подтверждены."
+          ]
+        },
+        "application": {
+          "text": {
+            "images": {
+              "support": "unsupported",
+              "extensions": [],
+              "max_count": 0
+            },
+            "videos": {
+              "support": "unsupported",
+              "extensions": [],
+              "max_count": 0
+            },
+            "files": {
+              "support": "unsupported",
+              "extensions": [],
+              "max_count": 0
+            }
+          },
+          "notes": [
+            "Сейчас можно отправить только текст. Фото, видео, аудио, PDF и другие файлы в запрос не передаются."
+          ]
+        }
+      }
+    },
+    {
+      "id": "gpt_6_luna",
+      "name": "GPT-6 Luna",
+      "description": "Ожидает проверки перед запуском.",
+      "kind": "text",
+      "categories": [
+        "text",
+        "study-work"
+      ],
+      "verification": "pending-verification",
+      "operations": [
+        {
+          "id": "reply",
+          "kind": "text",
+          "enabled": false,
+          "inputs": {
+            "images": {
+              "support": "unknown",
+              "enabled": false
+            },
+            "video": {
+              "support": "unknown",
+              "enabled": false
+            },
+            "audio": {
+              "support": "unknown",
+              "enabled": false
+            },
+            "documents": {
+              "support": "unknown",
+              "enabled": false
+            },
+            "max_total_bytes": 0
+          },
+          "text": {
+            "estimate_credits": 5,
+            "max_prompt_bytes": 7680,
+            "max_output_tokens": 2048
+          }
+        }
+      ],
+      "capabilities": {
+        "schema_version": 1,
+        "api": {
+          "text": {
+            "images": {
+              "support": "unknown",
+              "extensions": [],
+              "max_count": null
+            },
+            "videos": {
+              "support": "unknown",
+              "extensions": [],
+              "max_count": null
+            },
+            "files": {
+              "support": "unknown",
+              "extensions": [],
+              "max_count": null
+            }
+          },
+          "notes": [
+            "Возможности работы с вложениями у провайдера пока не подтверждены."
+          ]
+        },
+        "application": {
+          "text": {
+            "images": {
+              "support": "unsupported",
+              "extensions": [],
+              "max_count": 0
+            },
+            "videos": {
+              "support": "unsupported",
+              "extensions": [],
+              "max_count": 0
+            },
+            "files": {
+              "support": "unsupported",
+              "extensions": [],
+              "max_count": 0
+            }
+          },
+          "notes": [
+            "Сейчас можно отправить только текст. Фото, видео, аудио, PDF и другие файлы в запрос не передаются."
+          ]
+        }
+      }
+    },
+    {
+      "id": "gpt_5_4",
+      "name": "GPT-5.4",
+      "description": "Ожидает проверки перед запуском.",
+      "kind": "text",
+      "categories": [
+        "text",
+        "study-work"
+      ],
+      "verification": "pending-verification",
+      "operations": [
+        {
+          "id": "reply",
+          "kind": "text",
+          "enabled": false,
+          "inputs": {
+            "images": {
+              "support": "unknown",
+              "enabled": false
+            },
+            "video": {
+              "support": "unknown",
+              "enabled": false
+            },
+            "audio": {
+              "support": "unknown",
+              "enabled": false
+            },
+            "documents": {
+              "support": "unknown",
+              "enabled": false
+            },
+            "max_total_bytes": 0
+          },
+          "text": {
+            "estimate_credits": 25,
+            "max_prompt_bytes": 7680,
+            "max_output_tokens": 2048
+          }
+        }
+      ],
+      "capabilities": {
+        "schema_version": 1,
+        "api": {
+          "text": {
+            "images": {
+              "support": "unknown",
+              "extensions": [],
+              "max_count": null
+            },
+            "videos": {
+              "support": "unknown",
+              "extensions": [],
+              "max_count": null
+            },
+            "files": {
+              "support": "unknown",
+              "extensions": [],
+              "max_count": null
+            }
+          },
+          "notes": [
+            "Возможности работы с вложениями у провайдера пока не подтверждены."
+          ]
+        },
+        "application": {
+          "text": {
+            "images": {
+              "support": "unsupported",
+              "extensions": [],
+              "max_count": 0
+            },
+            "videos": {
+              "support": "unsupported",
+              "extensions": [],
+              "max_count": 0
+            },
+            "files": {
+              "support": "unsupported",
+              "extensions": [],
+              "max_count": 0
+            }
+          },
+          "notes": [
+            "Сейчас можно отправить только текст. Фото, видео, аудио, PDF и другие файлы в запрос не передаются."
+          ]
+        }
+      }
+    },
+    {
+      "id": "gpt_5_3_codex",
+      "name": "GPT-5.3 Codex",
+      "description": "Ожидает проверки перед запуском.",
+      "kind": "text",
+      "categories": [
+        "text",
+        "study-work"
+      ],
+      "verification": "pending-verification",
+      "operations": [
+        {
+          "id": "reply",
+          "kind": "text",
+          "enabled": false,
+          "inputs": {
+            "images": {
+              "support": "unknown",
+              "enabled": false
+            },
+            "video": {
+              "support": "unknown",
+              "enabled": false
+            },
+            "audio": {
+              "support": "unknown",
+              "enabled": false
+            },
+            "documents": {
+              "support": "unknown",
+              "enabled": false
+            },
+            "max_total_bytes": 0
+          },
+          "text": {
+            "estimate_credits": 25,
+            "max_prompt_bytes": 7680,
+            "max_output_tokens": 2048
+          }
+        }
+      ],
+      "capabilities": {
+        "schema_version": 1,
+        "api": {
+          "text": {
+            "images": {
+              "support": "unknown",
+              "extensions": [],
+              "max_count": null
+            },
+            "videos": {
+              "support": "unknown",
+              "extensions": [],
+              "max_count": null
+            },
+            "files": {
+              "support": "unknown",
+              "extensions": [],
+              "max_count": null
+            }
+          },
+          "notes": [
+            "Возможности работы с вложениями у провайдера пока не подтверждены."
+          ]
+        },
+        "application": {
+          "text": {
+            "images": {
+              "support": "unsupported",
+              "extensions": [],
+              "max_count": 0
+            },
+            "videos": {
+              "support": "unsupported",
+              "extensions": [],
+              "max_count": 0
+            },
+            "files": {
+              "support": "unsupported",
+              "extensions": [],
+              "max_count": 0
+            }
+          },
+          "notes": [
+            "Сейчас можно отправить только текст. Фото, видео, аудио, PDF и другие файлы в запрос не передаются."
+          ]
+        }
+      }
+    },
+    {
+      "id": "gpt_5_2",
+      "name": "GPT-5.2",
+      "description": "Ожидает проверки перед запуском.",
+      "kind": "text",
+      "categories": [
+        "text",
+        "study-work"
+      ],
+      "verification": "pending-verification",
+      "operations": [
+        {
+          "id": "reply",
+          "kind": "text",
+          "enabled": false,
+          "inputs": {
+            "images": {
+              "support": "unknown",
+              "enabled": false
+            },
+            "video": {
+              "support": "unknown",
+              "enabled": false
+            },
+            "audio": {
+              "support": "unknown",
+              "enabled": false
+            },
+            "documents": {
+              "support": "unknown",
+              "enabled": false
+            },
+            "max_total_bytes": 0
+          },
+          "text": {
+            "estimate_credits": 25,
+            "max_prompt_bytes": 7680,
+            "max_output_tokens": 2048
+          }
+        }
+      ],
+      "capabilities": {
+        "schema_version": 1,
+        "api": {
+          "text": {
+            "images": {
+              "support": "unknown",
+              "extensions": [],
+              "max_count": null
+            },
+            "videos": {
+              "support": "unknown",
+              "extensions": [],
+              "max_count": null
+            },
+            "files": {
+              "support": "unknown",
+              "extensions": [],
+              "max_count": null
+            }
+          },
+          "notes": [
+            "Возможности работы с вложениями у провайдера пока не подтверждены."
+          ]
+        },
+        "application": {
+          "text": {
+            "images": {
+              "support": "unsupported",
+              "extensions": [],
+              "max_count": 0
+            },
+            "videos": {
+              "support": "unsupported",
+              "extensions": [],
+              "max_count": 0
+            },
+            "files": {
+              "support": "unsupported",
+              "extensions": [],
+              "max_count": 0
+            }
+          },
+          "notes": [
+            "Сейчас можно отправить только текст. Фото, видео, аудио, PDF и другие файлы в запрос не передаются."
+          ]
+        }
+      }
+    },
+    {
+      "id": "claude_opus_5_5",
+      "name": "Claude Opus 5.5",
+      "description": "Ожидает проверки перед запуском.",
+      "kind": "text",
+      "categories": [
+        "text",
+        "study-work"
+      ],
+      "verification": "pending-verification",
+      "operations": [
+        {
+          "id": "reply",
+          "kind": "text",
+          "enabled": false,
+          "inputs": {
+            "images": {
+              "support": "unknown",
+              "enabled": false
+            },
+            "video": {
+              "support": "unknown",
+              "enabled": false
+            },
+            "audio": {
+              "support": "unknown",
+              "enabled": false
+            },
+            "documents": {
+              "support": "unknown",
+              "enabled": false
+            },
+            "max_total_bytes": 0
+          },
+          "text": {
+            "estimate_credits": 40,
+            "max_prompt_bytes": 7680,
+            "max_output_tokens": 2048
+          }
+        }
+      ],
+      "capabilities": {
+        "schema_version": 1,
+        "api": {
+          "text": {
+            "images": {
+              "support": "unknown",
+              "extensions": [],
+              "max_count": null
+            },
+            "videos": {
+              "support": "unknown",
+              "extensions": [],
+              "max_count": null
+            },
+            "files": {
+              "support": "unknown",
+              "extensions": [],
+              "max_count": null
+            }
+          },
+          "notes": [
+            "Возможности работы с вложениями у провайдера пока не подтверждены."
+          ]
+        },
+        "application": {
+          "text": {
+            "images": {
+              "support": "unsupported",
+              "extensions": [],
+              "max_count": 0
+            },
+            "videos": {
+              "support": "unsupported",
+              "extensions": [],
+              "max_count": 0
+            },
+            "files": {
+              "support": "unsupported",
+              "extensions": [],
+              "max_count": 0
+            }
+          },
+          "notes": [
+            "Сейчас можно отправить только текст. Фото, видео, аудио, PDF и другие файлы в запрос не передаются."
+          ]
+        }
+      }
+    },
+    {
+      "id": "claude_haiku_4_5_20251001",
+      "name": "Claude Haiku 4.5 (20251001)",
+      "description": "Ожидает проверки перед запуском.",
+      "kind": "text",
+      "categories": [
+        "text",
+        "study-work"
+      ],
+      "verification": "pending-verification",
+      "operations": [
+        {
+          "id": "reply",
+          "kind": "text",
+          "enabled": false,
+          "inputs": {
+            "images": {
+              "support": "unknown",
+              "enabled": false
+            },
+            "video": {
+              "support": "unknown",
+              "enabled": false
+            },
+            "audio": {
+              "support": "unknown",
+              "enabled": false
+            },
+            "documents": {
+              "support": "unknown",
+              "enabled": false
+            },
+            "max_total_bytes": 0
+          },
+          "text": {
+            "estimate_credits": 10,
+            "max_prompt_bytes": 7680,
+            "max_output_tokens": 2048
+          }
+        }
+      ],
+      "capabilities": {
+        "schema_version": 1,
+        "api": {
+          "text": {
+            "images": {
+              "support": "unknown",
+              "extensions": [],
+              "max_count": null
+            },
+            "videos": {
+              "support": "unknown",
+              "extensions": [],
+              "max_count": null
+            },
+            "files": {
+              "support": "unknown",
+              "extensions": [],
+              "max_count": null
+            }
+          },
+          "notes": [
+            "Возможности работы с вложениями у провайдера пока не подтверждены."
+          ]
+        },
+        "application": {
+          "text": {
+            "images": {
+              "support": "unsupported",
+              "extensions": [],
+              "max_count": 0
+            },
+            "videos": {
+              "support": "unsupported",
+              "extensions": [],
+              "max_count": 0
+            },
+            "files": {
+              "support": "unsupported",
+              "extensions": [],
+              "max_count": 0
+            }
+          },
+          "notes": [
+            "Сейчас можно отправить только текст. Фото, видео, аудио, PDF и другие файлы в запрос не передаются."
+          ]
+        }
+      }
+    },
+    {
+      "id": "kimi_k3",
+      "name": "Kimi K3",
+      "description": "Ожидает проверки перед запуском.",
+      "kind": "text",
+      "categories": [
+        "text",
+        "study-work"
+      ],
+      "verification": "pending-verification",
+      "operations": [
+        {
+          "id": "reply",
+          "kind": "text",
+          "enabled": false,
+          "inputs": {
+            "images": {
+              "support": "unknown",
+              "enabled": false
+            },
+            "video": {
+              "support": "unknown",
+              "enabled": false
+            },
+            "audio": {
+              "support": "unknown",
+              "enabled": false
+            },
+            "documents": {
+              "support": "unknown",
+              "enabled": false
+            },
+            "max_total_bytes": 0
+          },
+          "text": {
+            "estimate_credits": 30,
+            "max_prompt_bytes": 7680,
+            "max_output_tokens": 2048
+          }
+        }
+      ],
+      "capabilities": {
+        "schema_version": 1,
+        "api": {
+          "text": {
+            "images": {
+              "support": "unknown",
+              "extensions": [],
+              "max_count": null
+            },
+            "videos": {
+              "support": "unknown",
+              "extensions": [],
+              "max_count": null
+            },
+            "files": {
+              "support": "unknown",
+              "extensions": [],
+              "max_count": null
+            }
+          },
+          "notes": [
+            "Возможности работы с вложениями у провайдера пока не подтверждены."
+          ]
+        },
+        "application": {
+          "text": {
+            "images": {
+              "support": "unsupported",
+              "extensions": [],
+              "max_count": 0
+            },
+            "videos": {
+              "support": "unsupported",
+              "extensions": [],
+              "max_count": 0
+            },
+            "files": {
+              "support": "unsupported",
+              "extensions": [],
+              "max_count": 0
+            }
+          },
+          "notes": [
+            "Сейчас можно отправить только текст. Фото, видео, аудио, PDF и другие файлы в запрос не передаются."
+          ]
+        }
+      }
+    },
+    {
+      "id": "qwen_3_8_max",
+      "name": "Qwen 3.8 Max",
+      "description": "Ожидает проверки перед запуском.",
+      "kind": "text",
+      "categories": [
+        "text",
+        "study-work"
+      ],
+      "verification": "pending-verification",
+      "operations": [
+        {
+          "id": "reply",
+          "kind": "text",
+          "enabled": false,
+          "inputs": {
+            "images": {
+              "support": "unknown",
+              "enabled": false
+            },
+            "video": {
+              "support": "unknown",
+              "enabled": false
+            },
+            "audio": {
+              "support": "unknown",
+              "enabled": false
+            },
+            "documents": {
+              "support": "unknown",
+              "enabled": false
+            },
+            "max_total_bytes": 0
+          },
+          "text": {
+            "estimate_credits": 15,
+            "max_prompt_bytes": 7680,
+            "max_output_tokens": 2048
+          }
+        }
+      ],
+      "capabilities": {
+        "schema_version": 1,
+        "api": {
+          "text": {
+            "images": {
+              "support": "unknown",
+              "extensions": [],
+              "max_count": null
+            },
+            "videos": {
+              "support": "unknown",
+              "extensions": [],
+              "max_count": null
+            },
+            "files": {
+              "support": "unknown",
+              "extensions": [],
+              "max_count": null
+            }
+          },
+          "notes": [
+            "Возможности работы с вложениями у провайдера пока не подтверждены."
+          ]
+        },
+        "application": {
+          "text": {
+            "images": {
+              "support": "unsupported",
+              "extensions": [],
+              "max_count": 0
+            },
+            "videos": {
+              "support": "unsupported",
+              "extensions": [],
+              "max_count": 0
+            },
+            "files": {
+              "support": "unsupported",
+              "extensions": [],
+              "max_count": 0
+            }
+          },
+          "notes": [
+            "Сейчас можно отправить только текст. Фото, видео, аудио, PDF и другие файлы в запрос не передаются."
+          ]
+        }
+      }
+    },
+    {
+      "id": "qwen_3_7_flash",
+      "name": "Qwen 3.7 Flash",
+      "description": "Ожидает проверки перед запуском.",
+      "kind": "text",
+      "categories": [
+        "text",
+        "study-work"
+      ],
+      "verification": "pending-verification",
+      "operations": [
+        {
+          "id": "reply",
+          "kind": "text",
+          "enabled": false,
+          "inputs": {
+            "images": {
+              "support": "unknown",
+              "enabled": false
+            },
+            "video": {
+              "support": "unknown",
+              "enabled": false
+            },
+            "audio": {
+              "support": "unknown",
+              "enabled": false
+            },
+            "documents": {
+              "support": "unknown",
+              "enabled": false
+            },
+            "max_total_bytes": 0
+          },
+          "text": {
+            "estimate_credits": 5,
+            "max_prompt_bytes": 7680,
+            "max_output_tokens": 2048
+          }
+        }
+      ],
+      "capabilities": {
+        "schema_version": 1,
+        "api": {
+          "text": {
+            "images": {
+              "support": "unknown",
+              "extensions": [],
+              "max_count": null
+            },
+            "videos": {
+              "support": "unknown",
+              "extensions": [],
+              "max_count": null
+            },
+            "files": {
+              "support": "unknown",
+              "extensions": [],
+              "max_count": null
+            }
+          },
+          "notes": [
+            "Возможности работы с вложениями у провайдера пока не подтверждены."
+          ]
+        },
+        "application": {
+          "text": {
+            "images": {
+              "support": "unsupported",
+              "extensions": [],
+              "max_count": 0
+            },
+            "videos": {
+              "support": "unsupported",
+              "extensions": [],
+              "max_count": 0
+            },
+            "files": {
+              "support": "unsupported",
+              "extensions": [],
+              "max_count": 0
+            }
+          },
+          "notes": [
+            "Сейчас можно отправить только текст. Фото, видео, аудио, PDF и другие файлы в запрос не передаются."
+          ]
+        }
+      }
+    },
+    {
+      "id": "grok_4_5",
+      "name": "Grok 4.5",
+      "description": "Ожидает проверки перед запуском.",
+      "kind": "text",
+      "categories": [
+        "text",
+        "study-work"
+      ],
+      "verification": "pending-verification",
+      "operations": [
+        {
+          "id": "reply",
+          "kind": "text",
+          "enabled": false,
+          "inputs": {
+            "images": {
+              "support": "unknown",
+              "enabled": false
+            },
+            "video": {
+              "support": "unknown",
+              "enabled": false
+            },
+            "audio": {
+              "support": "unknown",
+              "enabled": false
+            },
+            "documents": {
+              "support": "unknown",
+              "enabled": false
+            },
+            "max_total_bytes": 0
+          },
+          "text": {
+            "estimate_credits": 15,
+            "max_prompt_bytes": 7680,
+            "max_output_tokens": 2048
+          }
+        }
+      ],
+      "capabilities": {
+        "schema_version": 1,
+        "api": {
+          "text": {
+            "images": {
+              "support": "unknown",
+              "extensions": [],
+              "max_count": null
+            },
+            "videos": {
+              "support": "unknown",
+              "extensions": [],
+              "max_count": null
+            },
+            "files": {
+              "support": "unknown",
+              "extensions": [],
+              "max_count": null
+            }
+          },
+          "notes": [
+            "Возможности работы с вложениями у провайдера пока не подтверждены."
+          ]
+        },
+        "application": {
+          "text": {
+            "images": {
+              "support": "unsupported",
+              "extensions": [],
+              "max_count": 0
+            },
+            "videos": {
+              "support": "unsupported",
+              "extensions": [],
+              "max_count": 0
+            },
+            "files": {
+              "support": "unsupported",
+              "extensions": [],
+              "max_count": 0
+            }
+          },
+          "notes": [
+            "Сейчас можно отправить только текст. Фото, видео, аудио, PDF и другие файлы в запрос не передаются."
+          ]
+        }
+      }
+    },
+    {
+      "id": "grok_4_6",
+      "name": "Grok 4.6",
+      "description": "Ожидает проверки перед запуском.",
+      "kind": "text",
+      "categories": [
+        "text",
+        "study-work"
+      ],
+      "verification": "pending-verification",
+      "operations": [
+        {
+          "id": "reply",
+          "kind": "text",
+          "enabled": false,
+          "inputs": {
+            "images": {
+              "support": "unknown",
+              "enabled": false
+            },
+            "video": {
+              "support": "unknown",
+              "enabled": false
+            },
+            "audio": {
+              "support": "unknown",
+              "enabled": false
+            },
+            "documents": {
+              "support": "unknown",
+              "enabled": false
+            },
+            "max_total_bytes": 0
+          },
+          "text": {
+            "estimate_credits": 15,
+            "max_prompt_bytes": 7680,
+            "max_output_tokens": 2048
+          }
+        }
+      ],
+      "capabilities": {
+        "schema_version": 1,
+        "api": {
+          "text": {
+            "images": {
+              "support": "unknown",
+              "extensions": [],
+              "max_count": null
+            },
+            "videos": {
+              "support": "unknown",
+              "extensions": [],
+              "max_count": null
+            },
+            "files": {
+              "support": "unknown",
+              "extensions": [],
+              "max_count": null
+            }
+          },
+          "notes": [
+            "Возможности работы с вложениями у провайдера пока не подтверждены."
+          ]
+        },
+        "application": {
+          "text": {
+            "images": {
+              "support": "unsupported",
+              "extensions": [],
+              "max_count": 0
+            },
+            "videos": {
+              "support": "unsupported",
+              "extensions": [],
+              "max_count": 0
+            },
+            "files": {
+              "support": "unsupported",
+              "extensions": [],
+              "max_count": 0
+            }
+          },
+          "notes": [
+            "Сейчас можно отправить только текст. Фото, видео, аудио, PDF и другие файлы в запрос не передаются."
+          ]
+        }
+      }
+    },
+    {
+      "id": "grok_4_7",
+      "name": "Grok 4.7",
+      "description": "Ожидает проверки перед запуском.",
+      "kind": "text",
+      "categories": [
+        "text",
+        "study-work"
+      ],
+      "verification": "pending-verification",
+      "operations": [
+        {
+          "id": "reply",
+          "kind": "text",
+          "enabled": false,
+          "inputs": {
+            "images": {
+              "support": "unknown",
+              "enabled": false
+            },
+            "video": {
+              "support": "unknown",
+              "enabled": false
+            },
+            "audio": {
+              "support": "unknown",
+              "enabled": false
+            },
+            "documents": {
+              "support": "unknown",
+              "enabled": false
+            },
+            "max_total_bytes": 0
+          },
+          "text": {
+            "estimate_credits": 15,
+            "max_prompt_bytes": 7680,
+            "max_output_tokens": 2048
+          }
+        }
+      ],
+      "capabilities": {
+        "schema_version": 1,
+        "api": {
+          "text": {
+            "images": {
+              "support": "unknown",
+              "extensions": [],
+              "max_count": null
+            },
+            "videos": {
+              "support": "unknown",
+              "extensions": [],
+              "max_count": null
+            },
+            "files": {
+              "support": "unknown",
+              "extensions": [],
+              "max_count": null
+            }
+          },
+          "notes": [
+            "Возможности работы с вложениями у провайдера пока не подтверждены."
+          ]
+        },
+        "application": {
+          "text": {
+            "images": {
+              "support": "unsupported",
+              "extensions": [],
+              "max_count": 0
+            },
+            "videos": {
+              "support": "unsupported",
+              "extensions": [],
+              "max_count": 0
+            },
+            "files": {
+              "support": "unsupported",
+              "extensions": [],
+              "max_count": 0
+            }
+          },
+          "notes": [
+            "Сейчас можно отправить только текст. Фото, видео, аудио, PDF и другие файлы в запрос не передаются."
+          ]
+        }
+      }
     }
   ]
 }

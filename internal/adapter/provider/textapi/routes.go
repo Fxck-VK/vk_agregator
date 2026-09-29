@@ -30,6 +30,9 @@ func route(model string) (modelRoute, bool) {
 		if err != nil {
 			return modelRoute{}, false
 		}
+		if c.EndpointPath() == "/v1/responses" {
+			return modelRoute{"/responses", responses, (q.Floor.Amount + 99999) / 100000}, true
+		}
 		return modelRoute{"/chat/completions", openAIChat, (q.Floor.Amount + 99999) / 100000}, true
 	}
 	switch model {

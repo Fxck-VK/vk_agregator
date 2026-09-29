@@ -41,7 +41,7 @@ func TestTextCandidateContractsRemainHonestDrafts(t *testing.T) {
 		}
 		seen[candidate.PublicID] = true
 		c := DraftTextContract(candidate)
-		if c.ValidateReady() == nil || c.Status != "draft" || len(c.Sources) != 3 || c.RegistryFingerprint != "" {
+		if c.ValidateReady() == nil || c.Status != "draft" || len(c.Sources) < 3 || c.RegistryFingerprint != "" {
 			t.Fatal("candidate forged admission")
 		}
 		for _, check := range c.Checks {
@@ -50,7 +50,7 @@ func TestTextCandidateContractsRemainHonestDrafts(t *testing.T) {
 			}
 		}
 		for _, source := range c.Sources {
-			if source.CheckedAt != TextCandidateCheckedAt {
+			if source.CheckedAt == "" || source.CheckedAt != candidate.CheckedAt {
 				t.Fatal("undated source")
 			}
 		}
@@ -58,7 +58,27 @@ func TestTextCandidateContractsRemainHonestDrafts(t *testing.T) {
 			t.Fatal("unwired inputs enabled")
 		}
 	}
-	if len(seen) != 21 {
+	if len(seen) != 34 {
 		t.Fatal("incomplete documented list")
+	}
+}
+
+func TestStudy24TextVersionsNeverSubstituteUnlistedModels(t *testing.T) {
+	for _, id := range []string{"claude_sonnet_5_5", "gemini_3_1_flash"} {
+		if _, ok := TextCandidateByID(id); ok {
+			t.Fatalf("unlisted model %s enabled", id)
+		}
+	}
+	qwen, ok := TextCandidateByID("qwen_3_8_max")
+	if !ok {
+		t.Fatal("missing Qwen")
+	}
+	c := DraftTextContract(qwen)
+	if c.Endpoint != "POST /v1/responses" || c.Revision != "2026-09-29" || len(c.Sources) != 5 {
+		t.Fatal("Qwen contract lost model-specific protocol evidence")
+	}
+	old, _ := TextCandidateByID("gpt_5")
+	if DraftTextContract(old).Revision != "2026-09-28" {
+		t.Fatal("old evidence dates refreshed without re-verification")
 	}
 }

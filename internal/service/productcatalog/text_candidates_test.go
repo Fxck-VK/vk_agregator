@@ -31,7 +31,7 @@ func TestTextCandidateCatalogToSubmission(t *testing.T) {
 		t.Fatal(err)
 	}
 	list := WorkspaceCatalog(WorkspaceConfig{TextModels: runtime.TextModels, Pricing: prices, IncludePendingText: true})
-	if len(list.Items) != 22 || len(cfg.APIMartTextModels()) != 21 {
+	if len(list.Items) != 35 || len(cfg.APIMartTextModels()) != 34 {
 		t.Fatal("missing or duplicated text candidates")
 	}
 	for _, c := range providermodels.TextCandidates() {

@@ -3032,6 +3032,14 @@ A unique provider_tasks submit intent precedes paid HTTP. ImmediateResult is tra
 Model flags, provider credentials, exact prices and the matching KIE_TEXT_LIMITS_VERIFIED or APIMART_TEXT_LIMITS_VERIFIED gate must all be ready. Verification gates are independent; all new model flags default to false. Static pricing version 11 adds the eight new models with cost times three rounded up to five credits. Unconfirmed native output-limit semantics keep rollout disabled. See docs/runbooks/KIE_TEXT_MODELS.md for contracts, prices, tests and rollout gates.
 
 
+Additional APIMart text candidates are available only in the explicitly enabled
+DEV smoke runtime, with dated evidence and bounded reply quotes. The September 29
+extension adds 13 exact IDs. Qwen 3.8 Max uses /v1/responses with a combined
+reasoning/output cap; other new routes use Chat Completions. Tools, explicit
+cache creation and attachments remain closed. Worker submit intent, artifact
+checkpointing, moderation and ledger semantics are unchanged. These candidates
+remain draft until live admission; see docs/runbooks/MODEL_ONBOARDING.md.
+
 ## Signed video references for APIMart Motion Control
 
 Mini App video uploads are authenticated and probed in cmd/api before private input

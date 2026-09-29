@@ -25,7 +25,22 @@ Sonnet 4.6 and Opus 4.5 (20251101); Gemini 3.5 Flash, 3.1 Pro Preview,
 V4 Pro/Flash, V3.2/Exp, R1 (250528) and V3 (0324). Existing KIE routes, including
 Opus 4.7/4.8 and Gemini 3.1 Pro, are preserved. Preview has its own exact ID.
 
-New text routes use `POST /v1/chat/completions`, `stream:false` and `max_tokens:2048`.
+The 2026-09-29 extension adds 13 more exact text routes (34 candidates total):
+GPT-6 Sol/Luna, GPT-5.4, GPT-5.3 Codex, GPT-5.2, Claude Opus 5.5,
+Claude Haiku 4.5 (20251001), Kimi K3, Qwen 3.8 Max, Qwen 3.7 Flash and
+Grok 4.5/4.6/4.7. Read-only `/v1/models?expand=category` confirmed each native ID;
+the public default-group pricing API and browser catalog confirmed its rate.
+Claude Sonnet 5.5 and Gemini 3.1 Flash were absent; Sonnet 5 and Flash Lite Preview
+are not replacements. Dated facts and bounded prices are stored in
+`internal/service/pricingcatalog/testdata/apimart-text-20260929.json`.
+
+Chat routes use `POST /v1/chat/completions`, `stream:false` and `max_tokens:2048`.
+Qwen 3.8 Max instead uses `POST /v1/responses`, text-only `input`, `stream:false`
+and `max_output_tokens:2048`, as specified by its
+[model guide](https://docs.apimart.ai/ru/api-reference/texts/qwen3.8-max/guide).
+This bound includes reasoning. No tools, explicit cache creation or PDF input
+are sent; those operations have different contracts/costs. Only a completed
+assistant answer with bounded usage is accepted, never reasoning alone.
 The application reserves a fixed bounded reply: at most 8192 input tokens including
 trusted framing, with a 7680 UTF-8-byte prompt/context budget, and 2048 output tokens.
 The full provider context window is unknown; pricing metadata's input ceiling is
@@ -33,6 +48,11 @@ not advertised as that window. All attachments remain disabled. Rates use the
 public default-group effective price, without cache or membership discounts,
 then x3 rounded up to five internal credits. Source facts are recorded in
 `internal/service/pricingcatalog/testdata/apimart-text-20260928.json`.
+The new tiered prices use the first input tier because 8192 is below every
+published first threshold; fractional micro-dollar rates are rounded upward.
+Old price versions and evidence dates are preserved. New reply prices range
+from 5 to 40 credits; quotes are fixed reply reservations, not a per-message
+claim about actual consumed tokens.
 These candidates do not inherit `APIMART_TEXT_LIMITS_VERIFIED`: live limit/usage
 checks remain outstanding. That flag still gates the existing Fable 5.1 route.
 Check every candidate's usable answer, usage bounds and actual charge manually;

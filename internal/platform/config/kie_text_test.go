@@ -27,14 +27,14 @@ func TestKIETextRequiresExplicitVerificationAndCredentials(t *testing.T) {
 
 func TestAPIMartCandidateDEVReadinessDoesNotForgeFableVerification(t *testing.T) {
 	cfg := Config{Env: "development", FeatureDEVModelSmokeEnabled: true, APIMartProviderEnabled: true, APIMartAPIKey: "fixture", APIMartBaseURL: "https://api.apimart.ai/v1"}
-	if err := cfg.validateAPIMartText(); err != nil || len(cfg.APIMartTextModels()) != 21 {
+	if err := cfg.validateAPIMartText(); err != nil || len(cfg.APIMartTextModels()) != 34 {
 		t.Fatalf("DEV text unavailable: %v", err)
 	}
 	if !cfg.TextModelEnabled("gpt_5") || cfg.TextModelEnabled("unknown") {
 		t.Fatal("wrong text model gate")
 	}
 	cfg.FeatureTextClaudeFable51Enabled = true
-	if cfg.validateAPIMartText() == nil || len(cfg.APIMartTextModels()) != 21 {
+	if cfg.validateAPIMartText() == nil || len(cfg.APIMartTextModels()) != 34 {
 		t.Fatal("manual smoke bypassed Fable verification")
 	}
 	cfg.FeatureTextClaudeFable51Enabled = false
