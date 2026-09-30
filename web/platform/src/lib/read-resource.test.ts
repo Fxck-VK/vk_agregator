@@ -1,6 +1,49 @@
 import { afterEach, expect, it, vi } from "vitest";
 import { createReadResource } from "./read-resource";
+import { ReadError } from "./web-api/read-error";
 afterEach(() => vi.useRealTimers());
+it("automatically recovers a transient read while retaining the visible snapshot", async () => {
+  vi.useFakeTimers();
+  const loader = vi.fn().mockRejectedValueOnce(new ReadError("unavailable", 503)).mockResolvedValue([2]);
+  const resource = createReadResource(loader, [1]);
+  await resource.load(true);
+  expect(resource.getSnapshot()).toMatchObject({ data: [1], failed: true, error: { kind: "unavailable" } });
+  await vi.advanceTimersByTimeAsync(2500);
+  expect(resource.getSnapshot()).toMatchObject({ data: [2], failed: false, error: null });
+  resource.dispose();
+});
+it("does not retry terminal errors or resurrect a disposed request", async () => {
+  vi.useFakeTimers();
+  const terminal = vi.fn().mockRejectedValue(new ReadError("forbidden", 403));
+  const resource = createReadResource(terminal);
+  await resource.load(); await vi.advanceTimersByTimeAsync(120000);
+  expect(terminal).toHaveBeenCalledTimes(1);
+  resource.dispose();
+  const transient = vi.fn().mockRejectedValue(new ReadError("network"));
+  const abandoned = createReadResource(transient);
+  await abandoned.load(); abandoned.dispose(); await vi.advanceTimersByTimeAsync(120000);
+  expect(transient).toHaveBeenCalledTimes(1);
+});
+it("pauses automatic retries offline and resumes without losing cached data", async () => {
+  vi.useFakeTimers();
+  const online = vi.spyOn(navigator, "onLine", "get").mockReturnValue(false);
+  const loader = vi.fn().mockRejectedValueOnce(new ReadError("network")).mockResolvedValue([3]);
+  const resource = createReadResource(loader, [1]);
+  await resource.load(true); await vi.advanceTimersByTimeAsync(25_000);
+  expect(loader).toHaveBeenCalledTimes(1);
+  online.mockReturnValue(true); await resource.resume();
+  expect(resource.getSnapshot().data).toEqual([3]);
+  resource.dispose(); online.mockRestore();
+});
+it("respects Retry-After even when focus events request a refresh", async () => {
+  vi.useFakeTimers();
+  const loader = vi.fn().mockRejectedValueOnce(new ReadError("rate_limit", 429, 20_000)).mockResolvedValue([2]);
+  const resource = createReadResource(loader);
+  await resource.load(); await resource.resume(); await vi.advanceTimersByTimeAsync(19_999);
+  expect(loader).toHaveBeenCalledTimes(1);
+  await vi.advanceTimersByTimeAsync(1000); expect(resource.getSnapshot().data).toEqual([2]);
+  resource.dispose();
+});
 it("deduplicates reads, retains a good snapshot on failure and recovers", async () => {
   const loader = vi.fn().mockResolvedValueOnce([1]).mockRejectedValueOnce(new Error("offline")).mockResolvedValueOnce([2]);
   const resource = createReadResource(loader);

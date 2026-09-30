@@ -100,6 +100,10 @@ func WithClock(now func() time.Time) Option {
 
 // IssueSession creates an account session and returns raw tokens once.
 func (s *Service) IssueSession(ctx context.Context, accountID uuid.UUID, meta SessionMetadata) (SessionTokens, error) {
+	return s.issueSession(ctx, accountID, meta, "")
+}
+
+func (s *Service) issueSession(ctx context.Context, accountID uuid.UUID, meta SessionMetadata, oldRefreshHash string) (SessionTokens, error) {
 	if s == nil || s.sessions == nil {
 		return SessionTokens{}, ErrSessionStoreUnavailable
 	}
@@ -134,7 +138,15 @@ func (s *Service) IssueSession(ctx context.Context, accountID uuid.UUID, meta Se
 		UpdatedAt:        now,
 		ExpiresAt:        expiresAt,
 	}
-	created, err := s.sessions.CreateSession(ctx, session)
+	var created *domain.AccountSession
+	if oldRefreshHash == "" {
+		created, err = s.sessions.CreateSession(ctx, session)
+	} else {
+		created, err = s.sessions.RotateSession(ctx, oldRefreshHash, session)
+		if errors.Is(err, domain.ErrNotFound) {
+			return SessionTokens{}, ErrInvalidSession
+		}
+	}
 	if err != nil {
 		return SessionTokens{}, err
 	}
@@ -206,16 +218,10 @@ func (s *Service) RefreshSession(ctx context.Context, refreshToken string, meta 
 	if !old.ExpiresAt.After(now) {
 		return SessionTokens{}, ErrSessionExpired
 	}
-	if _, err := s.sessions.RevokeSessionByRefreshHash(ctx, old.RefreshTokenHash, now); err != nil {
-		if errors.Is(err, domain.ErrNotFound) {
-			return SessionTokens{}, ErrInvalidSession
-		}
-		return SessionTokens{}, err
-	}
 	if meta.IdentityID == nil {
 		meta.IdentityID = old.IdentityID
 	}
-	return s.IssueSession(ctx, old.AccountID, meta)
+	return s.issueSession(ctx, old.AccountID, meta, old.RefreshTokenHash)
 }
 
 // RevokeSession revokes one active session owned by accountID.

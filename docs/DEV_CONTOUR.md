@@ -446,7 +446,7 @@ manual sequence:
 
 1. From outside the gateway, request `https://dev-web.neiirohub.ru/` and verify
    `401 outside the gateway`.
-2. Clear the outer Basic Auth gate temporarily. Before platform sign-in, verify
+2. Complete the outer DEV gateway login without disabling the gate. Before platform sign-in, verify
    `/web/v1/me -> 401` from the anonymous BFF and a protected administrative
    path -> 404.
 3. Restore the gateway, enter the gateway credentials, then password login

@@ -1,4 +1,5 @@
 import { webBrowserMutation } from "@/lib/web-api/browser";
+import { withSessionLock } from "@/lib/web-api/browser-session";
 
 const attemptTimeoutMs = 1_300;
 const retryDelaysMs = [250, 500] as const;
@@ -27,6 +28,10 @@ async function requestAttempt(): Promise<void> {
 }
 
 export async function requestWorkspaceLogout(): Promise<void> {
+  return withSessionLock(requestLogoutWithRetries);
+}
+
+async function requestLogoutWithRetries(): Promise<void> {
   for (let attempt = 0; attempt <= retryDelaysMs.length; attempt += 1) {
     try {
       await requestAttempt();

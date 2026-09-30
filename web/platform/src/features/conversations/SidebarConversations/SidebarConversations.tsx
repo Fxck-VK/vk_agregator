@@ -1,7 +1,6 @@
 "use client";
 
 import { Skeleton, StateNotice } from "@/components/ui/AsyncState/AsyncState";
-import { LoadFeedback } from "@/components/ui/AsyncState/LoadFeedback";
 import { useDictionary } from "@/i18n/LocaleProvider";
 
 
@@ -70,6 +69,7 @@ export function SidebarConversations({ conversations }: SidebarConversationsProp
   };
 
   const archiveConversation = ({ conversationId }: { conversationId: string }) => {
+    workspaceConversationList?.removeConversation(conversationId);
     optimisticallyArchivedConversationIdsRef.current.delete(conversationId);
     setArchivedConversationIds((ids) => new Set(ids).add(conversationId));
     setOpenConversationId((openId) => openId === conversationId ? null : openId);
@@ -78,8 +78,12 @@ export function SidebarConversations({ conversations }: SidebarConversationsProp
   return (
     <section aria-labelledby="recent-conversations-title" className={styles.conversations} data-sidebar-conversations="true">
       <h2 data-sidebar-conversations-title="true" id="recent-conversations-title">{t.conversations.recentHeading}</h2>
-      <LoadFeedback pending={workspaceConversationList?.pending ?? false} failed={workspaceConversationList?.failed} hasData={visibleConversations.length > 0} onRetry={workspaceConversationList?.retry} />
-      {visibleConversations.length === 0 && workspaceConversationList?.pending ? <div aria-busy="true">{[0, 1, 2].map(index => <Skeleton key={index} style={{ display: "block", height: "2.5rem", marginBlock: ".5rem" }} />)}</div> : visibleConversations.length === 0 && !workspaceConversationList?.failed ? (
+      <div className={styles.statusSlot}>
+        {visibleConversations.length === 0 && workspaceConversationList?.failed && !workspaceConversationList.hasData ? (
+          <StateNotice inline kind="error" action={{ label: t.files.retry, onClick: workspaceConversationList.retry }}>{t.conversations.listLoadFailure}</StateNotice>
+        ) : null}
+      </div>
+      {visibleConversations.length === 0 && !workspaceConversationList?.hasData && workspaceConversationList?.pending ? <div aria-busy="true">{[0, 1, 2].map(index => <Skeleton key={index} style={{ display: "block", height: "2.5rem", marginBlock: ".5rem" }} />)}</div> : visibleConversations.length === 0 && (!workspaceConversationList?.failed || workspaceConversationList.hasData) ? (
         <StateNotice inline role="note">{t.conversations.empty}</StateNotice>
       ) : (
         <ScrollArea

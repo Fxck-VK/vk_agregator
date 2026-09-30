@@ -14,6 +14,7 @@ import { WorkspaceModelSelectionProvider } from "@/features/models/WorkspaceMode
 import { WorkspaceDataCacheProvider } from "@/features/workspace/WorkspaceDataCache/WorkspaceDataCache";
 import { WorkspaceNavigationMetrics } from "@/features/workspace/WorkspaceNavigationMetrics/WorkspaceNavigationMetrics";
 import { GenerationCatalogProvider } from "@/features/models/GenerationCatalogProvider";
+import { WorkspaceSessionHealth } from "@/features/session/WorkspaceSessionHealth";
 import type { GenerationModelCatalog } from "@/features/models/generation-model-catalog";
 import { Skeleton, StateNotice } from "@/components/ui/AsyncState/AsyncState";
 import { useDictionary } from "@/i18n/LocaleProvider";
@@ -94,6 +95,7 @@ function WorkspaceChrome({ account, balance = null, children, conversations, tra
 
 export function WorkspaceFrame({ account, accountId, balance = null, children, conversations, profile, deferred = false, initialCatalog = null }: WorkspaceFrameProps) {
   return (
+    <WorkspaceSessionHealth accountId={accountId} verification={profile} key={accountId} guest={<GuestWorkspaceFrame><SessionFailureNotice /></GuestWorkspaceFrame>}>
     <GenerationCatalogProvider initial={initialCatalog} key={accountId}>
     <WorkspaceAccountProvider deferred={deferred} snapshot={{ balance, profile }}>
       <WorkspaceConversationListProvider deferred={deferred} accountId={accountId} initialConversations={conversations} key={accountId}>
@@ -111,6 +113,7 @@ export function WorkspaceFrame({ account, accountId, balance = null, children, c
       </WorkspaceConversationListProvider>
     </WorkspaceAccountProvider>
     </GenerationCatalogProvider>
+    </WorkspaceSessionHealth>
   );
 }
 

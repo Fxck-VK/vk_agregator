@@ -1,4 +1,4 @@
-import { cleanup, fireEvent, render, screen } from "@testing-library/react";
+import { act, cleanup, fireEvent, render, screen } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
 vi.mock("next/navigation", () => ({
@@ -8,12 +8,14 @@ vi.mock("next/navigation", () => ({
 
 vi.mock("@/lib/web-api/browser", () => ({
   webBrowserMutation: vi.fn(),
+  webBrowserFetch: vi.fn(),
 }));
 
 import { usePathname, useRouter } from "next/navigation";
 
 import { ru } from "@/i18n/ru";
-import { webBrowserMutation } from "@/lib/web-api/browser";
+import { webBrowserFetch, webBrowserMutation } from "@/lib/web-api/browser";
+import { activateConversationCache, clearConversationCache, writeConversationCache } from "../conversation-list-cache";
 import type { ConversationItem } from "@/lib/web-api/contracts";
 
 import { WorkspaceConversationListProvider, useWorkspaceConversationList } from "../WorkspaceConversationList/WorkspaceConversationList";
@@ -38,6 +40,28 @@ describe("SidebarConversations", () => {
   afterEach(() => {
     cleanup();
     vi.clearAllMocks();
+    clearConversationCache();
+  });
+
+  it("keeps cached rows and hides background loading/error messages", async () => {
+    activateConversationCache("account-a"); writeConversationCache("account-a", conversations);
+    vi.mocked(webBrowserFetch).mockResolvedValue(new Response(null, { status: 503 }));
+    render(<WorkspaceConversationListProvider accountId="account-a" deferred initialConversations={[]}><SidebarConversations /></WorkspaceConversationListProvider>);
+    await act(async () => undefined);
+    expect(screen.getByRole("link", { name: conversations[0].title })).toBeInTheDocument();
+    expect(screen.queryByText(ru.preloading.refreshFailed)).not.toBeInTheDocument();
+    expect(screen.queryByText(ru.preloading.slow)).not.toBeInTheDocument();
+    expect(screen.queryByRole("alert")).not.toBeInTheDocument();
+  });
+
+  it("gives a cold failure a dedicated status row without an empty-list claim", async () => {
+    vi.mocked(webBrowserFetch).mockResolvedValue(new Response(null, { status: 503 }));
+    const view = render(<WorkspaceConversationListProvider accountId="account-a" deferred initialConversations={[]}><SidebarConversations /></WorkspaceConversationListProvider>);
+    expect(await screen.findByRole("alert")).toHaveTextContent(ru.conversations.listLoadFailure);
+    expect(screen.queryByText(ru.conversations.empty)).not.toBeInTheDocument();
+    const section = view.container.querySelector('[data-sidebar-conversations="true"]');
+    expect(section?.children).toHaveLength(3);
+    expect(section?.children[1]).toContainElement(screen.getByRole("alert"));
   });
 
   it("marks only the exact current conversation without rendering a duplicate create action", () => {

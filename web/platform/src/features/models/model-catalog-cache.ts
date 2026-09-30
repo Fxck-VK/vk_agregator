@@ -1,4 +1,5 @@
 import { webBrowserFetch } from "@/lib/web-api/browser";
+import { readJson } from "@/lib/web-api/read-error";
 
 import { parseModelCatalog, type PublicCatalog } from "./model-catalog-contract";
 
@@ -25,10 +26,7 @@ export function loadModelCatalog(options: ModelCatalogLoadOptions = {}): Promise
   inFlight = (async () => {
     try {
       const response = await fetcher("/web/v1/models");
-      if (response.status !== 200) {
-        throw new Error("Unable to load model catalog.");
-      }
-      const value = parseModelCatalog(await response.json());
+      const value = await readJson(response, parseModelCatalog);
       cached = { expiresAt: now() + modelCatalogTtlMs, value };
       return value;
     } catch (error) {

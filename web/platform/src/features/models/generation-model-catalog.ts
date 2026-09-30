@@ -1,4 +1,5 @@
 import type { ChatModel, ImageModel } from "@/lib/web-api/contracts";
+import { classifyReadError } from "@/lib/web-api/read-error";
 
 import type { VideoModel } from "./video-model-catalog";
 import { chatModelForSelector } from "./chat-model-selector";
@@ -83,10 +84,11 @@ function allCategoryErrors() {
 
 // Both pickers and the new-chat form consume this exact adapter. Ordering,
 // categories and partial failures must not vary with picker placement.
-export async function loadGenerationModelCatalog(): Promise<GenerationModelCatalog> {
+export async function loadGenerationModelCatalog(options: { throwOnError?: boolean } = {}): Promise<GenerationModelCatalog> {
  try {
   return projectGenerationModelCatalog(await loadModelCatalog());
- } catch {
+ } catch (error) {
+  if (options.throwOnError) throw classifyReadError(error);
   return { items: [], default_model_id: "", categoryErrors: allCategoryErrors() };
  }
 }

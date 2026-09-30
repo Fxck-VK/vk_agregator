@@ -6,6 +6,7 @@ import type { AccountProfile } from "@/lib/web-api/contracts";
 import { parseAccountBalance } from "@/lib/web-api/contracts";
 import { webBrowserFetch } from "@/lib/web-api/browser";
 import { useReadResource } from "@/lib/use-read-resource";
+import { readJson } from "@/lib/web-api/read-error";
 
 type WorkspaceAccountSnapshot = {
   balance: number | null;
@@ -25,8 +26,7 @@ type WorkspaceAccountProviderProps = {
 
 async function loadBalance(signal: AbortSignal) {
   const response = await webBrowserFetch("/web/v1/balance", { signal });
-  if (!response.ok) throw new Error("Balance unavailable");
-  return parseAccountBalance(await response.json()).balance;
+  return readJson(response, value => parseAccountBalance(value).balance);
 }
 
 export function WorkspaceAccountProvider({ children, snapshot, deferred = false }: WorkspaceAccountProviderProps): ReactNode {

@@ -2,6 +2,8 @@ import { canonicalizeWebApiPath, type WebApiPath } from "./path";
 import { developmentResponse, type BrowserRequestInit } from "./development-transport";
 import { WebNetworkError } from "./network-error";
 import { readSignal } from "./read-signal";
+import { announceAccountChange, browserCsrfToken, refreshBrowserSession, signalSessionFailure, withSessionLock } from "./browser-session";
+import { assertBrowserSession, browserSessionSnapshot, endBrowserSession } from "./browser-session-state";
 
 const forbiddenIdentityHeaders = [
   "authorization",
@@ -28,27 +30,38 @@ export function webBrowserFetch(path: WebApiPath, init?: RequestInit): Promise<R
   const safePath = canonicalizeWebApiPath(path);
   const preview = developmentResponse(safePath, init);
   if (preview) return preview;
-  return fetch(safePath, {
+  const session = browserSessionSnapshot();
+  const isRead = ["GET", "HEAD"].includes((init?.method ?? "GET").toUpperCase());
+  const signal = isRead ? AbortSignal.any([session.signal, ...(init?.signal ? [init.signal] : [])]) : init?.signal;
+  const request = (requestSignal = signal) => fetch(safePath, {
     ...init,
-    signal: readSignal(init),
+    signal: readSignal({ ...init, signal: requestSignal }),
     credentials: "include",
     headers: browserRequestHeaders(init),
   });
-}
-
-function csrfTokenFromBrowserCookie(): string | null {
-  if (typeof document === "undefined") {
-    return null;
+  if (!isRead && safePath.split("?")[0] === "/web/v1/auth/password/login") {
+    return withSessionLock(async (deadline) => {
+      const response = await request(init?.signal ? AbortSignal.any([deadline, init.signal]) : deadline);
+      if (response.ok) { endBrowserSession(); announceAccountChange(); }
+      return response;
+    });
   }
-
-  for (const cookie of document.cookie.split(";")) {
-    const trimmed = cookie.trim();
-    if (trimmed.startsWith("nh_csrf=")) {
-      const token = trimmed.slice("nh_csrf=".length);
-      return token || null;
-    }
-  }
-  return null;
+  if (!isRead || safePath.startsWith("/web/v1/auth/")) return request();
+  return (async () => {
+    const response = await request();
+    assertBrowserSession(response, session);
+    if (response.status !== 401) return response;
+    if (response.headers.get("X-NeiroHub-Dev-Access") === "required") { signalSessionFailure(response); return response; }
+    init?.signal?.throwIfAborted();
+    const refreshed = await refreshBrowserSession(signal ?? undefined);
+    assertBrowserSession(refreshed, session);
+    init?.signal?.throwIfAborted();
+    if (!refreshed.ok) { signalSessionFailure(refreshed); return refreshed; }
+    const retried = await request();
+    assertBrowserSession(retried, session);
+    signalSessionFailure(retried);
+    return retried;
+  })();
 }
 
 type MutationInit = BrowserRequestInit;
@@ -57,7 +70,7 @@ export function webBrowserMutation(path: WebApiPath, init: MutationInit): Promis
   const safePath = canonicalizeWebApiPath(path);
   const preview = developmentResponse(safePath, init);
   if (preview) return preview;
-  const csrfToken = csrfTokenFromBrowserCookie();
+  const csrfToken = browserCsrfToken();
   if (!csrfToken) {
     return Promise.reject(new Error("Unable to complete the request."));
   }

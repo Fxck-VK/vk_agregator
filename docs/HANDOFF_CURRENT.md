@@ -1,15 +1,131 @@
-# Current handoff
+# Передача изменений NeiroHub другу: интерфейс и DEV-деплой
 
-Status: none
+Status: active
+Дата: 21 сентября 2026. Статус CI ниже относится к последней проверке коммита `8601f0f`.
 
-The September 14 integration combines colleague commit `f8db756` and model
-capability commit `29c2f17` on `dev-deploy`. The same tested result is intended
-for `fastlife_dev`. No active handoff remains.
+## Коммиты и ветка
 
-Source records:
-- [Unified catalog and workspace](archive/handoffs/2026-09-14-unified-catalog-source.md)
-- [Model integrations and capabilities](archive/handoffs/2026-09-14-model-integrations-source.md)
+Репозиторий: https://github.com/Fxck-VK/vk_agregator
+Ветка назначения: `dev-deploy`.
 
-Current behavior: [model capabilities](../docs/MODEL_CAPABILITIES.md),
-[shared catalog](../docs/runbooks/MODEL_CATALOG.md),
-[model admission](../docs/runbooks/MODEL_ONBOARDING.md).
+| Коммит | Содержимое |
+| --- | --- |
+| `9abc06099810e95684c6b02212f87788d21d627b` | База до нашего пакета |
+| `256665c5d907d0b78c474bd197ff4ba7e87a84f8` | Основной пакет интерфейса, локализации и предзагрузки; 484 изменённых файла |
+| `8601f0f85c4a05af0e8eda1c22a6f8e3025e8b4f` | Добавлен WEB_ORIGIN в тестовое окружение проверки инфраструктуры |
+
+[Полный diff пакета](https://github.com/Fxck-VK/vk_agregator/compare/9abc06099810e95684c6b02212f87788d21d627b...8601f0f85c4a05af0e8eda1c22a6f8e3025e8b4f).
+
+Оба коммита уже находятся в `origin/dev-deploy`: повторный merge в эту ветку не нужен.
+Локальная ветка автора — `fix/remove-workspace-dividers`, но пуш выполнен прямо в
+`dev-deploy`. Искать отдельную удалённую ветку с локальным названием не требуется.
+
+## Наши изменения
+
+- Общие стили рабочей области, меню, карточки, инпут, кнопки, стоимость с иконкой,
+  уведомления, FAQ и единые состояния загрузки, ошибки и пустого списка.
+- RU/EN: словари, выбор языка, `/ru` и `/en`, переходы и перенаправления старых URL,
+  canonical/hreflang, robots и sitemap. Общая 404 с рабочим меню платформы.
+- Фото в инпуте и чате: просмотр локального файла до завершения загрузки, повтор,
+  удаление, drag-and-drop, выбор из «Моих файлов». Общий просмотрщик вложений без
+  правой информационной панели; карточки окна выбора используют общие компоненты.
+- Массовая генерация: количество и формат заглушек соответствуют запросу,
+  ожидание и готовые фото используют одну центрированную сетку.
+- Предзагрузка: начальный каталог моделей с сервера, общий клиентский кеш,
+  независимые баланс/список чатов/история, сохранение данных и черновика при сбое.
+  Приватные кеши ограничены аккаунтом; автоматических повторов платных записей нет.
+- Маленькие авторизованные превью фото в карточках; оригиналы в большом просмотре,
+  редакторе и скачивании. Проверка доступа к приватным артефактам сохранена.
+- Видеопримеры: отдельные WebP-обложки, MP4 загружается при видимости карточки.
+  Обложка остаётся при ожидании/ошибке. Большой просмотр воспроизводит видео,
+  миниатюры показывают картинки. Текущий переход без fade пользователь принял.
+- Backend: загрузка вложений через web session API и существующий artifact service,
+  безопасная геометрия image-job DTO и изменения общего каталога моделей.
+- Локальные сценарии и `/app/ui-states` для проверки без платных генераций;
+  доступны только в режиме локального превью. Добавлены unit и browser tests.
+
+Отдельный одноразовый Telegram-бот не входит в этот пакет. Временные скриншоты и
+отчёты `web/platform/.tmp/` исключены из Git. Черновики формы хранятся в памяти и
+не восстанавливают File-объекты после полной перезагрузки браузера.
+
+## Текущий блокер выкладки
+
+Пуш прошёл. На `8601f0f` проверки **Web Platform**, Backend, Mini App, Admin Web и
+Secret Scan успешны. **Infrastructure** завершилась ошибкой.
+
+Первый блокер — отсутствующий WEB_ORIGIN в New-ComposeValidationEnvFile — уже
+исправлен. Docker Compose теперь проходит этот шаг. Следующая ошибка:
+
+```text
+platform nonce proxy is missing required snippet: matcher: ["/", "/login", "/app/:path*"]
+```
+
+`scripts/ci/validate-infra.ps1`, около строк 320–337, ищет старую буквальную строку.
+В `web/platform/src/proxy.ts` matcher изменён для локализованных страниц и исключает
+служебные URL/статику. Нужно согласовать проверку с действующим контрактом маршрутов.
+Не возвращать старую маршрутизацию ради теста и не отключать nonce/CSP-проверки.
+Проверить обычные страницы, `/ru`, `/en`, вложенные страницы и 404, исключение API,
+статики и health. Пройти весь валидатор: после раннего сбоя могли остаться другие
+устаревшие проверки.
+
+Неуспешный CI заблокировал публикацию Docker-образов. Поэтому эта версия ещё не
+дошла до обновления сайта. Повторный push без нового коммита это не исправляет.
+
+- [CI](https://github.com/Fxck-VK/vk_agregator/actions/runs/35568517384)
+- [Точная ошибка](https://github.com/Fxck-VK/vk_agregator/actions/runs/35568517384/job/106235037335)
+- [Docker Images](https://github.com/Fxck-VK/vk_agregator/actions/runs/35568517336)
+
+## Как забрать и продолжить
+
+Сначала сохранить свою незакоммиченную работу. Создать рабочую ветку от актуальной
+DEV-ветки (если имя уже занято, выбрать другое):
+
+```sh
+git fetch origin
+git switch -c fix/dev-infra-route-validation origin/dev-deploy
+git log -2 --oneline
+```
+
+Если нужно объединить пакет со своей существующей веткой, выполнить в ней обычный
+`git merge origin/dev-deploy`, сохранив её изменения при разрешении конфликтов.
+Не копировать рабочую папку поверх своей и не использовать force push.
+
+После правки валидатора проверить инфраструктуру. Нужны PowerShell 7 и Docker:
+
+```sh
+pwsh -File scripts/ci/test-next-route-discovery.ps1
+pwsh -File scripts/ci/test-platform-csp.ps1
+pwsh -File scripts/ci/validate-infra.ps1
+```
+
+Регрессионные проверки маршрутов: `web/platform/src/proxy.test.ts` и `src/i18n`.
+Оформить исправление отдельным коммитом и интегрировать в `dev-deploy` через
+согласованный merge/PR. Если владелец разрешил прямой push:
+
+```sh
+git push origin HEAD:dev-deploy
+```
+
+Если remote ушёл вперёд, сначала интегрировать новые коммиты. Main/production не
+трогать. После отправки проверить цепочку **CI → Docker Images → Deploy DEV**
+для нового коммита и сайт `https://dev-web.neiirohub.ru`.
+
+## Проверки и документация
+
+Основной пакет локально прошёл 1488 unit-тестов, TypeScript, ESLint, сборку,
+packaging, asset tests и тесты затронутого websession backend. Обложки проверены
+отдельно: 71 тематический тест и два браузерных сценария. GitHub на `8601f0f`
+подтвердил Web Platform, но общий CI красный из-за описанного валидатора.
+Успешная выкладка пакета пока не подтверждена.
+
+Точки входа:
+
+- `AGENTS.md`, `.agents/state.json`, `docs/ARCHITECTURE.md` — границы системы.
+- `web/platform/docs/preloading.md` — данные, кеши, превью и обложки видео.
+- `web/platform/docs/locale-routing.md` — актуальная маршрутизация RU/EN.
+- `web/platform/docs/ui-index.md` — общие компоненты.
+- `web/platform/docs/local-development.md` — локальные сценарии без API.
+- `docs/runbooks/DEV.md` — DEV-выкладка и настройки окружения.
+
+Авторизация, приватность артефактов, billing/idempotency и worker/provider-границы
+должны сохраниться. Для исправления валидатора не нужны платные генерации и новые секреты.

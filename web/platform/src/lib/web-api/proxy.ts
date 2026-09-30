@@ -2,6 +2,7 @@ import "server-only";
 
 import { canonicalizeWebApiPath } from "./path";
 import { readSignal } from "./read-signal";
+import { randomUUID } from "node:crypto";
 
 const forwardedRequestHeaders = [
   "Accept",
@@ -47,7 +48,7 @@ function proxyRequestHeaders(requestHeaders: Headers): Headers {
 
 function proxyResponseHeaders(upstream: Headers): Headers {
   const headers = new Headers();
-  for (const header of ["Content-Type", "Cache-Control", "Content-Range", "Accept-Ranges"]) {
+  for (const header of ["Content-Type", "Cache-Control", "Content-Range", "Accept-Ranges", "Retry-After", "X-NeiroHub-Account-ID"]) {
     const value = upstream.get(header);
     if (value) {
       headers.set(header, value);
@@ -177,6 +178,11 @@ export async function proxyWebApiRequest(
   internalOrigin: string,
 ): Promise<Response> {
   const safePath = canonicalizeWebApiPath(rawPath);
+  const requestId = randomUUID();
+  const startedAt = Date.now();
+  const requestHeaders = proxyRequestHeaders(request.headers);
+  requestHeaders.set("X-Request-ID", requestId);
+  const failed = (status: number, stage: string) => console.warn("web_proxy_failed", { request_id: requestId, status, stage, duration_ms: Date.now() - startedAt });
   let body: ArrayBuffer | undefined;
   if (request.method !== "GET" && request.method !== "HEAD") {
     const proxyBody = await readProxyRequestBody(request, request.method === "POST" && safePath.split("?")[0] === "/web/v1/input-artifacts" ? 21 * 1024 * 1024 : MAX_PROXY_REQUEST_BODY_BYTES);
@@ -193,14 +199,16 @@ export async function proxyWebApiRequest(
   try {
     upstream = await fetch(new URL(safePath, internalOrigin).toString(), {
       method: request.method,
-      signal: readSignal({ method: request.method, signal: request.signal }),
+      signal: readSignal({ method: request.method, signal: request.signal }, 12_000),
       body,
       cache: "no-store",
-      headers: proxyRequestHeaders(request.headers),
+      headers: requestHeaders,
       redirect: "manual",
     });
-  } catch {
-    return genericUnavailableResponse();
+  } catch (error) {
+    const timeout = error instanceof Error && error.name === "TimeoutError";
+    failed(timeout ? 504 : 503, timeout ? "upstream_timeout" : "upstream_transport");
+    return Response.json({ error: "Service unavailable." }, { status: timeout ? 504 : 503, headers: { "X-Request-ID": requestId, "Cache-Control": "private, no-store" } });
   }
 
   if (upstream.status >= 300 && upstream.status < 400) {
@@ -214,8 +222,11 @@ export async function proxyWebApiRequest(
     return genericUnavailableResponse();
   }
 
+  const responseHeaders = proxyResponseHeaders(upstream.headers);
+  responseHeaders.set("X-Request-ID", requestId);
+  if (!upstream.ok) failed(upstream.status, "upstream_response");
   return new Response(upstream.body, {
     status: upstream.status,
-    headers: proxyResponseHeaders(upstream.headers),
+    headers: responseHeaders,
   });
 }

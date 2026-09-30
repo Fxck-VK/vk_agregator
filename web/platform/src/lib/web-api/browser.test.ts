@@ -1,6 +1,7 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 
 import { webBrowserFetch, webBrowserMutation } from "./browser";
+import { refreshBrowserSession } from "./browser-session";
 
 const forbiddenCallerHeaders = [
   ["Authorization", "forged authorization"],
@@ -12,6 +13,62 @@ const forbiddenCallerHeaders = [
 ] as const;
 
 describe("webBrowserFetch", () => {
+  it("bounds login itself so it cannot outlive the cross-tab lease", async () => {
+    const deadline = new AbortController();
+    const timeout = vi.spyOn(AbortSignal, "timeout").mockReturnValue(deadline.signal);
+    const send = vi.fn((_path: string, init?: RequestInit) => new Promise<Response>((_resolve, reject) => {
+      init?.signal?.addEventListener("abort", () => reject(init.signal?.reason));
+    }));
+    vi.stubGlobal("fetch", send);
+    const pending = webBrowserFetch("/web/v1/auth/password/login", { method: "POST" });
+    await vi.waitFor(() => expect(send).toHaveBeenCalledOnce());
+    expect(send.mock.calls[0][1]?.signal).toBeInstanceOf(AbortSignal);
+    deadline.abort(new DOMException("", "TimeoutError"));
+    await expect(pending).rejects.toMatchObject({ name: "TimeoutError" });
+    timeout.mockRestore();
+  });
+  it("waits for account A refresh before account B login can change cookies", async () => {
+    document.cookie = "nh_csrf=synthetic; Path=/";
+    let queue = Promise.resolve();
+    const request = (_name: string, _options: unknown, task: () => Promise<Response>) => {
+      const result = queue.then(task); queue = result.then(() => undefined, () => undefined); return result;
+    };
+    vi.stubGlobal("navigator", { locks: { request } });
+    let completeRefresh!: (response: Response) => void;
+    const send = vi.fn(async (path: string) => {
+      if (path === "/web/v1/me") return new Response(null, { status: 401 });
+      if (path === "/web/v1/auth/refresh") return new Promise<Response>(resolve => { completeRefresh = resolve; });
+      return new Response(null, { status: 201 });
+    });
+    vi.stubGlobal("fetch", send);
+    const recovery = refreshBrowserSession();
+    await vi.waitFor(() => expect(completeRefresh).toBeDefined());
+    const login = webBrowserFetch("/web/v1/auth/password/login", { method: "POST" });
+    await Promise.resolve();
+    expect(send.mock.calls.some(([path]) => path.includes("login"))).toBe(false);
+    completeRefresh(new Response(null, { status: 200 }));
+    await recovery; expect((await login).status).toBe(201);
+  });
+  it("recovers an expired read once but never replays a mutation", async () => {
+    document.cookie = "nh_csrf=synthetic; Path=/";
+    let refreshed = false;
+    const send = vi.fn(async (path: string) => {
+      if (path === "/web/v1/auth/refresh") { refreshed = true; return new Response(null, { status: 200 }); }
+      return new Response(null, { status: refreshed ? 200 : 401 });
+    });
+    vi.stubGlobal("fetch", send);
+    expect((await webBrowserFetch("/web/v1/conversations")).status).toBe(200);
+    expect(send.mock.calls.filter(([path]) => path === "/web/v1/auth/refresh")).toHaveLength(1);
+    send.mockClear(); refreshed = false;
+    expect((await webBrowserMutation("/web/v1/conversations", { method: "POST" })).status).toBe(401);
+    expect(send).toHaveBeenCalledTimes(1);
+  });
+  it("does not try account refresh when the DEV gate rejects access", async () => {
+    const send = vi.fn(async () => new Response(null, { status: 401, headers: { "X-NeiroHub-Dev-Access": "required" } }));
+    vi.stubGlobal("fetch", send);
+    expect((await webBrowserFetch("/web/v1/conversations")).status).toBe(401);
+    expect(send).toHaveBeenCalledTimes(1);
+  });
   afterEach(() => {
     vi.unstubAllGlobals();
     document.cookie = "nh_csrf=; Max-Age=0; Path=/";

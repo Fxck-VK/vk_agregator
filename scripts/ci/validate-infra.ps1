@@ -282,6 +282,17 @@ function Assert-ReverseProxyConfig {
         "server_name dev-web.neiirohub.ru;",
         'auth_basic "NeiroHub development";',
         "auth_basic_user_file /tmp/dev-web.htpasswd;",
+        "location = /__dev/login",
+        "include /tmp/dev-web-issuer.conf;",
+        "auth_request /_dev_access_check;",
+        "error_page 401 = @dev_access_required;",
+        "proxy_intercept_errors off;",
+        "proxy_hide_header WWW-Authenticate;",
+        'proxy_set_header X-Dev-Web-Proof "";',
+        'proxy_set_header X-Dev-Web-User "";',
+        "location ^~ /web/dev-access { return 404; }",
+        "limit_req zone=dev_web_login burst=10 nodelay;",
+        'add_header Cache-Control "private, no-store" always;',
         'proxy_set_header Authorization "";',
         "proxy_set_header Host `$host;",
         "proxy_set_header X-Real-IP `$remote_addr;",
@@ -303,7 +314,7 @@ function Assert-ReverseProxyConfig {
         }
     }
     if ($devWeb -match '(?im)^\s*auth_basic\s+off\s*;') {
-        throw "DEV web nginx host fragment must keep basic authentication enabled"
+        throw "DEV web nginx must preserve password verification at the session issuer"
     }
     if ($devWeb -match '(?im)^\s*add_header\s+Access-Control-Allow-Origin\s+["'']?\*') {
         throw "DEV web nginx host fragment must not enable broad wildcard CORS"
@@ -318,7 +329,7 @@ function Assert-ReverseProxyConfig {
     }
     $platformProxy = Get-Content -LiteralPath $platformProxyPath -Raw
     foreach ($snippet in @(
-        'matcher: ["/", "/login", "/app/:path*"]',
+        'matcher: ["/((?!_next/|assets/|web/|api/|health$|favicon.ico$|robots.txt$|sitemap.xml$).*)"]',
         "crypto.getRandomValues",
         'requestHeaders.set("x-nonce", nonce)',
         'requestHeaders.set("Content-Security-Policy", contentSecurityPolicy)',
@@ -729,7 +740,7 @@ function Assert-DevWebOperatorDocs {
             "DEV-only",
             "remote DEV deployment",
             "docker-compose.dev-web.yml",
-            "clear the outer Basic Auth gate",
+            "complete the outer DEV gateway login",
             "/web/v1/me -> 401",
             "protected administrative path -> 404"
         )
@@ -1629,6 +1640,9 @@ if (Test-Path -LiteralPath "docker-compose.prod.yml") {
         "http://127.0.0.1:3000/health",
         "reverse-proxy:",
         "./deployments/nginx/dev-web.conf:/etc/nginx/dev-web.conf:ro",
+        "./deployments/nginx/start-dev-web.sh:/etc/nginx/start-dev-web.sh:ro",
+        'command: ["/bin/sh", "/etc/nginx/start-dev-web.sh"]',
+        'DEV_WEB_BASIC_AUTH_HTPASSWD: ${DEV_WEB_BASIC_AUTH_HTPASSWD:?',
         "condition: service_healthy"
     )) {
         if (-not $devWebCompose.Contains($snippet)) {

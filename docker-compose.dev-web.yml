@@ -19,6 +19,7 @@ services:
     environment:
       WEB_API_INTERNAL_ORIGIN: http://api:8080
       WEB_ORIGIN: ${WEB_ORIGIN:?WEB_ORIGIN is required for localized canonical URLs}
+      DEV_WEB_BASIC_AUTH_HTPASSWD: ${DEV_WEB_BASIC_AUTH_HTPASSWD:?DEV_WEB_BASIC_AUTH_HTPASSWD is required for DEV access sessions}
     healthcheck:
       test: ["CMD", "node", "-e", "fetch('http://127.0.0.1:3000/health').then((response) => { if (!response.ok) process.exit(1); }).catch(() => process.exit(1))"]
       interval: 10s
@@ -28,16 +29,10 @@ services:
   reverse-proxy:
     volumes:
       - ./deployments/nginx/dev-web.conf:/etc/nginx/dev-web.conf:ro
+      - ./deployments/nginx/start-dev-web.sh:/etc/nginx/start-dev-web.sh:ro
     environment:
       DEV_WEB_BASIC_AUTH_HTPASSWD: ${DEV_WEB_BASIC_AUTH_HTPASSWD:?DEV_WEB_BASIC_AUTH_HTPASSWD is required for DEV web Basic Auth}
-    command:
-      - /bin/sh
-      - -ec
-      - |
-        umask 077
-        printf '%s\n' "$${DEV_WEB_BASIC_AUTH_HTPASSWD}" > /tmp/dev-web.htpasswd
-        unset DEV_WEB_BASIC_AUTH_HTPASSWD
-        exec nginx -g 'daemon off;'
+    command: ["/bin/sh", "/etc/nginx/start-dev-web.sh"]
     depends_on:
       platform:
         condition: service_healthy

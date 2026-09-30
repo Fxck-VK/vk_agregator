@@ -36,6 +36,10 @@ func (r *AccountSessionRepo) CreateSession(_ context.Context, session domain.Acc
 	}
 	r.mu.Lock()
 	defer r.mu.Unlock()
+	return r.createSessionLocked(session)
+}
+
+func (r *AccountSessionRepo) createSessionLocked(session domain.AccountSession) (*domain.AccountSession, error) {
 	if session.ID == uuid.Nil {
 		session.ID = uuid.New()
 	}
@@ -63,6 +67,30 @@ func (r *AccountSessionRepo) CreateSession(_ context.Context, session domain.Acc
 		r.byAccessHash[session.AccessTokenHash] = session.ID
 	}
 	return cloneAccountSession(&cp), nil
+}
+
+func (r *AccountSessionRepo) RotateSession(_ context.Context, oldRefreshHash string, session domain.AccountSession) (*domain.AccountSession, error) {
+	if err := session.Validate(); err != nil {
+		return nil, err
+	}
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	id, ok := r.byRefreshHash[oldRefreshHash]
+	if !ok {
+		return nil, domain.ErrNotFound
+	}
+	old := r.byID[id]
+	if old.AccountID != session.AccountID || old.RevokedAt != nil || !old.ExpiresAt.After(session.CreatedAt) {
+		return nil, domain.ErrNotFound
+	}
+	created, err := r.createSessionLocked(session)
+	if err != nil {
+		return nil, err
+	}
+	now := session.CreatedAt
+	old.RevokedAt = &now
+	old.UpdatedAt = now
+	return created, nil
 }
 
 func (r *AccountSessionRepo) FindSessionByAccessHash(_ context.Context, accessTokenHash string) (*domain.AccountSession, error) {

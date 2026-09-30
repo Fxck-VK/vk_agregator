@@ -20,6 +20,7 @@ import {
   WorkspaceLogoutBoundary,
 } from "./WorkspaceLogoutBoundary";
 import { requestWorkspaceLogout } from "./workspace-logout-request";
+import { activateConversationCache, readConversationCache, writeConversationCache } from "@/features/conversations/conversation-list-cache";
 
 const push = vi.fn();
 const refresh = vi.fn();
@@ -160,6 +161,14 @@ describe("WorkspaceLogoutBoundary", () => {
     act(() => channel.emit({ type: "logout-confirmed" }));
     expect(replace).toHaveBeenCalledWith("/ru/app");
     expect(refresh).toHaveBeenCalledOnce();
+  });
+  it("clears private metadata when confirmation arrives without the start event", () => {
+    renderBoundary();
+    activateConversationCache("account-a");
+    writeConversationCache("account-a", [{ id: "d7c979f5-24e5-4f88-924b-a592d6e5a906", title: "Cached chat", created_at: "2026-09-29T00:00:00Z", updated_at: "2026-09-29T00:00:00Z" }]);
+    act(() => FakeBroadcastChannel.instances[0].emit({ type: "logout-confirmed" }));
+    activateConversationCache("account-a");
+    expect(readConversationCache("account-a")).toBeNull();
   });
 });
 

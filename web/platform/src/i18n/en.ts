@@ -139,6 +139,7 @@ export const en = {
     ],
   },
   conversations: {
+    listLoadFailure: "Couldn't load chats.",
     imagesLoading: "Loading chat images…",
     imagesLoadFailure: "Could not load chat images. Select an image to try again.",
     actionsLabel: "Chat actions",

@@ -9,6 +9,14 @@ const maxProxyRequestBodyBytes = 64 * 1024;
 type StreamingRequestInit = RequestInit & { duplex: "half" };
 
 describe("proxyWebApiRequest", () => {
+  it("preserves retry and account metadata with a generated correlation id", async () => {
+    vi.stubGlobal("fetch", vi.fn(async () => new Response(null, { status: 503, headers: { "Retry-After": "5", "X-NeiroHub-Account-ID": "account", "Set-Cookie": "nh_access=synthetic; HttpOnly" } })));
+    const response = await proxyWebApiRequest(new Request("https://platform.example/web/v1/conversations?limit=20"), "/web/v1/conversations?limit=20", internalOrigin);
+    expect(response.headers.get("Retry-After")).toBe("5");
+    expect(response.headers.get("X-Request-ID")).toMatch(/^[0-9a-f-]{36}$/);
+    expect(response.headers.get("X-NeiroHub-Account-ID")).toBe("account");
+    expect(response.headers.getSetCookie()).toHaveLength(1);
+  });
   it("allows multipart-sized bodies only on the input upload route", async () => {
     const upstream = vi.fn(async () => Response.json({ artifact_id: "synthetic" }));
     vi.stubGlobal("fetch", upstream);

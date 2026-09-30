@@ -139,6 +139,7 @@ export const ru = {
     ],
   },
   conversations: {
+    listLoadFailure: "Не удалось загрузить чаты.",
     imagesLoading: "Загружаем фотографии диалога…",
     imagesLoadFailure: "Не удалось загрузить фотографии диалога. Нажмите на фото, чтобы повторить.",
     actionsLabel: "Действия с чатом",

@@ -18,6 +18,8 @@ import {
 import { clearPendingConversationPrompts } from "@/features/conversations/pending-conversation-prompt";
 import { clearPendingConversationBootstraps } from "@/features/conversations/pending-conversation-bootstrap";
 import { clearPendingConversationTitleSyncs } from "@/features/conversations/pending-conversation-title-sync";
+import { clearConversationCache } from "@/features/conversations/conversation-list-cache";
+import { endBrowserSession } from "@/lib/web-api/browser-session-state";
 
 import { requestWorkspaceLogout } from "./workspace-logout-request";
 import styles from "./WorkspaceLogoutBoundary.module.css";
@@ -51,6 +53,8 @@ function isWorkspaceLogoutMessage(value: unknown): value is WorkspaceLogoutMessa
 }
 
 function clearPrivateBrowserState() {
+  endBrowserSession();
+  clearConversationCache();
   clearPendingConversationPrompts();
   clearPendingConversationBootstraps();
   clearPendingConversationTitleSyncs();
@@ -101,6 +105,7 @@ export function WorkspaceLogoutBoundary({ children, guest }: WorkspaceLogoutBoun
         return;
       }
       requestInFlightRef.current = false;
+      clearPrivateBrowserState();
       transition("confirmed");
       publish({ type: "logout-confirmed" });
       navigateAfterConfirmation();
@@ -154,6 +159,7 @@ export function WorkspaceLogoutBoundary({ children, guest }: WorkspaceLogoutBoun
         transition("failed");
         return;
       }
+      clearPrivateBrowserState();
       transition("confirmed");
       navigateAfterConfirmation();
     };

@@ -15,6 +15,7 @@
     "typecheck": "tsc --noEmit",
     "test": "vitest run && npm run test:assets",
     "test:i18n": "vitest run src/i18n",
+    "test:session-browser": "node --test scripts/test-session-recovery.mjs",
     "test:assets": "node --test scripts/validate-assets.test.mjs",
     "validate:assets": "node scripts/validate-assets.mjs",
     "test:packaging": "node scripts/assert-packaging.mjs"

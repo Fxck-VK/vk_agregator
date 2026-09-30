@@ -165,6 +165,8 @@ type AccountIdentityRepository interface {
 // agents.
 type AccountSessionRepository interface {
 	CreateSession(ctx context.Context, session AccountSession) (*AccountSession, error)
+	// RotateSession atomically replaces one active same-account refresh session.
+	RotateSession(ctx context.Context, oldRefreshHash string, session AccountSession) (*AccountSession, error)
 	FindSessionByAccessHash(ctx context.Context, accessTokenHash string) (*AccountSession, error)
 	FindSessionByRefreshHash(ctx context.Context, refreshTokenHash string) (*AccountSession, error)
 	ListActiveSessionsByAccount(ctx context.Context, accountID uuid.UUID, now time.Time, limit int) ([]*AccountSession, error)
