@@ -3,6 +3,73 @@
 The DEV contour mirrors production architecture with separate secrets, domains,
 VK community, YooKassa/test settings and Cloudflare tunnel.
 
+## Manual model smoke on DEV
+
+At the user's request, `FEATURE_DEV_MODEL_SMOKE_ENABLED=true` exposes priced
+APIMart candidates for manual smoke on the DEV site. The DEV env renderer enables
+it when APIMart has credentials; explicit `false` disables it. Application defaults
+remain false. API and worker reject this flag outside `APP_ENV=development` and
+require APIMart readiness plus the video router. Deploy both processes together.
+
+This adds 16 media candidates: Nano Banana, Imagen 4.0; HappyHorse 1.0/1.1, SkyReels V4
+Fast/Standard, Wan 3.0, Vidu Q3 Pro, Grok Imagine 1.5 Video, Kling 2.6, Seedance 2.0
+Standard/Mini; Suno V6/Wild/Mini and Lyria 3.5. Images and videos accept text only;
+music exposes `generate` only. GPT-4o Mini TTS and Whisper remain disabled until
+bounded per-job billing is implemented. Reference-only legacy routes remain subject
+to their existing surface/input restrictions.
+
+It also exposes 21 text candidates from APIMart's documented Chat Completions
+list (checked 2026-09-28): GPT-5/5.1/5 Chat Latest/5 Mini; Claude Opus 4.6,
+Sonnet 4.6 and Opus 4.5 (20251101); Gemini 3.5 Flash, 3.1 Pro Preview,
+3 Pro Preview/Thinking, 3 Flash Preview, 2.5 Pro/Flash/Flash Lite; DeepSeek
+V4 Pro/Flash, V3.2/Exp, R1 (250528) and V3 (0324). Existing KIE routes, including
+Opus 4.7/4.8 and Gemini 3.1 Pro, are preserved. Preview has its own exact ID.
+
+The 2026-09-29 extension adds 13 more exact text routes (34 candidates total):
+GPT-6 Sol/Luna, GPT-5.4, GPT-5.3 Codex, GPT-5.2, Claude Opus 5.5,
+Claude Haiku 4.5 (20251001), Kimi K3, Qwen 3.8 Max, Qwen 3.7 Flash and
+Grok 4.5/4.6/4.7. Read-only `/v1/models?expand=category` confirmed each native ID;
+the public default-group pricing API and browser catalog confirmed its rate.
+Claude Sonnet 5.5 and Gemini 3.1 Flash were absent; Sonnet 5 and Flash Lite Preview
+are not replacements. Dated facts and bounded prices are stored in
+`internal/service/pricingcatalog/testdata/apimart-text-20260929.json`.
+
+Chat routes use `POST /v1/chat/completions`, `stream:false` and `max_tokens:2048`.
+Qwen 3.8 Max instead uses `POST /v1/responses`, text-only `input`, `stream:false`
+and `max_output_tokens:2048`, as specified by its
+[model guide](https://docs.apimart.ai/ru/api-reference/texts/qwen3.8-max/guide).
+This bound includes reasoning. No tools, explicit cache creation or PDF input
+are sent; those operations have different contracts/costs. Only a completed
+assistant answer with bounded usage is accepted, never reasoning alone.
+The application reserves a fixed bounded reply: at most 8192 input tokens including
+trusted framing, with a 7680 UTF-8-byte prompt/context budget, and 2048 output tokens.
+The full provider context window is unknown; pricing metadata's input ceiling is
+not advertised as that window. All attachments remain disabled. Rates use the
+public default-group effective price, without cache or membership discounts,
+then x3 rounded up to five internal credits. Source facts are recorded in
+`internal/service/pricingcatalog/testdata/apimart-text-20260928.json`.
+The new tiered prices use the first input tier because 8192 is below every
+published first threshold; fractional micro-dollar rates are rounded upward.
+Old price versions and evidence dates are preserved. New reply prices range
+from 5 to 40 credits; quotes are fixed reply reservations, not a per-message
+claim about actual consumed tokens.
+These candidates do not inherit `APIMART_TEXT_LIMITS_VERIFIED`: live limit/usage
+checks remain outstanding. That flag still gates the existing Fable 5.1 route.
+Check every candidate's usable answer, usage bounds and actual charge manually;
+in particular, thinking/reasoning must fit the total output budget. Missing usage,
+an over-budget answer or an ambiguous response fails without automatic resubmission.
+
+`GET /web/v1/models` marks these models `dev-smoke`, never verified. Auth, owned
+Jobs/artifacts, reservations, idempotency, moderation and capture/release remain
+mandatory. Candidate prices supplement missing catalog entries without overriding
+primary prices and survive runtime price refresh. Video/image prices use the
+documented floor, x3 and rounding up to five credits. Check actual provider charges
+and produced media during manual smoke; offline tests do not establish live success.
+
+The user runs paid smoke manually. Deploy and infrastructure checks submit no
+generations. Setting the flag false hides new selections and blocks candidate
+execution; drain or resolve active smoke jobs before switching it off.
+
 ## Platform language URLs
 
 The platform serves existing UI pages under `/ru` and `/en`. Legacy page URLs

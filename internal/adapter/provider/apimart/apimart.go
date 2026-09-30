@@ -18,6 +18,7 @@ import (
 
 	"vk-ai-aggregator/internal/adapter/provider/textapi"
 	"vk-ai-aggregator/internal/domain"
+	"vk-ai-aggregator/internal/service/pricingcatalog"
 )
 
 const (
@@ -104,6 +105,24 @@ func (p *Provider) Capabilities(ctx context.Context) ([]domain.Capability, error
 		return nil, err
 	}
 	return append(textCaps, []domain.Capability{
+		{Operation: domain.OperationImageGenerate, Modality: domain.ModalityImage, ModelCode: ModelNanoBanana, SupportsPolling: true},
+		{Operation: domain.OperationVideoGenerate, Modality: domain.ModalityVideo, ModelCode: ModelGrokImagineVideo, SupportsPolling: true, MaxDurationSec: 15},
+		{Operation: domain.OperationVideoGenerate, Modality: domain.ModalityVideo, ModelCode: ModelKling26, SupportsPolling: true, MaxDurationSec: 10},
+		{Operation: domain.OperationVideoGenerate, Modality: domain.ModalityVideo, ModelCode: ModelSeedance20, SupportsPolling: true, MaxDurationSec: 15},
+		{Operation: domain.OperationVideoGenerate, Modality: domain.ModalityVideo, ModelCode: ModelSeedance20Mini, SupportsPolling: true, MaxDurationSec: 15},
+		{Operation: domain.OperationVideoGenerate, Modality: domain.ModalityVideo, ModelCode: ModelWan30Video, SupportsPolling: true, MaxDurationSec: 30},
+		{Operation: domain.OperationVideoGenerate, Modality: domain.ModalityVideo, ModelCode: ModelViduQ3Pro, SupportsPolling: true, MaxDurationSec: 16},
+		{Operation: domain.OperationImageGenerate, Modality: domain.ModalityImage, ModelCode: ModelImagen40, SupportsPolling: true},
+		{Operation: domain.OperationAudioTTS, Modality: domain.ModalityAudio, ModelCode: ModelGPT4oMiniTTS},
+		{Operation: domain.OperationAudioSTT, Modality: domain.ModalityText, ModelCode: ModelWhisper1},
+		{Operation: domain.OperationAudioMusic, Modality: domain.ModalityAudio, ModelCode: ModelLyria35, SupportsPolling: true, MaxDurationSec: 240},
+		{Operation: domain.OperationAudioMusic, Modality: domain.ModalityAudio, ModelCode: ModelSunoV6, SupportsPolling: true},
+		{Operation: domain.OperationAudioMusic, Modality: domain.ModalityAudio, ModelCode: ModelSunoV6Wild, SupportsPolling: true},
+		{Operation: domain.OperationAudioMusic, Modality: domain.ModalityAudio, ModelCode: ModelSunoV6Mini, SupportsPolling: true},
+		{Operation: domain.OperationVideoGenerate, Modality: domain.ModalityVideo, ModelCode: ModelHappyHorse10, SupportsPolling: true, MaxDurationSec: 15},
+		{Operation: domain.OperationVideoGenerate, Modality: domain.ModalityVideo, ModelCode: ModelHappyHorse11, SupportsPolling: true, MaxDurationSec: 15},
+		{Operation: domain.OperationVideoGenerate, Modality: domain.ModalityVideo, ModelCode: ModelSkyReelsV4Fast, SupportsPolling: true, MaxDurationSec: 15},
+		{Operation: domain.OperationVideoGenerate, Modality: domain.ModalityVideo, ModelCode: ModelSkyReelsV4Std, SupportsPolling: true, MaxDurationSec: 15},
 		{Operation: domain.OperationVideoGenerate, Modality: domain.ModalityVideo, ModelCode: ModelKlingV3, SupportsPolling: true, MaxDurationSec: 15},
 		{Operation: domain.OperationVideoGenerate, Modality: domain.ModalityVideo, ModelCode: ModelKling26Motion, SupportsPolling: true, MaxDurationSec: 30},
 		{Operation: domain.OperationVideoGenerate, Modality: domain.ModalityVideo, ModelCode: ModelVeo31Fast, SupportsPolling: true, MaxDurationSec: 8},
@@ -161,6 +180,69 @@ func (p *Provider) Capabilities(ctx context.Context) ([]domain.Capability, error
 // and telemetry. User billing must use pricingcatalog snapshots, never adapter
 // estimates.
 func (p *Provider) Estimate(ctx context.Context, req domain.ProviderRequest) (domain.CostEstimate, error) {
+	if isSpeechModel(req.ModelCode) {
+		return domain.CostEstimate{}, &Error{Class: domain.ProviderErrModelUnavailable, Message: "speech billing awaits verification"}
+	}
+	if isNextVisualModel(req.ModelCode) {
+		return estimateNextVisual(req)
+	}
+	if req.ModelCode == ModelLyria35 {
+		if err := validateLyriaRequest(req); err != nil {
+			return domain.CostEstimate{}, err
+		}
+		quote, err := pricingcatalog.MusicCandidateQuote("lyria_3_5", "generate", false)
+		if err != nil {
+			return domain.CostEstimate{}, &Error{Class: domain.ProviderErrModelUnavailable, Message: "music price unavailable"}
+		}
+		return domain.CostEstimate{AmountCredits: (quote.Floor.Amount + 99999) / 100000, Currency: "credits", Estimated: false}, nil
+	}
+	if isSunoModel(req.ModelCode) {
+		if err := validateSunoRequest(req); err != nil {
+			return domain.CostEstimate{}, err
+		}
+		m, _ := sunoMusicRequest(req)
+		s, err := pricingcatalog.MusicCandidateQuote(strings.ReplaceAll(strings.ToLower(req.ModelCode), "-", "_"), string(m.Action), m.MaxMode != nil && *m.MaxMode)
+		if err != nil {
+			return domain.CostEstimate{}, &Error{Class: domain.ProviderErrInvalidRequest, Message: "music price unavailable"}
+		}
+		return domain.CostEstimate{AmountCredits: (s.Floor.Amount + 99999) / 100000, Currency: "credits", Estimated: false}, nil
+	}
+	if isHappyHorseSkyReelsModel(req.ModelCode) {
+		if err := validateHappyHorseSkyReelsRequest(req); err != nil {
+			return domain.CostEstimate{}, err
+		}
+		mode := ""
+		seconds := req.DurationSec
+		if seconds == 0 {
+			seconds = 5
+		}
+		if req.VideoMedia != nil {
+			if req.VideoMedia.Mode == domain.VideoMediaModeEdit {
+				mode = "edit"
+			}
+			for _, v := range req.VideoMedia.ReferenceVideos {
+				switch v.Type {
+				case domain.VideoReferenceVideoTypeEdit:
+					seconds = min(v.DurationSec, 15)
+				case domain.VideoReferenceVideoTypeReference:
+					mode = "reference_video"
+					seconds = min(v.DurationSec, 10)
+				case domain.VideoReferenceVideoTypeExtend:
+					mode = "extend_video"
+				}
+			}
+		}
+		resolution := strings.ToLower(req.Resolution)
+		if resolution == "" {
+			resolution = "720p"
+		}
+		id := strings.NewReplacer("-", "_", ".", "_").Replace(req.ModelCode)
+		s, err := pricingcatalog.MediaVideoCandidateQuote(id, mode, resolution, seconds)
+		if err != nil {
+			return domain.CostEstimate{}, &Error{Class: domain.ProviderErrInvalidRequest, Message: "video price unavailable"}
+		}
+		return domain.CostEstimate{AmountCredits: (s.Floor.Amount + 99999) / 100000, Currency: "credits", Estimated: false}, nil
+	}
 	if isKlingVeoVideo(req.ModelCode) {
 		if err := validateKlingVeoVideo(req, false); err != nil {
 			return domain.CostEstimate{}, err
@@ -241,6 +323,27 @@ func (p *Provider) Estimate(ctx context.Context, req domain.ProviderRequest) (do
 
 // Submit returns synchronous text to the worker or creates an async media task.
 func (p *Provider) Submit(ctx context.Context, req domain.ProviderRequest) (domain.ProviderTask, error) {
+	if isSpeechModel(req.ModelCode) {
+		return p.submitSpeech(ctx, req)
+	}
+	if isNextVisualModel(req.ModelCode) {
+		if err := validateNextVisualRequest(req); err != nil {
+			return domain.ProviderTask{}, err
+		}
+		return p.submitUnversionedOnce(ctx, req, p.submitNextVisual)
+	}
+	if req.ModelCode == ModelLyria35 {
+		return p.submitLyria(ctx, req)
+	}
+	if isSunoModel(req.ModelCode) {
+		return p.submitSuno(ctx, req)
+	}
+	if isHappyHorseSkyReelsModel(req.ModelCode) {
+		if err := validateHappyHorseSkyReelsRequest(req); err != nil {
+			return domain.ProviderTask{}, err
+		}
+		return p.submitUnversionedOnce(ctx, req, p.submitHappyHorseSkyReels)
+	}
 	if isKlingVeoVideo(req.ModelCode) {
 		if err := validateKlingVeoVideo(req, true); err != nil {
 			return domain.ProviderTask{}, err
@@ -425,6 +528,15 @@ func (p *Provider) submitImage(ctx context.Context, req domain.ProviderRequest) 
 // when the task has completed. The worker stores those URLs as our artifacts
 // before the job can become successful.
 func (p *Provider) Poll(ctx context.Context, ref domain.ProviderTaskRef) (domain.ProviderTaskResult, error) {
+	if strings.HasPrefix(ref.ExternalID, "speech:") {
+		return domain.ProviderTaskResult{}, &Error{Class: domain.ProviderErrUnsupportedCapab, Message: "synchronous speech requires stored output"}
+	}
+	if strings.HasPrefix(ref.ExternalID, lyriaTaskPrefix) {
+		return p.pollLyria(ctx, ref)
+	}
+	if strings.HasPrefix(ref.ExternalID, sunoTaskPrefix) {
+		return p.pollSuno(ctx, ref)
+	}
 	if strings.HasPrefix(ref.ExternalID, "text:") {
 		return p.text.Poll(ctx, ref)
 	}
@@ -491,7 +603,12 @@ func (p *Provider) Poll(ctx context.Context, ref domain.ProviderTaskRef) (domain
 }
 
 // Cancel is a no-op until APIMart documents a stable task cancellation endpoint.
-func (p *Provider) Cancel(context.Context, domain.ProviderTaskRef) error { return nil }
+func (p *Provider) Cancel(_ context.Context, ref domain.ProviderTaskRef) error {
+	if strings.HasPrefix(ref.ExternalID, sunoTaskPrefix) || strings.HasPrefix(ref.ExternalID, lyriaTaskPrefix) {
+		return &Error{Class: domain.ProviderErrUnsupportedCapab, Message: "music cancellation is not supported"}
+	}
+	return nil
+}
 
 func (p *Provider) idempotentTask(key string) (domain.ProviderTask, bool) {
 	p.mu.Lock()

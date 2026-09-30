@@ -350,7 +350,7 @@ func imageDescription(modelID string) string {
 }
 
 func imageQualityOptions(modelID string) []string {
-	if model, ok := providermodels.StaticRegistry().PublicImageModel(modelID); ok {
+	if model, ok := providermodels.RuntimeRegistry().PublicImageModel(modelID); ok {
 		return append([]string(nil), model.Limits.AllowedQualities...)
 	}
 	return nil

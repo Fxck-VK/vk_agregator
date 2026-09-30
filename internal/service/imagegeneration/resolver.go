@@ -167,7 +167,7 @@ func (r Resolver) Resolve(request Request) (Resolution, error) {
 	}
 
 	size := imageSizeForQuality(trustedModel.Provider, public.ImageQuality)
-	if pricingcatalog.IsBoundedAPIMartImage(trustedModel.ModelID) {
+	if pricingcatalog.IsBoundedAPIMartImage(trustedModel.ModelID) || trustedModel.ModelID == "nano_banana" || trustedModel.ModelID == "imagen_4_0" {
 		size = public.AspectRatio
 	}
 	return Resolution{
@@ -194,7 +194,7 @@ func WorkerResolution(modelID, quality string) string {
 	case modelcatalog.MiniAppImageGPTImage25Flare, modelcatalog.MiniAppImageGPTImage25Sunburst:
 		resolution, _, _ := strings.Cut(quality, "-")
 		return resolution
-	case modelcatalog.MiniAppImageGrokImage15:
+	case modelcatalog.MiniAppImageGrokImage15, "imagen_4_0":
 		return ""
 	case modelcatalog.MiniAppImageGrokImage20:
 		return "quality"

@@ -53,6 +53,8 @@ const (
 	OperationAudioTTS OperationType = "audio_tts"
 	// OperationAudioSTT transcribes speech to text.
 	OperationAudioSTT OperationType = "audio_stt"
+	// OperationAudioMusic generates or transforms music through a typed action.
+	OperationAudioMusic OperationType = "audio_music"
 	// OperationImageUpscale increases the resolution of an image.
 	OperationImageUpscale OperationType = "image_upscale"
 )
@@ -68,6 +70,7 @@ func (o OperationType) Valid() bool {
 		OperationVideoExtend,
 		OperationAudioTTS,
 		OperationAudioSTT,
+		OperationAudioMusic,
 		OperationImageUpscale:
 		return true
 	default:
@@ -86,7 +89,7 @@ const (
 	// bounded reconciliation so the same durable job state is observable through
 	// every path.
 	PreparedConfirmationExpiredCode    = "prepared_confirmation_expired"
-	PreparedConfirmationExpiredMessage = "image generation confirmation expired"
+	PreparedConfirmationExpiredMessage = "generation confirmation expired"
 
 	// JobStatusPrepared is an account-owned request recorded before a future
 	// activation flow atomically reserves credits and queues delivery-neutral

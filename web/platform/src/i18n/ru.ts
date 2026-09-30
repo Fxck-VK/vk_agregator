@@ -38,6 +38,8 @@ export const ru = {
     chats: "Новый чат",
     files: "Мои файлы",
     models: "Все нейросети",
+    music: "Музыка",
+    speech: "Речь",
     inspiration: "Вдохновение",
     profile: "Профиль",
   },

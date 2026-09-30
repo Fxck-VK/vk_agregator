@@ -72,6 +72,12 @@ func TestEveryPreviewOptionResolvesWithoutCallingProviders(t *testing.T) {
 	}
 	for _, model := range catalog.Items {
 		for _, op := range model.Operations {
+			if !op.Enabled {
+				if model.Verification != "pending-verification" {
+					t.Fatalf("unexpected disabled preview operation: %s", model.ID)
+				}
+				continue
+			}
 			if op.Image != nil {
 				m, _ := registry.PublicImageModel(model.ID)
 				resolver := imagegeneration.NewResolver([]imagegeneration.PublicModel{{ID: model.ID, Name: model.Name, Enabled: true, Ready: true, QualityOptions: op.Image.QualityOptions, DefaultQuality: op.Image.DefaultQuality, MaxOutputCount: op.Image.MaxOutputCount, SupportsReferenceImage: m.Limits.SupportsReferenceImage, MaxReferenceImages: m.Limits.MaxReferenceImages}}, prices)

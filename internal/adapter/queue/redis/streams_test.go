@@ -39,6 +39,9 @@ func TestStreamForOperation(t *testing.T) {
 		domain.OperationImageEdit:         redisqueue.StreamImage,
 		domain.OperationVideoGenerate:     redisqueue.StreamVideo,
 		domain.OperationVideoImageToVideo: redisqueue.StreamVideo,
+		domain.OperationAudioMusic:        redisqueue.StreamAudio,
+		domain.OperationAudioTTS:          redisqueue.StreamAudio,
+		domain.OperationAudioSTT:          redisqueue.StreamAudio,
 	}
 	for op, want := range cases {
 		if got := redisqueue.StreamForOperation(op); got != want {

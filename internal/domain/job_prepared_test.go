@@ -21,7 +21,7 @@ func TestPreparedConfirmationExpiryUsesStableSafeErrorDetails(t *testing.T) {
 	if PreparedConfirmationExpiredCode != "prepared_confirmation_expired" {
 		t.Fatalf("confirmation expiry code = %q", PreparedConfirmationExpiredCode)
 	}
-	if PreparedConfirmationExpiredMessage != "image generation confirmation expired" {
+	if PreparedConfirmationExpiredMessage != "generation confirmation expired" {
 		t.Fatalf("confirmation expiry message = %q", PreparedConfirmationExpiredMessage)
 	}
 }

@@ -4,6 +4,9 @@ import "vk-ai-aggregator/internal/domain"
 
 // VideoName is the display name shared by the catalog and capability export.
 func VideoName(alias domain.VideoRouteAlias) string {
+	if c, ok := MediaCandidateByID(string(alias)); ok && c.Kind == "video" {
+		return c.Name
+	}
 	switch alias {
 	case domain.VideoRouteKling30Turbo:
 		return "Kling 3.0 Turbo"

@@ -1,6 +1,17 @@
 import type { MessageCatalog } from "../messages";
+import { messagesSpeechEn } from "../speech";
+import { messagesMusicCatalogEn } from "../music-catalog";
+import { messagesMusicEn } from "../music";
 
 export const messagesEn = {
+  ...messagesSpeechEn,
+  ...messagesMusicCatalogEn,
+  ...messagesMusicEn,
+  "catalog.pendingDescription": "Awaiting verification before launch.",
+  "catalog.devSmokeDescription": "Available for manual testing on DEV. Model verification is incomplete.",
+  "catalog.pendingImageDescription": "Awaiting verification before launch. References and editing are disabled.",
+  "catalog.pendingSpeechDescription": "Awaiting billing verification before launch.",
+  "catalog.musicDescription": "Music generation, track editing and music tools.",
   "imageGeneration.pendingImage": "Generating image {value1} of {value2}",
   "localDevelopment.imageBatch": "Waiting for multiple images",
   "localDevelopment.imageBatchDescription": "Count and aspect ratio control the placeholders. Switch between loading, error and ready above — these are local examples.",

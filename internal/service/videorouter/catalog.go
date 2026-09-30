@@ -12,6 +12,7 @@ import (
 	"github.com/google/uuid"
 
 	"vk-ai-aggregator/internal/domain"
+	"vk-ai-aggregator/internal/service/pricingcatalog"
 	"vk-ai-aggregator/internal/service/providermodels"
 )
 
@@ -119,7 +120,7 @@ func NewCatalog(cfg Config) (*Catalog, error) {
 		}
 		modelIDs[modelKey] = spec.Alias
 	}
-	for _, alias := range providermodels.StaticRegistry().ProviderModelAliases() {
+	for _, alias := range providermodels.RuntimeRegistry().ProviderModelAliases() {
 		addProviderModelAlias(modelIDs, alias.Alias, alias.ProviderModelID)
 	}
 	return &Catalog{
@@ -130,7 +131,7 @@ func NewCatalog(cfg Config) (*Catalog, error) {
 }
 
 func DefaultRouteSpecs() []domain.VideoRouteSpec {
-	return providermodels.StaticRegistry().VideoRouteSpecs()
+	return providermodels.RuntimeRegistry().VideoRouteSpecs()
 }
 
 func (c *Catalog) PublicRoutes() []PublicRoute {
@@ -301,6 +302,13 @@ func (c *Catalog) Resolve(ctx context.Context, req Request) (Resolution, error) 
 		return Resolution{}, fmt.Errorf("%w: provider cost %d exceeds route cap %d", domain.ErrCostCapExceeded, providerCost, route.Spec.MaxProviderCostCredits)
 	}
 	internalCost := int64(math.Ceil(float64(providerCost) * route.Spec.PriceMultiplier))
+	if providermodels.RuntimeRegistry().IsDEVSmokeModel(string(routeAlias)) {
+		quote, err := pricingcatalog.MediaVideoCandidateQuote(string(routeAlias), "", resolutionRaw, durationSec)
+		if err != nil {
+			return Resolution{}, err
+		}
+		internalCost = quote.InternalCredits
+	}
 	if routeAlias == domain.VideoRouteKling30Turbo || routeAlias == domain.VideoRouteMiniMaxH3 {
 		// Retail rounds once after converting the fractional provider rate;
 		// the whole-credit provider budget above is only a safety ceiling.
@@ -329,6 +337,10 @@ func (c *Catalog) Resolve(ctx context.Context, req Request) (Resolution, error) 
 		PriceMultiplier:        route.Spec.PriceMultiplier,
 		MaxProviderCostCredits: route.Spec.MaxProviderCostCredits,
 		MaxInternalCostCredits: route.Spec.MaxInternalCostCredits,
+	}
+	if providermodels.RuntimeRegistry().IsDEVSmokeModel(string(route.Spec.Alias)) {
+		// Manual smoke routes have text input only, so there is no source audio.
+		snapshot.KeepOriginalSound = false
 	}
 	if params.ReferenceVideoArtifactID != uuid.Nil {
 		snapshot.ReferenceVideoArtifactID = params.ReferenceVideoArtifactID.String()

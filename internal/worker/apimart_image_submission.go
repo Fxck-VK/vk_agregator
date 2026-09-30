@@ -13,6 +13,9 @@ import (
 )
 
 func durablePaidSubmitRoute(provider domain.ProviderName, model string) bool {
+	if providermodels.IsPendingMediaRoute(provider, model) {
+		return true
+	}
 	if providermodels.IsTurboH3VideoRoute(provider, model) {
 		return true
 	}
@@ -20,7 +23,7 @@ func durablePaidSubmitRoute(provider domain.ProviderName, model string) bool {
 }
 
 func isDurablePaidSubmitJob(job *domain.Job) bool {
-	if job == nil || (job.Modality != domain.ModalityImage && job.Modality != domain.ModalityText && job.Modality != domain.ModalityVideo) {
+	if job == nil || (job.Modality != domain.ModalityImage && job.Modality != domain.ModalityText && job.Modality != domain.ModalityVideo && job.Modality != domain.ModalityAudio) {
 		return false
 	}
 	var params struct {
@@ -39,6 +42,9 @@ func unresolvedPaidSubmitIntent(task *domain.ProviderTask) bool {
 // A retry must never allocate another attempt key for the same Job.
 func (g *GenerationWorker) claimPaidSubmit(ctx context.Context, req *domain.ProviderRequest) (*domain.ProviderTask, error) {
 	prefix := "flux_2_pro_submit:"
+	if providermodels.IsPendingMediaRoute(req.Provider, req.ModelCode) {
+		prefix = "apimart_media_submit:"
+	}
 	if providermodels.IsTurboH3VideoRoute(req.Provider, req.ModelCode) {
 		prefix = "apimart_video_submit:"
 	}
@@ -86,8 +92,11 @@ func (p *processor) failPaidSubmit(ctx context.Context, job *domain.Job, intent 
 }
 
 func (p *processor) resumePaidSubmit(ctx context.Context, job *domain.Job, intent *domain.ProviderTask, task queue.Task) error {
-	if providermodels.IsPaidTextRoute(intent.Provider, intent.ModelCode) && len(job.OutputArtifactIDs) > 0 && intent.ErrorClass == "" {
+	if (providermodels.IsPaidTextRoute(intent.Provider, intent.ModelCode) || isSpeechJob(job)) && len(job.OutputArtifactIDs) > 0 && intent.ErrorClass == "" {
 		intent.ExternalID = "text:" + job.ID.String()
+		if isSpeechJob(job) {
+			intent.ExternalID = "speech:" + job.ID.String()
+		}
 		intent.Status = domain.ProviderTaskSucceeded
 		if job.Status == domain.JobStatusDispatchingProvider {
 			if err := p.setStatus(ctx, job, domain.JobStatusProviderSubmitted, "", ""); err != nil {

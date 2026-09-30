@@ -12,8 +12,7 @@ describe("platform return-path proxy", () => {
   });
 
   it("matches rendered UI requests and leaves BFF and health routes alone", () => {
-    expect(config.matcher).toHaveLength(1);
-    expect(config.matcher[0]).toContain("_next/|assets/|web/|api/");
+    expect(config.matcher).toEqual(["/((?!_next/|assets/|web/|api/|health$|favicon.ico$|robots.txt$|sitemap.xml$).*)"]);
   });
 
   it.each(["/ru", "/en/login", privatePath])("sets a fresh strict nonce CSP for the rendered UI route %s", (pathname) => {

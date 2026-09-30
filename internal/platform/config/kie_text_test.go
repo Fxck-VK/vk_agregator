@@ -25,6 +25,27 @@ func TestKIETextRequiresExplicitVerificationAndCredentials(t *testing.T) {
 	}
 }
 
+func TestAPIMartCandidateDEVReadinessDoesNotForgeFableVerification(t *testing.T) {
+	cfg := Config{Env: "development", FeatureDEVModelSmokeEnabled: true, APIMartProviderEnabled: true, APIMartAPIKey: "fixture", APIMartBaseURL: "https://api.apimart.ai/v1"}
+	if err := cfg.validateAPIMartText(); err != nil || len(cfg.APIMartTextModels()) != 34 {
+		t.Fatalf("DEV text unavailable: %v", err)
+	}
+	if !cfg.TextModelEnabled("gpt_5") || cfg.TextModelEnabled("unknown") {
+		t.Fatal("wrong text model gate")
+	}
+	cfg.FeatureTextClaudeFable51Enabled = true
+	if cfg.validateAPIMartText() == nil || len(cfg.APIMartTextModels()) != 34 {
+		t.Fatal("manual smoke bypassed Fable verification")
+	}
+	cfg.FeatureTextClaudeFable51Enabled = false
+	for _, base := range []string{"http://api.apimart.ai/v1", "https://api.apimart.ai@other.invalid/v1", "https://api.apimart.ai/v1?key=fixture", "https://api.apimart.ai"} {
+		cfg.APIMartBaseURL = base
+		if cfg.validateAPIMartText() == nil {
+			t.Fatal("unsafe text base accepted")
+		}
+	}
+}
+
 func TestTextModelEnvFlagsDefaultOffAndResolveProvider(t *testing.T) {
 	for _, model := range providermodels.PaidTextModels() {
 		t.Setenv(model.FeatureFlag, "false")

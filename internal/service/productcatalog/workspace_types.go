@@ -12,6 +12,8 @@ const WebReferenceMaxBytes = 20 << 20
 const WebReferenceMaxDimension = 4096
 
 type WorkspaceConfig struct {
+	IncludePendingMedia   bool
+	IncludePendingText    bool
 	ImageReferenceUploads bool
 	TextModels            []textgeneration.PublicModel
 	ImageModels           []imagegeneration.PublicModel
@@ -40,14 +42,15 @@ type WorkspaceModel struct {
 }
 
 type WorkspaceOperation struct {
-	ID      string                     `json:"id"`
-	Kind    string                     `json:"kind"`
-	Enabled bool                       `json:"enabled"`
-	Inputs  modelcontract.Inputs       `json:"inputs"`
-	Text    *WorkspaceText             `json:"text,omitempty"`
-	Image   *WorkspaceImage            `json:"image,omitempty"`
-	Video   *WorkspaceVideo            `json:"video,omitempty"`
-	Audio   *modelcontract.AudioOutput `json:"audio,omitempty"`
+	ID      string               `json:"id"`
+	Kind    string               `json:"kind"`
+	Enabled bool                 `json:"enabled"`
+	Inputs  modelcontract.Inputs `json:"inputs"`
+	Text    *WorkspaceText       `json:"text,omitempty"`
+	Image   *WorkspaceImage      `json:"image,omitempty"`
+	Video   *WorkspaceVideo      `json:"video,omitempty"`
+	Audio   *WorkspaceAudio      `json:"audio,omitempty"`
+	Music   *WorkspaceMusic      `json:"music,omitempty"`
 }
 
 type WorkspaceText struct {
@@ -55,6 +58,16 @@ type WorkspaceText struct {
 	MaxPromptBytes  int   `json:"max_prompt_bytes,omitempty"`
 	MaxOutputTokens int   `json:"max_output_tokens,omitempty"`
 	ContextTokens   int   `json:"context_tokens,omitempty"`
+}
+
+// Output duration and language coverage stay absent when the API does not
+// establish an upper bound for this particular operation.
+type WorkspaceAudio struct {
+	Tasks          []string `json:"tasks"`
+	Languages      []string `json:"languages"`
+	Voices         []string `json:"voices"`
+	Formats        []string `json:"formats"`
+	MaxDurationSec int      `json:"max_duration_sec,omitempty"`
 }
 
 type WorkspaceImage struct {

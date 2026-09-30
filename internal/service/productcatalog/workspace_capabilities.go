@@ -5,6 +5,9 @@ import "vk-ai-aggregator/internal/service/providermodels"
 // Public capability descriptions follow the same priced controls as submission.
 // Native support never enables uploads or controls on the web surface.
 func workspaceCapabilities(id string, op WorkspaceOperation) *providermodels.ModelCapabilities {
+	if c, ok := providermodels.MediaCandidateByID(id); ok {
+		return &c.Capabilities
+	}
 	switch op.Kind {
 	case "text":
 		return providermodels.Capabilities(id)

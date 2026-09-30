@@ -29,10 +29,10 @@ func FromConfig(cfg config.Config, pricingCatalog *pricingcatalog.Catalog) (Runt
 	if pricingCatalog == nil {
 		return RuntimeCatalog{}, errors.New("productcatalog: pricing catalog is required")
 	}
-	if err := providermodels.StaticRegistry().Validate(); err != nil {
+	if err := providermodels.RuntimeRegistry().Validate(); err != nil {
 		return RuntimeCatalog{}, err
 	}
-	if err := validateRegistryConfigMappings(providermodels.StaticRegistry()); err != nil {
+	if err := validateRegistryConfigMappings(providermodels.RuntimeRegistry()); err != nil {
 		return RuntimeCatalog{}, err
 	}
 	videoCatalog, err := VideoRouteCatalogFromConfig(cfg)
@@ -57,7 +57,7 @@ func FromConfig(cfg config.Config, pricingCatalog *pricingcatalog.Catalog) (Runt
 }
 
 func VideoRouteCatalogFromConfig(cfg config.Config) (*videorouter.Catalog, error) {
-	registry := providermodels.StaticRegistry()
+	registry := providermodels.RuntimeRegistry()
 	if err := registry.Validate(); err != nil {
 		return nil, err
 	}
@@ -95,7 +95,7 @@ func (r RuntimeCatalog) VideoRoutes() []VideoRoute {
 }
 
 func imageProviderReadyFromConfig(cfg config.Config) map[domain.ProviderName]bool {
-	registry := providermodels.StaticRegistry()
+	registry := providermodels.RuntimeRegistry()
 	ready := make(map[domain.ProviderName]bool)
 	for _, model := range registry.PublicImageModels() {
 		ready[model.Provider] = ready[model.Provider] || providerReadyFromReadiness(cfg, model.Readiness)
@@ -111,7 +111,7 @@ func imageProviderReadyFromConfig(cfg config.Config) map[domain.ProviderName]boo
 }
 
 func enabledImageModelsFromConfig(cfg config.Config) map[string]bool {
-	registry := providermodels.StaticRegistry()
+	registry := providermodels.RuntimeRegistry()
 	enabled := make(map[string]bool)
 	for _, model := range registry.PublicImageModels() {
 		enabled[model.PublicID] = featureFlagEnabled(cfg, model.FeatureFlag)
@@ -213,6 +213,8 @@ func featureFlagEnabled(cfg config.Config, flag string) bool {
 
 func featureFlagValue(cfg config.Config, flag string) (bool, bool) {
 	switch flag {
+	case providermodels.FeatureDEVModelSmoke:
+		return cfg.FeatureDEVModelSmokeEnabled && cfg.Env == "development", true
 	case providermodels.FeatureTextClaudeOpus48:
 		return cfg.FeatureTextClaudeOpus48Enabled, true
 	case providermodels.FeatureTextGPT56Terra:

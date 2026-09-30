@@ -128,6 +128,11 @@ func (r Registry) ValidateOnboarding() error {
 			return fmt.Errorf("providermodels: public ID %s is duplicated across model types", b.PublicID)
 		}
 		seen[b.PublicID] = true
+		// An exact bootstrap-generated DEV binding may execute manual smoke, but
+		// has no approved contract and must use the public dev-smoke status.
+		if r.devSmoke && r.smokeFingerprints[b.PublicID] != "" && r.smokeFingerprints[b.PublicID] == b.Fingerprint {
+			continue
+		}
 		c, exists := r.Contracts[b.PublicID]
 		if !exists {
 			if baseline[b.Kind+"/"+b.PublicID] == b.Fingerprint {

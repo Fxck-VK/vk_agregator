@@ -24,6 +24,55 @@ describe("model catalog contract", () => {
     });
   });
 
+
+  it("accepts all-disabled audio operations only while verification is pending", () => {
+    const payload = publicModelCatalog();
+    payload.default_model_id = "suno_v6";
+    payload.items.push({
+      id: "suno_v6",
+      name: "Suno V6",
+      description: "Pending audio candidate",
+      kind: "audio",
+      categories: ["video-audio"],
+      verification: "pending-verification",
+      operations: [
+        {
+          id: "generate",
+          kind: "audio",
+          enabled: false,
+          inputs: {
+            images: { support: "unknown", enabled: false },
+            video: { support: "unknown", enabled: false },
+            audio: { support: "unknown", enabled: false },
+            documents: { support: "unknown", enabled: false },
+            max_total_bytes: 0,
+          },
+          audio: { tasks: [], languages: [], voices: [], formats: ["mp3", "m4a", "wav"], max_duration_sec: 360 },
+          music: {
+            title: "Generate",
+            group: "create",
+            output_kind: "audio",
+            supports_max: true,
+            supports_custom_model: false,
+            supports_persona: false,
+            supports_audio_format: true,
+            min_sources: 0,
+            max_sources: 0,
+            min_uploads: 0,
+            max_uploads: 0,
+            estimate_credits: 25,
+            max_estimate_credits: 40,
+            unavailable_reason: "pending verification",
+          },
+        },
+      ],
+    });
+
+    expect(parseModelCatalog(payload).items.at(-1)?.verification).toBe("pending-verification");
+
+    payload.items[payload.items.length - 1].verification = "verified-contract";
+    expect(() => parseModelCatalog(payload)).toThrow();
+  });
   it("accepts sparse image price variants when every offered dimension is represented", () => {
     const payload = publicModelCatalog();
     delete payload.items[0].operations[0].image.price_by_variant["1K:16:9"];

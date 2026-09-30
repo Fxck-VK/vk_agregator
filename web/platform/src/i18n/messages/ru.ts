@@ -1,4 +1,16 @@
+import { messagesSpeechRu } from "../speech";
+import { messagesMusicCatalogRu } from "../music-catalog";
+import { messagesMusicRu } from "../music";
+
 export const messagesRu = {
+  ...messagesSpeechRu,
+  ...messagesMusicCatalogRu,
+  ...messagesMusicRu,
+  "catalog.pendingDescription": "Ожидает проверки перед запуском.",
+  "catalog.devSmokeDescription": "Доступна для ручного тестирования на DEV. Проверка модели не завершена.",
+  "catalog.pendingImageDescription": "Ожидает проверки перед запуском. Референсы и редактирование выключены.",
+  "catalog.pendingSpeechDescription": "Ожидает проверки тарификации перед запуском.",
+  "catalog.musicDescription": "Создание музыки, работа с треками и музыкальные инструменты.",
   "imageGeneration.pendingImage": "Генерируем изображение {value1} из {value2}",
   "localDevelopment.imageBatch": "Ожидание нескольких изображений",
   "localDevelopment.imageBatchDescription": "Количество и формат задают форму заглушек. Переключайте загрузку, ошибку и готовый результат сверху — это локальные примеры.",

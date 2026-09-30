@@ -5,6 +5,7 @@ import { useDictionary } from "@/i18n/LocaleProvider";
 
 
 import { useGenerationCatalog } from "@/features/models/GenerationCatalogProvider";
+import type { GenerationModel } from "@/features/models/generation-model-catalog";
 
 
 import { WorkspacePrompt } from "./WorkspacePrompt";
@@ -12,7 +13,7 @@ import { WorkspacePrompt } from "./WorkspacePrompt";
 export function NewChatPrompt({ modelId }: { modelId: string }) {
   const t = useDictionary();
   const { catalog, failed: catalogFailed, retry } = useGenerationCatalog();
-  const model = catalog?.items.find((item) => item.id === modelId) ?? null;
+  const model = catalog?.items.find((item): item is GenerationModel => item.category !== "audio" && item.id === modelId) ?? null;
   const failed = catalogFailed || (catalog !== null && model === null);
 
   return <>

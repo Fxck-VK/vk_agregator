@@ -33,6 +33,10 @@ function getWorkspaceHeaderTitle(pathname: string | null, t: Dictionary) {
       return t.navigation.files;
     case "/app/models":
       return t.navigation.models;
+    case "/app/music":
+      return t.navigation.music;
+    case "/app/speech":
+      return t.navigation.speech;
     case "/app/profile":
       return t.navigation.profile;
     default:
@@ -52,7 +56,7 @@ export function WorkspaceHeader({ balance, trailingAction }: WorkspaceHeaderProp
     <>
       <header aria-label={title} className={styles.header} data-testid="workspace-header">
         <div className={styles.leading}>
-          <WorkspaceModelSelector />
+          {pathname === "/app/music" || pathname === "/app/speech" ? <p className={styles.title}>{title}</p> : <WorkspaceModelSelector />}
         </div>
         <div className={styles.trailing}>
           {trailingAction ?? (

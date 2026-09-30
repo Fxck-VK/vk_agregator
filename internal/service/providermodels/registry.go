@@ -38,6 +38,9 @@ type ProviderReadiness struct {
 
 // Registry is the static provider/model registry.
 type Registry struct {
+	devSmoke            bool
+	smokeFingerprints   map[string]string
+	smokePrices         []pricingcatalog.ProductPrice
 	ModelAliases        []ProviderModelAlias
 	Contracts           map[string]modelcontract.Contract
 	onboardingError     error

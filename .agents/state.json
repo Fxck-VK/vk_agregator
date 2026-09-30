@@ -1,6 +1,6 @@
 {
   "schema_version": 5,
-  "updated_at": "2026-09-14T00:00:00+03:00",
+  "updated_at": "2026-09-28T00:00:00+03:00",
   "branch": "dev-deploy",
   "remote_tracking": "origin/dev-deploy",
   "purpose": "Short machine-readable current context and routing for agents. This file is not project history.",
@@ -59,6 +59,7 @@
     "loadtest_contour": "Mock providers, payments and delivery only; no production hosts or paid calls."
   },
   "recent_decisions": [
+    "DEV manual model smoke is explicitly authorized by the user: priced candidates run with dev-smoke status; production admission and paid-agent-call authorization remain unchanged.",
     "Default context is intentionally small: AGENTS.md, .agents/state.json and docs/ARCHITECTURE.md.",
     "docs/HANDOFF_CURRENT.md is the only active handoff slot; completed handoffs live under docs/archive/handoffs/.",
     "RUNBOOK.md is an entrypoint; task details live under docs/runbooks/.",

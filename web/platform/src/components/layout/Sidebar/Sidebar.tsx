@@ -54,6 +54,8 @@ export const getWorkspaceNavigationItems = (t: Dictionary) => [
   { href: "/app/chats", icon: "edit", label: t.navigation.chats, prefetch: true },
   { href: "/app/files", icon: "file", label: t.navigation.files, prefetch: true },
   { href: "/app/models", icon: "grid", label: t.navigation.models, prefetch: true },
+  { href: "/app/music", icon: "image", label: t.navigation.music, prefetch: true },
+  { href: "/app/speech", icon: "edit", label: t.navigation.speech, prefetch: true },
   { href: "/app/inspiration", icon: "image", label: t.navigation.inspiration, prefetch: true },
 ] as const;
 

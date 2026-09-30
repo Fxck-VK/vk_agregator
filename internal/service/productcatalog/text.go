@@ -8,7 +8,7 @@ import (
 
 func textModelsFromConfig(cfg config.Config, r RuntimeCatalog) []textgeneration.PublicModel {
 	var ids []string
-	for _, m := range providermodels.StaticRegistry().TextAliasModels() {
+	for _, m := range providermodels.RuntimeRegistry().TextAliasModels() {
 		if m.PublicID == providermodels.PublicTextChatGPT {
 			continue
 		}

@@ -62,7 +62,7 @@ func New(cfg Config) *Provider {
 func (p *Provider) Name() domain.ProviderName { return p.provider }
 func (p *Provider) Capabilities(context.Context) ([]domain.Capability, error) {
 	var caps []domain.Capability
-	for _, m := range providermodels.PaidTextModels() {
+	for _, m := range providermodels.KnownPaidTextModels() {
 		if m.Provider == p.provider && p.enabled[m.ProviderModelID] {
 			caps = append(caps, domain.Capability{Operation: domain.OperationTextGenerate, Modality: domain.ModalityText, ModelCode: m.ProviderModelID})
 		}
@@ -200,6 +200,23 @@ type textBlock struct {
 }
 
 func normalize(raw []byte, format protocol, inputLimit, limit int) (string, error) {
+	if format == openAIChat {
+		var envelope struct {
+			Code    *int            `json:"code"`
+			Data    json.RawMessage `json:"data"`
+			Error   json.RawMessage `json:"error"`
+			Choices json.RawMessage `json:"choices"`
+		}
+		if json.Unmarshal(raw, &envelope) != nil || (len(envelope.Error) > 0 && string(envelope.Error) != "null") {
+			return "", failure(domain.ProviderErrSubmitIndeterminate)
+		}
+		if envelope.Code != nil || len(envelope.Data) > 0 {
+			if envelope.Code == nil || *envelope.Code != 200 || len(envelope.Data) == 0 || len(envelope.Choices) > 0 {
+				return "", failure(domain.ProviderErrSubmitIndeterminate)
+			}
+			raw = envelope.Data
+		}
+	}
 	var res struct {
 		Status     string          `json:"status"`
 		Error      json.RawMessage `json:"error"`

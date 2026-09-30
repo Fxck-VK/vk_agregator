@@ -82,6 +82,10 @@ func main() {
 		os.Exit(1)
 	}
 
+	if err := providermodels.ConfigureDEVSmoke(cfg.Env, cfg.FeatureDEVModelSmokeEnabled); err != nil {
+		logger.Error("model smoke configuration failed", logging.ErrorAttr(err))
+		os.Exit(1)
+	}
 	rootCtx := context.Background()
 	shutdownTracing, err := tracing.Init(rootCtx, tracing.Config{
 		ServiceName:         cfg.TracingServiceName + "-worker",
@@ -172,6 +176,10 @@ func main() {
 	pricingCatalog, pricingSelection, err := pricingCache.Current()
 	if err != nil {
 		logger.Error("runtime pricing cache unavailable", logging.ErrorAttr(err))
+		os.Exit(1)
+	}
+	if err := pricingCatalog.AddSupplemental(providermodels.RuntimeRegistry().DEVSmokePrices()); err != nil {
+		logger.Error("model smoke pricing failed", logging.ErrorAttr(err))
 		os.Exit(1)
 	}
 	if cfg.RuntimePricingRefreshInterval > 0 {
@@ -387,7 +395,7 @@ func main() {
 	}
 
 	var referenceSigner worker.ReferenceVideoSigner
-	if cfg.FeatureAPIMartKling26MotionEnabled {
+	if cfg.FeatureAPIMartKling26MotionEnabled || providermodels.MusicReferencesAdmitted() {
 		gateway, err := providerreference.New(cfg.ProviderReferenceBaseURL, cfg.ProviderReferenceSigningKey, jobs, artRepo, store)
 		if err != nil {
 			logger.Error("provider reference gateway configuration invalid")
@@ -500,7 +508,7 @@ func main() {
 			os.Exit(1)
 		}
 
-		genStreams := []string{redisqueue.StreamText, redisqueue.StreamImage, redisqueue.StreamVideo}
+		genStreams := []string{redisqueue.StreamText, redisqueue.StreamImage, redisqueue.StreamVideo, redisqueue.StreamAudio}
 		engines := []*worker.Engine{
 			worker.NewEngine(consumer, genStreams, gen.Process, worker.WithLogger(logger)),
 			worker.NewConversationTitleEngine(consumer, title.Process, logger),
@@ -771,7 +779,7 @@ func defaultProviderMediaContracts(cfg config.Config) []domain.ProviderMediaCont
 	if maxBytes <= 0 {
 		maxBytes = 256 << 20
 	}
-	return providermodels.StaticRegistry().ProviderMediaContracts(providermodels.MediaContractRuntime{
+	return providermodels.RuntimeRegistry().ProviderMediaContracts(providermodels.MediaContractRuntime{
 		ExpectedMaxVideoBytes: maxBytes,
 		RequireVideoProbe:     cfg.MediaVideoProbeRequired(),
 		VideoTranscodeAllowed: cfg.MediaVideoTranscodeEnabled(),

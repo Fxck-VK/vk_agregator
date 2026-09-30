@@ -20,6 +20,7 @@ const imageArtifactPathPattern =
   /^\/web\/v1\/(?:image|video)-artifacts\/[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
 export const MAX_PROXY_REQUEST_BODY_BYTES = 64 * 1024;
+export const MAX_MUSIC_UPLOAD_BODY_BYTES = 25 * 1024 * 1024;
 
 type ProxyRequestBody =
   | { kind: "body"; body: ArrayBuffer }
@@ -48,7 +49,7 @@ function proxyRequestHeaders(requestHeaders: Headers): Headers {
 
 function proxyResponseHeaders(upstream: Headers): Headers {
   const headers = new Headers();
-  for (const header of ["Content-Type", "Cache-Control", "Content-Range", "Accept-Ranges", "Retry-After", "X-NeiroHub-Account-ID"]) {
+  for (const header of ["Content-Type", "Cache-Control", "Content-Range", "Accept-Ranges", "Content-Disposition", "X-Content-Type-Options", "Retry-After", "X-NeiroHub-Account-ID"]) {
     const value = upstream.get(header);
     if (value) {
       headers.set(header, value);
@@ -185,7 +186,13 @@ export async function proxyWebApiRequest(
   const failed = (status: number, stage: string) => console.warn("web_proxy_failed", { request_id: requestId, status, stage, duration_ms: Date.now() - startedAt });
   let body: ArrayBuffer | undefined;
   if (request.method !== "GET" && request.method !== "HEAD") {
-    const proxyBody = await readProxyRequestBody(request, request.method === "POST" && safePath.split("?")[0] === "/web/v1/input-artifacts" ? 21 * 1024 * 1024 : MAX_PROXY_REQUEST_BODY_BYTES);
+    const pathname = safePath.split("?", 1)[0];
+    let bodyLimit = MAX_PROXY_REQUEST_BODY_BYTES;
+    if (request.method === "POST") {
+      if (pathname === "/web/v1/music-inputs") bodyLimit = MAX_MUSIC_UPLOAD_BODY_BYTES;
+      if (pathname === "/web/v1/input-artifacts") bodyLimit = 21 * 1024 * 1024;
+    }
+    const proxyBody = await readProxyRequestBody(request, bodyLimit);
     if (proxyBody.kind === "too_large") {
       return requestBodyTooLargeResponse();
     }

@@ -4,6 +4,7 @@ import (
 	"context"
 	"net/http"
 	"net/http/httptest"
+	"strings"
 	"testing"
 	"vk-ai-aggregator/internal/domain"
 )
@@ -25,6 +26,34 @@ func TestPaidPOSTNeverFollowsRedirectOrRetries(t *testing.T) {
 		if err == nil || calls != 1 || redirects != 0 {
 			t.Fatalf("status=%d calls=%d redirects=%d", status, calls, redirects)
 		}
+	}
+}
+
+func TestAPIMartChatEnvelopeAndUsageValidation(t *testing.T) {
+	valid := `{"choices":[{"message":{"role":"assistant","content":"answer","reasoning_content":"hidden"},"finish_reason":"stop"}],"usage":{"prompt_tokens":8192,"completion_tokens":2048}}`
+	for _, data := range []string{valid, `{"code":200,"data":` + valid + `}`} {
+		text, err := normalize([]byte(data), openAIChat, 8192, 2048)
+		if err != nil || text != "answer" {
+			t.Fatalf("valid response rejected: %v", err)
+		}
+	}
+	for name, data := range map[string]string{
+		"failed code":     `{"code":500,"data":` + valid + `}`,
+		"missing code":    `{"data":` + valid + `}`,
+		"missing data":    `{"code":200}`,
+		"mixed envelope":  `{"code":200,"choices":[],"data":` + valid + `}`,
+		"outer error":     `{"code":200,"error":{"message":"private fixture"},"data":` + valid + `}`,
+		"missing usage":   `{"code":200,"data":{"choices":[{"message":{"role":"assistant","content":"answer"},"finish_reason":"stop"}]}}`,
+		"output overflow": `{"code":200,"data":` + strings.Replace(valid, "2048", "2049", 1) + `}`,
+		"input overflow":  strings.Replace(valid, "8192", "8193", 1),
+		"no user answer":  strings.Replace(valid, `"content":"answer"`, `"content":""`, 1),
+		"tools":           strings.Replace(valid, `"stop"`, `"tool_calls"`, 1),
+	} {
+		t.Run(name, func(t *testing.T) {
+			if text, err := normalize([]byte(data), openAIChat, 8192, 2048); err == nil || text != "" {
+				t.Fatal("unsafe response accepted")
+			}
+		})
 	}
 }
 

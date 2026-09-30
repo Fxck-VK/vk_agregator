@@ -9,17 +9,23 @@ export type ModelPresentation = {
 
 type ModelPresentationSource = {
   artworkSrc?: string;
+  category?: unknown;
   description?: string;
   description_translations?: LocalizedText;
   id: string;
   name: string;
 };
 
+export function modelWorkspaceHref(model: { id: string; category?: unknown }): string {
+  const path = model.category === "audio" ? "/app/music" : "/app/chats";
+  return `${path}?model=${encodeURIComponent(model.id)}`;
+}
+
 export function getModelPresentation(model: ModelPresentationSource, msg: Translator = getTranslator("ru")): ModelPresentation {
   return {
     artworkSrc: model.artworkSrc,
     description: localizedText(model.description_translations, msg.locale,
       model.description ? translateCatalogText(model.description, msg) : msg("modelCardContent.valueIsAvailableInNeirohub", { value1: model.name })),
-    href: `/app/chats?model=${encodeURIComponent(model.id)}`,
+    href: modelWorkspaceHref(model),
   };
 }

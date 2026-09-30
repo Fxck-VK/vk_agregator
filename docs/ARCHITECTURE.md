@@ -11,6 +11,14 @@
 ---
 
 # Current implementation addendum: app surfaces and backend core
+Manual model testing on DEV uses `providermodels.RuntimeRegistry`, configured
+once by API/worker bootstrap after config validation. The explicitly enabled
+development flag adds priced text replies and text-input media candidates with pinned runtime
+bindings and a public `dev-smoke` status. Static admission and the frozen legacy
+baseline remain unchanged; production/loadtest reject this mode. A supplemental
+pricing layer fills missing candidate keys, preserves primary prices and survives
+DB refresh. Existing worker, Job, moderation and ledger boundaries still apply.
+See [DEV manual smoke](runbooks/DEV.md#manual-model-smoke-on-dev).
 
 The current implementation is a production-shaped modular monolith. It has one
 shared backend core and two user-facing app surfaces:
@@ -3024,6 +3032,14 @@ A unique provider_tasks submit intent precedes paid HTTP. ImmediateResult is tra
 Model flags, provider credentials, exact prices and the matching KIE_TEXT_LIMITS_VERIFIED or APIMART_TEXT_LIMITS_VERIFIED gate must all be ready. Verification gates are independent; all new model flags default to false. Static pricing version 11 adds the eight new models with cost times three rounded up to five credits. Unconfirmed native output-limit semantics keep rollout disabled. See docs/runbooks/KIE_TEXT_MODELS.md for contracts, prices, tests and rollout gates.
 
 
+Additional APIMart text candidates are available only in the explicitly enabled
+DEV smoke runtime, with dated evidence and bounded reply quotes. The September 29
+extension adds 13 exact IDs. Qwen 3.8 Max uses /v1/responses with a combined
+reasoning/output cap; other new routes use Chat Completions. Tools, explicit
+cache creation and attachments remain closed. Worker submit intent, artifact
+checkpointing, moderation and ledger semantics are unchanged. These candidates
+remain draft until live admission; see docs/runbooks/MODEL_ONBOARDING.md.
+
 ## Signed video references for APIMart Motion Control
 
 Mini App video uploads are authenticated and probed in cmd/api before private input
@@ -3141,6 +3157,53 @@ resolve to existing adapter bounds in public copies, without enabling new
 provider features. Web submission, authorization, ownership, billing and worker
 boundaries are unchanged by this merge.
 
+## Music workspace and pending APIMart media (2026-09-16)
+
+The web music workspace uses account-owned audio_music Jobs, a dedicated audio
+stream, prepared confirmation expiry, and the existing ledger lifecycle. API
+prepares/activates Jobs; workers own Suno native actions, durable submit intents
+and music-prefixed task polling. Transforms resolve owned, succeeded source Jobs
+and original one-based track indexes. Partial artifact checkpoints preserve
+associations; complete checkpoints resume moderation/delivery without resubmit.
+
+Audio inputs are private Artifacts checked by content and ffprobe. Workers issue
+expiring Job-bound provider-reference URLs through the signed gateway. Results
+are served to the authenticated owner after completion and moderation; private
+storage/provider URLs never reach the browser. Gateway startup requires music
+admission or the existing Motion Control flag plus valid signing configuration.
+
+HappyHorse 1.0/1.1, SkyReels V4 Fast/Std and Suno V6/Wild/Mini have native adapters,
+dated facts, draft contracts and cost-times-three candidate quotes. They remain
+outside active bindings and runtime tariffs. The catalog can display them as
+pending-verification with all operations disabled. Required real output evidence
+cannot be replaced by an implementation or feature flag. Video application
+hydration is text-only: native frame/Omni/edit adapter modes do not enable web
+inputs. The frozen legacy baseline is unchanged. See runbooks/MODEL_CATALOG.md.
+
+## Additional APIMart media and synchronous speech (2026-09-20)
+
+Wan 3.0, Vidu Q3 Pro, Imagen 4.0 and Lyria 3.5 extend the pending candidate
+catalog with dated API facts and separate application capabilities. Lyria uses
+Flow Music generation/polling; Suno-only actions and source transformations
+cannot consume Lyria Jobs. Candidate quotes preserve the existing x3 policy.
+
+Account-owned audio_tts/audio_stt Jobs use /web/v1/speech-jobs prepare/activate
+and the existing ledger, outbox, moderation and account-history finalization.
+TTS produces audio; STT produces text from an owned, inspected private audio
+Artifact. Worker reads input bytes; API/BFF never calls the provider. Audio
+uploads reuse the private music-inputs path. Output routes enforce ownership
+and completed moderation before returning bytes.
+
+The synchronous speech adapter returns transient bytes/text without persisting
+raw provider responses. Worker stores private output Artifacts and records their
+IDs before the terminal provider checkpoint. Recovery reuses that checkpoint;
+ambiguous paid submissions cannot automatically replay. Prepared confirmation
+expiry covers TTS/STT through additive migration 000054.
+
+GPT-4o Mini TTS and Whisper-1 remain disabled until audio metering and live
+outputs are verified; token price tables alone are not per-job quotes. All six
+models remain outside active bindings/runtime prices until canonical admission.
+See runbooks/MODEL_CATALOG.md for application limits and remaining rollout gates.
 ## Platform localization ownership (2026-09-16)
 
 `web/platform/src/i18n` owns UI dictionaries, formatting and locale resolution. All UI URLs use `/ru` or `/en`; `src/proxy.ts` validates the prefix, overwrites the page-locale request header and rewrites to the shared internal App Router tree. Server dictionaries use this header; the root client boundary follows URL/history. Shared Link/router adapters own localized navigation. The stable route tree preserves draft, model and File/blob state during locale switches. The `neirohub-locale` cookie remembers preference only for legacy unprefixed redirects; it never overrides a localized URL and is not account identity or authorization. There is no mutable process-global language.
@@ -3189,3 +3252,11 @@ change/confirmed expiry. No credentials, message bodies or attachments are store
 Read retries preserve visible data and pause offline/hidden. BFF/Go failures
 share a generated request ID and sanitized stage/status/duration diagnostics.
 See web/platform/docs/preloading.md for the implemented contract and checks.
+Web image references now use the account-owned /web/v1/input-artifacts route:
+PNG/JPEG content is decoded and bounded to 20 MiB and 4096 pixels per side.
+The image catalog advertises uploads only when storage dependencies, model
+readiness and reference pricing are available. Owner checks and reference-count
+quotes remain server-owned; pending media candidates stay disabled. BFF body
+limits are separate for image multipart uploads and music/speech audio uploads.
+Music and speech UI use the same locale provider as the workspace; switching
+language preserves drafts, prepared Jobs and retry keys without resubmission.

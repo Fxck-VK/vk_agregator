@@ -20,6 +20,8 @@ import (
 	"github.com/google/uuid"
 
 	"vk-ai-aggregator/internal/domain"
+	"vk-ai-aggregator/internal/service/mediaprobe"
+	"vk-ai-aggregator/internal/service/musicgeneration"
 	"vk-ai-aggregator/internal/service/videoreference"
 )
 
@@ -138,12 +140,7 @@ func (s *Service) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		writeSafeError(w, statusForLoadError(err))
 		return
 	}
-	params, err := parseJobParams(job.Params)
-	if err != nil {
-		writeSafeError(w, http.StatusForbidden)
-		return
-	}
-	if err := authorize(job, artifact, artifactID, params); err != nil {
+	if err := authorize(job, artifact, artifactID); err != nil {
 		writeSafeError(w, statusForAuthError(err))
 		return
 	}
@@ -153,7 +150,7 @@ func (s *Service) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		writeSafeError(w, statusForLoadError(err))
 		return
 	}
-	if int64(len(data)) > videoreference.MaxBytes {
+	if int64(len(data)) > providerReferenceMaxBytes(artifact) {
 		writeSafeError(w, http.StatusRequestEntityTooLarge)
 		return
 	}
@@ -166,7 +163,7 @@ func (s *Service) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	if modTime.IsZero() {
 		modTime = s.now()
 	}
-	http.ServeContent(w, r, artifact.ID.String()+".mp4", modTime, bytes.NewReader(data))
+	http.ServeContent(w, r, artifact.ID.String()+providerReferenceExtension(artifact), modTime, bytes.NewReader(data))
 }
 
 func (s *Service) verifyRequest(path string, query url.Values) error {
@@ -205,14 +202,21 @@ func (s *Service) signature(path, expires string) string {
 	return hex.EncodeToString(mac.Sum(nil))
 }
 
-func authorize(job *domain.Job, artifact *domain.Artifact, artifactID uuid.UUID, params jobParams) error {
+func authorize(job *domain.Job, artifact *domain.Artifact, artifactID uuid.UUID) error {
 	if job == nil || artifact == nil {
 		return ErrNotFound
 	}
 	if job.AccountID == uuid.Nil || artifact.OwnerAccountID != job.AccountID {
 		return ErrNotFound
 	}
+	if job.OperationType == domain.OperationAudioMusic && job.Modality == domain.ModalityAudio {
+		return authorizeMusic(job, artifact, artifactID)
+	}
 	if job.OperationType != domain.OperationVideoGenerate || job.Modality != domain.ModalityVideo {
+		return ErrForbidden
+	}
+	params, err := parseJobParams(job.Params)
+	if err != nil {
 		return ErrForbidden
 	}
 	if !statusAllowsProviderDownload(job.Status) {
@@ -238,6 +242,49 @@ func authorize(job *domain.Job, artifact *domain.Artifact, artifactID uuid.UUID,
 		return ErrNotFound
 	}
 	return nil
+}
+
+func authorizeMusic(job *domain.Job, artifact *domain.Artifact, artifactID uuid.UUID) error {
+	if !statusAllowsProviderDownload(job.Status) {
+		return ErrForbidden
+	}
+	params, err := musicgeneration.DecodeJob(job)
+	if err != nil {
+		return ErrForbidden
+	}
+	if !containsUUID(job.InputArtifactIDs, artifactID) || !containsUUID(params.AudioArtifactIDs, artifactID) {
+		return ErrNotFound
+	}
+	if err := mediaprobe.ValidateMusicInputArtifact(artifact, job.AccountID); err != nil {
+		return ErrForbidden
+	}
+	if strings.TrimSpace(artifact.StorageBucket) == "" || strings.TrimSpace(artifact.StorageKey) == "" {
+		return ErrNotFound
+	}
+	return nil
+}
+
+func providerReferenceMaxBytes(artifact *domain.Artifact) int64 {
+	if artifact != nil && artifact.MediaType == domain.MediaTypeAudio {
+		return mediaprobe.MaxMusicInputBytes
+	}
+	return videoreference.MaxBytes
+}
+
+func providerReferenceExtension(artifact *domain.Artifact) string {
+	if artifact == nil {
+		return ".bin"
+	}
+	switch strings.ToLower(strings.TrimSpace(artifact.MimeType)) {
+	case "audio/mpeg":
+		return ".mp3"
+	case "audio/aac":
+		return ".aac"
+	case "audio/wav", "audio/x-wav":
+		return ".wav"
+	default:
+		return ".mp4"
+	}
 }
 
 func statusAllowsProviderDownload(status domain.JobStatus) bool {

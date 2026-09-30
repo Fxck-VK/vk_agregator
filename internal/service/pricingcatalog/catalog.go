@@ -81,6 +81,9 @@ func (u FloorUnit) Valid() bool {
 // lookup. It intentionally has no provider, provider model id, floor or
 // multiplier fields.
 type ProductKey struct {
+	AudioModelID    string                 `json:"audio_model_id,omitempty"`
+	AudioAction     string                 `json:"audio_action,omitempty"`
+	AudioMax        bool                   `json:"audio_max,omitempty"`
 	TextModelID     string                 `json:"text_model_id,omitempty"`
 	Operation       domain.OperationType   `json:"operation"`
 	Modality        domain.Modality        `json:"modality"`
@@ -93,6 +96,8 @@ type ProductKey struct {
 
 // Normalize returns a trimmed copy suitable for stable lookup and snapshots.
 func (k ProductKey) Normalize() ProductKey {
+	k.AudioModelID = strings.TrimSpace(k.AudioModelID)
+	k.AudioAction = strings.TrimSpace(k.AudioAction)
 	k.TextModelID = strings.TrimSpace(k.TextModelID)
 	k.ImageModelID = strings.TrimSpace(k.ImageModelID)
 	k.VideoRouteAlias = domain.VideoRouteAlias(strings.TrimSpace(string(k.VideoRouteAlias)))
@@ -106,6 +111,16 @@ func (k ProductKey) Normalize() ProductKey {
 func (k ProductKey) Valid() bool {
 	k = k.Normalize()
 	if !k.Operation.Valid() || !k.Modality.Valid() {
+		return false
+	}
+	if k.Operation == domain.OperationAudioTTS || k.Operation == domain.OperationAudioSTT {
+		pair := k.Operation == domain.OperationAudioTTS && k.Modality == domain.ModalityAudio && k.AudioAction == "speak" || k.Operation == domain.OperationAudioSTT && k.Modality == domain.ModalityText && k.AudioAction == "transcribe"
+		return pair && k.AudioModelID != "" && !k.AudioMax && k.TextModelID == "" && k.ImageModelID == "" && k.VideoRouteAlias == "" && k.Quality == "" && k.Resolution == "" && k.DurationSec == 0
+	}
+	if k.Operation == domain.OperationAudioMusic {
+		return k.Modality == domain.ModalityAudio && k.AudioModelID != "" && k.AudioAction != "" && k.TextModelID == "" && k.ImageModelID == "" && k.VideoRouteAlias == "" && k.Quality == "" && k.Resolution == "" && k.DurationSec == 0
+	}
+	if k.AudioModelID != "" || k.AudioAction != "" || k.AudioMax {
 		return false
 	}
 	switch k.Operation {
@@ -350,8 +365,25 @@ func (s PricingSnapshot) Valid() bool {
 // to it in a later PR; this package does not call providers or trust frontend
 // price input.
 type Catalog struct {
-	mu     sync.RWMutex
-	prices map[ProductKey]ProductPrice
+	mu           sync.RWMutex
+	prices       map[ProductKey]ProductPrice
+	supplemental map[ProductKey]ProductPrice
+}
+
+// AddSupplemental installs server-owned candidate prices without overriding any
+// runtime price (including a disabled one). A DB refresh preserves this overlay.
+func (c *Catalog) AddSupplemental(prices []ProductPrice) error {
+	if c == nil {
+		return ErrInvalidRuntimePrice
+	}
+	validated, err := NewCatalog(prices)
+	if err != nil {
+		return err
+	}
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	c.supplemental = validated.prices
+	return nil
 }
 
 // NewCatalog validates and indexes backend-owned price entries by public
@@ -390,6 +422,9 @@ func (c *Catalog) Lookup(key ProductKey) (ProductPrice, error) {
 	}
 	price, ok := c.prices[key]
 	if !ok {
+		price, ok = c.supplemental[key]
+	}
+	if !ok {
 		return ProductPrice{}, fmt.Errorf("%w: %+v", ErrPriceNotFound, key)
 	}
 	if err := validateProductPrice(price); err != nil {
@@ -409,6 +444,11 @@ func (c *Catalog) Prices() []ProductPrice {
 	prices := make([]ProductPrice, 0, len(c.prices))
 	for _, price := range c.prices {
 		prices = append(prices, price)
+	}
+	for key, price := range c.supplemental {
+		if _, exists := c.prices[key]; !exists {
+			prices = append(prices, price)
+		}
 	}
 	c.mu.RUnlock()
 	sort.Slice(prices, func(i, j int) bool {
@@ -473,6 +513,9 @@ func productKeySortKey(key ProductKey) string {
 	return strings.Join([]string{
 		string(key.Operation),
 		string(key.Modality),
+		key.AudioModelID,
+		key.AudioAction,
+		fmt.Sprint(key.AudioMax),
 		key.TextModelID,
 		key.ImageModelID,
 		string(key.VideoRouteAlias),
