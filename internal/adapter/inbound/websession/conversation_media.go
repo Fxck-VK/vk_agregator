@@ -15,6 +15,7 @@ import (
 	"vk-ai-aggregator/internal/service/joborchestrator"
 	"vk-ai-aggregator/internal/service/pricingcatalog"
 	"vk-ai-aggregator/internal/service/productcatalog"
+	"vk-ai-aggregator/internal/service/providermodels"
 	"vk-ai-aggregator/internal/service/resultservice"
 )
 
@@ -30,6 +31,7 @@ type conversationGenerationRequest struct {
 }
 
 type safeVideoModel struct {
+	AutomaticDuration   bool             `json:"automatic_duration,omitempty"`
 	ID                  string           `json:"id"`
 	Name                string           `json:"name"`
 	Description         string           `json:"description"`
@@ -42,15 +44,14 @@ type safeVideoModel struct {
 	PriceByOption       map[string]int64 `json:"price_by_option"`
 }
 
-// Only ready text-to-video routes are selectable until the web supports owned
-// reference uploads. Public product aliases and server prices are the contract.
+// Public aliases, owned inputs and server prices define the web video surface.
 func (h *Handler) conversationVideoRoutes() []productcatalog.VideoRoute {
 	routes := make([]productcatalog.VideoRoute, 0)
 	if h.deps.ImagePricing == nil {
 		return routes
 	}
 	for _, route := range h.cfg.VideoRoutes {
-		if !route.Enabled || route.RequiresStartImage || route.RequiresReferenceVideo || route.AutomaticDuration || len(route.AllowedReferenceImageCounts) > 0 && !slices.Contains(route.AllowedReferenceImageCounts, 0) {
+		if !productcatalog.WorkspaceVideoRouteSupported(route) || providermodels.VideoCandidateRequiresImages(route.Alias) && (h.deps.InputArtifacts == nil || h.deps.InputObjects == nil) {
 			continue
 		}
 		key := pricingcatalog.ProductKey{Operation: domain.OperationVideoGenerate, Modality: domain.ModalityVideo, VideoRouteAlias: domain.VideoRouteAlias(route.Alias), Resolution: route.DefaultResolution, DurationSec: route.DefaultDurationSec}
@@ -69,7 +70,7 @@ func (h *Handler) listVideoModels(w http.ResponseWriter, r *http.Request) {
 		if !ok {
 			continue
 		}
-		items = append(items, safeVideoModel{ID: route.Alias, Name: route.Name, Description: route.Description, AllowedResolutions: controls.AllowedResolutions, AllowedDurations: controls.AllowedDurationsSec, AllowedAspectRatios: controls.AllowedAspectRatios, DefaultResolution: controls.DefaultResolution, DefaultDuration: controls.DefaultDurationSec, DefaultAspectRatio: controls.DefaultAspectRatio, PriceByOption: controls.PriceByOption})
+		items = append(items, safeVideoModel{ID: route.Alias, Name: route.Name, Description: route.Description, AllowedResolutions: controls.AllowedResolutions, AllowedDurations: controls.AllowedDurationsSec, AllowedAspectRatios: controls.AllowedAspectRatios, DefaultResolution: controls.DefaultResolution, DefaultDuration: controls.DefaultDurationSec, DefaultAspectRatio: controls.DefaultAspectRatio, PriceByOption: controls.PriceByOption, AutomaticDuration: controls.AutomaticDuration})
 	}
 	writeJSON(w, http.StatusOK, struct {
 		Items []safeVideoModel `json:"items"`
@@ -115,7 +116,8 @@ func (h *Handler) resolveConversationMedia(req conversationGenerationRequest) (d
 		if route.Alias != req.ModelID {
 			continue
 		}
-		if len(req.ReferenceArtifactIDs) > 0 || req.ImageQuality != "" || req.OutputCount != 0 {
+		requiredReferences := providermodels.VideoCandidateRequiresImages(route.Alias)
+		if req.ImageQuality != "" || req.OutputCount != 0 || (!requiredReferences && len(req.ReferenceArtifactIDs) > 0) || (requiredReferences && (len(req.ReferenceArtifactIDs) < 1 || len(req.ReferenceArtifactIDs) > 7)) {
 			break
 		}
 		if req.Resolution == "" {
@@ -147,7 +149,11 @@ func (h *Handler) resolveConversationMedia(req conversationGenerationRequest) (d
 		if err != nil {
 			return "", "", nil, pricingcatalog.PricingSnapshot{}, err
 		}
-		return domain.OperationVideoGenerate, domain.ModalityVideo, map[string]any{"prompt": req.Prompt, "model_id": route.Alias, "model_name": route.Name, "video_route_alias": route.Alias, "resolution": req.Resolution, "duration_sec": req.DurationSec, "aspect_ratio": req.AspectRatio}, snapshot, nil
+		params := map[string]any{"prompt": req.Prompt, "model_id": route.Alias, "model_name": route.Name, "video_route_alias": route.Alias, "resolution": req.Resolution, "duration_sec": req.DurationSec, "aspect_ratio": req.AspectRatio}
+		if requiredReferences {
+			params["reference_artifact_ids"] = req.ReferenceArtifactIDs
+		}
+		return domain.OperationVideoGenerate, domain.ModalityVideo, params, snapshot, nil
 	}
 	return "", "", nil, pricingcatalog.PricingSnapshot{}, errors.New("unavailable media model or options")
 }
@@ -165,7 +171,7 @@ func (h *Handler) createConversationMedia(w http.ResponseWriter, r *http.Request
 	params["conversation_source"] = string(domain.ConversationSourceWeb)
 	raw, _ := json.Marshal(params)
 	orchestrationKey := "web-chat:" + accountID.String() + ":" + key.String()
-	job, err := h.deps.WebChatJobs.CreateJob(r.Context(), joborchestrator.CreateJobInput{AccountID: accountID, Source: "web", ChannelContext: &domain.ChannelContext{Channel: domain.ChannelWeb}, ResultMode: domain.ResultModeAccountHistory, Operation: operation, Modality: modality, IdempotencyKey: orchestrationKey, CorrelationID: orchestrationKey, Params: raw, PricingSnapshot: snapshot})
+	job, err := h.deps.WebChatJobs.CreateJob(r.Context(), joborchestrator.CreateJobInput{AccountID: accountID, Source: "web", ChannelContext: &domain.ChannelContext{Channel: domain.ChannelWeb}, ResultMode: domain.ResultModeAccountHistory, Operation: operation, Modality: modality, IdempotencyKey: orchestrationKey, CorrelationID: orchestrationKey, Params: raw, PricingSnapshot: snapshot, InputArtifactIDs: append([]uuid.UUID(nil), req.ReferenceArtifactIDs...)})
 	switch {
 	case errors.Is(err, domain.ErrConflict):
 		writeError(w, http.StatusConflict, "idempotency key belongs to another message")

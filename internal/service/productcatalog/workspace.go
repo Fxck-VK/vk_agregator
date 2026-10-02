@@ -89,11 +89,23 @@ func WorkspaceCatalog(cfg WorkspaceConfig) WorkspaceModelList {
 		add(model.ID, model.Name, "Ответы на вопросы и работа с текстом в текущем диалоге", WorkspaceOperation{ID: "reply", Kind: "text", Enabled: true, Inputs: unknownWorkspaceInputs(), Text: &text}, model.EstimateCredits == 0)
 	}
 	for _, route := range cfg.VideoRoutes {
+		if providermodels.VideoCandidateRequiresImages(route.Alias) && !cfg.ImageReferenceUploads {
+			continue
+		}
 		controls, ok := WorkspaceVideoControls(route, cfg.Pricing)
 		if !ok {
 			continue
 		}
-		add(route.Alias, route.Name, "Создание видео по текстовому описанию. Разрешения: "+strings.Join(controls.AllowedResolutions, ", ")+".", WorkspaceOperation{ID: "generate", Kind: "video", Enabled: true, Inputs: unknownWorkspaceInputs(), Video: &controls}, false)
+		inputs := unknownWorkspaceInputs()
+		if providermodels.VideoCandidateRequiresImages(route.Alias) {
+			inputs.Images = modelcontract.Input{Support: modelcontract.Supported, Enabled: true, Required: true, Processing: "native", MaxCount: 7, AllowedCounts: []int{1, 2, 3, 4, 5, 6, 7}, MaxBytes: WebReferenceMaxBytes, MaxWidth: WebReferenceMaxDimension, MaxHeight: WebReferenceMaxDimension, Formats: []modelcontract.FileFormat{{Extension: ".png", MIME: "image/png"}, {Extension: ".jpg", MIME: "image/jpeg"}, {Extension: ".jpeg", MIME: "image/jpeg"}}}
+			inputs.MaxTotalBytes = 7 * WebReferenceMaxBytes
+		}
+		description := "Создание видео по текстовому описанию. Разрешения: " + strings.Join(controls.AllowedResolutions, ", ") + "."
+		if providermodels.VideoCandidateRequiresImages(route.Alias) {
+			description = "Доступна для ручного тестирования на DEV. Проверка модели не завершена."
+		}
+		add(route.Alias, route.Name, description, WorkspaceOperation{ID: "generate", Kind: "video", Enabled: true, Inputs: inputs, Video: &controls}, false)
 	}
 	if seen[providermodels.PublicTextChatGPT] {
 		out.DefaultModelID = providermodels.PublicTextChatGPT
@@ -195,9 +207,10 @@ func workspaceImageDefaultAspect(controls WorkspaceImage) string {
 
 func WorkspaceVideoControls(route VideoRoute, prices imagegeneration.SnapshotCatalog) (WorkspaceVideo, bool) {
 	out := WorkspaceVideo{PriceByOption: map[string]int64{}, StartImage: "unsupported", EndImage: "unsupported"}
-	if prices == nil || !route.Enabled || route.RequiresStartImage || route.RequiresReferenceVideo || route.AutomaticDuration || len(route.AllowedReferenceImageCounts) > 0 && !slices.Contains(route.AllowedReferenceImageCounts, 0) {
+	if prices == nil || !WorkspaceVideoRouteSupported(route) {
 		return out, false
 	}
+	out.AutomaticDuration = route.AutomaticDuration
 	registered, known := providermodels.RuntimeRegistry().VideoRoute(domain.VideoRouteAlias(route.Alias))
 	for _, resolution := range route.AllowedResolutions {
 		if known && !slices.Contains(registered.Spec.AllowedResolutions, resolution) {
@@ -216,7 +229,9 @@ func WorkspaceVideoControls(route VideoRoute, prices imagegeneration.SnapshotCat
 				if known && !slices.Contains(registered.Spec.AllowedAspectRatios, ratio) {
 					continue
 				}
-				out.Variants = append(out.Variants, WorkspaceVideoVariant{Resolution: resolution, DurationSec: duration, AspectRatio: ratio})
+				variant := WorkspaceVideoVariant{Resolution: resolution, DurationSec: duration, AspectRatio: ratio}
+				videoExpansionOutputMetadata(route.Alias, &variant)
+				out.Variants = append(out.Variants, variant)
 				if !slices.Contains(out.AllowedAspectRatios, ratio) {
 					out.AllowedAspectRatios = append(out.AllowedAspectRatios, ratio)
 				}
@@ -245,6 +260,33 @@ func WorkspaceVideoControls(route VideoRoute, prices imagegeneration.SnapshotCat
 	}
 	out.DefaultResolution, out.DefaultDurationSec, out.DefaultAspectRatio = def.Resolution, def.DurationSec, def.AspectRatio
 	return out, true
+}
+
+func videoExpansionOutputMetadata(id string, variant *WorkspaceVideoVariant) {
+	switch id {
+	case "gemini_omni_flash_preview", "minimax_h3_max":
+		audio := true
+		variant.Audio = &audio
+	case "flux_3_video", "pixverse_v6", "vidu_q3_turbo", "wan_3_0_prime":
+		audio := false
+		variant.Audio = &audio
+	}
+	if id == "gemini_omni_flash_preview" {
+		fps := 24
+		variant.FPS = &fps
+	}
+}
+
+// Only specifically wired reference/automatic routes extend the text-only web
+// surface. Provider support alone does not expose other advanced routes.
+func WorkspaceVideoRouteSupported(route VideoRoute) bool {
+	if !route.Enabled || route.RequiresStartImage || route.RequiresReferenceVideo {
+		return false
+	}
+	if route.AutomaticDuration && route.Alias != "gemini_omni_flash_preview" {
+		return false
+	}
+	return len(route.AllowedReferenceImageCounts) == 0 || slices.Contains(route.AllowedReferenceImageCounts, 0) || providermodels.VideoCandidateRequiresImages(route.Alias)
 }
 
 func workspaceVideoDurationAllowed(spec domain.VideoRouteSpec, resolution string, duration int) bool {

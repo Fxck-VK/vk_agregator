@@ -53,6 +53,8 @@ func MediaCandidates() []MediaCandidate {
 	}
 	out = append(out, nextMediaCandidates()...)
 	out = append(out, catalogExpansionCandidates()...)
+	out = append(out, imageExpansionCandidates()...)
+	out = append(out, videoExpansionCandidates()...)
 	return out
 }
 

@@ -64,7 +64,7 @@ func catalogExpansionCandidates() []MediaCandidate {
 
 func catalogExpansionFacts(c MediaCandidate) []MediaCandidateOperationFact {
 	switch c.PublicID {
-	case "nano_banana", "grok_imagine_1_5_video", "kling_2_6", "seedance_2_0", "seedance_2_0_mini":
+	case "nano_banana", "grok_imagine_1_5_video", "kling_2_6", "seedance_2_0", "seedance_2_0_mini", "seedream_5_0_flash", "z_image_turbo", "flux_2_max", "flux_2_flex", "qwen_image_3_pro":
 	default:
 		return nil
 	}

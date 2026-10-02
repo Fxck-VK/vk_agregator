@@ -6,8 +6,8 @@ const nextMediaCandidateCheckedAt = "2026-09-20"
 
 func nextMediaCandidates() []MediaCandidate {
 	return []MediaCandidate{
-		nextVideoCandidate("wan_3_0", "Wan 3.0 Video", "wan3.0-video", "https://docs.apimart.ai/en/api-reference/videos/wan3.0-video/generation", 2, 30, []string{"480p", "720p", "1080p"}, 10, 5),
-		nextVideoCandidate("vidu_q3_pro", "Vidu Q3 Pro", "viduq3-pro", "https://docs.apimart.ai/en/api-reference/videos/vidu-q3-pro/generation", 1, 16, []string{"540p", "720p", "1080p"}, 2, 0),
+		nextVideoCandidate("wan_3_0", "Wan 3.0 Video", "wan3.0-video", "https://docs.apimart.ai/ru/api-reference/videos/wan3.0-video/generation", 2, 30, []string{"480p", "720p", "1080p"}, 10, 5),
+		nextVideoCandidate("vidu_q3_pro", "Vidu Q3 Pro", "viduq3-pro", "https://docs.apimart.ai/ru/api-reference/videos/vidu-q3-pro/generation", 1, 16, []string{"540p", "720p", "1080p"}, 2, 0),
 		nextImageCandidate(),
 		nextAudioCandidate("lyria_3_5", "Lyria 3.5", "flowmusic-lyria-3.5", "https://docs.apimart.ai/en/api-reference/audios/flow-music/music-lyria-3-5", "music"),
 		nextAudioCandidate("gpt_4o_mini_tts", "GPT-4o Mini TTS", "gpt-4o-mini-tts", "https://docs.apimart.ai/en/api-reference/audios/tts", "speech"),
@@ -17,6 +17,9 @@ func nextMediaCandidates() []MediaCandidate {
 
 func nextVideoCandidate(id, name, native, doc string, minDuration, maxDuration int, resolutions []string, maxImages, maxVideos int) MediaCandidate {
 	imageInput := inputCapability(Supported, integer(maxImages), "jpg", "jpeg", "png", "bmp", "webp")
+	if id == "vidu_q3_pro" {
+		imageInput = inputCapability(Supported, integer(maxImages))
+	}
 	videoInput := noInput()
 	if maxVideos > 0 {
 		videoInput = inputCapability(Supported, integer(maxVideos), "mp4", "mov")
@@ -53,7 +56,7 @@ func nextVideoCandidate(id, name, native, doc string, minDuration, maxDuration i
 		Provider:      domain.ProviderAPIMart,
 		ModelCode:     native,
 		Documentation: doc,
-		CheckedAt:     nextMediaCandidateCheckedAt,
+		CheckedAt:     videoExpansionCheckedAt,
 		Capabilities: ModelCapabilities{SchemaVersion: 1,
 			API:         CapabilityProfile{Video: &api, Notes: []string{"Возможности API взяты из документации APIMart. FPS и фактическая аудиодорожка результата не проверены live."}},
 			Application: CapabilityProfile{Video: &app, Notes: []string{"Ожидает допуска; публичная заявка будет text-to-video без кадров и вложений."}},

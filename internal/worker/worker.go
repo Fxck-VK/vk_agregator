@@ -17,6 +17,7 @@ import (
 	"errors"
 	"fmt"
 	"log/slog"
+	"slices"
 	"sort"
 	"strings"
 	"sync"
@@ -265,6 +266,9 @@ func (r *Registry) ForRequest(ctx context.Context, req domain.ProviderRequest) (
 			continue
 		}
 		action := "text_to_video"
+		if req.Modality == domain.ModalityVideo && providermodels.VideoCandidateRequiresImages(candidate.PublicID) {
+			action = "reference_image_to_video"
+		}
 		if req.Modality == domain.ModalityImage {
 			action = "generate"
 		}
@@ -1395,6 +1399,12 @@ func (p *processor) buildRequest(ctx context.Context, job *domain.Job, attempt i
 		maxOutputTokens = textOutputLimit
 	}
 	var inputURLs []string
+	viduReferences := pp.Provider == domain.ProviderAPIMart && (modelCode == "viduq3" || modelCode == "viduq3-mix")
+	if viduReferences {
+		if len(pp.ReferenceArtifactIDs) < 1 || len(pp.ReferenceArtifactIDs) > 7 || !slices.Equal(job.InputArtifactIDs, pp.ReferenceArtifactIDs) {
+			return domain.ProviderRequest{}, referenceInputError("worker: Vidu requires 1..7 job-bound reference images")
+		}
+	}
 	if (job.Modality == domain.ModalityImage || job.Modality == domain.ModalityVideo) && len(pp.ReferenceArtifactIDs) > 0 {
 		var err error
 		inputURLs, err = p.resolveReferenceInputURLs(ctx, job, pp.ReferenceArtifactIDs)
@@ -1432,9 +1442,9 @@ func (p *processor) buildRequest(ctx context.Context, job *domain.Job, attempt i
 		}{size, pp.AspectRatio, pp.OutputCount})
 	}
 	if job.Modality == domain.ModalityVideo && providermodels.IsPendingMediaRoute(pp.Provider, modelCode) {
-		// The first application route is text-only. Advanced native modes have
-		// adapter contracts but need separate owned-input hydration and admission.
-		if len(job.InputArtifactIDs) > 0 || len(pp.ReferenceArtifactIDs) > 0 || referenceVideoURL != "" || pp.VideoAudio || pp.CharacterOrientation != "" {
+		// Candidate jobs stay text-only except Vidu Standard/Mix, whose API
+		// requires owned images. Advanced native modes need separate admission.
+		if (!viduReferences && (len(job.InputArtifactIDs) > 0 || len(pp.ReferenceArtifactIDs) > 0)) || referenceVideoURL != "" || pp.VideoAudio || pp.CharacterOrientation != "" {
 			return domain.ProviderRequest{}, providerResultError{class: domain.ProviderErrInvalidRequest, message: "video media inputs are not enabled"}
 		}
 		keepOriginalSound = false

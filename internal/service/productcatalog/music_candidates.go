@@ -83,13 +83,13 @@ func pendingMusicOperation(c providermodels.MediaCandidate, op musicgeneration.O
 }
 
 func pendingImageOperation(c providermodels.MediaCandidate) WorkspaceOperation {
-	quality := "standard"
-	if c.PublicID == "nano_banana" {
-		quality = "1K"
-	}
-	image := WorkspaceImage{QualityLabel: "Вариант", ShowOutputCount: false, MaxOutputCount: 1, QualityOptions: []string{quality}, DefaultQuality: quality, AllowedAspectRatios: append([]string(nil), c.Capabilities.Application.Image.AspectRatios...), DefaultAspectRatio: "16:9", PriceByQuality: map[string]int64{}, PriceByVariant: map[string]int64{}}
-	quote, err := pricingcatalog.ImageCandidateQuote(c.PublicID)
-	if err == nil {
+	qualities := providermodels.ImageCandidateQualities(c)
+	image := WorkspaceImage{QualityLabel: "Вариант", ShowOutputCount: false, MaxOutputCount: 1, QualityOptions: qualities, DefaultQuality: qualities[0], AllowedAspectRatios: append([]string(nil), c.Capabilities.Application.Image.AspectRatios...), DefaultAspectRatio: "16:9", PriceByQuality: map[string]int64{}, PriceByVariant: map[string]int64{}}
+	for _, quality := range qualities {
+		quote, err := pricingcatalog.ImageCandidateQualityQuote(c.PublicID, quality)
+		if err != nil {
+			continue
+		}
 		image.PriceByQuality[quality] = quote.InternalCredits
 		for _, ratio := range image.AllowedAspectRatios {
 			image.PriceByVariant[quality+":"+ratio] = quote.InternalCredits
@@ -99,6 +99,9 @@ func pendingImageOperation(c providermodels.MediaCandidate) WorkspaceOperation {
 }
 
 func pendingVideoOperation(c providermodels.MediaCandidate) WorkspaceOperation {
+	if providermodels.IsVideoExpansion(c.PublicID) {
+		return pendingVideoExpansionOperation(c)
+	}
 	api := c.Capabilities.API.Video
 	video := WorkspaceVideo{AllowedResolutions: append([]string(nil), api.Resolutions...), AllowedAspectRatios: append([]string(nil), api.AspectRatios...), AllowedDurationsSec: []int{}, DefaultResolution: pendingDefaultResolution(api.Resolutions), DefaultAspectRatio: pendingDefaultAspect(api.AspectRatios), DefaultDurationSec: 5, StartImage: "unsupported", EndImage: "unsupported", PriceByOption: map[string]int64{}, Variants: []WorkspaceVideoVariant{}}
 	for _, seconds := range pendingVideoDurations(api.Duration) {
@@ -122,6 +125,30 @@ func pendingVideoOperation(c providermodels.MediaCandidate) WorkspaceOperation {
 		video.DefaultDurationSec = video.AllowedDurationsSec[0]
 	}
 	return WorkspaceOperation{ID: "generate", Kind: "video", Enabled: false, Inputs: unknownWorkspaceInputs(), Video: &video}
+}
+
+func pendingVideoExpansionOperation(c providermodels.MediaCandidate) WorkspaceOperation {
+	api := c.Capabilities.API.Video
+	resolution, seconds := providermodels.VideoCandidateDefaults(c.PublicID)
+	video := WorkspaceVideo{AllowedResolutions: append([]string(nil), api.Resolutions...), AllowedAspectRatios: append([]string(nil), api.AspectRatios...), AllowedDurationsSec: providermodels.VideoCandidateDurations(c), DefaultResolution: resolution, DefaultDurationSec: seconds, DefaultAspectRatio: "16:9", StartImage: "unsupported", EndImage: "unsupported", PriceByOption: map[string]int64{}, Variants: []WorkspaceVideoVariant{}}
+	video.AutomaticDuration = api.Duration.Mode == "automatic"
+	for _, res := range video.AllowedResolutions {
+		for _, duration := range video.AllowedDurationsSec {
+			if quote, err := pricingcatalog.MediaVideoCandidateQuote(c.PublicID, "", res, duration); err == nil {
+				video.PriceByOption[res+":"+strconv.Itoa(duration)] = quote.InternalCredits
+			}
+			for _, ratio := range video.AllowedAspectRatios {
+				variant := WorkspaceVideoVariant{Resolution: res, DurationSec: duration, AspectRatio: ratio}
+				videoExpansionOutputMetadata(c.PublicID, &variant)
+				video.Variants = append(video.Variants, variant)
+			}
+		}
+	}
+	inputs := unknownWorkspaceInputs()
+	if providermodels.VideoCandidateRequiresImages(c.PublicID) {
+		inputs.Images = modelcontract.Input{Support: modelcontract.Supported, Required: true, MaxCount: 7, AllowedCounts: []int{1, 2, 3, 4, 5, 6, 7}, Formats: []modelcontract.FileFormat{{Extension: ".png", MIME: "image/png"}, {Extension: ".jpg", MIME: "image/jpeg"}, {Extension: ".jpeg", MIME: "image/jpeg"}, {Extension: ".webp", MIME: "image/webp"}}, MaxBytes: 50 << 20}
+	}
+	return WorkspaceOperation{ID: "generate", Kind: "video", Enabled: false, Inputs: inputs, Video: &video}
 }
 
 func pendingSpeechOperation(c providermodels.MediaCandidate) WorkspaceOperation {

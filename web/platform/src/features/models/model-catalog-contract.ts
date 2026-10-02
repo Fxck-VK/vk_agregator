@@ -132,6 +132,7 @@ const videoVariantSchema = z.object({
 }).strict();
 
 const videoControlsSchema = z.object({
+  automatic_duration: z.boolean().optional(),
   allowed_resolutions: uniqueStringArray("Video resolutions"),
   allowed_durations_sec: z.array(positiveInt).min(1),
   allowed_aspect_ratios: uniqueStringArray("Video aspect ratios"),
@@ -172,7 +173,7 @@ const videoControlsSchema = z.object({
     if (!video.allowed_aspect_ratios.includes(variant.aspect_ratio)) {
       ctx.addIssue({ code: "custom", path: ["variants"], message: "Video variant must use a known aspect ratio." });
     }
-    if (video.price_by_option[`${variant.resolution}:${variant.duration_sec}`] === undefined) {
+    if (Object.keys(video.price_by_option).length > 0 && video.price_by_option[`${variant.resolution}:${variant.duration_sec}`] === undefined) {
       ctx.addIssue({ code: "custom", path: ["price_by_option"], message: "Every video variant must have a matching price option." });
     }
     hasDefaultVariant ||= (
@@ -243,6 +244,9 @@ const publicOperationSchema = z.object({
   audio: audioControlsSchema.optional(),
   music: musicControlsSchema.optional(),
 }).strict().superRefine((operation, ctx) => {
+  if (operation.enabled && operation.video && Object.keys(operation.video.price_by_option).length === 0) {
+    ctx.addIssue({ code: "custom", path: ["video", "price_by_option"], message: "Enabled video operations require server prices." });
+  }
   const outputKeys = (["text", "image", "video", "audio"] as const).filter((key) => operation[key] !== undefined);
   if (outputKeys.length !== 1) {
     ctx.addIssue({ code: "custom", message: "Operation must expose exactly one output contract." });
@@ -294,6 +298,7 @@ export type PublicOperation = PublicCatalogModel["operations"][number];
 export type PublicCatalogCategory = PublicCatalogModel["categories"][number];
 
 export const videoModelSchema = z.object({
+  automatic_duration: z.boolean().optional(),
   capabilities: modelCapabilitiesSchema.optional(),
   id: nonEmptyString,
   name: nonEmptyString,
@@ -401,6 +406,7 @@ export function projectVideoModelCatalog(catalog: PublicCatalog): VideoModelList
         default_duration_sec: operation.video.default_duration_sec,
         default_aspect_ratio: operation.video.default_aspect_ratio,
         price_by_option: operation.video.price_by_option,
+        automatic_duration: operation.video.automatic_duration,
         variants: operation.video.variants,
         start_image: operation.video.start_image,
         end_image: operation.video.end_image,

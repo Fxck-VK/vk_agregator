@@ -6,6 +6,16 @@ import "vk-ai-aggregator/internal/service/providermodels"
 // Native support never enables uploads or controls on the web surface.
 func workspaceCapabilities(id string, op WorkspaceOperation) *providermodels.ModelCapabilities {
 	if c, ok := providermodels.MediaCandidateByID(id); ok {
+		if providermodels.IsVideoExpansion(id) && op.Kind == "video" && op.Enabled && c.Capabilities.Application.Video != nil {
+			app := c.Capabilities.Application.Video
+			c.Capabilities.Application.Notes = []string{"Доступна для ручного тестирования на DEV; проверка результатов ещё не завершена."}
+			if op.Inputs.Images.Enabled {
+				maximum := op.Inputs.Images.MaxCount
+				app.Images = providermodels.InputCapability{Support: providermodels.Supported, MaxCount: &maximum, Extensions: []string{"png", "jpg", "jpeg"}}
+				app.AllowedImageCounts = append([]int(nil), op.Inputs.Images.AllowedCounts...)
+				c.Capabilities.Application.Notes = append(c.Capabilities.Application.Notes, "Нужны 1–7 фото PNG/JPEG до 20 МиБ, от 128 до 4096 пикселей по стороне, пропорции 1:4–4:1.")
+			}
+		}
 		return &c.Capabilities
 	}
 	switch op.Kind {

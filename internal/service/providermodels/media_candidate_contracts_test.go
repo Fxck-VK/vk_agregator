@@ -1,6 +1,7 @@
 package providermodels_test
 
 import (
+	"net/url"
 	"strings"
 	"testing"
 
@@ -52,6 +53,12 @@ func TestDraftMediaContractsRemainNotReady(t *testing.T) {
 			t.Fatalf("%s missing sources/operations/checks: %+v", candidate.PublicID, contract)
 		}
 		for _, source := range contract.Sources {
+			if providermodels.IsVideoExpansion(candidate.PublicID) && source.ID == candidate.PublicID+"_pricing" {
+				if source.CheckedAt != "2026-10-02" || source.URL != "https://api.apimart.ai/api/pricing/model?model="+url.QueryEscape(candidate.ModelCode) {
+					t.Fatalf("%s invalid tariff evidence", candidate.PublicID)
+				}
+				continue
+			}
 			if source.CheckedAt != candidate.CheckedAt {
 				t.Fatalf("%s source %s checked_at = %q, want %q", candidate.PublicID, source.ID, source.CheckedAt, candidate.CheckedAt)
 			}

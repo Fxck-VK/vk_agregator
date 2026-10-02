@@ -18,6 +18,28 @@ const uploaded = () => Response.json({ artifact_id: id, mime_type: "image/png", 
 beforeEach(() => { vi.stubGlobal("crypto", webcrypto); });
 afterEach(() => { cleanup(); vi.restoreAllMocks(); vi.resetAllMocks(); vi.unstubAllGlobals(); });
 
+it("requires an uploaded Vidu reference, enforces seven files and blocks again after removal", async () => {
+  const pending = modelCatalog.items.find(item => item.id === "vidu_q3")!;
+  const operation = pending.operations[0];
+  const video = { ...operation.video!, id: pending.id, name: pending.name, description: pending.description,
+    category: "video", operations: [{ ...operation, enabled: true, inputs: { ...operation.inputs,
+      images: { ...operation.inputs.images, support: "supported", enabled: true, required: true, max_count: 7 },
+    } }],
+  } as GenerationModel;
+  vi.mocked(webBrowserMutation).mockResolvedValue(Response.json({ artifact_id: id, mime_type: "image/png", size_bytes: 9, width: 128, height: 128 }));
+  const { result } = renderHook(() => useChatAttachments(video));
+  expect(result.current.blocked).toBe(true);
+  expect(result.current.error).toContain("от 1 до 7");
+  await act(async () => { await result.current.add(Array.from({ length: 8 }, (_, i) => file(String(i)))); });
+  expect(webBrowserMutation).not.toHaveBeenCalled();
+  await act(async () => { await result.current.add([file()]); });
+  await waitFor(() => expect(result.current.ids).toEqual([id]));
+  expect(webBrowserMutation).toHaveBeenCalledWith("/web/v1/input-artifacts?model_id=vidu_q3", expect.anything());
+  expect(result.current.blocked).toBe(false);
+  act(() => result.current.remove(result.current.items[0].id));
+  expect(result.current.blocked).toBe(true);
+});
+
 it("uploads bytes and blocks send until the owned artifact ID arrives", async () => {
   let finish!: (response: Response) => void;
   vi.mocked(webBrowserMutation).mockReturnValue(new Promise((resolve) => { finish = resolve; }));

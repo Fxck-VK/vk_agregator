@@ -44,6 +44,27 @@ func TestQwenImageAsyncLifecycle(t *testing.T) {
 	testAPIMartImageLifecycle(t, "qwen_image_3", "qwen-image-3.0", "2K", "2K", 15, true)
 }
 
+func TestImageExpansionAsyncLifecycle(t *testing.T) {
+	if err := providermodels.ConfigureDEVSmoke("development", true); err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = providermodels.ConfigureDEVSmoke("development", false) })
+	for _, tc := range []struct {
+		id, model, quality string
+		credits            int64
+	}{
+		{"seedream_5_0_flash", apimart.ModelSeedream50Flash, "2K", 55},
+		{"z_image_turbo", apimart.ModelZImageTurbo, "2K", 10},
+		{"flux_2_max", apimart.ModelFlux2Max, "4MP", 80},
+		{"flux_2_flex", apimart.ModelFlux2Flex, "4MP", 100},
+		{"qwen_image_3_pro", apimart.ModelQwenImage3Pro, "2K", 35},
+	} {
+		t.Run(tc.id, func(t *testing.T) {
+			testAPIMartImageLifecycle(t, tc.id, tc.model, tc.quality, tc.quality, tc.credits, false)
+		})
+	}
+}
+
 func TestGrokImageAsyncLifecycle(t *testing.T) {
 	t.Run("1.5", func(t *testing.T) {
 		testAPIMartImageLifecycle(t, "grok_image_1_5", apimart.ModelGrokImage15, "standard", "", 10, true)
@@ -119,7 +140,7 @@ func testAPIMartImageLifecycle(t *testing.T, publicModel, providerModel, quality
 						if body["version"] != "7" || body["speed"] != quality || body["n"] != nil || body["resolution"] != nil {
 							t.Error("incorrect Imagine worker request")
 						}
-					} else if body["model"] != providerModel || body["n"] != float64(1) {
+					} else if body["model"] != providerModel || (providerModel != apimart.ModelZImageTurbo && body["n"] != float64(1)) || (providerModel == apimart.ModelZImageTurbo && body["n"] != nil) {
 						t.Error("wrong worker request")
 					}
 					bodyResolution := resolution
@@ -154,6 +175,11 @@ func testAPIMartImageLifecycle(t *testing.T, publicModel, providerModel, quality
 						_, _ = w.Write([]byte(`{"code":200,"data":{"status":"completed","result":{"images":[{"url":["https://example.com/1.png","https://example.com/2.png","https://example.com/3.png","https://example.com/4.png"]}]}}}`))
 						return
 					}
+					if providerModel == apimart.ModelSeedream50Flash {
+						// The Flash documentation uses a flat success envelope.
+						_, _ = w.Write([]byte(`{"id":"qwen-task","status":"success","progress":100,"result":{"images":[{"url":["https://example.com/qwen.png"],"sizes":["2048x2048"],"output_formats":["png"]}]}}`))
+						return
+					}
 					_, _ = w.Write([]byte(`{"code":200,"data":{"status":"completed","result":{"images":[{"url":["https://example.com/qwen.png"]}]}}}`))
 				default:
 					t.Error("unexpected provider request")
@@ -168,6 +194,9 @@ func testAPIMartImageLifecycle(t *testing.T, publicModel, providerModel, quality
 			h := newHarnessWithProvider(t, provider, func(d *worker.Deps) { d.Moderator = moderator; d.Releaser = billing })
 			prices, err := pricingcatalog.NewStaticCatalog()
 			if err != nil {
+				t.Fatal(err)
+			}
+			if err := prices.AddSupplemental(providermodels.RuntimeRegistry().DEVSmokePrices()); err != nil {
 				t.Fatal(err)
 			}
 			snapshot, err := prices.Snapshot(pricingcatalog.ProductKey{Operation: domain.OperationImageGenerate, Modality: domain.ModalityImage, ImageModelID: publicModel, Quality: quality})
@@ -215,6 +244,13 @@ func testAPIMartImageLifecycle(t *testing.T, publicModel, providerModel, quality
 			if err := h.jobs.Create(ctx, job); err != nil {
 				t.Fatal(err)
 			}
+			startingBalance := billingservice.DefaultStartingBalance
+			if credits > startingBalance {
+				if err := billing.Grant(ctx, owner, credits, "image-fixture-funding", "test funding"); err != nil {
+					t.Fatal(err)
+				}
+				startingBalance += credits
+			}
 			if _, err := billing.Reserve(ctx, owner, job.ID, credits); err != nil {
 				t.Fatal(err)
 			}
@@ -239,7 +275,7 @@ func testAPIMartImageLifecycle(t *testing.T, publicModel, providerModel, quality
 					t.Fatal("uncertain submission retried or became visible")
 				}
 				account, err := billingRepo.GetAccountByUser(ctx, owner, domain.CurrencyCredits)
-				if err != nil || account.BalanceCached != billingservice.DefaultStartingBalance {
+				if err != nil || account.BalanceCached != startingBalance {
 					t.Fatal("uncertain submission charged")
 				}
 				return
@@ -256,7 +292,7 @@ func testAPIMartImageLifecycle(t *testing.T, publicModel, providerModel, quality
 			job = h.reload(t, job.ID)
 			if name == "provider failure" || name == "unexpected output count" {
 				account, err := billingRepo.GetAccountByUser(ctx, owner, domain.CurrencyCredits)
-				if err != nil || account.BalanceCached != billingservice.DefaultStartingBalance || job.Status != domain.JobStatusFailedTerminal || job.CostCaptured != 0 || moderator.calls != 0 || len(job.OutputArtifactIDs) != 0 {
+				if err != nil || account.BalanceCached != startingBalance || job.Status != domain.JobStatusFailedTerminal || job.CostCaptured != 0 || moderator.calls != 0 || len(job.OutputArtifactIDs) != 0 {
 					t.Fatal("failed provider task charged or exposed a result")
 				}
 				return
@@ -272,7 +308,7 @@ func testAPIMartImageLifecycle(t *testing.T, publicModel, providerModel, quality
 				if err != nil {
 					t.Fatal(err)
 				}
-				if account.BalanceCached != billingservice.DefaultStartingBalance {
+				if account.BalanceCached != startingBalance {
 					t.Fatal("blocked result charged")
 				}
 				return
@@ -305,7 +341,7 @@ func testAPIMartImageLifecycle(t *testing.T, publicModel, providerModel, quality
 			if err != nil {
 				t.Fatal(err)
 			}
-			if account.BalanceCached != billingservice.DefaultStartingBalance-credits {
+			if account.BalanceCached != startingBalance-credits {
 				t.Fatal("wrong ledger balance after replay")
 			}
 		})

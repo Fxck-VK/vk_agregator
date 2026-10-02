@@ -1,12 +1,16 @@
 package worker
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
+	"image"
+	"image/png"
 	"testing"
 
 	"github.com/google/uuid"
 	"vk-ai-aggregator/internal/adapter/provider/apimart"
+	"vk-ai-aggregator/internal/adapter/storage/memory"
 	"vk-ai-aggregator/internal/domain"
 	"vk-ai-aggregator/internal/platform/config"
 	"vk-ai-aggregator/internal/service/imagegeneration"
@@ -38,7 +42,19 @@ func TestDEVSmokePublicControlsReachAdapterWithoutNetwork(t *testing.T) {
 	for _, m := range runtime.ImageModels() {
 		images = append(images, imagegeneration.PublicModel{ID: m.ID, Name: m.Name, Enabled: true, Ready: true, QualityOptions: m.QualityOptions, DefaultQuality: m.DefaultQuality, MaxOutputCount: m.MaxOutputCount, AllowedAspectRatios: m.AllowedAspectRatios})
 	}
-	catalog := productcatalog.WorkspaceCatalog(productcatalog.WorkspaceConfig{ImageModels: images, VideoRoutes: runtime.VideoRoutes(), Pricing: prices, IncludePendingMedia: true})
+	catalog := productcatalog.WorkspaceCatalog(productcatalog.WorkspaceConfig{ImageModels: images, VideoRoutes: runtime.VideoRoutes(), Pricing: prices, IncludePendingMedia: true, ImageReferenceUploads: true})
+	owner, inputID := uuid.New(), uuid.New()
+	artifacts, objects := memory.NewArtifactRepo(), memory.NewObjectStore()
+	var input bytes.Buffer
+	if err := png.Encode(&input, image.NewRGBA(image.Rect(0, 0, 128, 128))); err != nil {
+		t.Fatal(err)
+	}
+	if err := artifacts.Create(context.Background(), &domain.Artifact{ID: inputID, OwnerAccountID: owner, Kind: domain.ArtifactKindInput, MediaType: domain.MediaTypeImage, Status: domain.ArtifactStatusReady, StorageBucket: "inputs", StorageKey: "reference.png", MimeType: "image/png"}); err != nil {
+		t.Fatal(err)
+	}
+	if err := objects.Put(context.Background(), "inputs", "reference.png", input.Bytes(), "image/png"); err != nil {
+		t.Fatal(err)
+	}
 	imageResolver := imagegeneration.NewResolver(images, prices)
 	adapter := apimart.New(apimart.Config{})
 	providers := NewRegistry(adapter)
@@ -100,8 +116,12 @@ func TestDEVSmokePublicControlsReachAdapterWithoutNetwork(t *testing.T) {
 			}
 			if op.Video != nil {
 				for _, v := range op.Video.Variants {
-					params, _ := json.Marshal(map[string]any{"prompt": "A tree in the wind", "video_route_alias": m.ID, "resolution": v.Resolution, "duration_sec": v.DurationSec, "aspect_ratio": v.AspectRatio})
-					resolved, err := runtime.VideoRouteCatalog.Resolve(context.Background(), videorouter.Request{Source: "web", Operation: domain.OperationVideoGenerate, Modality: domain.ModalityVideo, Params: params})
+					var references []uuid.UUID
+					if providermodels.VideoCandidateRequiresImages(m.ID) {
+						references = []uuid.UUID{inputID}
+					}
+					params, _ := json.Marshal(map[string]any{"prompt": "A tree in the wind", "video_route_alias": m.ID, "resolution": v.Resolution, "duration_sec": v.DurationSec, "aspect_ratio": v.AspectRatio, "reference_artifact_ids": references})
+					resolved, err := runtime.VideoRouteCatalog.Resolve(context.Background(), videorouter.Request{Source: "web", Operation: domain.OperationVideoGenerate, Modality: domain.ModalityVideo, Params: params, InputArtifactIDs: references})
 					if err != nil {
 						t.Fatalf("%s resolve: %v", m.ID, err)
 					}
@@ -109,8 +129,8 @@ func TestDEVSmokePublicControlsReachAdapterWithoutNetwork(t *testing.T) {
 					if err != nil || resolved.InternalCostCredits != quote.InternalCredits {
 						t.Fatalf("%s route price mismatch", m.ID)
 					}
-					job := &domain.Job{ID: uuid.New(), AccountID: uuid.New(), OperationType: domain.OperationVideoGenerate, Modality: domain.ModalityVideo, Params: resolved.Params}
-					p := processor{}
+					job := &domain.Job{ID: uuid.New(), AccountID: owner, OperationType: domain.OperationVideoGenerate, Modality: domain.ModalityVideo, Params: resolved.Params, InputArtifactIDs: references}
+					p := processor{artifactRepo: artifacts, objects: objects}
 					request, err := p.buildRequest(context.Background(), job, 1)
 					if err != nil {
 						t.Fatal(err)
@@ -126,9 +146,10 @@ func TestDEVSmokePublicControlsReachAdapterWithoutNetwork(t *testing.T) {
 					t.Fatal(err)
 				}
 				w := result.Worker
-				params, _ := json.Marshal(map[string]any{"prompt": "A tree", "provider": w.Provider, "model_code": w.ModelCode, "model_id": m.ID, "size": w.Size, "aspect_ratio": w.AspectRatio, "output_count": w.OutputCount, "resolution": w.Resolution})
+				params, _ := json.Marshal(map[string]any{"prompt": "A tree", "provider": w.Provider, "model_code": w.ModelCode, "model_id": m.ID, "size": w.Size, "aspect_ratio": w.AspectRatio, "output_count": w.OutputCount, "resolution": w.Resolution, "image_quality": w.ImageQuality})
+				price, _ := json.Marshal(result.PricingSnapshot)
 				p := processor{}
-				r, err := p.buildRequest(context.Background(), &domain.Job{ID: uuid.New(), AccountID: uuid.New(), OperationType: domain.OperationImageGenerate, Modality: domain.ModalityImage, Params: params}, 1)
+				r, err := p.buildRequest(context.Background(), &domain.Job{ID: uuid.New(), AccountID: uuid.New(), OperationType: domain.OperationImageGenerate, Modality: domain.ModalityImage, Params: params, PricingSnapshot: price, CostReserved: result.PricingSnapshot.InternalCredits}, 1)
 				if err != nil {
 					t.Fatal(err)
 				}
@@ -139,7 +160,7 @@ func TestDEVSmokePublicControlsReachAdapterWithoutNetwork(t *testing.T) {
 			}
 		}
 	}
-	if count != 16 {
-		t.Fatalf("enabled candidates %d, want 16", count)
+	if count != 31 {
+		t.Fatalf("enabled candidates %d, want 31", count)
 	}
 }

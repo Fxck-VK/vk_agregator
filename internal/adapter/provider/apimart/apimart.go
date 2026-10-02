@@ -105,6 +105,21 @@ func (p *Provider) Capabilities(ctx context.Context) ([]domain.Capability, error
 		return nil, err
 	}
 	return append(textCaps, []domain.Capability{
+		{Operation: domain.OperationVideoGenerate, Modality: domain.ModalityVideo, ModelCode: ModelFlux3Video, SupportsPolling: true, MaxDurationSec: 20},
+		{Operation: domain.OperationVideoGenerate, Modality: domain.ModalityVideo, ModelCode: ModelPixVerseV6, SupportsPolling: true, MaxDurationSec: 15},
+		{Operation: domain.OperationVideoGenerate, Modality: domain.ModalityVideo, ModelCode: ModelViduQ3, SupportsPolling: true, MaxDurationSec: 16},
+		{Operation: domain.OperationVideoGenerate, Modality: domain.ModalityVideo, ModelCode: ModelViduQ3Mix, SupportsPolling: true, MaxDurationSec: 16},
+		{Operation: domain.OperationVideoGenerate, Modality: domain.ModalityVideo, ModelCode: ModelViduQ3Turbo, SupportsPolling: true, MaxDurationSec: 16},
+		{Operation: domain.OperationVideoGenerate, Modality: domain.ModalityVideo, ModelCode: ModelKlingVideoO1, SupportsPolling: true, MaxDurationSec: 10},
+		{Operation: domain.OperationVideoGenerate, Modality: domain.ModalityVideo, ModelCode: ModelMiniMaxH3Max, SupportsPolling: true, MaxDurationSec: 15},
+		{Operation: domain.OperationVideoGenerate, Modality: domain.ModalityVideo, ModelCode: ModelWan30Prime, SupportsPolling: true, MaxDurationSec: 30},
+		{Operation: domain.OperationVideoGenerate, Modality: domain.ModalityVideo, ModelCode: ModelWan27, SupportsPolling: true, MaxDurationSec: 15},
+		{Operation: domain.OperationVideoGenerate, Modality: domain.ModalityVideo, ModelCode: ModelGeminiOmniPreview, SupportsPolling: true, MaxDurationSec: 10},
+		{Operation: domain.OperationImageGenerate, Modality: domain.ModalityImage, ModelCode: ModelSeedream50Flash, SupportsPolling: true},
+		{Operation: domain.OperationImageGenerate, Modality: domain.ModalityImage, ModelCode: ModelZImageTurbo, SupportsPolling: true},
+		{Operation: domain.OperationImageGenerate, Modality: domain.ModalityImage, ModelCode: ModelFlux2Max, SupportsPolling: true},
+		{Operation: domain.OperationImageGenerate, Modality: domain.ModalityImage, ModelCode: ModelFlux2Flex, SupportsPolling: true},
+		{Operation: domain.OperationImageGenerate, Modality: domain.ModalityImage, ModelCode: ModelQwenImage3Pro, SupportsPolling: true},
 		{Operation: domain.OperationImageGenerate, Modality: domain.ModalityImage, ModelCode: ModelNanoBanana, SupportsPolling: true},
 		{Operation: domain.OperationVideoGenerate, Modality: domain.ModalityVideo, ModelCode: ModelGrokImagineVideo, SupportsPolling: true, MaxDurationSec: 15},
 		{Operation: domain.OperationVideoGenerate, Modality: domain.ModalityVideo, ModelCode: ModelKling26, SupportsPolling: true, MaxDurationSec: 10},

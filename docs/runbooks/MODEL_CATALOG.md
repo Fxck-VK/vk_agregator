@@ -268,9 +268,136 @@ Seedance явно отправляет `generate_audio=false`, Kling — `audio=
 
 ## DEV manual smoke (2026-09-28)
 
-An explicitly configured DEV runtime exposes 16 priced media candidates as
+An explicitly configured DEV runtime exposes priced media candidates as
 `verification: dev-smoke`. This status permits the enabled operation without
 claiming completed onboarding. Static preview and production keep candidates
 pending. Candidate input restrictions and server quotes remain authoritative.
 Speech without bounded billing remains disabled. Scope and rollback:
 [DEV runbook](../../docs/runbooks/DEV.md#manual-model-smoke-on-dev).
+
+## Image candidates checked 2026-09-30
+
+Five additional APIMart image candidates use the same DEV manual smoke gate:
+[Seedream 5.0 Flash](https://docs.apimart.ai/ru/api-reference/images/seedream-5-0-flash/generation),
+[Z-Image Turbo](https://docs.apimart.ai/ru/api-reference/images/z-image-turbo/generation),
+[FLUX.2 Max and Flex](https://docs.apimart.ai/ru/api-reference/images/flux-2/generation),
+[Qwen Image 3.0 Pro](https://docs.apimart.ai/ru/api-reference/images/qwen-image-3.0/generation).
+Their exact IDs were present in the authenticated models list on that date.
+The schema preflight returned `invalid_schema` for all five; documentation
+review does not count as a successful schema or live-output check.
+
+Each application route generates one image from text. API reference limits
+and application support are recorded separately; references, arbitrary pixel
+dimensions, layers, prompt rewriting and tuning are not enabled. Z-Image has
+an 800-character prompt limit; the other four use a conservative application
+bound of 4000 characters. FLUX tiers are megapixels, not K resolution aliases.
+
+| Public ID | Output tiers | USD floor per image | Retail credits |
+| --- | --- | --- | --- |
+| seedream_5_0_flash | 1K / 1.5K / 2K | 0.045 / 0.045 / 0.09 | 30 / 30 / 55 |
+| z_image_turbo | 1K / 2K | 0.01 / 0.01 | 10 / 10 |
+| flux_2_max | 1MP / 2MP / 3MP / 4MP | 0.056 / 0.08 / 0.104 / 0.128 | 35 / 50 / 65 / 80 |
+| flux_2_flex | 1MP / 2MP / 3MP / 4MP | 0.04 / 0.08 / 0.12 / 0.16 | 25 / 50 / 75 / 100 |
+| qwen_image_3_pro | 1K / 2K | 0.028572 / 0.057144 | 20 / 35 |
+
+Source: [APIMart pricing](https://apimart.ai/ru/pricing) and
+`https://api.apimart.ai/api/pricing/model?model=<exact-native-id>`, checked
+2026-09-30. Gold paid prices are rounded up to USD micros, then multiplied
+by three and rounded up to five internal credits. Seedream Flash is an explicit
+exception: the site reports $0.0137144 without resolution tiers while its docs
+report $0.045/$0.09. The provisional floor uses the higher documented tiers;
+confirm actual billing before lowering it. Qwen reference charges also differ
+between docs and pricing API, so reference inputs remain unavailable.
+
+Offline tests cover all exposed catalog variants, bound pricing snapshots,
+wire bodies, unsupported options, durable submission across restarts,
+success/failure, moderation and capture/release. Live output, actual account
+billing and deployed DEV smoke remain unverified; no paid calls were made.
+
+## Video API adapters checked 2026-09-30
+
+Only the nine generation pages selected by the user establish API facts for
+this expansion. Context7, the models API and other documentation were not used.
+The existing Wan 3.0 and Vidu Q3 Pro adapters were rechecked; Vidu Pro now
+accepts the documented seed range `-1..4294967295`. Unknown image formats and
+output metadata are not inferred from other models.
+
+| New public ID | Exact provider ID | Sole API source |
+| --- | --- | --- |
+| flux_3_video | flux-3-video | [FLUX 3 Video](https://docs.apimart.ai/ru/api-reference/videos/flux-3-video/generation) |
+| pixverse_v6 | pixverse-v6 | [PixVerse v6](https://docs.apimart.ai/ru/api-reference/videos/pixverse-v6/generation) |
+| vidu_q3 | viduq3 | [Vidu Q3](https://docs.apimart.ai/ru/api-reference/videos/vidu-q3/generation) |
+| vidu_q3_mix | viduq3-mix | [Vidu Q3 Mix](https://docs.apimart.ai/ru/api-reference/videos/vidu-q3/generation) |
+| vidu_q3_turbo | viduq3-turbo | [Vidu Q3 Pro/Turbo](https://docs.apimart.ai/ru/api-reference/videos/vidu-q3-pro/generation) |
+| kling_video_o1 | kling-video-o1 | [Kling Video O1](https://docs.apimart.ai/ru/api-reference/videos/kling-video-o1/generation) |
+| minimax_h3_max | MiniMax-H3-Max | [MiniMax H3 Max](https://docs.apimart.ai/ru/api-reference/videos/minimax-h3/max) |
+| wan_3_0_prime | wan3.0-video-prime | [Wan 3.0 / Prime](https://docs.apimart.ai/ru/api-reference/videos/wan3.0-video/generation) |
+| wan_2_7 | wan2.7 | [Wan 2.7](https://docs.apimart.ai/ru/api-reference/videos/wan2.7/generation) |
+| gemini_omni_flash_preview | gemini-omni-flash-preview | [Gemini Omni Flash Preview](https://docs.apimart.ai/ru/api-reference/videos/gemini-omni-flash-preview/generation) |
+
+Adapters submit asynchronously through `/v1/videos/generations` and reuse the
+existing task polling, normalization and worker submission boundary. They
+validate exact durations, resolutions, aspect ratios, prompt limits and input
+combinations before HTTP. FLUX uses `hd/fhd`; Kling O1 uses `mode` without
+`resolution`; MiniMax Max omits unsupported audio/mode fields and watermark.
+Gemini Preview sends neither duration nor audio: its documented output duration
+is automatic (3–10s); 10s in pricing controls is the fixed-quote ceiling,
+not an API parameter. Vidu with frames omits `aspect_ratio`; PixVerse
+first/last-frame transitions allow only 5/8s.
+
+The draft API contracts describe frames and supported image references. Worker
+hydration is prepared for Vidu Standard/Mix's required 1–7 references: exact
+job binding, account ownership, input/ready status and JPEG/PNG sanitization
+are mandatory. The current application bound is 20 MiB and 4096px per edge,
+stricter than the API's 50MB; the adapter also checks >=128px and aspect 1:4..4:1.
+Bytes are uploaded through the existing APIMart image transport; generation
+receives URLs. Web upload/selection now reuses the owned image transport for
+Vidu Standard/Mix only. The composer requires 1–7 ready images; API and worker
+revalidate ownership, count, geometry and binding before generation. Routes
+are hidden from web execution if artifact storage dependencies are unavailable.
+Other new application routes accept text-only input with audio off where a
+documented switch exists. Generated sound in MiniMax Max/Gemini has no switch.
+Video/audio inputs, continuation, editing and draft/finalization remain closed.
+Wan 2.7's contradictory image+audio example does not enable that combination.
+
+### Video pricing and DEV wiring checked 2026-10-02
+
+After the user's tariff authorization, prices were read from the official
+[APIMart pricing UI](https://apimart.ai/ru/pricing) and its public
+`https://api.apimart.ai/api/pricing/model?model=<exact-provider-id>` endpoint.
+These are pricing evidence only; API facts still come solely from the nine
+selected documentation pages. Use Gold paid USD/second (discount already
+included), cost ×3, rounded up to 5 internal credits. Do not apply a second
+discount or assume Platinum/Diamond membership. Fractional USD micros round up.
+
+| Model | USD/second by resolution | Default | Retail credits |
+| --- | --- | --- | ---: |
+| FLUX 3 Video | 720p .136; 1080p .232 | 720p, 5s | 410 |
+| PixVerse v6 | 360p .016; 540p .024; 720p .032; 1080p .064 | 540p, 5s, no audio | 75 |
+| Vidu Q3 Standard | 540p .04; 720p .08; 1080p .10 | 720p, 5s | 240 |
+| Vidu Q3 Mix | 720p .10; 1080p .12 | 720p, 5s | 300 |
+| Vidu Q3 Turbo | 540p .032; 720p .048; 1080p .056 | 720p, 5s, no audio | 145 |
+| Kling Video O1 | 720p .0672; 1080p .0896 | 720p/std, 5s | 205 |
+| MiniMax H3 Max | 480p .03768; 768p .05712; 1080p .128 | 768p, 5s | 175 |
+| Wan 3.0 Prime | 480p .0514288; 720p .1028568; 1080p .2057144 | 1080p, 5s | 620 |
+| Wan 2.7 | 720p .0664; 1080p .1096 | 1080p, 5s | 330 |
+| Gemini Omni Flash Preview | 720p .088 | Auto 3–10s, quote for 10s | 530 |
+
+Gemini uses a **fixed retail price of 530 credits**, calculated for the maximum
+10-second output. The UI labels the duration automatic and the price fixed;
+it never promises a selectable 10-second output. The existing ledger captures
+the accepted quote after success; there is no actual-duration price reconciliation.
+No duration/audio parameter is sent to Gemini. Other models expose complete
+priced duration/resolution combinations with provider defaults selected first.
+Unwired native inputs and extra-cost audio modes have no quote and fail closed.
+
+All ten candidates can run with `dev-smoke` status only in the explicitly enabled
+DEV contour. Outside it, they stay `pending-verification`. Frozen admission
+baselines and approved contracts are unchanged. Unpriced candidates still cannot
+receive runtime bindings; empty price maps are accepted only on disabled cards.
+
+Offline tests cover wire payloads, variants, estimates, owned references,
+CSRF, invalid input, immutable quotes and recovery without a second paid submit
+or charge. Remaining admission work is separately authorized live-output/input
+and actual billing verification; `live-output` stays `not_run`. No paid calls
+or deployment were performed for this change.

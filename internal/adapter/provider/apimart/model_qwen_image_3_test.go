@@ -113,7 +113,7 @@ func TestModel_qwen_image_3(t *testing.T) {
 			"large pixels":       func(r *domain.ProviderRequest) { r.Size = "2049x1024" },
 			"unsupported aspect": func(r *domain.ProviderRequest) { r.AspectRatio = "21:9" },
 			"auto":               func(r *domain.ProviderRequest) { r.Size = "auto" },
-			"pro":                func(r *domain.ProviderRequest) { r.ModelCode = "qwen-image-3.0-pro" },
+			"unknown variant":    func(r *domain.ProviderRequest) { r.ModelCode = "qwen-image-3.0-unknown" },
 			"empty prompt":       func(r *domain.ProviderRequest) { r.Prompt = " " },
 			"agent reference": func(r *domain.ProviderRequest) {
 				r.InputURLs = []string{"https://example.com/a.png"}

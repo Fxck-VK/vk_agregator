@@ -18,6 +18,15 @@ music exposes `generate` only. GPT-4o Mini TTS and Whisper remain disabled until
 bounded per-job billing is implemented. Reference-only legacy routes remain subject
 to their existing surface/input restrictions.
 
+The September 30 image extension and October 2 video pricing/wiring bring the
+prepared media count to 31. Ten new video candidates use exact APIMart Gold
+rates, x3 rounded up to five credits. Vidu Q3 Standard/Mix require 1-7 owned
+PNG/JPEG inputs and working artifact storage; other new video routes are
+text-only. Gemini Omni Flash Preview has automatic 3-10s output and a fixed
+530-credit quote calculated at the 10s ceiling. No new env flag is required.
+See [models, rates and input restrictions](MODEL_CATALOG.md#video-pricing-and-dev-wiring-checked-2026-10-02).
+These additions still need manual live smoke and do not grant production admission.
+
 It also exposes 21 text candidates from APIMart's documented Chat Completions
 list (checked 2026-09-28): GPT-5/5.1/5 Chat Latest/5 Mini; Claude Opus 4.6,
 Sonnet 4.6 and Opus 4.5 (20251101); Gemini 3.5 Flash, 3.1 Pro Preview,

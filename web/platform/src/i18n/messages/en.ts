@@ -302,6 +302,8 @@ export const messagesEn = {
   "chatModelSelector.answersAndTextAssistanceInTheCurrent": "Answers and text assistance in the current chat",
   "generationOptions.resolution": "Resolution",
   "generationOptions.duration": "Duration",
+  "generationOptions.automaticDuration": "Auto, 3–10 s · fixed price",
+  "useChatAttachments.referenceImageRequired": "Attach 1–7 PNG/JPEG images. Minimum 128 × 128 pixels, aspect ratio from 1:4 to 4:1.",
   "generationOptions.valueS": "{value1} s",
   "modelCardContent.valueIsAvailableInNeirohub": "{value1} is available in NeiroHub.",
   "modelSelector.selectedAiModelValueValueList": "Selected AI model: {value1}. {value2} list",

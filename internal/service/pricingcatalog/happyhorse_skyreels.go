@@ -15,6 +15,9 @@ func MediaVideoCandidateQuote(model, mode, resolution string, seconds int) (Pric
 	var rates map[string]int64
 	minSeconds, maxSeconds := 3, 15
 	resolution = strings.ToLower(strings.TrimSpace(resolution))
+	if quote, found, err := videoExpansionQuote(model, mode, resolution, seconds); found {
+		return quote, err
+	}
 	switch model {
 	// Public discounted USD/second, checked 2026-09-28 at the endpoint above
 	// for grok-imagine-1.5-video-ext, kling-v2-6, seedance-2.0 and seedance-2.0-mini.

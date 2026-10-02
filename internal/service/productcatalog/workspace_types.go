@@ -86,6 +86,7 @@ type WorkspaceImage struct {
 }
 
 type WorkspaceVideo struct {
+	AutomaticDuration   bool                    `json:"automatic_duration,omitempty"`
 	AllowedResolutions  []string                `json:"allowed_resolutions"`
 	AllowedDurationsSec []int                   `json:"allowed_durations_sec"`
 	AllowedAspectRatios []string                `json:"allowed_aspect_ratios"`

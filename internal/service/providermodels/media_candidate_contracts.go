@@ -1,6 +1,7 @@
 package providermodels
 
 import (
+	"net/url"
 	"strings"
 
 	"vk-ai-aggregator/internal/service/modelcontract"
@@ -31,6 +32,9 @@ func MediaCandidateOperationFacts(publicID string) []MediaCandidateOperationFact
 	candidate, ok := MediaCandidateByID(publicID)
 	if !ok {
 		return nil
+	}
+	if IsVideoExpansion(publicID) {
+		return videoExpansionFacts(candidate)
 	}
 	switch publicID {
 	case "happyhorse_1_0":
@@ -439,10 +443,23 @@ func mediaCandidateSources(candidate MediaCandidate, facts []MediaCandidateOpera
 	if len(sources) == 0 && strings.TrimSpace(candidate.Documentation) != "" {
 		addURL("candidate_documentation", candidate.Documentation)
 	}
+	if IsVideoExpansion(candidate.PublicID) {
+		sources = append(sources, modelcontract.Source{ID: candidate.PublicID + "_pricing", URL: "https://api.apimart.ai/api/pricing/model?model=" + url.QueryEscape(candidate.ModelCode), CheckedAt: "2026-10-02"})
+	}
 	return sources
 }
 
 func mediaCandidateSourceURL(sourceID string) string {
+	for _, c := range videoExpansionCandidates() {
+		if sourceID == c.PublicID+"_generation" {
+			return c.Documentation
+		}
+	}
+	for _, c := range imageExpansionCandidates() {
+		if sourceID == c.PublicID+"_generation" {
+			return c.Documentation
+		}
+	}
 	switch sourceID {
 	case "nano_banana_generation":
 		return apimartDocsBase + "images/gemini-2.5-flash/generation"
@@ -453,9 +470,9 @@ func mediaCandidateSourceURL(sourceID string) string {
 	case "seedance_2_0_generation", "seedance_2_0_mini_generation":
 		return apimartDocsBase + "videos/seedance-2-0/generation"
 	case "wan_3_0_generation":
-		return "https://docs.apimart.ai/en/api-reference/videos/wan3.0-video/generation"
+		return "https://docs.apimart.ai/ru/api-reference/videos/wan3.0-video/generation"
 	case "vidu_q3_pro_generation":
-		return "https://docs.apimart.ai/en/api-reference/videos/vidu-q3-pro/generation"
+		return "https://docs.apimart.ai/ru/api-reference/videos/vidu-q3-pro/generation"
 	case "imagen_4_0_generation":
 		return "https://docs.apimart.ai/en/api-reference/images/imagen-4.0-apimart/generation"
 	case "lyria_3_5_generation":
@@ -568,14 +585,16 @@ func mediaCandidateImageOperation(candidate MediaCandidate, fact MediaCandidateO
 	image := candidate.Capabilities.Application.Image
 	variants := make([]modelcontract.ImageVariant, 0, len(image.AspectRatios))
 	defaultVariant := 0
-	for i, ratio := range image.AspectRatios {
-		resolution := ""
-		if len(image.Resolutions) == 1 {
-			resolution = image.Resolutions[0]
-		}
-		variants = append(variants, modelcontract.ImageVariant{AspectRatio: ratio, Resolution: resolution})
-		if ratio == "16:9" {
-			defaultVariant = i
+	resolutions := image.Resolutions
+	if len(resolutions) == 0 {
+		resolutions = []string{""}
+	}
+	for index, resolution := range resolutions {
+		for _, ratio := range image.AspectRatios {
+			if index == 0 && ratio == "16:9" {
+				defaultVariant = len(variants)
+			}
+			variants = append(variants, modelcontract.ImageVariant{AspectRatio: ratio, Resolution: resolution})
 		}
 	}
 	return modelcontract.Operation{
@@ -592,6 +611,9 @@ func mediaCandidateImageOperation(candidate MediaCandidate, fact MediaCandidateO
 }
 
 func mediaCandidateVideoOperation(candidate MediaCandidate, fact MediaCandidateOperationFact) modelcontract.Operation {
+	if IsVideoExpansion(candidate.PublicID) {
+		return videoExpansionDraftOperation(candidate, fact)
+	}
 	inputs := explicitUnsupportedInputs()
 	variants := mediaCandidateVideoVariants(candidate.ModelCode, fact.ID)
 	startImage := "unsupported"

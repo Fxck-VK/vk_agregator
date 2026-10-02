@@ -54,7 +54,9 @@ export function useGenerationControls(model: GenerationModel | undefined, disabl
  if (model?.category === "video") controls = <>
   <ImageAspectRatioSelector disabled={disabled} value={options.aspect_ratio!} options={videoAspectRatios(model, options)} onChange={aspect_ratio=>change({aspect_ratio})}/>
   <ImageQualitySelector disabled={disabled} label={msg("generationOptions.resolution")} value={options.resolution!} options={model.allowed_resolutions} onChange={resolution=>change({resolution})}/>
-  <ImageQualitySelector disabled={disabled} label={msg("generationOptions.duration")} value={msg("generationOptions.valueS", { value1: options.duration_sec ?? "—" })} options={model.allowed_durations_sec.filter(value=>model.price_by_option[`${options.resolution}:${value}`] > 0 && (!model.variants || model.variants.some(variant=>variant.resolution===options.resolution && variant.duration_sec===value))).map(value=>msg("generationOptions.valueS", { value1: value }))} onChange={value=>change({duration_sec:parseInt(value,10)})}/>
+  {model.automatic_duration
+    ? <ImageQualitySelector disabled label={msg("generationOptions.duration")} value={msg("generationOptions.automaticDuration")} options={[msg("generationOptions.automaticDuration")]} onChange={()=>{}}/>
+    : <ImageQualitySelector disabled={disabled} label={msg("generationOptions.duration")} value={msg("generationOptions.valueS", { value1: options.duration_sec ?? "—" })} options={model.allowed_durations_sec.filter(value=>model.price_by_option[`${options.resolution}:${value}`] > 0 && (!model.variants || model.variants.some(variant=>variant.resolution===options.resolution && variant.duration_sec===value))).map(value=>msg("generationOptions.valueS", { value1: value }))} onChange={value=>change({duration_sec:parseInt(value,10)})}/>}
  </>;
  return {options,controls,cost,canSubmit:model !== undefined && (model.category === "text" || (cost ?? 0)>0)};
 }

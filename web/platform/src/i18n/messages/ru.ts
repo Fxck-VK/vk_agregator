@@ -301,6 +301,8 @@ export const messagesRu = {
   "chatModelSelector.answersAndTextAssistanceInTheCurrent": "Ответы на вопросы и работа с текстом в текущем диалоге",
   "generationOptions.resolution": "Разрешение",
   "generationOptions.duration": "Длительность",
+  "generationOptions.automaticDuration": "Авто, 3–10 с · фиксированная цена",
+  "useChatAttachments.referenceImageRequired": "Прикрепите от 1 до 7 фото PNG/JPEG. Минимум 128 × 128 пикселей, пропорции от 1:4 до 4:1.",
   "generationOptions.valueS": "{value1} с",
   "modelCardContent.valueIsAvailableInNeirohub": "{value1} доступна для выбора в NeiroHub.",
   "modelSelector.selectedAiModelValueValueList": "Выбрана нейросеть {value1}. {value2} список",

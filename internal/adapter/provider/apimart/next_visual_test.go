@@ -52,8 +52,8 @@ func TestNextVisualModelConstantsAndMembership(t *testing.T) {
 		{ModelWan30Video, true},
 		{ModelViduQ3Pro, true},
 		{ModelImagen40, true},
-		{"wan3.0-video-prime", false},
-		{"viduq3-turbo", false},
+		{"wan3.0-video-prime", true},
+		{"viduq3-turbo", true},
 		{"imagen-4.0", false},
 	} {
 		if got := isNextVisualModel(tc.model); got != tc.want {

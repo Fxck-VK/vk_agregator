@@ -27,6 +27,9 @@ func TestDEVSmokeRegistryDoesNotGrantAdmission(t *testing.T) {
 		op := "generate"
 		if c.Kind == "video" {
 			op = "text_to_video"
+			if VideoCandidateRequiresImages(c.PublicID) {
+				op = "reference_image_to_video"
+			}
 		}
 		want := c.PublicID != "gpt_4o_mini_tts" && c.PublicID != "whisper_1"
 		if got := r.MediaCandidateRunnable(c.PublicID, op); got != want {

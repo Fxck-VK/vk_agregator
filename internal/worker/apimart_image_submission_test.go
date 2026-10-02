@@ -1,9 +1,12 @@
 package worker_test
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
 	"errors"
+	"image"
+	"image/png"
 	"net/http"
 	"net/http/httptest"
 	"strings"
@@ -16,6 +19,7 @@ import (
 	"vk-ai-aggregator/internal/adapter/storage/memory"
 	"vk-ai-aggregator/internal/domain"
 	"vk-ai-aggregator/internal/service/billingservice"
+	"vk-ai-aggregator/internal/service/pricingcatalog"
 	"vk-ai-aggregator/internal/service/providermodels"
 	"vk-ai-aggregator/internal/worker"
 )
@@ -56,10 +60,49 @@ func TestFlux2PersistsSubmitIntentBeforeNetworkAndSurvivesRestart(t *testing.T) 
 	testAPIMartImageSubmitRestart(t, "flux_2_pro", "flux-2-pro", "4MP", "/v1/images/generations", 40)
 }
 
+func TestImageExpansionSubmitSurvivesRestart(t *testing.T) {
+	if err := providermodels.ConfigureDEVSmoke("development", true); err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = providermodels.ConfigureDEVSmoke("development", false) })
+	for _, c := range providermodels.MediaCandidates() {
+		if !pricingcatalog.IsImageExpansion(c.PublicID) {
+			continue
+		}
+		q, err := pricingcatalog.ImageCandidateQuote(c.PublicID)
+		if err != nil {
+			t.Fatal(err)
+		}
+		t.Run(c.PublicID, func(t *testing.T) {
+			testAPIMartImageSubmitRestart(t, c.PublicID, c.ModelCode, q.Key.Quality, "/v1/images/generations", q.InternalCredits)
+		})
+	}
+}
+
 func TestOmniVideoPersistsSubmitIntentBeforeNetworkAndSurvivesRestart(t *testing.T) {
 	for _, model := range []string{apimart.ModelOmni11Flash, apimart.ModelOmni11FlashExt} {
 		t.Run(model, func(t *testing.T) {
 			testAPIMartImageSubmitRestart(t, "", model, "360p", "/v1/videos/generations", 180)
+		})
+	}
+}
+
+func TestVideoExpansionSubmitSurvivesRestart(t *testing.T) {
+	if err := providermodels.ConfigureDEVSmoke("development", true); err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = providermodels.ConfigureDEVSmoke("development", false) })
+	for _, c := range providermodels.MediaCandidates() {
+		if !providermodels.IsVideoExpansion(c.PublicID) {
+			continue
+		}
+		res, seconds := providermodels.VideoCandidateDefaults(c.PublicID)
+		q, err := pricingcatalog.MediaVideoCandidateQuote(c.PublicID, "", res, seconds)
+		if err != nil {
+			t.Fatal(err)
+		}
+		t.Run(c.PublicID, func(t *testing.T) {
+			testAPIMartImageSubmitRestart(t, c.PublicID, c.ModelCode, res, "/v1/videos/generations", q.InternalCredits)
 		})
 	}
 }
@@ -77,6 +120,10 @@ func testAPIMartImageSubmitRestart(t *testing.T, publicModel, providerModel, res
 			ctx := context.Background()
 			var calls atomic.Int32
 			srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+				if r.Method == "POST" && r.URL.Path == "/v1/uploads/images" && providermodels.VideoCandidateRequiresImages(publicModel) {
+					_, _ = w.Write([]byte(`{"url":"https://cdn.example/reference.png"}`))
+					return
+				}
 				calls.Add(1)
 				if r.Method != "POST" || r.URL.Path != endpoint {
 					t.Error("unexpected provider request")
@@ -90,10 +137,13 @@ func testAPIMartImageSubmitRestart(t *testing.T, publicModel, providerModel, res
 			var deps worker.Deps
 			var tasks *interruptedAPIMartImageTasks
 			h := newHarnessWithProvider(t, apimart.New(cfg), func(d *worker.Deps) {
-				d.ProviderMediaContracts = providermodels.StaticRegistry().ProviderMediaContracts(providermodels.MediaContractRuntime{})
-				if strings.HasPrefix(providerModel, "gemini-omni-") || providermodels.IsKlingVeoVideoRoute(domain.ProviderAPIMart, providerModel) {
+				d.ProviderMediaContracts = providermodels.RuntimeRegistry().ProviderMediaContracts(providermodels.MediaContractRuntime{})
+				if providermodels.IsVideoExpansion(publicModel) || strings.HasPrefix(providerModel, "gemini-omni-") || providermodels.IsKlingVeoVideoRoute(domain.ProviderAPIMart, providerModel) {
 					// This recovery fixture has no route snapshot, so the worker uses its runtime resolution.
 					d.VideoResolution = resolution
+					if providermodels.IsVideoExpansion(publicModel) {
+						_, d.VideoDurationSec = providermodels.VideoCandidateDefaults(publicModel)
+					}
 				}
 				tasks = &interruptedAPIMartImageTasks{ProviderTaskRepository: d.Tasks, rejectCreate: rejectCreate}
 				d.Tasks = tasks
@@ -103,6 +153,13 @@ func testAPIMartImageSubmitRestart(t *testing.T, publicModel, providerModel, res
 			owner := uuid.New()
 			params, _ := json.Marshal(map[string]any{"prompt": "Synthetic scene", "provider": domain.ProviderAPIMart, "model_code": providerModel, "model_id": publicModel, "resolution": resolution, "image_quality": resolution, "aspect_ratio": "16:9", "output_count": 1})
 			job := &domain.Job{ID: uuid.New(), AccountID: owner, UserID: owner, Source: "web", ResultMode: domain.ResultModeAccountHistory, ChannelContext: &domain.ChannelContext{Channel: domain.ChannelWeb}, OperationType: domain.OperationImageGenerate, Modality: domain.ModalityImage, Status: domain.JobStatusQueued, IdempotencyKey: uuid.NewString(), CostEstimate: credits, CostReserved: credits, Params: params}
+			if pricingcatalog.IsImageExpansion(publicModel) {
+				quote, err := pricingcatalog.ImageCandidateQualityQuote(publicModel, resolution)
+				if err != nil {
+					t.Fatal(err)
+				}
+				job.PricingSnapshot, _ = json.Marshal(quote)
+			}
 			if strings.HasPrefix(providerModel, "gemini-omni-") || providermodels.IsKlingVeoVideoRoute(domain.ProviderAPIMart, providerModel) {
 				job.OperationType, job.Modality = domain.OperationVideoGenerate, domain.ModalityVideo
 				job.Params, _ = json.Marshal(map[string]any{"prompt": "Synthetic scene", "provider": domain.ProviderAPIMart, "model_code": providerModel, "resolution": resolution, "aspect_ratio": "16:9", "duration_sec": func() int {
@@ -111,6 +168,30 @@ func testAPIMartImageSubmitRestart(t *testing.T, publicModel, providerModel, res
 					}
 					return 10
 				}()})
+			}
+			if providermodels.IsVideoExpansion(publicModel) {
+				_, seconds := providermodels.VideoCandidateDefaults(publicModel)
+				quote, err := pricingcatalog.MediaVideoCandidateQuote(publicModel, "", resolution, seconds)
+				if err != nil {
+					t.Fatal(err)
+				}
+				job.OperationType, job.Modality = domain.OperationVideoGenerate, domain.ModalityVideo
+				job.PricingSnapshot, _ = json.Marshal(quote)
+				if providermodels.VideoCandidateRequiresImages(publicModel) {
+					var data bytes.Buffer
+					if err := png.Encode(&data, image.NewRGBA(image.Rect(0, 0, 128, 128))); err != nil {
+						t.Fatal(err)
+					}
+					id := uuid.New()
+					if err := deps.ArtifactRepo.Create(ctx, &domain.Artifact{ID: id, OwnerAccountID: owner, Kind: domain.ArtifactKindInput, MediaType: domain.MediaTypeImage, Status: domain.ArtifactStatusReady, StorageBucket: "inputs", StorageKey: "ref.png", MimeType: "image/png"}); err != nil {
+						t.Fatal(err)
+					}
+					if err := deps.Objects.(*memory.ObjectStore).Put(ctx, "inputs", "ref.png", data.Bytes(), "image/png"); err != nil {
+						t.Fatal(err)
+					}
+					job.InputArtifactIDs = []uuid.UUID{id}
+				}
+				job.Params, _ = json.Marshal(map[string]any{"prompt": "Synthetic scene", "provider": domain.ProviderAPIMart, "model_code": providerModel, "resolution": resolution, "aspect_ratio": "16:9", "duration_sec": seconds, "reference_artifact_ids": job.InputArtifactIDs})
 			}
 			if err := billing.Grant(ctx, owner, credits, "restart-test-funding", "test funding"); err != nil {
 				t.Fatal(err)

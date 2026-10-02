@@ -3229,3 +3229,13 @@ quotes remain server-owned; pending media candidates stay disabled. BFF body
 limits are separate for image multipart uploads and music/speech audio uploads.
 Music and speech UI use the same locale provider as the workspace; switching
 language preserves drafts, prepared Jobs and retry keys without resubmission.
+
+The October 2 DEV video expansion reuses the owned input path for Vidu Q3
+Standard/Mix, whose generation requires 1-7 images. Both API and worker check
+ownership, count, image geometry and exact Job binding. Other new video routes
+remain text-only. Gemini Omni Flash Preview chooses output duration (3-10s);
+its fixed retail quote uses the 10s ceiling, with the existing reservation and
+capture lifecycle. The UI labels this automatic duration/fixed price, and the
+provider receives no duration parameter. No actual-duration settlement is implied.
+These routes remain unverified DEV candidates; see
+[model catalog](runbooks/MODEL_CATALOG.md#video-pricing-and-dev-wiring-checked-2026-10-02).

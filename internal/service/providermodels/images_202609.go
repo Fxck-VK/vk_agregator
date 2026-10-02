@@ -57,5 +57,5 @@ func IsGPTImage25Route(provider domain.ProviderName, model string) bool {
 }
 
 func IsNewAPIMartImageRoute(provider domain.ProviderName, model string) bool {
-	return provider == domain.ProviderAPIMart && (IsGPTImage25Route(provider, model) || model == ProviderModelSeedream50Lite || model == ProviderModelSeedream50Pro)
+	return provider == domain.ProviderAPIMart && (IsGPTImage25Route(provider, model) || model == ProviderModelSeedream50Lite || model == ProviderModelSeedream50Pro || imageExpansionRoute(provider, model))
 }

@@ -12,7 +12,21 @@ func estimateNextVisual(req domain.ProviderRequest) (domain.CostEstimate, error)
 	}
 	var quote pricingcatalog.PricingSnapshot
 	var err error
-	if req.ModelCode == ModelImagen40 || req.ModelCode == ModelNanoBanana {
+	if imageExpansionID(req.ModelCode) != "" {
+		quote, err = pricingcatalog.ImageCandidateQualityQuote(imageExpansionID(req.ModelCode), imageExpansionResolution(req))
+	} else if spec, ok := videoExpansionSpec(req.ModelCode); ok {
+		// Advanced native input modes have separate rates. Only the wired,
+		// priced reference-only Vidu routes may include media in a quote.
+		if req.ModelCode != ModelViduQ3 && req.ModelCode != ModelViduQ3Mix && (req.VideoMedia != nil || len(req.InputURLs) > 0) {
+			return domain.CostEstimate{}, &Error{Class: domain.ProviderErrModelUnavailable, Message: "media input price unavailable"}
+		}
+		seconds, resolution := videoExpansionOptions(req, spec)
+		mode := ""
+		if req.VideoAudio {
+			mode = "audio"
+		}
+		quote, err = pricingcatalog.MediaVideoCandidateQuote(spec.id, mode, resolution, seconds)
+	} else if req.ModelCode == ModelImagen40 || req.ModelCode == ModelNanoBanana {
 		id := "imagen_4_0"
 		if req.ModelCode == ModelNanoBanana {
 			id = "nano_banana"

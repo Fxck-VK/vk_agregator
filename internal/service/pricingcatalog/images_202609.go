@@ -63,6 +63,9 @@ func gptImage25Floor(quality, aspectRatio string) (int64, bool) {
 // Custom runtime floors fail closed instead of silently overriding operators'
 // tariff decisions with a different public rate table.
 func QuoteAPIMartImage(s PricingSnapshot, aspectRatio string, references int) (PricingSnapshot, error) {
+	if IsImageExpansion(s.Key.ImageModelID) {
+		return quoteImageExpansion(s, references)
+	}
 	if !IsBoundedAPIMartImage(s.Key.ImageModelID) {
 		return s, nil
 	}
@@ -135,7 +138,7 @@ func finalizeImageQuote(s PricingSnapshot) (PricingSnapshot, error) {
 }
 
 func IsBoundedAPIMartImage(modelID string) bool {
-	return IsGPTImage25(modelID) || modelID == PublicImageSeedream50Lite || modelID == PublicImageSeedream50Pro
+	return IsGPTImage25(modelID) || modelID == PublicImageSeedream50Lite || modelID == PublicImageSeedream50Pro || IsImageExpansion(modelID)
 }
 
 func IsGPTImage25(modelID string) bool {

@@ -31,7 +31,7 @@ func ConfigureDEVSmoke(environment string, enabled bool) error {
 	return nil
 }
 
-// RuntimeRegistry adds only priced text-input candidates for the explicitly
+// RuntimeRegistry adds only priced, wired candidates for the explicitly
 // enabled DEV contour. StaticRegistry and its frozen admission baseline stay strict.
 func RuntimeRegistry() Registry {
 	if configured := devSmokeRegistry.Load(); configured != nil {
@@ -64,21 +64,23 @@ func buildDEVSmokeRegistry() Registry {
 	for _, c := range MediaCandidates() {
 		switch c.Kind {
 		case "image":
-			q, err := pricingcatalog.ImageCandidateQuote(c.PublicID)
-			if err != nil {
+			qualities := []string{}
+			for _, quality := range ImageCandidateQualities(c) {
+				q, err := pricingcatalog.ImageCandidateQualityQuote(c.PublicID, quality)
+				if err != nil {
+					continue
+				}
+				qualities = append(qualities, quality)
+				r.smokePrices = append(r.smokePrices, smokePrice(q))
+			}
+			if len(qualities) == 0 {
 				continue
 			}
-			quality := "standard"
-			if c.PublicID == "nano_banana" {
-				quality = "1K"
-			}
-			q.Key.Quality = quality
-			m := imageModelWithQualities(c.PublicID, c.Name, c.Provider, c.ModelCode, FeatureDEVModelSmoke, apimartReadiness(), []string{quality}, 0)
+			m := imageModelWithQualities(c.PublicID, c.Name, c.Provider, c.ModelCode, FeatureDEVModelSmoke, apimartReadiness(), qualities, 0)
 			m.Limits.MaxOutputCount = 1
 			m.Limits.SupportsReferenceImage = false
-			m.Limits.AllowedAspectRatios = append([]string(nil), c.Capabilities.API.Image.AspectRatios...)
+			m.Limits.AllowedAspectRatios = append([]string(nil), c.Capabilities.Application.Image.AspectRatios...)
 			r.ImageModels = append(r.ImageModels, m)
-			r.smokePrices = append(r.smokePrices, smokePrice(q))
 		case "video":
 			v := c.Capabilities.API.Video
 			durations := append([]int(nil), v.Duration.AllowedSeconds...)
@@ -86,6 +88,19 @@ func buildDEVSmokeRegistry() Registry {
 				durations = integerRange(*v.Duration.MinSeconds, *v.Duration.MaxSeconds)
 			}
 			spec := domain.VideoRouteSpec{Alias: domain.VideoRouteAlias(c.PublicID), Provider: c.Provider, ProviderModelID: c.ModelCode, ModelClass: c.PublicID, InputModes: []domain.VideoInputMode{domain.VideoInputText}, AllowedDurationsSec: durations, AllowedResolutions: append([]string(nil), v.Resolutions...), AllowedAspectRatios: append([]string(nil), v.AspectRatios...), PriceMultiplier: 3, ProviderCostMicrosByResolutionDuration: map[string]map[int]int64{}}
+			if IsVideoExpansion(c.PublicID) {
+				resolution, seconds := VideoCandidateDefaults(c.PublicID)
+				spec.AllowedResolutions = candidateDefaultFirst(spec.AllowedResolutions, resolution)
+				durations = candidateDefaultFirst(VideoCandidateDurations(c), seconds)
+				spec.AllowedDurationsSec = durations
+				spec.AutomaticDuration = v.Duration.Mode == videoDurationAutomatic
+				if VideoCandidateRequiresImages(c.PublicID) {
+					spec.InputModes = []domain.VideoInputMode{domain.VideoInputReference}
+					spec.SupportsReferenceImage = true
+					spec.MaxReferenceImages = 7
+					spec.AllowedReferenceImageCounts = intSequence(1, 7)
+				}
+			}
 			var keys []pricingcatalog.ProductKey
 			for _, res := range spec.AllowedResolutions {
 				spec.ProviderCostMicrosByResolutionDuration[res] = map[int]int64{}
@@ -101,6 +116,11 @@ func buildDEVSmokeRegistry() Registry {
 					keys = append(keys, q.Key)
 					r.smokePrices = append(r.smokePrices, smokePrice(q))
 				}
+			}
+			// An API contract alone is not a billable route. In particular, never
+			// publish a new candidate with a zero or unrelated model's price.
+			if len(keys) == 0 {
+				continue
 			}
 			r.VideoRouteModels = append(r.VideoRouteModels, videoRoute(spec, FeatureDEVModelSmoke, apimartReadiness(), keys, nil, false))
 		}
@@ -156,7 +176,25 @@ func (r Registry) MediaCandidateRunnable(id, operation string) bool {
 		return false
 	}
 	if c.Kind == "video" {
+		if VideoCandidateRequiresImages(id) {
+			return operation == "reference_image_to_video"
+		}
 		return operation == "text_to_video"
 	}
 	return operation == "generate"
+}
+
+func candidateDefaultFirst[T comparable](values []T, preferred T) []T {
+	result := make([]T, 0, len(values))
+	for _, value := range values {
+		if value == preferred {
+			result = append(result, value)
+		}
+	}
+	for _, value := range values {
+		if value != preferred {
+			result = append(result, value)
+		}
+	}
+	return result
 }

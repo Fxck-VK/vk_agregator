@@ -6,6 +6,13 @@ import "vk-ai-aggregator/internal/domain"
 // https://api.apimart.ai/api/pricing/model?model=imagen-4.0-apimart
 // Candidate quotes are deliberately not inserted into StaticProductPrices.
 func ImageCandidateQuote(model string) (PricingSnapshot, error) {
+	if IsImageExpansion(model) {
+		quality := "1K"
+		if model == "flux_2_max" || model == "flux_2_flex" {
+			quality = "1MP"
+		}
+		return ImageCandidateQualityQuote(model, quality)
+	}
 	switch model {
 	case "nano_banana":
 		// APIMart public discounted price, checked 2026-09-28:

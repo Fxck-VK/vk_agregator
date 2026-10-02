@@ -16,6 +16,7 @@ import (
 	"github.com/google/uuid"
 	"vk-ai-aggregator/internal/domain"
 	"vk-ai-aggregator/internal/service/productcatalog"
+	"vk-ai-aggregator/internal/service/providermodels"
 )
 
 func (h *Handler) quoteConversationImage(w http.ResponseWriter, r *http.Request) {
@@ -69,6 +70,13 @@ type InputArtifactService interface {
 func (h *Handler) imageReferencesEnabled(modelID string) bool {
 	if h.deps.InputArtifacts == nil || h.deps.InputObjects == nil {
 		return false
+	}
+	if providermodels.VideoCandidateRequiresImages(modelID) {
+		for _, route := range h.conversationVideoRoutes() {
+			if route.Alias == modelID {
+				return true
+			}
+		}
 	}
 	for _, m := range h.cfg.ImageModels {
 		if m.ID == modelID {
@@ -142,7 +150,7 @@ func (h *Handler) uploadConversationInput(w http.ResponseWriter, r *http.Request
 		return
 	}
 	mime, cfg, validationErr := webInputImage(data)
-	if err != nil || validationErr != nil {
+	if err != nil || validationErr != nil || !validReferenceGeometry(r.URL.Query().Get("model_id"), cfg) {
 		writeError(w, 400, "invalid image attachment")
 		return
 	}
@@ -190,13 +198,17 @@ func (h *Handler) validateConversationInputs(w http.ResponseWriter, r *http.Requ
 		}
 		// Recheck stored bytes, including legacy inputs that predate web validation.
 		data, err := h.deps.InputObjects.GetObject(r.Context(), a.StorageBucket, a.StorageKey)
-		mime, _, invalid := webInputImage(data)
-		if err != nil || invalid != nil || mime != a.MimeType || int64(len(data)) != a.SizeBytes {
+		mime, cfg, invalid := webInputImage(data)
+		if err != nil || invalid != nil || !validReferenceGeometry(req.ModelID, cfg) || mime != a.MimeType || int64(len(data)) != a.SizeBytes {
 			writeError(w, 400, "invalid attachment")
 			return false
 		}
 	}
 	return true
+}
+
+func validReferenceGeometry(modelID string, cfg image.Config) bool {
+	return !providermodels.VideoCandidateRequiresImages(modelID) || cfg.Width >= 128 && cfg.Height >= 128 && cfg.Width <= 4*cfg.Height && cfg.Height <= 4*cfg.Width
 }
 
 func (h *Handler) getConversationInput(w http.ResponseWriter, r *http.Request) {

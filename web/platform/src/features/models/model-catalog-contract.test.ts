@@ -11,6 +11,17 @@ import {
 } from "./model-catalog-contract";
 
 describe("model catalog contract", () => {
+  it("keeps documented but unpriced videos informational until pricing is complete", () => {
+    const payload = publicModelCatalog();
+    const model = payload.items[2];
+    model.verification = "pending-verification";
+    model.operations[0].enabled = false;
+    model.operations[0].video.price_by_option = {};
+    expect(parseModelCatalog(payload).items[2].operations[0].enabled).toBe(false);
+    expect(projectVideoModelCatalog(parseModelCatalog(payload)).items.some((item) => item.id === model.id)).toBe(false);
+    model.operations[0].enabled = true;
+    expect(() => parseModelCatalog(payload)).toThrow();
+  });
   it("accepts the public unified model catalog with explicit image metadata", () => {
     const payload = publicModelCatalog();
 

@@ -40,6 +40,12 @@ type nextVisualImageRequest struct {
 }
 
 func isNextVisualModel(model string) bool {
+	if videoExpansionID(model) != "" {
+		return true
+	}
+	if imageExpansionID(model) != "" {
+		return true
+	}
 	if catalogExpansionID(model) != "" {
 		return true
 	}
@@ -52,6 +58,13 @@ func isNextVisualModel(model string) bool {
 }
 
 func validateNextVisualRequest(req domain.ProviderRequest) error {
+	if videoExpansionID(req.ModelCode) != "" {
+		return validateVideoExpansionRequest(req)
+	}
+	if imageExpansionID(req.ModelCode) != "" {
+		_, err := buildImageExpansionBody(req)
+		return err
+	}
 	if catalogExpansionID(req.ModelCode) != "" {
 		_, err := buildCatalogExpansionBody(req)
 		return err
@@ -69,6 +82,12 @@ func validateNextVisualRequest(req domain.ProviderRequest) error {
 }
 
 func buildNextVisualBody(req domain.ProviderRequest) ([]byte, error) {
+	if videoExpansionID(req.ModelCode) != "" {
+		return buildVideoExpansionBody(req)
+	}
+	if imageExpansionID(req.ModelCode) != "" {
+		return buildImageExpansionBody(req)
+	}
 	if catalogExpansionID(req.ModelCode) != "" {
 		return buildCatalogExpansionBody(req)
 	}
@@ -109,6 +128,9 @@ func buildNextVisualBody(req domain.ProviderRequest) ([]byte, error) {
 			Audio:      req.VideoAudio,
 			ImageURLs:  frames,
 		}
+		if req.VideoMedia != nil {
+			body.Seed = req.VideoMedia.Seed
+		}
 		if len(frames) == 0 {
 			body.AspectRatio = nextVisualRatioValue(req, nextVisualVideoAspectRatios, "16:9")
 		}
@@ -127,12 +149,28 @@ func buildNextVisualBody(req domain.ProviderRequest) ([]byte, error) {
 }
 
 func (p *Provider) submitNextVisual(ctx context.Context, req domain.ProviderRequest) (domain.ProviderTask, error) {
+	if req.ModelCode == ModelViduQ3 || req.ModelCode == ModelViduQ3Mix {
+		// Validate every input before even the first upload. Generation receives
+		// public URLs as required by the selected Vidu API, never data URIs.
+		if err := validateVideoExpansionRequest(req); err != nil {
+			return domain.ProviderTask{}, err
+		}
+		inputs := make([]string, len(req.InputURLs))
+		for i, value := range req.InputURLs {
+			url, err := p.prepareFirstFrameImage(ctx, value)
+			if err != nil {
+				return domain.ProviderTask{}, err
+			}
+			inputs[i] = url
+		}
+		req.InputURLs = inputs
+	}
 	body, err := buildNextVisualBody(req)
 	if err != nil {
 		return domain.ProviderTask{}, err
 	}
 	path := "/videos/generations"
-	if strings.TrimSpace(req.ModelCode) == ModelImagen40 || req.ModelCode == ModelNanoBanana {
+	if strings.TrimSpace(req.ModelCode) == ModelImagen40 || req.ModelCode == ModelNanoBanana || imageExpansionID(req.ModelCode) != "" {
 		path = "/images/generations"
 	}
 	return p.postUnversionedTask(ctx, req, path, body)
@@ -172,8 +210,8 @@ func validateNextVisualVidu(req domain.ProviderRequest) error {
 	if err := validateNextVisualVideoCommon(req, ModelViduQ3Pro); err != nil {
 		return err
 	}
-	if req.VideoMedia != nil && req.VideoMedia.Seed != nil {
-		return nextVisualInvalid("Vidu Q3 Pro seed is unsupported")
+	if req.VideoMedia != nil && req.VideoMedia.Seed != nil && (int64(*req.VideoMedia.Seed) < -1 || int64(*req.VideoMedia.Seed) > 4294967295) {
+		return nextVisualInvalid("Vidu Q3 Pro seed is outside documented range")
 	}
 	prompt := strings.TrimSpace(req.Prompt)
 	if len([]rune(prompt)) > 2000 {

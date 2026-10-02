@@ -26,11 +26,15 @@ func TestNextSixMediaCandidatesExposeDatedDraftFacts(t *testing.T) {
 		{"whisper_1", "audio", "whisper-1", "transcribe", "POST /v1/audio/transcriptions", "whisper-1", "whisper_1_transcription"},
 	}
 	for _, tt := range tests {
+		checkedAt := "2026-09-20"
+		if tt.kind == "video" {
+			checkedAt = "2026-09-30"
+		}
 		candidate, ok := providermodels.MediaCandidateByID(tt.publicID)
 		if !ok {
 			t.Fatalf("missing candidate %s", tt.publicID)
 		}
-		if candidate.Kind != tt.kind || candidate.ModelCode != tt.native || candidate.CheckedAt != "2026-09-20" {
+		if candidate.Kind != tt.kind || candidate.ModelCode != tt.native || candidate.CheckedAt != checkedAt {
 			t.Fatalf("%s identity = kind %q native %q checked %q", tt.publicID, candidate.Kind, candidate.ModelCode, candidate.CheckedAt)
 		}
 		fact, ok := findOperationFact(tt.publicID, tt.opID)
@@ -41,11 +45,11 @@ func TestNextSixMediaCandidatesExposeDatedDraftFacts(t *testing.T) {
 			t.Fatalf("%s/%s fact = %+v", tt.publicID, tt.opID, fact)
 		}
 		contract := providermodels.DraftMediaContract(candidate)
-		if contract.Revision != "2026-09-20" || contract.ProviderModelID != tt.native || contract.Endpoint == "" {
+		if contract.Revision != checkedAt || contract.ProviderModelID != tt.native || contract.Endpoint == "" {
 			t.Fatalf("%s contract identity = %+v", tt.publicID, contract)
 		}
 		for _, source := range contract.Sources {
-			if source.CheckedAt != "2026-09-20" {
+			if source.CheckedAt != checkedAt {
 				t.Fatalf("%s source %s checked_at = %s", tt.publicID, source.ID, source.CheckedAt)
 			}
 		}
