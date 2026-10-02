@@ -80,3 +80,16 @@ it("returns failures for every selector category without rejecting when the unif
  });
  expect(webBrowserFetch).toHaveBeenCalledTimes(1);
 });
+
+it.each([
+ [503, "unavailable", true],
+ [403, "forbidden", false],
+])("preserves a typed %s failure for background recovery", async (status, kind, retryable) => {
+ vi.mocked(webBrowserFetch).mockResolvedValue(new Response(null, { status }));
+ await expect(loadGenerationModelCatalog({ throwOnError: true })).rejects.toMatchObject({ kind, retryable });
+});
+
+it("does not automatically retry a malformed catalog response", async () => {
+ vi.mocked(webBrowserFetch).mockResolvedValue(Response.json({ broken: true }));
+ await expect(loadGenerationModelCatalog({ throwOnError: true })).rejects.toMatchObject({ kind: "invalid_payload", retryable: false });
+});

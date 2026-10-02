@@ -1,5 +1,6 @@
-import { cleanup, fireEvent, render, screen } from "@testing-library/react";
-import { afterEach, describe, expect, it } from "vitest";
+import { act, cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
+import { afterEach, describe, expect, it, vi } from "vitest";
+import { clearConversationCache } from "../conversation-list-cache";
 
 import type { ConversationItem } from "@/lib/web-api/contracts";
 
@@ -34,7 +35,30 @@ function ConversationListProbe({ conversation = createdConversation }: { convers
 }
 
 describe("WorkspaceConversationListProvider", () => {
-  afterEach(() => cleanup());
+  afterEach(() => { cleanup(); clearConversationCache(); vi.unstubAllGlobals(); });
+
+  it("restores a previously loaded list after remount and keeps it through a failed refresh", async () => {
+    vi.stubGlobal("fetch", vi.fn(async () => Response.json({ items: accountAConversations })));
+    const view = render(<WorkspaceConversationListProvider deferred accountId="account-a" initialConversations={[]}><ConversationListProbe /></WorkspaceConversationListProvider>);
+    await waitFor(() => expect(screen.getByRole("status")).toHaveTextContent("Account A existing chat"));
+    view.unmount();
+    vi.stubGlobal("fetch", vi.fn(async () => new Response(null, { status: 503 })));
+    render(<WorkspaceConversationListProvider deferred accountId="account-a" initialConversations={[]}><ConversationListProbe /></WorkspaceConversationListProvider>);
+    await act(async () => undefined);
+    expect(screen.getByRole("status")).toHaveTextContent("Account A existing chat");
+  });
+
+  it("ignores an old account's delayed result after changing accounts", async () => {
+    let finish!: (response: Response) => void;
+    const send = vi.fn().mockImplementationOnce(() => new Promise<Response>(resolve => { finish = resolve; })).mockResolvedValue(Response.json({ items: [createdConversation] }));
+    vi.stubGlobal("fetch", send);
+    const view = render(<WorkspaceConversationListProvider deferred accountId="account-a" initialConversations={[]}><ConversationListProbe /></WorkspaceConversationListProvider>);
+    await act(async () => undefined);
+    view.rerender(<WorkspaceConversationListProvider deferred accountId="account-b" initialConversations={[]}><ConversationListProbe /></WorkspaceConversationListProvider>);
+    await waitFor(() => expect(screen.getByRole("status")).toHaveTextContent("New chat"));
+    await act(async () => { finish(Response.json({ items: accountAConversations })); });
+    expect(screen.getByRole("status")).not.toHaveTextContent("Account A existing chat");
+  });
 
   it("renders the supplied initial conversations", () => {
     render(

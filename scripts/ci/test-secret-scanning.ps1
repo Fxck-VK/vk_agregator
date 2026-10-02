@@ -116,6 +116,15 @@ try {
     Set-Content -LiteralPath (Join-Path $policyCanaryRoot "internal\adapter\inbound\admin\handler_test.go") `
         -Value ("ADMIN_TOKEN=" + $policyCanaryPrefix + "FEDCBA9876543210") -Encoding ascii
 
+    $workflowFixtureRoot = Join-Path $policyCanaryRoot ".github\workflows"
+    New-Item -ItemType Directory -Path $workflowFixtureRoot -Force | Out-Null
+    Set-Content -LiteralPath (Join-Path $workflowFixtureRoot "ci.yml") -Value @(
+        ('POSTGRES_PASSWORD=' + 'session_test_fixture'),
+        ('POSTGRES_PASSWORD=' + $policyCanaryPrefix + '9123456789ABCDEF')
+    ) -Encoding ascii
+    Set-Content -LiteralPath (Join-Path $workflowFixtureRoot "other.yml") `
+        -Value ('POSTGRES_PASSWORD=' + 'session_test_fixture') -Encoding ascii
+
     $policyResult = Invoke-Quiet -Executable $GitleaksPath -WorkingDirectory $policyCanaryRoot -Arguments @(
         "dir",
         "--config", $configPath,
@@ -131,17 +140,23 @@ try {
     }
 
     $policyFindings = Get-Content -Raw $policyCanaryReport | ConvertFrom-Json
-    if ($policyFindings.Count -ne 10) {
-        throw "Allowlist policy canary must return exactly ten synthetic findings; got $($policyFindings.Count)."
+    if ($policyFindings.Count -ne 12) {
+        throw "Allowlist policy canary must return exactly twelve synthetic findings; got $($policyFindings.Count)."
     }
     foreach ($finding in $policyFindings) {
         if ($finding.RuleID -ne "project-secret-assignment") {
             throw "Allowlist policy canary returned an unexpected rule classification."
         }
     }
+    $ciFindings = @($policyFindings | Where-Object { $_.File.Replace('\', '/') -eq '.github/workflows/ci.yml' })
+    $otherFindings = @($policyFindings | Where-Object { $_.File.Replace('\', '/') -eq '.github/workflows/other.yml' })
+    if ($ciFindings.Count -ne 1 -or $ciFindings[0].StartLine -ne 2 -or $otherFindings.Count -ne 1) {
+        throw "Only the exact temporary PostgreSQL fixture in ci.yml may be allowed; other values and paths must still be detected."
+    }
 
     Remove-Item -LiteralPath (Join-Path $policyCanaryRoot "RUNBOOK.md") -Force
     Remove-Item -LiteralPath (Join-Path $policyCanaryRoot "internal") -Recurse -Force
+    Remove-Item -LiteralPath $workflowFixtureRoot -Recurse -Force
     $placeholderEnvName = ".env.prod" + ".example"
     Set-Content -LiteralPath (Join-Path $policyCanaryRoot $placeholderEnvName) -Value @(
         'ADMIN_TOKEN=<ADMIN_TOKEN>',
@@ -161,7 +176,7 @@ try {
         throw "Exact committed environment placeholders must remain clean."
     }
 
-    Write-Output "Allowlist policy canary detected all ten synthetic findings; exact placeholders remained clean."
+    Write-Output "Allowlist policy canary detected all twelve synthetic findings; only exact scoped fixtures remained clean."
 }
 finally {
     if (Test-Path $policyCanaryRoot) {

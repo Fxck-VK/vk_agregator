@@ -3,13 +3,13 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { useRouter } from "@/i18n/navigation";
 
-import { webBrowserMutation } from "@/lib/web-api/browser";
+import { navigateToDevAccess, refreshBrowserSession } from "@/lib/web-api/browser-session";
 
 import { SessionRestorationShell } from "../SessionRestorationShell/SessionRestorationShell";
 
 const progressDelayMs = 150;
 const refreshTimeoutMs = 8_000;
-const invalidRefreshStatuses = new Set([400, 401, 403]);
+const invalidRefreshStatuses = new Set([401]);
 
 type RefreshPhase = "pending" | "slow" | "retryable_error";
 
@@ -40,10 +40,7 @@ export function SessionRefresh() {
 
     const runRefresh = async () => {
       try {
-        const response = await webBrowserMutation("/web/v1/auth/refresh", {
-          method: "POST",
-          signal: controller.signal,
-        });
+        const response = await refreshBrowserSession(controller.signal);
 
         if (attemptIdRef.current !== attemptId) {
           return;
@@ -54,6 +51,10 @@ export function SessionRefresh() {
           return;
         }
 
+        if (response.headers.get("X-NeiroHub-Dev-Access") === "required") {
+          navigateToDevAccess();
+          return;
+        }
         if (invalidRefreshStatuses.has(response.status)) {
           router.replace("/login");
           return;

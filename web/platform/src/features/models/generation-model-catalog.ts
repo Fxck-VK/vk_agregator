@@ -1,4 +1,5 @@
 import type { ChatModel, ImageModel } from "@/lib/web-api/contracts";
+import { classifyReadError } from "@/lib/web-api/read-error";
 import { projectMusicModelCatalog } from "@/features/music/music-model-catalog";
 
 import type { VideoModel } from "./video-model-catalog";
@@ -99,10 +100,11 @@ function allCategoryErrors() {
 
 // Workspace discovery shares one adapter. Conversation consumers narrow items
 // to GenerationModel; music uses its separate editor and job API.
-export async function loadGenerationModelCatalog(): Promise<GenerationModelCatalog> {
+export async function loadGenerationModelCatalog(options: { throwOnError?: boolean } = {}): Promise<GenerationModelCatalog> {
  try {
   return projectGenerationModelCatalog(await loadModelCatalog());
- } catch {
+ } catch (error) {
+  if (options.throwOnError) throw classifyReadError(error);
   return { items: [], default_model_id: "", categoryErrors: allCategoryErrors() };
  }
 }

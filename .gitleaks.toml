@@ -71,6 +71,17 @@ keywords = [
 ]
 
   [[rules.allowlists]]
+  description = "Exact non-secret password of the disposable PostgreSQL CI service"
+  condition = "AND"
+  regexTarget = "secret"
+  paths = [
+    '''(^|/)\.github/workflows/ci\.yml$''',
+  ]
+  regexes = [
+    '''^session_test_fixture$''',
+  ]
+
+  [[rules.allowlists]]
   description = "Exact non-secret values in committed environment templates"
   condition = "AND"
   regexTarget = "secret"

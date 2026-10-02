@@ -14,16 +14,20 @@ export function useReadResource<T>(loader: (signal: AbortSignal) => Promise<T>, 
   }, [enabled, resource, revisionKey]);
   useEffect(() => {
     if (!enabled) return;
-    void resource.load();
-    const refresh = () => { if (document.visibilityState !== "hidden") void resource.load(resource.getSnapshot().failed); };
+    void resource.resume();
+    const refresh = () => { void resource.resume(); };
     window.addEventListener("online", refresh);
     window.addEventListener("focus", refresh);
+    document.addEventListener("visibilitychange", refresh);
+    const timer = window.setInterval(refresh, 60_000);
     return () => {
       window.removeEventListener("online", refresh);
       window.removeEventListener("focus", refresh);
+      document.removeEventListener("visibilitychange", refresh);
+      window.clearInterval(timer);
       resource.dispose();
     };
   }, [enabled, resource]);
   const retry = useCallback(() => { void resource.load(true); }, [resource]);
-  return { ...snapshot, pending: snapshot.pending || enabled && snapshot.data === null && !snapshot.failed, retry };
+  return { ...snapshot, pending: snapshot.pending || enabled && snapshot.data === null && !snapshot.failed, retry, seed: resource.seed };
 }

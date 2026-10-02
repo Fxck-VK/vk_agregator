@@ -1,10 +1,12 @@
 "use client";
 
-import { createContext, type ReactNode, useCallback, useContext, useMemo, useState } from "react";
+import { createContext, type ReactNode, useCallback, useContext, useEffect, useMemo, useState } from "react";
 
 import { parseConversationList, type ConversationItem } from "@/lib/web-api/contracts";
 import { webBrowserFetch } from "@/lib/web-api/browser";
 import { useReadResource } from "@/lib/use-read-resource";
+import { readJson } from "@/lib/web-api/read-error";
+import { activateConversationCache, readConversationCache, writeConversationCache } from "../conversation-list-cache";
 
 export type WorkspaceConversationItem = ConversationItem & {
   isPending?: true;
@@ -14,6 +16,8 @@ type WorkspaceConversationList = {
   pending: boolean;
   failed: boolean;
   retry: () => void;
+  hasData: boolean;
+  removeConversation: (conversationID: string) => void;
   conversations: WorkspaceConversationItem[];
   discardPendingConversation: (conversationID: string) => void;
   resolvePendingConversation: (pendingConversationID: string, conversation: ConversationItem) => void;
@@ -64,12 +68,22 @@ function reconcileServerConversations(
 
 async function loadConversations(signal: AbortSignal) {
   const response = await webBrowserFetch("/web/v1/conversations?limit=20", { signal });
-  if (!response.ok) throw new Error("Conversations unavailable");
-  return parseConversationList(await response.json()).items;
+  return readJson(response, value => parseConversationList(value).items);
 }
 
-export function WorkspaceConversationListProvider({ accountId, children, initialConversations: seed, deferred = false }: WorkspaceConversationListProviderProps) {
+export function WorkspaceConversationListProvider(props: WorkspaceConversationListProviderProps) {
+  return <AccountConversationListProvider {...props} key={props.accountId} />;
+}
+
+function AccountConversationListProvider({ accountId, children, initialConversations: seed, deferred = false }: WorkspaceConversationListProviderProps) {
   const resource = useReadResource(loadConversations, deferred ? null : seed, deferred, seed);
+  const seedResource = resource.seed;
+  useEffect(() => {
+    if (!deferred) return;
+    activateConversationCache(accountId);
+    const cached = readConversationCache(accountId);
+    if (cached !== null) seedResource(cached);
+  }, [accountId, deferred, seedResource]);
   const initialConversations = deferred ? resource.data ?? seed : seed;
   const [conversationListState, setConversationListState] = useState<WorkspaceConversationListState>({
     accountId,
@@ -86,7 +100,14 @@ export function WorkspaceConversationListProvider({ accountId, children, initial
     setConversationListState({ accountId, initialConversations, conversations: reconciledConversations });
   }
 
-  const conversations = hasChangedServerInput ? reconciledConversations : conversationListState.conversations;
+  const conversations: WorkspaceConversationItem[] = hasChangedServerInput ? reconciledConversations : conversationListState.conversations;
+  useEffect(() => {
+    if (deferred && resource.updatedAt > 0) writeConversationCache(accountId, conversations.filter(item => !item.isPending));
+  }, [accountId, conversations, deferred, resource.updatedAt]);
+
+  const removeConversation = useCallback((conversationID: string) => {
+    setConversationListState(state => ({ ...state, conversations: state.conversations.filter(item => item.id !== conversationID) }));
+  }, []);
 
   const upsertConversation = useCallback((conversation: WorkspaceConversationItem) => {
     setConversationListState((previousState) => ({
@@ -166,8 +187,8 @@ export function WorkspaceConversationListProvider({ accountId, children, initial
   }, []);
 
   const value = useMemo(
-    () => ({ conversations, pending: resource.pending, failed: resource.failed, retry: resource.retry, discardPendingConversation, replaceConversation, resolvePendingConversation, updateConversationTitle, upsertConversation }),
-    [conversations, resource.pending, resource.failed, resource.retry, discardPendingConversation, replaceConversation, resolvePendingConversation, updateConversationTitle, upsertConversation],
+    () => ({ conversations, hasData: resource.data !== null, pending: resource.pending, failed: resource.failed, retry: resource.retry, removeConversation, discardPendingConversation, replaceConversation, resolvePendingConversation, updateConversationTitle, upsertConversation }),
+    [conversations, resource.data, resource.pending, resource.failed, resource.retry, removeConversation, discardPendingConversation, replaceConversation, resolvePendingConversation, updateConversationTitle, upsertConversation],
   );
 
   return (

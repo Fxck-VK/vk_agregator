@@ -5,14 +5,14 @@ vi.mock("next/navigation", () => ({
   useRouter: vi.fn(),
 }));
 
-vi.mock("@/lib/web-api/browser", () => ({
-  webBrowserMutation: vi.fn(),
+vi.mock("@/lib/web-api/browser-session", () => ({
+  refreshBrowserSession: vi.fn(),
 }));
 
 import { useRouter } from "next/navigation";
 
 import { ru } from "@/i18n/ru";
-import { webBrowserMutation } from "@/lib/web-api/browser";
+import { refreshBrowserSession } from "@/lib/web-api/browser-session";
 
 import { SessionRefresh } from "./SessionRefresh";
 
@@ -31,27 +31,21 @@ describe("SessionRefresh", () => {
   });
 
   it("refreshes the server tree only after a successful session refresh", async () => {
-    vi.mocked(webBrowserMutation).mockResolvedValue(
+    vi.mocked(refreshBrowserSession).mockResolvedValue(
       new Response(null, { status: 200 }),
     );
 
     render(<SessionRefresh />);
 
     await vi.waitFor(() => expect(refresh).toHaveBeenCalledTimes(1));
-    expect(webBrowserMutation).toHaveBeenCalledTimes(1);
-    expect(webBrowserMutation).toHaveBeenCalledWith(
-      "/web/v1/auth/refresh",
-      expect.objectContaining({
-        method: "POST",
-        signal: expect.any(AbortSignal),
-      }),
-    );
+    expect(refreshBrowserSession).toHaveBeenCalledTimes(1);
+    expect(refreshBrowserSession).toHaveBeenCalledWith(expect.any(AbortSignal));
     expect(replace).not.toHaveBeenCalled();
   });
 
   it("shows the top progress line only after 150 milliseconds", async () => {
     vi.useFakeTimers();
-    vi.mocked(webBrowserMutation).mockReturnValue(new Promise(() => undefined));
+    vi.mocked(refreshBrowserSession).mockReturnValue(new Promise(() => undefined));
 
     render(<SessionRefresh />);
 
@@ -71,10 +65,10 @@ describe("SessionRefresh", () => {
     ).toBeInTheDocument();
   });
 
-  it.each([400, 401, 403])(
+  it.each([401])(
     "redirects to login when refresh returns %s",
     async (status) => {
-      vi.mocked(webBrowserMutation).mockResolvedValue(
+      vi.mocked(refreshBrowserSession).mockResolvedValue(
         new Response(null, { status }),
       );
 
@@ -88,7 +82,7 @@ describe("SessionRefresh", () => {
   it.each([408, 429, 500, 503])(
     "keeps the user in place and offers retry when refresh returns %s",
     async (status) => {
-      vi.mocked(webBrowserMutation).mockResolvedValue(
+      vi.mocked(refreshBrowserSession).mockResolvedValue(
         new Response(null, { status }),
       );
 
@@ -104,7 +98,7 @@ describe("SessionRefresh", () => {
   );
 
   it("keeps the user in place after a network rejection", async () => {
-    vi.mocked(webBrowserMutation).mockRejectedValue(
+    vi.mocked(refreshBrowserSession).mockRejectedValue(
       new TypeError("Failed to fetch"),
     );
 
@@ -117,7 +111,7 @@ describe("SessionRefresh", () => {
   });
 
   it("retries in place and refreshes after the next successful response", async () => {
-    vi.mocked(webBrowserMutation)
+    vi.mocked(refreshBrowserSession)
       .mockResolvedValueOnce(new Response(null, { status: 503 }))
       .mockResolvedValueOnce(new Response(null, { status: 200 }));
 
@@ -128,16 +122,16 @@ describe("SessionRefresh", () => {
     );
 
     await vi.waitFor(() => expect(refresh).toHaveBeenCalledTimes(1));
-    expect(webBrowserMutation).toHaveBeenCalledTimes(2);
+    expect(refreshBrowserSession).toHaveBeenCalledTimes(2);
     expect(replace).not.toHaveBeenCalled();
   });
 
   it("times out a stalled refresh and offers retry", async () => {
     vi.useFakeTimers();
-    vi.mocked(webBrowserMutation).mockImplementation(
-      (_path, init) =>
+    vi.mocked(refreshBrowserSession).mockImplementation(
+      (signal) =>
         new Promise((_resolve, reject) => {
-          init?.signal?.addEventListener("abort", () => {
+          signal?.addEventListener("abort", () => {
             reject(new DOMException("Aborted", "AbortError"));
           });
         }),
@@ -157,7 +151,7 @@ describe("SessionRefresh", () => {
 
   it("does not duplicate the initial refresh mutation on re-render", async () => {
     let resolveRequest: (response: Response) => void = () => undefined;
-    vi.mocked(webBrowserMutation).mockReturnValue(
+    vi.mocked(refreshBrowserSession).mockReturnValue(
       new Promise<Response>((resolve) => {
         resolveRequest = resolve;
       }),
@@ -166,7 +160,7 @@ describe("SessionRefresh", () => {
     const view = render(<SessionRefresh />);
     view.rerender(<SessionRefresh />);
 
-    expect(webBrowserMutation).toHaveBeenCalledTimes(1);
+    expect(refreshBrowserSession).toHaveBeenCalledTimes(1);
     resolveRequest(new Response(null, { status: 200 }));
     await vi.waitFor(() => expect(refresh).toHaveBeenCalledTimes(1));
   });

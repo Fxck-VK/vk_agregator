@@ -91,11 +91,21 @@ plaintext password. It is not an application login credential and must not be
 read, sent or logged by smoke checks.
 
 Operator acceptance is deliberately two-stage: verify an unauthenticated
-`401`, clear the outer Basic Auth gate, then verify `/web/v1/me -> 401` from
-the anonymous BFF and a protected administrative path -> 404. Restore the
-gateway and complete password login. Confirm `Secure`, host-only,
+`401`, complete the outer DEV gateway login, then verify `/web/v1/me -> 401` from
+the anonymous BFF and a protected administrative path -> 404. Keep the
+gateway enabled and complete application password login. Confirm `Secure`, host-only,
 `SameSite=Lax` cookies, `/web/v1/me`, CSRF rejection, and deep-link return
 after login. This route is DEV-only; production remains unchanged.
+
+The outer gate remembers access for 30 days using `__Host-nh-dev-access`, an
+HttpOnly, Secure, SameSite=Lax cookie. Only `/__dev/login` uses the native Basic
+Auth challenge. Requests for pages/assets/API use the cookie; expired or absent
+access produces a challenge-free 401 for background requests. A full document
+navigation redirects to gateway login. The DEV-only, server-only session routes
+under `/web/dev-access/*` are blocked from public access by Nginx. The secret
+htpasswd entry is also supplied to the platform container at runtime; never
+expose it through a `NEXT_PUBLIC_` variable. See the
+[DEV session operation and checks](../../docs/runbooks/DEV.md#remembered-browser-dev-access).
 
 ## Repository layout
 

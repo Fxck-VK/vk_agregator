@@ -3221,6 +3221,37 @@ Unknown localized page URLs use the dynamic, noindex `[...missing]` route with t
 
 The web shell streams before identity resolution; only an authenticated /me unlocks private content. Balance and conversation navigation load independently in account-owned resources. A normalized, non-personal model catalog may be cached for 60 seconds and seeded into a shared client provider; authorization failures and user data are never shared. Catalog seed wait is bounded to 200 ms. Private history, file-result metadata and drafts remain client-owner scoped. Backend acceptance, availability and billing remain authoritative. Private image previews reuse artifact authorization and verified storage redirects, constrain input/processing, omit shared byte caches, and preserve original URLs for viewing/download. Public ImageJob geometry is explicitly projected without worker fields. Contract and tests: web/platform/docs/preloading.md.
 
+## Remembered outer DEV access (2026-09-29)
+
+The DEV web gateway uses a separate signed 30-day cookie, not account identity.
+Nginx retains htpasswd verification only on /__dev/login, then passes a private
+issuer proof to a server-only Next route. Every ordinary path uses auth_request
+for the cookie check. Only document navigation redirects to login; unauthenticated
+background requests return 401 without WWW-Authenticate. Upstream account 401
+responses are preserved without triggering the outer browser password dialog.
+
+The existing DEV htpasswd entry remains secret and is supplied only at runtime
+to Nginx and the platform server. Domain-separated SHA-256 derivation provides
+an issuer proof and a distinct HMAC signing key. Credential rotation revokes all
+outer sessions; ordinary revalidation never extends their fixed expiry. Internal
+routes are publicly blocked, issuer headers stripped, login rate-limited and
+shared caching disabled for this protected host. Missing configuration fails
+closed. Account sessions, CSRF, artifact ownership, billing and provider boundaries
+are independent and unchanged. Production has no DEV overlay or gate secret.
+Operations and verification: docs/runbooks/DEV.md#remembered-browser-dev-access.
+## Workspace read recovery (2026-09-29)
+
+Browser reads use shared account-session recovery; writes are not replayed.
+Web Locks/IndexedDB serialize cookie rotation and logout across tabs. Go session
+rotation atomically revokes and replaces a refresh session; storage failures are
+503, distinct from invalid/expired credentials (401). Private history/media
+caches remain memory-only. The approved exception is up to 20 conversation-list
+metadata rows (id/title/timestamps, 24-hour TTL) in account-scoped browser storage,
+restored only after server identity confirmation and cleared on logout/account
+change/confirmed expiry. No credentials, message bodies or attachments are stored.
+Read retries preserve visible data and pause offline/hidden. BFF/Go failures
+share a generated request ID and sanitized stage/status/duration diagnostics.
+See web/platform/docs/preloading.md for the implemented contract and checks.
 Web image references now use the account-owned /web/v1/input-artifacts route:
 PNG/JPEG content is decoded and bounded to 20 MiB and 4096 pixels per side.
 The image catalog advertises uploads only when storage dependencies, model

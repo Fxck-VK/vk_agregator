@@ -32,6 +32,8 @@ Read only the document that matches the current task:
 | Account-first backend core independence, VK adapter separation, neutral sessions and delivery | docs/superpowers/specs/2026-07-30-account-first-backend-core-design.md; implementation plan: docs/superpowers/plans/2026-07-30-channel-neutral-result-delivery.md |
 | Production deploy, domains, Cloudflare, VPS runtime | `docs/runbooks/DEPLOYMENT.md` |
 | Local DEV contour and DEV GitHub deploy | `docs/runbooks/DEV.md` |
+| Remembered DEV gateway access, session expiry and rotation | [Operations](../docs/runbooks/DEV.md#remembered-browser-dev-access); [implementation plan](superpowers/plans/2026-09-29-dev-access-session.md) |
+| Workspace chat availability, account session recovery and private list cache | [Loading contract](../web/platform/docs/preloading.md); [implementation plan](superpowers/plans/2026-09-29-workspace-read-recovery.md) |
 | DEV deploy fast feedback, preflight serialization, workflow polling and build caches | approved design: `docs/superpowers/specs/2026-08-18-dev-deploy-fast-feedback-design.md`; implementation plan: `docs/superpowers/plans/2026-08-18-dev-deploy-fast-feedback.md` |
 | YooKassa, payment intents, refunds, billing smoke | `docs/runbooks/BILLING.md` |
 | k6, loadtest contour, capacity reports | `docs/runbooks/LOAD_TESTING.md` |
@@ -67,7 +69,7 @@ Read only the document that matches the current task:
 | Video providers, routes, model visibility | `docs/VIDEO_GENERATION.md` |
 | VK bot behavior and agent guidance | `docs/VK_BOT_AGENT_GUIDE.md` |
 | Full agent policy reference | `docs/AGENTS_FULL.md` |
-| Current explicit merge handoff: unified model catalog and working-tree dependencies | [Merge handoff](../docs/HANDOFF_CURRENT.md) |
+| Current explicit merge handoff: workspace UI, localization, preloading and blocked DEV rollout | [Merge handoff](../docs/HANDOFF_CURRENT.md) |
 
 Use local package-level `AGENTS.md` files when touching a package or app surface
 that has its own instructions.
@@ -91,7 +93,7 @@ There must be only one active handoff file:
 
 | File | Status |
 | --- | --- |
-| `docs/HANDOFF_CURRENT.md` | Status: none; September 14 integration archived under `docs/archive/handoffs/` |
+| `docs/HANDOFF_CURRENT.md` | Status: active; September 21 workspace changes and DEV infrastructure validation blocker |
 
 When a handoff or merge is complete, archive it under `docs/archive/handoffs/`
 and reset `docs/HANDOFF_CURRENT.md` back to `Status: none`.

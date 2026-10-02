@@ -24,7 +24,7 @@ rates, x3 rounded up to five credits. Vidu Q3 Standard/Mix require 1-7 owned
 PNG/JPEG inputs and working artifact storage; other new video routes are
 text-only. Gemini Omni Flash Preview has automatic 3-10s output and a fixed
 530-credit quote calculated at the 10s ceiling. No new env flag is required.
-See [models, rates and input restrictions](MODEL_CATALOG.md#video-pricing-and-dev-wiring-checked-2026-10-02).
+See [models, rates and input restrictions](../../docs/runbooks/MODEL_CATALOG.md#video-pricing-and-dev-wiring-checked-2026-10-02).
 These additions still need manual live smoke and do not grant production admission.
 
 It also exposes 21 text candidates from APIMart's documented Chat Completions
@@ -143,6 +143,58 @@ route and price snapshots and can finish while APIMart remains configured.
 The shared image UI lists the model from the backend catalog. This release adds no
 Web reference-upload controls. Paid canary and deployed UI verification are separate
 from local tests; see [Qwen architecture](../../docs/ARCHITECTURE.md#qwen-image-30-image-route-2026-09-08).
+
+## Remembered browser DEV access
+
+The outer gate at `https://dev-web.neiirohub.ru` remembers successful access
+for a fixed 30 days. This is separate from the platform's account session.
+Nginx verifies the existing username/password only at `/__dev/login` and
+forwards a private issuer proof to the server-only platform route. The issued
+`__Host-nh-dev-access` cookie is signed, Secure, HttpOnly, host-only, Path=/ and
+SameSite=Lax. Ordinary requests never renew it. Only document GET navigation
+redirects to login; background requests without access return 401 without
+`WWW-Authenticate`, preventing recurring browser dialogs. An expired-session
+write is rejected, never redirected or replayed. Reload the page to sign in.
+
+Deployment still uses the existing `DEV_WEB_BASIC_AUTH_HTPASSWD` secret and
+`prepare-dev-web-auth.sh`; no plaintext password or new repository secret is
+needed. The DEV Compose overlay supplies the pre-hashed entry to both Nginx
+and the platform server, never client code. `start-dev-web.sh` writes private
+mode-600 htpasswd/issuer files in the proxy's existing tmpfs. Separate SHA-256
+derivation labels for issuer proof and HMAC signing key must match the platform
+session module. The pre-hashed entry is a secret, not a public password digest.
+Preserving it preserves sessions across restarts and deployments. Rotating the
+entry and recreating both services revokes all remembered sessions. Clearing the
+site cookie revokes access in that browser. A password change, deleted cookies,
+private browsing or the 30-day expiry requires login again.
+
+Roll out the platform image and DEV Nginx overlay together through the normal
+DEV workflow; keep the mandatory smoke. The route is disabled without a valid
+DEV secret and the exact HTTPS DEV `WEB_ORIGIN`. Direct platform host ports must
+remain unpublished. Gate-check failures fail closed. Nginx blocks the internal
+route tree, strips caller issuer headers, rate-limits login, and marks responses
+private/no-store so shared caches cannot bypass the gate. Account authentication,
+ownership checks, CSRF and billing admission are unchanged.
+
+Acceptance with synthetic credentials:
+
+1. Run the focused commands from `web/platform`:
+   `npx vitest run src/lib/dev-access/session.test.ts src/app/web/dev-access`.
+2. Set `NGINX_BINARY` to an installed Nginx executable and run
+   `npx vitest run src/lib/dev-access/gateway.integration.test.ts` from that same
+   directory. CI installs Nginx and runs this test explicitly. It uses loopback
+   ports, a synthetic APR1 credential and the real server route handler.
+3. After deployment, an unauthenticated curl of `/` must still return 401.
+   A browser document navigation should ask once, set the protected cookie and
+   return to the original local page. Reopen a tab/browser and verify access
+   using the cookie alone. Check photo/video/API requests have no Basic challenge.
+4. With only the DEV cookie, `/web/v1/me` must still require account login.
+   Public `/web/dev-access/check`, `/web/dev-access/issue` and `/_dev_access_check`
+   must return 404. Deleting/tampering with the DEV cookie must deny access.
+
+Rollback the image and overlay together through the normal DEV rollback flow.
+The previous version restores all-path Basic Auth; never disable the gate as a
+workaround. This rollout does not change production authentication.
 
 ## DEV Domains
 

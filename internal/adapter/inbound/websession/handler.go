@@ -397,7 +397,7 @@ func (h *Handler) Routes() http.Handler {
 	mux.HandleFunc("POST /web/v1/image-jobs/prepare", h.requireUnsafePrincipal(h.prepareImageJob))
 	mux.HandleFunc("POST /web/v1/image-jobs/{jobID}/activate", h.requireUnsafePrincipal(h.activateImageJob))
 	mux.HandleFunc("POST /web/v1/image-jobs/{jobID}/retry", h.requireUnsafePrincipal(h.retryImageJob))
-	return mux
+	return observeWebRequest(mux)
 }
 
 // PrincipalFromContext returns the valid principal established by this adapter.
@@ -455,7 +455,7 @@ func (h *Handler) refresh(w http.ResponseWriter, r *http.Request) {
 	}
 	tokens, err := h.deps.Sessions.RefreshSession(r.Context(), refresh.Value, sessionMetadata(r, ""))
 	if err != nil {
-		writeError(w, http.StatusUnauthorized, "unauthorized")
+		sessionFailure(w, r, err, "session_refresh")
 		return
 	}
 	if err := h.setSessionCookies(w, tokens); err != nil {
@@ -495,10 +495,15 @@ func (h *Handler) requirePrincipal(next http.HandlerFunc) http.HandlerFunc {
 			return
 		}
 		principal, err := h.deps.Authenticator.AuthenticateAccessToken(r.Context(), access.Value)
-		if err != nil || principal.Validate() != nil {
+		if err != nil {
+			sessionFailure(w, r, err, "authenticate")
+			return
+		}
+		if principal.Validate() != nil {
 			writeError(w, http.StatusUnauthorized, "unauthorized")
 			return
 		}
+		w.Header().Set("X-NeiroHub-Account-ID", principal.AccountID.String())
 		next(w, r.WithContext(context.WithValue(r.Context(), principalContextKey{}, principal)))
 	}
 }
@@ -1105,6 +1110,7 @@ func (h *Handler) listConversations(w http.ResponseWriter, r *http.Request) {
 	}
 	conversations, err := h.deps.Conversations.ListActiveByAccountSource(r.Context(), principal.AccountID, domain.ConversationSourceWeb, limit, 0)
 	if err != nil {
+		reportReadFailure(w, r, "conversation_list", http.StatusServiceUnavailable)
 		writeError(w, http.StatusServiceUnavailable, "conversations unavailable")
 		return
 	}
