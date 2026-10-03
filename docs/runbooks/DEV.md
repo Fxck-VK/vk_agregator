@@ -310,8 +310,10 @@ Use a patched Go toolchain. For the current release baseline, set
 `$env:GOTOOLCHAIN = 'go1.25.14'` in this shell when a newer but unpatched Go
 installation would otherwise take precedence over `go.mod`.
 
-It runs source tests, npm audits, `govulncheck`, infrastructure policy and the
-pinned Trivy filesystem scan in that order. Only one full preflight may run in
+It runs source tests, npm audits, `govulncheck`, documentation/infrastructure
+policy and the pinned Trivy filesystem scan in that order. Policy v2 includes
+the same documentation regression and routing checks as CI before push.
+Only one full preflight may run in
 a worktree at a time. A successful result is cached under private Git metadata
 for the exact commit, policy version, and completed stage. If a late stage
 fails, retrying the same commit resumes from that stage instead of repeating

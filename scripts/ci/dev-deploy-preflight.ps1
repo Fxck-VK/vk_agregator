@@ -81,7 +81,7 @@ if (-not [string]::IsNullOrWhiteSpace($worktreeChanges)) {
 $commitSha = Get-GitOutput -Arguments @("rev-parse", "HEAD")
 $gitDirectory = Get-GitOutput -Arguments @("rev-parse", "--absolute-git-dir")
 $npmCommand = if ($IsWindows) { "npm.cmd" } else { "npm" }
-$policyVersion = "v1"
+$policyVersion = "v2"
 $stageNames = @("tests", "audit", "govulncheck", "infrastructure", "trivy")
 
 $runStage = {
@@ -124,6 +124,10 @@ $runStage = {
             if ($LASTEXITCODE -ne 0) { throw "Next.js route discovery tests failed" }
             & pwsh -NoProfile -File scripts/ci/test-dev-deploy-preflight.ps1
             if ($LASTEXITCODE -ne 0) { throw "DEV preflight regression tests failed" }
+            & pwsh -NoProfile -File scripts/ci/test-docs-validation.ps1
+            if ($LASTEXITCODE -ne 0) { throw "Documentation regression tests failed" }
+            & pwsh -NoProfile -File scripts/ci/validate-docs.ps1
+            if ($LASTEXITCODE -ne 0) { throw "Documentation validation failed" }
             Invoke-Native -Command "bash" -Arguments @("scripts/ci/test-wait-for-github-workflow.sh")
             & pwsh -NoProfile -File scripts/ci/validate-infra.ps1
             if ($LASTEXITCODE -ne 0) { throw "Infrastructure validation failed" }
