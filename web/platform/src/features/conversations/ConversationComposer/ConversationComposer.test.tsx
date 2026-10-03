@@ -139,6 +139,56 @@ describe("ConversationComposer", () => {
     expect(onSubmit).not.toHaveBeenCalled();
   });
 
+  it("enforces image prompt character maximums by Unicode codepoint", async () => {
+    const onSubmit = vi.fn();
+    const limitedModel = { ...referenceModel, max_prompt_chars: 2 };
+    render(<ConversationComposer {...chatScrollProps} generationModel={limitedModel} onSubmit={onSubmit} />);
+
+    const input = screen.getByLabelText(ru.conversations.composerLabel);
+    fireEvent.change(input, { target: { value: " 🙂🙂 " } });
+    fireEvent.submit(input.closest("form")!);
+    expect(onSubmit).toHaveBeenCalledWith("🙂🙂", expect.any(Object));
+    await waitFor(() => expect(input).toHaveValue(""));
+
+    fireEvent.change(input, { target: { value: "🙂🙂🙂" } });
+    fireEvent.submit(input.closest("form")!);
+    expect(onSubmit).toHaveBeenCalledTimes(1);
+    expect(screen.getByRole("alert")).toHaveTextContent("Сообщение слишком длинное");
+    expect(input).toHaveValue("🙂🙂🙂");
+  });
+
+  it("enforces video prompt character minimums before submit", () => {
+    const onSubmit = vi.fn();
+    const video = {
+      category: "video" as const,
+      id: "seedance_2_fast",
+      name: "Seedance",
+      description: "Video",
+      allowed_resolutions: ["720p"],
+      allowed_durations_sec: [8],
+      allowed_aspect_ratios: ["16:9"],
+      default_resolution: "720p",
+      default_duration_sec: 8,
+      default_aspect_ratio: "16:9",
+      price_by_option: { "720p:8": 100 },
+      min_prompt_chars: 3,
+      max_prompt_chars: 2000,
+    };
+    render(<ConversationComposer {...chatScrollProps} generationModel={video} onSubmit={onSubmit} />);
+
+    const input = screen.getByLabelText(ru.conversations.composerLabel);
+    expect(screen.queryByRole("alert")).toBeNull();
+    fireEvent.change(input, { target: { value: " аб " } });
+    expect(screen.getByRole("button", { name: ru.conversations.composerSubmit })).toBeDisabled();
+    expect(screen.getByRole("alert")).toHaveTextContent("Сообщение слишком короткое");
+    fireEvent.submit(input.closest("form")!);
+    expect(onSubmit).not.toHaveBeenCalled();
+
+    fireEvent.change(input, { target: { value: "абв" } });
+    fireEvent.submit(input.closest("form")!);
+    expect(onSubmit).toHaveBeenCalledWith("абв", { resolution: "720p", duration_sec: 8, aspect_ratio: "16:9" });
+  });
+
   it("passes the active reply state to the circular scroll control", () => {
     const scrollContainer = document.createElement("main");
     Object.defineProperties(scrollContainer, {

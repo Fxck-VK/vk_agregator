@@ -36,7 +36,11 @@ func TestWorkspaceCatalogUsesOneTypedAndSafeList(t *testing.T) {
 		if !op.Enabled || op.Kind != model.Kind || op.Inputs.Images.Enabled {
 			t.Fatalf("unsafe operation: %+v", op)
 		}
-		if model.Kind == "image" && (op.Image == nil || len(op.Image.QualityOptions) == 0 || op.Image.DefaultAspectRatio == "" || op.Image.MaxOutputCount != 4) {
+		wantCount := 4
+		if model.ID == "nano_banana_2" || model.ID == "nano_banana_pro" || model.ID == "gpt_image_2" {
+			wantCount = 1
+		}
+		if model.Kind == "image" && (op.Image == nil || len(op.Image.QualityOptions) == 0 || op.Image.DefaultAspectRatio == "" || op.Image.MaxOutputCount != wantCount) {
 			t.Fatalf("image options missing: %+v", op)
 		}
 		if model.Kind == "text" && (!slices.Contains(model.Categories, "text") || !slices.Contains(model.Categories, "study-work")) {

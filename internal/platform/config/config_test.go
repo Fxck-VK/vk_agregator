@@ -445,6 +445,7 @@ func TestValidateImageModelSeedream45RequiresPoYoConfig(t *testing.T) {
 		Env:                                "development",
 		Provider:                           "mock",
 		ProviderChain:                      []string{"mock"},
+		ImageProvider:                      "poyo",
 		FeatureImageModelSeedream45Enabled: true,
 	}
 
@@ -476,6 +477,7 @@ func TestValidateImageModelNanoBananaProRequiresAPIMartConfig(t *testing.T) {
 		Env:                                   "development",
 		Provider:                              "mock",
 		ProviderChain:                         []string{"mock"},
+		ImageProvider:                         "apimart",
 		FeatureImageModelNanoBananaProEnabled: true,
 	}
 
@@ -508,6 +510,7 @@ func TestValidateImageModelGPTImage2RequiresAPIMartConfig(t *testing.T) {
 		Env:                               "development",
 		Provider:                          "mock",
 		ProviderChain:                     []string{"mock"},
+		ImageProvider:                     "apimart",
 		FeatureImageModelGPTImage2Enabled: true,
 	}
 
@@ -540,6 +543,7 @@ func TestValidateImageModelNanoBanana2RequiresPoYoConfig(t *testing.T) {
 		Env:                                 "development",
 		Provider:                            "mock",
 		ProviderChain:                       []string{"mock"},
+		ImageProvider:                       "poyo",
 		FeatureImageModelNanoBanana2Enabled: true,
 	}
 
@@ -676,6 +680,7 @@ func TestValidateAPIMartTurboH3RoutesFailClosedWithoutReadiness(t *testing.T) {
 				Env:                       "development",
 				Provider:                  "mock",
 				ProviderChain:             []string{"mock"},
+				VideoProvider:             "apimart",
 				FeatureVideoRouterEnabled: true,
 				APIMartProviderEnabled:    true,
 				APIMartAPIKey:             "test-key",
@@ -710,6 +715,23 @@ func TestValidateAPIMartTurboH3RoutesFailClosedWithoutReadiness(t *testing.T) {
 				})
 			}
 		})
+	}
+}
+
+func TestValidateEnabledRouteIgnoresBareProviderWhenWorkerProviderChainEmpty(t *testing.T) {
+	cfg := config.Config{
+		Env:                               "development",
+		Provider:                          "apimart",
+		FeatureVideoRouterEnabled:         true,
+		FeatureAPIMartKling30TurboEnabled: true,
+		APIMartProviderEnabled:            true,
+		APIMartAPIKey:                     "test-key",
+		APIMartBaseURL:                    "https://api.apimart.ai/v1",
+	}
+
+	err := cfg.Validate()
+	if err == nil || !strings.Contains(err.Error(), "APIMart") || !strings.Contains(err.Error(), "PROVIDER_CHAIN") {
+		t.Fatalf("expected route to fail closed without worker provider chain, got %v", err)
 	}
 }
 
@@ -2900,6 +2922,7 @@ func validKlingMotionConfig() config.Config {
 		Env:                                "development",
 		Provider:                           "mock",
 		ProviderChain:                      []string{"mock"},
+		VideoProvider:                      "apimart",
 		FeatureVideoRouterEnabled:          true,
 		FeatureAPIMartKling26MotionEnabled: true,
 		APIMartProviderEnabled:             true,

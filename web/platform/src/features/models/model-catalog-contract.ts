@@ -75,6 +75,8 @@ const imageControlsSchema = z.object({
   quality_label: nonEmptyString,
   show_output_count: z.boolean(),
   max_prompt_bytes: positiveInt.optional(),
+  min_prompt_chars: positiveInt.optional(),
+  max_prompt_chars: positiveInt.optional(),
 }).strict().superRefine((image, ctx) => {
   if (!image.quality_options.includes(image.default_quality)) {
     ctx.addIssue({ code: "custom", path: ["default_quality"], message: "Default image quality must be available." });
@@ -133,6 +135,7 @@ const videoVariantSchema = z.object({
 
 const videoControlsSchema = z.object({
   automatic_duration: z.boolean().optional(),
+  automatic_resolution: z.boolean().optional(),
   allowed_resolutions: uniqueStringArray("Video resolutions"),
   allowed_durations_sec: z.array(positiveInt).min(1),
   allowed_aspect_ratios: uniqueStringArray("Video aspect ratios"),
@@ -143,6 +146,8 @@ const videoControlsSchema = z.object({
   variants: z.array(videoVariantSchema).min(1),
   start_image: nonEmptyString,
   end_image: nonEmptyString,
+  min_prompt_chars: positiveInt.optional(),
+  max_prompt_chars: positiveInt.optional(),
 }).strict().superRefine((video, ctx) => {
   if (new Set(video.allowed_durations_sec).size !== video.allowed_durations_sec.length) {
     ctx.addIssue({ code: "custom", path: ["allowed_durations_sec"], message: "Video durations must be unique." });
@@ -299,6 +304,7 @@ export type PublicCatalogCategory = PublicCatalogModel["categories"][number];
 
 export const videoModelSchema = z.object({
   automatic_duration: z.boolean().optional(),
+  automatic_resolution: z.boolean().optional(),
   capabilities: modelCapabilitiesSchema.optional(),
   id: nonEmptyString,
   name: nonEmptyString,
@@ -316,6 +322,8 @@ export const videoModelSchema = z.object({
   variants: z.array(videoVariantSchema).min(1).optional(),
   start_image: nonEmptyString.optional(),
   end_image: nonEmptyString.optional(),
+  min_prompt_chars: positiveInt.optional(),
+  max_prompt_chars: positiveInt.optional(),
 }).strict();
 
 export const videoModelListSchema = z.object({
@@ -358,6 +366,8 @@ export function projectImageModelCatalog(catalog: PublicCatalog): ImageModelList
         quality_label: operation.image.quality_label,
         show_output_count: operation.image.show_output_count,
         max_prompt_bytes: operation.image.max_prompt_bytes,
+        min_prompt_chars: operation.image.min_prompt_chars,
+        max_prompt_chars: operation.image.max_prompt_chars,
       }];
     }),
   });
@@ -407,9 +417,12 @@ export function projectVideoModelCatalog(catalog: PublicCatalog): VideoModelList
         default_aspect_ratio: operation.video.default_aspect_ratio,
         price_by_option: operation.video.price_by_option,
         automatic_duration: operation.video.automatic_duration,
+        automatic_resolution: operation.video.automatic_resolution,
         variants: operation.video.variants,
         start_image: operation.video.start_image,
         end_image: operation.video.end_image,
+        min_prompt_chars: operation.video.min_prompt_chars,
+        max_prompt_chars: operation.video.max_prompt_chars,
       }];
     }),
   });

@@ -59,9 +59,19 @@ export function ConversationComposer({
   });
   const cost = referenceQuote.active ? referenceQuote.cost : generation.cost;
   const normalizedDraft = draft.trim();
-  const tooLong = selectedModel?.max_prompt_bytes !== undefined
-    && new TextEncoder().encode(normalizedDraft).length > selectedModel.max_prompt_bytes;
-  const canSubmit = normalizedDraft !== "" && !submitDisabled && !disabled && !tooLong && generation.canSubmit && !attachments.blocked && referenceQuote.ready;
+  const promptByteLimit = selectedModel?.max_prompt_bytes
+    ?? (generationModel?.category === "text" || generationModel?.category === "images" ? generationModel.max_prompt_bytes : undefined);
+  const promptCharCount = Array.from(normalizedDraft).length;
+  const minPromptChars = generationModel?.category === "images" || generationModel?.category === "video"
+    ? generationModel.min_prompt_chars
+    : undefined;
+  const maxPromptChars = generationModel?.category === "images" || generationModel?.category === "video"
+    ? generationModel.max_prompt_chars
+    : undefined;
+  const tooShort = minPromptChars !== undefined && promptCharCount < minPromptChars;
+  const tooLong = (promptByteLimit !== undefined && new TextEncoder().encode(normalizedDraft).length > promptByteLimit)
+    || (maxPromptChars !== undefined && promptCharCount > maxPromptChars);
+  const canSubmit = normalizedDraft !== "" && !submitDisabled && !disabled && !tooShort && !tooLong && generation.canSubmit && !attachments.blocked && referenceQuote.ready;
 
   const changeDraft = (event: ChangeEvent<HTMLTextAreaElement>) => {
     setDraft(event.target.value);
@@ -122,6 +132,7 @@ export function ConversationComposer({
       />
       <ReferenceQuoteNotice message={referenceQuote.error} onRetry={referenceQuote.retry} />
       {tooLong ? <StateNotice inline kind="error">{msg("conversationComposer.theMessageIsTooLongForThe")}</StateNotice> : null}
+      {!tooLong && normalizedDraft !== "" && tooShort ? <StateNotice inline kind="error">{msg("conversationComposer.theMessageIsTooShortForThe")}</StateNotice> : null}
     </form>
   );
 }

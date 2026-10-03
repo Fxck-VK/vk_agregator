@@ -71,6 +71,8 @@ type WorkspaceAudio struct {
 }
 
 type WorkspaceImage struct {
+	MinPromptChars         int              `json:"min_prompt_chars,omitempty"`
+	MaxPromptChars         int              `json:"max_prompt_chars,omitempty"`
 	QualityLabel           string           `json:"quality_label"`
 	ShowOutputCount        bool             `json:"show_output_count"`
 	MaxPromptBytes         int              `json:"max_prompt_bytes,omitempty"`
@@ -86,6 +88,9 @@ type WorkspaceImage struct {
 }
 
 type WorkspaceVideo struct {
+	MinPromptChars      int                     `json:"min_prompt_chars,omitempty"`
+	MaxPromptChars      int                     `json:"max_prompt_chars,omitempty"`
+	AutomaticResolution bool                    `json:"automatic_resolution,omitempty"`
 	AutomaticDuration   bool                    `json:"automatic_duration,omitempty"`
 	AllowedResolutions  []string                `json:"allowed_resolutions"`
 	AllowedDurationsSec []int                   `json:"allowed_durations_sec"`

@@ -43,10 +43,10 @@ const (
 	defaultImageProviderCostCredits = 1
 	defaultTaskLanguage             = "en"
 	maxUploadImageBytes             = 20 * 1024 * 1024
-	maxGeminiGenerationImageBytes   = 10 * 1024 * 1024
+	maxGeminiGenerationImageBytes   = 20 * 1024 * 1024
 	maxGeminiReferenceImages        = 14
 	maxGPTImage2ImageBytes          = 20 * 1024 * 1024
-	maxGPTImage2ReferenceImages     = 16
+	maxGPTImage2ReferenceImages     = 15
 	maxGPTImage2TotalImageBytes     = 256 * 1024 * 1024
 )
 
@@ -929,6 +929,9 @@ func validateImageShape(req domain.ProviderRequest, requirePrompt bool) error {
 		if err := validateQwenImageOptions(req); err != nil {
 			return err
 		}
+	}
+	if (model == ModelGemini3ProImage || model == ModelGPTImage2) && (req.OutputCount < 0 || req.OutputCount > 1) {
+		return &Error{Class: domain.ProviderErrInvalidRequest, Message: "image model supports one result per request"}
 	}
 	if requirePrompt {
 		prompt := strings.TrimSpace(req.Prompt)

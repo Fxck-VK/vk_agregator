@@ -13,28 +13,68 @@ import (
 
 	"github.com/google/uuid"
 	"vk-ai-aggregator/internal/domain"
+	"vk-ai-aggregator/internal/service/imagegeneration"
+	"vk-ai-aggregator/internal/service/modelcatalog"
+	"vk-ai-aggregator/internal/service/productcatalog"
 )
 
 type webInputStoreStub struct {
-	artifact *domain.Artifact
-	data     []byte
-	saves    int
+	artifact    *domain.Artifact
+	artifacts   map[uuid.UUID]*domain.Artifact
+	data        []byte
+	objects     map[string][]byte
+	objectReads int
+	saves       int
 }
 
 func (s *webInputStoreStub) SaveAccountInputArtifact(_ context.Context, owner uuid.UUID, media domain.MediaType, mime string, data []byte) (*domain.Artifact, error) {
 	s.saves++
 	s.data = append([]byte(nil), data...)
 	s.artifact = &domain.Artifact{ID: uuid.New(), OwnerAccountID: owner, Kind: domain.ArtifactKindInput, MediaType: media, MimeType: mime, Status: domain.ArtifactStatusReady, SizeBytes: int64(len(data)), StorageBucket: "artifacts", StorageKey: "synthetic"}
+	s.addArtifact(s.artifact, data)
 	return s.artifact, nil
 }
 func (s *webInputStoreStub) GetArtifactForAccount(_ context.Context, owner, id uuid.UUID) (*domain.Artifact, error) {
+	if s.artifacts != nil {
+		a := s.artifacts[id]
+		if a == nil || a.OwnerAccountID != owner {
+			return nil, domain.ErrNotFound
+		}
+		return a, nil
+	}
 	if s.artifact == nil || s.artifact.ID != id || s.artifact.OwnerAccountID != owner {
 		return nil, domain.ErrNotFound
 	}
 	return s.artifact, nil
 }
-func (s *webInputStoreStub) GetObject(context.Context, string, string) ([]byte, error) {
+func (s *webInputStoreStub) GetObject(_ context.Context, bucket, key string) ([]byte, error) {
+	s.objectReads++
+	if s.objects != nil {
+		data, ok := s.objects[bucket+"/"+key]
+		if !ok {
+			return nil, domain.ErrNotFound
+		}
+		return data, nil
+	}
 	return s.data, nil
+}
+
+func (s *webInputStoreStub) addArtifact(a *domain.Artifact, data []byte) {
+	if s.artifacts == nil {
+		s.artifacts = map[uuid.UUID]*domain.Artifact{}
+	}
+	if s.objects == nil {
+		s.objects = map[string][]byte{}
+	}
+	s.artifacts[a.ID] = a
+	s.objects[a.StorageBucket+"/"+a.StorageKey] = append([]byte(nil), data...)
+}
+
+func (s *webInputStoreStub) addSizedArtifact(owner uuid.UUID, size int64) uuid.UUID {
+	id := uuid.New()
+	a := &domain.Artifact{ID: id, OwnerAccountID: owner, Kind: domain.ArtifactKindInput, MediaType: domain.MediaTypeImage, MimeType: "image/png", Status: domain.ArtifactStatusReady, SizeBytes: size, StorageBucket: "artifacts", StorageKey: id.String()}
+	s.addArtifact(a, []byte("not read before aggregate reject"))
+	return id
 }
 
 func TestConversationUploadAndReferenceSubmission(t *testing.T) {
@@ -91,6 +131,9 @@ func TestConversationUploadAndReferenceSubmission(t *testing.T) {
 	if rec = send(); rec.Code != 201 || len(jobs.inputs) != 1 {
 		t.Fatalf("reference submit %d %s", rec.Code, rec.Body.String())
 	}
+	if store.objectReads != 1 {
+		t.Fatalf("reference byte recheck reads = %d, want 1", store.objectReads)
+	}
 	var params struct {
 		References []uuid.UUID `json:"reference_artifact_ids"`
 	}
@@ -132,6 +175,68 @@ func TestConversationUploadAndReferenceSubmission(t *testing.T) {
 	payload["reference_artifact_ids"] = []uuid.UUID{store.artifact.ID}
 	if rec = send(); rec.Code != 400 || len(jobs.inputs) != 1 {
 		t.Fatal("text silently ignored reference")
+	}
+}
+
+func TestConversationReferencesRejectAggregateSizeBeforeObjectRead(t *testing.T) {
+	h, conversations, sessions, jobs, _ := newWebConversationMessageTestHandler(t)
+	images, _, _ := newImageJobTestHandler(t)
+	h.deps.ImagePricing = images.deps.ImagePricing
+	h.cfg.ImageModels = []imagegeneration.PublicModel{gptImage2ReferencePublicModel(t)}
+	store := &webInputStoreStub{}
+	h.deps.InputArtifacts, h.deps.InputObjects = store, store
+	owner := uuid.New()
+	conv := seedWebMessageConversation(t, conversations, owner, domain.ConversationSourceWeb)
+	jobs.job = &domain.Job{ID: uuid.New(), Status: domain.JobStatusQueued}
+
+	ids := make([]uuid.UUID, 13)
+	for i := range ids {
+		ids[i] = store.addSizedArtifact(owner, productcatalog.WebReferenceMaxBytes)
+	}
+	rec := submitConversationMedia(t, h, sessions, owner, conv.ID, map[string]any{
+		"prompt":                 "Synthetic aggregate references",
+		"model_id":               modelcatalog.MiniAppImageGPTImage2,
+		"image_quality":          modelcatalog.ImageQuality1K,
+		"aspect_ratio":           "1:1",
+		"reference_artifact_ids": ids,
+	})
+	if rec.Code != http.StatusBadRequest || store.objectReads != 0 || len(jobs.inputs) != 0 {
+		t.Fatalf("aggregate reject = status %d object reads %d jobs %d body %s", rec.Code, store.objectReads, len(jobs.inputs), rec.Body.String())
+	}
+}
+
+func TestConversationReferenceAggregateLimitBoundary(t *testing.T) {
+	atLimit := make([]*domain.Artifact, 0, 13)
+	for i := 0; i < 12; i++ {
+		atLimit = append(atLimit, &domain.Artifact{SizeBytes: productcatalog.WebReferenceMaxBytes})
+	}
+	atLimit = append(atLimit, &domain.Artifact{SizeBytes: 16 << 20})
+	if !conversationReferencesWithinTotalByteLimit(modelcatalog.MiniAppImageGPTImage2, atLimit) {
+		t.Fatal("GPT Image 2 references at 256 MiB rejected")
+	}
+	overLimit := append(append([]*domain.Artifact(nil), atLimit...), &domain.Artifact{SizeBytes: 1})
+	if conversationReferencesWithinTotalByteLimit(modelcatalog.MiniAppImageGPTImage2, overLimit) {
+		t.Fatal("GPT Image 2 references over 256 MiB accepted")
+	}
+}
+
+func gptImage2ReferencePublicModel(t *testing.T) imagegeneration.PublicModel {
+	t.Helper()
+	model, ok := modelcatalog.ResolvePublicModel(domain.OperationImageGenerate, modelcatalog.MiniAppImageGPTImage2)
+	if !ok {
+		t.Fatal("GPT Image 2 public model missing")
+	}
+	return imagegeneration.PublicModel{
+		ID:                     model.ModelID,
+		Name:                   model.ModelName,
+		Enabled:                true,
+		Ready:                  true,
+		QualityOptions:         []string{modelcatalog.ImageQuality1K},
+		DefaultQuality:         modelcatalog.ImageQuality1K,
+		SupportsReferenceImage: true,
+		MaxReferenceImages:     model.MaxReferenceImages,
+		MaxOutputCount:         1,
+		AllowedAspectRatios:    append([]string(nil), model.AllowedAspectRatios...),
 	}
 }
 

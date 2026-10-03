@@ -58,7 +58,7 @@ func WorkspaceCatalog(cfg WorkspaceConfig) WorkspaceModelList {
 			// without enabling new provider formats, models, or reference-only routes.
 			input := modelcontract.Input{Support: modelcontract.Supported, Enabled: true, Processing: "native", MaxCount: op.Image.MaxReferenceImages, MaxBytes: WebReferenceMaxBytes, MaxWidth: WebReferenceMaxDimension, MaxHeight: WebReferenceMaxDimension, Formats: []modelcontract.FileFormat{{Extension: ".png", MIME: "image/png"}, {Extension: ".jpg", MIME: "image/jpeg"}, {Extension: ".jpeg", MIME: "image/jpeg"}}}
 			model.Operations[0].Inputs.Images = input
-			model.Operations[0].Inputs.MaxTotalBytes = int64(input.MaxCount) * input.MaxBytes
+			model.Operations[0].Inputs.MaxTotalBytes = workspaceReferenceTotalBytes(id, input.MaxCount, input.MaxBytes)
 		}
 		model.Capabilities = workspaceCapabilities(id, model.Operations[0])
 		if registry.IsDEVSmokeModel(id) {
@@ -69,6 +69,7 @@ func WorkspaceCatalog(cfg WorkspaceConfig) WorkspaceModelList {
 	}
 	resolver := imagegeneration.NewResolver(cfg.ImageModels, cfg.Pricing)
 	for _, image := range cfg.ImageModels {
+		image.MaxOutputCount, image.MaxReferenceImages = providermodels.ImageOperationalLimits(image.ID, image.MaxOutputCount, image.MaxReferenceImages)
 		controls, ok := WorkspaceImageControls(image, resolver)
 		if !ok {
 			continue
@@ -102,6 +103,9 @@ func WorkspaceCatalog(cfg WorkspaceConfig) WorkspaceModelList {
 			inputs.MaxTotalBytes = 7 * WebReferenceMaxBytes
 		}
 		description := "Создание видео по текстовому описанию. Разрешения: " + strings.Join(controls.AllowedResolutions, ", ") + "."
+		if controls.AutomaticResolution {
+			description = "Создание видео по текстовому описанию. Разрешение выбирает провайдер."
+		}
 		if providermodels.VideoCandidateRequiresImages(route.Alias) {
 			description = "Доступна для ручного тестирования на DEV. Проверка модели не завершена."
 		}
@@ -129,6 +133,17 @@ func WorkspaceCatalog(cfg WorkspaceConfig) WorkspaceModelList {
 	return out
 }
 
+func workspaceReferenceTotalBytes(modelID string, count int, maxBytes int64) int64 {
+	if count <= 0 || maxBytes <= 0 {
+		return 0
+	}
+	total := int64(count) * maxBytes
+	if limit := providermodels.ImageReferenceTotalByteLimit(modelID); limit > 0 && total > limit {
+		return limit
+	}
+	return total
+}
+
 func unknownWorkspaceInputs() modelcontract.Inputs {
 	u := modelcontract.Input{Support: modelcontract.Unknown}
 	return modelcontract.Inputs{Images: u, Video: u, Audio: u, Documents: u}
@@ -150,6 +165,9 @@ func workspacePriceCategories(categories []string, free bool) []string {
 
 func WorkspaceImageControls(model imagegeneration.PublicModel, resolver imagegeneration.Resolver) (WorkspaceImage, bool) {
 	out := WorkspaceImage{QualityLabel: "Разрешение", ShowOutputCount: true, PriceByQuality: map[string]int64{}, PriceByVariant: map[string]int64{}, MaxOutputCount: max(model.MaxOutputCount, 1)}
+	out.MaxOutputCount, _ = providermodels.ImageOperationalLimits(model.ID, out.MaxOutputCount, model.MaxReferenceImages)
+	out.ShowOutputCount = out.MaxOutputCount > 1
+	out.MinPromptChars, out.MaxPromptChars = providermodels.MediaPromptLimits(model.ID)
 	if model.ID == providermodels.PublicImageMidjourneyV7 {
 		out.QualityLabel, out.ShowOutputCount = "Режим", false
 	}
@@ -207,12 +225,19 @@ func workspaceImageDefaultAspect(controls WorkspaceImage) string {
 
 func WorkspaceVideoControls(route VideoRoute, prices imagegeneration.SnapshotCatalog) (WorkspaceVideo, bool) {
 	out := WorkspaceVideo{PriceByOption: map[string]int64{}, StartImage: "unsupported", EndImage: "unsupported"}
+	out.MinPromptChars, out.MaxPromptChars = providermodels.MediaPromptLimits(route.Alias)
+	out.AutomaticResolution = route.Alias == string(domain.VideoRouteRunwayGen45)
 	if prices == nil || !WorkspaceVideoRouteSupported(route) {
 		return out, false
 	}
 	out.AutomaticDuration = route.AutomaticDuration
 	registered, known := providermodels.RuntimeRegistry().VideoRoute(domain.VideoRouteAlias(route.Alias))
 	for _, resolution := range route.AllowedResolutions {
+		// PoYo does not accept an output-resolution option for this route.
+		// Retain one existing tariff key without claiming native output pixels.
+		if out.AutomaticResolution && resolution != route.DefaultResolution {
+			continue
+		}
 		if known && !slices.Contains(registered.Spec.AllowedResolutions, resolution) {
 			continue
 		}

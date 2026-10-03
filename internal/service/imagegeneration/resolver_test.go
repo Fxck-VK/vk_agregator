@@ -15,20 +15,21 @@ import (
 
 func TestResolver_UsesTrustedModelAndExactPricingSnapshot(t *testing.T) {
 	pricing := staticPricingCatalog(t)
+	const modelID = modelcatalog.MiniAppImageSeedream45
 	resolver := imagegeneration.NewResolver([]imagegeneration.PublicModel{{
-		ID:                     modelcatalog.MiniAppImageNanoBanana2,
-		Name:                   "Nano Banana 2",
+		ID:                     modelID,
+		Name:                   "Seedream 4.5",
 		Enabled:                true,
 		Ready:                  true,
-		QualityOptions:         []string{modelcatalog.ImageQuality1K, modelcatalog.ImageQuality2K, modelcatalog.ImageQuality4K},
-		DefaultQuality:         modelcatalog.ImageQuality1K,
+		QualityOptions:         []string{modelcatalog.ImageQuality2K, modelcatalog.ImageQuality4K},
+		DefaultQuality:         modelcatalog.ImageQuality2K,
 		SupportsReferenceImage: true,
 		MaxReferenceImages:     4,
 		MaxOutputCount:         4,
 	}}, pricing)
 
 	got, err := resolver.Resolve(imagegeneration.Request{
-		ModelID:        modelcatalog.MiniAppImageNanoBanana2,
+		ModelID:        modelID,
 		Quality:        " 2k ",
 		ReferenceCount: 2,
 		OutputCount:    4,
@@ -37,14 +38,14 @@ func TestResolver_UsesTrustedModelAndExactPricingSnapshot(t *testing.T) {
 		t.Fatalf("resolve image: %v", err)
 	}
 
-	if got.Public.ModelID != modelcatalog.MiniAppImageNanoBanana2 ||
-		got.Public.ModelName != "Nano Banana 2" ||
+	if got.Public.ModelID != modelID ||
+		got.Public.ModelName != "Seedream 4.5" ||
 		got.Public.ImageQuality != modelcatalog.ImageQuality2K {
 		t.Fatalf("public selection = %+v", got.Public)
 	}
 	if got.Worker.Provider == "" || got.Worker.ModelCode == "" ||
-		got.Worker.ModelID != modelcatalog.MiniAppImageNanoBanana2 ||
-		got.Worker.ModelName != "Nano Banana 2" ||
+		got.Worker.ModelID != modelID ||
+		got.Worker.ModelName != "Seedream 4.5" ||
 		got.Worker.ImageQuality != modelcatalog.ImageQuality2K ||
 		got.Worker.Resolution != modelcatalog.ImageQuality2K ||
 		got.Worker.Size != "1:1" ||
@@ -58,7 +59,7 @@ func TestResolver_UsesTrustedModelAndExactPricingSnapshot(t *testing.T) {
 	wantSnapshot, err := pricing.Snapshot(pricingcatalog.ProductKey{
 		Operation:    domain.OperationImageGenerate,
 		Modality:     domain.ModalityImage,
-		ImageModelID: modelcatalog.MiniAppImageNanoBanana2,
+		ImageModelID: modelID,
 		Quality:      modelcatalog.ImageQuality2K,
 	})
 	if err != nil {

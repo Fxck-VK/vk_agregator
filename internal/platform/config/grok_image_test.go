@@ -25,7 +25,7 @@ func TestGrokImageFlagsAndRequiredConfig(t *testing.T) {
 			if !enabled(config.Load()) {
 				t.Fatal("Grok flag not loaded")
 			}
-			cfg := config.Config{Env: "development", Provider: "mock", ProviderChain: []string{"mock"}, FeatureAPIMartGrokImage15Enabled: version == "1_5", FeatureAPIMartGrokImage20Enabled: version == "2_0"}
+			cfg := config.Config{Env: "development", Provider: "mock", ProviderChain: []string{"mock"}, ImageProvider: "apimart", FeatureAPIMartGrokImage15Enabled: version == "1_5", FeatureAPIMartGrokImage20Enabled: version == "2_0"}
 			for _, required := range []string{"APIMART_PROVIDER_ENABLED", "APIMART_API_KEY", "APIMART_BASE_URL"} {
 				if err := cfg.Validate(); err == nil || !strings.Contains(err.Error(), required) {
 					t.Fatalf("expected missing %s", required)

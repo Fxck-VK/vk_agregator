@@ -31,7 +31,10 @@ type conversationGenerationRequest struct {
 }
 
 type safeVideoModel struct {
+	AutomaticResolution bool             `json:"automatic_resolution,omitempty"`
 	AutomaticDuration   bool             `json:"automatic_duration,omitempty"`
+	MinPromptChars      int              `json:"min_prompt_chars,omitempty"`
+	MaxPromptChars      int              `json:"max_prompt_chars,omitempty"`
 	ID                  string           `json:"id"`
 	Name                string           `json:"name"`
 	Description         string           `json:"description"`
@@ -70,7 +73,7 @@ func (h *Handler) listVideoModels(w http.ResponseWriter, r *http.Request) {
 		if !ok {
 			continue
 		}
-		items = append(items, safeVideoModel{ID: route.Alias, Name: route.Name, Description: route.Description, AllowedResolutions: controls.AllowedResolutions, AllowedDurations: controls.AllowedDurationsSec, AllowedAspectRatios: controls.AllowedAspectRatios, DefaultResolution: controls.DefaultResolution, DefaultDuration: controls.DefaultDurationSec, DefaultAspectRatio: controls.DefaultAspectRatio, PriceByOption: controls.PriceByOption, AutomaticDuration: controls.AutomaticDuration})
+		items = append(items, safeVideoModel{ID: route.Alias, Name: route.Name, Description: route.Description, AllowedResolutions: controls.AllowedResolutions, AllowedDurations: controls.AllowedDurationsSec, AllowedAspectRatios: controls.AllowedAspectRatios, DefaultResolution: controls.DefaultResolution, DefaultDuration: controls.DefaultDurationSec, DefaultAspectRatio: controls.DefaultAspectRatio, PriceByOption: controls.PriceByOption, AutomaticResolution: controls.AutomaticResolution, AutomaticDuration: controls.AutomaticDuration, MinPromptChars: controls.MinPromptChars, MaxPromptChars: controls.MaxPromptChars})
 	}
 	writeJSON(w, http.StatusOK, struct {
 		Items []safeVideoModel `json:"items"`
@@ -115,6 +118,9 @@ func (h *Handler) resolveConversationMedia(req conversationGenerationRequest) (d
 	for _, route := range h.conversationVideoRoutes() {
 		if route.Alias != req.ModelID {
 			continue
+		}
+		if !providermodels.MediaPromptValid(route.Alias, req.Prompt) {
+			return "", "", nil, pricingcatalog.PricingSnapshot{}, errors.New("invalid model prompt length")
 		}
 		requiredReferences := providermodels.VideoCandidateRequiresImages(route.Alias)
 		if req.ImageQuality != "" || req.OutputCount != 0 || (!requiredReferences && len(req.ReferenceArtifactIDs) > 0) || (requiredReferences && (len(req.ReferenceArtifactIDs) < 1 || len(req.ReferenceArtifactIDs) > 7)) {

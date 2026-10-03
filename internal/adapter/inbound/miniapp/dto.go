@@ -119,6 +119,7 @@ type miniAppJobParams struct {
 // only a backend-provided display hint; clients must use /miniapp/estimate for
 // the exact request cost.
 type VideoRouteDTO struct {
+	AutomaticResolution         bool     `json:"automatic_resolution,omitempty"`
 	SupportsAudio               bool     `json:"supports_audio,omitempty"`
 	RequiresReferenceVideo      bool     `json:"requires_reference_video,omitempty"`
 	AutomaticDuration           bool     `json:"automatic_duration,omitempty"`
@@ -160,6 +161,7 @@ type ImageModelDTO struct {
 // It exposes estimate_credits only as a backend-provided display hint and never
 // exposes provider, floor, multiplier, provider cost or provider-native ids.
 type ModelCatalogItemDTO struct {
+	AutomaticResolution         bool                              `json:"automatic_resolution,omitempty"`
 	Capabilities                *providermodels.ModelCapabilities `json:"capabilities,omitempty"`
 	SupportsAudio               bool                              `json:"supports_audio,omitempty"`
 	RequiresReferenceVideo      bool                              `json:"requires_reference_video,omitempty"`

@@ -146,7 +146,7 @@ func pendingVideoExpansionOperation(c providermodels.MediaCandidate) WorkspaceOp
 	}
 	inputs := unknownWorkspaceInputs()
 	if providermodels.VideoCandidateRequiresImages(c.PublicID) {
-		inputs.Images = modelcontract.Input{Support: modelcontract.Supported, Required: true, MaxCount: 7, AllowedCounts: []int{1, 2, 3, 4, 5, 6, 7}, Formats: []modelcontract.FileFormat{{Extension: ".png", MIME: "image/png"}, {Extension: ".jpg", MIME: "image/jpeg"}, {Extension: ".jpeg", MIME: "image/jpeg"}, {Extension: ".webp", MIME: "image/webp"}}, MaxBytes: 50 << 20}
+		inputs.Images = modelcontract.Input{Support: modelcontract.Supported, Required: true, MaxCount: 7, AllowedCounts: []int{1, 2, 3, 4, 5, 6, 7}, Formats: []modelcontract.FileFormat{{Extension: ".png", MIME: "image/png"}, {Extension: ".jpg", MIME: "image/jpeg"}, {Extension: ".jpeg", MIME: "image/jpeg"}}, MaxBytes: WebReferenceMaxBytes}
 	}
 	return WorkspaceOperation{ID: "generate", Kind: "video", Enabled: false, Inputs: inputs, Video: &video}
 }

@@ -1,5 +1,55 @@
 # Единый каталог моделей
 
+<a id="contract-corrections-2026-10-03"></a>
+
+## Исправления контрактов 2026-10-03
+
+Операционные ограничения публичной проекции сужены без изменения замороженного
+`onboarding/legacy.json` и без повышения статуса допуска. Nano Banana 2/Pro и
+GPT Image 2 допускают один результат; GPT Image 2 — максимум 15 референсов
+и 256 MiB суммарно. Каталог и frontend показывают этот операционный бюджет;
+web API проверяет размеры принадлежащих аккаунту артефактов до чтения объектов,
+создания Job и резервирования. Worker сохраняет проверку обработанных данных.
+Resolver проверяет это даже при устаревших серверных controls; адаптеры также
+отклоняют несовместимые запросы до HTTP. PoYo Nano Banana 2 не получает поле `n`
+и не объявляет пропорции отдельной official-семьи.
+
+Seedream 4.5 ограничен 3000 Unicode-символами; Runway Gen-4.5 — 1800;
+Seedance Fast — 3–2000. `min_prompt_chars`/`max_prompt_chars` в image/video
+controls применяются к обрезанному тексту по Unicode code points; существующие
+`max_prompt_bytes` остаются отдельной UTF-8 проверкой. API отклоняет нарушения
+до создания Job; frontend использует ту же metadata.
+Старый `GET /web/v1/video-models` также отдаёт эти ограничения и
+`automatic_resolution`, согласованно с единым каталогом.
+
+PoYo Runway Gen-4.5 не документирует входной `resolution`. Адаптер не отправляет
+его; `automatic_resolution=true` скрывает выбор разрешения в UI. Внутренний
+default сохраняет существующий тарифный ключ, не гарантирует размер результата;
+другой resolution не проходит публичную матрицу вариантов. Worker сохраняет
+прежний probe/контейнер/геометрию/размер и список допустимых выходных разрешений.
+Mini App также получает `automatic_resolution` и единственный внутренний
+default; `estimate` и `jobs` отклоняют другой тариф до расчёта/резервирования.
+Адаптер отклоняет старые queued запросы с другим тарифом до provider HTTP;
+существующий путь terminal failure освобождает резерв без изменения снимка цены.
+
+Gemini image adapter принимает до 20 MiB на обработанный референс, согласованно
+с существующим web upload; это уже, чем документированный API предел 30 MB.
+Pending Vidu reference metadata также показывает реализованные PNG/JPEG и
+20 MiB. Config не допускает enabled route без соответствующего провайдера
+в фактическом наборе worker (`PROVIDER_CHAIN`, `IMAGE_PROVIDER`, `VIDEO_PROVIDER`).
+
+Источники, прочитанные 2026-10-03: [APIMart GPT Image 2](https://docs.apimart.ai/en/api-reference/images/gpt-image-2/generation),
+[APIMart Nano Banana Pro](https://docs.apimart.ai/en/api-reference/images/gemini-3-pro/generation),
+[PoYo Nano Banana 2](https://docs.poyo.ai/api-manual/image-series/nano-banana-2-new.json),
+[Seedream 4.5](https://docs.poyo.ai/api-manual/image-series/seedream-4-5.json),
+[Runway Gen-4.5](https://docs.poyo.ai/api-manual/video-series/runway-gen-4-5.json),
+[Seedance Fast](https://docs.poyo.ai/api-manual/video-series/seedance-2).
+Это офлайн-исправления, не результаты живой генерации. VEO 3.1 exact IDs и
+соблюдение native output cap у KIE требуют ручного DEV smoke. Речь остаётся
+закрыта до допуска/тарификации; дополнительные Suno операции не включаются.
+
+План и проверки: [hardening](../superpowers/plans/2026-10-03-model-integration-hardening.md).
+
 ## Владельцы данных
 
 `internal/service/productcatalog.WorkspaceCatalog` собирает публичную выдачу из

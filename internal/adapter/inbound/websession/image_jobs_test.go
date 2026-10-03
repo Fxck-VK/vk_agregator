@@ -76,11 +76,16 @@ func TestWebImageJobPrepareUsesServerResolvedPriceAndReturnsSafeDTO(t *testing.T
 
 func TestWebImageJobPrepareScalesPriceAndPersistsOutputCount(t *testing.T) {
 	h, jobs, sessions := newImageJobTestHandler(t)
+	seedream, ok := modelcatalog.ResolvePublicModel(domain.OperationImageGenerate, modelcatalog.MiniAppImageSeedream45)
+	if !ok {
+		t.Fatal("Seedream 4.5 public model missing")
+	}
+	h.cfg.ImageModels = []imagegeneration.PublicModel{seedream45PublicImageModel(t)}
 	accountID := uuid.New()
 	req := safeImageMutationRequest(t, sessions, accountID, http.MethodPost, "/web/v1/image-jobs/prepare", map[string]any{
 		"prompt":        "two matching portraits",
-		"model_id":      modelcatalog.MiniAppImageNanoBanana2,
-		"image_quality": modelcatalog.ImageQuality1K,
+		"model_id":      modelcatalog.MiniAppImageSeedream45,
+		"image_quality": modelcatalog.ImageQuality2K,
 		"aspect_ratio":  "1:1",
 		"output_count":  2,
 	})
@@ -91,8 +96,8 @@ func TestWebImageJobPrepareScalesPriceAndPersistsOutputCount(t *testing.T) {
 	if rec.Code != http.StatusCreated {
 		t.Fatalf("status = %d, body = %s", rec.Code, rec.Body.String())
 	}
-	if jobs.prepareInput.CostEstimateCredits != 100 || jobs.prepareInput.PricingSnapshot.InternalCredits != 100 {
-		t.Fatalf("server price = %d / %+v, want 100", jobs.prepareInput.CostEstimateCredits, jobs.prepareInput.PricingSnapshot)
+	if jobs.prepareInput.CostEstimateCredits != 60 || jobs.prepareInput.PricingSnapshot.InternalCredits != 60 {
+		t.Fatalf("server price = %d / %+v, want 60", jobs.prepareInput.CostEstimateCredits, jobs.prepareInput.PricingSnapshot)
 	}
 	var params webImageJobParams
 	if err := json.Unmarshal(jobs.prepareInput.Params, &params); err != nil {
@@ -101,7 +106,10 @@ func TestWebImageJobPrepareScalesPriceAndPersistsOutputCount(t *testing.T) {
 	if params.OutputCount != 2 {
 		t.Fatalf("output count = %d, want 2", params.OutputCount)
 	}
-	assertSafeWebImagePreparation(t, rec.Body.Bytes(), jobs.prepared.ID, domain.JobStatusPrepared, 100, 104)
+	if params.ModelID != modelcatalog.MiniAppImageSeedream45 || params.Provider != domain.ProviderPoYo || params.ModelCode != seedream.ModelCode {
+		t.Fatalf("private Seedream route = %s/%s/%s, want %s/%s/%s", params.ModelID, params.Provider, params.ModelCode, modelcatalog.MiniAppImageSeedream45, domain.ProviderPoYo, seedream.ModelCode)
+	}
+	assertSafeWebImagePreparation(t, rec.Body.Bytes(), jobs.prepared.ID, domain.JobStatusPrepared, 60, 104)
 }
 
 func TestWebImageJobPrepareRejectsAccountScopedRateLimitBeforeDurablePrepare(t *testing.T) {
@@ -422,7 +430,7 @@ func TestWebImageModelsReturnsOnlyServerSafeCatalog(t *testing.T) {
 	if len(response.Items) != 1 || response.Items[0].ID != modelcatalog.MiniAppImageNanoBanana2 || response.Items[0].Name != "Nano Banana 2" || response.Items[0].DefaultQuality != modelcatalog.ImageQuality1K {
 		t.Fatalf("catalog = %+v", response.Items)
 	}
-	if response.Items[0].MaxReferenceImages != 0 || response.Items[0].SupportsReferenceImage || response.Items[0].MaxOutputCount != 4 {
+	if response.Items[0].MaxReferenceImages != 0 || response.Items[0].SupportsReferenceImage || response.Items[0].MaxOutputCount != 1 {
 		t.Fatalf("reference support = %+v", response.Items[0])
 	}
 	if got := response.Items[0].PriceByQuality; !reflect.DeepEqual(got, map[string]int64{
@@ -1544,6 +1552,26 @@ func newImageJobTestHandler(t *testing.T) (*Handler, *imageJobServiceStub, *sess
 	h.deps.ImageJobPrepareLimiter = &imagePrepareLimiterStub{allowed: true}
 	h.deps.ImageJobExpiry = &imageJobExpiryReconcilerStub{}
 	return h, jobs, sessions
+}
+
+func seedream45PublicImageModel(t *testing.T) imagegeneration.PublicModel {
+	t.Helper()
+	model, ok := modelcatalog.ResolvePublicModel(domain.OperationImageGenerate, modelcatalog.MiniAppImageSeedream45)
+	if !ok {
+		t.Fatal("Seedream 4.5 public model missing")
+	}
+	return imagegeneration.PublicModel{
+		ID:                     model.ModelID,
+		Name:                   model.ModelName,
+		Enabled:                true,
+		Ready:                  true,
+		QualityOptions:         []string{modelcatalog.ImageQuality2K},
+		DefaultQuality:         modelcatalog.ImageQuality2K,
+		SupportsReferenceImage: model.SupportsReferenceImage,
+		MaxReferenceImages:     model.MaxReferenceImages,
+		MaxOutputCount:         15,
+		AllowedAspectRatios:    append([]string(nil), model.AllowedAspectRatios...),
+	}
 }
 
 func newPreparedWebImageJobForReplay(t *testing.T, accountID, idempotencyKey uuid.UUID, prompt string, expiresAt *time.Time) *domain.Job {

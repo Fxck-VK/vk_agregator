@@ -810,6 +810,9 @@ func (c Config) Validate() error {
 	if err := c.validateVideoRouteProviderConfig(); err != nil {
 		return err
 	}
+	if err := c.validateEnabledGenerationProvidersSelected(); err != nil {
+		return err
+	}
 	if err := c.validateProviderReferenceConfig(); err != nil {
 		return err
 	}
@@ -2075,6 +2078,85 @@ func (c Config) validateSelectedProviderSwitches() error {
 		return fmt.Errorf("config: selected Runway provider requires RUNWAY_PROVIDER_ENABLED=true")
 	}
 	return nil
+}
+
+func (c Config) validateEnabledGenerationProvidersSelected() error {
+	require := func(enabled bool, flag, provider string) error {
+		if !enabled || c.generationProviderSelected(provider) {
+			return nil
+		}
+		return fmt.Errorf("config: %s=true requires %s in PROVIDER_CHAIN, IMAGE_PROVIDER, or VIDEO_PROVIDER", flag, providerDisplayName(provider))
+	}
+	if err := require(c.FeatureDEVModelSmokeEnabled, "FEATURE_DEV_MODEL_SMOKE_ENABLED", "apimart"); err != nil {
+		return err
+	}
+	for _, route := range []struct {
+		enabled  bool
+		flag     string
+		provider string
+	}{
+		{c.FeatureImageModelNanoBanana2Enabled, "FEATURE_IMAGE_MODEL_NANO_BANANA_2_ENABLED", "poyo"},
+		{c.FeatureImageModelNanoBananaProEnabled, "FEATURE_IMAGE_MODEL_NANO_BANANA_PRO_ENABLED", "apimart"},
+		{c.FeatureImageModelGPTImage2Enabled, "FEATURE_IMAGE_MODEL_GPT_IMAGE_2_ENABLED", "apimart"},
+		{c.FeatureAPIMartQwenImage3Enabled, "FEATURE_APIMART_QWEN_IMAGE_3_ENABLED", "apimart"},
+		{c.FeatureImageModelSeedream45Enabled, "FEATURE_IMAGE_MODEL_SEEDREAM_4_5_ENABLED", "poyo"},
+		{c.FeatureAPIMartGPTImage25FlareEnabled, "FEATURE_APIMART_GPT_IMAGE_2_5_FLARE_ENABLED", "apimart"},
+		{c.FeatureAPIMartGPTImage25SunburstEnabled, "FEATURE_APIMART_GPT_IMAGE_2_5_SUNBURST_ENABLED", "apimart"},
+		{c.FeatureAPIMartMidjourneyV7Enabled, "FEATURE_APIMART_MIDJOURNEY_V7_ENABLED", "apimart"},
+		{c.FeatureAPIMartFlux2ProEnabled, "FEATURE_APIMART_FLUX_2_PRO_ENABLED", "apimart"},
+		{c.FeatureAPIMartGrokImage15Enabled, "FEATURE_APIMART_GROK_IMAGE_1_5_ENABLED", "apimart"},
+		{c.FeatureAPIMartGrokImage20Enabled, "FEATURE_APIMART_GROK_IMAGE_2_0_ENABLED", "apimart"},
+		{c.FeatureAPIMartSeedream50LiteEnabled, "FEATURE_APIMART_SEEDREAM_5_0_LITE_ENABLED", "apimart"},
+		{c.FeatureAPIMartSeedream50ProEnabled, "FEATURE_APIMART_SEEDREAM_5_0_PRO_ENABLED", "apimart"},
+		{c.FeatureVideoRouteHailuo23FastEnabled, "FEATURE_VIDEO_ROUTE_HAILUO_2_3_FAST_ENABLED", "apimart"},
+		{c.FeatureVideoRouteHailuo23StandardEnabled, "FEATURE_VIDEO_ROUTE_HAILUO_2_3_STANDARD_ENABLED", "apimart"},
+		{c.FeatureVideoRouteKlingO3StandardEnabled, "FEATURE_VIDEO_ROUTE_KLING_O3_STANDARD_ENABLED", "poyo"},
+		{c.FeatureVideoRouteRunwayGen4TurboEnabled, "FEATURE_VIDEO_ROUTE_RUNWAY_GEN4_TURBO_ENABLED", "runway"},
+		{c.FeatureVideoRouteSeedance20FastEnabled, "FEATURE_VIDEO_ROUTE_SEEDANCE_2_0_FAST_ENABLED", "poyo"},
+		{c.FeatureAPIMartSeedance25Enabled, "FEATURE_APIMART_SEEDANCE_2_5_ENABLED", "apimart"},
+		{c.FeatureAPIMartOmni11FlashEnabled, "FEATURE_APIMART_OMNI_1_1_FLASH_ENABLED", "apimart"},
+		{c.FeatureAPIMartOmni11FlashExtEnabled, "FEATURE_APIMART_OMNI_1_1_FLASH_EXT_ENABLED", "apimart"},
+		{c.FeatureAPIMartKlingV3Enabled, "FEATURE_APIMART_KLING_V3_ENABLED", "apimart"},
+		{c.FeatureAPIMartKling30TurboEnabled, "FEATURE_APIMART_KLING_3_0_TURBO_ENABLED", "apimart"},
+		{c.FeatureAPIMartMiniMaxH3Enabled, "FEATURE_APIMART_MINIMAX_H3_ENABLED", "apimart"},
+		{c.FeatureAPIMartKling26MotionEnabled, "FEATURE_APIMART_KLING_2_6_MOTION_CONTROL_ENABLED", "apimart"},
+		{c.FeatureAPIMartVeo31FastEnabled, "FEATURE_APIMART_VEO_3_1_FAST_ENABLED", "apimart"},
+		{c.FeatureAPIMartVeo31QualityEnabled, "FEATURE_APIMART_VEO_3_1_QUALITY_ENABLED", "apimart"},
+		{c.FeatureAPIMartVeo31LiteEnabled, "FEATURE_APIMART_VEO_3_1_LITE_ENABLED", "apimart"},
+		{c.FeatureVideoRouteRunwayGen45Enabled, "FEATURE_VIDEO_ROUTE_RUNWAY_GEN4_5_ENABLED", "poyo"},
+	} {
+		if err := require(route.enabled, route.flag, route.provider); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+func (c Config) generationProviderSelected(name string) bool {
+	name = strings.ToLower(strings.TrimSpace(name))
+	if name == "" {
+		return false
+	}
+	for _, provider := range c.ProviderChain {
+		if strings.EqualFold(strings.TrimSpace(provider), name) {
+			return true
+		}
+	}
+	return strings.EqualFold(strings.TrimSpace(c.ImageProvider), name) ||
+		strings.EqualFold(strings.TrimSpace(c.VideoProvider), name)
+}
+
+func providerDisplayName(name string) string {
+	switch strings.ToLower(strings.TrimSpace(name)) {
+	case "apimart":
+		return "APIMart"
+	case "poyo":
+		return "PoYo"
+	case "runway":
+		return "Runway"
+	default:
+		return name
+	}
 }
 
 func (c Config) usesDeepInfra() bool {

@@ -172,7 +172,7 @@
 `CreditAmount` с локализованным префиксом «Стоимость:»: число и фирменную звезду
 вместо текстовой валюты. Неизвестная цена по-прежнему скрыта, источник расчёта не меняется.
 
-Для генерации уже есть адаптер [ImageGenerationComposer](../src/features/image-generation/ImageGenerationComposer/ImageGenerationComposer.tsx), для диалога — [ConversationComposer](../src/features/conversations/ConversationComposer/ConversationComposer.tsx), для стартового экрана — [WorkspacePrompt](../src/features/workspace/WorkspacePrompt/WorkspacePrompt.tsx). При изменении существующего сценария использовать его адаптер.
+Для генерации уже есть адаптер [ImageGenerationComposer](../src/features/image-generation/ImageGenerationComposer/ImageGenerationComposer.tsx), для диалога — [ConversationComposer](../src/features/conversations/ConversationComposer/ConversationComposer.tsx), для стартового экрана — [WorkspacePrompt](../src/features/workspace/WorkspacePrompt/WorkspacePrompt.tsx). При изменении существующего сценария использовать его адаптер. Диалоговый composer проверяет байтовый лимит выбранной текстовой/image модели и каталожные min/max prompt chars image/video моделей по количеству Unicode codepoints в trimmed draft.
 
 В начатом диалоге `ConversationComposer` использует ширину `--workspace-page-shell-width` и симметричные боковые отступы, как `ConversationHistory`. На средней ширине (48–82 rem) оба отступа равны `--space-4` (16px); на мобильном экране такое же значение задаёт `--workspace-page-inline-gutter`. На широком экране отступы берутся из адаптивного `--workspace-page-inline-gutter`. `ChatComposer` в варианте `conversation` заполняет этот контейнер без отдельного ограничения 58 rem: внешние края поля совпадают с границами сообщений.
 
@@ -242,7 +242,7 @@ pending; фронтенд самостоятельно не включает м�
 
 ### Модели, оболочки и публичная часть
 - Источник данных для всех рабочих списков — backend `productcatalog.WorkspaceCatalog`, `/web/v1/models`. Типизированная схема, доступность, категории, описание, ограничения и цены проверяются в `model-catalog-contract.ts`. Ручные подборки содержат только ID. Полный ModelsCatalog и FeaturedModels показывают доступные текстовые, графические и видеомодели; ModelCard ведёт в новый чат с публичным ID, без локальной таблицы описаний или моделей-заглушек. Превью использует сгенерированный бэкендом JSON. [Контракт и проверка](../../../docs/runbooks/MODEL_CATALOG.md).
-- `ImageGenerationControls` принимает `qualityLabel` и `showOutputCount` из выбранной модели. Соотношения сторон фильтруются по качеству и `price_by_variant`; у видео `variants` ограничивают длительность, разрешение и пропорции совместно. Цена в интерфейсе относится к выбранной комбинации, финальный расчёт остаётся серверным.
+- `ImageGenerationControls` принимает `qualityLabel` и `showOutputCount` из выбранной модели. Соотношения сторон фильтруются по качеству и `price_by_variant`; у видео `variants` ограничивают длительность, разрешение и пропорции совместно. При `video.automatic_resolution` выбор разрешения скрыт: внутренний `default_resolution` остаётся в запросе как тарифный ключ, но интерфейс не обещает конкретный размер результата. Цена в интерфейсе относится к выбранной комбинации, финальный расчёт остаётся серверным.
 - `FileTaskModelSelector` загружает тот же каталог и выбирает операции: generate/video для анимации, edit/enhance/remove-background для изображения, только с включённым images input. Фиктивных моделей и цен нет. Пустой список и сбой имеют отдельное состояние. Реальное исполнение этих файловых операций ещё не подключено; локальные кисть/ластик/undo сохранены.
 
 - `ModelSelector.descriptionMode` принимает `inline` (по умолчанию) или `tooltip`. Только `ConversationModelSelector` у инпута включает `tooltip`: в строке остаются иконка и название. `ModelSelectorOption` показывает одно описание через общий `TooltipBubble` в портале на слое 180 при наведении мыши или фокусе; выбирает свободную сторону панели, на узком экране — место над/под строкой. Подсказка скрывается при уходе указателя/фокуса, прокрутке, изменении размеров, фильтрации и закрытии списка. В `ModelCard variant="selector"` режим и уникальный `descriptionId` связывают скрытый текст с кнопкой через `aria-describedby`. Хедер, редактор файла и отдельный каталог сохраняют описания в строках/карточках.
@@ -505,5 +505,7 @@ HTTP-ошибки, неверный формат, отсутствие CSRF и �
 `video.automatic_duration` у Gemini Omni Flash Preview заменяет выбор секунд
 на отключённый общий `ImageQualitySelector` с подписью «Авто, 3–10 с · фиксированная
 цена». Внутреннее значение 10 служит ключом фиксированного тарифа, не обещанием
-длительности результата. Переводы находятся в общем RU/EN-словаре.
+длительности результата. `video.automatic_resolution` скрывает выбор разрешения
+тем же правилом: внутренний default нужен для тарифа и backend-совместимости,
+но пользователь не видит обещание 720p/1080p. Переводы находятся в общем RU/EN-словаре.
 Локальное демо не подменяет реальную серверную загрузку успешной фиктивной.

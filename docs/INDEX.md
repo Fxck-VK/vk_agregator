@@ -43,6 +43,7 @@ Read only the document that matches the current task:
 | Provider/model registry, adapter contracts, add-provider/add-model checklist | `docs/ARCHITECTURE.md` and `docs/runbooks/DEV.md` |
 | Mandatory model capability contract, evidence, admission and re-verification | [Model onboarding](../docs/runbooks/MODEL_ONBOARDING.md) |
 | Unified public model catalog, UI projections and local preview | [Model catalog](../docs/runbooks/MODEL_CATALOG.md); [design](superpowers/specs/2026-09-14-unified-model-catalog-design.md); [plan](superpowers/plans/2026-09-14-unified-model-catalog.md) |
+| Corrections to the 103-model provider contracts and DEV rollout | [Operational limits](runbooks/MODEL_CATALOG.md#исправления-контрактов-2026-10-03); [implementation and checks](superpowers/plans/2026-10-03-model-integration-hardening.md) |
 | Existing model evidence gaps and live verification scope | [43-record verification matrix](runbooks/model-onboarding/existing-models-2026-09-14.md) |
 | APIMart Nano Banana Pro provider migration | `docs/superpowers/plans/2026-07-05-apimart-nano-banana-pro-migration.md` |
 | DEV contour, local DEV tunnel, DEV deploy | `docs/DEV_CONTOUR.md` |

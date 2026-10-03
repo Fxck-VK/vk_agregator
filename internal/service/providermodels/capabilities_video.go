@@ -30,7 +30,7 @@ const (
 // internal/worker/{worker,motion_video}.go. Comments stay source-only because
 // returned capabilities must not expose provider ids, costs, URLs, or secrets.
 func videoCapabilities(m VideoRoute) *ModelCapabilities {
-	return &ModelCapabilities{
+	c := &ModelCapabilities{
 		SchemaVersion: 1,
 		API: CapabilityProfile{
 			Video: videoCapability(m, false),
@@ -41,6 +41,10 @@ func videoCapabilities(m VideoRoute) *ModelCapabilities {
 			Notes: videoCapabilityNotes(m, true),
 		},
 	}
+	if m.Alias == domain.VideoRouteRunwayGen45 {
+		c.API.Video.Resolutions = []string{}
+	}
+	return c
 }
 
 // VideoCapabilitiesForOptions returns capabilities for a runtime/pricing-filtered
@@ -257,6 +261,8 @@ func videoCapabilityNotes(m VideoRoute, application bool) []string {
 		notes = append(notes, "Одно или два изображения используются как кадры; у Fast три изображения считаются референсами.")
 	case domain.VideoRouteRunwayGen4Turbo:
 		notes = append(notes, "Доступен выбор 5 или 10 секунд.")
+	case domain.VideoRouteRunwayGen45:
+		notes = append(notes, "Разрешение выбирает провайдер; точные размеры можно проверить в готовом файле.")
 	case domain.VideoRouteHailuo23Fast, domain.VideoRouteHailuo23Standard:
 		notes = append(notes, "Маршрут сейчас скрыт от продажи; для 1080p допустимо только 6 секунд.")
 	case domain.VideoRouteKlingO3Standard:

@@ -20,6 +20,15 @@ pricing layer fills missing candidate keys, preserves primary prices and survive
 DB refresh. Existing worker, Job, moderation and ledger boundaries still apply.
 See [DEV manual smoke](runbooks/DEV.md#manual-model-smoke-on-dev).
 
+Operational provider limits also apply at public catalog/resolver and adapter
+boundaries: documented image counts, reference counts and Unicode prompt bounds
+are rejected before Job creation/provider submission. These narrowing guards do
+not renew frozen admission fingerprints or claim successful live verification.
+Config readiness requires enabled routes to have their provider in the actual
+worker provider set. Provider-selected Runway resolution retains an internal
+tariff key while the public UI exposes no unsupported output-size choice.
+See [current contract corrections](runbooks/MODEL_CATALOG.md#contract-corrections-2026-10-03).
+
 The current implementation is a production-shaped modular monolith. It has one
 shared backend core and two user-facing app surfaces:
 

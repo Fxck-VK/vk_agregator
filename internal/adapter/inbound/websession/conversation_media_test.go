@@ -5,11 +5,14 @@ import (
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
+	"strings"
 	"testing"
 	"time"
 
 	"github.com/google/uuid"
 	"vk-ai-aggregator/internal/domain"
+	"vk-ai-aggregator/internal/service/imagegeneration"
+	"vk-ai-aggregator/internal/service/modelcatalog"
 	"vk-ai-aggregator/internal/service/productcatalog"
 	"vk-ai-aggregator/internal/service/resultservice"
 )
@@ -21,7 +24,7 @@ func TestConversationImageUsesOwnedJobAndServerPrice(t *testing.T) {
 	owner := uuid.New()
 	conversation := seedWebMessageConversation(t, conversations, owner, domain.ConversationSourceWeb)
 	jobs.job = &domain.Job{ID: uuid.New(), Status: domain.JobStatusQueued}
-	body := `{"prompt":"Synthetic crane","model_id":"nano_banana_2","image_quality":"2K","aspect_ratio":"4:5","output_count":2}`
+	body := `{"prompt":"Synthetic crane","model_id":"nano_banana_2","image_quality":"2K","aspect_ratio":"4:5","output_count":1}`
 	rec := httptest.NewRecorder()
 	h.Routes().ServeHTTP(rec, safeWebConversationMessageRequest(t, sessions, owner, conversation.ID, uuid.New(), body))
 	if rec.Code != http.StatusCreated || len(jobs.inputs) != 1 {
@@ -30,12 +33,13 @@ func TestConversationImageUsesOwnedJobAndServerPrice(t *testing.T) {
 	in := jobs.inputs[0]
 	var params map[string]any
 	_ = json.Unmarshal(in.Params, &params)
-	if in.Operation != domain.OperationImageGenerate || in.Modality != domain.ModalityImage || in.PricingSnapshot.InternalCredits != 120 || params["conversation_id"] != conversation.ID.String() || params["output_count"] != float64(2) {
+	if in.Operation != domain.OperationImageGenerate || in.Modality != domain.ModalityImage || in.PricingSnapshot.InternalCredits != 60 || params["conversation_id"] != conversation.ID.String() || params["output_count"] != float64(1) {
 		t.Fatal("image price, operation or conversation lost")
 	}
 	for _, invalid := range []string{
 		`{"prompt":"Synthetic","model_id":"nano_banana_2","image_quality":"unknown"}`,
 		`{"prompt":"Synthetic","model_id":"nano_banana_2","duration_sec":5}`,
+		`{"prompt":"Synthetic","model_id":"nano_banana_2","output_count":2}`,
 		`{"prompt":"Synthetic","model_id":"nano_banana_2","output_count":500}`,
 		`{"prompt":"Synthetic","model_id":"nano_banana_2","cost_estimate":1}`,
 	} {
@@ -49,6 +53,169 @@ func TestConversationImageUsesOwnedJobAndServerPrice(t *testing.T) {
 	h.Routes().ServeHTTP(rec, safeWebConversationMessageRequest(t, sessions, uuid.New(), conversation.ID, uuid.New(), body))
 	if rec.Code != 404 || len(jobs.inputs) != 1 {
 		t.Fatal("foreign conversation accepted")
+	}
+}
+
+func TestConversationSeedreamPromptBoundaryRejectsBeforeJobs(t *testing.T) {
+	h, conversations, sessions, jobs, _ := newWebConversationMessageTestHandler(t)
+	images, _, _ := newImageJobTestHandler(t)
+	h.deps.ImagePricing = images.deps.ImagePricing
+	h.cfg.ImageModels = []imagegeneration.PublicModel{seedream45PublicImageModel(t)}
+	owner := uuid.New()
+	conversation := seedWebMessageConversation(t, conversations, owner, domain.ConversationSourceWeb)
+	jobs.job = &domain.Job{ID: uuid.New(), Status: domain.JobStatusQueued}
+
+	rec := submitConversationMedia(t, h, sessions, owner, conversation.ID, map[string]any{
+		"prompt":        strings.Repeat("я", 3001),
+		"model_id":      modelcatalog.MiniAppImageSeedream45,
+		"image_quality": modelcatalog.ImageQuality2K,
+		"aspect_ratio":  "1:1",
+	})
+	if rec.Code != http.StatusBadRequest || len(jobs.inputs) != 0 {
+		t.Fatalf("overlong Seedream prompt executed: status=%d jobs=%d body=%s", rec.Code, len(jobs.inputs), rec.Body.String())
+	}
+
+	rec = submitConversationMedia(t, h, sessions, owner, conversation.ID, map[string]any{
+		"prompt":        strings.Repeat("я", 3000),
+		"model_id":      modelcatalog.MiniAppImageSeedream45,
+		"image_quality": modelcatalog.ImageQuality2K,
+		"aspect_ratio":  "1:1",
+	})
+	if rec.Code != http.StatusCreated || len(jobs.inputs) != 1 {
+		t.Fatalf("boundary Seedream prompt rejected: status=%d jobs=%d body=%s", rec.Code, len(jobs.inputs), rec.Body.String())
+	}
+	if jobs.inputs[0].PricingSnapshot.InternalCredits != 30 {
+		t.Fatalf("Seedream boundary price = %d, want 30", jobs.inputs[0].PricingSnapshot.InternalCredits)
+	}
+}
+
+func TestConversationVideoPromptBoundariesRejectBeforeJobs(t *testing.T) {
+	cases := []struct {
+		name       string
+		alias      domain.VideoRouteAlias
+		prompt     string
+		wantStatus int
+		wantJobs   int
+	}{
+		{name: "runway over max", alias: domain.VideoRouteRunwayGen45, prompt: strings.Repeat("я", 1801), wantStatus: http.StatusBadRequest},
+		{name: "runway max", alias: domain.VideoRouteRunwayGen45, prompt: strings.Repeat("я", 1800), wantStatus: http.StatusCreated, wantJobs: 1},
+		{name: "seedance one char", alias: domain.VideoRouteSeedance20Fast, prompt: "я", wantStatus: http.StatusBadRequest},
+		{name: "seedance two chars", alias: domain.VideoRouteSeedance20Fast, prompt: "яя", wantStatus: http.StatusBadRequest},
+		{name: "seedance min", alias: domain.VideoRouteSeedance20Fast, prompt: "яяя", wantStatus: http.StatusCreated, wantJobs: 1},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			h, conversations, sessions, jobs, _ := newWebConversationMessageTestHandler(t)
+			images, _, _ := newImageJobTestHandler(t)
+			h.deps.ImagePricing = images.deps.ImagePricing
+			h.cfg.VideoRoutes = []productcatalog.VideoRoute{conversationTestVideoRoute(tc.alias)}
+			owner := uuid.New()
+			conversation := seedWebMessageConversation(t, conversations, owner, domain.ConversationSourceWeb)
+			jobs.job = &domain.Job{ID: uuid.New(), Status: domain.JobStatusQueued}
+
+			rec := submitConversationMedia(t, h, sessions, owner, conversation.ID, map[string]any{
+				"prompt":       tc.prompt,
+				"model_id":     string(tc.alias),
+				"duration_sec": 5,
+				"aspect_ratio": "16:9",
+			})
+			if rec.Code != tc.wantStatus || len(jobs.inputs) != tc.wantJobs {
+				t.Fatalf("status=%d jobs=%d body=%s", rec.Code, len(jobs.inputs), rec.Body.String())
+			}
+		})
+	}
+}
+
+func TestConversationRunwayExplicit1080RejectsBeforeJobs(t *testing.T) {
+	h, conversations, sessions, jobs, _ := newWebConversationMessageTestHandler(t)
+	images, _, _ := newImageJobTestHandler(t)
+	h.deps.ImagePricing = images.deps.ImagePricing
+	h.cfg.VideoRoutes = []productcatalog.VideoRoute{conversationTestVideoRoute(domain.VideoRouteRunwayGen45)}
+	owner := uuid.New()
+	conversation := seedWebMessageConversation(t, conversations, owner, domain.ConversationSourceWeb)
+	jobs.job = &domain.Job{ID: uuid.New(), Status: domain.JobStatusQueued}
+
+	rec := submitConversationMedia(t, h, sessions, owner, conversation.ID, map[string]any{
+		"prompt":       "Synthetic motion prompt",
+		"model_id":     string(domain.VideoRouteRunwayGen45),
+		"resolution":   "1080p",
+		"duration_sec": 5,
+		"aspect_ratio": "16:9",
+	})
+	if rec.Code != http.StatusBadRequest || len(jobs.inputs) != 0 {
+		t.Fatalf("explicit Runway 1080 executed: status=%d jobs=%d body=%s", rec.Code, len(jobs.inputs), rec.Body.String())
+	}
+}
+
+func TestConversationVideoModelsExposeOperationalControls(t *testing.T) {
+	h, _, sessions, _, _ := newWebConversationMessageTestHandler(t)
+	images, _, _ := newImageJobTestHandler(t)
+	h.deps.ImagePricing = images.deps.ImagePricing
+	h.cfg.VideoRoutes = []productcatalog.VideoRoute{
+		conversationTestVideoRoute(domain.VideoRouteRunwayGen45),
+		conversationTestVideoRoute(domain.VideoRouteSeedance20Fast),
+	}
+
+	rec := httptest.NewRecorder()
+	h.Routes().ServeHTTP(rec, authenticatedConversationRequest(t, http.MethodGet, "/web/v1/video-models", sessions, uuid.New()))
+	if rec.Code != http.StatusOK {
+		t.Fatalf("video models: %d %s", rec.Code, rec.Body.String())
+	}
+	var response struct {
+		Items []struct {
+			ID                  string `json:"id"`
+			AutomaticResolution bool   `json:"automatic_resolution,omitempty"`
+			MinPromptChars      int    `json:"min_prompt_chars,omitempty"`
+			MaxPromptChars      int    `json:"max_prompt_chars,omitempty"`
+		} `json:"items"`
+	}
+	if err := json.Unmarshal(rec.Body.Bytes(), &response); err != nil {
+		t.Fatalf("decode video models: %v", err)
+	}
+	byID := map[string]struct {
+		AutomaticResolution bool
+		MinPromptChars      int
+		MaxPromptChars      int
+	}{}
+	for _, item := range response.Items {
+		byID[item.ID] = struct {
+			AutomaticResolution bool
+			MinPromptChars      int
+			MaxPromptChars      int
+		}{item.AutomaticResolution, item.MinPromptChars, item.MaxPromptChars}
+	}
+	runway := byID[string(domain.VideoRouteRunwayGen45)]
+	if !runway.AutomaticResolution || runway.MinPromptChars != 1 || runway.MaxPromptChars != 1800 {
+		t.Fatalf("Runway operational controls = %+v", runway)
+	}
+	seedance := byID[string(domain.VideoRouteSeedance20Fast)]
+	if seedance.AutomaticResolution || seedance.MinPromptChars != 3 || seedance.MaxPromptChars != 2000 {
+		t.Fatalf("Seedance operational controls = %+v", seedance)
+	}
+}
+
+func submitConversationMedia(t *testing.T, h *Handler, sessions *sessionStub, accountID, conversationID uuid.UUID, body map[string]any) *httptest.ResponseRecorder {
+	t.Helper()
+	raw, err := json.Marshal(body)
+	if err != nil {
+		t.Fatalf("marshal conversation media request: %v", err)
+	}
+	rec := httptest.NewRecorder()
+	h.Routes().ServeHTTP(rec, safeWebConversationMessageRequest(t, sessions, accountID, conversationID, uuid.New(), string(raw)))
+	return rec
+}
+
+func conversationTestVideoRoute(alias domain.VideoRouteAlias) productcatalog.VideoRoute {
+	return productcatalog.VideoRoute{
+		Alias:               string(alias),
+		Name:                string(alias),
+		Enabled:             true,
+		AllowedResolutions:  []string{"720p"},
+		AllowedDurationsSec: []int{5},
+		AllowedAspectRatios: []string{"16:9"},
+		DefaultResolution:   "720p",
+		DefaultDurationSec:  5,
+		DefaultAspectRatio:  "16:9",
 	}
 }
 

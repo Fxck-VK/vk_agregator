@@ -118,6 +118,7 @@ export interface ModelCatalogItem {
   default_quality?: string;
   allowed_durations_sec?: number[];
   automatic_duration?: boolean;
+  automatic_resolution?: boolean;
   allowed_reference_image_counts?: number[];
   allowed_resolutions?: string[];
   allowed_aspect_ratios?: string[];

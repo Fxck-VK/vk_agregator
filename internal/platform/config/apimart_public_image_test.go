@@ -55,6 +55,7 @@ func TestAPIMartPublicImageFlagsAndRequiredConfig(t *testing.T) {
 			cfg.Env = "development"
 			cfg.Provider = "mock"
 			cfg.ProviderChain = []string{"mock"}
+			cfg.ImageProvider = "apimart"
 			for _, required := range []string{"APIMART_PROVIDER_ENABLED", "APIMART_API_KEY", "APIMART_BASE_URL"} {
 				if err := cfg.Validate(); err == nil || !strings.Contains(err.Error(), required) {
 					t.Fatalf("expected missing %s, got %v", required, err)

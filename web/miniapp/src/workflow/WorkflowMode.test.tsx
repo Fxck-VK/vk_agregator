@@ -37,6 +37,34 @@ const gptImage25QualityOptions = [
 
 afterEach(() => { vi.useRealTimers(); vi.restoreAllMocks(); });
 
+test("automatic video resolution hides native choices and estimates the default tariff", async () => {
+  vi.useFakeTimers();
+  Object.assign(globalThis, { IS_REACT_ACT_ENVIRONMENT: true, React });
+  vi.mocked(listModelCatalog).mockResolvedValue([{
+    type: "video", id: "video_runway_gen4_5", alias: "video_runway_gen4_5", name: "Runway", enabled: true,
+    automatic_resolution: true, allowed_durations_sec: [5], default_duration_sec: 5,
+    allowed_resolutions: ["720p", "1080p"], default_resolution: "720p", allowed_aspect_ratios: ["16:9"],
+    requires_start_image: false, supports_reference_image: false,
+  }]);
+  vi.mocked(estimateJob).mockResolvedValue({ operation: "video_generate", cost_estimate: 450, balance_credits: 1000, enough_credits: true });
+  const container = document.createElement("div"); document.body.append(container);
+  const root = createRoot(container);
+  try {
+    await act(async () => { root.render(<WorkflowMode user={{ name: "Test", firstName: "Test", avatar: null }} jobs={[]} chats={[]} loading={false} submitting={false} openJobRequest={null} onOpenJobRequestHandled={() => {}} onCreateJob={vi.fn()} />); });
+    expect(container.querySelector('[aria-label="Качество видео"]')).toBeNull();
+    expect(container.querySelector('[aria-label="Разрешение видео"]')).toBeNull();
+    await act(async () => {
+      const prompt = container.querySelector("textarea")!;
+      Object.getOwnPropertyDescriptor(HTMLTextAreaElement.prototype, "value")!.set!.call(prompt, "Synthetic video");
+      prompt.dispatchEvent(new Event("input", { bubbles: true }));
+    });
+    await act(async () => { await vi.advanceTimersByTimeAsync(500); });
+    expect(estimateJob).toHaveBeenLastCalledWith(expect.objectContaining({ video_route_alias: "video_runway_gen4_5", video_resolution: "720p" }));
+  } finally {
+    await act(async () => { root.unmount(); }); container.remove();
+  }
+});
+
 test("Motion Control uploads image and video refs and submits video options", async () => {
   vi.useFakeTimers();
   Object.assign(globalThis, { IS_REACT_ACT_ENVIRONMENT: true, React });

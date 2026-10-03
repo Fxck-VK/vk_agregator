@@ -122,7 +122,7 @@ func TestSubmitGemini3ProImageSuccess(t *testing.T) {
 		Prompt:         "safe product image",
 		Size:           "16:9",
 		Resolution:     "4K",
-		OutputCount:    3,
+		OutputCount:    1,
 		InputURLs:      []string{" https://cdn.test/reference.png "},
 		Params:         json.RawMessage(`{"model_id":"nano_banana_pro","model_name":"Nano Banana Pro"}`),
 		IdempotencyKey: "provider_submit:image:1",
@@ -136,7 +136,7 @@ func TestSubmitGemini3ProImageSuccess(t *testing.T) {
 	if seen.Model != ModelGemini3ProImage || seen.Prompt != "safe product image" || seen.Size != "16:9" || seen.Resolution != "4K" {
 		t.Fatalf("unexpected request body: %+v", seen)
 	}
-	if seen.N != 3 || seen.OfficialFallback {
+	if seen.N != 1 || seen.OfficialFallback {
 		t.Fatalf("unexpected generation options: %+v", seen)
 	}
 	if _, ok := rawBody["official_fallback"]; ok {

@@ -103,6 +103,8 @@ export const imageModelSchema = z
     quality_label: z.string().trim().min(1).optional(),
     show_output_count: z.boolean().optional(),
     max_prompt_bytes: z.number().int().positive().optional(),
+    min_prompt_chars: z.number().int().positive().optional(),
+    max_prompt_chars: z.number().int().positive().optional(),
   })
   .strict();
 

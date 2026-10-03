@@ -114,8 +114,8 @@ func TestSubmitNanoBanana2TextOnlyUsesGenerationModel(t *testing.T) {
 		if body.Input["prompt"] != "safe prompt" || body.Input["size"] != "16:9" || body.Input["resolution"] != "4K" {
 			t.Fatalf("bad image input: %+v", body.Input)
 		}
-		if body.Input["n"].(float64) != 3 {
-			t.Fatalf("output count = %#v, want 3", body.Input["n"])
+		if _, ok := body.Input["n"]; ok {
+			t.Fatalf("n must be omitted for Nano Banana 2: %+v", body.Input)
 		}
 		if _, ok := body.Input["image_urls"]; ok {
 			t.Fatalf("image_urls must be omitted without references: %+v", body.Input)
@@ -129,7 +129,6 @@ func TestSubmitNanoBanana2TextOnlyUsesGenerationModel(t *testing.T) {
 	req := baseImageRequest(ModelNanoBanana2New)
 	req.AspectRatio = "16:9"
 	req.Resolution = "4K"
-	req.OutputCount = 3
 
 	task, err := provider.Submit(context.Background(), req)
 	if err != nil {
@@ -158,8 +157,8 @@ func TestSubmitNanoBanana2ReferencesUseEditModelAndImageURLs(t *testing.T) {
 		if body.Input["prompt"] != "safe prompt" || body.Input["size"] != "16:9" || body.Input["resolution"] != "4K" {
 			t.Fatalf("bad image input: %+v", body.Input)
 		}
-		if body.Input["n"].(float64) != 2 {
-			t.Fatalf("output count = %#v, want 2", body.Input["n"])
+		if _, ok := body.Input["n"]; ok {
+			t.Fatalf("n must be omitted for Nano Banana 2 edit: %+v", body.Input)
 		}
 		refs, ok := body.Input["image_urls"].([]any)
 		if !ok || len(refs) != 2 || refs[0] != "https://cdn.test/ref-a.png" || refs[1] != "https://cdn.test/ref-b.png" {
@@ -178,7 +177,7 @@ func TestSubmitNanoBanana2ReferencesUseEditModelAndImageURLs(t *testing.T) {
 	req.AspectRatio = "16:9"
 	req.Resolution = "4K"
 	req.InputURLs = []string{" https://cdn.test/ref-a.png ", "https://cdn.test/ref-b.png"}
-	req.OutputCount = 2
+	req.OutputCount = 1
 
 	task, err := provider.Submit(context.Background(), req)
 	if err != nil {
@@ -406,6 +405,42 @@ func TestSeedream45ReferenceValidationAndEstimate(t *testing.T) {
 	}
 	_, err = provider.Estimate(context.Background(), req)
 	requireErrorClass(t, err, domain.ProviderErrInvalidRequest)
+}
+
+func TestSeedream45RejectsPromptAboveDocumentedMaximumBeforeHTTP(t *testing.T) {
+	var called bool
+	srv := httptest.NewServer(http.HandlerFunc(func(http.ResponseWriter, *http.Request) {
+		called = true
+	}))
+	defer srv.Close()
+
+	provider := New(Config{APIKey: "test-key", BaseURL: srv.URL, HTTPClient: srv.Client()})
+	req := baseImageRequest("seedream-4.5")
+	req.Prompt = strings.Repeat("a", 3001)
+
+	_, err := provider.Submit(context.Background(), req)
+	requireErrorClass(t, err, domain.ProviderErrInvalidRequest)
+	if called {
+		t.Fatal("Seedream 4.5 prompt above 3000 characters must be rejected before HTTP submit")
+	}
+}
+
+func TestSeedream45RejectsOutputCountAboveDocumentedMaximumBeforeHTTP(t *testing.T) {
+	var called bool
+	srv := httptest.NewServer(http.HandlerFunc(func(http.ResponseWriter, *http.Request) {
+		called = true
+	}))
+	defer srv.Close()
+
+	provider := New(Config{APIKey: "test-key", BaseURL: srv.URL, HTTPClient: srv.Client()})
+	req := baseImageRequest("seedream-4.5")
+	req.OutputCount = 16
+
+	_, err := provider.Submit(context.Background(), req)
+	requireErrorClass(t, err, domain.ProviderErrInvalidRequest)
+	if called {
+		t.Fatal("Seedream 4.5 output_count above 15 must be rejected before HTTP submit")
+	}
 }
 
 func TestSeedream45AllowedSizes(t *testing.T) {
@@ -663,6 +698,56 @@ func TestNanoBanana2EstimateAndValidation(t *testing.T) {
 	requireErrorClass(t, err, domain.ProviderErrInvalidRequest)
 }
 
+func TestNanoBanana2RejectsOutputCountAboveOneBeforeHTTP(t *testing.T) {
+	var called bool
+	srv := httptest.NewServer(http.HandlerFunc(func(http.ResponseWriter, *http.Request) {
+		called = true
+	}))
+	defer srv.Close()
+
+	provider := New(Config{APIKey: "test-key", BaseURL: srv.URL, HTTPClient: srv.Client()})
+	req := baseImageRequest(ModelNanoBanana2New)
+	req.OutputCount = 2
+
+	_, err := provider.Submit(context.Background(), req)
+	requireErrorClass(t, err, domain.ProviderErrInvalidRequest)
+	if called {
+		t.Fatal("Nano Banana 2 output_count > 1 must be rejected before HTTP submit")
+	}
+}
+
+func TestNanoBanana2RejectsOfficialOnlyExtremeRatiosBeforeHTTP(t *testing.T) {
+	for _, tc := range []struct {
+		name      string
+		ratio     string
+		inputURLs []string
+	}{
+		{name: "text 1 to 4", ratio: "1:4"},
+		{name: "text 4 to 1", ratio: "4:1"},
+		{name: "edit 1 to 8", ratio: "1:8", inputURLs: []string{"https://cdn.test/ref.png"}},
+		{name: "edit 8 to 1", ratio: "8:1", inputURLs: []string{"https://cdn.test/ref.png"}},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			var called bool
+			srv := httptest.NewServer(http.HandlerFunc(func(http.ResponseWriter, *http.Request) {
+				called = true
+			}))
+			defer srv.Close()
+
+			provider := New(Config{APIKey: "test-key", BaseURL: srv.URL, HTTPClient: srv.Client()})
+			req := baseImageRequest(ModelNanoBanana2New)
+			req.AspectRatio = tc.ratio
+			req.InputURLs = tc.inputURLs
+
+			_, err := provider.Submit(context.Background(), req)
+			requireErrorClass(t, err, domain.ProviderErrInvalidRequest)
+			if called {
+				t.Fatal("official-only Nano Banana 2 ratio must be rejected before HTTP submit")
+			}
+		})
+	}
+}
+
 func TestSubmitRejectsKlingAudioByDefault(t *testing.T) {
 	var called bool
 	srv := httptest.NewServer(http.HandlerFunc(func(http.ResponseWriter, *http.Request) {
@@ -705,6 +790,24 @@ func TestSeedanceEstimateAndReferenceValidation(t *testing.T) {
 	requireErrorClass(t, err, domain.ProviderErrInvalidRequest)
 }
 
+func TestSeedanceFastRejectsPromptBelowDocumentedMinimumBeforeHTTP(t *testing.T) {
+	var called bool
+	srv := httptest.NewServer(http.HandlerFunc(func(http.ResponseWriter, *http.Request) {
+		called = true
+	}))
+	defer srv.Close()
+
+	provider := New(Config{APIKey: "test-key", BaseURL: srv.URL, HTTPClient: srv.Client()})
+	req := baseVideoRequest(ModelSeedance20Fast)
+	req.Prompt = "ab"
+
+	_, err := provider.Submit(context.Background(), req)
+	requireErrorClass(t, err, domain.ProviderErrInvalidRequest)
+	if called {
+		t.Fatal("Seedance Fast prompt shorter than 3 characters must be rejected before HTTP submit")
+	}
+}
+
 func TestRunwayGen45DurationAndReferenceValidation(t *testing.T) {
 	provider := New(Config{APIKey: "test-key", BaseURL: "http://127.0.0.1"})
 	req := baseVideoRequest(ModelRunwayGen45)
@@ -721,6 +824,41 @@ func TestRunwayGen45DurationAndReferenceValidation(t *testing.T) {
 	req.InputURLs = nil
 	_, err = provider.Estimate(context.Background(), req)
 	requireErrorClass(t, err, domain.ProviderErrUnsupportedCapab)
+}
+
+func TestRunwayGen45RejectsUnsupportedLegacyTariffBeforeHTTP(t *testing.T) {
+	called := false
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		called = true
+		_, _ = w.Write([]byte(`{"code":200,"data":{"task_id":"runway_test","status":"not_started"}}`))
+	}))
+	defer server.Close()
+	provider := New(Config{APIKey: "test-key", BaseURL: server.URL, HTTPClient: server.Client()})
+	request := baseVideoRequest(ModelRunwayGen45)
+	request.Resolution = "1080p"
+	_, err := provider.Submit(context.Background(), request)
+	requireErrorClass(t, err, domain.ProviderErrInvalidRequest)
+	if called {
+		t.Fatal("unsupported legacy tariff reached provider HTTP")
+	}
+}
+
+func TestRunwayGen45RejectsPromptAboveDocumentedMaximumBeforeHTTP(t *testing.T) {
+	var called bool
+	srv := httptest.NewServer(http.HandlerFunc(func(http.ResponseWriter, *http.Request) {
+		called = true
+	}))
+	defer srv.Close()
+
+	provider := New(Config{APIKey: "test-key", BaseURL: srv.URL, HTTPClient: srv.Client()})
+	req := baseVideoRequest(ModelRunwayGen45)
+	req.Prompt = strings.Repeat("a", 1801)
+
+	_, err := provider.Submit(context.Background(), req)
+	requireErrorClass(t, err, domain.ProviderErrInvalidRequest)
+	if called {
+		t.Fatal("Runway Gen-4.5 prompt above 1800 characters must be rejected before HTTP submit")
+	}
 }
 
 func TestSubmitRunwayGen45UsesOptionalImageURLsList(t *testing.T) {
@@ -747,6 +885,9 @@ func TestSubmitRunwayGen45UsesOptionalImageURLsList(t *testing.T) {
 				}
 				if _, ok := body.Input["image_url"]; ok {
 					t.Fatalf("image_url must not be used for Runway Gen-4.5: %+v", body.Input)
+				}
+				if _, ok := body.Input["resolution"]; ok {
+					t.Fatalf("resolution must not be sent for Runway Gen-4.5: %+v", body.Input)
 				}
 				refs, ok := body.Input["image_urls"].([]any)
 				if !tc.wantRefs {

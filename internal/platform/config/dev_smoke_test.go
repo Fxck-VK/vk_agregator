@@ -35,3 +35,26 @@ func TestDEVModelSmokeRequiresDevelopmentAndProviderReadiness(t *testing.T) {
 		t.Fatal("explicit smoke flag not loaded")
 	}
 }
+
+func TestDEVModelSmokeRequiresAPIMartInWorkerProviderSet(t *testing.T) {
+	cfg := config.Config{
+		Env:                         "development",
+		Provider:                    "mock",
+		ProviderChain:               []string{"mock"},
+		FeatureDEVModelSmokeEnabled: true,
+		FeatureVideoRouterEnabled:   true,
+		APIMartProviderEnabled:      true,
+		APIMartAPIKey:               "test-key",
+		APIMartBaseURL:              "https://api.apimart.ai/v1",
+	}
+
+	err := cfg.Validate()
+	if err == nil || !strings.Contains(err.Error(), "APIMart") || !strings.Contains(err.Error(), "PROVIDER_CHAIN") {
+		t.Fatalf("expected DEV smoke to fail closed without APIMart in worker provider set, got %v", err)
+	}
+
+	cfg.ProviderChain = []string{"mock", "apimart"}
+	if err := cfg.Validate(); err != nil {
+		t.Fatalf("ready DEV smoke provider set rejected: %v", err)
+	}
+}

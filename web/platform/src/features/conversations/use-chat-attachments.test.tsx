@@ -5,7 +5,7 @@ import { attachmentFromFile } from "@/components/chat/ChatFilePicker/ChatFilePic
 import { webBrowserFetch, webBrowserMutation } from "@/lib/web-api/browser";
 import { WebNetworkError } from "@/lib/web-api/network-error";
 import catalog from "@/features/session/model-catalog.preview.json";
-import { parseModelCatalog, projectImageModelCatalog } from "@/features/models/model-catalog-contract";
+import { parseModelCatalog, projectImageModelCatalog, type PublicOperation } from "@/features/models/model-catalog-contract";
 import type { GenerationModel } from "@/features/models/generation-model-catalog";
 import { useChatAttachments } from "./use-chat-attachments";
 
@@ -14,7 +14,15 @@ const modelCatalog = parseModelCatalog(catalog);
 const model: GenerationModel = { ...projectImageModelCatalog(modelCatalog).items.find((item) => item.id === "nano_banana_2")!, category: "images", operations: modelCatalog.items.find((item) => item.id === "nano_banana_2")!.operations };
 const id = "aaaaaaaa-1111-4111-8111-aaaaaaaaaaaa";
 const file = (content = "synthetic") => attachmentFromFile(new File([content], "reference.png", { type: "image/png" }));
-const uploaded = () => Response.json({ artifact_id: id, mime_type: "image/png", size_bytes: 9, width: 2, height: 2 });
+const uploaded = (sizeBytes = 9) => Response.json({ artifact_id: id, mime_type: "image/png", size_bytes: sizeBytes, width: 2, height: 2 });
+function modelWithTotalBytesLimit(limit: number): GenerationModel {
+  return {
+    ...model,
+    operations: (model.operations as PublicOperation[]).map(operation => operation.kind === "image"
+      ? { ...operation, inputs: { ...operation.inputs, max_total_bytes: limit } }
+      : operation),
+  };
+}
 beforeEach(() => { vi.stubGlobal("crypto", webcrypto); });
 afterEach(() => { cleanup(); vi.restoreAllMocks(); vi.resetAllMocks(); vi.unstubAllGlobals(); });
 
@@ -66,6 +74,32 @@ it("rejects unsupported models, file types and excess count without uploading", 
   expect(result.current.error).toContain("PNG и JPEG");
   await act(async () => { await result.current.add(Array.from({ length: model.max_reference_images + 1 }, (_, index) => file(String(index)))); });
   expect(result.current.error).toContain("не более"); expect(webBrowserMutation).not.toHaveBeenCalled();
+});
+
+it("rejects selections over the model total byte limit before upload", async () => {
+  vi.mocked(webBrowserMutation).mockReturnValue(new Promise(() => {}));
+  const { result } = renderHook(() => useChatAttachments(modelWithTotalBytesLimit(10)));
+
+  await act(async () => { await result.current.add([file("123456"), file("12345")]); });
+
+  expect(result.current.error).toContain("Суммарный размер вложений");
+  expect(result.current.items).toEqual([]);
+  expect(webBrowserMutation).not.toHaveBeenCalled();
+});
+
+it("blocks model switches when ready attachments exceed the new total byte limit", async () => {
+  vi.mocked(webBrowserMutation).mockResolvedValue(uploaded(12));
+  const initialProps: { selected: GenerationModel } = { selected: model };
+  const { result, rerender } = renderHook(({ selected }) => useChatAttachments(selected), { initialProps });
+
+  await act(async () => { await result.current.add([file("small")]); });
+  await waitFor(() => expect(result.current.ids).toEqual([id]));
+  expect(result.current.blocked).toBe(false);
+
+  rerender({ selected: modelWithTotalBytesLimit(10) });
+
+  expect(result.current.blocked).toBe(true);
+  expect(result.current.error).toContain("Суммарный размер вложений");
 });
 
 it("clears a rejected model's notice when switching models and accepts a supported reference", async () => {

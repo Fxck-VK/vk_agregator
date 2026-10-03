@@ -16,6 +16,7 @@ import (
 	"vk-ai-aggregator/internal/domain"
 	"vk-ai-aggregator/internal/service/modelcatalog"
 	"vk-ai-aggregator/internal/service/pricingcatalog"
+	"vk-ai-aggregator/internal/service/providermodels"
 )
 
 var (
@@ -128,6 +129,7 @@ type Resolver struct {
 func NewResolver(publicModels []PublicModel, pricing SnapshotCatalog) Resolver {
 	models := make([]PublicModel, 0, len(publicModels))
 	for _, model := range publicModels {
+		model.MaxOutputCount, model.MaxReferenceImages = providermodels.ImageOperationalLimits(model.ID, model.MaxOutputCount, model.MaxReferenceImages)
 		model.QualityOptions = append([]string(nil), model.QualityOptions...)
 		model.AllowedAspectRatios = append([]string(nil), model.AllowedAspectRatios...)
 		models = append(models, model)
@@ -266,6 +268,9 @@ func (r Resolver) resolvePublic(request Request) (modelcatalog.Model, PublicSele
 		return modelcatalog.Model{}, PublicSelection{}, ErrOutputCountLimit
 	}
 	if pricingcatalog.IsGPTImage25(trustedModel.ModelID) && len(request.Prompt) > domain.GPTImage25MaxPromptBytes {
+		return modelcatalog.Model{}, PublicSelection{}, ErrPromptTooLong
+	}
+	if strings.TrimSpace(request.Prompt) != "" && !providermodels.MediaPromptValid(trustedModel.ModelID, request.Prompt) {
 		return modelcatalog.Model{}, PublicSelection{}, ErrPromptTooLong
 	}
 

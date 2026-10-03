@@ -241,6 +241,7 @@ func copyImageModels(in []ImageModel) []ImageModel {
 func copyImageModel(model ImageModel) ImageModel {
 	model.Readiness = copyReadiness(model.Readiness)
 	model.Limits = copyImageLimits(model.Limits)
+	model.Limits.MaxOutputCount, model.Limits.MaxReferenceImages = ImageOperationalLimits(model.PublicID, model.Limits.MaxOutputCount, model.Limits.MaxReferenceImages)
 	if len(model.Limits.AllowedAspectRatios) == 0 && !model.LoadTestOnly {
 		// Legacy declarations omitted ratios. Resolve the existing adapter bounds
 		// at the public boundary; keep the admitted declaration byte-stable.
@@ -255,6 +256,33 @@ func copyImageModel(model ImageModel) ImageModel {
 	}
 	model.PricingKeys = append([]pricingcatalog.ProductKey(nil), model.PricingKeys...)
 	return model
+}
+
+// ImageOperationalLimits only narrows requests supported by the attached API.
+// Frozen admission declarations remain unchanged and do not gain verification.
+// Sources checked 2026-10-03: APIMart gemini-3-pro/gpt-image-2 generation;
+// PoYo nano-banana-2-new/edit schemas omit a multiple-output parameter.
+func ImageOperationalLimits(id string, outputCount, referenceCount int) (int, int) {
+	switch id {
+	case PublicImageNanoBanana2, PublicImageNanoBananaPro, PublicImageGPTImage2:
+		if outputCount > 1 {
+			outputCount = 1
+		}
+	}
+	if id == PublicImageGPTImage2 && referenceCount > 15 {
+		referenceCount = 15
+	}
+	return outputCount, referenceCount
+}
+
+// ImageReferenceTotalByteLimit returns the aggregate decoded input byte cap for
+// the attached adapter path. Zero means only per-file and reference-count limits
+// are currently known for this public model.
+func ImageReferenceTotalByteLimit(id string) int64 {
+	if id == PublicImageGPTImage2 {
+		return 256 << 20
+	}
+	return 0
 }
 
 func copyImageLimits(limits ImageLimits) ImageLimits {

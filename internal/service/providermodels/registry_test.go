@@ -95,8 +95,8 @@ func TestRegistryGPTImage2ReferenceLimitIsIsolated(t *testing.T) {
 	if gpt.Provider != domain.ProviderAPIMart || gpt.ProviderModelID != providermodels.ProviderModelGPTImage2 {
 		t.Fatalf("GPT Image 2 provider mapping drifted: %+v", gpt)
 	}
-	if !gpt.Limits.SupportsReferenceImage || gpt.Limits.MaxReferenceImages != 16 {
-		t.Fatalf("GPT Image 2 reference limits = %+v, want max refs 16", gpt.Limits)
+	if !gpt.Limits.SupportsReferenceImage || gpt.Limits.MaxReferenceImages != 15 {
+		t.Fatalf("GPT Image 2 reference limits = %+v, want max refs 15", gpt.Limits)
 	}
 
 	stableImageLimits := map[string]int{
@@ -177,7 +177,7 @@ func TestRegistryNanoBananaProUsesAPIMartGemini3ProContract(t *testing.T) {
 		maxRefs  int
 	}{
 		modelcatalog.MiniAppImageNanoBanana2: {provider: domain.ProviderPoYo, modelID: providermodels.ProviderModelPoYoNanoBanana2, maxRefs: 14},
-		modelcatalog.MiniAppImageGPTImage2:   {provider: domain.ProviderAPIMart, modelID: providermodels.ProviderModelGPTImage2, maxRefs: 16},
+		modelcatalog.MiniAppImageGPTImage2:   {provider: domain.ProviderAPIMart, modelID: providermodels.ProviderModelGPTImage2, maxRefs: 15},
 	}
 	for publicID, want := range unchangedImages {
 		got, ok := registry.PublicImageModel(publicID)

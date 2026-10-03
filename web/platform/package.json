@@ -13,10 +13,11 @@
     "start": "node .next/standalone/server.js",
     "lint": "eslint . --max-warnings=0",
     "typecheck": "tsc --noEmit",
-    "test": "vitest run && npm run test:assets",
+    "test": "vitest run && npm run test:assets && npm run test:next-lint-contract",
     "test:i18n": "vitest run src/i18n",
     "test:session-browser": "node --test scripts/test-session-recovery.mjs",
     "test:assets": "node --test scripts/validate-assets.test.mjs",
+    "test:next-lint-contract": "node --test scripts/validate-next-lint.test.mjs",
     "validate:assets": "node scripts/validate-assets.mjs",
     "test:packaging": "node scripts/assert-packaging.mjs"
   },
@@ -32,6 +33,9 @@
   "overrides": {
     "js-yaml": "4.3.2",
     "nanoid": "3.3.18",
+    "@next/eslint-plugin-next": {
+      "fast-glob": "npm:glob@12.0.0"
+    },
     "next": {
       "postcss": "8.5.26",
       "sharp": "0.35.4"

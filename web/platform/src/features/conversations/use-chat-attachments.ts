@@ -16,14 +16,29 @@ import { attachmentFingerprint } from "./attachment-fingerprint";
 
 const uploadSchema = z.object({ artifact_id: z.string().uuid(), mime_type: z.enum(["image/png", "image/jpeg"]), size_bytes: z.number().positive(), width: z.number().positive(), height: z.number().positive() }).strict();
 const maxBytes = 20 * 1024 * 1024;
-type Attachment = ChatMediaAttachment & { fingerprint: string; artifactId?: string; status: "uploading" | "ready" | "failed"; progress: number | null; error?: MessageReference };
+type Attachment = ChatMediaAttachment & { fingerprint: string; artifactId?: string; status: "uploading" | "ready" | "failed"; progress: number | null; sizeBytes: number; error?: MessageReference };
+
+function referenceOperation(model?: GenerationModel): PublicOperation | undefined {
+  if (!model || (model.category !== "images" && model.category !== "video")) return undefined;
+  return (model.operations as PublicOperation[] | undefined)?.find((op) => op.kind === (model.category === "video" ? "video" : "image") && op.enabled);
+}
 
 function referenceLimit(model?: GenerationModel) {
-  if (!model || (model.category !== "images" && model.category !== "video")) return 0;
-  const operation = (model.operations as PublicOperation[] | undefined)?.find((op) => op.kind === (model.category === "video" ? "video" : "image") && op.enabled);
+  if (!model) return 0;
+  const operation = referenceOperation(model);
   if (!operation?.inputs.images.enabled) return 0;
   if (model.category === "video") return operation.inputs.images.max_count ?? 0;
-  return model.supports_reference_image ? Math.min(model.max_reference_images, operation.inputs.images.max_count ?? 0) : 0;
+  if (model.category === "images" && model.supports_reference_image) return Math.min(model.max_reference_images, operation.inputs.images.max_count ?? 0);
+  return 0;
+}
+
+function referenceTotalBytesLimit(model?: GenerationModel) {
+  const limit = referenceOperation(model)?.inputs.max_total_bytes;
+  return limit !== undefined && limit > 0 ? limit : undefined;
+}
+
+function attachmentTotalBytes(items: readonly Pick<Attachment, "sizeBytes">[]) {
+  return items.reduce((total, item) => total + item.sizeBytes, 0);
 }
 
 export function useChatAttachments(model?: GenerationModel) {
@@ -40,8 +55,9 @@ export function useChatAttachments(model?: GenerationModel) {
   const mounted = useRef(true);
   const previews = useRef(new Set<string>());
   const maxCount = referenceLimit(model);
+  const maxTotalBytes = referenceTotalBytesLimit(model);
   const imagesRequired = maxCount > 0 && (model?.operations as PublicOperation[] | undefined)?.some(op => op.enabled && op.inputs.images.enabled && op.inputs.images.required);
-  const validationContext = `${model?.id ?? ""}:${maxCount}`;
+  const validationContext = `${model?.id ?? ""}:${maxCount}:${maxTotalBytes ?? ""}`;
   const [errorContext, setErrorContext] = useState(validationContext);
   // Notices describe an attempted selection for one model. Existing files are
   // retained and checked against the new model separately below.
@@ -79,7 +95,7 @@ export function useChatAttachments(model?: GenerationModel) {
           if (item.previewUrl && previews.current.delete(item.previewUrl)) URL.revokeObjectURL(item.previewUrl);
           update(current.current.filter((value) => value.id !== item.id));
           setDuplicateNotice(true);
-        } else update(current.current.map((value) => value.id === item.id ? { ...value, artifactId: uploaded.artifact_id, status: "ready", progress: 100, error: undefined } : value));
+        } else update(current.current.map((value) => value.id === item.id ? { ...value, artifactId: uploaded.artifact_id, status: "ready", progress: 100, sizeBytes: uploaded.size_bytes, error: undefined } : value));
       }
     } catch (reason) {
       if (!controller.signal.aborted) {
@@ -127,12 +143,16 @@ export function useChatAttachments(model?: GenerationModel) {
           duplicate = true;
           continue;
         }
-        unique.push({ ...item, file, fingerprint, status: "uploading", progress: null });
+        unique.push({ ...item, file, fingerprint, status: "uploading", progress: null, sizeBytes: file.size });
       }
       controller.signal.throwIfAborted();
       if (duplicate) setDuplicateNotice(true);
       if (current.current.length + unique.length > maxCount) {
         setError({ key: "useChatAttachments.youCanAttachUpToValueImages", parameters: { value1: maxCount } });
+        return;
+      }
+      if (maxTotalBytes !== undefined && attachmentTotalBytes([...current.current, ...unique]) > maxTotalBytes) {
+        setError({ key: "useChatAttachments.totalAttachmentsTooLargeForThisModel" });
         return;
       }
       const additions = unique.map(item => {
@@ -152,7 +172,7 @@ export function useChatAttachments(model?: GenerationModel) {
     });
     selectionQueue.current = task;
     return task;
-  }, [maxCount, model, update, upload]);
+  }, [maxCount, maxTotalBytes, model, update, upload]);
 
   const remove = (id: string) => {
     pending.current.get(id)?.abort(); pending.current.delete(id);
@@ -175,8 +195,21 @@ export function useChatAttachments(model?: GenerationModel) {
     update(current.current.map((value) => value.id === id ? { ...value, status: "uploading", progress: null, error: undefined } : value));
     void upload(item, model.id);
   };
-  const modelError = items.length > maxCount ? msg("useChatAttachments.theAttachmentsAreNotCompatibleWithThe") : imagesRequired && items.length === 0 ? msg("useChatAttachments.referenceImageRequired") : null;
-  return { enabled: maxCount > 0, items: items.map(item => ({ ...item, error: renderMessage(msg, item.error) ?? undefined })), add, remove, retry, clear, duplicateNotice, dismissDuplicateNotice: () => setDuplicateNotice(false),
+  const totalBytesError = maxTotalBytes !== undefined && attachmentTotalBytes(items) > maxTotalBytes ? msg("useChatAttachments.totalAttachmentsTooLargeForThisModel") : null;
+  const modelError = items.length > maxCount ? msg("useChatAttachments.theAttachmentsAreNotCompatibleWithThe") : totalBytesError ?? (imagesRequired && items.length === 0 ? msg("useChatAttachments.referenceImageRequired") : null);
+  return { enabled: maxCount > 0, items: items.map(item => ({
+    id: item.id,
+    mimeType: item.mimeType,
+    name: item.name,
+    source: item.source,
+    ...(item.file ? { file: item.file } : {}),
+    ...(item.previewUrl ? { previewUrl: item.previewUrl } : {}),
+    fingerprint: item.fingerprint,
+    ...(item.artifactId ? { artifactId: item.artifactId } : {}),
+    status: item.status,
+    progress: item.progress,
+    error: renderMessage(msg, item.error) ?? undefined,
+  })), add, remove, retry, clear, duplicateNotice, dismissDuplicateNotice: () => setDuplicateNotice(false),
     networkNotice: networkNotice && items.some(item => item.error?.key === "useChatAttachments.uploadNetworkError"), dismissNetworkNotice: () => setNetworkNotice(false),
     error: modelError ?? renderMessage(msg, error), blocked: checking || !!modelError || items.some((item) => item.status !== "ready"), ids: items.flatMap((item) => item.artifactId ? [item.artifactId] : []) };
 }

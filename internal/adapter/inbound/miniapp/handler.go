@@ -872,6 +872,11 @@ func copyVideoRouteDTO(route VideoRouteDTO) VideoRouteDTO {
 	route.AllowedDurationsSec = append([]int(nil), route.AllowedDurationsSec...)
 	route.AllowedResolutions = append([]string(nil), route.AllowedResolutions...)
 	route.AllowedAspectRatios = append([]string(nil), route.AllowedAspectRatios...)
+	if route.Alias == string(domain.VideoRouteRunwayGen45) {
+		route.AutomaticResolution = true
+		route.AllowedResolutions = []string{route.DefaultResolution}
+		route.Description = "Разрешение выбирает провайдер."
+	}
 	return route
 }
 
@@ -912,6 +917,7 @@ func (h *Handler) modelCatalogItemFromImage(model ImageModelDTO) (ModelCatalogIt
 
 func modelCatalogItemFromVideo(route VideoRouteDTO) ModelCatalogItemDTO {
 	return ModelCatalogItemDTO{
+		AutomaticResolution:         route.AutomaticResolution,
 		Capabilities:                miniAppVideoCapabilities(route),
 		SupportsAudio:               route.SupportsAudio,
 		RequiresReferenceVideo:      route.RequiresReferenceVideo,

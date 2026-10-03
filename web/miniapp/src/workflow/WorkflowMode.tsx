@@ -103,6 +103,7 @@ type CreateMode = {
   defaultQuality?: string;
   durationOptions?: number[];
   automaticDuration?: boolean;
+  automaticResolution?: boolean;
   allowedReferenceImageCounts?: number[];
   defaultDurationSec?: number;
   resolutionOptions?: string[];
@@ -357,6 +358,7 @@ function createModeFromVideoItem(route: ModelCatalogItem): CreateMode {
     catalogEstimateCredits: route.estimate_credits,
     durationOptions: durations,
     automaticDuration: capability ? capability.duration.mode === "automatic" : route.automatic_duration,
+    automaticResolution: route.automatic_resolution,
     allowedReferenceImageCounts: capability?.allowed_image_counts ?? route.allowed_reference_image_counts,
     resolutionOptions: (capability ? (capability.quality_modes?.length ? capability.quality_modes : capability.resolutions) : route.allowed_resolutions)?.filter(Boolean) ?? [],
     defaultResolution: route.default_resolution,
@@ -1436,7 +1438,7 @@ export function WorkflowMode({
               </div>
             )}
 
-            {activeCreateModel && isVideoModality && usesVideoQualitySelector && (
+            {activeCreateModel && isVideoModality && !activeCreateModel.automaticResolution && usesVideoQualitySelector && (
               <div className="create-setting" role="group" aria-label="Качество видео">
                 <span className="create-control-label">Качество</span>
                 <div className="model-select workflow-select">
@@ -1458,7 +1460,7 @@ export function WorkflowMode({
               </div>
             )}
 
-            {activeCreateModel && isVideoModality && !usesVideoQualitySelector && videoResolutionOptions.length > 0 && (
+            {activeCreateModel && isVideoModality && !activeCreateModel.automaticResolution && !usesVideoQualitySelector && videoResolutionOptions.length > 0 && (
               <div className="create-setting" role="group" aria-label="Разрешение видео">
                 <span className="create-control-label">Разрешение</span>
                 <div className="segment create-setting__segment">

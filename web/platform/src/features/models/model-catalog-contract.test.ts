@@ -97,6 +97,38 @@ describe("model catalog contract", () => {
     });
   });
 
+  it("projects optional image and video prompt character limits", () => {
+    const payload = publicModelCatalog();
+    payload.items[0].operations[0].image.min_prompt_chars = 3;
+    payload.items[0].operations[0].image.max_prompt_chars = 3000;
+    payload.items[2].operations[0].video.min_prompt_chars = 3;
+    payload.items[2].operations[0].video.max_prompt_chars = 1800;
+
+    const catalog = parseModelCatalog(payload);
+
+    expect(projectImageModelCatalog(catalog).items[0]).toMatchObject({
+      min_prompt_chars: 3,
+      max_prompt_chars: 3000,
+    });
+    expect(projectVideoModelCatalog(catalog).items[0]).toMatchObject({
+      min_prompt_chars: 3,
+      max_prompt_chars: 1800,
+    });
+  });
+
+  it("projects automatic video resolution without rejecting the strict catalog", () => {
+    const payload = publicModelCatalog();
+    payload.items[2].operations[0].video.automatic_resolution = true;
+
+    const catalog = parseModelCatalog(payload);
+
+    expect(projectVideoModelCatalog(catalog).items[0]).toMatchObject({
+      automatic_resolution: true,
+      default_resolution: "720p",
+      allowed_resolutions: ["720p"],
+    });
+  });
+
   it("parses and projects the generated backend preview fixture", () => {
     const catalog = parseModelCatalog(previewCatalog);
     const images = projectImageModelCatalog(catalog);

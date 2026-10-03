@@ -670,9 +670,6 @@ func buildImageSubmitRequest(req domain.ProviderRequest) (submitRequest, error) 
 	if modelCode != ModelSeedream45 {
 		input["resolution"] = effectiveImageResolution(req.Resolution)
 	}
-	if modelCode == ModelNanoBanana2New {
-		input["n"] = max(req.OutputCount, 1)
-	}
 	if modelCode == ModelNanoBananaPro {
 		input["n"] = max(req.OutputCount, 1)
 		input["output_format"] = "png"
@@ -714,7 +711,6 @@ func buildVideoSubmitRequest(req domain.ProviderRequest) (submitRequest, error) 
 			input["reference_image_urls"] = inputURLs
 		}
 	case ModelRunwayGen45:
-		input["resolution"] = effectiveResolution(req.ModelCode, req.Resolution)
 		if len(inputURLs) > 0 {
 			input["image_urls"] = inputURLs
 		}
@@ -839,8 +835,9 @@ func validateImageShape(req domain.ProviderRequest, requirePrompt bool) error {
 		if prompt == "" {
 			return &Error{Class: domain.ProviderErrInvalidRequest, Message: "prompt is required"}
 		}
-		if len([]rune(prompt)) > 20000 {
-			return &Error{Class: domain.ProviderErrInvalidRequest, Message: "prompt exceeds 20000 characters"}
+		maxPrompt := maxImagePromptRunes(modelCode)
+		if len([]rune(prompt)) > maxPrompt {
+			return &Error{Class: domain.ProviderErrInvalidRequest, Message: fmt.Sprintf("prompt exceeds %d characters", maxPrompt)}
 		}
 	}
 	if value := strings.TrimSpace(req.AspectRatio); value != "" && !allowedImageSize(modelCode, value) {
@@ -852,11 +849,38 @@ func validateImageShape(req domain.ProviderRequest, requirePrompt bool) error {
 	if value := strings.TrimSpace(req.Resolution); value != "" && !allowedImageResolution(modelCode, value) {
 		return &Error{Class: domain.ProviderErrInvalidRequest, Message: "unsupported PoYo image resolution"}
 	}
+	if err := validateImageOutputCount(modelCode, req.OutputCount); err != nil {
+		return err
+	}
 	if len(cleanInputURLs(req.InputURLs)) > maxImageReferenceImages(modelCode) {
 		return &Error{Class: domain.ProviderErrInvalidRequest, Message: "too many PoYo reference images"}
 	}
 	if err := validateInputURLShape(req.InputURLs); err != nil {
 		return err
+	}
+	return nil
+}
+
+func maxImagePromptRunes(model string) int {
+	if strings.TrimSpace(model) == ModelSeedream45 {
+		return 3000
+	}
+	return 20000
+}
+
+func validateImageOutputCount(model string, outputCount int) error {
+	if outputCount < 0 {
+		return &Error{Class: domain.ProviderErrInvalidRequest, Message: "output count must be positive"}
+	}
+	switch strings.TrimSpace(model) {
+	case ModelNanoBanana2New:
+		if outputCount > 1 {
+			return &Error{Class: domain.ProviderErrInvalidRequest, Message: "Nano Banana 2 output count must be 1"}
+		}
+	case ModelSeedream45:
+		if outputCount > 15 {
+			return &Error{Class: domain.ProviderErrInvalidRequest, Message: "Seedream 4.5 output count must be at most 15"}
+		}
 	}
 	return nil
 }
@@ -976,8 +1000,7 @@ func allowedImageSize(model, value string) bool {
 		}
 	}
 	switch trimmed {
-	case "1:1", "2:3", "3:2", "3:4", "4:3", "4:5", "5:4", "9:16", "16:9", "21:9",
-		"1:4", "4:1", "1:8", "8:1":
+	case "1:1", "2:3", "3:2", "3:4", "4:3", "4:5", "5:4", "9:16", "16:9", "21:9":
 		return true
 	default:
 		return false
@@ -1006,8 +1029,14 @@ func validateVideoShape(req domain.ProviderRequest, requirePrompt bool) error {
 		if prompt == "" {
 			return &Error{Class: domain.ProviderErrInvalidRequest, Message: "prompt is required"}
 		}
-		if len([]rune(prompt)) > 2000 {
-			return &Error{Class: domain.ProviderErrInvalidRequest, Message: "prompt exceeds 2000 characters"}
+		promptRunes := len([]rune(prompt))
+		minPrompt := minVideoPromptRunes(model)
+		if promptRunes < minPrompt {
+			return &Error{Class: domain.ProviderErrInvalidRequest, Message: fmt.Sprintf("prompt must be at least %d characters", minPrompt)}
+		}
+		maxPrompt := maxVideoPromptRunes(model)
+		if promptRunes > maxPrompt {
+			return &Error{Class: domain.ProviderErrInvalidRequest, Message: fmt.Sprintf("prompt exceeds %d characters", maxPrompt)}
 		}
 	}
 	params, err := parseParams(req.Params)
@@ -1051,6 +1080,20 @@ func validateVideoShape(req domain.ProviderRequest, requirePrompt bool) error {
 		return err
 	}
 	return nil
+}
+
+func minVideoPromptRunes(model string) int {
+	if strings.TrimSpace(model) == ModelSeedance20Fast {
+		return 3
+	}
+	return 1
+}
+
+func maxVideoPromptRunes(model string) int {
+	if strings.TrimSpace(model) == ModelRunwayGen45 {
+		return 1800
+	}
+	return 2000
 }
 
 func parseParams(raw json.RawMessage) (requestParams, error) {
@@ -1130,7 +1173,7 @@ func effectiveResolution(model, value string) string {
 
 func allowedResolution(model, resolution string) bool {
 	switch strings.TrimSpace(model) {
-	case ModelSeedance20Fast:
+	case ModelSeedance20Fast, ModelRunwayGen45:
 		return resolution == "720p"
 	default:
 		return resolution == "720p" || resolution == "1080p"

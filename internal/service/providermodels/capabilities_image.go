@@ -3,6 +3,7 @@ package providermodels
 import "strings"
 
 func imageCapabilities(m ImageModel) *ModelCapabilities {
+	m = copyImageModel(m)
 	app := imageProfile(m)
 	api := imageProfile(m)
 	// This is a verified subset of the adapter's API contract, not a claim that
@@ -34,11 +35,12 @@ func imageCapabilities(m ImageModel) *ModelCapabilities {
 	case PublicImageSeedream50Pro:
 		api.Image.Images.MaxCount = integer(10)
 		api.Image.MaxOutputCount = integer(1)
-	case PublicImageNanoBanana2:
-		api.Image.AspectRatios = append(api.Image.AspectRatios, "1:4", "4:1", "1:8", "8:1")
 	case PublicImageNanoBananaPro:
+		api.Image.MaxOutputCount = integer(1)
 		api.Image.AspectRatios = append(api.Image.AspectRatios, "auto")
 	case PublicImageGPTImage2:
+		api.Image.MaxOutputCount = integer(1)
+		api.Image.Images.MaxCount = integer(15)
 		api.Image.AspectRatios = append(api.Image.AspectRatios, "2:1", "1:2", "3:1", "1:3", "9:21")
 	case PublicImageGPTImage25Flare, PublicImageGPTImage25Sunburst:
 		// The adapter implements native image input; product pricing deliberately

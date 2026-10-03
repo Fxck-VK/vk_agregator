@@ -16,7 +16,7 @@ func TestQwenImageFlagAndRequiredConfig(t *testing.T) {
 	if !config.Load().FeatureAPIMartQwenImage3Enabled {
 		t.Fatal("Qwen flag not loaded")
 	}
-	cfg := config.Config{Env: "development", Provider: "mock", ProviderChain: []string{"mock"}, FeatureAPIMartQwenImage3Enabled: true}
+	cfg := config.Config{Env: "development", Provider: "mock", ProviderChain: []string{"mock"}, ImageProvider: "apimart", FeatureAPIMartQwenImage3Enabled: true}
 	for _, required := range []string{"APIMART_PROVIDER_ENABLED", "APIMART_API_KEY", "APIMART_BASE_URL"} {
 		if err := cfg.Validate(); err == nil || !strings.Contains(err.Error(), required) {
 			t.Fatalf("expected missing %s", required)

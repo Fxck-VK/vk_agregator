@@ -277,8 +277,11 @@ Required GitHub repository secrets:
 - `ENV_PROVIDERS_COMMON`
 - `ENV_SECRETS_DEV`
 - `ENV_PAYMENTS_DEV`
-- `GHCR_USERNAME`
-- `GHCR_TOKEN`
+
+The `development` GitHub environment also requires
+`DEV_WEB_BASIC_AUTH_HTPASSWD`. The workflow authenticates to GHCR with
+`github.actor` and its scoped `GITHUB_TOKEN`; separate long-lived
+`GHCR_USERNAME`/`GHCR_TOKEN` repository secrets are not required for DEV deploy.
 
 `DEV_DEPLOY_SSH_KNOWN_HOSTS` must contain the DEV VPS SSH host key line(s)
 verified out of band, in OpenSSH `known_hosts` format. The DEV deploy workflow
@@ -302,6 +305,10 @@ serialized validation entry point from the repository root:
 ```powershell
 pwsh -NoProfile -File scripts/ci/dev-deploy-preflight.ps1
 ```
+
+Use a patched Go toolchain. For the current release baseline, set
+`$env:GOTOOLCHAIN = 'go1.25.14'` in this shell when a newer but unpatched Go
+installation would otherwise take precedence over `go.mod`.
 
 It runs source tests, npm audits, `govulncheck`, infrastructure policy and the
 pinned Trivy filesystem scan in that order. Only one full preflight may run in

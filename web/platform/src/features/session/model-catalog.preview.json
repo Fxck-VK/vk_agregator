@@ -1067,7 +1067,7 @@
           },
           "image": {
             "quality_label": "Разрешение",
-            "show_output_count": true,
+            "show_output_count": false,
             "quality_options": [
               "1.5K",
               "1K",
@@ -1328,7 +1328,18 @@
               "extensions": [],
               "max_count": null
             },
-            "aspect_ratios": [],
+            "aspect_ratios": [
+              "16:9",
+              "1:1",
+              "21:9",
+              "2:3",
+              "3:2",
+              "3:4",
+              "4:3",
+              "4:5",
+              "5:4",
+              "9:16"
+            ],
             "resolutions": [],
             "quality_modes": [],
             "speed_modes": [
@@ -1418,7 +1429,7 @@
           },
           "image": {
             "quality_label": "Разрешение",
-            "show_output_count": true,
+            "show_output_count": false,
             "quality_options": [
               "1MP",
               "2MP",
@@ -1614,7 +1625,7 @@
           },
           "image": {
             "quality_label": "Разрешение",
-            "show_output_count": true,
+            "show_output_count": false,
             "quality_options": [
               "1K",
               "2K",
@@ -1634,7 +1645,7 @@
               "9:16"
             ],
             "default_aspect_ratio": "16:9",
-            "max_output_count": 4,
+            "max_output_count": 1,
             "supports_reference_image": true,
             "max_reference_images": 14,
             "price_by_quality": {
@@ -1687,10 +1698,16 @@
               "max_count": null
             },
             "aspect_ratios": [
-              "1:4",
-              "4:1",
-              "1:8",
-              "8:1"
+              "16:9",
+              "1:1",
+              "21:9",
+              "2:3",
+              "3:2",
+              "3:4",
+              "4:3",
+              "4:5",
+              "5:4",
+              "9:16"
             ],
             "resolutions": [
               "1K",
@@ -1736,7 +1753,7 @@
             ],
             "quality_modes": [],
             "speed_modes": [],
-            "max_output_count": 4,
+            "max_output_count": 1,
             "max_combined_images": null
           }
         }
@@ -1797,7 +1814,7 @@
           },
           "image": {
             "quality_label": "Разрешение",
-            "show_output_count": true,
+            "show_output_count": false,
             "quality_options": [
               "1K",
               "2K",
@@ -1817,7 +1834,7 @@
               "9:16"
             ],
             "default_aspect_ratio": "16:9",
-            "max_output_count": 4,
+            "max_output_count": 1,
             "supports_reference_image": true,
             "max_reference_images": 14,
             "price_by_quality": {
@@ -1870,6 +1887,16 @@
               "max_count": null
             },
             "aspect_ratios": [
+              "16:9",
+              "1:1",
+              "21:9",
+              "2:3",
+              "3:2",
+              "3:4",
+              "4:3",
+              "4:5",
+              "5:4",
+              "9:16",
               "auto"
             ],
             "resolutions": [
@@ -1879,7 +1906,7 @@
             ],
             "quality_modes": [],
             "speed_modes": [],
-            "max_output_count": null,
+            "max_output_count": 1,
             "max_combined_images": null
           },
           "notes": [
@@ -1916,7 +1943,7 @@
             ],
             "quality_modes": [],
             "speed_modes": [],
-            "max_output_count": 4,
+            "max_output_count": 1,
             "max_combined_images": null
           }
         }
@@ -1956,7 +1983,7 @@
                   "mime": "image/jpeg"
                 }
               ],
-              "max_count": 16,
+              "max_count": 15,
               "max_bytes": 20971520,
               "max_width": 4096,
               "max_height": 4096
@@ -1973,11 +2000,11 @@
               "support": "unknown",
               "enabled": false
             },
-            "max_total_bytes": 335544320
+            "max_total_bytes": 268435456
           },
           "image": {
             "quality_label": "Разрешение",
-            "show_output_count": true,
+            "show_output_count": false,
             "quality_options": [
               "1K",
               "2K",
@@ -1997,9 +2024,9 @@
               "9:16"
             ],
             "default_aspect_ratio": "16:9",
-            "max_output_count": 4,
+            "max_output_count": 1,
             "supports_reference_image": true,
-            "max_reference_images": 16,
+            "max_reference_images": 15,
             "price_by_quality": {
               "1K": 40,
               "2K": 50,
@@ -2047,9 +2074,19 @@
             "images": {
               "support": "supported",
               "extensions": [],
-              "max_count": null
+              "max_count": 15
             },
             "aspect_ratios": [
+              "16:9",
+              "1:1",
+              "21:9",
+              "2:3",
+              "3:2",
+              "3:4",
+              "4:3",
+              "4:5",
+              "5:4",
+              "9:16",
               "2:1",
               "1:2",
               "3:1",
@@ -2063,7 +2100,7 @@
             ],
             "quality_modes": [],
             "speed_modes": [],
-            "max_output_count": null,
+            "max_output_count": 1,
             "max_combined_images": null
           },
           "notes": [
@@ -2079,7 +2116,7 @@
                 "jpeg",
                 "png"
               ],
-              "max_count": 16
+              "max_count": 15
             },
             "aspect_ratios": [
               "16:9",
@@ -2100,7 +2137,7 @@
             ],
             "quality_modes": [],
             "speed_modes": [],
-            "max_output_count": 4,
+            "max_output_count": 1,
             "max_combined_images": null
           }
         }
@@ -2161,7 +2198,7 @@
           },
           "image": {
             "quality_label": "Разрешение",
-            "show_output_count": true,
+            "show_output_count": false,
             "quality_options": [
               "1K",
               "2K"
@@ -2212,7 +2249,15 @@
               "extensions": [],
               "max_count": null
             },
-            "aspect_ratios": [],
+            "aspect_ratios": [
+              "1:1",
+              "4:3",
+              "3:4",
+              "16:9",
+              "9:16",
+              "3:2",
+              "2:3"
+            ],
             "resolutions": [
               "1K",
               "2K"
@@ -2313,7 +2358,7 @@
           },
           "image": {
             "quality_label": "Разрешение",
-            "show_output_count": true,
+            "show_output_count": false,
             "quality_options": [
               "standard"
             ],
@@ -2435,7 +2480,7 @@
           },
           "image": {
             "quality_label": "Разрешение",
-            "show_output_count": true,
+            "show_output_count": false,
             "quality_options": [
               "standard"
             ],
@@ -2582,6 +2627,8 @@
             "max_total_bytes": 209715200
           },
           "image": {
+            "min_prompt_chars": 1,
+            "max_prompt_chars": 3000,
             "quality_label": "Разрешение",
             "show_output_count": true,
             "quality_options": [
@@ -2637,7 +2684,16 @@
               "extensions": [],
               "max_count": null
             },
-            "aspect_ratios": [],
+            "aspect_ratios": [
+              "1:1",
+              "4:3",
+              "3:4",
+              "16:9",
+              "9:16",
+              "3:2",
+              "2:3",
+              "21:9"
+            ],
             "resolutions": [
               "2K",
               "4K"
@@ -8843,6 +8899,8 @@
             "max_total_bytes": 0
           },
           "video": {
+            "min_prompt_chars": 3,
+            "max_prompt_chars": 2000,
             "allowed_resolutions": [
               "720p"
             ],
@@ -9013,7 +9071,7 @@
     {
       "id": "video_runway_gen4_5",
       "name": "Runway Gen-4.5",
-      "description": "Создание видео по текстовому описанию. Разрешения: 720p, 1080p.",
+      "description": "Создание видео по текстовому описанию. Разрешение выбирает провайдер.",
       "kind": "video",
       "categories": [
         "popular",
@@ -9045,9 +9103,11 @@
             "max_total_bytes": 0
           },
           "video": {
+            "min_prompt_chars": 1,
+            "max_prompt_chars": 1800,
+            "automatic_resolution": true,
             "allowed_resolutions": [
-              "720p",
-              "1080p"
+              "720p"
             ],
             "allowed_durations_sec": [
               5,
@@ -9065,8 +9125,6 @@
             "default_duration_sec": 5,
             "default_aspect_ratio": "16:9",
             "price_by_option": {
-              "1080p:10": 900,
-              "1080p:5": 450,
               "720p:10": 900,
               "720p:5": 450
             },
@@ -9154,90 +9212,6 @@
                 "aspect_ratio": "21:9",
                 "fps": null,
                 "audio": null
-              },
-              {
-                "duration_sec": 5,
-                "resolution": "1080p",
-                "aspect_ratio": "16:9",
-                "fps": null,
-                "audio": null
-              },
-              {
-                "duration_sec": 5,
-                "resolution": "1080p",
-                "aspect_ratio": "9:16",
-                "fps": null,
-                "audio": null
-              },
-              {
-                "duration_sec": 5,
-                "resolution": "1080p",
-                "aspect_ratio": "4:3",
-                "fps": null,
-                "audio": null
-              },
-              {
-                "duration_sec": 5,
-                "resolution": "1080p",
-                "aspect_ratio": "3:4",
-                "fps": null,
-                "audio": null
-              },
-              {
-                "duration_sec": 5,
-                "resolution": "1080p",
-                "aspect_ratio": "1:1",
-                "fps": null,
-                "audio": null
-              },
-              {
-                "duration_sec": 5,
-                "resolution": "1080p",
-                "aspect_ratio": "21:9",
-                "fps": null,
-                "audio": null
-              },
-              {
-                "duration_sec": 10,
-                "resolution": "1080p",
-                "aspect_ratio": "16:9",
-                "fps": null,
-                "audio": null
-              },
-              {
-                "duration_sec": 10,
-                "resolution": "1080p",
-                "aspect_ratio": "9:16",
-                "fps": null,
-                "audio": null
-              },
-              {
-                "duration_sec": 10,
-                "resolution": "1080p",
-                "aspect_ratio": "4:3",
-                "fps": null,
-                "audio": null
-              },
-              {
-                "duration_sec": 10,
-                "resolution": "1080p",
-                "aspect_ratio": "3:4",
-                "fps": null,
-                "audio": null
-              },
-              {
-                "duration_sec": 10,
-                "resolution": "1080p",
-                "aspect_ratio": "1:1",
-                "fps": null,
-                "audio": null
-              },
-              {
-                "duration_sec": 10,
-                "resolution": "1080p",
-                "aspect_ratio": "21:9",
-                "fps": null,
-                "audio": null
               }
             ],
             "start_image": "unsupported",
@@ -9272,10 +9246,7 @@
                 10
               ]
             },
-            "resolutions": [
-              "720p",
-              "1080p"
-            ],
+            "resolutions": [],
             "quality_modes": null,
             "aspect_ratios": [
               "16:9",
@@ -9294,7 +9265,8 @@
           },
           "notes": [
             "Профиль показывает проверенные ограничения выбора; стоимость считается отдельно перед запуском.",
-            "Указан проверенный набор параметров API. Неподтверждённые форматы и ограничения отмечены отдельно; отсутствие значения не означает отсутствие поддержки."
+            "Указан проверенный набор параметров API. Неподтверждённые форматы и ограничения отмечены отдельно; отсутствие значения не означает отсутствие поддержки.",
+            "Разрешение выбирает провайдер; точные размеры можно проверить в готовом файле."
           ]
         },
         "application": {
@@ -9322,8 +9294,7 @@
               ]
             },
             "resolutions": [
-              "720p",
-              "1080p"
+              "720p"
             ],
             "quality_modes": null,
             "aspect_ratios": [
@@ -9344,6 +9315,7 @@
           "notes": [
             "Профиль показывает проверенные ограничения выбора; стоимость считается отдельно перед запуском.",
             "В интерфейсе изображения загружаются как JPEG/PNG; видео MP4/MOV доступно только для Motion Control.",
+            "Разрешение выбирает провайдер; точные размеры можно проверить в готовом файле.",
             "На сайте видеозапрос принимает только текст. Загрузка референсов и переключатель звука ещё не подключены."
           ]
         }
@@ -36674,10 +36646,6 @@
                 {
                   "extension": ".jpeg",
                   "mime": "image/jpeg"
-                },
-                {
-                  "extension": ".webp",
-                  "mime": "image/webp"
                 }
               ],
               "max_count": 7,
@@ -36690,7 +36658,7 @@
                 6,
                 7
               ],
-              "max_bytes": 52428800
+              "max_bytes": 20971520
             },
             "video": {
               "support": "unknown",
@@ -38426,10 +38394,6 @@
                 {
                   "extension": ".jpeg",
                   "mime": "image/jpeg"
-                },
-                {
-                  "extension": ".webp",
-                  "mime": "image/webp"
                 }
               ],
               "max_count": 7,
@@ -38442,7 +38406,7 @@
                 6,
                 7
               ],
-              "max_bytes": 52428800
+              "max_bytes": 20971520
             },
             "video": {
               "support": "unknown",

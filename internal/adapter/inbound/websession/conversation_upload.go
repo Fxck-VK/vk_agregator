@@ -181,6 +181,7 @@ func (h *Handler) validateConversationInputs(w http.ResponseWriter, r *http.Requ
 		return false
 	}
 	seen := map[uuid.UUID]bool{}
+	artifacts := make([]*domain.Artifact, 0, len(req.ReferenceArtifactIDs))
 	for _, id := range req.ReferenceArtifactIDs {
 		if id == uuid.Nil || seen[id] {
 			writeError(w, 400, "invalid attachment ids")
@@ -196,6 +197,13 @@ func (h *Handler) validateConversationInputs(w http.ResponseWriter, r *http.Requ
 			writeError(w, 400, "invalid attachment")
 			return false
 		}
+		artifacts = append(artifacts, a)
+	}
+	if !conversationReferencesWithinTotalByteLimit(req.ModelID, artifacts) {
+		writeError(w, 400, "invalid attachment")
+		return false
+	}
+	for _, a := range artifacts {
 		// Recheck stored bytes, including legacy inputs that predate web validation.
 		data, err := h.deps.InputObjects.GetObject(r.Context(), a.StorageBucket, a.StorageKey)
 		mime, cfg, invalid := webInputImage(data)
@@ -203,6 +211,21 @@ func (h *Handler) validateConversationInputs(w http.ResponseWriter, r *http.Requ
 			writeError(w, 400, "invalid attachment")
 			return false
 		}
+	}
+	return true
+}
+
+func conversationReferencesWithinTotalByteLimit(modelID string, artifacts []*domain.Artifact) bool {
+	limit := providermodels.ImageReferenceTotalByteLimit(modelID)
+	if limit <= 0 {
+		return true
+	}
+	var total int64
+	for _, artifact := range artifacts {
+		if artifact == nil || artifact.SizeBytes < 0 || artifact.SizeBytes > limit || total > limit-artifact.SizeBytes {
+			return false
+		}
+		total += artifact.SizeBytes
 	}
 	return true
 }
