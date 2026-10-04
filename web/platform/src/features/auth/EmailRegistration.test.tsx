@@ -1,15 +1,37 @@
 import { cleanup, fireEvent, render, screen } from "@testing-library/react";
-import { afterEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 vi.mock("next/navigation", () => ({ useRouter: () => ({ replace }) }));
 vi.mock("@/lib/web-api/browser", () => ({ webBrowserFetch: vi.fn() }));
+vi.mock("@/lib/auth/sign-in-navigation", () => ({ replaceSignInDocument: vi.fn() }));
 import { webBrowserFetch } from "@/lib/web-api/browser";
+import { replaceSignInDocument } from "@/lib/auth/sign-in-navigation";
 import { previewAuthMethods } from "@/lib/auth/methods";
 import { LoginForm } from "./LoginForm/LoginForm";
-const replace = vi.fn();
-afterEach(() => { cleanup(); vi.clearAllMocks(); });
+const replace = vi.mocked(replaceSignInDocument);
+beforeEach(() => { vi.stubGlobal("fetch", vi.fn().mockImplementation(async () => Response.json({ account_id: "10000000-0000-4000-8000-000000000001", identity_refs: [] }))); });
+afterEach(() => { cleanup(); vi.clearAllMocks(); vi.unstubAllGlobals(); });
 
 describe("Email registration", () => {
+ it("retries cookie confirmation after accepted signup without creating the account again", async () => {
+  vi.mocked(webBrowserFetch).mockResolvedValue(new Response(null, { status: 204 }));
+  vi.stubGlobal("fetch", vi.fn().mockResolvedValueOnce(new Response(null, { status: 401 })).mockResolvedValueOnce(Response.json({ account_id: "10000000-0000-4000-8000-000000000001", identity_refs: [] })));
+  render(<LoginForm methods={previewAuthMethods} />);
+  fireEvent.click(screen.getByRole("button", { name: "Создать аккаунт" }));
+  fireEvent.change(screen.getByLabelText("Электронная почта"), { target: { value: "new@example.test" } });
+  fireEvent.click(screen.getByRole("button", { name: "Отправить код" }));
+  fireEvent.change(await screen.findByLabelText("Код из письма"), { target: { value: "123456" } });
+  fireEvent.click(screen.getByRole("button", { name: "Подтвердить почту" }));
+  fireEvent.change(await screen.findByLabelText("Пароль"), { target: { value: "strong-password" } });
+  fireEvent.change(screen.getByLabelText("Повторите пароль"), { target: { value: "strong-password" } });
+  fireEvent.click(screen.getByRole("button", { name: "Создать аккаунт" }));
+  expect(await screen.findByRole("alert")).toHaveTextContent("Не удалось подтвердить вход.");
+  expect(screen.queryByLabelText("Пароль")).not.toBeInTheDocument();
+  expect(screen.queryByRole("button", { name: "Запросить новый код" })).not.toBeInTheDocument();
+  fireEvent.click(screen.getByRole("button", { name: "Повторить вход" }));
+  await vi.waitFor(() => expect(replace).toHaveBeenCalledWith("/ru/app"));
+  expect(vi.mocked(webBrowserFetch).mock.calls.filter(([path]) => path === "/web/v1/auth/email/register")).toHaveLength(1);
+ });
  it("verifies code before asking for password and signs into the safe locale return path", async () => {
   vi.mocked(webBrowserFetch).mockResolvedValue(new Response(null, { status: 204 }));
   render(<LoginForm methods={previewAuthMethods} returnTo="/app/files" />);

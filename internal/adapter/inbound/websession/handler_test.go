@@ -886,7 +886,7 @@ type passwordStub struct {
 func (s *passwordStub) AuthenticateEmailPassword(context.Context, string, string) (domain.IdentityResolution, error) {
 	s.calls++
 	if s.resolution.AccountID == uuid.Nil {
-		return domain.IdentityResolution{}, errors.New("invalid credentials")
+		return domain.IdentityResolution{}, accountauth.ErrInvalidPasswordLogin
 	}
 	return s.resolution, nil
 }

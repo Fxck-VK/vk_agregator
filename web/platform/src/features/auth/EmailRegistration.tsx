@@ -3,24 +3,26 @@
 import { type FormEvent, useEffect, useRef, useState } from "react";
 import { Button } from "@/components/ui/Button/Button";
 import { LoadingIndicator, StateNotice } from "@/components/ui/AsyncState/AsyncState";
-import { useDictionary } from "@/i18n/LocaleProvider";
-import { useRouter } from "@/i18n/navigation";
-import { safeReturnPath } from "@/lib/auth/return-path";
+import { useDictionary, useLocale } from "@/i18n/LocaleProvider";
+import { classifySignInFailure, completeSignIn, reportSignInFailure, signInFailureText, type SignInStage } from "@/lib/auth/sign-in-completion";
 import { isPasswordTooLong } from "@/lib/auth/password";
 import { webBrowserFetch } from "@/lib/web-api/browser";
 import { CredentialField } from "./CredentialField";
 import styles from "./LoginForm/LoginForm.module.css";
 
-type Step = "email" | "code" | "password" | "preview-complete";
+type Step = "email" | "code" | "password" | "session" | "preview-complete";
 class RegistrationFailure extends Error { constructor(readonly status: number) { super("registration"); } }
 
 export function EmailRegistration({ preview, returnTo, onBack }: Readonly<{ preview: boolean; returnTo?: string; onBack: () => void }>) {
-  const t = useDictionary(); const router = useRouter();
+  const t = useDictionary(); const locale = useLocale();
   const [step, setStep] = useState<Step>("email");
   const [email, setEmail] = useState(""); const [code, setCode] = useState("");
   const [password, setPassword] = useState(""); const [confirmation, setConfirmation] = useState("");
   const [pending, setPending] = useState(false); const [error, setError] = useState("");
   const [passwordRetry, setPasswordRetry] = useState(false);
+  const [accepted, setAccepted] = useState<Response | null>(null);
+  const [diagnosticId, setDiagnosticId] = useState("");
+  const [signInStage, setSignInStage] = useState<SignInStage>("session");
   const [resendSeconds, setResendSeconds] = useState(0);
   const request = useRef<AbortController | null>(null);
   useEffect(() => () => request.current?.abort(), []);
@@ -34,17 +36,21 @@ export function EmailRegistration({ preview, returnTo, onBack }: Readonly<{ prev
     if (preview) return;
     const response = await webBrowserFetch(`/web/v1/auth/email/${path}`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body), signal });
     if (!response.ok) throw new RegistrationFailure(response.status);
+    return response;
   }
   async function perform(resend = false) {
-    if (pending) return;
+    if (pending || request.current) return;
     if (step === "password") {
       if (isPasswordTooLong(password)) { setError(t.auth.passwordTooLong); return; }
       if (password.length < 8 || !password.trim()) { setError(t.auth.passwordHint); return; }
       if (password !== confirmation) { setError(t.auth.passwordMismatch); return; }
     }
     if (step === "code" && !resend && !/^\d{6}$/.test(code)) { setError(t.auth.registrationCodeFailure); return; }
-    setPending(true); setError("");
+    setPending(true); setError(""); setDiagnosticId("");
     const controller = new AbortController(); request.current = controller;
+    const started = performance.now();
+    let completionResponse = accepted;
+    let completionStage: SignInStage = "session";
     let clearPassword = true;
     try {
       if (step === "email" || resend) {
@@ -56,13 +62,22 @@ export function EmailRegistration({ preview, returnTo, onBack }: Readonly<{ prev
         if (controller.signal.aborted) return;
         setCode(""); setStep("password");
       } else if (step === "password") {
-        await action("register", { email, password }, controller.signal);
+        completionResponse = await action("register", { email, password }, controller.signal) ?? null;
         if (controller.signal.aborted) return;
         if (preview) setStep("preview-complete");
-        else router.replace(safeReturnPath(returnTo ?? "") ?? "/app");
+        else { setAccepted(completionResponse); setStep("session"); setPassword(""); setConfirmation(""); }
+      }
+      if (completionResponse && (step === "password" || step === "session")) {
+        await completeSignIn(completionResponse, { locale, returnTo, signal: controller.signal, onStage: next => { completionStage = next; setSignInStage(next); } });
       }
     } catch (failure) {
       if (controller.signal.aborted) return;
+      if (completionResponse) {
+        const diagnostic = classifySignInFailure(failure, completionStage);
+        reportSignInFailure(diagnostic, started);
+        setError(signInFailureText(diagnostic, t.auth, t.login.failure)); setDiagnosticId(diagnostic.diagnosticId);
+        return;
+      }
       const status = failure instanceof RegistrationFailure ? failure.status : 0;
       if (step === "password" && (status === 0 || status >= 500 || status === 429)) {
         // The account may already exist while session issuance failed. Keep the
@@ -73,11 +88,12 @@ export function EmailRegistration({ preview, returnTo, onBack }: Readonly<{ prev
       }
       setError(status === 429 ? t.auth.registrationRateLimited : status === 409 ? t.auth.registrationExisting : step === "code" && status === 400 ? t.auth.registrationCodeFailure : step === "password" && status === 400 ? t.auth.registrationExpired : t.auth.registrationFailure);
     } finally {
+      request.current = null;
       if (step === "password" && clearPassword) { setPassword(""); setConfirmation(""); setPasswordRetry(false); }
       if (!controller.signal.aborted) setPending(false);
     }
   }
-  function restart() { setStep("email"); setCode(""); setPassword(""); setConfirmation(""); setPasswordRetry(false); setError(""); }
+  function restart() { setStep("email"); setCode(""); setPassword(""); setConfirmation(""); setPasswordRetry(false); setError(""); setAccepted(null); setDiagnosticId(""); }
   function submit(event: FormEvent<HTMLFormElement>) { event.preventDefault(); void perform(); }
 
   return <>
@@ -87,9 +103,9 @@ export function EmailRegistration({ preview, returnTo, onBack }: Readonly<{ prev
       <CredentialField label={t.login.emailLabel} id="signup-email" autoComplete="email" type="email" maxLength={254} required disabled={pending || step !== "email"} value={email} onChange={event => setEmail(event.target.value)} />
       {step === "code" ? <><p className={styles.hint} role="status">{preview ? t.auth.registrationPreviewCode : t.auth.registrationCodeSent}</p><CredentialField label={t.auth.code} id="signup-code" autoComplete="one-time-code" inputMode="numeric" pattern="[0-9]{6}" maxLength={6} required disabled={pending} value={code} onChange={event => setCode(event.target.value)} /></> : null}
       {step === "password" ? <><p className={styles.hint}>{preview ? t.auth.registrationPreviewPassword : t.auth.registrationEmailVerified}</p><CredentialField label={t.login.passwordLabel} hint={t.auth.passwordHint} id="signup-password" autoComplete="new-password" type="password" minLength={8} maxLength={256} required disabled={pending} readOnly={passwordRetry} value={password} onChange={event => setPassword(event.target.value)} /><CredentialField label={t.auth.confirmPassword} id="signup-confirm-password" autoComplete="new-password" type="password" minLength={8} maxLength={256} required disabled={pending} readOnly={passwordRetry} value={confirmation} onChange={event => setConfirmation(event.target.value)} /></> : null}
-      {error ? <StateNotice inline kind="error">{error}</StateNotice> : null}
-      <Button type="submit" disabled={pending}>{pending ? <><span aria-hidden="true"><LoadingIndicator label="" /></span>{t.auth.pending}</> : step === "email" ? t.auth.sendCode : step === "code" ? t.auth.verifyRegistrationEmail : t.auth.createAccount}</Button>
-      <div className={styles.actions}><button type="button" className={styles.textAction} disabled={pending} onClick={onBack}>{t.auth.back}</button>{step !== "email" ? <button type="button" className={styles.textAction} disabled={pending} onClick={restart}>{step === "password" ? t.auth.registrationRestart : t.auth.changeEmail}</button> : null}</div>
+      {error ? <StateNotice inline kind="error">{error}{diagnosticId ? <small className={styles.diagnostic}>{t.auth.loginDiagnostic} {diagnosticId}</small> : null}</StateNotice> : null}
+      <Button type="submit" disabled={pending}>{pending ? <><span aria-hidden="true"><LoadingIndicator label="" /></span>{accepted ? signInStage === "navigation" ? t.auth.loginOpening : t.auth.loginConfirming : t.auth.pending}</> : step === "session" ? t.auth.loginRetry : step === "email" ? t.auth.sendCode : step === "code" ? t.auth.verifyRegistrationEmail : t.auth.createAccount}</Button>
+      <div className={styles.actions}><button type="button" className={styles.textAction} disabled={pending} onClick={onBack}>{t.auth.back}</button>{step !== "email" && step !== "session" ? <button type="button" className={styles.textAction} disabled={pending} onClick={restart}>{step === "password" ? t.auth.registrationRestart : t.auth.changeEmail}</button> : null}</div>
       {step === "code" ? <button type="button" className={styles.textAction} disabled={pending || resendSeconds > 0} onClick={() => void perform(true)}>{t.auth.resend}{resendSeconds ? ` (${resendSeconds})` : ""}</button> : null}
     </form>}
   </>;

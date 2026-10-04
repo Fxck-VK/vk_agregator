@@ -73,6 +73,7 @@ func (h *Handler) emailRegistration(w http.ResponseWriter, r *http.Request) {
 		cookie := sessionCookie(registrationCookieName, "", time.Unix(1, 0))
 		cookie.MaxAge = -1
 		http.SetCookie(w, cookie)
+		w.Header().Set("X-NeiroHub-Account-ID", tokens.Session.AccountID.String())
 		writeJSON(w, 201, safeSessionResponse{Session: tokens.Session})
 	}
 }

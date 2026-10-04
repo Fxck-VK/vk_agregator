@@ -87,6 +87,7 @@ type OAuthVerifier interface {
 type IdentityLinker interface {
 	RequestEmailCode(ctx context.Context, accountID uuid.UUID, email string) (accountlink.RequestResult, error)
 	VerifyEmailCode(ctx context.Context, accountID uuid.UUID, email, code string) (accountservice.AccountIdentitySafe, error)
+	VerifyEmailRecoveryCode(ctx context.Context, accountID uuid.UUID, email, code string) error
 	RequestPhoneOTP(ctx context.Context, accountID uuid.UUID, phone string) (accountlink.RequestResult, error)
 	VerifyPhoneOTP(ctx context.Context, accountID uuid.UUID, phone, code string) (accountservice.AccountIdentitySafe, error)
 }
@@ -702,7 +703,7 @@ func (h *Handler) resetPassword(w http.ResponseWriter, r *http.Request) {
 		writeError(w, statusForError(err), "password reset failed")
 		return
 	}
-	if _, err := h.deps.Linker.VerifyEmailCode(r.Context(), accountID, req.Email, req.Code); err != nil {
+	if err := h.deps.Linker.VerifyEmailRecoveryCode(r.Context(), accountID, req.Email, req.Code); err != nil {
 		writeError(w, statusForError(err), "password reset failed")
 		return
 	}

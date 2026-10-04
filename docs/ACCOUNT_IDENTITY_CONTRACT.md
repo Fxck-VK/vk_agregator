@@ -475,6 +475,11 @@ The target migration is additive:
   profile exposes only `password_set`, never credential material.
 - Password reset requires the same verified email code path and revokes active
   account sessions after the credential is rotated.
+- Additional verified email identities act as backup sign-in/recovery addresses
+  for the same account-wide password. Recovery through any linked address must
+  preserve account ownership; it must not create an account, merge accounts or
+  attach an unconfirmed/removed address. “Backup email” is a product label for an
+  additional email identity, not a separate credential or restricted login type.
 - Link, unlink and merge actions are always audited.
 - Account and identity APIs must not expose raw provider tokens, launch params,
   full phone/email values or private artifact URLs.

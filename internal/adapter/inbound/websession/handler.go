@@ -434,6 +434,7 @@ func (h *Handler) passwordLogin(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if h.deps.Passwords == nil || h.deps.Sessions == nil {
+		reportReadFailure(w, r, "password_dependencies", http.StatusServiceUnavailable)
 		writeError(w, http.StatusServiceUnavailable, "authentication unavailable")
 		return
 	}
@@ -443,23 +444,38 @@ func (h *Handler) passwordLogin(w http.ResponseWriter, r *http.Request) {
 		DeviceInfo string `json:"device_info"`
 	}
 	if !decodeJSON(w, r, &req) || strings.TrimSpace(req.Email) == "" || req.Password == "" {
+		reportReadFailure(w, r, "password_request", http.StatusBadRequest)
 		writeError(w, http.StatusBadRequest, "invalid password login request")
 		return
 	}
 	resolution, err := h.deps.Passwords.AuthenticateEmailPassword(r.Context(), req.Email, req.Password)
-	if err != nil || resolution.AccountID == uuid.Nil {
+	if errors.Is(err, accountauth.ErrInvalidPasswordLogin) {
+		reportReadFailure(w, r, "password_credentials", http.StatusUnauthorized)
 		writeError(w, http.StatusUnauthorized, "invalid credentials")
+		return
+	}
+	if errors.Is(err, accountauth.ErrRateLimited) {
+		reportReadFailure(w, r, "password_rate_limit", http.StatusTooManyRequests)
+		writeError(w, http.StatusTooManyRequests, "authentication rate limited")
+		return
+	}
+	if err != nil || resolution.AccountID == uuid.Nil {
+		reportReadFailure(w, r, "password_authentication", http.StatusServiceUnavailable)
+		writeError(w, http.StatusServiceUnavailable, "authentication unavailable")
 		return
 	}
 	tokens, err := h.deps.Sessions.IssueSession(r.Context(), resolution.AccountID, sessionMetadata(r, req.DeviceInfo))
 	if err != nil {
+		reportReadFailure(w, r, "password_session_issue", http.StatusServiceUnavailable)
 		writeError(w, http.StatusServiceUnavailable, "authentication unavailable")
 		return
 	}
 	if err := h.setSessionCookies(w, tokens); err != nil {
+		reportReadFailure(w, r, "password_session_cookies", http.StatusServiceUnavailable)
 		writeError(w, http.StatusServiceUnavailable, "authentication unavailable")
 		return
 	}
+	w.Header().Set("X-NeiroHub-Account-ID", resolution.AccountID.String())
 	writeJSON(w, http.StatusCreated, safeSessionResponse{Session: tokens.Session})
 }
 

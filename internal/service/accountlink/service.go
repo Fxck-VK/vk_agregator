@@ -227,42 +227,61 @@ func (s *Service) VerifyEmailCode(ctx context.Context, accountID uuid.UUID, emai
 	if s == nil || s.store == nil || s.account == nil {
 		return accountservice.AccountIdentitySafe{}, ErrMissingDependency
 	}
-	if accountID == uuid.Nil {
-		return accountservice.AccountIdentitySafe{}, domain.ErrInvalidIdentity
-	}
-	normalizedEmail, err := normalizeEmail(email)
+	normalizedEmail, err := s.verifyEmailProof(ctx, accountID, email, code)
 	if err != nil {
 		return accountservice.AccountIdentitySafe{}, err
 	}
-	code = strings.TrimSpace(code)
-	if code == "" {
-		return accountservice.AccountIdentitySafe{}, ErrInvalidCode
-	}
-	emailHash := hashIdentity(normalizedEmail)
-	if err := s.checkLimit(ctx, verifyRateKey(accountID, emailHash), s.cfg.VerifyLimit, s.cfg.VerifyWindow); err != nil {
-		return accountservice.AccountIdentitySafe{}, err
-	}
-	key := challengeKey(accountID, emailHash)
-	challenge, err := s.store.LoadChallenge(ctx, key)
-	if err != nil {
-		return accountservice.AccountIdentitySafe{}, err
-	}
-	if challenge.AccountID != accountID || challenge.IdentityHash != emailHash {
-		return accountservice.AccountIdentitySafe{}, ErrInvalidCode
-	}
-	if !challenge.ExpiresAt.IsZero() && s.cfg.Now().After(challenge.ExpiresAt) {
-		_ = s.store.DeleteChallenge(ctx, key)
-		return accountservice.AccountIdentitySafe{}, ErrExpiredCode
-	}
-	if !hmac.Equal([]byte(challenge.CodeHash), []byte(s.codeHash(accountID, normalizedEmail, code))) {
-		return accountservice.AccountIdentitySafe{}, ErrInvalidCode
-	}
-	_ = s.store.DeleteChallenge(ctx, key)
 	return s.account.LinkVerifiedIdentity(ctx, accountID, accountID, domain.VerifiedAccountLogin{
 		Method:     domain.AccountLoginEmailPassword,
 		ExternalID: normalizedEmail,
 		Verified:   true,
 	})
+}
+
+// VerifyEmailRecoveryCode verifies the code without linking an identity. The
+// caller must resolve an existing email before verification and recheck that
+// it still belongs to the account before updating the password.
+func (s *Service) VerifyEmailRecoveryCode(ctx context.Context, accountID uuid.UUID, email, code string) error {
+	_, err := s.verifyEmailProof(ctx, accountID, email, code)
+	return err
+}
+
+func (s *Service) verifyEmailProof(ctx context.Context, accountID uuid.UUID, email, code string) (string, error) {
+	if s == nil || s.store == nil {
+		return "", ErrMissingDependency
+	}
+	if accountID == uuid.Nil {
+		return "", domain.ErrInvalidIdentity
+	}
+	normalizedEmail, err := normalizeEmail(email)
+	if err != nil {
+		return "", err
+	}
+	code = strings.TrimSpace(code)
+	if code == "" {
+		return "", ErrInvalidCode
+	}
+	emailHash := hashIdentity(normalizedEmail)
+	if err := s.checkLimit(ctx, verifyRateKey(accountID, emailHash), s.cfg.VerifyLimit, s.cfg.VerifyWindow); err != nil {
+		return "", err
+	}
+	key := challengeKey(accountID, emailHash)
+	challenge, err := s.store.LoadChallenge(ctx, key)
+	if err != nil {
+		return "", err
+	}
+	if challenge.AccountID != accountID || challenge.IdentityHash != emailHash {
+		return "", ErrInvalidCode
+	}
+	if !challenge.ExpiresAt.IsZero() && s.cfg.Now().After(challenge.ExpiresAt) {
+		_ = s.store.DeleteChallenge(ctx, key)
+		return "", ErrExpiredCode
+	}
+	if !hmac.Equal([]byte(challenge.CodeHash), []byte(s.codeHash(accountID, normalizedEmail, code))) {
+		return "", ErrInvalidCode
+	}
+	_ = s.store.DeleteChallenge(ctx, key)
+	return normalizedEmail, nil
 }
 
 // VerifyPhoneOTP validates an OTP and links the verified phone identity to the

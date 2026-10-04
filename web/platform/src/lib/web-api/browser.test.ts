@@ -13,21 +13,21 @@ const forbiddenCallerHeaders = [
 ] as const;
 
 describe("webBrowserFetch", () => {
-  it("bounds login itself so it cannot outlive the cross-tab lease", async () => {
+  it.each(["/web/v1/auth/password/login", "/web/v1/auth/email/register"] as const)("bounds cookie issuance so it cannot outlive the cross-tab lease: %s", async path => {
     const deadline = new AbortController();
     const timeout = vi.spyOn(AbortSignal, "timeout").mockReturnValue(deadline.signal);
     const send = vi.fn((_path: string, init?: RequestInit) => new Promise<Response>((_resolve, reject) => {
       init?.signal?.addEventListener("abort", () => reject(init.signal?.reason));
     }));
     vi.stubGlobal("fetch", send);
-    const pending = webBrowserFetch("/web/v1/auth/password/login", { method: "POST" });
+    const pending = webBrowserFetch(path, { method: "POST" });
     await vi.waitFor(() => expect(send).toHaveBeenCalledOnce());
     expect(send.mock.calls[0][1]?.signal).toBeInstanceOf(AbortSignal);
     deadline.abort(new DOMException("", "TimeoutError"));
     await expect(pending).rejects.toMatchObject({ name: "TimeoutError" });
     timeout.mockRestore();
   });
-  it("waits for account A refresh before account B login can change cookies", async () => {
+  it.each(["/web/v1/auth/password/login", "/web/v1/auth/email/register"] as const)("waits for account A refresh before account B can change cookies: %s", async path => {
     document.cookie = "nh_csrf=synthetic; Path=/";
     let queue = Promise.resolve();
     const request = (_name: string, _options: unknown, task: () => Promise<Response>) => {
@@ -43,9 +43,9 @@ describe("webBrowserFetch", () => {
     vi.stubGlobal("fetch", send);
     const recovery = refreshBrowserSession();
     await vi.waitFor(() => expect(completeRefresh).toBeDefined());
-    const login = webBrowserFetch("/web/v1/auth/password/login", { method: "POST" });
+    const login = webBrowserFetch(path, { method: "POST" });
     await Promise.resolve();
-    expect(send.mock.calls.some(([path]) => path.includes("login"))).toBe(false);
+    expect(send.mock.calls.some(([sent]) => sent === path)).toBe(false);
     completeRefresh(new Response(null, { status: 200 }));
     await recovery; expect((await login).status).toBe(201);
   });

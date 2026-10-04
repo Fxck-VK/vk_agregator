@@ -1,7 +1,7 @@
 import { z } from "zod";
 import { modelCapabilitiesSchema } from "./model-capabilities-schema";
 
-const safeIdentityRefSchema = z
+export const safeIdentityRefSchema = z
   .object({
     id: z.string().uuid(),
     account_id: z.string().uuid(),

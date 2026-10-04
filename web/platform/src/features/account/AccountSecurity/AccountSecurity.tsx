@@ -9,7 +9,7 @@ import { useRouter } from "@/i18n/navigation";
 import { providerNames, safeAuthorizationURL, type AuthMethods, type OAuthProvider } from "@/lib/auth/methods";
 import { accountSessionsSchema, type AccountSession } from "@/lib/auth/sessions";
 import { isPasswordTooLong } from "@/lib/auth/password";
-import { accountProfileSchema, type AccountProfile } from "@/lib/web-api/contracts";
+import { accountProfileSchema, safeIdentityRefSchema, type AccountProfile } from "@/lib/web-api/contracts";
 import { webBrowserFetch, webBrowserMutation } from "@/lib/web-api/browser";
 import { announceAccountChange } from "@/lib/web-api/browser-session";
 import { requestWorkspaceLogout } from "@/features/session/WorkspaceLogout/workspace-logout-request";
@@ -74,7 +74,15 @@ export function AccountSecurity({ profile: initialProfile, methods, preview = fa
       const kind = form === "phone" ? "phone" : "email";
       const payload = kind === "phone" ? { phone: address } : { email: address };
       if (!sent) { await mutation(`/web/v1/account/identities/${kind}/${kind === "email" ? "request-code" : "request-otp"}`, payload); setSent(true); return; }
-      await mutation(`/web/v1/account/identities/${kind}/verify`, { ...payload, code }); setCode(""); setForm(null); setMessage(t.auth.linked); await refreshProfile();
+      const response = await mutation(`/web/v1/account/identities/${kind}/verify`, { ...payload, code });
+      if (kind === "email") {
+        const identity = safeIdentityRefSchema.parse(await response.json());
+        if (identity.account_id !== initialProfile.account_id || identity.provider !== "email" || !identity.verified) throw new Error("identity");
+        if (profile.identity_refs.some(item => item.id === identity.id)) {
+          setSent(false); setCode(""); setError(t.auth.emailAlreadyAdded); await refreshProfile(); return;
+        }
+      }
+      setCode(""); setForm(null); setMessage(kind === "email" && hasVerifiedEmail ? t.auth.backupEmailLinked : t.auth.linked); await refreshProfile();
     });
   };
   const linkProvider = (provider: OAuthProvider) => run(async () => {
@@ -97,6 +105,7 @@ export function AccountSecurity({ profile: initialProfile, methods, preview = fa
     });
   }
   const verified = profile.identity_refs.filter(item => item.verified);
+  const hasVerifiedEmail = verified.some(item => item.provider === "email");
   const canUnlink = (id: string, provider: string) => provider === "phone" || verified.some(other => other.id !== id && other.provider !== "phone");
   const date = (value: string) => new Intl.DateTimeFormat(locale, { dateStyle: "medium", timeStyle: "short" }).format(new Date(value));
   return <div className={styles.security}>
@@ -107,12 +116,13 @@ export function AccountSecurity({ profile: initialProfile, methods, preview = fa
       <ul className={styles.list}>{verified.map(identity => <li className={styles.row} key={identity.id}><div className={styles.details}><strong>{Object.hasOwn(providerNames, identity.provider) ? providerNames[identity.provider as OAuthProvider] : identity.provider === "phone" ? t.auth.phone : identity.provider === "password" ? t.login.passwordLabel : t.login.emailLabel}</strong><span>{identity.label}</span></div><Button variant="outline" disabled={pending || preview || !canUnlink(identity.id, identity.provider)} onClick={() => setConfirm({ kind: "identity", id: identity.id })}>{t.auth.unlink}</Button></li>)}</ul>
       {verified.filter(identity => identity.provider !== "phone").length <= 1 ? <p>{t.auth.lastIdentity}</p> : null}
       <div className={styles.actions}>
-        {methods.email_link ? <Button variant="outline" disabled={pending} onClick={() => openForm("email")}>{t.auth.emailLink}</Button> : null}
+        {methods.email_link ? <Button variant="outline" disabled={pending} onClick={() => openForm("email")}>{hasVerifiedEmail ? t.auth.backupEmailAdd : t.auth.emailLink}</Button> : null}
         {methods.phone_link ? <Button variant="outline" disabled={pending} onClick={() => openForm("phone")}>{t.auth.phoneLink}</Button> : null}
         {methods.providers.filter(provider => !verified.some(identity => identity.provider === provider)).map(provider => <Button variant="outline" disabled={pending || preview} key={provider} onClick={() => linkProvider(provider)}>{t.auth.link} {providerNames[provider]}</Button>)}
         {methods.password && typeof profile.password_set === "boolean" && verified.some(item => item.provider === "email") ? <Button variant="outline" disabled={pending} onClick={() => openForm("password")}>{profile.password_set ? t.auth.passwordChange : t.auth.passwordSetup}</Button> : null}
       </div>
       {form ? <form className={styles.form} onSubmit={submit}>
+        {form === "email" && hasVerifiedEmail ? <p>{t.auth.backupEmailDescription}</p> : null}
         {form === "password" ? <p>{profile.password_set ? t.auth.passwordChangeDescription : t.auth.passwordSetupDescription}</p> : null}
         <CredentialField label={form === "phone" ? t.auth.phone : t.login.emailLabel} id="security-address" type={form === "phone" ? "tel" : "email"} autoComplete={form === "phone" ? "tel" : "email"} required disabled={pending || sent} value={address} onChange={e => setAddress(e.target.value)} />
         {sent ? <><p role="status">{t.auth.verificationSent}</p><CredentialField label={form === "phone" ? t.auth.smsCode : t.auth.code} id="security-code" autoComplete="one-time-code" inputMode="numeric" pattern="[0-9]{6}" maxLength={6} required disabled={pending} value={code} onChange={e => setCode(e.target.value)} /></> : null}

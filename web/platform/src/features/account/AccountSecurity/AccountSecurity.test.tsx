@@ -14,6 +14,67 @@ vi.mock("next/navigation", () => ({ useRouter: () => navigation }));
 
 afterEach(() => { cleanup(); vi.clearAllMocks(); });
 describe("AccountSecurity", () => {
+  it("confirms a backup email by code before showing it as linked", async () => {
+    const profile = { ...localWorkspacePreviewProfile, identity_refs: [...localWorkspacePreviewProfile.identity_refs, { ...localWorkspacePreviewProfile.identity_refs[0], id: "10000000-0000-4000-8000-000000000003", label: "b***@example.test" }] };
+    vi.mocked(webBrowserFetch).mockImplementation(async path => path === "/web/v1/me" ? Response.json(profile) : Response.json({ items: [] }));
+    vi.mocked(webBrowserMutation).mockResolvedValue(new Response(null, { status: 202 }));
+    render(<AccountSecurity profile={localWorkspacePreviewProfile} methods={previewAuthMethods} />);
+    fireEvent.click(screen.getByRole("button", { name: "Добавить резервную почту" }));
+    expect(screen.getByText("Подтвердите дополнительный адрес. Он позволит войти и восстановить доступ, если основная почта недоступна.")).toBeInTheDocument();
+    fireEvent.change(screen.getByLabelText("Электронная почта"), { target: { value: "backup@example.test" } });
+    fireEvent.click(screen.getByRole("button", { name: "Отправить код" }));
+    await screen.findByLabelText("Код из письма");
+    expect(webBrowserMutation).toHaveBeenCalledWith("/web/v1/account/identities/email/request-code", expect.objectContaining({ body: JSON.stringify({ email: "backup@example.test" }) }));
+    expect(screen.queryByText("b***@example.test")).not.toBeInTheDocument();
+    expect(screen.getByLabelText("Электронная почта")).toBeDisabled();
+    fireEvent.change(screen.getByLabelText("Код из письма"), { target: { value: "123456" } });
+    vi.mocked(webBrowserMutation).mockResolvedValue(Response.json(profile.identity_refs[1], { status: 201 }));
+    fireEvent.click(screen.getByRole("button", { name: "Подтвердить" }));
+    await screen.findByText("Резервная почта подтверждена. Для восстановления доступа укажите её на странице входа.");
+    expect(webBrowserMutation).toHaveBeenLastCalledWith("/web/v1/account/identities/email/verify", expect.objectContaining({ body: JSON.stringify({ email: "backup@example.test", code: "123456" }) }));
+    expect(await screen.findByText("b***@example.test")).toBeInTheDocument();
+    expect(screen.queryByLabelText("Код из письма")).not.toBeInTheDocument();
+  });
+  it("keeps the backup unlinked when the verification code is rejected", async () => {
+    vi.mocked(webBrowserFetch).mockResolvedValue(Response.json({ items: [] }));
+    vi.mocked(webBrowserMutation).mockResolvedValue(new Response(null, { status: 202 }));
+    render(<AccountSecurity profile={localWorkspacePreviewProfile} methods={previewAuthMethods} />);
+    fireEvent.click(screen.getByRole("button", { name: "Добавить резервную почту" }));
+    fireEvent.change(screen.getByLabelText("Электронная почта"), { target: { value: "backup@example.test" } });
+    fireEvent.click(screen.getByRole("button", { name: "Отправить код" }));
+    await screen.findByLabelText("Код из письма");
+    fireEvent.change(screen.getByLabelText("Код из письма"), { target: { value: "000000" } });
+    vi.mocked(webBrowserMutation).mockResolvedValue(Response.json({ error: "email verification failed" }, { status: 400 }));
+    fireEvent.click(screen.getByRole("button", { name: "Подтвердить" }));
+    expect(await screen.findByRole("alert")).toHaveTextContent("Не удалось выполнить действие.");
+    expect(screen.getByLabelText("Код из письма")).toBeInTheDocument();
+    expect(webBrowserFetch).not.toHaveBeenCalledWith("/web/v1/me");
+    expect(screen.queryByText(/Резервная почта подтверждена/)).not.toBeInTheDocument();
+  });
+  it("asks for another address instead of claiming the existing email is a new backup", async () => {
+    vi.mocked(webBrowserFetch).mockImplementation(async path => path === "/web/v1/me" ? Response.json(localWorkspacePreviewProfile) : Response.json({ items: [] }));
+    vi.mocked(webBrowserMutation).mockResolvedValue(new Response(null, { status: 202 }));
+    render(<AccountSecurity profile={localWorkspacePreviewProfile} methods={previewAuthMethods} />);
+    fireEvent.click(screen.getByRole("button", { name: "Добавить резервную почту" }));
+    fireEvent.change(screen.getByLabelText("Электронная почта"), { target: { value: "preview@neirohub.local" } });
+    fireEvent.click(screen.getByRole("button", { name: "Отправить код" }));
+    await screen.findByLabelText("Код из письма");
+    fireEvent.change(screen.getByLabelText("Код из письма"), { target: { value: "123456" } });
+    vi.mocked(webBrowserMutation).mockResolvedValue(Response.json(localWorkspacePreviewProfile.identity_refs[0], { status: 201 }));
+    fireEvent.click(screen.getByRole("button", { name: "Подтвердить" }));
+    expect(await screen.findByRole("alert")).toHaveTextContent("Эта почта уже добавлена. Укажите другой адрес.");
+    expect(screen.getByLabelText("Электронная почта")).toBeEnabled();
+    expect(screen.queryByText(/Резервная почта подтверждена/)).not.toBeInTheDocument();
+  });
+  it("offers adding the first email when no verified email is linked", () => {
+    render(<AccountSecurity profile={{ ...localWorkspacePreviewProfile, identity_refs: localWorkspacePreviewProfile.identity_refs.map(identity => ({ ...identity, provider: "google" })) }} methods={previewAuthMethods} preview />);
+    expect(screen.getByRole("button", { name: "Добавить почту" })).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "Добавить резервную почту" })).not.toBeInTheDocument();
+  });
+  it("does not treat an unconfirmed email as an existing recovery address", () => {
+    render(<AccountSecurity profile={{ ...localWorkspacePreviewProfile, identity_refs: localWorkspacePreviewProfile.identity_refs.map(identity => ({ ...identity, verified: false })) }} methods={previewAuthMethods} preview />);
+    expect(screen.getByRole("button", { name: "Добавить почту" })).toBeInTheDocument();
+  });
   it("requires current password and matching new passwords before changing an existing password", async () => {
     vi.mocked(webBrowserFetch).mockResolvedValue(Response.json({ items: [] }));
     vi.mocked(webBrowserMutation).mockResolvedValue(new Response(null, { status: 204 }));
@@ -90,7 +151,7 @@ describe("AccountSecurity", () => {
   it("does not offer unlinking the last identity and never performs writes in preview", () => {
     render(<AccountSecurity profile={localWorkspacePreviewProfile} methods={previewAuthMethods} preview />);
     expect(screen.getByRole("button", { name: "Отвязать" })).toBeDisabled();
-    fireEvent.click(screen.getByRole("button", { name: "Привязать почту" }));
+    fireEvent.click(screen.getByRole("button", { name: "Добавить резервную почту" }));
     expect(webBrowserMutation).not.toHaveBeenCalled();
   });
 });

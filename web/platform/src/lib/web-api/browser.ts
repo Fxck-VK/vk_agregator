@@ -39,7 +39,7 @@ export function webBrowserFetch(path: WebApiPath, init?: RequestInit): Promise<R
     credentials: "include",
     headers: browserRequestHeaders(init),
   });
-  if (!isRead && safePath.split("?")[0] === "/web/v1/auth/password/login") {
+  if (!isRead && ["/web/v1/auth/password/login", "/web/v1/auth/email/register"].includes(safePath.split("?")[0])) {
     return withSessionLock(async (deadline) => {
       const response = await request(init?.signal ? AbortSignal.any([deadline, init.signal]) : deadline);
       if (response.ok) { endBrowserSession(); announceAccountChange(); }

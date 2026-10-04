@@ -16,6 +16,7 @@
     "test": "vitest run && npm run test:assets && npm run test:next-lint-contract",
     "test:i18n": "vitest run src/i18n",
     "test:session-browser": "node --test scripts/test-session-recovery.mjs",
+    "test:sign-in-browser": "node --test scripts/test-sign-in-browser.mjs",
     "test:assets": "node --test scripts/validate-assets.test.mjs",
     "test:next-lint-contract": "node --test scripts/validate-next-lint.test.mjs",
     "validate:assets": "node scripts/validate-assets.mjs",
