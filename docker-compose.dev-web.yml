@@ -1,4 +1,9 @@
 services:
+  api:
+    env_file:
+      - path: .env.dev-email
+        required: false
+
   platform:
     image: ${APP_IMAGE_REGISTRY}/platform:${IMAGE_TAG}
     build:

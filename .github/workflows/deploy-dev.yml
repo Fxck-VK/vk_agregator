@@ -343,10 +343,11 @@ jobs:
 
           raw_env="$(mktemp)"
           email_env="$(mktemp)"
+          email_settings="$(mktemp)"
           rendered_env="$(mktemp)"
           raw_auth_env="$(mktemp)"
           rendered_auth_env="$(mktemp)"
-          trap 'rm -f "${raw_env}" "${email_env}" "${rendered_env}" "${raw_auth_env}" "${rendered_auth_env}"' EXIT
+          trap 'rm -f "${raw_env}" "${email_env}" "${email_settings}" "${rendered_env}" "${raw_auth_env}" "${rendered_auth_env}"' EXIT
 
           bash scripts/deploy/assemble-env-parts.sh \
             --target dev \
@@ -355,7 +356,8 @@ jobs:
 
           bash scripts/deploy/prepare-dev-email.sh \
             --input "${raw_env}" \
-            --output "${email_env}"
+            --output "${email_env}" \
+            --settings-output "${email_settings}"
 
           bash scripts/deploy/prepare-dev-env.sh \
             --input "${email_env}" \
@@ -380,17 +382,28 @@ jobs:
           umask 077
           : > .dev-web-auth.next
           chmod 600 .dev-web-auth.next
+          rm -f .env.dev-email.next
           REMOTE
           } | ssh "${ssh_opts[@]}" "${DEV_DEPLOY_USER}@${DEV_DEPLOY_HOST}" bash -s
 
           scp "${ssh_opts[@]}" "${rendered_env}" "${DEV_DEPLOY_USER}@${DEV_DEPLOY_HOST}:${DEV_DEPLOY_PATH}/.env.next"
           scp -p "${ssh_opts[@]}" "${rendered_auth_env}" "${DEV_DEPLOY_USER}@${DEV_DEPLOY_HOST}:${DEV_DEPLOY_PATH}/.dev-web-auth.next"
+          if [[ -s "${email_settings}" ]]; then
+            scp -p "${ssh_opts[@]}" "${email_settings}" "${DEV_DEPLOY_USER}@${DEV_DEPLOY_HOST}:${DEV_DEPLOY_PATH}/.env.dev-email.next"
+          fi
           {
             printf 'deploy_path=%q\n' "${DEV_DEPLOY_PATH}"
             cat <<'REMOTE'
           set -euo pipefail
           cd "${deploy_path}"
           install -m 600 .env.next .env
+          if [[ -f .env.dev-email.next ]]; then
+            if [[ "$(stat -c '%a' .env.dev-email.next)" != "600" ]]; then
+              echo "DEV email settings staging file must be mode 600" >&2
+              exit 1
+            fi
+            mv -f .env.dev-email.next .env.dev-email
+          fi
           if [[ "$(stat -c '%a' .dev-web-auth.next)" != "600" ]]; then
             echo "DEV web auth staging file must be mode 600" >&2
             exit 1

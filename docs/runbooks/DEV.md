@@ -299,7 +299,14 @@ For browser email registration and recovery, set the optional repository secret
 runs `scripts/deploy/prepare-dev-email.sh` before the existing env preparation;
 it overrides only email delivery keys with Resend STARTTLS on port 587 and the
 verified sender `noreply@notify.neiirohub.ru`. An absent secret preserves the
-assembled email configuration. This hook does not alter production secrets.
+assembled email configuration. When configured, the workflow also installs only
+the email settings into the ignored `.env.dev-email` file with mode 600. The DEV
+API reads that optional overlay after its main env file, so subsequent automatic
+deployments preserve SMTP even when their default-branch workflow does not yet
+include the new secret hook. Dispatch `Deploy DEV` from `dev-deploy` to bootstrap
+or rotate this file. Removing the dedicated secret alone does not remove the
+existing overlay; disabling mail also requires clearing its settings and
+recreating the API container. This hook does not alter production secrets.
 See [browser account access](../../docs/runbooks/BROWSER_ACCOUNT.md) for registration and smoke.
 
 DEV deploy does not read production env secrets. Run DEV/PROD parity as a
