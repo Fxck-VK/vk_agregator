@@ -34,6 +34,23 @@ func (r *AccountSecurityRepo) UpsertCredential(_ context.Context, credential dom
 	}
 	r.mu.Lock()
 	defer r.mu.Unlock()
+	return r.upsertCredentialLocked(credential), nil
+}
+
+func (r *AccountSecurityRepo) CompareAndSwapCredential(_ context.Context, credential domain.AccountCredential, expectedHash string) (*domain.AccountCredential, error) {
+	if err := credential.Validate(); err != nil {
+		return nil, err
+	}
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	existing, exists := r.credentials[accountCredentialKey(credential.AccountID, credential.CredentialType)]
+	if (expectedHash == "" && exists) || (expectedHash != "" && (!exists || existing.SecretHash != expectedHash)) {
+		return nil, domain.ErrConflict
+	}
+	return r.upsertCredentialLocked(credential), nil
+}
+
+func (r *AccountSecurityRepo) upsertCredentialLocked(credential domain.AccountCredential) *domain.AccountCredential {
 	now := time.Now().UTC()
 	key := accountCredentialKey(credential.AccountID, credential.CredentialType)
 	if existing, ok := r.credentials[key]; ok {
@@ -45,7 +62,7 @@ func (r *AccountSecurityRepo) UpsertCredential(_ context.Context, credential dom
 			existing.ChangedAt = &now
 		}
 		existing.UpdatedAt = now
-		return cloneAccountCredential(existing), nil
+		return cloneAccountCredential(existing)
 	}
 	if credential.ID == uuid.Nil {
 		credential.ID = uuid.New()
@@ -62,7 +79,7 @@ func (r *AccountSecurityRepo) UpsertCredential(_ context.Context, credential dom
 	}
 	cp := credential
 	r.credentials[key] = &cp
-	return cloneAccountCredential(&cp), nil
+	return cloneAccountCredential(&cp)
 }
 
 func (r *AccountSecurityRepo) FindCredential(_ context.Context, accountID uuid.UUID, credentialType domain.AccountCredentialType) (*domain.AccountCredential, error) {

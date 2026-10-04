@@ -44,7 +44,9 @@ var (
 	// credential and wrong password so callers cannot enumerate accounts.
 	ErrInvalidPasswordLogin = errors.New("accountauth: invalid email or password")
 	// ErrWeakPassword is returned for passwords outside accepted bounds.
-	ErrWeakPassword = errors.New("accountauth: weak password")
+	ErrWeakPassword                 = errors.New("accountauth: weak password")
+	ErrPasswordConfirmationRequired = errors.New("accountauth: current password confirmation required")
+	ErrInvalidCurrentPassword       = errors.New("accountauth: invalid current password")
 )
 
 // WithCredentialRepository enables email/password credential persistence.
@@ -74,7 +76,68 @@ func (s *Service) SetPasswordForVerifiedEmail(ctx context.Context, actorAccountI
 	if err := s.checkRateLimit(ctx, "password_set", domain.IdentityProviderEmail, normalizedEmail); err != nil {
 		return err
 	}
-	if err := s.upsertPassword(ctx, accountID, password); err != nil {
+	credential, err := s.newPasswordCredential(accountID, password)
+	if err != nil {
+		return err
+	}
+	if _, err := s.credentials.CompareAndSwapCredential(ctx, credential, ""); err != nil {
+		if errors.Is(err, domain.ErrConflict) {
+			return ErrPasswordConfirmationRequired
+		}
+		return err
+	}
+	return s.recordAudit(ctx, accountID, &actorAccountID, domain.AccountLinkActionPasswordSet, domain.IdentityProviderEmail)
+}
+
+// PasswordState exposes only whether a credential exists, never its verifier.
+// Nil means credential storage is not configured, rather than no password.
+func (s *Service) PasswordState(ctx context.Context, accountID uuid.UUID) (*bool, error) {
+	if accountID == uuid.Nil {
+		return nil, domain.ErrInvalidIdentity
+	}
+	if s == nil || s.credentials == nil {
+		return nil, nil
+	}
+	_, err := s.credentials.FindCredential(ctx, accountID, domain.AccountCredentialPassword)
+	if err != nil && !errors.Is(err, domain.ErrNotFound) {
+		return nil, err
+	}
+	set := err == nil
+	return &set, nil
+}
+
+// ChangePasswordForVerifiedEmail replaces only the credential whose current
+// password was verified. Concurrent changes or recovery invalidate that proof.
+func (s *Service) ChangePasswordForVerifiedEmail(ctx context.Context, actorAccountID, accountID uuid.UUID, email, currentPassword, newPassword string) error {
+	if actorAccountID == uuid.Nil || accountID == uuid.Nil || actorAccountID != accountID {
+		return domain.ErrAccountIdentityOwnershipRequired
+	}
+	normalizedEmail, err := s.verifyLinkedEmail(ctx, accountID, email)
+	if err != nil {
+		return err
+	}
+	if err := s.checkRateLimit(ctx, "password_change", domain.IdentityProviderEmail, normalizedEmail); err != nil {
+		return err
+	}
+	stored, err := s.credentials.FindCredential(ctx, accountID, domain.AccountCredentialPassword)
+	if errors.Is(err, domain.ErrNotFound) {
+		return ErrInvalidCurrentPassword
+	}
+	if err != nil {
+		return err
+	}
+	ok, _, err := verifyPasswordWithUpgrade(currentPassword, stored.SecretHash)
+	if err != nil || !ok {
+		return ErrInvalidCurrentPassword
+	}
+	credential, err := s.newPasswordCredential(accountID, newPassword)
+	if err != nil {
+		return err
+	}
+	if _, err := s.credentials.CompareAndSwapCredential(ctx, credential, stored.SecretHash); err != nil {
+		if errors.Is(err, domain.ErrConflict) {
+			return ErrPasswordConfirmationRequired
+		}
 		return err
 	}
 	return s.recordAudit(ctx, accountID, &actorAccountID, domain.AccountLinkActionPasswordSet, domain.IdentityProviderEmail)
@@ -144,7 +207,14 @@ func (s *Service) AuthenticateEmailPassword(ctx context.Context, email, password
 		return domain.IdentityResolution{}, ErrInvalidPasswordLogin
 	}
 	if needsRehash {
-		if err := s.upsertPassword(ctx, accountID, password); err != nil {
+		upgraded, err := s.newPasswordCredential(accountID, password)
+		if err != nil {
+			return domain.IdentityResolution{}, err
+		}
+		if _, err := s.credentials.CompareAndSwapCredential(ctx, upgraded, credential.SecretHash); err != nil {
+			if errors.Is(err, domain.ErrConflict) {
+				return domain.IdentityResolution{}, ErrInvalidPasswordLogin
+			}
 			return domain.IdentityResolution{}, err
 		}
 	}
@@ -183,12 +253,21 @@ func (s *Service) upsertPassword(ctx context.Context, accountID uuid.UUID, passw
 	if s == nil || s.credentials == nil {
 		return ErrPasswordStoreUnavailable
 	}
-	hash, err := hashPassword(password)
+	credential, err := s.newPasswordCredential(accountID, password)
 	if err != nil {
 		return err
 	}
+	_, err = s.credentials.UpsertCredential(ctx, credential)
+	return err
+}
+
+func (s *Service) newPasswordCredential(accountID uuid.UUID, password string) (domain.AccountCredential, error) {
+	hash, err := hashPassword(password)
+	if err != nil {
+		return domain.AccountCredential{}, err
+	}
 	now := s.currentTime()
-	_, err = s.credentials.UpsertCredential(ctx, domain.AccountCredential{
+	return domain.AccountCredential{
 		ID:             uuid.New(),
 		AccountID:      accountID,
 		CredentialType: domain.AccountCredentialPassword,
@@ -196,8 +275,7 @@ func (s *Service) upsertPassword(ctx context.Context, accountID uuid.UUID, passw
 		ChangedAt:      &now,
 		CreatedAt:      now,
 		UpdatedAt:      now,
-	})
-	return err
+	}, nil
 }
 
 func (s *Service) recordAudit(ctx context.Context, accountID uuid.UUID, actorAccountID *uuid.UUID, action domain.AccountLinkAction, provider domain.IdentityProvider) error {

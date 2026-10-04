@@ -2,6 +2,7 @@ package postgres
 
 import (
 	"context"
+	"errors"
 	"time"
 
 	"github.com/google/uuid"
@@ -65,6 +66,32 @@ func (r *AccountSecurityRepository) FindCredential(ctx context.Context, accountI
 	var out domain.AccountCredential
 	if err := scanAccountCredential(r.db.QueryRow(ctx, q, accountID, credentialType), &out); err != nil {
 		return nil, mapError(err)
+	}
+	return &out, nil
+}
+
+func (r *AccountSecurityRepository) CompareAndSwapCredential(ctx context.Context, credential domain.AccountCredential, expectedHash string) (*domain.AccountCredential, error) {
+	if err := credential.Validate(); err != nil {
+		return nil, err
+	}
+	var row rowScanner
+	if expectedHash == "" {
+		const q = `INSERT INTO account_credentials (id, account_id, credential_type, secret_hash, changed_at, created_at, updated_at)
+			VALUES (COALESCE($1, gen_random_uuid()), $2, $3, $4, COALESCE($5, now()), now(), now())
+			ON CONFLICT (account_id, credential_type) DO NOTHING RETURNING ` + accountCredentialColumns
+		row = r.db.QueryRow(ctx, q, nullableUUIDOrNil(credential.ID), credential.AccountID, credential.CredentialType, credential.SecretHash, nullableTimePtr(credential.ChangedAt))
+	} else {
+		const q = `UPDATE account_credentials SET secret_hash = $3, changed_at = COALESCE($4, now()), updated_at = now()
+			WHERE account_id = $1 AND credential_type = $2 AND secret_hash = $5 RETURNING ` + accountCredentialColumns
+		row = r.db.QueryRow(ctx, q, credential.AccountID, credential.CredentialType, credential.SecretHash, nullableTimePtr(credential.ChangedAt), expectedHash)
+	}
+	var out domain.AccountCredential
+	if err := scanAccountCredential(row, &out); err != nil {
+		err = mapError(err)
+		if errors.Is(err, domain.ErrNotFound) {
+			return nil, domain.ErrConflict
+		}
+		return nil, err
 	}
 	return &out, nil
 }

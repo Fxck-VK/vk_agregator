@@ -11,6 +11,12 @@ import {
 } from "./contracts";
 
 describe("AccountProfile contract", () => {
+  it("accepts safe password status without exposing credential data", () => {
+    const profile = { account_id: "62d33e7f-7b0e-4a26-975b-41080b55d78d", identity_refs: [], password_set: true };
+    expect(parseAccountProfile(profile).password_set).toBe(true);
+    expect(() => parseAccountProfile({ ...profile, secret_hash: "private" })).toThrow();
+    expect(() => parseAccountProfile({ ...profile, password_set: "true" })).toThrow();
+  });
   it("accepts only the documented safe profile fields", () => {
     expect(
       parseAccountProfile({

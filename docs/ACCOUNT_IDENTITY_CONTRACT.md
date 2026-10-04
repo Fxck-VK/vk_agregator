@@ -468,6 +468,11 @@ The target migration is additive:
   material.
 - Email/password credentials can be created only for an email identity that is
   already verified and linked to the same account.
+- First password setup is insert-only. Replacing an existing password requires
+  confirmation of the current password, followed by a conditional update of
+  that exact verifier. Concurrent password changes or recovery invalidate stale
+  proof; legacy hash upgrades cannot overwrite a newer credential. The safe
+  profile exposes only `password_set`, never credential material.
 - Password reset requires the same verified email code path and revokes active
   account sessions after the credential is rotated.
 - Link, unlink and merge actions are always audited.

@@ -50,6 +50,7 @@ func New(identities IdentityStore, linker IdentityLinker) *Service {
 type AccountProfile struct {
 	AccountID    uuid.UUID             `json:"account_id"`
 	IdentityRefs []AccountIdentitySafe `json:"identity_refs"`
+	PasswordSet  *bool                 `json:"password_set,omitempty"`
 }
 
 // AccountIdentitySafe is a display-safe account identity DTO. It intentionally
@@ -70,9 +71,19 @@ func (s *Service) Profile(ctx context.Context, accountID uuid.UUID) (AccountProf
 	if err != nil {
 		return AccountProfile{}, err
 	}
+	var passwordSet *bool
+	if reader, ok := s.linker.(interface {
+		PasswordState(context.Context, uuid.UUID) (*bool, error)
+	}); ok {
+		passwordSet, err = reader.PasswordState(ctx, accountID)
+		if err != nil {
+			return AccountProfile{}, err
+		}
+	}
 	return AccountProfile{
 		AccountID:    accountID,
 		IdentityRefs: identities,
+		PasswordSet:  passwordSet,
 	}, nil
 }
 

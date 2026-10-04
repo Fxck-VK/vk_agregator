@@ -67,6 +67,7 @@ type SessionService interface {
 // email identity.
 type PasswordService interface {
 	SetPasswordForVerifiedEmail(ctx context.Context, actorAccountID, accountID uuid.UUID, email, password string) error
+	ChangePasswordForVerifiedEmail(ctx context.Context, actorAccountID, accountID uuid.UUID, email, currentPassword, newPassword string) error
 	ResetPasswordForVerifiedEmail(ctx context.Context, accountID uuid.UUID, email, password string) error
 	AuthenticateEmailPassword(ctx context.Context, email, password string) (domain.IdentityResolution, error)
 }
@@ -434,8 +435,9 @@ type logoutSessionRequest struct {
 }
 
 type passwordSetRequest struct {
-	Email    string `json:"email"`
-	Password string `json:"password"`
+	Email           string `json:"email"`
+	Password        string `json:"password"`
+	CurrentPassword string `json:"current_password"`
 }
 
 type passwordLoginRequest struct {
@@ -587,7 +589,21 @@ func (h *Handler) setPassword(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusBadRequest, "invalid password request")
 		return
 	}
-	if err := h.deps.Passwords.SetPasswordForVerifiedEmail(r.Context(), accountID, accountID, req.Email, req.Password); err != nil {
+	var err error
+	if req.CurrentPassword != "" {
+		err = h.deps.Passwords.ChangePasswordForVerifiedEmail(r.Context(), accountID, accountID, req.Email, req.CurrentPassword, req.Password)
+	} else {
+		err = h.deps.Passwords.SetPasswordForVerifiedEmail(r.Context(), accountID, accountID, req.Email, req.Password)
+	}
+	if errors.Is(err, accountauth.ErrInvalidCurrentPassword) {
+		writeError(w, http.StatusBadRequest, "current_password_invalid")
+		return
+	}
+	if errors.Is(err, accountauth.ErrPasswordConfirmationRequired) {
+		writeError(w, http.StatusConflict, "password_confirmation_required")
+		return
+	}
+	if err != nil {
 		writeError(w, statusForError(err), "password update failed")
 		return
 	}

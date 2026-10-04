@@ -180,6 +180,9 @@ type AccountSessionRepository interface {
 type AccountCredentialRepository interface {
 	UpsertCredential(ctx context.Context, credential AccountCredential) (*AccountCredential, error)
 	FindCredential(ctx context.Context, accountID uuid.UUID, credentialType AccountCredentialType) (*AccountCredential, error)
+	// CompareAndSwapCredential inserts only when expectedHash is empty, or
+	// replaces only the matching existing verifier. Failed conditions return ErrConflict.
+	CompareAndSwapCredential(ctx context.Context, credential AccountCredential, expectedHash string) (*AccountCredential, error)
 }
 
 // AccountLinkAuditRepository persists PII-free account security audit events.

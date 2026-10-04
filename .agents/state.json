@@ -1,6 +1,6 @@
 {
   "schema_version": 5,
-  "updated_at": "2026-09-28T00:00:00+03:00",
+  "updated_at": "2026-10-04T11:23:23.0784557+03:00",
   "branch": "dev-deploy",
   "remote_tracking": "origin/dev-deploy",
   "purpose": "Short machine-readable current context and routing for agents. This file is not project history.",
@@ -71,7 +71,7 @@
     "VK Bot can link email/phone identities to the current account after use through IdentityResolver with explicit VK-button confirmation; no balance/history transfer is needed.",
     "New login methods enter as verified assertions through accountauth -> IdentityResolver; email/password, phone OTP, Google, Apple, Telegram and VK ID all resolve to account_id through the same layer.",
     "Account auth/link flows require verified assertions, hashed token/credential storage, PII-free safe refs, link/unlink audit, same-account actor checks and hashed Redis-backed rate-limit keys; merge remains blocked without a dedicated confirmed audit flow.",
-    "Email/password can be enabled only for an already verified email identity on the same account; reset uses email-code verification, rotates the hash and revokes active account sessions.",
+    "Email/password requires a verified email on the same account. Initial setup is insert-only; changing a password requires current-password proof and an atomic conditional write. Recovery uses email-code verification and revokes active sessions.",
     "Account identity rollout checks now cover old VK balance/jobs/payments visibility by account_id, implicit accounts for new VK users, idempotent email linking, conflict handling and ledger owner_account_id.",
     "Email and phone identity linking now has real delivery boundaries: SMTP for email and generic HTTP SMS/OTP for phone; both remain fail-closed unless explicitly configured.",
     "Current business tables have additive account ownership columns for dual-read/dual-write: jobs, payment_intents, artifacts, conversations, referrals and billing credit/ledger surfaces. Subscriptions are target-model only until a real table/domain model exists.",

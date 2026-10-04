@@ -26,6 +26,7 @@ export function AccountSecurity({ profile: initialProfile, methods, preview = fa
   const [message, setMessage] = useState(oauthStatus === "linked" ? t.auth.linked : "");
   const [form, setForm] = useState<FormKind | null>(null); const [sent, setSent] = useState(false);
   const [address, setAddress] = useState(""); const [code, setCode] = useState(""); const [password, setPassword] = useState("");
+  const [currentPassword, setCurrentPassword] = useState(""); const [passwordConfirmation, setPasswordConfirmation] = useState("");
   const [confirm, setConfirm] = useState<{ kind: "identity" | "session"; id: string } | null>(null);
   useEffect(() => {
     const abort = new AbortController();
@@ -40,7 +41,15 @@ export function AccountSecurity({ profile: initialProfile, methods, preview = fa
 
   async function mutation(path: `/web/v1/${string}`, body?: object, method = "POST") {
     const response = await webBrowserMutation(path, { method, headers: body ? { "Content-Type": "application/json" } : undefined, body: body ? JSON.stringify(body) : undefined });
-    if (!response.ok) { setError(response.status === 409 ? (method === "DELETE" ? t.auth.lastIdentity : t.auth.conflict) : t.auth.failure); throw new Error("action"); }
+    if (!response.ok) {
+      if (path === "/web/v1/account/password/set") {
+        const data: unknown = await response.json().catch(() => null);
+        const code = typeof data === "object" && data !== null && "error" in data ? data.error : null;
+        if (code === "password_confirmation_required") setProfile(value => ({ ...value, password_set: true }));
+        setError(code === "current_password_invalid" ? t.auth.currentPasswordInvalid : code === "password_confirmation_required" ? t.auth.passwordConfirmationRequired : response.status === 429 ? t.auth.registrationRateLimited : t.auth.failure);
+      } else setError(response.status === 409 ? (method === "DELETE" ? t.auth.lastIdentity : t.auth.conflict) : t.auth.failure);
+      throw new Error("action");
+    }
     return response;
   }
   async function refreshProfile() {
@@ -50,14 +59,18 @@ export function AccountSecurity({ profile: initialProfile, methods, preview = fa
   }
   async function run(work: () => Promise<void>) {
     if (pending || preview) return; setPending(true); setError(""); setMessage("");
-    try { await work(); } catch { setError(value => value || t.auth.failure); } finally { setPending(false); setPassword(""); }
+    try { await work(); } catch { setError(value => value || t.auth.failure); } finally { setPending(false); setPassword(""); setCurrentPassword(""); setPasswordConfirmation(""); }
   }
-  const openForm = (kind: FormKind) => { setForm(kind); setAddress(""); setCode(""); setPassword(""); setSent(false); setError(""); setMessage(""); };
+  const openForm = (kind: FormKind) => { setForm(kind); setAddress(""); setCode(""); setPassword(""); setCurrentPassword(""); setPasswordConfirmation(""); setSent(false); setError(""); setMessage(""); };
   const submit = (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
-    if (form === "password" && isPasswordTooLong(password)) { setError(t.auth.passwordTooLong); return; }
+    if (form === "password" && (isPasswordTooLong(password) || isPasswordTooLong(currentPassword))) { setError(t.auth.passwordTooLong); return; }
+    if (form === "password" && password !== passwordConfirmation) { setError(t.auth.passwordMismatch); return; }
     void run(async () => {
-      if (form === "password") { await mutation("/web/v1/account/password/set", { email: address, password }); setMessage(t.auth.passwordSaved); setForm(null); return; }
+      if (form === "password") {
+        await mutation("/web/v1/account/password/set", { email: address, password, ...(profile.password_set ? { current_password: currentPassword } : {}) });
+        setProfile(value => ({ ...value, password_set: true })); setMessage(t.auth.passwordSaved); setForm(null); router.refresh(); return;
+      }
       const kind = form === "phone" ? "phone" : "email";
       const payload = kind === "phone" ? { phone: address } : { email: address };
       if (!sent) { await mutation(`/web/v1/account/identities/${kind}/${kind === "email" ? "request-code" : "request-otp"}`, payload); setSent(true); return; }
@@ -97,14 +110,18 @@ export function AccountSecurity({ profile: initialProfile, methods, preview = fa
         {methods.email_link ? <Button variant="outline" disabled={pending} onClick={() => openForm("email")}>{t.auth.emailLink}</Button> : null}
         {methods.phone_link ? <Button variant="outline" disabled={pending} onClick={() => openForm("phone")}>{t.auth.phoneLink}</Button> : null}
         {methods.providers.filter(provider => !verified.some(identity => identity.provider === provider)).map(provider => <Button variant="outline" disabled={pending || preview} key={provider} onClick={() => linkProvider(provider)}>{t.auth.link} {providerNames[provider]}</Button>)}
-        {methods.password && verified.some(item => item.provider === "email") ? <Button variant="outline" disabled={pending} onClick={() => openForm("password")}>{t.auth.passwordSetup}</Button> : null}
+        {methods.password && typeof profile.password_set === "boolean" && verified.some(item => item.provider === "email") ? <Button variant="outline" disabled={pending} onClick={() => openForm("password")}>{profile.password_set ? t.auth.passwordChange : t.auth.passwordSetup}</Button> : null}
       </div>
       {form ? <form className={styles.form} onSubmit={submit}>
-        {form === "password" ? <p>{t.auth.passwordSetupDescription}</p> : null}
+        {form === "password" ? <p>{profile.password_set ? t.auth.passwordChangeDescription : t.auth.passwordSetupDescription}</p> : null}
         <CredentialField label={form === "phone" ? t.auth.phone : t.login.emailLabel} id="security-address" type={form === "phone" ? "tel" : "email"} autoComplete={form === "phone" ? "tel" : "email"} required disabled={pending || sent} value={address} onChange={e => setAddress(e.target.value)} />
         {sent ? <><p role="status">{t.auth.verificationSent}</p><CredentialField label={form === "phone" ? t.auth.smsCode : t.auth.code} id="security-code" autoComplete="one-time-code" inputMode="numeric" pattern="[0-9]{6}" maxLength={6} required disabled={pending} value={code} onChange={e => setCode(e.target.value)} /></> : null}
-        {form === "password" ? <CredentialField label={t.auth.newPassword} hint={t.auth.passwordHint} id="security-password" type="password" autoComplete="new-password" minLength={8} maxLength={256} required disabled={pending} value={password} onChange={e => setPassword(e.target.value)} /> : null}
-        <div className={styles.actions}><Button type="submit" disabled={pending || preview}>{form === "password" ? t.auth.savePassword : sent ? t.auth.verify : t.auth.sendCode}</Button><Button variant="outline" disabled={pending} onClick={() => { setForm(null); setPassword(""); setCode(""); setAddress(""); }}>{t.auth.cancel}</Button></div>
+        {form === "password" ? <>
+          {profile.password_set ? <CredentialField label={t.auth.currentPassword} id="security-current-password" type="password" autoComplete="current-password" maxLength={256} required disabled={pending} value={currentPassword} onChange={e => setCurrentPassword(e.target.value)} /> : null}
+          <CredentialField label={t.auth.newPassword} hint={t.auth.passwordHint} id="security-password" type="password" autoComplete="new-password" minLength={8} maxLength={256} required disabled={pending} value={password} onChange={e => setPassword(e.target.value)} />
+          <CredentialField label={t.auth.confirmPassword} id="security-password-confirmation" type="password" autoComplete="new-password" minLength={8} maxLength={256} required disabled={pending} value={passwordConfirmation} onChange={e => setPasswordConfirmation(e.target.value)} />
+        </> : null}
+        <div className={styles.actions}><Button type="submit" disabled={pending || preview}>{form === "password" ? t.auth.savePassword : sent ? t.auth.verify : t.auth.sendCode}</Button><Button variant="outline" disabled={pending} onClick={() => { setForm(null); setPassword(""); setCurrentPassword(""); setPasswordConfirmation(""); setCode(""); setAddress(""); }}>{t.auth.cancel}</Button></div>
       </form> : null}
     </section>
     <section className={styles.card} aria-labelledby="security-sessions"><h2 id="security-sessions">{t.auth.sessions}</h2>

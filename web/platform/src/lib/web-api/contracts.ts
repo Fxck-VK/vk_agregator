@@ -17,6 +17,7 @@ export const accountProfileSchema = z
   .object({
     account_id: z.string().uuid(),
     identity_refs: z.array(safeIdentityRefSchema),
+    password_set: z.boolean().optional(),
   })
   .strict();
 
