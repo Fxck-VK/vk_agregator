@@ -126,6 +126,17 @@ keywords = [
   ]
 
   [[rules.allowlists]]
+  description = "Exact mock SMTP credential used by the DEV email script test"
+  condition = "AND"
+  regexTarget = "secret"
+  paths = [
+    '''(^|/)scripts/deploy/test-dev-email\.sh$''',
+  ]
+  regexes = [
+    '''^fixture-smtp-value$''',
+  ]
+
+  [[rules.allowlists]]
   description = "Exact mock credentials used by release bundle tests"
   condition = "AND"
   regexTarget = "secret"

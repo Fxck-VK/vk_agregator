@@ -125,6 +125,15 @@ try {
     Set-Content -LiteralPath (Join-Path $workflowFixtureRoot "other.yml") `
         -Value ('POSTGRES_PASSWORD=' + 'session_test_fixture') -Encoding ascii
 
+    $deployFixtureRoot = Join-Path $policyCanaryRoot "scripts\deploy"
+    New-Item -ItemType Directory -Path $deployFixtureRoot -Force | Out-Null
+    Set-Content -LiteralPath (Join-Path $deployFixtureRoot "test-dev-email.sh") -Value @(
+        ('DEV_ACCOUNT_EMAIL_SMTP_PASSWORD=' + 'fixture-smtp-value'),
+        ('DEV_ACCOUNT_EMAIL_SMTP_PASSWORD=' + $policyCanaryPrefix + 'A123456789ABCDEF')
+    ) -Encoding ascii
+    Set-Content -LiteralPath (Join-Path $deployFixtureRoot "other.sh") `
+        -Value ('DEV_ACCOUNT_EMAIL_SMTP_PASSWORD=' + 'fixture-smtp-value') -Encoding ascii
+
     $policyResult = Invoke-Quiet -Executable $GitleaksPath -WorkingDirectory $policyCanaryRoot -Arguments @(
         "dir",
         "--config", $configPath,
@@ -140,8 +149,8 @@ try {
     }
 
     $policyFindings = Get-Content -Raw $policyCanaryReport | ConvertFrom-Json
-    if ($policyFindings.Count -ne 12) {
-        throw "Allowlist policy canary must return exactly twelve synthetic findings; got $($policyFindings.Count)."
+    if ($policyFindings.Count -ne 14) {
+        throw "Allowlist policy canary must return exactly fourteen synthetic findings; got $($policyFindings.Count)."
     }
     foreach ($finding in $policyFindings) {
         if ($finding.RuleID -ne "project-secret-assignment") {
@@ -153,10 +162,16 @@ try {
     if ($ciFindings.Count -ne 1 -or $ciFindings[0].StartLine -ne 2 -or $otherFindings.Count -ne 1) {
         throw "Only the exact temporary PostgreSQL fixture in ci.yml may be allowed; other values and paths must still be detected."
     }
+    $emailFindings = @($policyFindings | Where-Object { $_.File.Replace('\', '/') -eq 'scripts/deploy/test-dev-email.sh' })
+    $otherEmailFindings = @($policyFindings | Where-Object { $_.File.Replace('\', '/') -eq 'scripts/deploy/other.sh' })
+    if ($emailFindings.Count -ne 1 -or $emailFindings[0].StartLine -ne 2 -or $otherEmailFindings.Count -ne 1) {
+        throw "Only the exact SMTP fixture in test-dev-email.sh may be allowed; other values and paths must still be detected."
+    }
 
     Remove-Item -LiteralPath (Join-Path $policyCanaryRoot "RUNBOOK.md") -Force
     Remove-Item -LiteralPath (Join-Path $policyCanaryRoot "internal") -Recurse -Force
     Remove-Item -LiteralPath $workflowFixtureRoot -Recurse -Force
+    Remove-Item -LiteralPath $deployFixtureRoot -Recurse -Force
     $placeholderEnvName = ".env.prod" + ".example"
     Set-Content -LiteralPath (Join-Path $policyCanaryRoot $placeholderEnvName) -Value @(
         'ADMIN_TOKEN=<ADMIN_TOKEN>',
@@ -176,7 +191,7 @@ try {
         throw "Exact committed environment placeholders must remain clean."
     }
 
-    Write-Output "Allowlist policy canary detected all twelve synthetic findings; only exact scoped fixtures remained clean."
+    Write-Output "Allowlist policy canary detected all fourteen synthetic findings; only exact scoped fixtures remained clean."
 }
 finally {
     if (Test-Path $policyCanaryRoot) {
