@@ -1,0 +1,11 @@
+.security { display: grid; gap: var(--space-5); }
+.card { display: grid; gap: var(--space-4); padding: var(--space-5); border: .0625rem solid var(--color-card-border); border-radius: var(--radius-lg); background: var(--color-panel); }
+.card h2 { margin: 0; font-size: var(--font-size-supporting); }
+.card p { margin: 0; color: var(--color-text-muted); line-height: var(--line-height-body); }
+.list { display: grid; gap: var(--space-3); margin: 0; padding: 0; list-style: none; }
+.row { display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: var(--space-3); padding-block: var(--space-3); border-block-end: .0625rem solid var(--color-border); }
+.details { display: grid; gap: var(--space-1); overflow-wrap: anywhere; }
+.details span, .details time { color: var(--color-text-muted); font-size: var(--font-size-ui); }
+.actions { display: flex; align-items: center; flex-wrap: wrap; gap: var(--space-2); }
+.form { display: grid; gap: var(--space-3); max-inline-size: 30rem; }
+.confirm { display: grid; gap: var(--space-2); }

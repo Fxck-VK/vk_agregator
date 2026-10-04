@@ -353,6 +353,16 @@ noindex и отсутствие общего кэша, обходя ошибку
 инертен, а layout effect восстанавливает сохранённую тему до отрисовки, если Next
 смонтировал корень из документа ошибки. Повторного исполнения inline-скрипта нет.
 
+<a id="browser-account"></a>
+### Вход и безопасность аккаунта
+
+- [LoginForm](../src/features/auth/LoginForm/LoginForm.tsx): email/password, восстановление через письмо и код, внешние провайдеры по серверному `AuthMethods`. Параметры `returnTo`, `methods`, `preview`, `oauthFailed`; безопасный возврат для password login. В preview восстановление — подписанная симуляция, провайдеры отключены.
+- [EmailRegistration](../src/features/auth/EmailRegistration.tsx): открывается из `LoginForm` по серверному флагу `registration`; почта → код → пароль с повторным вводом → обычная cookie-сессия. Параметры `preview`, `returnTo`, `onBack`. Ошибочный код сохраняет шаг; истёкшее подтверждение позволяет запросить новое; при временном сбое пароль сохраняется только в текущей форме и блокируется для повторной попытки. Код/пароль не сохраняются в browser storage. В preview каждый шаг подписан как симуляция, запись в API отсутствует.
+- [CredentialField](../src/features/auth/CredentialField.tsx): нативные props input + `label`, `hint`; поверхность `InputSurface`, автозаполнение по сценарию. Значения хранятся только в текущей форме.
+- [AccountSecurity](../src/features/account/AccountSecurity/AccountSecurity.tsx): `profile`, `methods`, `preview`, `oauthStatus`; вкладка «Доступ и безопасность» в `ProfileWorkspace`. Привязки с кодом, установка пароля, список и подтверждение завершения сессий. Мутации через общий CSRF-клиент, чтения через session-recovery клиент. После привязки обновляет профиль, смена владельца отменяет прежние чтения. Preview запрещает мутации.
+- Общие `Button` filled/outline, `StateNotice`, `LoadingIndicator`, `LanguageSwitcher`, `ModeSwitchPanel`; цвета, поверхности и отступы из текущих токенов. Формы и кнопки переносятся на узком экране.
+- Самостоятельный вход по SMS отсутствует. Регистрация и восстановление работают только с настроенной отправкой писем. Настройка Resend и реальные проверки: [runbook](../../../docs/runbooks/BROWSER_ACCOUNT.md).
+
 ## Что пока не считать унифицированным или завершённым
 
 | Область | Проверенный факт | Решение при новой задаче |

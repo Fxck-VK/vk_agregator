@@ -507,18 +507,21 @@ type Config struct {
 	AccountAuthRateLimitWindow time.Duration
 	// AccountOAuth* configure provider adapters. Missing provider-specific
 	// trust material keeps that provider fail-closed.
-	AccountOAuthGoogleClientIDs   []string
-	AccountOAuthGoogleJWKSURL     string
-	AccountOAuthAppleClientIDs    []string
-	AccountOAuthAppleJWKSURL      string
-	AccountOAuthTelegramBotToken  string
-	AccountOAuthTelegramMaxAge    time.Duration
-	AccountOAuthTelegramClientIDs []string
-	AccountOAuthTelegramIssuer    string
-	AccountOAuthTelegramJWKSURL   string
-	AccountOAuthVKIDClientIDs     []string
-	AccountOAuthVKIDIssuer        string
-	AccountOAuthVKIDJWKSURL       string
+	AccountOAuthGoogleClientIDs         []string
+	AccountWebOAuthGoogleClientSecret   string
+	AccountWebOAuthAppleClientSecret    string
+	AccountWebOAuthTelegramClientSecret string
+	AccountOAuthGoogleJWKSURL           string
+	AccountOAuthAppleClientIDs          []string
+	AccountOAuthAppleJWKSURL            string
+	AccountOAuthTelegramBotToken        string
+	AccountOAuthTelegramMaxAge          time.Duration
+	AccountOAuthTelegramClientIDs       []string
+	AccountOAuthTelegramIssuer          string
+	AccountOAuthTelegramJWKSURL         string
+	AccountOAuthVKIDClientIDs           []string
+	AccountOAuthVKIDIssuer              string
+	AccountOAuthVKIDJWKSURL             string
 	// FrontendTelemetryEnabled accepts safe Mini App client telemetry events.
 	FrontendTelemetryEnabled bool
 	// FrontendTelemetryUserHashSecret enables anonymized client user hashing
@@ -1543,55 +1546,58 @@ func Load() Config {
 		)),
 		ReferralRewardOnActivation: envBool("REFERRAL_REWARD_ON_ACTIVATION", true),
 
-		VKAppID:                         env("VK_APP_ID", ""),
-		VKAppSecret:                     env("VK_APP_SECRET", ""),
-		MiniAppLaunchParamsMaxAge:       envDuration("MINIAPP_LAUNCH_PARAMS_MAX_AGE", time.Hour),
-		MiniAppAllowQueryLaunchParams:   envBool("MINIAPP_ALLOW_QUERY_LAUNCH_PARAMS", false),
-		AccountEmailLinkCodeTTL:         envDuration("ACCOUNT_EMAIL_LINK_CODE_TTL", 10*time.Minute),
-		AccountEmailLinkCodeDigits:      envInt("ACCOUNT_EMAIL_LINK_CODE_DIGITS", 6),
-		AccountEmailLinkRequestLimit:    envInt("ACCOUNT_EMAIL_LINK_REQUEST_LIMIT", 3),
-		AccountEmailLinkRequestWindow:   envDuration("ACCOUNT_EMAIL_LINK_REQUEST_WINDOW", 15*time.Minute),
-		AccountEmailLinkVerifyLimit:     envInt("ACCOUNT_EMAIL_LINK_VERIFY_LIMIT", 5),
-		AccountEmailLinkVerifyWindow:    envDuration("ACCOUNT_EMAIL_LINK_VERIFY_WINDOW", 15*time.Minute),
-		AccountPhoneLinkOTPTTL:          envDuration("ACCOUNT_PHONE_LINK_OTP_TTL", 10*time.Minute),
-		AccountPhoneLinkOTPDigits:       envInt("ACCOUNT_PHONE_LINK_OTP_DIGITS", 6),
-		AccountPhoneLinkRequestLimit:    envInt("ACCOUNT_PHONE_LINK_REQUEST_LIMIT", 3),
-		AccountPhoneLinkRequestWindow:   envDuration("ACCOUNT_PHONE_LINK_REQUEST_WINDOW", 15*time.Minute),
-		AccountPhoneLinkVerifyLimit:     envInt("ACCOUNT_PHONE_LINK_VERIFY_LIMIT", 5),
-		AccountPhoneLinkVerifyWindow:    envDuration("ACCOUNT_PHONE_LINK_VERIFY_WINDOW", 15*time.Minute),
-		AccountEmailDeliveryProvider:    envConfigToken("ACCOUNT_EMAIL_DELIVERY_PROVIDER", "disabled"),
-		AccountEmailSMTPHost:            env("ACCOUNT_EMAIL_SMTP_HOST", ""),
-		AccountEmailSMTPPort:            envInt("ACCOUNT_EMAIL_SMTP_PORT", 587),
-		AccountEmailSMTPUsername:        env("ACCOUNT_EMAIL_SMTP_USERNAME", ""),
-		AccountEmailSMTPPassword:        env("ACCOUNT_EMAIL_SMTP_PASSWORD", ""),
-		AccountEmailSMTPFrom:            env("ACCOUNT_EMAIL_SMTP_FROM", ""),
-		AccountEmailSMTPSubject:         env("ACCOUNT_EMAIL_SMTP_SUBJECT", "Код подтверждения НейроХаб"),
-		AccountEmailSMTPTLSMode:         envConfigToken("ACCOUNT_EMAIL_SMTP_TLS_MODE", "starttls"),
-		AccountEmailSMTPTimeout:         envDuration("ACCOUNT_EMAIL_SMTP_TIMEOUT", 10*time.Second),
-		AccountPhoneDeliveryProvider:    envConfigToken("ACCOUNT_PHONE_DELIVERY_PROVIDER", "disabled"),
-		AccountPhoneHTTPURL:             env("ACCOUNT_PHONE_HTTP_URL", ""),
-		AccountPhoneHTTPMethod:          env("ACCOUNT_PHONE_HTTP_METHOD", "POST"),
-		AccountPhoneHTTPAuthHeader:      env("ACCOUNT_PHONE_HTTP_AUTH_HEADER", ""),
-		AccountPhoneHTTPAuthValue:       env("ACCOUNT_PHONE_HTTP_AUTH_VALUE", ""),
-		AccountPhoneHTTPContentType:     env("ACCOUNT_PHONE_HTTP_CONTENT_TYPE", "application/json"),
-		AccountPhoneHTTPBodyTemplate:    env("ACCOUNT_PHONE_HTTP_BODY_TEMPLATE", ""),
-		AccountPhoneHTTPTimeout:         envDuration("ACCOUNT_PHONE_HTTP_TIMEOUT", 10*time.Second),
-		AccountAuthRateLimitLimit:       envInt("ACCOUNT_AUTH_RATE_LIMIT_LIMIT", 30),
-		AccountAuthRateLimitWindow:      envDuration("ACCOUNT_AUTH_RATE_LIMIT_WINDOW", 15*time.Minute),
-		AccountOAuthGoogleClientIDs:     envList("ACCOUNT_OAUTH_GOOGLE_CLIENT_IDS"),
-		AccountOAuthGoogleJWKSURL:       env("ACCOUNT_OAUTH_GOOGLE_JWKS_URL", "https://www.googleapis.com/oauth2/v3/certs"),
-		AccountOAuthAppleClientIDs:      envList("ACCOUNT_OAUTH_APPLE_CLIENT_IDS"),
-		AccountOAuthAppleJWKSURL:        env("ACCOUNT_OAUTH_APPLE_JWKS_URL", "https://appleid.apple.com/auth/keys"),
-		AccountOAuthTelegramBotToken:    env("ACCOUNT_OAUTH_TELEGRAM_BOT_TOKEN", ""),
-		AccountOAuthTelegramMaxAge:      envDuration("ACCOUNT_OAUTH_TELEGRAM_MAX_AGE", 24*time.Hour),
-		AccountOAuthTelegramClientIDs:   envList("ACCOUNT_OAUTH_TELEGRAM_CLIENT_IDS"),
-		AccountOAuthTelegramIssuer:      env("ACCOUNT_OAUTH_TELEGRAM_ISSUER", "https://oauth.telegram.org"),
-		AccountOAuthTelegramJWKSURL:     env("ACCOUNT_OAUTH_TELEGRAM_JWKS_URL", "https://oauth.telegram.org/.well-known/jwks.json"),
-		AccountOAuthVKIDClientIDs:       envList("ACCOUNT_OAUTH_VK_ID_CLIENT_IDS"),
-		AccountOAuthVKIDIssuer:          env("ACCOUNT_OAUTH_VK_ID_ISSUER", ""),
-		AccountOAuthVKIDJWKSURL:         env("ACCOUNT_OAUTH_VK_ID_JWKS_URL", ""),
-		FrontendTelemetryEnabled:        envBool("FRONTEND_TELEMETRY_ENABLED", false),
-		FrontendTelemetryUserHashSecret: env("FRONTEND_TELEMETRY_USER_HASH_SECRET", ""),
+		VKAppID:                             env("VK_APP_ID", ""),
+		VKAppSecret:                         env("VK_APP_SECRET", ""),
+		MiniAppLaunchParamsMaxAge:           envDuration("MINIAPP_LAUNCH_PARAMS_MAX_AGE", time.Hour),
+		MiniAppAllowQueryLaunchParams:       envBool("MINIAPP_ALLOW_QUERY_LAUNCH_PARAMS", false),
+		AccountEmailLinkCodeTTL:             envDuration("ACCOUNT_EMAIL_LINK_CODE_TTL", 10*time.Minute),
+		AccountEmailLinkCodeDigits:          envInt("ACCOUNT_EMAIL_LINK_CODE_DIGITS", 6),
+		AccountEmailLinkRequestLimit:        envInt("ACCOUNT_EMAIL_LINK_REQUEST_LIMIT", 3),
+		AccountEmailLinkRequestWindow:       envDuration("ACCOUNT_EMAIL_LINK_REQUEST_WINDOW", 15*time.Minute),
+		AccountEmailLinkVerifyLimit:         envInt("ACCOUNT_EMAIL_LINK_VERIFY_LIMIT", 5),
+		AccountEmailLinkVerifyWindow:        envDuration("ACCOUNT_EMAIL_LINK_VERIFY_WINDOW", 15*time.Minute),
+		AccountPhoneLinkOTPTTL:              envDuration("ACCOUNT_PHONE_LINK_OTP_TTL", 10*time.Minute),
+		AccountPhoneLinkOTPDigits:           envInt("ACCOUNT_PHONE_LINK_OTP_DIGITS", 6),
+		AccountPhoneLinkRequestLimit:        envInt("ACCOUNT_PHONE_LINK_REQUEST_LIMIT", 3),
+		AccountPhoneLinkRequestWindow:       envDuration("ACCOUNT_PHONE_LINK_REQUEST_WINDOW", 15*time.Minute),
+		AccountPhoneLinkVerifyLimit:         envInt("ACCOUNT_PHONE_LINK_VERIFY_LIMIT", 5),
+		AccountPhoneLinkVerifyWindow:        envDuration("ACCOUNT_PHONE_LINK_VERIFY_WINDOW", 15*time.Minute),
+		AccountEmailDeliveryProvider:        envConfigToken("ACCOUNT_EMAIL_DELIVERY_PROVIDER", "disabled"),
+		AccountEmailSMTPHost:                env("ACCOUNT_EMAIL_SMTP_HOST", ""),
+		AccountEmailSMTPPort:                envInt("ACCOUNT_EMAIL_SMTP_PORT", 587),
+		AccountEmailSMTPUsername:            env("ACCOUNT_EMAIL_SMTP_USERNAME", ""),
+		AccountEmailSMTPPassword:            env("ACCOUNT_EMAIL_SMTP_PASSWORD", ""),
+		AccountEmailSMTPFrom:                env("ACCOUNT_EMAIL_SMTP_FROM", ""),
+		AccountEmailSMTPSubject:             env("ACCOUNT_EMAIL_SMTP_SUBJECT", "Код подтверждения НейроХаб"),
+		AccountEmailSMTPTLSMode:             envConfigToken("ACCOUNT_EMAIL_SMTP_TLS_MODE", "starttls"),
+		AccountEmailSMTPTimeout:             envDuration("ACCOUNT_EMAIL_SMTP_TIMEOUT", 10*time.Second),
+		AccountPhoneDeliveryProvider:        envConfigToken("ACCOUNT_PHONE_DELIVERY_PROVIDER", "disabled"),
+		AccountPhoneHTTPURL:                 env("ACCOUNT_PHONE_HTTP_URL", ""),
+		AccountPhoneHTTPMethod:              env("ACCOUNT_PHONE_HTTP_METHOD", "POST"),
+		AccountPhoneHTTPAuthHeader:          env("ACCOUNT_PHONE_HTTP_AUTH_HEADER", ""),
+		AccountPhoneHTTPAuthValue:           env("ACCOUNT_PHONE_HTTP_AUTH_VALUE", ""),
+		AccountPhoneHTTPContentType:         env("ACCOUNT_PHONE_HTTP_CONTENT_TYPE", "application/json"),
+		AccountPhoneHTTPBodyTemplate:        env("ACCOUNT_PHONE_HTTP_BODY_TEMPLATE", ""),
+		AccountPhoneHTTPTimeout:             envDuration("ACCOUNT_PHONE_HTTP_TIMEOUT", 10*time.Second),
+		AccountAuthRateLimitLimit:           envInt("ACCOUNT_AUTH_RATE_LIMIT_LIMIT", 30),
+		AccountAuthRateLimitWindow:          envDuration("ACCOUNT_AUTH_RATE_LIMIT_WINDOW", 15*time.Minute),
+		AccountOAuthGoogleClientIDs:         envList("ACCOUNT_OAUTH_GOOGLE_CLIENT_IDS"),
+		AccountWebOAuthGoogleClientSecret:   env("ACCOUNT_WEB_OAUTH_GOOGLE_CLIENT_SECRET", ""),
+		AccountWebOAuthAppleClientSecret:    env("ACCOUNT_WEB_OAUTH_APPLE_CLIENT_SECRET", ""),
+		AccountWebOAuthTelegramClientSecret: env("ACCOUNT_WEB_OAUTH_TELEGRAM_CLIENT_SECRET", ""),
+		AccountOAuthGoogleJWKSURL:           env("ACCOUNT_OAUTH_GOOGLE_JWKS_URL", "https://www.googleapis.com/oauth2/v3/certs"),
+		AccountOAuthAppleClientIDs:          envList("ACCOUNT_OAUTH_APPLE_CLIENT_IDS"),
+		AccountOAuthAppleJWKSURL:            env("ACCOUNT_OAUTH_APPLE_JWKS_URL", "https://appleid.apple.com/auth/keys"),
+		AccountOAuthTelegramBotToken:        env("ACCOUNT_OAUTH_TELEGRAM_BOT_TOKEN", ""),
+		AccountOAuthTelegramMaxAge:          envDuration("ACCOUNT_OAUTH_TELEGRAM_MAX_AGE", 24*time.Hour),
+		AccountOAuthTelegramClientIDs:       envList("ACCOUNT_OAUTH_TELEGRAM_CLIENT_IDS"),
+		AccountOAuthTelegramIssuer:          env("ACCOUNT_OAUTH_TELEGRAM_ISSUER", "https://oauth.telegram.org"),
+		AccountOAuthTelegramJWKSURL:         env("ACCOUNT_OAUTH_TELEGRAM_JWKS_URL", "https://oauth.telegram.org/.well-known/jwks.json"),
+		AccountOAuthVKIDClientIDs:           envList("ACCOUNT_OAUTH_VK_ID_CLIENT_IDS"),
+		AccountOAuthVKIDIssuer:              env("ACCOUNT_OAUTH_VK_ID_ISSUER", ""),
+		AccountOAuthVKIDJWKSURL:             env("ACCOUNT_OAUTH_VK_ID_JWKS_URL", ""),
+		FrontendTelemetryEnabled:            envBool("FRONTEND_TELEMETRY_ENABLED", false),
+		FrontendTelemetryUserHashSecret:     env("FRONTEND_TELEMETRY_USER_HASH_SECRET", ""),
 
 		ArtifactURLTTL:                 envDuration("ARTIFACT_URL_TTL", time.Hour),
 		SignedDelivery:                 envBool("SIGNED_DELIVERY", false),

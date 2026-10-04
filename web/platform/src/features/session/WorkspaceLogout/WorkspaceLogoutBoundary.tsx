@@ -15,12 +15,7 @@ import {
   useRef,
   useState,
 } from "react";
-import { clearPendingConversationPrompts } from "@/features/conversations/pending-conversation-prompt";
-import { clearPendingConversationBootstraps } from "@/features/conversations/pending-conversation-bootstrap";
-import { clearPendingConversationTitleSyncs } from "@/features/conversations/pending-conversation-title-sync";
-import { clearConversationCache } from "@/features/conversations/conversation-list-cache";
-import { endBrowserSession } from "@/lib/web-api/browser-session-state";
-
+import { clearPrivateBrowserState } from "./private-browser-state";
 import { requestWorkspaceLogout } from "./workspace-logout-request";
 import styles from "./WorkspaceLogoutBoundary.module.css";
 
@@ -50,14 +45,6 @@ function isWorkspaceLogoutMessage(value: unknown): value is WorkspaceLogoutMessa
     return false;
   }
   return value.type === "logout-started" || value.type === "logout-confirmed" || value.type === "logout-failed";
-}
-
-function clearPrivateBrowserState() {
-  endBrowserSession();
-  clearConversationCache();
-  clearPendingConversationPrompts();
-  clearPendingConversationBootstraps();
-  clearPendingConversationTitleSyncs();
 }
 
 export function WorkspaceLogoutBoundary({ children, guest }: WorkspaceLogoutBoundaryProps) {

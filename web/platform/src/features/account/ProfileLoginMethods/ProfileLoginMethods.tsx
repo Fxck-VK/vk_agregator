@@ -22,6 +22,10 @@ function getProviderName(provider: string, t: Dictionary, msg: Translator = getT
       return "VK";
     case "telegram":
       return "Telegram";
+    case "google": return "Google";
+    case "apple": return "Apple";
+    case "phone": return t.auth.phone;
+    case "password": return t.login.passwordLabel;
     case "yandex":
       return msg("profileLoginMethods.yandex");
     default:
@@ -38,6 +42,10 @@ function getProviderGlyph(provider: string, msg: Translator = getTranslator("ru"
       return "VK";
     case "telegram":
       return "↗";
+    case "google": return "G";
+    case "apple": return "A";
+    case "phone": return "+";
+    case "password": return "•";
     case "yandex":
       return msg("profileLoginMethods.y");
     default:

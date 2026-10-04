@@ -6,6 +6,7 @@ import (
 	"time"
 
 	"github.com/google/uuid"
+	"github.com/jackc/pgx/v5"
 
 	"vk-ai-aggregator/internal/domain"
 )
@@ -239,6 +240,23 @@ func (r *AccountIdentityRepository) LinkIdentity(ctx context.Context, accountID 
 
 // UnlinkIdentity removes one identity from an account.
 func (r *AccountIdentityRepository) UnlinkIdentity(ctx context.Context, accountID, identityID uuid.UUID) error {
+	beginner, ok := r.db.(interface {
+		Begin(context.Context) (pgx.Tx, error)
+	})
+	if !ok {
+		return errors.New("account identity unlink requires transactions")
+	}
+	tx, err := beginner.Begin(ctx)
+	if err != nil {
+		return mapError(err)
+	}
+	defer tx.Rollback(ctx)
+	// Serialize unlink operations for an account. The count query executes after
+	// acquiring this lock, so concurrent removals see the preceding commit.
+	var locked uuid.UUID
+	if err := tx.QueryRow(ctx, "SELECT id FROM accounts WHERE id = $1 FOR UPDATE", accountID).Scan(&locked); err != nil {
+		return mapError(err)
+	}
 	const q = `
 		WITH target AS (
 			SELECT id, account_id, provider
@@ -248,12 +266,13 @@ func (r *AccountIdentityRepository) UnlinkIdentity(ctx context.Context, accountI
 		stats AS (
 			SELECT
 				(SELECT count(*) FROM target) AS target_count,
-				(SELECT count(*) FROM account_identities WHERE account_id = $1) AS account_count
+				(SELECT count(*) FROM account_identities WHERE account_id = $1) AS account_count,
+				(SELECT count(*) FROM account_identities WHERE account_id = $1 AND id <> $2 AND provider <> 'phone' AND verified_at IS NOT NULL) AS remaining_login
 		),
 		guarded AS (
 			SELECT target.*
 			FROM target, stats
-			WHERE stats.account_count > 1
+			WHERE stats.account_count > 1 AND (target.provider = 'phone' OR stats.remaining_login > 0)
 		),
 		audit AS (
 			INSERT INTO account_links_audit (id, account_id, actor_account_id, action, provider, identity_id, created_at)
@@ -271,17 +290,17 @@ func (r *AccountIdentityRepository) UnlinkIdentity(ctx context.Context, accountI
 			(SELECT 'deleted' FROM deleted LIMIT 1),
 			CASE
 				WHEN (SELECT target_count FROM stats) = 0 THEN 'not_found'
-				WHEN (SELECT account_count FROM stats) <= 1 THEN 'last_identity'
+				WHEN (SELECT account_count FROM stats) <= 1 OR (SELECT remaining_login FROM stats) = 0 THEN 'last_identity'
 				ELSE 'not_found'
 			END
 		)`
 	var status string
-	if err := r.db.QueryRow(ctx, q, accountID, identityID, uuid.New()).Scan(&status); err != nil {
+	if err := tx.QueryRow(ctx, q, accountID, identityID, uuid.New()).Scan(&status); err != nil {
 		return mapError(err)
 	}
 	switch status {
 	case "deleted":
-		return nil
+		return mapError(tx.Commit(ctx))
 	case "last_identity":
 		return domain.ErrAccountLastIdentity
 	default:

@@ -19,6 +19,37 @@ import { LoginForm } from "./LoginForm";
 const replace = vi.fn();
 
 describe("LoginForm", () => {
+  it("does not consume the recovery code when a multibyte password exceeds the server limit", async () => {
+    vi.mocked(webBrowserFetch).mockResolvedValue(new Response(null, { status: 202 }));
+    render(<LoginForm methods={{ registration: false, password: true, recovery: true, email_link: true, phone_link: false, providers: [] }} />);
+    fireEvent.click(screen.getByRole("button", { name: "Забыли пароль?" }));
+    fireEvent.change(screen.getByLabelText(ru.login.emailLabel), { target: { value: "member@example.test" } });
+    fireEvent.click(screen.getByRole("button", { name: "Отправить код" }));
+    await screen.findByLabelText("Код из письма");
+    fireEvent.change(screen.getByLabelText("Код из письма"), { target: { value: "123456" } });
+    fireEvent.change(screen.getByLabelText("Новый пароль"), { target: { value: "я".repeat(129) } });
+    fireEvent.click(screen.getByRole("button", { name: "Сохранить пароль" }));
+    expect(await screen.findByRole("alert")).toHaveTextContent("Пароль слишком длинный. Используйте более короткий.");
+    expect(webBrowserFetch).toHaveBeenCalledTimes(1);
+    expect(screen.getByLabelText("Код из письма")).toHaveValue("123456");
+  });
+  it("requests a recovery code without revealing whether the email exists, then resets with code and new password", async () => {
+    vi.mocked(webBrowserFetch).mockResolvedValue(new Response(null, { status: 202 }));
+    render(<LoginForm methods={{ registration: false, password: true, recovery: true, email_link: true, phone_link: false, providers: [] }} />);
+    fireEvent.click(screen.getByRole("button", { name: "Забыли пароль?" }));
+    fireEvent.change(screen.getByLabelText(ru.login.emailLabel), { target: { value: "member@example.com" } });
+    fireEvent.click(screen.getByRole("button", { name: "Отправить код" }));
+    await screen.findByLabelText("Код из письма");
+    expect(webBrowserFetch).toHaveBeenCalledWith("/web/v1/auth/password/request-reset", expect.objectContaining({ body: JSON.stringify({ email: "member@example.com" }) }));
+    expect(screen.getByText(/Если эта почта привязана/)).toBeInTheDocument();
+    fireEvent.change(screen.getByLabelText("Код из письма"), { target: { value: "123456" } });
+    fireEvent.change(screen.getByLabelText("Новый пароль"), { target: { value: "new-password" } });
+    vi.mocked(webBrowserFetch).mockResolvedValue(new Response(null, { status: 204 }));
+    fireEvent.click(screen.getByRole("button", { name: "Сохранить пароль" }));
+    await screen.findByText("Пароль обновлён. Войдите с новым паролем.");
+    expect(webBrowserFetch).toHaveBeenLastCalledWith("/web/v1/auth/password/reset", expect.objectContaining({ body: JSON.stringify({ email: "member@example.com", code: "123456", new_password: "new-password" }) }));
+    expect(replace).not.toHaveBeenCalled();
+  });
   beforeEach(() => {
     vi.mocked(useRouter).mockReturnValue({ replace } as never);
   });

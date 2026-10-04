@@ -24,9 +24,10 @@ var (
 
 // VerifyRequest contains raw provider-specific proof. It must not be logged.
 type VerifyRequest struct {
-	Provider domain.IdentityProvider
-	IDToken  string
-	AuthData map[string]string
+	Provider      domain.IdentityProvider
+	IDToken       string
+	ExpectedNonce string
+	AuthData      map[string]string
 }
 
 // Adapter verifies one provider-specific assertion and returns only the safe

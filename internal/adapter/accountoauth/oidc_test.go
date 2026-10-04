@@ -2,12 +2,75 @@ package accountoauth
 
 import (
 	"context"
+	"crypto"
+	"crypto/rand"
+	"crypto/rsa"
+	"crypto/sha256"
+	"encoding/base64"
+	"encoding/json"
 	"errors"
+	"math/big"
+	"net/http"
+	"net/http/httptest"
 	"testing"
 	"time"
 
 	"vk-ai-aggregator/internal/domain"
 )
+
+func TestJWKSCacheDoesNotShareKeysAcrossProvidersWithSameKeyID(t *testing.T) {
+	first, err := rsa.GenerateKey(rand.Reader, 2048)
+	if err != nil {
+		t.Fatal(err)
+	}
+	second, err := rsa.GenerateKey(rand.Reader, 2048)
+	if err != nil {
+		t.Fatal(err)
+	}
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		key := first
+		if r.URL.Path == "/second" {
+			key = second
+		}
+		w.Header().Set("Cache-Control", "max-age=3600")
+		json.NewEncoder(w).Encode(jwksResponse{Keys: []jwkKey{{Kty: "RSA", Kid: "shared-kid", N: base64.RawURLEncoding.EncodeToString(key.N.Bytes()), E: base64.RawURLEncoding.EncodeToString(big.NewInt(int64(key.E)).Bytes())}}})
+	}))
+	defer server.Close()
+	verifier := NewRemoteJWKSOIDCVerifier(server.Client())
+	config := func(name string) OIDCVerifyConfig {
+		return OIDCVerifyConfig{Issuers: []string{name}, Audiences: []string{"client"}, JWKSURL: server.URL + "/" + name}
+	}
+	token := func(issuer string, key *rsa.PrivateKey) string {
+		header, _ := json.Marshal(jwtHeader{Algorithm: "RS256", KeyID: "shared-kid"})
+		claims, _ := json.Marshal(map[string]any{"sub": "subject", "iss": issuer, "aud": "client", "exp": time.Now().Add(time.Hour).Unix()})
+		signed := base64.RawURLEncoding.EncodeToString(header) + "." + base64.RawURLEncoding.EncodeToString(claims)
+		sum := sha256.Sum256([]byte(signed))
+		signature, err := rsa.SignPKCS1v15(rand.Reader, key, crypto.SHA256, sum[:])
+		if err != nil {
+			t.Fatal(err)
+		}
+		return signed + "." + base64.RawURLEncoding.EncodeToString(signature)
+	}
+	if _, err := verifier.VerifyIDToken(context.Background(), token("first", first), config("first")); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := verifier.VerifyIDToken(context.Background(), token("second", first), config("second")); err == nil {
+		t.Fatal("another provider's cached key accepted a forged token")
+	}
+	if _, err := verifier.VerifyIDToken(context.Background(), token("second", second), config("second")); err != nil {
+		t.Fatal(err)
+	}
+}
+
+func TestAppleStringEmailVerifiedClaimIsAccepted(t *testing.T) {
+	var raw rawOIDCClaims
+	if err := json.Unmarshal([]byte(`{"sub":"subject","nonce":"nonce","email_verified":"true"}`), &raw); err != nil {
+		t.Fatal(err)
+	}
+	if !raw.toClaims().EmailVerified || raw.toClaims().Nonce != "nonce" {
+		t.Fatal("claims changed")
+	}
+}
 
 func TestOIDCAdapterVerifiesSubjectOnly(t *testing.T) {
 	tests := []struct {

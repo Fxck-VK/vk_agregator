@@ -336,23 +336,29 @@ jobs:
           ENV_PAYMENTS_DEV: ${{ secrets.ENV_PAYMENTS_DEV }}
           DEV_WEB_BASIC_AUTH_HTPASSWD: ${{ secrets.DEV_WEB_BASIC_AUTH_HTPASSWD }}
           DEPLOY_IMAGE_TAG: ${{ steps.release.outputs.image_tag }}
+          DEV_ACCOUNT_EMAIL_SMTP_PASSWORD: ${{ secrets.DEV_ACCOUNT_EMAIL_SMTP_PASSWORD }}
         run: |
           set -euo pipefail
           ssh_opts=(-i "${HOME}/.ssh/deploy_key" -o StrictHostKeyChecking=yes -o UserKnownHostsFile="${HOME}/.ssh/known_hosts" -o GlobalKnownHostsFile=/dev/null)
 
           raw_env="$(mktemp)"
+          email_env="$(mktemp)"
           rendered_env="$(mktemp)"
           raw_auth_env="$(mktemp)"
           rendered_auth_env="$(mktemp)"
-          trap 'rm -f "${raw_env}" "${rendered_env}" "${raw_auth_env}" "${rendered_auth_env}"' EXIT
+          trap 'rm -f "${raw_env}" "${email_env}" "${rendered_env}" "${raw_auth_env}" "${rendered_auth_env}"' EXIT
 
           bash scripts/deploy/assemble-env-parts.sh \
             --target dev \
             --web-origin https://dev-web.neiirohub.ru \
             --output "${raw_env}"
 
-          bash scripts/deploy/prepare-dev-env.sh \
+          bash scripts/deploy/prepare-dev-email.sh \
             --input "${raw_env}" \
+            --output "${email_env}"
+
+          bash scripts/deploy/prepare-dev-env.sh \
+            --input "${email_env}" \
             --output "${rendered_env}" \
             --image-tag "${DEPLOY_IMAGE_TAG}" \
             --ghcr-username "${GHCR_USERNAME}" \

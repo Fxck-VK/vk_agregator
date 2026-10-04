@@ -26,6 +26,7 @@ Read only the document that matches the current task:
 
 | Task scope | Active document |
 | --- | --- |
+| Browser login, verified email registration, Resend SMTP, recovery, OAuth, profile bindings and sessions | [Browser account access](../docs/runbooks/BROWSER_ACCOUNT.md) |
 | Model input/output capabilities, API support vs implemented application, grouped text/image/video/audio inventory | [Model capabilities](../docs/MODEL_CAPABILITIES.md); generated with `go run ./cmd/model-catalog -format markdown` |
 | Text models: KIE and APIMart integration, prices and rollout gates | [Text models](../docs/runbooks/KIE_TEXT_MODELS.md) |
 | Study24 model research, provider documentation and shared integration work | [Model catalog](../docs/superpowers/plans/2026-09-08-study24-apimart/README.md); [shared foundation](../docs/superpowers/plans/2026-09-08-study24-apimart/00-common-foundation.md); [DEV configuration](../docs/runbooks/DEV.md); [read-only preflight](../docs/runbooks/APIMART_PREFLIGHT.md) |

@@ -833,6 +833,8 @@ POST /webhooks/vk/{group_id}
 
 ## 4.4. User / Identity Service
 
+Browser account integration (2026-10-04): websession owns cookie/Origin/CSRF authentication for login, recovery, identity linking and session management. The shared account adapter exposes narrow internal action/recovery entrypoints; browser token-returning routes remain excluded. accountoauth owns external authorization-code exchange and verified assertions. Redis stores browser-bound, one-use OAuth transactions with a 10-minute TTL. OIDC checks nonce and provider-scoped JWKS material. Credentials remain server-side; UI availability comes from /web/v1/auth/methods. Configuration: docs/runbooks/BROWSER_ACCOUNT.md.
+
 Target account identity architecture is defined in `docs/ACCOUNT_IDENTITY_CONTRACT.md`. `account_id` is the future canonical owner of billing, jobs, artifacts, conversations and referrals. `vk_user_id`, Telegram ID, email, phone, Google, Apple and password credentials are identity bindings only. Current implementation is in VK compatibility mode: `IdentityResolver` is wired through SharedCore and both VK Bot and VK Mini App resolve verified VK identities through it. Business storage now has additive account ownership columns for jobs, payments, artifacts, conversations, referrals and billing ledger surfaces, while repository reads/writes remain compatible with legacy `user_id` during the rollout.
 
 Хранит пользователей VK и их состояние.
@@ -3279,3 +3281,5 @@ capture lifecycle. The UI labels this automatic duration/fixed price, and the
 provider receives no duration parameter. No actual-duration settlement is implied.
 These routes remain unverified DEV candidates; see
 [model catalog](runbooks/MODEL_CATALOG.md#video-pricing-and-dev-wiring-checked-2026-10-02).
+
+Email registration (2026-10-04): accountregistration owns delivered six-digit email challenges and browser-bound, one-use Redis proofs (10-minute TTL). Exact-Origin public websession routes request/verify/create; availability is server-configured. accountauth validates/hashes credentials; an atomic AccountRegistrationRepository writes account, verified email, password and audit. Stable server proof-derived account IDs make transient storage/session/cookie-preparation retries safe without password overwrite. Existing identity owners cannot be replaced or merged. Resend uses the existing server-only STARTTLS SMTP adapter; secrets stay in runtime env. Local preview performs no delivery or writes. Configuration and live smoke requirements: docs/runbooks/BROWSER_ACCOUNT.md.

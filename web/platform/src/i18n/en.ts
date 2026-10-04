@@ -1,4 +1,7 @@
+import { accountAuthText } from "./account-auth";
+
 export const en = {
+  auth: accountAuthText.en,
   preloading: {
     offline: "You're offline. Your current content is preserved.",
     refreshFailed: "Couldn't refresh. Showing the last loaded version.",

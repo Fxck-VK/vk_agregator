@@ -4,6 +4,8 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 vi.mock("next/headers", () => ({
   cookies: vi.fn(),
 }));
+vi.mock("@/lib/auth/methods.server", () => ({ loadAuthMethods: () => ({ registration: false, password: true, recovery: false, email_link: false, phone_link: false, providers: [] }) }));
+vi.mock("@/features/session/local-workspace-preview", () => ({ isLocalWorkspacePreviewEnabled: () => false }));
 
 vi.mock("@/features/auth/LoginForm/LoginForm", () => ({
   LoginForm: vi.fn(() => <div data-testid="login-form">form</div>),
@@ -33,7 +35,7 @@ describe("LoginPage", () => {
 
     expect(markup).toContain('data-testid="login-form"');
     expect(LoginForm).toHaveBeenCalledWith(
-      { returnTo: "/app/chat/d7c979f5-24e5-4f88-924b-a592d6e5a906" },
+      expect.objectContaining({ returnTo: "/app/chat/d7c979f5-24e5-4f88-924b-a592d6e5a906", preview: false, oauthFailed: false }),
       undefined,
     );
     expect(markup).not.toContain("d7c979f5-24e5-4f88-924b-a592d6e5a906");
@@ -49,7 +51,7 @@ describe("LoginPage", () => {
 
       renderToStaticMarkup(await LoginPage());
 
-      expect(LoginForm).toHaveBeenCalledWith({}, undefined);
+      expect(LoginForm).toHaveBeenCalledWith(expect.not.objectContaining({ returnTo: expect.anything() }), undefined);
     },
   );
 });

@@ -25,6 +25,7 @@ type Service struct {
 	limiter        RateLimiter
 	sessions       domain.AccountSessionRepository
 	credentials    domain.AccountCredentialRepository
+	registration   domain.AccountRegistrationRepository
 	audit          domain.AccountLinkAuditRepository
 	sessionTTL     time.Duration
 	accessTokenTTL time.Duration

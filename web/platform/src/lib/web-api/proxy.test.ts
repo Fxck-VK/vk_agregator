@@ -9,6 +9,19 @@ const maxProxyRequestBodyBytes = 64 * 1024;
 type StreamingRequestInit = RequestInit & { duplex: "half" };
 
 describe("proxyWebApiRequest", () => {
+  it.each(["/ru/app", "/en/app/profile?oauth=linked", "/ru/login?oauth=failed"])("permits only a fixed OAuth callback redirect and preserves session cookies: %s", async (location) => {
+    vi.stubGlobal("fetch", vi.fn(async () => new Response(null, { status: 303, headers: { Location: location, "Set-Cookie": "nh_access=synthetic; HttpOnly; Secure" } })));
+    const path = "/web/v1/auth/oauth/google/callback?state=synthetic&code=synthetic";
+    const response = await proxyWebApiRequest(new Request(`https://platform.example${path}`), path, internalOrigin);
+    expect(response.status).toBe(303);
+    expect(response.headers.get("Location")).toBe(location);
+    expect(response.headers.getSetCookie()).toHaveLength(1);
+  });
+  it.each(["https://evil.example/ru/app", "//evil.example/ru/app", "/ru/app?token=raw", "/ru/login?oauth=failed&next=https://evil.example"])("rejects an arbitrary OAuth redirect: %s", async location => {
+    vi.stubGlobal("fetch", vi.fn(async () => new Response(null, { status: 303, headers: { Location: location } })));
+    const path = "/web/v1/auth/oauth/google/callback";
+    expect((await proxyWebApiRequest(new Request(`https://platform.example${path}`), path, internalOrigin)).status).toBe(503);
+  });
   it("preserves retry and account metadata with a generated correlation id", async () => {
     vi.stubGlobal("fetch", vi.fn(async () => new Response(null, { status: 503, headers: { "Retry-After": "5", "X-NeiroHub-Account-ID": "account", "Set-Cookie": "nh_access=synthetic; HttpOnly" } })));
     const response = await proxyWebApiRequest(new Request("https://platform.example/web/v1/conversations?limit=20"), "/web/v1/conversations?limit=20", internalOrigin);

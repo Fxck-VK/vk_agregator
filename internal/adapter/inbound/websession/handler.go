@@ -51,6 +51,8 @@ type principalContextKey struct{}
 
 // Config contains browser adapter settings.
 type Config struct {
+	EmailDeliveryEnabled        bool
+	PhoneDeliveryEnabled        bool
 	TestPaymentsEnabled         bool
 	VideoRoutes                 []productcatalog.VideoRoute
 	TextModels                  []textgeneration.PublicModel
@@ -311,6 +313,10 @@ type WebChatMessageLimiter interface {
 
 // Deps are services shared with other account adapters.
 type Deps struct {
+	EmailRegistration      EmailRegistrationService
+	AccountActions         BrowserAccountActions
+	BrowserOAuth           BrowserOAuthService
+	OAuthLogins            BrowserOAuthLogins
 	MusicInputArtifacts    MusicInputArtifactSaver
 	MusicInputProber       MusicInputProber
 	InputArtifacts         InputArtifactService
@@ -352,6 +358,23 @@ func NewHandler(cfg Config, deps Deps) *Handler {
 // Routes returns the versioned browser API router.
 func (h *Handler) Routes() http.Handler {
 	mux := http.NewServeMux()
+	mux.HandleFunc("GET /web/v1/auth/methods", h.accountMethods)
+	mux.HandleFunc("POST /web/v1/auth/email/request-code", h.emailRegistration)
+	mux.HandleFunc("POST /web/v1/auth/email/verify-code", h.emailRegistration)
+	mux.HandleFunc("POST /web/v1/auth/email/register", h.emailRegistration)
+	mux.HandleFunc("POST /web/v1/auth/password/request-reset", h.browserPasswordRecovery)
+	mux.HandleFunc("POST /web/v1/auth/password/reset", h.browserPasswordRecovery)
+	mux.HandleFunc("POST /web/v1/account/identities/email/request-code", h.requireUnsafePrincipal(h.browserAccountAction))
+	mux.HandleFunc("POST /web/v1/account/identities/email/verify", h.requireUnsafePrincipal(h.browserAccountAction))
+	mux.HandleFunc("POST /web/v1/account/identities/phone/request-otp", h.requireUnsafePrincipal(h.browserAccountAction))
+	mux.HandleFunc("POST /web/v1/account/identities/phone/verify", h.requireUnsafePrincipal(h.browserAccountAction))
+	mux.HandleFunc("POST /web/v1/account/password/set", h.requireUnsafePrincipal(h.browserAccountAction))
+	mux.HandleFunc("DELETE /web/v1/account/identities/{id}", h.requireUnsafePrincipal(h.browserAccountAction))
+	mux.HandleFunc("GET /web/v1/account/sessions", h.requirePrincipal(h.browserSessions))
+	mux.HandleFunc("POST /web/v1/account/sessions/{id}/revoke", h.requireUnsafePrincipal(h.browserRevokeSession))
+	mux.HandleFunc("POST /web/v1/auth/oauth/{provider}/start", h.browserOAuthStart)
+	mux.HandleFunc("POST /web/v1/account/oauth/{provider}/start", h.requireUnsafePrincipal(h.browserOAuthLinkStart))
+	mux.HandleFunc("GET /web/v1/auth/oauth/{provider}/callback", h.browserOAuthCallback)
 	mux.HandleFunc("POST /web/v1/auth/password/login", h.passwordLogin)
 	mux.HandleFunc("POST /web/v1/auth/refresh", h.refresh)
 	mux.HandleFunc("POST /web/v1/auth/logout", h.logout)

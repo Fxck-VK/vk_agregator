@@ -5,6 +5,7 @@ import (
 	"crypto"
 	"crypto/rsa"
 	"crypto/sha256"
+	"crypto/subtle"
 	"encoding/base64"
 	"encoding/json"
 	"errors"
@@ -23,6 +24,7 @@ const defaultOAuthHTTPTimeout = 5 * time.Second
 
 // OIDCClaims are the normalized claims account OAuth adapters need.
 type OIDCClaims struct {
+	Nonce         string
 	Subject       string
 	Issuer        string
 	Audience      []string
@@ -110,6 +112,9 @@ func (a *OIDCAdapter) Verify(ctx context.Context, req VerifyRequest) (domain.Ver
 	if err != nil {
 		return domain.VerifiedAccountLogin{}, fmt.Errorf("%w: %v", ErrInvalidAssertion, err)
 	}
+	if req.ExpectedNonce != "" && subtle.ConstantTimeCompare([]byte(claims.Nonce), []byte(req.ExpectedNonce)) != 1 {
+		return domain.VerifiedAccountLogin{}, ErrInvalidAssertion
+	}
 	subject := strings.TrimSpace(claims.Subject)
 	if subject == "" {
 		return domain.VerifiedAccountLogin{}, ErrInvalidAssertion
@@ -123,10 +128,11 @@ func (a *OIDCAdapter) Verify(ctx context.Context, req VerifyRequest) (domain.Ver
 
 // RemoteJWKSOIDCVerifier verifies RS256 ID tokens using provider JWKS.
 type RemoteJWKSOIDCVerifier struct {
-	client *http.Client
-	mu     sync.Mutex
-	keys   map[string]*rsa.PublicKey
-	expiry time.Time
+	client    *http.Client
+	mu        sync.Mutex
+	keys      map[string]*rsa.PublicKey
+	expiry    time.Time
+	keySource string
 }
 
 // NewRemoteJWKSOIDCVerifier builds a JWKS-backed verifier.
@@ -183,7 +189,7 @@ func (v *RemoteJWKSOIDCVerifier) VerifyIDToken(ctx context.Context, token string
 func (v *RemoteJWKSOIDCVerifier) keyFor(ctx context.Context, cfg OIDCVerifyConfig, kid string) (*rsa.PublicKey, error) {
 	now := clockNow(cfg.Clock)
 	v.mu.Lock()
-	if key := v.keys[kid]; key != nil && now.Before(v.expiry) {
+	if key := v.keys[kid]; key != nil && v.keySource == cfg.JWKSURL && now.Before(v.expiry) {
 		v.mu.Unlock()
 		return key, nil
 	}
@@ -195,6 +201,7 @@ func (v *RemoteJWKSOIDCVerifier) keyFor(ctx context.Context, cfg OIDCVerifyConfi
 	}
 	v.mu.Lock()
 	v.keys = keys
+	v.keySource = cfg.JWKSURL
 	v.expiry = expiry
 	key := v.keys[kid]
 	v.mu.Unlock()
@@ -255,11 +262,12 @@ type jwtHeader struct {
 }
 
 type rawOIDCClaims struct {
+	Nonce         string       `json:"nonce"`
 	Subject       string       `json:"sub"`
 	Issuer        string       `json:"iss"`
 	Audience      audienceList `json:"aud"`
 	Email         string       `json:"email"`
-	EmailVerified bool         `json:"email_verified"`
+	EmailVerified oidcBoolean  `json:"email_verified"`
 	ExpiresAt     int64        `json:"exp"`
 	NotBefore     int64        `json:"nbf"`
 	IssuedAt      int64        `json:"iat"`
@@ -267,11 +275,12 @@ type rawOIDCClaims struct {
 
 func (c rawOIDCClaims) toClaims() OIDCClaims {
 	claims := OIDCClaims{
+		Nonce:         c.Nonce,
 		Subject:       c.Subject,
 		Issuer:        c.Issuer,
 		Audience:      []string(c.Audience),
 		Email:         c.Email,
-		EmailVerified: c.EmailVerified,
+		EmailVerified: bool(c.EmailVerified),
 	}
 	if c.ExpiresAt > 0 {
 		claims.ExpiresAt = time.Unix(c.ExpiresAt, 0)
@@ -286,6 +295,30 @@ func (c rawOIDCClaims) toClaims() OIDCClaims {
 }
 
 type audienceList []string
+
+// Apple emits boolean claims as strings; Google uses JSON booleans.
+type oidcBoolean bool
+
+func (b *oidcBoolean) UnmarshalJSON(data []byte) error {
+	var value bool
+	if err := json.Unmarshal(data, &value); err == nil {
+		*b = oidcBoolean(value)
+		return nil
+	}
+	var text string
+	if err := json.Unmarshal(data, &text); err != nil {
+		return err
+	}
+	switch text {
+	case "true":
+		*b = true
+	case "false":
+		*b = false
+	default:
+		return errors.New("invalid boolean claim")
+	}
+	return nil
+}
 
 func (a *audienceList) UnmarshalJSON(data []byte) error {
 	var one string

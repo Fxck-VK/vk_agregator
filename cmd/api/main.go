@@ -41,6 +41,7 @@ import (
 	"vk-ai-aggregator/internal/platform/tracing"
 	"vk-ai-aggregator/internal/service/accountauth"
 	"vk-ai-aggregator/internal/service/accountlink"
+	"vk-ai-aggregator/internal/service/accountregistration"
 	"vk-ai-aggregator/internal/service/artifactservice"
 	"vk-ai-aggregator/internal/service/imagegeneration"
 	"vk-ai-aggregator/internal/service/joborchestrator"
@@ -350,7 +351,17 @@ func main() {
 		webInputs = artifactservice.New(core.Artifacts, objects, "artifacts")
 		webInputObjects = objects
 	}
+	var emailRegistration websession.EmailRegistrationService
+	if strings.EqualFold(cfg.AccountEmailDeliveryProvider, "smtp") {
+		emailRegistration, err = accountregistration.New(redisstore.NewAccountRegistrationStore(rdb), accountSender, core.AccountAuth, cfg.VKAppSecret)
+		if err != nil {
+			logger.Error("email registration wiring failed", logging.ErrorAttr(err))
+			os.Exit(1)
+		}
+	}
 	web := websession.NewHandler(websession.Config{
+		EmailDeliveryEnabled:        strings.EqualFold(cfg.AccountEmailDeliveryProvider, "smtp"),
+		PhoneDeliveryEnabled:        strings.EqualFold(cfg.AccountPhoneDeliveryProvider, "http"),
 		TestPaymentsEnabled:         apiapp.WebTestPaymentsEnabled(&cfg),
 		VideoRoutes:                 runtimeCatalog.VideoRoutes(),
 		WebOrigin:                   cfg.WebOrigin,
@@ -358,6 +369,16 @@ func main() {
 		ImageModels:                 webImageModelsFromRuntimeCatalog(runtimeCatalog.ImageModels()),
 		ImageArtifactRedirectPolicy: webArtifactRedirectPolicy,
 	}, websession.Deps{
+		EmailRegistration: emailRegistration,
+		AccountActions:    account,
+		OAuthLogins:       core.AccountAuth,
+		BrowserOAuth: accountoauth.NewBrowser(accountoauth.BrowserConfig{
+			WebOrigin:      cfg.WebOrigin,
+			GoogleClientID: firstOAuthClientID(cfg.AccountOAuthGoogleClientIDs), GoogleClientSecret: cfg.AccountWebOAuthGoogleClientSecret,
+			AppleClientID: firstOAuthClientID(cfg.AccountOAuthAppleClientIDs), AppleClientSecret: cfg.AccountWebOAuthAppleClientSecret,
+			TelegramClientID: firstOAuthClientID(cfg.AccountOAuthTelegramClientIDs), TelegramClientSecret: cfg.AccountWebOAuthTelegramClientSecret,
+			VKIDClientID: firstOAuthClientID(cfg.AccountOAuthVKIDClientIDs),
+		}, redisstore.NewAccountOAuthBrowserStore(rdb), oauthRegistry, nil),
 		InputArtifacts: webInputs, InputObjects: webInputObjects,
 		Payments:               core.Payment,
 		ReceiptContacts:        core.Account,

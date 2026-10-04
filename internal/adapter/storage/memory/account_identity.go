@@ -108,12 +108,16 @@ func (r *AccountIdentityRepo) UnlinkIdentity(_ context.Context, accountID, ident
 		return domain.ErrConflict
 	}
 	linkedCount := 0
+	remainingLogin := 0
 	for _, row := range r.byID {
 		if row.AccountID == accountID {
 			linkedCount++
+			if row.ID != identityID && row.Provider != domain.IdentityProviderPhone && !row.VerifiedAt.IsZero() {
+				remainingLogin++
+			}
 		}
 	}
-	if linkedCount <= 1 {
+	if linkedCount <= 1 || (identity.Provider != domain.IdentityProviderPhone && remainingLogin == 0) {
 		return domain.ErrAccountLastIdentity
 	}
 	delete(r.byID, identityID)

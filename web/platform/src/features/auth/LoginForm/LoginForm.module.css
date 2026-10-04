@@ -1,7 +1,7 @@
 .form {
   display: grid;
   gap: var(--space-4);
-  inline-size: min(100%, 26rem);
+  inline-size: min(100%, 30rem);
   padding: var(--space-6);
   border: 0.0625rem solid var(--color-card-border);
   border-radius: var(--radius-lg);
@@ -15,10 +15,10 @@
 
 .field input {
   inline-size: 100%;
-  border: 0.0625rem solid var(--color-input-border, var(--color-border));
-  border-radius: var(--radius-sm);
+  border: 0;
+  border-radius: inherit;
   padding: var(--space-3);
-  background: var(--field-background, var(--color-background));
+  background: transparent;
   color: var(--color-text);
 }
 
@@ -26,3 +26,17 @@
   margin: 0;
   color: var(--color-danger);
 }
+
+.fields { display: grid; gap: var(--space-4); }
+.heading h1 { margin: 0; font-size: 1.75rem; line-height: 1.2; }
+.heading p, .hint, .field small, .external { margin: 0; color: var(--color-text-muted); line-height: 1.5; }
+.heading p { margin-block-start: var(--space-2); }
+.inputSurface { border-radius: var(--radius-sm); }
+.inputSurface:focus-within { outline: 0.0625rem solid var(--color-accent); outline-offset: 0.125rem; }
+.textAction { border: 0; padding: var(--space-1); background: transparent; color: var(--color-text); cursor: pointer; text-align: center; }
+.textAction:hover { color: var(--color-accent); }
+.textAction:disabled { color: var(--color-text-muted); cursor: default; opacity: .6; }
+.actions, .providers { display: flex; flex-wrap: wrap; justify-content: center; gap: var(--space-2); }
+.providers > button { flex: 1 1 calc(50% - var(--space-2)); }
+.external { display: grid; gap: var(--space-3); padding-block-start: var(--space-4); border-block-start: 0.0625rem solid var(--color-border); text-align: center; }
+@media (max-width: 36rem) { .form { padding: var(--space-4); } }

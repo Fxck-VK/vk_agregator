@@ -294,6 +294,14 @@ it with `scripts/deploy/prepare-dev-env.sh`, validates it with
 `scripts/deploy/check-dev-env.sh`, uploads it to the DEV VPS, deploys, then runs
 DEV smoke.
 
+For browser email registration and recovery, set the optional repository secret
+`DEV_ACCOUNT_EMAIL_SMTP_PASSWORD` to the Resend sending key. The DEV workflow
+runs `scripts/deploy/prepare-dev-email.sh` before the existing env preparation;
+it overrides only email delivery keys with Resend STARTTLS on port 587 and the
+verified sender `noreply@notify.neiirohub.ru`. An absent secret preserves the
+assembled email configuration. This hook does not alter production secrets.
+See [browser account access](../../docs/runbooks/BROWSER_ACCOUNT.md) for registration and smoke.
+
 DEV deploy does not read production env secrets. Run DEV/PROD parity as a
 separate operator check when changing env structure.
 
@@ -560,6 +568,7 @@ Before changing DEV deploy env scripts:
 
 ```bash
 bash scripts/deploy/test-dev-env.sh
+bash scripts/deploy/test-dev-email.sh
 ```
 
 This validates shell syntax, mock DEV env, YooKassa DEV env, production URL

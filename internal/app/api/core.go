@@ -110,6 +110,7 @@ func NewSharedCore(pool *pgxpool.Pool, cfg config.Config, opts ...SharedCoreOpti
 	accountAuthOptions := append([]accountauth.Option{
 		accountauth.WithSessionRepository(sessions),
 		accountauth.WithCredentialRepository(accountSecurity),
+		accountauth.WithRegistrationRepository(identities),
 		accountauth.WithAccountAuditRepository(accountSecurity),
 	}, options.accountAuthOptions...)
 	accountAuth := accountauth.New(identity, accountAuthOptions...)

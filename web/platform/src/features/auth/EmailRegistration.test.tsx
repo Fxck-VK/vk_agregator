@@ -1,0 +1,106 @@
+import { cleanup, fireEvent, render, screen } from "@testing-library/react";
+import { afterEach, describe, expect, it, vi } from "vitest";
+
+vi.mock("next/navigation", () => ({ useRouter: () => ({ replace }) }));
+vi.mock("@/lib/web-api/browser", () => ({ webBrowserFetch: vi.fn() }));
+import { webBrowserFetch } from "@/lib/web-api/browser";
+import { previewAuthMethods } from "@/lib/auth/methods";
+import { LoginForm } from "./LoginForm/LoginForm";
+const replace = vi.fn();
+afterEach(() => { cleanup(); vi.clearAllMocks(); });
+
+describe("Email registration", () => {
+ it("verifies code before asking for password and signs into the safe locale return path", async () => {
+  vi.mocked(webBrowserFetch).mockResolvedValue(new Response(null, { status: 204 }));
+  render(<LoginForm methods={previewAuthMethods} returnTo="/app/files" />);
+  fireEvent.click(screen.getByRole("button", { name: "Создать аккаунт" }));
+  fireEvent.change(screen.getByLabelText("Электронная почта"), { target: { value: "new@example.test" } });
+  fireEvent.click(screen.getByRole("button", { name: "Отправить код" }));
+  const code = await screen.findByLabelText("Код из письма");
+  expect(screen.queryByLabelText("Пароль")).not.toBeInTheDocument();
+  fireEvent.change(code, { target: { value: "123456" } });
+  fireEvent.click(screen.getByRole("button", { name: "Подтвердить почту" }));
+  const password = await screen.findByLabelText("Пароль");
+  expect(webBrowserFetch).toHaveBeenLastCalledWith("/web/v1/auth/email/verify-code", expect.objectContaining({ body: JSON.stringify({ email: "new@example.test", code: "123456" }) }));
+  fireEvent.change(password, { target: { value: "strong-password" } });
+  fireEvent.change(screen.getByLabelText("Повторите пароль"), { target: { value: "strong-password" } });
+  fireEvent.click(screen.getByRole("button", { name: "Создать аккаунт" }));
+  await vi.waitFor(() => expect(replace).toHaveBeenCalledWith("/ru/app/files"));
+  expect(webBrowserFetch).toHaveBeenLastCalledWith("/web/v1/auth/email/register", expect.objectContaining({ body: JSON.stringify({ email: "new@example.test", password: "strong-password" }) }));
+ });
+ it("does not expose real signup when the backend capability is absent", () => {
+  render(<LoginForm />);
+  expect(screen.queryByRole("button", { name: "Создать аккаунт" })).not.toBeInTheDocument();
+ });
+ it("keeps the code step after a rejected code so it can be corrected", async () => {
+  vi.mocked(webBrowserFetch).mockResolvedValueOnce(new Response(null, { status: 202 })).mockResolvedValueOnce(new Response(null, { status: 400 })).mockResolvedValueOnce(new Response(null, { status: 204 }));
+  render(<LoginForm methods={previewAuthMethods} />);
+  fireEvent.click(screen.getByRole("button", { name: "Создать аккаунт" }));
+  fireEvent.change(screen.getByLabelText("Электронная почта"), { target: { value: "new@example.test" } });
+  fireEvent.click(screen.getByRole("button", { name: "Отправить код" }));
+  fireEvent.change(await screen.findByLabelText("Код из письма"), { target: { value: "111111" } });
+  fireEvent.click(screen.getByRole("button", { name: "Подтвердить почту" }));
+  expect(await screen.findByText("Код неверный или срок его действия истёк. Проверьте код или запросите новый.")).toBeInTheDocument();
+  expect(screen.queryByLabelText("Пароль")).not.toBeInTheDocument();
+  fireEvent.change(screen.getByLabelText("Код из письма"), { target: { value: "123456" } });
+  fireEvent.click(screen.getByRole("button", { name: "Подтвердить почту" }));
+  expect(await screen.findByLabelText("Пароль")).toBeInTheDocument();
+ });
+ it("does not submit mismatched passwords and allows restarting an expired confirmation", async () => {
+  vi.mocked(webBrowserFetch).mockResolvedValue(new Response(null, { status: 204 }));
+  render(<LoginForm methods={previewAuthMethods} />);
+  fireEvent.click(screen.getByRole("button", { name: "Создать аккаунт" }));
+  fireEvent.change(screen.getByLabelText("Электронная почта"), { target: { value: "new@example.test" } });
+  fireEvent.click(screen.getByRole("button", { name: "Отправить код" }));
+  fireEvent.change(await screen.findByLabelText("Код из письма"), { target: { value: "123456" } });
+  fireEvent.click(screen.getByRole("button", { name: "Подтвердить почту" }));
+  fireEvent.change(await screen.findByLabelText("Пароль"), { target: { value: "strong-password" } });
+  fireEvent.change(screen.getByLabelText("Повторите пароль"), { target: { value: "different-password" } });
+  fireEvent.click(screen.getByRole("button", { name: "Создать аккаунт" }));
+  expect(await screen.findByText("Пароли не совпадают.")).toBeInTheDocument();
+  expect(webBrowserFetch).toHaveBeenCalledTimes(2);
+  vi.mocked(webBrowserFetch).mockResolvedValueOnce(new Response(null, { status: 400 }));
+  fireEvent.change(screen.getByLabelText("Повторите пароль"), { target: { value: "strong-password" } });
+  fireEvent.click(screen.getByRole("button", { name: "Создать аккаунт" }));
+  expect(await screen.findByText("Подтверждение истекло. Запросите новый код.")).toBeInTheDocument();
+  expect(screen.getByLabelText("Пароль")).toHaveValue("");
+  fireEvent.click(screen.getByRole("button", { name: "Запросить новый код" }));
+  expect(screen.getByLabelText("Электронная почта")).toBeEnabled();
+  expect(screen.queryByLabelText("Пароль")).not.toBeInTheDocument();
+ });
+ it("labels preview steps as simulation and makes no backend writes", async () => {
+  render(<LoginForm preview methods={previewAuthMethods} />);
+  fireEvent.click(screen.getByRole("button", { name: "Создать аккаунт" }));
+  fireEvent.change(screen.getByLabelText("Электронная почта"), { target: { value: "new@example.test" } });
+  fireEvent.click(screen.getByRole("button", { name: "Отправить код" }));
+  expect(await screen.findByText("В предпросмотре введите любой шестизначный код. Письмо не отправляется.")).toBeInTheDocument();
+  fireEvent.change(screen.getByLabelText("Код из письма"), { target: { value: "123456" } });
+  fireEvent.click(screen.getByRole("button", { name: "Подтвердить почту" }));
+  expect(await screen.findByText("Предпросмотр шага установки пароля. Почта не подтверждается.")).toBeInTheDocument();
+  fireEvent.change(screen.getByLabelText("Пароль"), { target: { value: "strong-password" } });
+  fireEvent.change(screen.getByLabelText("Повторите пароль"), { target: { value: "strong-password" } });
+  fireEvent.click(screen.getByRole("button", { name: "Создать аккаунт" }));
+  expect(await screen.findByText("Предпросмотр завершён. На рабочем сайте здесь создаётся аккаунт и выполняется вход.")).toBeInTheDocument();
+  expect(webBrowserFetch).not.toHaveBeenCalled();
+  expect(replace).not.toHaveBeenCalled();
+ });
+ it.each([503, 502, 504])("retries signup with the original password after HTTP %s", async status => {
+  vi.mocked(webBrowserFetch).mockResolvedValue(new Response(null, { status: 204 }));
+  render(<LoginForm methods={previewAuthMethods} />);
+  fireEvent.click(screen.getByRole("button", { name: "Создать аккаунт" }));
+  fireEvent.change(screen.getByLabelText("Электронная почта"), { target: { value: "new@example.test" } });
+  fireEvent.click(screen.getByRole("button", { name: "Отправить код" }));
+  fireEvent.change(await screen.findByLabelText("Код из письма"), { target: { value: "123456" } });
+  fireEvent.click(screen.getByRole("button", { name: "Подтвердить почту" }));
+  fireEvent.change(await screen.findByLabelText("Пароль"), { target: { value: "strong-password" } });
+  fireEvent.change(screen.getByLabelText("Повторите пароль"), { target: { value: "strong-password" } });
+  vi.mocked(webBrowserFetch).mockResolvedValueOnce(new Response(null, { status }));
+  fireEvent.click(screen.getByRole("button", { name: "Создать аккаунт" }));
+  expect(await screen.findByText("Не удалось завершить регистрацию. Повторите с тем же паролем.")).toBeInTheDocument();
+  expect(screen.getByLabelText("Пароль")).toHaveValue("strong-password");
+  expect(screen.getByLabelText("Пароль")).toHaveAttribute("readonly");
+  fireEvent.click(screen.getByRole("button", { name: "Создать аккаунт" }));
+  await vi.waitFor(() => expect(replace).toHaveBeenCalled());
+  expect(webBrowserFetch).toHaveBeenLastCalledWith("/web/v1/auth/email/register", expect.objectContaining({ body: JSON.stringify({ email: "new@example.test", password: "strong-password" }) }));
+ });
+});
