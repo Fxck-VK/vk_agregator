@@ -8,6 +8,7 @@ import (
 	"fmt"
 	"strconv"
 	"strings"
+	"time"
 
 	"github.com/google/uuid"
 
@@ -102,6 +103,34 @@ func (s *Service) UnlinkIdentity(ctx context.Context, accountID, identityID uuid
 		return domain.ErrNotFound
 	}
 	return s.identities.UnlinkIdentity(ctx, accountID, identityID)
+}
+
+func (s *Service) ReplaceBackupEmailIdentity(ctx context.Context, accountID, identityID uuid.UUID, email string, expected time.Time) (*domain.AccountIdentity, error) {
+	if s == nil || s.identities == nil {
+		return nil, domain.ErrInvalidIdentity
+	}
+	repo, ok := s.identities.(domain.AccountBackupEmailRepository)
+	if !ok {
+		return nil, errors.New("identityresolver: email replacement unavailable")
+	}
+	normalized, err := domain.NormalizeExternalIdentity(domain.IdentityProviderEmail, email)
+	if err != nil {
+		return nil, err
+	}
+	return repo.ReplaceBackupEmailIdentity(ctx, accountID, identityID, email, normalized, expected)
+}
+
+func (s *Service) WithVerifiedEmailLock(ctx context.Context, accountID uuid.UUID, email string, action func(context.Context) error) error {
+	if s == nil {
+		return domain.ErrInvalidIdentity
+	}
+	repo, ok := s.identities.(interface {
+		WithVerifiedEmailLock(context.Context, uuid.UUID, string, func(context.Context) error) error
+	})
+	if !ok {
+		return errors.New("identityresolver: guarded recovery unavailable")
+	}
+	return repo.WithVerifiedEmailLock(ctx, accountID, email, action)
 }
 
 func (s *Service) resolveOrCreateVK(ctx context.Context, externalID, normalizedID string) (domain.IdentityResolution, error) {

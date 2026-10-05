@@ -28,7 +28,7 @@ func TestBrowserRecoveryRejectsCrossOrigin(t *testing.T) {
 
 func TestBrowserAccountWritesRequireCSRF(t *testing.T) {
 	h, _, _ := newTestHandler(t)
-	for _, path := range []string{"/web/v1/account/identities/email/request-code", "/web/v1/account/password/set", "/web/v1/account/sessions/00000000-0000-4000-8000-000000000001/revoke"} {
+	for _, path := range []string{"/web/v1/account/identities/email/request-code", "/web/v1/account/identities/email/backup/request-code", "/web/v1/account/identities/email/backup/verify", "/web/v1/account/password/set", "/web/v1/account/sessions/00000000-0000-4000-8000-000000000001/revoke"} {
 		req := httptest.NewRequest("POST", path, strings.NewReader(`{}`))
 		req.Header.Set("Origin", "https://app.example.test")
 		rec := httptest.NewRecorder()
@@ -45,6 +45,49 @@ func TestBrowserMethodsFailClosedWithoutConfiguration(t *testing.T) {
 	h.Routes().ServeHTTP(rec, httptest.NewRequest("GET", "/web/v1/auth/methods", nil))
 	if rec.Code != 200 || !strings.Contains(rec.Body.String(), `"recovery":false`) || strings.Contains(rec.Body.String(), "secret") {
 		t.Fatalf("unsafe methods: %d %s", rec.Code, rec.Body.String())
+	}
+}
+
+func TestBackupEmailBrowserRoutesRequireCookieOriginCSRFAndDelivery(t *testing.T) {
+	for _, path := range []string{"/web/v1/account/identities/email/backup/request-code", "/web/v1/account/identities/email/backup/verify"} {
+		t.Run(path, func(t *testing.T) {
+			h, _, sessions := newTestHandler(t)
+			spy := &browserActionsSpy{}
+			h.deps.AccountActions = spy
+			accountID := uuid.New()
+			tokens, _ := sessions.IssueSession(context.Background(), accountID, accountauth.SessionMetadata{})
+			request := func(origin string, cookie, csrf bool) *httptest.ResponseRecorder {
+				req := httptest.NewRequest("POST", path, strings.NewReader(`{}`))
+				req.Header.Set("Origin", origin)
+				if cookie {
+					req.AddCookie(&http.Cookie{Name: accessCookieName, Value: tokens.AccessToken})
+				}
+				if csrf {
+					req.Header.Set("X-CSRF-Token", "csrf")
+					req.AddCookie(&http.Cookie{Name: csrfCookieName, Value: "csrf"})
+				}
+				req.Header.Set("X-Account-ID", uuid.NewString())
+				rec := httptest.NewRecorder()
+				h.Routes().ServeHTTP(rec, req)
+				return rec
+			}
+			if request("https://evil.example.test", true, true).Code != 403 {
+				t.Fatal("cross origin accepted")
+			}
+			if request("https://app.example.test", true, false).Code != 403 {
+				t.Fatal("missing CSRF accepted")
+			}
+			if request("https://app.example.test", false, true).Code != 401 {
+				t.Fatal("missing cookie accepted")
+			}
+			if request("https://app.example.test", true, true).Code != 503 || spy.actor != uuid.Nil {
+				t.Fatal("disabled delivery accepted")
+			}
+			h.cfg.EmailDeliveryEnabled = true
+			if request("https://app.example.test", true, true).Code != 204 || spy.actor != accountID {
+				t.Fatal("cookie owner not forwarded")
+			}
+		})
 	}
 }
 

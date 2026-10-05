@@ -7,6 +7,7 @@ import (
 	"context"
 	"errors"
 	"strings"
+	"time"
 
 	"github.com/google/uuid"
 
@@ -56,6 +57,7 @@ type AccountProfile struct {
 // AccountIdentitySafe is a display-safe account identity DTO. It intentionally
 // omits external_id and normalized_id.
 type AccountIdentitySafe struct {
+	EmailRole  domain.AccountEmailRole `json:"email_role,omitempty"`
 	ID         uuid.UUID               `json:"id"`
 	AccountID  uuid.UUID               `json:"account_id"`
 	Provider   domain.IdentityProvider `json:"provider"`
@@ -96,13 +98,26 @@ func (s *Service) ListIdentities(ctx context.Context, accountID uuid.UUID, limit
 		return nil, domain.ErrInvalidIdentity
 	}
 	limit = normalizeLimit(limit)
-	rows, err := s.identities.ListIdentitiesByAccount(ctx, accountID, limit, offset)
+	rows, err := s.allIdentities(ctx, accountID)
 	if err != nil {
 		return nil, err
 	}
-	out := make([]AccountIdentitySafe, 0, len(rows))
-	for _, identity := range rows {
-		out = append(out, safeIdentityDTO(identity))
+	roles := domain.AccountEmailRoles(rows)
+	if offset < 0 {
+		offset = 0
+	}
+	if offset > len(rows) {
+		offset = len(rows)
+	}
+	end := offset + limit
+	if end > len(rows) {
+		end = len(rows)
+	}
+	out := make([]AccountIdentitySafe, 0, end-offset)
+	for _, identity := range rows[offset:end] {
+		dto := safeIdentityDTO(identity)
+		dto.EmailRole = roles[identity.ID]
+		out = append(out, dto)
 	}
 	return out, nil
 }
@@ -117,7 +132,74 @@ func (s *Service) LinkVerifiedIdentity(ctx context.Context, actorAccountID, acco
 	if err != nil {
 		return AccountIdentitySafe{}, err
 	}
-	return safeIdentityDTO(identity), nil
+	return s.identityDTOWithRole(ctx, identity)
+}
+
+func (s *Service) allIdentities(ctx context.Context, accountID uuid.UUID) ([]*domain.AccountIdentity, error) {
+	if s == nil || s.identities == nil {
+		return nil, errMissingDependency
+	}
+	if accountID == uuid.Nil {
+		return nil, domain.ErrInvalidIdentity
+	}
+	out := make([]*domain.AccountIdentity, 0)
+	for offset := 0; ; offset += maxIdentityLimit {
+		rows, err := s.identities.ListIdentitiesByAccount(ctx, accountID, maxIdentityLimit, offset)
+		if err != nil {
+			return nil, err
+		}
+		out = append(out, rows...)
+		if len(rows) < maxIdentityLimit {
+			return out, nil
+		}
+	}
+}
+
+func (s *Service) identityDTOWithRole(ctx context.Context, identity *domain.AccountIdentity) (AccountIdentitySafe, error) {
+	if identity == nil {
+		return AccountIdentitySafe{}, errMissingDependency
+	}
+	rows, err := s.allIdentities(ctx, identity.AccountID)
+	if err != nil {
+		return AccountIdentitySafe{}, err
+	}
+	dto := safeIdentityDTO(identity)
+	dto.EmailRole = domain.AccountEmailRoles(rows)[identity.ID]
+	return dto, nil
+}
+
+// BackupEmailVersion is internal proof state, never a product DTO.
+func (s *Service) BackupEmailVersion(ctx context.Context, accountID, identityID uuid.UUID) (time.Time, error) {
+	rows, err := s.allIdentities(ctx, accountID)
+	if err != nil {
+		return time.Time{}, err
+	}
+	if domain.AccountEmailRoles(rows)[identityID] != domain.AccountEmailBackup {
+		return time.Time{}, domain.ErrAccountBackupEmailChanged
+	}
+	for _, row := range rows {
+		if row.ID == identityID {
+			return row.UpdatedAt, nil
+		}
+	}
+	return time.Time{}, domain.ErrAccountBackupEmailChanged
+}
+
+func (s *Service) ReplaceVerifiedBackupEmail(ctx context.Context, actorAccountID, accountID, identityID uuid.UUID, login domain.VerifiedAccountLogin, expected time.Time) (AccountIdentitySafe, error) {
+	if s == nil {
+		return AccountIdentitySafe{}, errMissingDependency
+	}
+	linker, ok := s.linker.(interface {
+		ReplaceVerifiedBackupEmail(context.Context, uuid.UUID, uuid.UUID, uuid.UUID, domain.VerifiedAccountLogin, time.Time) (*domain.AccountIdentity, error)
+	})
+	if !ok {
+		return AccountIdentitySafe{}, errMissingDependency
+	}
+	identity, err := linker.ReplaceVerifiedBackupEmail(ctx, actorAccountID, accountID, identityID, login, expected)
+	if err != nil {
+		return AccountIdentitySafe{}, err
+	}
+	return s.identityDTOWithRole(ctx, identity)
 }
 
 // UnlinkIdentity removes an identity through the shared auth/link boundary.

@@ -10,6 +10,7 @@ import (
 	"fmt"
 	"strconv"
 	"strings"
+	"time"
 
 	"github.com/google/uuid"
 	"golang.org/x/crypto/argon2"
@@ -156,15 +157,35 @@ func (s *Service) ResetPasswordForVerifiedEmail(ctx context.Context, accountID u
 	if err := s.checkRateLimit(ctx, "password_reset", domain.IdentityProviderEmail, normalizedEmail); err != nil {
 		return err
 	}
-	if err := s.upsertPassword(ctx, accountID, password); err != nil {
+	credential, err := s.newPasswordCredential(accountID, password)
+	if err != nil {
 		return err
 	}
-	if s.sessions != nil {
-		if _, err := s.sessions.RevokeAllSessions(ctx, accountID, s.currentTime()); err != nil {
+	// Production commits ownership validation, credential, revocation and audit
+	// in the same transaction/account lock used by email unlink/replacement.
+	if writer, ok := s.credentials.(interface {
+		ResetCredentialForLinkedEmail(context.Context, domain.AccountCredential, string, bool, bool, time.Time) error
+	}); ok {
+		return writer.ResetCredentialForLinkedEmail(ctx, credential, normalizedEmail, s.sessions != nil, s.audit != nil, s.currentTime())
+	}
+	// Memory/mock stores hold the identity mutex throughout the security writes.
+	guard, ok := s.resolver.(interface {
+		WithVerifiedEmailLock(context.Context, uuid.UUID, string, func(context.Context) error) error
+	})
+	if !ok {
+		return ErrPasswordStoreUnavailable
+	}
+	return guard.WithVerifiedEmailLock(ctx, accountID, normalizedEmail, func(ctx context.Context) error {
+		if _, err := s.credentials.UpsertCredential(ctx, credential); err != nil {
 			return err
 		}
-	}
-	return s.recordAudit(ctx, accountID, nil, domain.AccountLinkActionPasswordReset, domain.IdentityProviderEmail)
+		if s.sessions != nil {
+			if _, err := s.sessions.RevokeAllSessions(ctx, accountID, s.currentTime()); err != nil {
+				return err
+			}
+		}
+		return s.recordAudit(ctx, accountID, nil, domain.AccountLinkActionPasswordReset, domain.IdentityProviderEmail)
+	})
 }
 
 // AuthenticateEmailPassword verifies an email/password pair and returns the
@@ -247,18 +268,6 @@ func (s *Service) verifyLinkedEmail(ctx context.Context, accountID uuid.UUID, em
 		return "", domain.ErrAccountIdentityOwnershipRequired
 	}
 	return normalizedEmail, nil
-}
-
-func (s *Service) upsertPassword(ctx context.Context, accountID uuid.UUID, password string) error {
-	if s == nil || s.credentials == nil {
-		return ErrPasswordStoreUnavailable
-	}
-	credential, err := s.newPasswordCredential(accountID, password)
-	if err != nil {
-		return err
-	}
-	_, err = s.credentials.UpsertCredential(ctx, credential)
-	return err
 }
 
 func (s *Service) newPasswordCredential(accountID uuid.UUID, password string) (domain.AccountCredential, error) {

@@ -44,6 +44,10 @@ func (r *AccountIdentityRepository) EnsureIdentityForUser(ctx context.Context, u
 	if user == nil || user.ID == uuid.Nil {
 		return nil, domain.ErrInvalidIdentity
 	}
+	// Legacy user backfill is not an email-linking entry point.
+	if provider == domain.IdentityProviderEmail {
+		return nil, domain.ErrInvalidIdentity
+	}
 	const q = `
 		WITH existing AS (
 			SELECT account_id
@@ -204,6 +208,9 @@ func (r *AccountIdentityRepository) ListIdentitiesByAccount(ctx context.Context,
 
 // LinkIdentity attaches an identity to an existing account.
 func (r *AccountIdentityRepository) LinkIdentity(ctx context.Context, accountID uuid.UUID, provider domain.IdentityProvider, externalID, normalizedID string) (*domain.AccountIdentity, error) {
+	if provider == domain.IdentityProviderEmail {
+		return r.linkEmailIdentity(ctx, accountID, externalID, normalizedID)
+	}
 	existing, err := r.ResolveIdentity(ctx, provider, normalizedID)
 	if err == nil {
 		if existing.AccountID == accountID {

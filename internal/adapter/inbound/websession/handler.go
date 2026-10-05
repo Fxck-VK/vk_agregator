@@ -366,6 +366,8 @@ func (h *Handler) Routes() http.Handler {
 	mux.HandleFunc("POST /web/v1/auth/password/reset", h.browserPasswordRecovery)
 	mux.HandleFunc("POST /web/v1/account/identities/email/request-code", h.requireUnsafePrincipal(h.browserAccountAction))
 	mux.HandleFunc("POST /web/v1/account/identities/email/verify", h.requireUnsafePrincipal(h.browserAccountAction))
+	mux.HandleFunc("POST /web/v1/account/identities/email/backup/request-code", h.requireUnsafePrincipal(h.browserAccountAction))
+	mux.HandleFunc("POST /web/v1/account/identities/email/backup/verify", h.requireUnsafePrincipal(h.browserAccountAction))
 	mux.HandleFunc("POST /web/v1/account/identities/phone/request-otp", h.requireUnsafePrincipal(h.browserAccountAction))
 	mux.HandleFunc("POST /web/v1/account/identities/phone/verify", h.requireUnsafePrincipal(h.browserAccountAction))
 	mux.HandleFunc("POST /web/v1/account/password/set", h.requireUnsafePrincipal(h.browserAccountAction))

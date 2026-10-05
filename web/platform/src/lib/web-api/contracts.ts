@@ -8,6 +8,7 @@ export const safeIdentityRefSchema = z
     provider: z.string().trim().min(1),
     label: z.string().trim().min(1),
     verified: z.boolean(),
+    email_role: z.enum(["primary", "backup", "additional"]).optional(),
     last_used_at: z.string().datetime({ offset: true }).optional(),
     created_at: z.string().datetime({ offset: true }),
   })

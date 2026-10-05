@@ -126,6 +126,39 @@ func (s *Service) UnlinkIdentity(ctx context.Context, actorAccountID, accountID,
 	return s.resolver.UnlinkIdentity(ctx, accountID, identityID)
 }
 
+func (s *Service) ReplaceVerifiedBackupEmail(ctx context.Context, actorAccountID, accountID, identityID uuid.UUID, login domain.VerifiedAccountLogin, expected time.Time) (*domain.AccountIdentity, error) {
+	if s == nil || s.resolver == nil {
+		return nil, errors.New("accountauth: identity resolver is required")
+	}
+	if actorAccountID == uuid.Nil || accountID == uuid.Nil || actorAccountID != accountID || identityID == uuid.Nil {
+		return nil, domain.ErrAccountIdentityOwnershipRequired
+	}
+	if !login.Verified {
+		return nil, domain.ErrUnverifiedLogin
+	}
+	provider, externalID, normalizedID, err := providerIdentity(login)
+	if err != nil {
+		return nil, err
+	}
+	if provider != domain.IdentityProviderEmail {
+		return nil, domain.ErrInvalidIdentity
+	}
+	if err := s.checkRateLimit(ctx, "replace-email", provider, normalizedID); err != nil {
+		return nil, err
+	}
+	resolver, ok := s.resolver.(interface {
+		ReplaceBackupEmailIdentity(context.Context, uuid.UUID, uuid.UUID, string, time.Time) (*domain.AccountIdentity, error)
+	})
+	if !ok {
+		return nil, errors.New("accountauth: email replacement unavailable")
+	}
+	identity, err := resolver.ReplaceBackupEmailIdentity(ctx, accountID, identityID, externalID, expected)
+	if errors.Is(err, domain.ErrConflict) {
+		return nil, domain.ErrAccountMergeRequiresConfirmation
+	}
+	return identity, err
+}
+
 // MergeAccounts is intentionally blocked until a dedicated confirmed and
 // audited merge flow is implemented.
 func (s *Service) MergeAccounts(_ context.Context, confirmed bool, sourceAccountID, targetAccountID uuid.UUID) error {

@@ -52,7 +52,7 @@ func (h *Handler) browserAccountAction(w http.ResponseWriter, r *http.Request) {
 		writeError(w, 503, "account unavailable")
 		return
 	}
-	if (r.URL.Path == "/web/v1/account/identities/email/request-code" || r.URL.Path == "/web/v1/account/identities/email/verify") && !h.cfg.EmailDeliveryEnabled {
+	if (r.URL.Path == "/web/v1/account/identities/email/request-code" || r.URL.Path == "/web/v1/account/identities/email/verify" || r.URL.Path == "/web/v1/account/identities/email/backup/request-code" || r.URL.Path == "/web/v1/account/identities/email/backup/verify") && !h.cfg.EmailDeliveryEnabled {
 		writeError(w, 503, "verification unavailable")
 		return
 	}

@@ -14,6 +14,61 @@ vi.mock("next/navigation", () => ({ useRouter: () => navigation }));
 
 afterEach(() => { cleanup(); vi.clearAllMocks(); });
 describe("AccountSecurity", () => {
+  const twoEmailProfile = () => ({ ...localWorkspacePreviewProfile, identity_refs: [
+    { ...localWorkspacePreviewProfile.identity_refs[0], email_role: "primary" as const },
+    { ...localWorkspacePreviewProfile.identity_refs[0], id: "10000000-0000-4000-8000-000000000003", label: "b***@example.test", email_role: "backup" as const },
+  ] });
+  it("labels both roles and replaces the backup only after confirming the new address", async () => {
+    const profile = twoEmailProfile(); const backup = { ...profile.identity_refs[1], label: "n***@example.test" };
+    vi.mocked(webBrowserFetch).mockImplementation(async path => path === "/web/v1/me" ? Response.json({ ...profile, identity_refs: [profile.identity_refs[0], backup] }) : Response.json({ items: [] }));
+    vi.mocked(webBrowserMutation).mockResolvedValue(new Response(null, { status: 202 }));
+    render(<AccountSecurity profile={profile} methods={previewAuthMethods} />);
+    expect(screen.getByText("Основная почта")).toBeInTheDocument(); expect(screen.getByText("Резервная почта")).toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: "Заменить" }));
+    expect(screen.getByText(/До подтверждения текущая резервная почта продолжит работать/)).toBeInTheDocument();
+    fireEvent.change(screen.getByLabelText("Электронная почта"), { target: { value: "new@example.test" } });
+    fireEvent.click(screen.getByRole("button", { name: "Отправить код" })); await screen.findByLabelText("Код из письма");
+    expect(webBrowserMutation).toHaveBeenCalledWith("/web/v1/account/identities/email/backup/request-code", expect.objectContaining({ body: JSON.stringify({ email: "new@example.test", identity_id: backup.id }) }));
+    expect(screen.getByText("b***@example.test")).toBeInTheDocument(); expect(screen.queryByText("n***@example.test")).not.toBeInTheDocument();
+    fireEvent.change(screen.getByLabelText("Код из письма"), { target: { value: "123456" } });
+    vi.mocked(webBrowserMutation).mockResolvedValue(Response.json(backup));
+    fireEvent.click(screen.getByRole("button", { name: "Подтвердить" }));
+    await screen.findByText("Резервная почта заменена."); expect(await screen.findByText("n***@example.test")).toBeInTheDocument();
+    expect(webBrowserMutation).toHaveBeenLastCalledWith("/web/v1/account/identities/email/backup/verify", expect.objectContaining({ body: JSON.stringify({ email: "new@example.test", identity_id: backup.id, code: "123456" }) }));
+    expect(screen.queryByRole("button", { name: "Добавить резервную почту" })).not.toBeInTheDocument();
+  });
+  it("resets consumed proof on conflict and retains the old backup", async () => {
+    const profile = twoEmailProfile();
+    vi.mocked(webBrowserFetch).mockImplementation(async path => path === "/web/v1/me" ? Response.json(profile) : Response.json({ items: [] }));
+    vi.mocked(webBrowserMutation).mockResolvedValue(new Response(null, { status: 202 }));
+    render(<AccountSecurity profile={profile} methods={previewAuthMethods} />);
+    fireEvent.click(screen.getByRole("button", { name: "Заменить" }));
+    fireEvent.change(screen.getByLabelText("Электронная почта"), { target: { value: "occupied@example.test" } });
+    fireEvent.click(screen.getByRole("button", { name: "Отправить код" })); await screen.findByLabelText("Код из письма");
+    fireEvent.change(screen.getByLabelText("Код из письма"), { target: { value: "123456" } });
+    vi.mocked(webBrowserMutation).mockResolvedValue(Response.json({ error: "email verification failed" }, { status: 409 }));
+    fireEvent.click(screen.getByRole("button", { name: "Подтвердить" }));
+    expect(await screen.findByRole("alert")).toHaveTextContent("Этот способ входа уже связан с другим аккаунтом.");
+    await waitFor(() => expect(screen.getByLabelText("Электронная почта")).toBeEnabled());
+    expect(screen.queryByLabelText("Код из письма")).not.toBeInTheDocument(); expect(screen.getByText("b***@example.test")).toBeInTheDocument();
+  });
+  it("refreshes changed backup state instead of retrying stale proof", async () => {
+    const profile = twoEmailProfile();
+    vi.mocked(webBrowserFetch).mockImplementation(async path => path === "/web/v1/me" ? Response.json(profile) : Response.json({ items: [] }));
+    vi.mocked(webBrowserMutation).mockResolvedValue(Response.json({ error: "backup_email_changed" }, { status: 409 }));
+    render(<AccountSecurity profile={profile} methods={previewAuthMethods} />);
+    fireEvent.click(screen.getByRole("button", { name: "Заменить" }));
+    fireEvent.change(screen.getByLabelText("Электронная почта"), { target: { value: "new@example.test" } });
+    fireEvent.click(screen.getByRole("button", { name: "Отправить код" }));
+    expect(await screen.findByRole("alert")).toHaveTextContent("Резервная почта уже изменилась.");
+    expect(webBrowserFetch).toHaveBeenCalledWith("/web/v1/me"); expect(screen.queryByLabelText("Электронная почта")).not.toBeInTheDocument();
+  });
+  it("hides adding another email when primary and backup are present", () => {
+    vi.mocked(webBrowserFetch).mockResolvedValue(Response.json({ items: [] }));
+    const profile = { ...localWorkspacePreviewProfile, identity_refs: [localWorkspacePreviewProfile.identity_refs[0], { ...localWorkspacePreviewProfile.identity_refs[0], id: "10000000-0000-4000-8000-000000000003", label: "b***@example.test" }] };
+    render(<AccountSecurity profile={profile} methods={previewAuthMethods} preview />);
+    expect(screen.queryByRole("button", { name: "Добавить резервную почту" })).not.toBeInTheDocument();
+  });
   it("confirms a backup email by code before showing it as linked", async () => {
     const profile = { ...localWorkspacePreviewProfile, identity_refs: [...localWorkspacePreviewProfile.identity_refs, { ...localWorkspacePreviewProfile.identity_refs[0], id: "10000000-0000-4000-8000-000000000003", label: "b***@example.test" }] };
     vi.mocked(webBrowserFetch).mockImplementation(async path => path === "/web/v1/me" ? Response.json(profile) : Response.json({ items: [] }));

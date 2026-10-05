@@ -475,11 +475,29 @@ The target migration is additive:
   profile exposes only `password_set`, never credential material.
 - Password reset requires the same verified email code path and revokes active
   account sessions after the credential is rotated.
+- Recovery rechecks verified email ownership under the same account lock used
+  by unlink and replacement. PostgreSQL commits credential, session revocation
+  and reset audit in one transaction; failure rolls back all three. The memory
+  path holds the identity mutex through its security writes. Unsupported storage
+  guards fail closed rather than using a check-then-write fallback.
 - Additional verified email identities act as backup sign-in/recovery addresses
   for the same account-wide password. Recovery through any linked address must
   preserve account ownership; it must not create an account, merge accounts or
   attach an unconfirmed/removed address. “Backup email” is a product label for an
   additional email identity, not a separate credential or restricted login type.
+- Accounts accept at most two email bindings: the oldest verified email is
+  primary, the next is backup (creation timestamp, then ID). Safe DTOs expose
+  `email_role`. Existing additional legacy emails remain linked, marked
+  `additional`; new emails are blocked at the limit. Unlinking the primary
+  promotes the remaining oldest verified email.
+- Email additions, backup replacement and unlink serialize on the same account
+  lock. Replacement preserves the backup ID and creation order, changes its
+  address only after proof, and commits the binding and link/unlink audit
+  together. The version captured when requesting a replacement code is checked
+  under the lock; stale proofs cannot overwrite a newer replacement or recreate
+  an unlinked binding. Replacement proof uses a separate namespace bound to
+  account, backup ID, version and new address. It cannot reset a password or
+  perform ordinary linking. Foreign email conflicts are checked after proof.
 - Link, unlink and merge actions are always audited.
 - Account and identity APIs must not expose raw provider tokens, launch params,
   full phone/email values or private artifact URLs.

@@ -333,7 +333,7 @@ func (h *Handler) verifyEmailCode(w http.ResponseWriter, r *http.Request) {
 	}
 	identity, err := h.deps.Linker.VerifyEmailCode(r.Context(), accountID, req.Email, req.Code)
 	if err != nil {
-		writeError(w, statusForError(err), "email verification failed")
+		writeEmailLinkError(w, err, "email verification failed")
 		return
 	}
 	writeJSON(w, http.StatusCreated, identity)

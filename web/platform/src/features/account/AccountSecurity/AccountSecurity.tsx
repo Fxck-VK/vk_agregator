@@ -25,6 +25,7 @@ export function AccountSecurity({ profile: initialProfile, methods, preview = fa
   const [pending, setPending] = useState(false); const [error, setError] = useState(oauthStatus === "failed" ? t.auth.failure : "");
   const [message, setMessage] = useState(oauthStatus === "linked" ? t.auth.linked : "");
   const [form, setForm] = useState<FormKind | null>(null); const [sent, setSent] = useState(false);
+  const [replacementID, setReplacementID] = useState<string | null>(null);
   const [address, setAddress] = useState(""); const [code, setCode] = useState(""); const [password, setPassword] = useState("");
   const [currentPassword, setCurrentPassword] = useState(""); const [passwordConfirmation, setPasswordConfirmation] = useState("");
   const [confirm, setConfirm] = useState<{ kind: "identity" | "session"; id: string } | null>(null);
@@ -47,7 +48,16 @@ export function AccountSecurity({ profile: initialProfile, methods, preview = fa
         const code = typeof data === "object" && data !== null && "error" in data ? data.error : null;
         if (code === "password_confirmation_required") setProfile(value => ({ ...value, password_set: true }));
         setError(code === "current_password_invalid" ? t.auth.currentPasswordInvalid : code === "password_confirmation_required" ? t.auth.passwordConfirmationRequired : response.status === 429 ? t.auth.registrationRateLimited : t.auth.failure);
-      } else setError(response.status === 409 ? (method === "DELETE" ? t.auth.lastIdentity : t.auth.conflict) : t.auth.failure);
+      } else {
+        const data: unknown = await response.json().catch(() => null);
+        const errorCode = typeof data === "object" && data !== null && "error" in data ? data.error : null;
+        setError(errorCode === "email_limit_reached" ? t.auth.emailLimitReached : errorCode === "backup_email_changed" ? t.auth.backupEmailChanged : errorCode === "email_already_linked" ? t.auth.emailAlreadyAdded : response.status === 409 ? (method === "DELETE" ? t.auth.lastIdentity : t.auth.conflict) : response.status === 429 ? t.auth.registrationRateLimited : t.auth.failure);
+        if (path.includes("/identities/email/") && (response.status === 409 || response.status === 410)) {
+          setSent(false); setCode("");
+          if (errorCode === "backup_email_changed" || errorCode === "email_limit_reached") { setForm(null); setReplacementID(null); }
+          await refreshProfile();
+        }
+      }
       throw new Error("action");
     }
     return response;
@@ -61,7 +71,7 @@ export function AccountSecurity({ profile: initialProfile, methods, preview = fa
     if (pending || preview) return; setPending(true); setError(""); setMessage("");
     try { await work(); } catch { setError(value => value || t.auth.failure); } finally { setPending(false); setPassword(""); setCurrentPassword(""); setPasswordConfirmation(""); }
   }
-  const openForm = (kind: FormKind) => { setForm(kind); setAddress(""); setCode(""); setPassword(""); setCurrentPassword(""); setPasswordConfirmation(""); setSent(false); setError(""); setMessage(""); };
+  const openForm = (kind: FormKind, identityID: string | null = null) => { setForm(kind); setReplacementID(identityID); setAddress(""); setCode(""); setPassword(""); setCurrentPassword(""); setPasswordConfirmation(""); setSent(false); setError(""); setMessage(""); };
   const submit = (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
     if (form === "password" && (isPasswordTooLong(password) || isPasswordTooLong(currentPassword))) { setError(t.auth.passwordTooLong); return; }
@@ -72,17 +82,19 @@ export function AccountSecurity({ profile: initialProfile, methods, preview = fa
         setProfile(value => ({ ...value, password_set: true })); setMessage(t.auth.passwordSaved); setForm(null); router.refresh(); return;
       }
       const kind = form === "phone" ? "phone" : "email";
-      const payload = kind === "phone" ? { phone: address } : { email: address };
-      if (!sent) { await mutation(`/web/v1/account/identities/${kind}/${kind === "email" ? "request-code" : "request-otp"}`, payload); setSent(true); return; }
-      const response = await mutation(`/web/v1/account/identities/${kind}/verify`, { ...payload, code });
+      const payload = kind === "phone" ? { phone: address } : { email: address, ...(replacementID ? { identity_id: replacementID } : {}) };
+      const base: `/web/v1/${string}` = replacementID ? "/web/v1/account/identities/email/backup" : `/web/v1/account/identities/${kind}`;
+      if (!sent) { await mutation(`${base}/${kind === "email" ? "request-code" : "request-otp"}`, payload); setSent(true); return; }
+      const response = await mutation(`${base}/verify`, { ...payload, code });
       if (kind === "email") {
         const identity = safeIdentityRefSchema.parse(await response.json());
         if (identity.account_id !== initialProfile.account_id || identity.provider !== "email" || !identity.verified) throw new Error("identity");
-        if (profile.identity_refs.some(item => item.id === identity.id)) {
+        if (replacementID && (identity.id !== replacementID || identity.email_role !== "backup")) throw new Error("identity");
+        if (!replacementID && profile.identity_refs.some(item => item.id === identity.id)) {
           setSent(false); setCode(""); setError(t.auth.emailAlreadyAdded); await refreshProfile(); return;
         }
       }
-      setCode(""); setForm(null); setMessage(kind === "email" && hasVerifiedEmail ? t.auth.backupEmailLinked : t.auth.linked); await refreshProfile();
+      setCode(""); setForm(null); setReplacementID(null); setMessage(replacementID ? t.auth.backupEmailReplaced : kind === "email" && hasVerifiedEmail ? t.auth.backupEmailLinked : t.auth.linked); await refreshProfile();
     });
   };
   const linkProvider = (provider: OAuthProvider) => run(async () => {
@@ -106,6 +118,8 @@ export function AccountSecurity({ profile: initialProfile, methods, preview = fa
   }
   const verified = profile.identity_refs.filter(item => item.verified);
   const hasVerifiedEmail = verified.some(item => item.provider === "email");
+  const emailCount = profile.identity_refs.filter(item => item.provider === "email").length;
+  const emailLabel = (role: string | undefined) => role === "primary" ? t.auth.primaryEmail : role === "backup" ? t.auth.backupEmail : role === "additional" ? t.auth.additionalEmail : t.login.emailLabel;
   const canUnlink = (id: string, provider: string) => provider === "phone" || verified.some(other => other.id !== id && other.provider !== "phone");
   const date = (value: string) => new Intl.DateTimeFormat(locale, { dateStyle: "medium", timeStyle: "short" }).format(new Date(value));
   return <div className={styles.security}>
@@ -113,16 +127,16 @@ export function AccountSecurity({ profile: initialProfile, methods, preview = fa
     {error ? <StateNotice inline kind="error">{error}</StateNotice> : null}{message ? <StateNotice inline kind="success">{message}</StateNotice> : null}
     {pending ? <LoadingIndicator label={t.auth.pending} /> : null}
     <section className={styles.card} aria-labelledby="security-identities"><h2 id="security-identities">{t.auth.identities}</h2>
-      <ul className={styles.list}>{verified.map(identity => <li className={styles.row} key={identity.id}><div className={styles.details}><strong>{Object.hasOwn(providerNames, identity.provider) ? providerNames[identity.provider as OAuthProvider] : identity.provider === "phone" ? t.auth.phone : identity.provider === "password" ? t.login.passwordLabel : t.login.emailLabel}</strong><span>{identity.label}</span></div><Button variant="outline" disabled={pending || preview || !canUnlink(identity.id, identity.provider)} onClick={() => setConfirm({ kind: "identity", id: identity.id })}>{t.auth.unlink}</Button></li>)}</ul>
+      <ul className={styles.list}>{verified.map(identity => <li className={styles.row} key={identity.id}><div className={styles.details}><strong>{Object.hasOwn(providerNames, identity.provider) ? providerNames[identity.provider as OAuthProvider] : identity.provider === "phone" ? t.auth.phone : identity.provider === "password" ? t.login.passwordLabel : emailLabel(identity.email_role)}</strong><span>{identity.label}</span></div><div className={styles.actions}>{identity.provider === "email" && identity.email_role === "backup" && methods.email_link ? <Button variant="outline" disabled={pending} onClick={() => openForm("email", identity.id)}>{t.auth.backupEmailReplace}</Button> : null}<Button variant="outline" disabled={pending || preview || !canUnlink(identity.id, identity.provider)} onClick={() => setConfirm({ kind: "identity", id: identity.id })}>{t.auth.unlink}</Button></div></li>)}</ul>
       {verified.filter(identity => identity.provider !== "phone").length <= 1 ? <p>{t.auth.lastIdentity}</p> : null}
       <div className={styles.actions}>
-        {methods.email_link ? <Button variant="outline" disabled={pending} onClick={() => openForm("email")}>{hasVerifiedEmail ? t.auth.backupEmailAdd : t.auth.emailLink}</Button> : null}
+        {methods.email_link && emailCount < 2 ? <Button variant="outline" disabled={pending} onClick={() => openForm("email")}>{hasVerifiedEmail ? t.auth.backupEmailAdd : t.auth.emailLink}</Button> : null}
         {methods.phone_link ? <Button variant="outline" disabled={pending} onClick={() => openForm("phone")}>{t.auth.phoneLink}</Button> : null}
         {methods.providers.filter(provider => !verified.some(identity => identity.provider === provider)).map(provider => <Button variant="outline" disabled={pending || preview} key={provider} onClick={() => linkProvider(provider)}>{t.auth.link} {providerNames[provider]}</Button>)}
         {methods.password && typeof profile.password_set === "boolean" && verified.some(item => item.provider === "email") ? <Button variant="outline" disabled={pending} onClick={() => openForm("password")}>{profile.password_set ? t.auth.passwordChange : t.auth.passwordSetup}</Button> : null}
       </div>
       {form ? <form className={styles.form} onSubmit={submit}>
-        {form === "email" && hasVerifiedEmail ? <p>{t.auth.backupEmailDescription}</p> : null}
+        {form === "email" && hasVerifiedEmail ? <p>{replacementID ? t.auth.backupEmailReplaceDescription : t.auth.backupEmailDescription}</p> : null}
         {form === "password" ? <p>{profile.password_set ? t.auth.passwordChangeDescription : t.auth.passwordSetupDescription}</p> : null}
         <CredentialField label={form === "phone" ? t.auth.phone : t.login.emailLabel} id="security-address" type={form === "phone" ? "tel" : "email"} autoComplete={form === "phone" ? "tel" : "email"} required disabled={pending || sent} value={address} onChange={e => setAddress(e.target.value)} />
         {sent ? <><p role="status">{t.auth.verificationSent}</p><CredentialField label={form === "phone" ? t.auth.smsCode : t.auth.code} id="security-code" autoComplete="one-time-code" inputMode="numeric" pattern="[0-9]{6}" maxLength={6} required disabled={pending} value={code} onChange={e => setCode(e.target.value)} /></> : null}

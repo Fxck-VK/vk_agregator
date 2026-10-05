@@ -34,6 +34,10 @@ func (h *Handler) ServeBrowserAccountAction(w http.ResponseWriter, r *http.Reque
 		h.requestEmailCode(w, r)
 	case "POST /web/v1/account/identities/email/verify":
 		h.verifyEmailCode(w, r)
+	case "POST /web/v1/account/identities/email/backup/request-code":
+		h.backupEmailAction(w, r, false)
+	case "POST /web/v1/account/identities/email/backup/verify":
+		h.backupEmailAction(w, r, true)
 	case "POST /web/v1/account/identities/phone/request-otp":
 		h.requestPhoneOTP(w, r)
 	case "POST /web/v1/account/identities/phone/verify":

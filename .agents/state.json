@@ -1,6 +1,6 @@
 {
   "schema_version": 5,
-  "updated_at": "2026-10-04T16:22:00+03:00",
+  "updated_at": "2026-10-05T12:00:00+03:00",
   "branch": "fastlife_dev",
   "remote_tracking": "origin/dev-deploy",
   "purpose": "Short machine-readable current context and routing for agents. This file is not project history.",
@@ -72,6 +72,7 @@
     "New login methods enter as verified assertions through accountauth -> IdentityResolver; email/password, phone OTP, Google, Apple, Telegram and VK ID all resolve to account_id through the same layer.",
     "Account auth/link flows require verified assertions, hashed token/credential storage, PII-free safe refs, link/unlink audit, same-account actor checks and hashed Redis-backed rate-limit keys; merge remains blocked without a dedicated confirmed audit flow.",
     "Email/password requires a verified email on the same account. Initial setup is insert-only; changing a password requires current-password proof and an atomic conditional write. Backup emails share the account password; recovery verifies proof without linking identities and revokes active sessions.",
+    "Accounts accept one primary and one backup email. Server roles follow verified binding creation order; legacy extras remain linked. Add/unlink/replace serialize on one account lock, and replacement proof binds the current backup version so stale tabs cannot overwrite newer addresses.",
     "Browser password login and accepted registration confirm the cookie profile, then load a fresh localized document to replace cached guest UI. Failed sign-in records only safe stage/code/status/timing and UUID request metadata; temporary backend failures are distinct from invalid credentials.",
     "Account identity rollout checks now cover old VK balance/jobs/payments visibility by account_id, implicit accounts for new VK users, idempotent email linking, conflict handling and ledger owner_account_id.",
     "Email and phone identity linking now has real delivery boundaries: SMTP for email and generic HTTP SMS/OTP for phone; both remain fail-closed unless explicitly configured.",

@@ -1,5 +1,9 @@
 export const accountAuthText = {
   ru: {
+    primaryEmail: "Основная почта", backupEmail: "Резервная почта", additionalEmail: "Дополнительная почта",
+    backupEmailReplace: "Заменить", backupEmailReplaceDescription: "Подтвердите новый адрес. До подтверждения текущая резервная почта продолжит работать.",
+    backupEmailReplaced: "Резервная почта заменена.", emailLimitReached: "Можно добавить только одну резервную почту. Замените существующую.",
+    backupEmailChanged: "Резервная почта уже изменилась. Проверьте список и начните замену заново.",
     loginConfirming: "Проверяем вход…", loginOpening: "Открываем рабочее пространство…", loginRetry: "Повторить вход", loginDiagnostic: "Номер ошибки:",
     loginUnavailable: "Сервис входа временно недоступен. Попробуйте ещё раз.", loginTimeout: "Сервер не ответил вовремя. Попробуйте ещё раз.", loginNetwork: "Не удалось связаться с сервером. Проверьте интернет и попробуйте ещё раз.",
     loginDevAccess: "Доступ к DEV закончился. Обновите страницу и подтвердите доступ.", loginRejected: "Запрос входа отклонён. Обновите страницу и попробуйте ещё раз.",
@@ -27,6 +31,10 @@ export const accountAuthText = {
     failure: "Не удалось выполнить действие. Попробуйте ещё раз.", conflict: "Этот способ входа уже связан с другим аккаунтом.", retry: "Повторить", pending: "Подождите…", done: "Готово.",
   },
   en: {
+    primaryEmail: "Primary email", backupEmail: "Backup email", additionalEmail: "Additional email",
+    backupEmailReplace: "Replace", backupEmailReplaceDescription: "Verify the new address. Your current backup email will keep working until verification succeeds.",
+    backupEmailReplaced: "Backup email replaced.", emailLimitReached: "You can add only one backup email. Replace the existing one.",
+    backupEmailChanged: "Your backup email has changed. Check the list and start the replacement again.",
     loginConfirming: "Confirming sign-in…", loginOpening: "Opening your workspace…", loginRetry: "Retry sign-in", loginDiagnostic: "Error reference:",
     loginUnavailable: "Sign-in is temporarily unavailable. Please try again.", loginTimeout: "The server did not respond in time. Please try again.", loginNetwork: "Could not reach the server. Check your connection and try again.",
     loginDevAccess: "DEV access has expired. Reload the page and confirm access.", loginRejected: "The sign-in request was rejected. Reload the page and try again.",

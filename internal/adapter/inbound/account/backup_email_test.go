@@ -2,6 +2,7 @@ package account
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"net/http"
@@ -14,6 +15,51 @@ import (
 	"vk-ai-aggregator/internal/domain"
 	"vk-ai-aggregator/internal/service/accountauth"
 )
+
+func TestBrowserBackupReplacementExposesSafeRoleAndStableLimit(t *testing.T) {
+	h, services := newTestHandler(t)
+	ctx := context.Background()
+	owner, err := services.auth.ResolveOrCreate(ctx, domain.VerifiedAccountLogin{Method: domain.AccountLoginEmailPassword, ExternalID: "primary@example.test", Verified: true})
+	if err != nil {
+		t.Fatal(err)
+	}
+	backup, err := services.account.LinkVerifiedIdentity(ctx, owner.AccountID, owner.AccountID, domain.VerifiedAccountLogin{Method: domain.AccountLoginEmailPassword, ExternalID: "backup@example.test", Verified: true})
+	if err != nil {
+		t.Fatal(err)
+	}
+	principal := domain.RequestPrincipal{AccountID: owner.AccountID, SessionID: uuid.New(), Method: domain.AuthenticationMethodAccountSession}
+	request := func(path, body string) *httptest.ResponseRecorder {
+		r := httptest.NewRecorder()
+		h.ServeBrowserAccountAction(r, httptest.NewRequest("POST", path, strings.NewReader(body)), principal)
+		return r
+	}
+	if r := request("/web/v1/account/identities/email/request-code", `{"email":"third@example.test"}`); r.Code != 202 {
+		t.Fatal("code request failed")
+	}
+	code := services.emailSender.waitEmailCode(t)
+	r := request("/web/v1/account/identities/email/verify", fmt.Sprintf(`{"email":"third@example.test","code":%q}`, code))
+	if r.Code != 409 || !strings.Contains(r.Body.String(), "email_limit_reached") {
+		t.Fatalf("limit response: %d", r.Code)
+	}
+	body := fmt.Sprintf(`{"email":"new@example.test","identity_id":%q}`, backup.ID)
+	if r := request("/web/v1/account/identities/email/backup/request-code", body); r.Code != 202 {
+		t.Fatalf("replacement request: %d", r.Code)
+	}
+	code = services.emailSender.waitEmailCode(t)
+	r = request("/web/v1/account/identities/email/backup/verify", fmt.Sprintf(`{"email":"new@example.test","identity_id":%q,"code":%q}`, backup.ID, code))
+	var safe struct {
+		ID        uuid.UUID `json:"id"`
+		EmailRole string    `json:"email_role"`
+	}
+	if r.Code != 200 || json.Unmarshal(r.Body.Bytes(), &safe) != nil || safe.ID != backup.ID || safe.EmailRole != "backup" {
+		t.Fatalf("replacement response: %d", r.Code)
+	}
+	for _, forbidden := range []string{"new@example.test", "backup@example.test", code, "backup_version", "external_id", "normalized_id"} {
+		if strings.Contains(r.Body.String(), forbidden) {
+			t.Fatal("unsafe replacement DTO")
+		}
+	}
+}
 
 func TestBrowserBackupEmailRecoversSameAccountAndSharedPassword(t *testing.T) {
 	h, services := newTestHandler(t)

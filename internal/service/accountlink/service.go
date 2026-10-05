@@ -98,10 +98,12 @@ type Config struct {
 // Challenge is the stored method-specific verification state. It contains only
 // hashed values and the owning account id.
 type Challenge struct {
-	AccountID    uuid.UUID `json:"account_id"`
-	IdentityHash string    `json:"identity_hash"`
-	CodeHash     string    `json:"code_hash"`
-	ExpiresAt    time.Time `json:"expires_at"`
+	BackupIdentityID uuid.UUID `json:"backup_identity_id,omitempty"`
+	BackupVersion    time.Time `json:"backup_version,omitempty"`
+	AccountID        uuid.UUID `json:"account_id"`
+	IdentityHash     string    `json:"identity_hash"`
+	CodeHash         string    `json:"code_hash"`
+	ExpiresAt        time.Time `json:"expires_at"`
 }
 
 // RequestResult is safe to return from request-code endpoints.
