@@ -99,7 +99,7 @@ There must be only one active handoff file:
 
 | File | Status |
 | --- | --- |
-| `docs/HANDOFF_CURRENT.md` | Status: active; September 21 workspace changes and DEV infrastructure validation blocker |
+| `docs/HANDOFF_CURRENT.md` | Status: active; October 7 model fixes, DEV live checks, branch merge and separate uncommitted video/history package |
 
 When a handoff or merge is complete, archive it under `docs/archive/handoffs/`
 and reset `docs/HANDOFF_CURRENT.md` back to `Status: none`.
@@ -108,6 +108,7 @@ Archived merge and handoff files are not default context:
 
 | File | Status |
 | --- | --- |
+| `docs/archive/handoffs/NEIROHUB_WORKSPACE_DEV_2026-09-21.md` | Archived September 21 workspace/DEV handoff; replaced by the October 7 current handoff |
 | `docs/archive/handoffs/ACCOUNT_IDENTITY_2026-07-05.md` | Archived account identity snapshot; superseded by the current model integration handoff |
 | `docs/archive/handoffs/FASTLIFE_VIDEO_ROUTER_MERGE_GUIDE.md` | Archived merge-specific guide |
 | `docs/archive/handoffs/SEREGA_DEV_CONTOUR_AND_VIDEO_HANDOFF.md` | Archived merge-specific handoff |

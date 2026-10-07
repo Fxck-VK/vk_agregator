@@ -1,8 +1,8 @@
 {
   "schema_version": 5,
-  "updated_at": "2026-10-05T12:00:00+03:00",
+  "updated_at": "2026-10-07T15:54:22.9991652+03:00",
   "branch": "fastlife_dev",
-  "remote_tracking": "origin/dev-deploy",
+  "remote_tracking": "origin/fastlife_dev",
   "purpose": "Short machine-readable current context and routing for agents. This file is not project history.",
   "read_policy": {
     "canonical_read_order": [
@@ -84,7 +84,7 @@
     "The standalone NeiroHub web platform uses one independently deployable Next.js application with public SSG/ISR routes, authenticated no-store/noindex routes, secure server-managed web sessions and a channel-neutral versioned /web/v1 Go API.",
     "The shared /web/v1/models catalog feeds all web selectors and generation controls; API and application capabilities remain separate and never enable unwired inputs.",
     "Registry records are typed by purpose. Stable admission serialization preserves the frozen legacy baseline; descriptions do not establish verified onboarding.",
-    "Completed September 14 source handoffs are archived; docs/HANDOFF_CURRENT.md has Status: none."
+    "Current model integration/live DEV handoff is docs/HANDOFF_CURRENT.md (October 7); the September 21 handoff is archived. Video/history fixes in worktree c2ec remain a separate uncommitted package."
   ],
   "active_priorities": [
     "Keep DEV and PROD deploy workflows aligned but isolated by secrets, tunnel, VK group and payment settings.",
