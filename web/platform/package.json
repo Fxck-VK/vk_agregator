@@ -28,7 +28,7 @@
     "react-dom": "19.2.7",
     "react-markdown": "^10.1.0",
     "server-only": "0.0.1",
-    "sharp": "0.35.4",
+    "sharp": "0.35.5",
     "zod": "4.3.6"
   },
   "overrides": {
@@ -39,7 +39,7 @@
     },
     "next": {
       "postcss": "8.5.26",
-      "sharp": "0.35.4"
+      "sharp": "0.35.5"
     }
   },
   "devDependencies": {
