@@ -99,7 +99,7 @@ There must be only one active handoff file:
 
 | File | Status |
 | --- | --- |
-| `docs/HANDOFF_CURRENT.md` | Status: active; October 7 model fixes, DEV live checks, branch merge and separate uncommitted video/history package |
+| `docs/HANDOFF_CURRENT.md` | Status: active; October 7 model fixes, DEV live checks, branch merge and verified integrated video/history package |
 
 When a handoff or merge is complete, archive it under `docs/archive/handoffs/`
 and reset `docs/HANDOFF_CURRENT.md` back to `Status: none`.

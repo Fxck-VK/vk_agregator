@@ -11,6 +11,23 @@ it when APIMart has credentials; explicit `false` disables it. Application defau
 remain false. API and worker reject this flag outside `APP_ENV=development` and
 require APIMart readiness plus the video router. Deploy both processes together.
 
+Enabled DEV video routes and model smoke require `MEDIA_PIPELINE_ENABLED=true`,
+`MEDIA_VIDEO_PROBE_POLICY=probe_required`, `MEDIA_VIDEO_TRANSCODE_POLICY=never`,
+`MEDIA_DELIVER_RAW_PROVIDER_VIDEO=if_probe_passed`,
+`MEDIA_ALLOWED_VIDEO_CONTAINERS=mp4,webm` and a configured `FFPROBE_PATH`
+(the worker image supplies `ffprobe`). `prepare-dev-env.sh` renders this policy;
+`check-dev-env.sh` rejects a video-enabled environment without it. Otherwise a
+successful provider video can fail with `media_processing_unavailable` before
+the website receives a result. Verify stored video metadata and the safe DEV
+smoke after changing media settings; do not resubmit already paid provider tasks
+to diagnose postprocessing failures.
+
+Verify video visibility on `/ru/app/files?category=video` and the all-files tab
+after restoring stored outputs. The authenticated video list is
+`GET /web/v1/video-jobs?limit=12`; each completed result is read through
+`GET /web/v1/video-jobs/{id}/result`. Checking account history alone does not
+verify the file library. Keep the image-only history endpoint unchanged.
+
 This adds 16 media candidates: Nano Banana, Imagen 4.0; HappyHorse 1.0/1.1, SkyReels V4
 Fast/Standard, Wan 3.0, Vidu Q3 Pro, Grok Imagine 1.5 Video, Kling 2.6, Seedance 2.0
 Standard/Mini; Suno V6/Wild/Mini and Lyria 3.5. Images and videos accept text only;

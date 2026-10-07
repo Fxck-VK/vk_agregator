@@ -82,6 +82,12 @@ is_placeholder() {
      "${value}" == *example* ]]
 }
 
+is_true_value() {
+  local value
+  value="$(printf '%s' "${1:-}" | tr '[:upper:]' '[:lower:]')"
+  [[ "${value}" == "1" || "${value}" == "true" || "${value}" == "yes" || "${value}" == "on" ]]
+}
+
 require_present() {
   local name="$1"
   local value
@@ -193,5 +199,20 @@ do
     exit 1
   fi
 done
+
+video_probe_required=false
+for video_flag in FEATURE_VIDEO_ROUTER_ENABLED FEATURE_DEV_MODEL_SMOKE_ENABLED VK_MENU_VIDEO_ENABLED; do
+  if is_true_value "$(get_env_value "${video_flag}")"; then
+    video_probe_required=true
+  fi
+done
+if [[ "${video_probe_required}" == "true" ]]; then
+  require_exact MEDIA_PIPELINE_ENABLED true
+  require_exact MEDIA_VIDEO_PROBE_POLICY probe_required
+  require_exact MEDIA_VIDEO_TRANSCODE_POLICY never
+  require_exact MEDIA_DELIVER_RAW_PROVIDER_VIDEO if_probe_passed
+  require_exact MEDIA_ALLOWED_VIDEO_CONTAINERS mp4,webm
+  require_present FFPROBE_PATH
+fi
 
 echo "DEV env check passed: app_env=development payment_provider=${payment_provider_lc} vk_group_id=dev public_urls=dev cloudflare_token=present"

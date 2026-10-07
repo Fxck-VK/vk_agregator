@@ -201,6 +201,8 @@
 
 В диалоге повторно используется **тот же FileCard и FilePreviewDialog** через [ConversationImageGallery](../src/features/conversations/ConversationImageGallery/ConversationImageGallery.tsx). Набор просмотра ограничен фото диалога, карточка скрывает удаление. Размер в истории ограничен `min(60dvh, 650px)` по высоте и `min(100%, 600px)` по ширине; пропорции сохраняются. Эти ограничения принадлежат [CSS диалоговой галереи](../src/features/conversations/ConversationImageGallery/ConversationImageGallery.module.css), а не всем карточкам файлов.
 
+[VideoFiles](../src/features/files/VideoFiles/VideoFiles.tsx) добавляет сохранённые видеорезультаты в «Мои файлы»: `visible` включает вкладки «Все файлы» и «Видео», `showEmpty` управляет только пустым состоянием. Данные приходят из защищённого `/web/v1/video-jobs` с ограниченными страницами и курсором; результаты загружаются максимум двумя запросами одновременно. Используются общие `MasonryGrid`, `MediaVideo`, состояния загрузки и `Button`. Проигрывание и скачивание обращаются только к `/web/v1/video-artifacts/<id>`. Инструменты редактирования изображений к видео не применяются.
+
 Один и тот же артефакт доступен по общему пути приложения, поэтому не нужно создавать его копию для диалога. Сам факт повторного использования карточки **не гарантирует один сетевой запрос**: кеширование и загрузка зависят от браузера и API. Полный клиентский контракт — [README галереи](../src/features/conversations/ConversationImageGallery/README.md).
 
 <a id="overlays"></a>

@@ -16,6 +16,7 @@ import {
 } from "@/features/files/FilePreviewDialog/FilePreviewDialog";
 import { FilesEmptyState } from "@/features/files/FilesEmptyState/FilesEmptyState";
 import { FilesGrid } from "@/features/files/FilesGrid/FilesGrid";
+import { VideoFiles } from "@/features/files/VideoFiles/VideoFiles";
 import { FileTypeTabs, type FileCategory } from "@/features/files/FileTypeTabs/FileTypeTabs";
 import { useWorkspaceDataCache } from "@/features/workspace/WorkspaceDataCache/WorkspaceDataCache";
 import { recordWorkspaceDataLoad } from "@/features/workspace/WorkspaceNavigationMetrics/workspace-navigation-metrics";
@@ -266,14 +267,12 @@ function isImageCategory(category: FileCategory): category is "all" | "images" {
   return category === "all" || category === "images";
 }
 
-function futureCategoryDescription(category: Exclude<FileCategory, "all" | "images">, t: Dictionary): string {
+function futureCategoryDescription(category: Exclude<FileCategory, "all" | "images" | "video">, t: Dictionary): string {
   switch (category) {
     case "reports":
       return t.files.emptyReportsDescription;
     case "presentations":
       return t.files.emptyPresentationsDescription;
-    case "video":
-      return t.files.emptyVideoDescription;
     case "uploads":
       return t.files.emptyUploadsDescription;
   }
@@ -655,7 +654,7 @@ export function FilesWorkspace({ initialCategory = "all" }: Readonly<FilesWorksp
           id="files-panel"
           role="tabpanel"
         >
-          {!hasImageCategory ? (
+          {!hasImageCategory && fileCategory !== "video" ? (
             <FilesEmptyState
               description={futureCategoryDescription(fileCategory, t)}
               title={t.files.emptyLibraryTitle}
@@ -668,7 +667,7 @@ export function FilesWorkspace({ initialCategory = "all" }: Readonly<FilesWorksp
             <StateNotice kind="error" action={{ label: t.files.retry, disabled: isLoading, onClick: () => void loadPage() }}>{t.files.loadFailure}</StateNotice>
           ) : null}
 
-          {hasImageCategory && hasLoaded && !hasImageJobs ? (
+          {fileCategory === "images" && hasLoaded && !hasImageJobs ? (
             <FilesEmptyState description={t.files.emptyAllDescription} title={t.files.emptyLibraryTitle} />
           ) : null}
           {hasImageCategory && hasLoaded && hasImageJobs ? (
@@ -689,6 +688,10 @@ export function FilesWorkspace({ initialCategory = "all" }: Readonly<FilesWorksp
               {isLoadingMore ? <><LoadingIndicator label={t.files.loadingMore} />{t.files.loadingMore}</> : t.files.loadMore}
             </Button>
           ) : null}
+          <VideoFiles
+            visible={fileCategory === "all" || fileCategory === "video"}
+            showEmpty={fileCategory === "video" || (hasLoaded && !hasImageJobs)}
+          />
         </section>
       </section>
       {selectedPreviewIndex >= 0 ? (

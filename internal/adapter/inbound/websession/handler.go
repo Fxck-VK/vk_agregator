@@ -401,6 +401,8 @@ func (h *Handler) Routes() http.Handler {
 	mux.HandleFunc("POST /web/v1/music-jobs/{jobID}/activate", h.requireUnsafePrincipal(h.activateMusicJob))
 	mux.HandleFunc("GET /web/v1/image-models", h.requirePrincipal(h.listImageModels))
 	mux.HandleFunc("GET /web/v1/video-models", h.requirePrincipal(h.listVideoModels))
+	mux.HandleFunc("GET /web/v1/video-jobs", h.requirePrincipal(h.listVideoJobs))
+	mux.HandleFunc("GET /web/v1/video-jobs/{jobID}/result", h.requirePrincipal(h.getVideoJobResult))
 	mux.HandleFunc("GET /web/v1/payment-products", h.requirePrincipal(h.listWebPaymentProducts))
 	mux.HandleFunc("POST /web/v1/payments/intents", h.requireUnsafePrincipal(h.createWebPayment))
 	mux.HandleFunc("GET /web/v1/payments/{paymentID}", h.requirePrincipal(h.getWebPayment))

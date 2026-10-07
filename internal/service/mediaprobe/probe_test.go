@@ -3,6 +3,9 @@ package mediaprobe
 import (
 	"context"
 	"errors"
+	"os"
+	"os/exec"
+	"path/filepath"
 	"strings"
 	"testing"
 	"time"
@@ -53,6 +56,101 @@ func TestFFProbeParsesAndValidatesVideoMetadata(t *testing.T) {
 	}
 }
 
+func TestFFProbePrefersMP4ForISOBaseMediaBrand(t *testing.T) {
+	cfg := testConfig()
+	cfg.AllowedVideoContainers = []string{"mp4", "mov", "webm"}
+	prober := NewFFProbe(cfg, WithRunner(&fakeRunner{out: validMP4ProbeJSON()}))
+
+	metadata, err := prober.ProbeVideo(context.Background(), []byte("video"), 1024)
+	if err != nil {
+		t.Fatalf("probe: %v", err)
+	}
+	if metadata.Container != "mp4" {
+		t.Fatalf("Container = %q, want mp4", metadata.Container)
+	}
+}
+func TestFFProbeKeepsQuickTimeBrandAsMOV(t *testing.T) {
+	cfg := testConfig()
+	cfg.AllowedVideoContainers = []string{"mp4", "mov", "webm"}
+	prober := NewFFProbe(cfg, WithRunner(&fakeRunner{out: validQuickTimeProbeJSON()}))
+
+	metadata, err := prober.ProbeVideo(context.Background(), []byte("video"), 1024)
+	if err != nil {
+		t.Fatalf("probe: %v", err)
+	}
+	if metadata.Container != "mov" {
+		t.Fatalf("Container = %q, want mov", metadata.Container)
+	}
+}
+
+func TestFFProbeRejectsQuickTimeBrandForMP4OnlyPolicy(t *testing.T) {
+	cfg := testConfig()
+	cfg.AllowedVideoContainers = []string{"mp4"}
+	prober := NewFFProbe(cfg, WithRunner(&fakeRunner{out: validQuickTimeProbeJSON()}))
+
+	metadata, err := prober.ProbeVideo(context.Background(), []byte("video"), 1024)
+	if err == nil {
+		t.Fatal("expected probe error")
+	}
+	if metadata.Container != "" {
+		t.Fatalf("Container = %q, want empty", metadata.Container)
+	}
+	if !strings.Contains(err.Error(), "video_container_not_allowed") {
+		t.Fatalf("unexpected safe error: %v", err)
+	}
+}
+
+func TestFFProbeRejectsMP4BrandForMOVOnlyPolicy(t *testing.T) {
+	cfg := testConfig()
+	cfg.AllowedVideoContainers = []string{"mov"}
+	prober := NewFFProbe(cfg, WithRunner(&fakeRunner{out: validMP4ProbeJSON()}))
+	metadata, err := prober.ProbeVideo(context.Background(), []byte("video"), 1024)
+	if err == nil || !strings.Contains(err.Error(), "video_container_not_allowed") {
+		t.Fatalf("expected container policy rejection, got metadata=%+v err=%v", metadata, err)
+	}
+}
+func TestFFProbeCanonicalizesSyntheticMP4Container(t *testing.T) {
+	ffmpegPath, err := exec.LookPath("ffmpeg")
+	if err != nil {
+		t.Skip("ffmpeg unavailable")
+	}
+	ffprobePath, err := exec.LookPath("ffprobe")
+	if err != nil {
+		t.Skip("ffprobe unavailable")
+	}
+
+	outPath := filepath.Join(t.TempDir(), "sample.mp4")
+	ctx, cancel := context.WithTimeout(context.Background(), 15*time.Second)
+	defer cancel()
+	cmd := exec.CommandContext(ctx, ffmpegPath,
+		"-v", "error",
+		"-f", "lavfi",
+		"-i", "testsrc=size=32x32:rate=1",
+		"-t", "1",
+		"-c:v", "libx264",
+		"-pix_fmt", "yuv420p",
+		"-movflags", "+faststart",
+		outPath,
+	)
+	if err := cmd.Run(); err != nil {
+		t.Skipf("synthetic h264 mp4 unavailable: %v", err)
+	}
+	data, err := os.ReadFile(outPath)
+	if err != nil {
+		t.Fatalf("read synthetic mp4: %v", err)
+	}
+
+	cfg := testConfig()
+	cfg.FFProbePath = ffprobePath
+	cfg.AllowedVideoContainers = []string{"mp4", "mov", "webm"}
+	metadata, err := NewFFProbe(cfg).ProbeVideo(context.Background(), data, int64(len(data)))
+	if err != nil {
+		t.Fatalf("probe synthetic mp4: %v", err)
+	}
+	if metadata.Container != "mp4" || metadata.Codec != "h264" {
+		t.Fatalf("codec/container = %q/%q, want h264/mp4", metadata.Codec, metadata.Container)
+	}
+}
 func TestFFProbeRejectsDisallowedCodec(t *testing.T) {
 	cfg := testConfig()
 	cfg.AllowedVideoCodecs = []string{"vp9"}
@@ -126,6 +224,46 @@ func testConfig() Config {
 	}
 }
 
+func validMP4ProbeJSON() string {
+	return `{
+		"streams": [
+			{
+				"codec_type": "video",
+				"codec_name": "h264",
+				"width": 1280,
+				"height": 720,
+				"duration": "5.120000",
+				"bit_rate": "2500000"
+			}
+		],
+		"format": {
+			"format_name": "mov,mp4,m4a,3gp,3g2,mj2",
+			"duration": "5.120000",
+			"bit_rate": "2500000",
+			"tags": {"major_brand": "mp42"}
+		}
+	}`
+}
+func validQuickTimeProbeJSON() string {
+	return `{
+		"streams": [
+			{
+				"codec_type": "video",
+				"codec_name": "h264",
+				"width": 1280,
+				"height": 720,
+				"duration": "5.120000",
+				"bit_rate": "2500000"
+			}
+		],
+		"format": {
+			"format_name": "mov,mp4,m4a,3gp,3g2,mj2",
+			"duration": "5.120000",
+			"bit_rate": "2500000",
+			"tags": {"major_brand": "qt  "}
+		}
+	}`
+}
 func validProbeJSON() string {
 	return `{
 		"streams": [

@@ -3229,6 +3229,12 @@ Unknown localized page URLs use the dynamic, noindex `[...missing]` route with t
 
 
 ### Web workspace preloading (2026-09-20)
+The file library includes video outputs through authenticated, no-store
+`GET /web/v1/video-jobs` and `GET /web/v1/video-jobs/{id}/result`. Listing uses
+bounded account-owned web video pages; completed result reads retain the existing
+artifact ownership and output-moderation gates. The browser renders owned video
+bytes through `/web/v1/video-artifacts/{id}` with the shared media player.
+History reads never submit providers, reserve credits or capture released holds.
 
 The web shell streams before identity resolution; only an authenticated /me unlocks private content. Balance and conversation navigation load independently in account-owned resources. A normalized, non-personal model catalog may be cached for 60 seconds and seeded into a shared client provider; authorization failures and user data are never shared. Catalog seed wait is bounded to 200 ms. Private history, file-result metadata and drafts remain client-owner scoped. Backend acceptance, availability and billing remain authoritative. Private image previews reuse artifact authorization and verified storage redirects, constrain input/processing, omit shared byte caches, and preserve original URLs for viewing/download. Public ImageJob geometry is explicitly projected without worker fields. Contract and tests: web/platform/docs/preloading.md.
 

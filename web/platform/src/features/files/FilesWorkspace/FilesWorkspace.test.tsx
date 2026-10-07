@@ -7,6 +7,12 @@ vi.mock("@/lib/web-api/browser", () => ({
   webBrowserMutation: vi.fn(),
 }));
 
+// Video loading/playback has its own real component regression tests. Keep
+// this suite focused on workspace category routing and image interactions.
+vi.mock("@/features/files/VideoFiles/VideoFiles", () => ({
+  VideoFiles: ({ visible }: { visible: boolean }) => visible ? <div data-testid="video-files" /> : null,
+}));
+
 import { ru } from "@/i18n/ru";
 import { webBrowserFetch } from "@/lib/web-api/browser";
 import type { ImageJobList } from "@/lib/web-api/contracts";
@@ -309,13 +315,13 @@ describe("FilesWorkspace", () => {
     expect(screen.queryByText(ru.files.loadedScopeNotice)).not.toBeInTheDocument();
   });
 
-  it("shows the library empty state when every loaded job is unfinished", async () => {
+  it("shows the image library empty state when every loaded image job is unfinished", async () => {
     const pendingJob = { ...firstSucceededJob, status: "queued" as const, prompt: "queued forest image" };
     vi.mocked(webBrowserFetch).mockResolvedValueOnce(
       Response.json({ items: [pendingJob], has_more: false, next_cursor: null }),
     );
 
-    renderFilesWorkspace();
+    renderFilesWorkspace({ initialCategory: "images" });
 
     expect(await screen.findByRole("heading", { name: ru.files.emptyLibraryTitle })).toBeInTheDocument();
     expect(screen.queryByText(pendingJob.prompt)).not.toBeInTheDocument();
@@ -362,11 +368,24 @@ describe("FilesWorkspace", () => {
   it("uses the illustrated library empty state when there are no image files", async () => {
     vi.mocked(webBrowserFetch).mockResolvedValueOnce(Response.json({ items: [], has_more: false, next_cursor: null }));
 
-    renderFilesWorkspace();
+    renderFilesWorkspace({ initialCategory: "images" });
 
     expect(await screen.findByRole("heading", { name: "Пока ничего нет" })).toBeInTheDocument();
     expect(screen.getByText("Здесь будут храниться ваши сгенерированные изображения и другие файлы.")).toBeInTheDocument();
     expect(screen.queryByRole("searchbox", { name: ru.files.searchLabel })).not.toBeInTheDocument();
+  });
+
+  it("shows video history on all and video tabs instead of the future empty placeholder", async () => {
+    vi.mocked(webBrowserFetch).mockResolvedValueOnce(
+      Response.json({ items: [firstSucceededJob], has_more: false, next_cursor: null }),
+    );
+    renderFilesWorkspace();
+    expect(screen.getByTestId("video-files")).toBeInTheDocument();
+    fireEvent.click(screen.getByRole("tab", { name: ru.files.categories.images }));
+    expect(screen.queryByTestId("video-files")).not.toBeInTheDocument();
+    fireEvent.click(screen.getByRole("tab", { name: ru.files.categories.video }));
+    expect(screen.getByTestId("video-files")).toBeInTheDocument();
+    expect(screen.queryByText(ru.files.emptyVideoDescription)).not.toBeInTheDocument();
   });
 
   it("limits simultaneous artifact metadata requests for visible ready cards", async () => {

@@ -39,6 +39,7 @@
 | Ползунок, толщина кисти | `RangeSlider` | [Ввод](ui-catalog.md#input), [пример 4](ui-catalog-examples.md#example-4) |
 | Привычная сетка фото, сохранить пропорции | `MasonryGrid`, непосредственные дети `li`; CSS-колонки | [Сетка и фото](ui-catalog.md#media), [пример 6](ui-catalog-examples.md#example-6) |
 | Карточка/просмотр результата в «Моих файлах» | `FileCard` + `FilePreviewDialog`; готовая сетка — `FilesGrid` | [Сетка и фото](ui-catalog.md#media), [пример 7](ui-catalog-examples.md#example-7) |
+| Видеорезультаты в «Моих файлах» | `VideoFiles` → `MasonryGrid` + `MediaVideo`; вкладки «Все файлы» и «Видео» | [Сетка и фото](ui-catalog.md#media) |
 | Выбрать готовое фото для сообщения | `ChatFilePicker` → `MasonryGrid` + `FileCard selectionAction`; вкладки — `ModeSwitchPanel` | [Сетка и фото](ui-catalog.md#media) |
 | Фото в диалоге, просмотр только фото этого чата | `ConversationImageGallery` → общие FileCard/FilePreviewDialog | [Сетка и фото](ui-catalog.md#media) |
 | Ожидание нескольких фото по количеству и формату запроса | `ImageGenerationPlaceholders` → `MediaState`; общий `ImageGenerationGrid` для заглушек и готовых фото | [Общие состояния](ui-catalog.md#async-states), [локальный пример](http://localhost:7158/ru/app/ui-states#image-generation) |

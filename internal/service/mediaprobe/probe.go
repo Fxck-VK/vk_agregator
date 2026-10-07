@@ -137,7 +137,7 @@ func (p *FFProbe) parseAndValidate(raw []byte) (domain.ArtifactMediaMetadata, er
 		Width:       stream.Width,
 		Height:      stream.Height,
 		Codec:       normalizeToken(stream.CodecName),
-		Container:   p.allowedContainer(payload.Format.FormatName),
+		Container:   p.allowedContainer(payload.Format),
 		DurationMS:  durationMillis(firstNonZero(stream.Duration, payload.Format.Duration)),
 		BitrateBPS:  firstPositive(parseInt64(stream.BitRate), parseInt64(payload.Format.BitRate)),
 		ProbeStatus: domain.MediaProbeFailed,
@@ -174,14 +174,47 @@ func (p *FFProbe) parseAndValidate(raw []byte) (domain.ArtifactMediaMetadata, er
 	return metadata, nil
 }
 
-func (p *FFProbe) allowedContainer(formatName string) string {
-	for _, token := range strings.Split(formatName, ",") {
-		token = normalizeToken(token)
+func (p *FFProbe) allowedContainer(format ffprobeFormat) string {
+	containers := containerTokens(format.FormatName)
+	majorBrand := normalizeToken(format.Tags.MajorBrand)
+	if majorBrand == "qt" && containsToken(containers, "mov") {
+		if containsToken(p.cfg.AllowedVideoContainers, "mov") {
+			return "mov"
+		}
+		return ""
+	}
+	if mp4MajorBrand(majorBrand) && containsToken(containers, "mp4") {
+		if containsToken(p.cfg.AllowedVideoContainers, "mp4") {
+			return "mp4"
+		}
+		return ""
+	}
+	for _, token := range containers {
 		if containsToken(p.cfg.AllowedVideoContainers, token) {
 			return token
 		}
 	}
 	return ""
+}
+
+func containerTokens(formatName string) []string {
+	parts := strings.Split(formatName, ",")
+	out := make([]string, 0, len(parts))
+	for _, part := range parts {
+		if token := normalizeToken(part); token != "" {
+			out = append(out, token)
+		}
+	}
+	return out
+}
+
+func mp4MajorBrand(brand string) bool {
+	switch brand {
+	case "isom", "iso2", "mp41", "mp42", "avc1", "m4v", "m4a", "dash":
+		return true
+	default:
+		return false
+	}
 }
 
 func failedMetadata() domain.ArtifactMediaMetadata {
@@ -203,9 +236,14 @@ type ffprobeStream struct {
 }
 
 type ffprobeFormat struct {
-	FormatName string `json:"format_name"`
-	Duration   string `json:"duration"`
-	BitRate    string `json:"bit_rate"`
+	FormatName string      `json:"format_name"`
+	Duration   string      `json:"duration"`
+	BitRate    string      `json:"bit_rate"`
+	Tags       ffprobeTags `json:"tags"`
+}
+
+type ffprobeTags struct {
+	MajorBrand string `json:"major_brand"`
 }
 
 func firstVideoStream(streams []ffprobeStream) *ffprobeStream {

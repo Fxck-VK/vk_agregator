@@ -63,6 +63,38 @@ YOOKASSA_RETURN_URL=https://dev-app.neiirohub.ru/
 EOF
 }
 
+write_nonvideo_dev_env() {
+  local output="$1"
+  cat > "${output}" <<EOF
+APP_ENV=development
+DEV_EXPECTED_VK_GROUP_ID=239658332
+PUBLIC_VK_BASE_URL=https://dev-vk.neiirohub.ru
+PUBLIC_APP_BASE_URL=https://dev-app.neiirohub.ru
+PUBLIC_PAYMENT_WEBHOOK_URL=https://dev.neiirohub.ru/billing/webhooks/yookassa
+WEB_ORIGIN=https://dev-web.neiirohub.ru
+VK_GROUP_ID=239658332
+VK_ACCESS_TOKEN=VK_TEST
+VK_SECRET=VK_CB_TEST
+VK_CONFIRMATION_TOKEN=VK_CONFIRM_TEST
+CLOUDFLARED_TUNNEL_TOKEN=CF_TEST
+PAYMENT_PROVIDER=mock
+PROVIDER=mock
+PROVIDER_CHAIN=mock
+IMAGE_PROVIDER=mock
+VIDEO_PROVIDER=mock
+MEDIA_PIPELINE_ENABLED=false
+MEDIA_VIDEO_PROBE_POLICY=disabled
+MEDIA_VIDEO_TRANSCODE_POLICY=never
+MEDIA_DELIVER_RAW_PROVIDER_VIDEO=always_dev_only
+MEDIA_ALLOWED_VIDEO_CONTAINERS=mp4,mov,webm
+FFPROBE_PATH=/opt/custom/ffprobe
+DEV_ALLOW_REAL_PAYMENTS=false
+YOOKASSA_SHOP_ID=dev-test-shop
+YOOKASSA_SECRET_KEY=YK_TEST
+YOOKASSA_RETURN_URL=https://dev-app.neiirohub.ru/
+EOF
+}
+
 run_valid_case() {
   local name="$1"
   local payment_provider="$2"
@@ -139,6 +171,12 @@ run_valid_case() {
   assert_file_contains "${rendered}" "FEATURE_VIDEO_ROUTE_RUNWAY_GEN4_5_ENABLED=true"
   assert_file_contains "${rendered}" "FEATURE_VIDEO_ROUTE_MOCK_TEXT_TO_VIDEO_ENABLED=false"
   assert_file_contains "${rendered}" "FEATURE_VIDEO_ROUTE_RESELLER_EXPERIMENTS_ENABLED=false"
+  assert_file_contains "${rendered}" "MEDIA_PIPELINE_ENABLED=true"
+  assert_file_contains "${rendered}" "MEDIA_VIDEO_PROBE_POLICY=probe_required"
+  assert_file_contains "${rendered}" "MEDIA_VIDEO_TRANSCODE_POLICY=never"
+  assert_file_contains "${rendered}" "MEDIA_DELIVER_RAW_PROVIDER_VIDEO=if_probe_passed"
+  assert_file_contains "${rendered}" "MEDIA_ALLOWED_VIDEO_CONTAINERS=mp4,webm"
+  assert_file_contains "${rendered}" "FFPROBE_PATH=ffprobe"
 }
 
 expect_failure() {
@@ -155,6 +193,21 @@ for script in scripts/deploy/*.sh; do
 done
 
 run_valid_case "mock-dev" "mock"
+
+nonvideo_raw="${tmpdir}/nonvideo.raw.env"
+nonvideo_rendered="${tmpdir}/nonvideo.rendered.env"
+write_nonvideo_dev_env "${nonvideo_raw}"
+bash "${prepare_script}" --input "${nonvideo_raw}" --output "${nonvideo_rendered}" \
+  --image-tag sha-test123 --ghcr-username test-ghcr-user --ghcr-token GHCR_TEST >/dev/null
+bash "${check_script}" --env-file "${nonvideo_rendered}" >/dev/null
+assert_file_contains "${nonvideo_rendered}" "FEATURE_VIDEO_ROUTER_ENABLED=false"
+assert_file_contains "${nonvideo_rendered}" "FEATURE_DEV_MODEL_SMOKE_ENABLED=false"
+assert_file_contains "${nonvideo_rendered}" "MEDIA_PIPELINE_ENABLED=false"
+assert_file_contains "${nonvideo_rendered}" "MEDIA_VIDEO_PROBE_POLICY=disabled"
+assert_file_contains "${nonvideo_rendered}" "MEDIA_VIDEO_TRANSCODE_POLICY=never"
+assert_file_contains "${nonvideo_rendered}" "MEDIA_DELIVER_RAW_PROVIDER_VIDEO=always_dev_only"
+assert_file_contains "${nonvideo_rendered}" "MEDIA_ALLOWED_VIDEO_CONTAINERS=mp4,mov,webm"
+assert_file_contains "${nonvideo_rendered}" "FFPROBE_PATH=/opt/custom/ffprobe"
 
 for apimart_flag in FEATURE_DEV_MODEL_SMOKE_ENABLED FEATURE_APIMART_GPT_IMAGE_2_5_FLARE_ENABLED FEATURE_APIMART_GPT_IMAGE_2_5_SUNBURST_ENABLED FEATURE_APIMART_QWEN_IMAGE_3_ENABLED FEATURE_APIMART_GROK_IMAGE_1_5_ENABLED FEATURE_APIMART_GROK_IMAGE_2_0_ENABLED FEATURE_APIMART_SEEDREAM_5_0_LITE_ENABLED FEATURE_APIMART_SEEDREAM_5_0_PRO_ENABLED FEATURE_APIMART_OMNI_1_1_FLASH_ENABLED FEATURE_APIMART_OMNI_1_1_FLASH_EXT_ENABLED FEATURE_APIMART_KLING_V3_ENABLED FEATURE_APIMART_KLING_3_0_TURBO_ENABLED FEATURE_APIMART_MINIMAX_H3_ENABLED FEATURE_APIMART_KLING_2_6_MOTION_CONTROL_ENABLED FEATURE_APIMART_VEO_3_1_FAST_ENABLED FEATURE_APIMART_VEO_3_1_QUALITY_ENABLED FEATURE_APIMART_VEO_3_1_LITE_ENABLED; do
 for apimart_case in disabled missing-key; do
@@ -183,5 +236,44 @@ wrong_web_origin_env="${tmpdir}/wrong-web-origin.env"
 write_common_dev_env "${wrong_web_origin_env}" "mock"
 sed -i 's#WEB_ORIGIN=https://dev-web.neiirohub.ru#WEB_ORIGIN=https://dev-app.neiirohub.ru#' "${wrong_web_origin_env}"
 expect_failure "wrong DEV web origin" bash "${check_script}" --env-file "${wrong_web_origin_env}"
+
+disabled_media_pipeline_env="${tmpdir}/disabled-media-pipeline.env"
+write_common_dev_env "${disabled_media_pipeline_env}" "mock"
+{
+  echo "FEATURE_VIDEO_ROUTER_ENABLED=true"
+  echo "MEDIA_PIPELINE_ENABLED=false"
+  echo "MEDIA_VIDEO_PROBE_POLICY=probe_required"
+  echo "MEDIA_VIDEO_TRANSCODE_POLICY=never"
+  echo "MEDIA_DELIVER_RAW_PROVIDER_VIDEO=if_probe_passed"
+  echo "MEDIA_ALLOWED_VIDEO_CONTAINERS=mp4,webm"
+  echo "FFPROBE_PATH=ffprobe"
+} >> "${disabled_media_pipeline_env}"
+expect_failure "video route without DEV media pipeline" bash "${check_script}" --env-file "${disabled_media_pipeline_env}"
+
+missing_ffprobe_env="${tmpdir}/missing-ffprobe.env"
+write_common_dev_env "${missing_ffprobe_env}" "mock"
+{
+  echo "FEATURE_VIDEO_ROUTER_ENABLED=true"
+  echo "MEDIA_PIPELINE_ENABLED=true"
+  echo "MEDIA_VIDEO_PROBE_POLICY=probe_required"
+  echo "MEDIA_VIDEO_TRANSCODE_POLICY=never"
+  echo "MEDIA_DELIVER_RAW_PROVIDER_VIDEO=if_probe_passed"
+  echo "MEDIA_ALLOWED_VIDEO_CONTAINERS=mp4,webm"
+  echo "FFPROBE_PATH="
+} >> "${missing_ffprobe_env}"
+expect_failure "video route without ffprobe path" bash "${check_script}" --env-file "${missing_ffprobe_env}"
+
+wide_video_containers_env="${tmpdir}/wide-video-containers.env"
+write_common_dev_env "${wide_video_containers_env}" "mock"
+{
+  echo "FEATURE_VIDEO_ROUTER_ENABLED=true"
+  echo "MEDIA_PIPELINE_ENABLED=true"
+  echo "MEDIA_VIDEO_PROBE_POLICY=probe_required"
+  echo "MEDIA_VIDEO_TRANSCODE_POLICY=never"
+  echo "MEDIA_DELIVER_RAW_PROVIDER_VIDEO=if_probe_passed"
+  echo "MEDIA_ALLOWED_VIDEO_CONTAINERS=mp4,mov,webm"
+  echo "FFPROBE_PATH=ffprobe"
+} >> "${wide_video_containers_env}"
+expect_failure "video route with broad DEV video containers" bash "${check_script}" --env-file "${wide_video_containers_env}"
 
 echo "DEV deploy env script tests passed"

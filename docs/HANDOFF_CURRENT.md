@@ -5,12 +5,13 @@ Status: active
 
 Сверено с Git, чатами «Проверь интеграцию моделей» и «Починить видео модели
 на сайте», таблицей и безопасными метаданными DEV-заданий. Результаты живых
-попыток и незакоммиченный runtime hotfix отделены от опубликованного кода.
+попыток отделены от кода. Пакет video/history перенесён из другой рабочей
+копии, проверен и включён в передачу; runtime recovery описан отдельно.
 
 ## Ветка и состав передачи
 
 Ветка передачи — `fastlife_dev`. Родитель коммита документа:
-`f329e8f2d320468734baaec3e7b7904b6c173481`.
+`463d13312d8a094419888b2f947d48ced622bf49`.
 Перед подготовкой remote `fastlife_dev` была на `2d714d65`, remote
 `dev-deploy` — на `f329e8f2`. Первая является предком второй; ветка передачи
 синхронизирована fast-forward с опубликованным DEV-кодом.
@@ -21,7 +22,8 @@ Status: active
 | `e28cc56b` | Модели, валидация, готовность worker, исправления зависимостей |
 | `2d714d65` | Routing-ссылки и проверка документации до DEV push |
 | `2d714d65..f329e8f2` | Уже опубликованные регистрация, вход, пароли и резервная почта; сохранены в передаче |
-| Новый коммит передачи | Этот документ, архив прежней передачи, INDEX и routing state |
+| `463d1331` | Первая версия передачи, архив прежней передачи, INDEX и routing state |
+| Новый коммит video/history | Все 18 файлов пакета видео, проверка полного web-контракта задания, регрессионные тесты и обновлённая передача |
 
 [Diff моделей](https://github.com/Fxck-VK/vk_agregator/compare/6dd08963...2d714d65).
 [Последующие опубликованные изменения](https://github.com/Fxck-VK/vk_agregator/compare/2d714d65...f329e8f2).
@@ -150,12 +152,14 @@ L — цена, M — списание, N — model ID.
 SSH-доступ. Это не Git-миграции. Не повторять начисление и не передавать ключи
 или credentials с файлом мерджа.
 
-## Незакоммиченный пакет видео: нужен отдельный перенос
+## Пакет видео: включён в передачу
 
 Чат «Починить видео модели на сайте», worktree `c2ec/vk_agregator`,
-detached HEAD `f329e8f2`: **18 файлов, 12 modified + 6 untracked**.
-Они не входят в published SHA и не попадут к коллеге через fetch.
-Исходная рабочая копия при подготовке передачи не менялась.
+detached HEAD `f329e8f2`: исходный пакет — **18 файлов, 12 modified + 6 untracked**.
+Все 18 файлов скопированы с проверкой хешей в ветку передачи и включены в
+новый коммит. Коллеге достаточно fetch/merge `origin/fastlife_dev`.
+Исходная рабочая копия `c2ec` сохранена без изменений; её незакоммиченный статус
+больше не означает, что пакет отсутствует в ветке передачи.
 
 - `internal/service/mediaprobe/probe.go`, `probe_test.go`: ISO BMFF major brand
   определяет MP4; QuickTime `qt` остаётся MOV. MP4 больше не отклоняется как MOV.
@@ -163,7 +167,11 @@ detached HEAD `f329e8f2`: **18 файлов, 12 modified + 6 untracked**.
   `docs/runbooks/DEV.md`: включение/проверка media pipeline и ffprobe в DEV.
 - `internal/adapter/inbound/websession/handler.go`; новые `video_jobs.go`,
   `video_jobs_test.go`: owned video history/result routes, только завершённый
-  и прошедший moderation результат.
+  и прошедший moderation результат. При проверке переноса дополнительно
+  закрыт пропуск полного web-контракта: источник/канал web, отсутствие VK
+  user/peer/command и внешней доставки, корректный account-history contract.
+  Регрессионные тесты воспроизвели выдачу HTTP 200 для некорректного канала
+  до исправления; также проверяется отказ чужому владельцу.
 - `web/platform/src/features/files/FilesWorkspace/FilesWorkspace.tsx` и тест;
   новые `VideoFiles/VideoFiles.tsx`, тест, CSS, `video-data.ts` в той же feature:
   видео на вкладках «Видео»/«Все», ограниченная параллельная загрузка превью.
@@ -178,20 +186,26 @@ Gemini Omni EXT, Seedance 2 Fast. Проверены выдача через API
 изображения. Там также отмечены отключённый Seedance 2.5 и отдельный отказ
 APIMart для MiniMax H3. Это не отменяет ошибки конкретных попыток выше.
 
-Для воспроизводимого переноса сохранить все 18 файлов, включая untracked,
-создать рабочую ветку от `f329e8f2` без reset/clean, проверить и закоммитить
-пакет, затем интегрировать обычным merge/PR. Runtime hotfix не считать
-входящим в push этого документа. Проверки пакета:
+Код переносится обычным merge/PR из `fastlife_dev`, без отдельного копирования
+файлов или повторных cherry-pick. Runtime recovery сохранённых видео не
+повторяется через Git. Проверки пакета:
 
 ```sh
-go test ./internal/service/mediaprobe ./internal/adapter/inbound/websession
-go vet ./internal/service/mediaprobe ./internal/adapter/inbound/websession
+go test ./...
+go vet ./...
 bash scripts/deploy/test-dev-env.sh
 ```
 
-Из `web/platform`: FilesWorkspace/VideoFiles tests, lint, typecheck,
-production build/packaging. Ранний video fix прошёл проверки в другом чате;
-окончательные 18 файлов здесь не прогонялись.
+Свежие `go test ./...` и `go vet ./...` прошли.
+Из `web/platform`: FilesWorkspace/VideoFiles tests (21/21), lint, typecheck,
+production build/packaging, asset tests (6/6) и asset validation.
+Скрипты DEV env и документация проверены. Infrastructure validation, включая
+Compose config, прошёл с `-SkipPromtool`: promtool локально отсутствует,
+конфигурация мониторинга этим пакетом не менялась.
+Первое локальное выполнение build остановилось
+из-за недоступного Google Fonts; повтор со штатным доступом к сети прошёл.
+Независимые UI/backend review выполнены; найденный пропуск web-контракта
+исправлен. Новых платных генераций и проверок скачивания при переносе не было.
 
 Для DEV нужны доступный ffprobe и настройки:
 `MEDIA_PIPELINE_ENABLED=true`, `MEDIA_VIDEO_PROBE_POLICY=probe_required`,
@@ -204,8 +218,9 @@ Jobs выполняется отдельно без provider resubmit и пов�
 
 ## Следующие действия
 
-1. Сохранить/интегрировать незакоммиченный video/history пакет и подтвердить
-   сохранение media env/ffprobe после штатного DEV deploy.
+1. Интегрировать `origin/fastlife_dev` и подтвердить сохранение media env/ffprobe
+   после штатного DEV deploy. Код video/history уже включён в эту ветку;
+   публикация нового DEV runtime в этом шаге не выполнялась.
 2. Разобрать Nano Banana 2 preview на существующем Job без новой генерации.
 3. Проверить ошибки Imagen/GPT/DeepSeek и отсутствие Job Vidu Pro по безопасным
    кодам и public model mapping. Новые платные попытки согласовать отдельно.

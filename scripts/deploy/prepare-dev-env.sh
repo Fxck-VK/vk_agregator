@@ -356,6 +356,15 @@ if [[ "${video_hailuo_fast_enabled}" == "true" ||
       "${video_runway_turbo_enabled}" == "true" ]]; then
   video_router_enabled=true
 fi
+video_probe_required=false
+if [[ "${video_router_enabled}" == "true" || "${dev_model_smoke_enabled}" == "true" ]]; then
+  video_probe_required=true
+fi
+
+ffprobe_path="$(get_raw_env_value FFPROBE_PATH)"
+if [[ "${video_probe_required}" == "true" ]] && ! has_raw_env_value FFPROBE_PATH; then
+  ffprobe_path="ffprobe"
+fi
 
 image_menu_enabled=false
 if [[ "${image_nano_banana_2_enabled}" == "true" ||
@@ -370,6 +379,18 @@ fi
 
 tmp_output="$(mktemp)"
 trap 'rm -f "${tmp_output}"' EXIT
+
+media_sed_args=()
+if [[ "${video_probe_required}" == "true" ]]; then
+  media_sed_args=(
+    -e '/^MEDIA_PIPELINE_ENABLED=/d'
+    -e '/^MEDIA_VIDEO_PROBE_POLICY=/d'
+    -e '/^MEDIA_VIDEO_TRANSCODE_POLICY=/d'
+    -e '/^MEDIA_DELIVER_RAW_PROVIDER_VIDEO=/d'
+    -e '/^MEDIA_ALLOWED_VIDEO_CONTAINERS=/d'
+    -e '/^FFPROBE_PATH=/d'
+  )
+fi
 
 sed \
   -e '/^APP_ENV=/d' \
@@ -396,6 +417,7 @@ sed \
   -e '/^OPENAI_IMAGE_MODEL=/d' \
   -e '/^OPENAI_VIDEO_MODEL=/d' \
   -e '/^VK_VIDEO_DELIVERY_MODE=/d' \
+  "${media_sed_args[@]}" \
   -e '/^RUNTIME_PRICING_DB_ENABLED=/d' \
   -e '/^RUNTIME_PRICING_STATIC_FALLBACK_ENABLED=/d' \
   -e '/^RUNTIME_PRICING_REFRESH_INTERVAL=/d' \
@@ -445,6 +467,14 @@ sed \
   printf 'IMAGE_PROVIDER=\n'
   printf 'VIDEO_PROVIDER=\n'
   printf 'VK_VIDEO_DELIVERY_MODE=doc\n'
+  if [[ "${video_probe_required}" == "true" ]]; then
+    printf 'MEDIA_PIPELINE_ENABLED=true\n'
+    printf 'MEDIA_VIDEO_PROBE_POLICY=probe_required\n'
+    printf 'MEDIA_VIDEO_TRANSCODE_POLICY=never\n'
+    printf 'MEDIA_DELIVER_RAW_PROVIDER_VIDEO=if_probe_passed\n'
+    printf 'MEDIA_ALLOWED_VIDEO_CONTAINERS=mp4,webm\n'
+    printf 'FFPROBE_PATH=%s\n' "${ffprobe_path}"
+  fi
   printf 'RUNTIME_PRICING_DB_ENABLED=false\n'
   printf 'RUNTIME_PRICING_STATIC_FALLBACK_ENABLED=true\n'
   printf 'RUNTIME_PRICING_REFRESH_INTERVAL=0\n'
@@ -504,4 +534,4 @@ sed \
 
 install -m 600 "${tmp_output}" "${output_file}"
 
-echo "DEV env prepared: providers=${provider_chain} provider_balance_bot=${provider_balance_bot_enabled} telegram_token=${telegram_bot_configured} admin_chat=${telegram_admin_configured} provider_key=${provider_balance_key_configured} apimart=${apimart_provider_enabled} poyo=${poyo_provider_enabled} runway=${runway_provider_enabled} deepinfra=${deepinfra_balance_provider_enabled} image_menu=${image_menu_enabled} video_menu=${video_router_enabled}"
+echo "DEV env prepared: providers=${provider_chain} provider_balance_bot=${provider_balance_bot_enabled} telegram_token=${telegram_bot_configured} admin_chat=${telegram_admin_configured} provider_key=${provider_balance_key_configured} apimart=${apimart_provider_enabled} poyo=${poyo_provider_enabled} runway=${runway_provider_enabled} deepinfra=${deepinfra_balance_provider_enabled} image_menu=${image_menu_enabled} video_menu=${video_router_enabled} media_pipeline=${video_probe_required}"
