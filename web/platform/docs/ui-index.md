@@ -27,7 +27,7 @@
 | Выбор соотношения сторон или разрешения, в том числе в редакторе фото | `ImageAspectRatioSelector`, `ImageQualitySelector`; в модальном редакторе portalLayer=170 | [Ввод](ui-catalog.md#input), [панели](ui-catalog.md#panels) |
 | Кнопка с заливкой / прозрачная кнопка с обводкой | `Button`: `variant="filled"` по умолчанию; `variant="outline"` для прозрачного фона во всех состояниях | [Ввод](ui-catalog.md#input) |
 | Поле сообщения / запрос генерации / загрузка медиа | `ChatComposer`; в существующем сценарии — его адаптер | [Ввод](ui-catalog.md#input), [пример 5](ui-catalog-examples.md#example-5) |
-| Музыкальная workspace-страница / Suno и Lyria | `MusicWorkspaceController` + `MusicWorkspace`; операции и контролы выбранной модели из общего каталога, prepare/activate и safe downloads | [Модели](ui-catalog.md#models), [Ввод](ui-catalog.md#input) |
+| Музыкальная workspace-страница / Suno и Lyria | `MusicWorkspaceController` + `MusicWorkspace` + `MusicStudioTools`: быстрое создание, карточки задач, раскрываемые настройки и «Мои треки»; каталог и prepare/activate | [Модели](ui-catalog.md#models), [Ввод](ui-catalog.md#input) |
 | Озвучка текста / распознавание записи | `SpeechWorkspace` в `/app/speech`; серверный prepare/activate, собственные MP3/WAV, WAV/текст на выходе; pending-модели не запускаются | [Модели](ui-catalog.md#models), [Ввод](ui-catalog.md#input) |
 | Стрелка к концу диалога, скрытая внизу | `ChatScrollToBottom` в `ConversationComposer` | [Ввод](ui-catalog.md#input) |
 | Перетаскивание файлов в правую панель | `WorkspaceFileDropZone` + `ChatComposer.attachmentController` | [Вложения](ui-catalog.md#раздельные-возможности-моделей) |

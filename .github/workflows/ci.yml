@@ -27,7 +27,7 @@ concurrency:
 
 jobs:
   session-rotation:
-    name: Session rotation on PostgreSQL
+    name: Account security on PostgreSQL and Redis
     runs-on: ubuntu-latest
     services:
       postgres:
@@ -43,6 +43,15 @@ jobs:
           --health-interval 5s
           --health-timeout 3s
           --health-retries 10
+      redis:
+        image: redis:7-alpine@sha256:6ab0b6e7381779332f97b8ca76193e45b0756f38d4c0dcda72dbb3c32061ab99
+        ports:
+          - 6379:6379
+        options: >-
+          --health-cmd "redis-cli ping"
+          --health-interval 5s
+          --health-timeout 3s
+          --health-retries 10
     steps:
       - name: Checkout
         uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4.3.1
@@ -51,10 +60,16 @@ jobs:
         with:
           go-version-file: go.mod
           cache: true
-      - name: Verify rollback and concurrent rotation in an isolated schema
+      - name: Verify account security transactions in isolated schemas
         env:
           TEST_DATABASE_URL: postgres://session_test:session_test_fixture@127.0.0.1:5432/session_test?sslmode=disable
-        run: go test ./internal/adapter/storage/postgres -run '^TestAtomicSessionRotationPostgres$' -count=1 -v
+        run: go test ./internal/adapter/storage/postgres -run 'TestAtomicSessionRotationPostgres|TestPostgresEmailLimitAndReplacementConcurrency|TestConcurrentPostgresUnlinkPreservesSignIn|TestPostgresRecoveryRechecksEmailAndRollsBackAllSecurityWrites|TestPostgresPasswordConditionalWrites|TestPostgresSecurityNotice|TestPostgresRefreshSerializesWithPasswordRevocation|TestPostgresPasswordTransactionRollbackAndConcurrentCAS|TestPostgresPasswordLoginRejectsStaleCredentialAndBinding' -count=1 -v
+      - name: Verify exact one-use proofs against Redis
+        env:
+          TEST_REDIS_URL: redis://127.0.0.1:6379/0
+        run: go test ./internal/adapter/storage/redis -run '^TestRedisAccountLinkConsumptionIsAtomicAndExact$' -count=1 -v
+      - name: Check concurrent account services with the race detector
+        run: go test -race ./internal/service/accountlink ./internal/service/accountauth ./internal/service/accountnotices ./internal/adapter/storage/memory -count=1
 
   backend:
     name: Backend

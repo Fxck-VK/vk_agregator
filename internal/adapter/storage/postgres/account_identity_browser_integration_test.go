@@ -13,18 +13,13 @@ import (
 
 func TestConcurrentPostgresUnlinkPreservesSignIn(t *testing.T) {
 	ctx := context.Background()
-	pool := conversationManagementIntegrationPool(t, ctx)
-	_, err := pool.Exec(ctx, `CREATE TABLE account_identities (id UUID PRIMARY KEY, account_id UUID NOT NULL REFERENCES accounts(id), provider TEXT NOT NULL, verified_at TIMESTAMPTZ);
-		CREATE TABLE account_links_audit (id UUID PRIMARY KEY, account_id UUID NOT NULL, actor_account_id UUID, action TEXT NOT NULL, provider TEXT NOT NULL, identity_id UUID, created_at TIMESTAMPTZ NOT NULL)`)
-	if err != nil {
-		t.Fatal(err)
-	}
+	pool := noticeEmailFixture(t)
 	accountID, emailID, googleID, phoneID := uuid.New(), uuid.New(), uuid.New(), uuid.New()
 	if _, err := pool.Exec(ctx, "INSERT INTO accounts(id) VALUES($1)", accountID); err != nil {
 		t.Fatal(err)
 	}
 	for provider, id := range map[string]uuid.UUID{"email": emailID, "google": googleID, "phone": phoneID} {
-		if _, err := pool.Exec(ctx, "INSERT INTO account_identities(id, account_id, provider, verified_at) VALUES($1,$2,$3,now())", id, accountID, provider); err != nil {
+		if _, err := pool.Exec(ctx, "INSERT INTO account_identities(id, account_id, provider, external_id, normalized_id, verified_at,created_at,updated_at) VALUES($1,$2,$3,$4,$4,now(),now(),now())", id, accountID, provider, provider+"@example.test"); err != nil {
 			t.Fatal(err)
 		}
 	}

@@ -32,6 +32,7 @@ export const assetPaths = {
     ui: {
       chevronDown: "/assets/icons/ui/chevron-down.svg",
       faqArrow: "/assets/icons/ui/faq-arrow.svg",
+      music: "/assets/icons/ui/music-outline.svg",
       resolution: "/assets/icons/ui/resolution-white.svg",
       retryUpload: "/assets/icons/ui/restart-white.svg",
       search: "/assets/icons/ui/search.svg",

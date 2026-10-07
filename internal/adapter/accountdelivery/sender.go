@@ -162,6 +162,10 @@ func newSMTPSender(cfg SMTPConfig) (*smtpSender, error) {
 
 func (s *smtpSender) SendEmailLinkCode(ctx context.Context, email, code string, expiresAt time.Time) error {
 	message := buildEmailMessage(s.cfg.From, email, s.cfg.Subject, code, expiresAt)
+	return s.sendMessage(ctx, email, message)
+}
+
+func (s *smtpSender) sendMessage(ctx context.Context, email string, message []byte) error {
 	addr := net.JoinHostPort(s.cfg.Host, strconv.Itoa(s.cfg.Port))
 	dialer := net.Dialer{Timeout: s.cfg.Timeout}
 	conn, err := dialer.DialContext(ctx, "tcp", addr)
@@ -169,7 +173,13 @@ func (s *smtpSender) SendEmailLinkCode(ctx context.Context, email, code string, 
 		return fmt.Errorf("accountdelivery: smtp connect failed: %w", err)
 	}
 	defer conn.Close()
-	_ = conn.SetDeadline(time.Now().Add(s.cfg.Timeout))
+	deadline := time.Now().Add(s.cfg.Timeout)
+	if parent, ok := ctx.Deadline(); ok && parent.Before(deadline) {
+		deadline = parent
+	}
+	_ = conn.SetDeadline(deadline)
+	stopCancel := context.AfterFunc(ctx, func() { _ = conn.Close() })
+	defer stopCancel()
 
 	client, err := smtp.NewClient(conn, s.cfg.Host)
 	if err != nil {

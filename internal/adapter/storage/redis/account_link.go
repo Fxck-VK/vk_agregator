@@ -18,6 +18,26 @@ end
 return current
 `)
 
+// Compare the complete serialized challenge, including its backup version and
+// expiry. TIME checks expiry in the same atomic operation as comparison/deletion.
+var consumeAccountLinkChallenge = goredis.NewScript(`
+local current = redis.call("GET", KEYS[1])
+if not current or current ~= ARGV[1] then
+  return 0
+end
+local expires = tonumber(ARGV[2])
+if expires > 0 then
+  local now = redis.call("TIME")
+  local milliseconds = tonumber(now[1]) * 1000 + math.floor(tonumber(now[2]) / 1000)
+  if milliseconds >= expires then
+    redis.call("DEL", KEYS[1])
+    return -1
+  end
+end
+redis.call("DEL", KEYS[1])
+return 1
+`)
+
 // AccountLinkStore persists short-lived account-link challenges in Redis.
 type AccountLinkStore struct {
 	client goredis.Cmdable
@@ -53,6 +73,29 @@ func (s *AccountLinkStore) LoadChallenge(ctx context.Context, key string) (accou
 
 func (s *AccountLinkStore) DeleteChallenge(ctx context.Context, key string) error {
 	return s.client.Del(ctx, key).Err()
+}
+
+func (s *AccountLinkStore) ConsumeChallenge(ctx context.Context, key string, expected accountlink.Challenge) error {
+	body, err := json.Marshal(expected)
+	if err != nil {
+		return err
+	}
+	var expiresAt int64
+	if !expected.ExpiresAt.IsZero() {
+		expiresAt = expected.ExpiresAt.UnixMilli()
+	}
+	result, err := consumeAccountLinkChallenge.Run(ctx, s.client, []string{key}, body, expiresAt).Int64()
+	if err != nil {
+		return err
+	}
+	switch result {
+	case 1:
+		return nil
+	case -1:
+		return accountlink.ErrExpiredCode
+	default:
+		return accountlink.ErrInvalidCode
+	}
 }
 
 func (s *AccountLinkStore) Increment(ctx context.Context, key string, ttl time.Duration) (int64, error) {

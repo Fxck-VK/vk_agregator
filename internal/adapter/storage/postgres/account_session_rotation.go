@@ -2,6 +2,9 @@ package postgres
 
 import (
 	"context"
+	"errors"
+	"github.com/google/uuid"
+	"github.com/jackc/pgx/v5"
 	"vk-ai-aggregator/internal/domain"
 )
 
@@ -11,6 +14,21 @@ import (
 func (r *AccountSessionRepository) RotateSession(ctx context.Context, oldRefreshHash string, session domain.AccountSession) (*domain.AccountSession, error) {
 	if err := session.Validate(); err != nil {
 		return nil, err
+	}
+	beginner, ok := r.db.(interface {
+		Begin(context.Context) (pgx.Tx, error)
+	})
+	if !ok {
+		return nil, errors.New("session rotation requires transactions")
+	}
+	tx, err := beginner.Begin(ctx)
+	if err != nil {
+		return nil, mapError(err)
+	}
+	defer tx.Rollback(ctx)
+	var locked uuid.UUID
+	if err := tx.QueryRow(ctx, "SELECT id FROM accounts WHERE id=$1 FOR UPDATE /* account-session-rotation */", session.AccountID).Scan(&locked); err != nil {
+		return nil, mapError(err)
 	}
 	const q = `WITH revoked AS (
   UPDATE account_sessions SET revoked_at = $12, updated_at = $12
@@ -22,10 +40,13 @@ func (r *AccountSessionRepository) RotateSession(ctx context.Context, oldRefresh
  ) SELECT $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $12 FROM revoked
  RETURNING ` + accountSessionColumns
 	var out domain.AccountSession
-	err := scanAccountSession(r.db.QueryRow(ctx, q, oldRefreshHash, session.ID, session.AccountID,
+	err = scanAccountSession(tx.QueryRow(ctx, q, oldRefreshHash, session.ID, session.AccountID,
 		nullableUUIDPtr(session.IdentityID), session.AccessTokenHash, nullableTimePtr(session.AccessExpiresAt),
 		session.RefreshTokenHash, session.DeviceID, session.IPHash, session.UserAgentHash, session.ExpiresAt, session.CreatedAt), &out)
 	if err != nil {
+		return nil, mapError(err)
+	}
+	if err := tx.Commit(ctx); err != nil {
 		return nil, mapError(err)
 	}
 	return &out, nil

@@ -1,7 +1,7 @@
 # Account Identity Contract
 
 Status: active target architecture
-Updated: 2026-07-02
+Updated: 2026-10-05
 
 This document defines the target account identity layer for all current and
 future user surfaces: VK Bot, VK Mini App, Telegram Bot, Web and Mobile.
@@ -475,11 +475,28 @@ The target migration is additive:
   profile exposes only `password_set`, never credential material.
 - Password reset requires the same verified email code path and revokes active
   account sessions after the credential is rotated.
+- Recovery/link/phone/backup challenge consumption atomically compares the
+  exact validated challenge and deletes it once. Invalid proof cannot consume
+  a valid challenge; stale readers/delivery cleanup cannot delete a newer one.
+  Store failures never authorize a request.
+- Password login rechecks its validated hash and verified email binding under
+  the account lock before issuing a session. Password mutation, unlink and
+  session rotation share that lock, so stale proof and refresh cannot survive
+  a committed security change.
 - Recovery rechecks verified email ownership under the same account lock used
   by unlink and replacement. PostgreSQL commits credential, session revocation
-  and reset audit in one transaction; failure rolls back all three. The memory
+  audit and security notice enqueue in one transaction; failure rolls back all
+  writes. Ordinary password changes use the same transaction and revoke other
+  sessions, preserving only the active session established by the cookie
+  principal. Legacy calls without that principal revoke all sessions. The memory
   path holds the identity mutex through its security writes. Unsupported storage
   guards fail closed rather than using a check-then-write fallback.
+- Password and backup email security notices use a durable transactional
+  outbox with verified recipient snapshots, fixed templates, leased delivery
+  and bounded retry/retention. SMTP is outside account transactions; delivery
+  errors cannot reverse successful mutations. Recipients and bodies are never
+  logged. Delivery is at least once and may duplicate after SMTP acceptance
+  when the database acknowledgement fails.
 - Additional verified email identities act as backup sign-in/recovery addresses
   for the same account-wide password. Recovery through any linked address must
   preserve account ownership; it must not create an account, merge accounts or

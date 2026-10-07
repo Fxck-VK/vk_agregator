@@ -58,6 +58,9 @@ var (
 type Store interface {
 	SaveChallenge(ctx context.Context, key string, challenge Challenge, ttl time.Duration) error
 	LoadChallenge(ctx context.Context, key string) (Challenge, error)
+	// ConsumeChallenge atomically deletes only the exact validated, unexpired
+	// challenge. A missing or superseded challenge returns ErrInvalidCode.
+	ConsumeChallenge(ctx context.Context, key string, expected Challenge) error
 	DeleteChallenge(ctx context.Context, key string) error
 	Increment(ctx context.Context, key string, ttl time.Duration) (int64, error)
 }
@@ -171,7 +174,7 @@ func (s *Service) RequestEmailCode(ctx context.Context, accountID uuid.UUID, ema
 		return RequestResult{}, err
 	}
 	if err := s.sender.SendEmailLinkCode(ctx, normalizedEmail, code, expiresAt); err != nil {
-		_ = s.store.DeleteChallenge(ctx, key)
+		_ = s.store.ConsumeChallenge(ctx, key, challenge)
 		return RequestResult{}, err
 	}
 	return RequestResult{
@@ -214,7 +217,7 @@ func (s *Service) RequestPhoneOTP(ctx context.Context, accountID uuid.UUID, phon
 		return RequestResult{}, err
 	}
 	if err := s.sender.SendPhoneLinkOTP(ctx, normalizedPhone, code, expiresAt); err != nil {
-		_ = s.store.DeleteChallenge(ctx, key)
+		_ = s.store.ConsumeChallenge(ctx, key, challenge)
 		return RequestResult{}, err
 	}
 	return RequestResult{
@@ -275,14 +278,15 @@ func (s *Service) verifyEmailProof(ctx context.Context, accountID uuid.UUID, ema
 	if challenge.AccountID != accountID || challenge.IdentityHash != emailHash {
 		return "", ErrInvalidCode
 	}
-	if !challenge.ExpiresAt.IsZero() && s.cfg.Now().After(challenge.ExpiresAt) {
-		_ = s.store.DeleteChallenge(ctx, key)
+	if !challenge.ExpiresAt.IsZero() && !s.cfg.Now().Before(challenge.ExpiresAt) {
 		return "", ErrExpiredCode
 	}
 	if !hmac.Equal([]byte(challenge.CodeHash), []byte(s.codeHash(accountID, normalizedEmail, code))) {
 		return "", ErrInvalidCode
 	}
-	_ = s.store.DeleteChallenge(ctx, key)
+	if err := s.store.ConsumeChallenge(ctx, key, challenge); err != nil {
+		return "", err
+	}
 	return normalizedEmail, nil
 }
 
@@ -315,14 +319,15 @@ func (s *Service) VerifyPhoneOTP(ctx context.Context, accountID uuid.UUID, phone
 	if challenge.AccountID != accountID || challenge.IdentityHash != phoneHash {
 		return accountservice.AccountIdentitySafe{}, ErrInvalidCode
 	}
-	if !challenge.ExpiresAt.IsZero() && s.cfg.Now().After(challenge.ExpiresAt) {
-		_ = s.store.DeleteChallenge(ctx, key)
+	if !challenge.ExpiresAt.IsZero() && !s.cfg.Now().Before(challenge.ExpiresAt) {
 		return accountservice.AccountIdentitySafe{}, ErrExpiredCode
 	}
 	if !hmac.Equal([]byte(challenge.CodeHash), []byte(s.codeHash(accountID, normalizedPhone, code))) {
 		return accountservice.AccountIdentitySafe{}, ErrInvalidCode
 	}
-	_ = s.store.DeleteChallenge(ctx, key)
+	if err := s.store.ConsumeChallenge(ctx, key, challenge); err != nil {
+		return accountservice.AccountIdentitySafe{}, err
+	}
 	return s.account.LinkVerifiedIdentity(ctx, accountID, accountID, domain.VerifiedAccountLogin{
 		Method:     domain.AccountLoginPhoneOTP,
 		ExternalID: normalizedPhone,

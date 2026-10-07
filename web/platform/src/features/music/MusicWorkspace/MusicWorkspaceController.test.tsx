@@ -75,11 +75,11 @@ describe("MusicWorkspaceController", () => {
     };
     const loader = () => Promise.resolve(catalog);
     const { rerender } = render(<MusicWorkspaceController api={api} catalogLoader={loader} requestedModelId="lyria_3_5" />);
-    await waitFor(() => expect(screen.getByRole("button", { name: "Lyria 3.5" })).toHaveAttribute("aria-pressed", "true"));
+    await waitFor(() => expect(screen.getByRole("button", { name: "Модель генерации музыки" })).toHaveTextContent("Lyria 3.5"));
     rerender(<MusicWorkspaceController api={api} catalogLoader={loader} requestedModelId="suno_v6" />);
-    await waitFor(() => expect(screen.getByRole("button", { name: "Suno V6" })).toHaveAttribute("aria-pressed", "true"));
+    await waitFor(() => expect(screen.getByRole("button", { name: "Модель генерации музыки" })).toHaveTextContent("Suno V6"));
     rerender(<MusicWorkspaceController api={api} catalogLoader={loader} requestedModelId="not-a-model" />);
-    await waitFor(() => expect(screen.getByRole("button", { name: "Suno V6" })).toHaveAttribute("aria-pressed", "true"));
+    await waitFor(() => expect(screen.getByRole("button", { name: "Модель генерации музыки" })).toHaveTextContent("Suno V6"));
     expect(api.prepareMusicJob).not.toHaveBeenCalled();
     expect(api.activateMusicJob).not.toHaveBeenCalled();
   });
@@ -88,13 +88,13 @@ describe("MusicWorkspaceController", () => {
     const api = apiStub();
     render(<MusicWorkspaceController api={api} catalogLoader={() => Promise.resolve(pendingCatalog)} />);
 
-    expect(await screen.findAllByText("Модель ждёт отдельной проверки")).not.toHaveLength(0);
+    expect(await screen.findByText("Эта модель пока недоступна. Можно подготовить описание и настройки.")).toBeVisible();
     fireEvent.change(screen.getByRole("textbox", { name: "Описание трека" }), {
       target: { value: "make a chorus" },
     });
 
-    expect(screen.getByRole("button", { name: "Сгенерировать" })).toBeDisabled();
-    fireEvent.click(screen.getByRole("button", { name: "Сгенерировать" }));
+    expect(screen.getByRole("button", { name: "Создать песню" })).toBeDisabled();
+    fireEvent.click(screen.getByRole("button", { name: "Создать песню" }));
     expect(api.prepareMusicJob).not.toHaveBeenCalled();
   });
 
@@ -126,7 +126,7 @@ describe("MusicWorkspaceController", () => {
     fireEvent.change(await screen.findByRole("textbox", { name: "Описание трека" }), {
       target: { value: "ambient pop" },
     });
-    fireEvent.click(screen.getByRole("button", { name: "Сгенерировать" }));
+    fireEvent.click(screen.getByRole("button", { name: "Создать песню" }));
 
     await waitFor(() => expect(api.prepareMusicJob).toHaveBeenCalledTimes(1));
     expect(api.prepareMusicJob).toHaveBeenCalledWith({
@@ -173,7 +173,7 @@ describe("MusicWorkspaceController", () => {
     fireEvent.change(await screen.findByRole("textbox", { name: "Описание трека" }), {
       target: { value: "ambient pop" },
     });
-    fireEvent.click(screen.getByRole("button", { name: "Сгенерировать" }));
+    fireEvent.click(screen.getByRole("button", { name: "Создать песню" }));
     await screen.findByRole("heading", { name: "Подтверждение запуска" });
 
     rerender(view("en"));
@@ -199,7 +199,7 @@ describe("MusicWorkspaceController", () => {
     fireEvent.change(await screen.findByRole("textbox", { name: "Описание трека" }), {
       target: { value: "ambient pop" },
     });
-    fireEvent.click(screen.getByRole("button", { name: "Сгенерировать" }));
+    fireEvent.click(screen.getByRole("button", { name: "Создать песню" }));
     await screen.findByRole("alert", { name: "" });
     expect(screen.getByRole("alert")).toHaveTextContent("Сервер отклонил параметры музыкального запуска.");
 
@@ -328,7 +328,9 @@ describe("MusicWorkspaceController", () => {
 
     render(<MusicWorkspaceController api={api} catalogLoader={() => Promise.resolve(enabledCatalog)} />);
 
+    fireEvent.click(screen.getByRole("button", { name: /Мои треки/ }));
     fireEvent.click(await screen.findByRole("button", { name: "Загрузить ещё" }));
+    fireEvent.click(screen.getByRole("button", { name: "Настройки трека" }));
 
     await waitFor(() => expect(api.loadMusicJobs).toHaveBeenLastCalledWith(8, "older-page"));
     expect(await screen.findByRole("option", { name: "Bright persona" })).toBeInTheDocument();

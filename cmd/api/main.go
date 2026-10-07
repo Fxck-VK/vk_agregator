@@ -41,6 +41,7 @@ import (
 	"vk-ai-aggregator/internal/platform/tracing"
 	"vk-ai-aggregator/internal/service/accountauth"
 	"vk-ai-aggregator/internal/service/accountlink"
+	"vk-ai-aggregator/internal/service/accountnotices"
 	"vk-ai-aggregator/internal/service/accountregistration"
 	"vk-ai-aggregator/internal/service/artifactservice"
 	"vk-ai-aggregator/internal/service/imagegeneration"
@@ -197,6 +198,20 @@ func main() {
 	if err != nil {
 		logger.Error("account delivery wiring failed", logging.ErrorAttr(err))
 		os.Exit(1)
+	}
+	{
+		noticeCtx, stopNotices := context.WithCancel(ctx)
+		noticeDone := make(chan struct{})
+		go func() {
+			defer close(noticeDone)
+			notices := accountnotices.New(postgres.NewAccountSecurityNoticeRepository(pool), accountSender, logger)
+			if strings.EqualFold(cfg.AccountEmailDeliveryProvider, "smtp") {
+				notices.Run(noticeCtx)
+			} else {
+				notices.RunRetention(noticeCtx)
+			}
+		}()
+		defer func() { stopNotices(); <-noticeDone }()
 	}
 	emailLinker, err := accountlink.New(
 		redisstore.NewAccountLinkStore(rdb),

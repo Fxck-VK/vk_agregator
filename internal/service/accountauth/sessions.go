@@ -107,16 +107,37 @@ func (s *Service) issueSession(ctx context.Context, accountID uuid.UUID, meta Se
 	if s == nil || s.sessions == nil {
 		return SessionTokens{}, ErrSessionStoreUnavailable
 	}
+	session, tokens, err := s.prepareSession(accountID, meta)
+	if err != nil {
+		return SessionTokens{}, err
+	}
+	var created *domain.AccountSession
+	if oldRefreshHash == "" {
+		created, err = s.sessions.CreateSession(ctx, session)
+	} else {
+		created, err = s.sessions.RotateSession(ctx, oldRefreshHash, session)
+		if errors.Is(err, domain.ErrNotFound) {
+			return SessionTokens{}, ErrInvalidSession
+		}
+	}
+	if err != nil {
+		return SessionTokens{}, err
+	}
+	tokens.Session = SafeSessionDTO(created)
+	return tokens, nil
+}
+
+func (s *Service) prepareSession(accountID uuid.UUID, meta SessionMetadata) (domain.AccountSession, SessionTokens, error) {
 	if accountID == uuid.Nil {
-		return SessionTokens{}, domain.ErrInvalidIdentity
+		return domain.AccountSession{}, SessionTokens{}, domain.ErrInvalidIdentity
 	}
 	accessToken, err := randomToken(defaultSessionTokenBytes)
 	if err != nil {
-		return SessionTokens{}, err
+		return domain.AccountSession{}, SessionTokens{}, err
 	}
 	refreshToken, err := randomToken(defaultSessionTokenBytes)
 	if err != nil {
-		return SessionTokens{}, err
+		return domain.AccountSession{}, SessionTokens{}, err
 	}
 	now := s.currentTime()
 	expiresAt := now.Add(s.effectiveSessionTTL())
@@ -138,24 +159,12 @@ func (s *Service) issueSession(ctx context.Context, accountID uuid.UUID, meta Se
 		UpdatedAt:        now,
 		ExpiresAt:        expiresAt,
 	}
-	var created *domain.AccountSession
-	if oldRefreshHash == "" {
-		created, err = s.sessions.CreateSession(ctx, session)
-	} else {
-		created, err = s.sessions.RotateSession(ctx, oldRefreshHash, session)
-		if errors.Is(err, domain.ErrNotFound) {
-			return SessionTokens{}, ErrInvalidSession
-		}
-	}
-	if err != nil {
-		return SessionTokens{}, err
-	}
-	return SessionTokens{
+	return session, SessionTokens{
 		AccessToken:     accessToken,
 		RefreshToken:    refreshToken,
-		AccessExpiresAt: formatSessionTime(*created.AccessExpiresAt),
-		ExpiresAt:       formatSessionTime(created.ExpiresAt),
-		Session:         SafeSessionDTO(created),
+		AccessExpiresAt: formatSessionTime(*session.AccessExpiresAt),
+		ExpiresAt:       formatSessionTime(session.ExpiresAt),
+		Session:         SafeSessionDTO(&session),
 	}, nil
 }
 

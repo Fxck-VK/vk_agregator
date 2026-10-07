@@ -4,7 +4,6 @@
 
 import { useId, useRef, useState, type ChangeEvent } from "react";
 
-import { ChatComposer } from "@/components/chat/ChatComposer/ChatComposer";
 import { Button } from "@/components/ui/Button/Button";
 import { CreditAmount } from "@/components/ui/CreditAmount/CreditAmount";
 import { InputControlChip } from "@/components/ui/InputControlChip/InputControlChip";
@@ -18,6 +17,7 @@ import { useMessages } from "@/i18n/LocaleProvider";
 import type { MessageKey, Translator } from "@/i18n/messages";
 
 import { musicArtifactLabel } from "../music-api";
+import { MusicOperationPrice, MusicToolCard, MusicToolIcon } from "./MusicStudioTools";
 
 import styles from "./MusicWorkspace.module.css";
 
@@ -284,6 +284,10 @@ const durationModeLabels: Record<MusicDurationMode, MessageKey> = {
 
 const outputFormats: readonly MusicOutputFormat[] = ["mp3", "m4a", "wav"];
 const emptyReusableAssets: MusicReusableAssets = { customModels: [], personas: [], voices: [] };
+const genreHints = [
+  ["pop", "pop"], ["rock", "rock"], ["indie", "indie pop"],
+  ["rap", "rap"], ["lofi", "lo-fi"], ["electronic", "electronic"],
+] as const;
 
 const operationGroups: readonly OperationGroup[] = [
   {
@@ -621,6 +625,18 @@ export function MusicWorkspace({
   uploadsEnabled = false,
 }: Readonly<MusicWorkspaceProps>) {
   const msg = useMessages();
+  const [settingsOpen, setSettingsOpen] = useState(mode !== "description");
+  const [libraryOpen, setLibraryOpen] = useState(false);
+  const [toolOpen, setToolOpen] = useState(activeOperationId !== null);
+  const [modelMenuOpen, setModelMenuOpen] = useState(false);
+  const [moreToolsOpen, setMoreToolsOpen] = useState(false);
+  const settingsId = useId();
+  const libraryId = useId();
+  const modelMenuId = useId();
+  const modelButtonRef = useRef<HTMLButtonElement>(null);
+  const moreToolsId = useId();
+  const editorRef = useRef<HTMLDivElement>(null);
+  const toolRef = useRef<HTMLElement>(null);
   const operationById = new Map(operations.map((operation) => [operation.id, operation]));
   const selectedModel = models.find((model) => model.id === selectedModelId);
   const activeOperation = activeOperationId === null ? undefined : operationById.get(activeOperationId);
@@ -687,33 +703,75 @@ export function MusicWorkspace({
       .filter((operation): operation is MusicWorkspaceOperation => operation !== undefined),
   })).filter((group) => group.operations.length > 0);
 
+  const openCreation = (nextMode: MusicCreationMode, instrumental = false) => {
+    onModeChange(nextMode);
+    updateDraft({ instrumental });
+    setSettingsOpen(true);
+    setToolOpen(false);
+    requestAnimationFrame(() => {
+      editorRef.current?.scrollIntoView?.({ block: "center", behavior: "smooth" });
+      editorRef.current?.focus({ preventScroll: true });
+    });
+  };
+  const openTool = (operationId: MusicOperationID) => {
+    onActiveOperationChange(operationId);
+    setToolOpen(true);
+    requestAnimationFrame(() => {
+      toolRef.current?.scrollIntoView?.({ block: "center", behavior: "smooth" });
+      toolRef.current?.focus({ preventScroll: true });
+    });
+  };
+  const primaryAudioIds: readonly MusicOperationID[] = [
+    "cover", "mashup", "stems", "stems_all", "add_vocals", "add_instrumental", "upload_cover", "upload_extend",
+  ];
+  const audioOperations = primaryAudioIds
+    .map((id) => operationById.get(id))
+    .filter((op): op is MusicWorkspaceOperation => op !== undefined);
+  const otherGroups = availableGroups.map((group) => ({
+    ...group,
+    operations: group.operations.filter((op) => !primaryAudioIds.includes(op.id) && op.id !== "lyrics" && op.id !== "sounds"),
+  })).filter((group) => group.operations.length > 0);
+  const renderTool = (operation: MusicWorkspaceOperation) => (
+    <MusicToolCard
+      active={toolOpen && activeOperationId === operation.id}
+      busy={busy}
+      key={operation.id}
+      label={operationLabel(operation, operation.id, msg)}
+      onClick={() => openTool(operation.id)}
+      operation={operation}
+      unavailable={!operation.enabled || modelDisabledReason !== null}
+    />
+  );
+  const activeTrackIds = operationConsumesSelectedTracks(activeOperation) ? selectedTrackIds : [];
+  const trackLibrary = (
+    <TrackSourceList
+      busy={busy}
+      hasMore={state?.historyHasMore === true}
+      loadingMore={state?.historyLoading === true}
+      onLoadMore={onLoadMoreHistory}
+      onToggle={toggleSelectedTrack}
+      selectedTrackIds={selectedTrackIds}
+      tracks={tracks}
+    />
+  );
+
   return (
     <section aria-label={msg("music.studio.aria")} className={styles.workspace}>
       <div className={styles.header}>
         <div>
-          <p className={styles.eyebrow}>{msg("music.studio.title")}</p>
           <h1>{msg("music.studio.heading")}</h1>
+          <p className={styles.intro}>{msg("music.studio.intro")}</p>
         </div>
-        <ModeSwitchPanel
-          activeID={selectedModelId}
-          ariaLabel={msg("music.studio.modelAria")}
-          className={styles.modelSwitch}
-          items={models.map((model) => ({
-            disabled: !model.enabled || model.availability !== "available" || busy,
-            id: model.id,
-            label: model.name,
-            title: model.statusReason ?? model.description,
-          }))}
-          onChange={onModelChange}
-        />
+        <Button aria-controls={libraryId} aria-expanded={libraryOpen} className={styles.libraryButton} onClick={() => setLibraryOpen(!libraryOpen)} type="button" variant="outline">
+          <MusicToolIcon kind="folder" />{msg("music.studio.myTracks")}<span className={styles.trackCount}>{tracks.length}</span>
+        </Button>
       </div>
-      <ModelAvailabilitySummary
-        models={models}
-        selectedModel={selectedModel}
-        state={state}
-      />
-
-      <div className={styles.layout}>
+      <div id={libraryId}>{libraryOpen ? trackLibrary : null}</div>
+      <div className={styles.creation}>
+        <div className={styles.sectionTitle}>
+          <h2>{msg("music.studio.newTrack")}</h2>
+          {mode !== "upload" ? <span>{msg("music.studio.noUploadNeeded")}</span> : null}
+        </div>
         <form
           className={styles.creation}
           onSubmit={(event) => {
@@ -721,94 +779,196 @@ export function MusicWorkspace({
             requestConfirmation("generate");
           }}
         >
-          <ModeSwitchPanel
-            activeID={mode}
-            ariaLabel={msg("music.workspace.descriptionLabel")}
-            items={creationModeItems(msg).map((item) => ({
-              ...item,
-              disabled: busy || (item.id === "upload" && !uploadsEnabled),
-              title: item.id === "upload" && !uploadsEnabled ? msg("music.workspace.uploadDisabled") : item.title,
-            }))}
-            onChange={onModeChange}
-            semantics="tabs"
-          />
-
-          <div className={styles.modePanel}>
-            <SharedSongFields
-              lyria={selectedModelId === "lyria_3_5"}
-              busy={busy}
-              draft={draft}
-              onEnhanceStyle={onEnhanceStyle}
-              onRequestSuggestedLyrics={onRequestSuggestedLyrics}
-              updateDraft={updateDraft}
+          <InputSurface className={styles.quickCreator}>
+            <div className={styles.composerHeading}>
+              <span>{msg(mode === "own_lyrics" ? "music.studio.ownSong" : draft.instrumental ? "music.shared.instrumental" : "music.studio.quickSong")}</span>
+              <InputControlChip
+                aria-label={msg("music.studio.modelAria")}
+                aria-controls={modelMenuId}
+                aria-expanded={modelMenuOpen}
+                aria-haspopup="dialog"
+                className={styles.modelChip}
+                disabled={busy || models.length === 0}
+                onClick={() => setModelMenuOpen(!modelMenuOpen)}
+                ref={modelButtonRef}
+              >
+                {selectedModel?.name ?? msg("music.catalog.loadingShort")}<span aria-hidden="true">⌄</span>
+              </InputControlChip>
+              <PopoverPanel
+                align="end"
+                anchorRef={modelButtonRef}
+                id={modelMenuId}
+                isOpen={modelMenuOpen}
+                label={msg("music.studio.modelAria")}
+                onClose={() => setModelMenuOpen(false)}
+                width={240}
+              >
+                <div aria-label={msg("music.studio.modelAria")} role="radiogroup">
+                  {models.map((model) => (
+                    <PopoverOption
+                      disabled={!model.enabled || model.availability !== "available" || busy}
+                      key={model.id}
+                      onClick={() => { onModelChange(model.id); setModelMenuOpen(false); }}
+                      selected={selectedModelId === model.id}
+                    >
+                      {model.name}
+                    </PopoverOption>
+                  ))}
+                </div>
+              </PopoverPanel>
+            </div>
+            <textarea
+              aria-label={mode === "upload" ? msg("music.workspace.promptUploadLabel") : msg("music.workspace.descriptionLabel")}
+              className={styles.quickPrompt}
+              disabled={busy}
+              onChange={(event) => updateDraft({ descriptionPrompt: event.target.value })}
+              placeholder={mode === "own_lyrics" ? msg("music.workspace.ownLyricsComposerPlaceholder") : msg("music.studio.ideaPlaceholder")}
+              rows={3}
+              value={draft.descriptionPrompt}
             />
-            <ModeSpecificFields
-              busy={busy}
-              draft={draft}
-              mode={mode}
-              onRequestOwnedUpload={onRequestOwnedUpload}
-              uploadsEnabled={uploadsEnabled}
-              updateDraft={updateDraft}
-            />
-            <AdvancedControls
-              lyria={selectedModelId === "lyria_3_5"}
-              busy={busy}
-              customModelEnabled={generateOperation?.supportsCustomModel === true}
-              draft={draft}
-              personaEnabled={generateOperation?.supportsPersona === true}
-              reusableAssets={reusableAssets}
-              updateDraft={updateDraft}
-            />
+            <div className={styles.composerFooter}>
+              <div aria-label={msg("music.studio.genres")} className={styles.genreList} role="group">
+                {genreHints.map(([genre, value]) => {
+                  const parts = draft.style.split(",").map((part) => part.trim()).filter(Boolean);
+                  const selected = parts.some((part) => part.toLowerCase() === value);
+                  return (
+                    <button
+                      aria-pressed={selected}
+                      className={styles.genreChip}
+                      disabled={busy}
+                      key={genre}
+                      onClick={() => updateDraft({
+                        style: (selected ? parts.filter((part) => part.toLowerCase() !== value) : [...parts, value]).join(", "),
+                      })}
+                      type="button"
+                    >
+                      {msg(`music.studio.genre.${genre}`)}
+                    </button>
+                  );
+                })}
+              </div>
+              <Button aria-label={busy ? msg("music.workspace.submitBusy") : msg("music.workspace.readySubmit")} className={styles.createButton} disabled={!canGenerate} type="submit">
+                {busy ? msg("music.workspace.submitBusy") : msg("music.studio.createSong")}<MusicOperationPrice operation={generateOperation} />
+              </Button>
+            </div>
+          </InputSurface>
+          <div className={styles.creatorMeta}>
+            <div className={styles.creatorNote}>
+              <ModelAvailabilitySummary models={models} selectedModel={selectedModel} state={state} />
+              {modelDisabledReason === null && (draft.descriptionPrompt.trim() || mode !== "description") && generateDisabledReason ? <span>{generateDisabledReason}</span> : null}
+              {modelDisabledReason === null && generateDisabledReason === null ? <span>{msg("music.operation.exactPriceAfterPrepare")}</span> : null}
+            </div>
+            <button aria-controls={settingsId} aria-expanded={settingsOpen} className={styles.settingsButton} onClick={() => setSettingsOpen(!settingsOpen)} type="button"><MusicToolIcon kind="settings" />{msg("music.studio.settings")}</button>
           </div>
-
-          <ChatComposer
-            attachmentsEnabled={false}
-            canSubmit={canGenerate}
-            disabled={busy}
-            label={mode === "upload" ? msg("music.workspace.promptUploadLabel") : msg("music.workspace.descriptionLabel")}
-            mediaLabel={msg("music.workspace.mediaLabel")}
-            note={<GenerationPriceNote disabledReason={generateDisabledReason} operation={generateOperation} />}
-            onChange={(event) => updateDraft({ descriptionPrompt: event.target.value })}
-            onSend={() => requestConfirmation("generate")}
-            placeholder={mode === "own_lyrics" ? msg("music.workspace.ownLyricsComposerPlaceholder") : msg("music.workspace.promptPlaceholder")}
-            submitLabel={busy ? msg("music.workspace.submitBusy") : msg("music.workspace.readySubmit")}
-            value={draft.descriptionPrompt}
-            variant="workspace"
-          />
+          <div id={settingsId} ref={editorRef} tabIndex={-1}>
+            {settingsOpen ? (
+              <div className={styles.modePanel}>
+                <ModeSwitchPanel
+                  activeID={mode}
+                  ariaLabel={msg("music.workspace.descriptionLabel")}
+                  items={creationModeItems(msg).map((item) => ({
+                    ...item,
+                    disabled: busy || (item.id === "upload" && !uploadsEnabled),
+                    title: item.id === "upload" && !uploadsEnabled ? msg("music.workspace.uploadDisabled") : item.title,
+                  }))}
+                  onChange={onModeChange}
+                  semantics="tabs"
+                />
+                <SharedSongFields
+                  lyria={selectedModelId === "lyria_3_5"}
+                  busy={busy}
+                  draft={draft}
+                  onEnhanceStyle={onEnhanceStyle}
+                  onRequestSuggestedLyrics={onRequestSuggestedLyrics}
+                  updateDraft={updateDraft}
+                />
+                <ModeSpecificFields
+                  busy={busy}
+                  draft={draft}
+                  mode={mode}
+                  onRequestOwnedUpload={onRequestOwnedUpload}
+                  uploadsEnabled={uploadsEnabled}
+                  updateDraft={updateDraft}
+                />
+                <AdvancedControls
+                  lyria={selectedModelId === "lyria_3_5"}
+                  busy={busy}
+                  customModelEnabled={generateOperation?.supportsCustomModel === true}
+                  draft={draft}
+                  personaEnabled={generateOperation?.supportsPersona === true}
+                  reusableAssets={reusableAssets}
+                  updateDraft={updateDraft}
+                />
+              </div>
+            ) : null}
+          </div>
         </form>
-
-        <aside aria-label={msg("music.operation.panelAria")} className={styles.sidePanel}>
-          <TrackSourceList
-            busy={busy}
-            hasMore={state?.historyHasMore === true}
-            loadingMore={state?.historyLoading === true}
-            onLoadMore={onLoadMoreHistory}
-            onToggle={toggleSelectedTrack}
-            selectedTrackIds={selectedTrackIds}
-            tracks={tracks}
-          />
-          <OperationsPanel
-            activeOperation={activeOperation}
-            activeOperationId={activeOperationId}
-            busy={busy}
-            draft={draft}
-            groups={availableGroups}
-            modelDisabledReason={modelDisabledReason}
-            onActiveOperationChange={onActiveOperationChange}
-            onRequestConfirmation={requestConfirmation}
-            onUpdateActionDraft={updateActionDraft}
-            selectedTrackIds={selectedTrackIds}
-            tracks={tracks}
-          />
-        </aside>
+        <div className={styles.toolGrid}>
+          {generateOperation ? <>
+            <MusicToolCard
+              active={settingsOpen && mode === "own_lyrics" && !toolOpen}
+              busy={busy}
+              description={msg("music.studio.ownSongDescription")}
+              icon="lyrics"
+              label={msg("music.studio.ownSong")}
+              onClick={() => openCreation("own_lyrics")}
+              operation={generateOperation}
+              unavailable={!generateOperation.enabled || modelDisabledReason !== null}
+            />
+            {selectedModelId !== "lyria_3_5" ? (
+              <MusicToolCard
+                active={settingsOpen && draft.instrumental && !toolOpen}
+                busy={busy}
+                description={msg("music.studio.instrumentalSongDescription")}
+                icon="instrumental"
+                label={msg("music.shared.instrumental")}
+                onClick={() => openCreation("description", true)}
+                operation={generateOperation}
+                unavailable={!generateOperation.enabled || modelDisabledReason !== null}
+              />
+            ) : null}
+          </> : null}
+          {(["lyrics", "sounds"] as const).map((id) => { const operation = operationById.get(id); return operation ? renderTool(operation) : null; })}
+        </div>
       </div>
+
+      {audioOperations.length > 0 ? <section className={styles.toolsSection}>
+        <div className={styles.sectionTitle}><h2>{msg("music.studio.fromAudio")}</h2><span>{msg("music.studio.fromAudioHint")}</span></div>
+        <div className={styles.toolGrid}>{audioOperations.map(renderTool)}</div>
+      </section> : null}
+
+      {otherGroups.length > 0 ? <section className={styles.toolsSection}>
+        <button aria-controls={moreToolsId} aria-expanded={moreToolsOpen} className={styles.moreToolsButton} onClick={() => setMoreToolsOpen(!moreToolsOpen)} type="button">{msg("music.studio.moreTools")}<span aria-hidden="true">{moreToolsOpen ? "−" : "+"}</span></button>
+        <div id={moreToolsId}>{moreToolsOpen ? otherGroups.map((group) => <div className={styles.toolsSection} key={group.id}><h3>{operationGroupLabel(group.id, msg)}</h3><div className={styles.toolGrid}>{group.operations.map(renderTool)}</div></div>) : null}</div>
+      </section> : null}
+
+      <section className={styles.selectedTool} ref={toolRef} tabIndex={-1}>
+        {toolOpen && activeOperation && activeOperationId ? <>
+          <div className={styles.sectionTitle}><span>{msg("music.operation.exactPriceAfterPrepare")}</span><Button disabled={busy} onClick={() => setToolOpen(false)} type="button" variant="outline">{msg("music.studio.closeTool")}</Button></div>
+          {operationConsumesOwnedUploads(activeOperation) ? <ModeSpecificFields busy={busy} draft={draft} mode="upload" onRequestOwnedUpload={onRequestOwnedUpload} uploadsEnabled={uploadsEnabled} updateDraft={updateDraft} /> : null}
+          {!libraryOpen && operationConsumesSelectedTracks(activeOperation) ? trackLibrary : null}
+          <ActionParameterForm
+            busy={busy}
+            disabledReason={getDisabledReason(activeOperation, activeTrackIds, draft, busy, msg, modelDisabledReason)}
+            draft={draft.actionParameters?.[activeOperationId] ?? {}}
+            onChange={(patch) => updateActionDraft(activeOperationId, patch)}
+            onRun={() => requestConfirmation(activeOperationId)}
+            operation={activeOperation}
+            selectedTrackIds={activeTrackIds}
+            tracks={tracks}
+          />
+        </> : null}
+      </section>
 
       <MusicResultsPanel results={results} />
       <WorkspaceStatus state={state} />
       <ConfirmationDialog
         confirmation={state?.confirmation ?? null}
         onCancel={onCancelConfirmation}
-        onConfirm={onConfirmAction}
+        onConfirm={(request, quote) => {
+          setLibraryOpen(true);
+          onConfirmAction(request, quote);
+        }}
       />
     </section>
   );
@@ -840,46 +1000,10 @@ function ModelAvailabilitySummary({
     return <p className={styles.catalogStatus} role="status">{msg("music.catalog.notInCatalog")}</p>;
   }
 
-  return (
-    <div className={styles.modelDetails}>
-      <p>
-        <strong>{selectedModel.name}</strong>
-        {selectedModel.availability && selectedModel.availability !== "available"
-          ? ` · ${selectedModel.availability === "unverified" ? msg("music.catalog.unverifiedBadge") : msg("music.catalog.unavailableBadge")}`
-          : null}
-      </p>
-      {selectedModel.description ? <p>{selectedModel.description}</p> : null}
-      {selectedModel.statusReason ? <p>{selectedModel.statusReason}</p> : null}
-      {selectedModel.operationDetails && selectedModel.operationDetails.length > 0 ? (
-        <ul>
-          {selectedModel.operationDetails.map((detail) => <li key={detail}>{detail}</li>)}
-        </ul>
-      ) : null}
-    </div>
-  );
-}
-
-function GenerationPriceNote({
-  disabledReason,
-  operation,
-}: Readonly<{
-  disabledReason: string | null;
-  operation: MusicWorkspaceOperation | undefined;
-}>) {
-  const msg = useMessages();
-  if (disabledReason) {
-    return <span>{disabledReason}</span>;
+  if (!selectedModel.enabled || selectedModel.availability !== "available") {
+    return <p className={styles.catalogStatus} role="status">{msg("music.studio.modelUnavailable")}</p>;
   }
-  if (operation?.quote) {
-    return <CreditAmount prefix={msg("music.price.cost")} value={operation.quote.credits} />;
-  }
-  if (operation?.maxEstimateCredits !== undefined && operation.maxEstimateCredits !== null) {
-    return <CreditAmount prefix={msg("music.price.estimateUpTo")} value={operation.maxEstimateCredits} />;
-  }
-  if (operation?.estimateCredits !== undefined && operation.estimateCredits !== null) {
-    return <CreditAmount prefix={msg("music.price.estimate")} value={operation.estimateCredits} />;
-  }
-  return <span>{disabledReason ?? msg("music.price.prepareFirst")}</span>;
+  return null;
 }
 
 function SharedSongFields({
@@ -1358,97 +1482,6 @@ function TrackSourceList({
         >
           {loadingMore ? msg("music.track.loadingMore") : msg("music.track.loadMore")}
         </Button>
-      ) : null}
-    </section>
-  );
-}
-
-function OperationsPanel({
-  activeOperation,
-  activeOperationId,
-  busy,
-  draft,
-  groups,
-  modelDisabledReason,
-  onActiveOperationChange,
-  onRequestConfirmation,
-  onUpdateActionDraft,
-  selectedTrackIds,
-  tracks,
-}: Readonly<{
-  activeOperation: MusicWorkspaceOperation | undefined;
-  activeOperationId: MusicOperationID | null;
-  busy: boolean;
-  draft: MusicWorkspaceDraft;
-  groups: readonly (OperationGroup & { operations: readonly MusicWorkspaceOperation[] })[];
-  modelDisabledReason: string | null;
-  onActiveOperationChange: (operationId: MusicOperationID) => void;
-  onRequestConfirmation: (operationId: MusicOperationID) => void;
-  onUpdateActionDraft: (operationId: MusicOperationID, patch: MusicActionParameterDraft) => void;
-  selectedTrackIds: readonly string[];
-  tracks: readonly MusicTrack[];
-}>) {
-  const msg = useMessages();
-  const activeSelectedTrackIds = activeOperation !== undefined && operationConsumesSelectedTracks(activeOperation)
-    ? selectedTrackIds
-    : [];
-
-  return (
-    <section aria-labelledby="music-actions-title" className={styles.card}>
-      <div className={styles.sectionTitle}>
-        <h2 id="music-actions-title">{msg("music.operation.heading")}</h2>
-        <span>{msg("music.operation.exactPriceAfterPrepare")}</span>
-      </div>
-      {groups.length === 0 ? (
-        <p className={styles.muted}>{msg("music.operation.noOperations")}</p>
-      ) : groups.map((group) => (
-        <div className={styles.operationGroup} key={group.id}>
-          <h3>{operationGroupLabel(group.id, msg)}</h3>
-          <div className={styles.operationGrid}>
-            {group.operations.map((operation) => {
-              const disabledReason = getDisabledReason(operation, selectedTrackIds, draft, busy, msg, modelDisabledReason);
-              const isActive = activeOperationId === operation.id;
-              const label = operationLabel(operation, operation.id, msg);
-
-              return (
-                <button
-                  aria-label={`${label}${disabledReason ? `: ${disabledReason}` : ""}`}
-                  aria-pressed={isActive}
-                  className={styles.operationButton}
-                  data-active={isActive || undefined}
-                  key={operation.id}
-                  onClick={() => onActiveOperationChange(operation.id)}
-                  title={[disabledReason ?? operation.description, ...(operation.details ?? [])].filter(Boolean).join("\n")}
-                  type="button"
-                >
-                  <span>{label}</span>
-                  {operation.quote ? (
-                    <CreditAmount value={operation.quote.credits} />
-                  ) : operation.maxEstimateCredits !== undefined && operation.maxEstimateCredits !== null ? (
-                    <CreditAmount prefix={msg("music.operation.upTo")} value={operation.maxEstimateCredits} />
-                  ) : operation.estimateCredits !== undefined && operation.estimateCredits !== null ? (
-                    <CreditAmount value={operation.estimateCredits} />
-                  ) : (
-                    <span>{msg("music.operation.afterPreparation")}</span>
-                  )}
-                </button>
-              );
-            })}
-          </div>
-        </div>
-      ))}
-
-      {activeOperation && activeOperationId ? (
-        <ActionParameterForm
-          busy={busy}
-          draft={draft.actionParameters?.[activeOperationId] ?? {}}
-          disabledReason={getDisabledReason(activeOperation, activeSelectedTrackIds, draft, busy, msg, modelDisabledReason)}
-          onChange={(patch) => onUpdateActionDraft(activeOperationId, patch)}
-          onRun={() => onRequestConfirmation(activeOperationId)}
-          operation={activeOperation}
-          selectedTrackIds={activeSelectedTrackIds}
-          tracks={tracks}
-        />
       ) : null}
     </section>
   );

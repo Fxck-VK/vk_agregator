@@ -1,8 +1,8 @@
 {
   "schema_version": 5,
-  "updated_at": "2026-10-07T16:37:58.7949116+03:00",
+  "updated_at": "2026-10-07T16:44:04+03:00",
   "branch": "fastlife_dev",
-  "remote_tracking": "origin/fastlife_dev",
+  "remote_tracking": "origin/dev-deploy",
   "purpose": "Short machine-readable current context and routing for agents. This file is not project history.",
   "read_policy": {
     "canonical_read_order": [
@@ -71,11 +71,11 @@
     "VK Bot can link email/phone identities to the current account after use through IdentityResolver with explicit VK-button confirmation; no balance/history transfer is needed.",
     "New login methods enter as verified assertions through accountauth -> IdentityResolver; email/password, phone OTP, Google, Apple, Telegram and VK ID all resolve to account_id through the same layer.",
     "Account auth/link flows require verified assertions, hashed token/credential storage, PII-free safe refs, link/unlink audit, same-account actor checks and hashed Redis-backed rate-limit keys; merge remains blocked without a dedicated confirmed audit flow.",
-    "Email/password requires a verified email on the same account. Initial setup is insert-only; changing a password requires current-password proof and an atomic conditional write. Backup emails share the account password; recovery verifies proof without linking identities and revokes active sessions.",
+    "Email/password requires a verified email on the same account. Initial setup is insert-only; password mutation commits credential, audit, session revocation and notice enqueue atomically. Password login rechecks exact credential/email binding under the same account lock as mutation/unlink/rotation. Browser changes preserve only their active server session; recovery/legacy calls revoke all. Recovery/link/phone/backup codes are consumed atomically once; backup emails share the account password.",
     "Accounts accept one primary and one backup email. Server roles follow verified binding creation order; legacy extras remain linked. Add/unlink/replace serialize on one account lock, and replacement proof binds the current backup version so stale tabs cannot overwrite newer addresses.",
     "Browser password login and accepted registration confirm the cookie profile, then load a fresh localized document to replace cached guest UI. Failed sign-in records only safe stage/code/status/timing and UUID request metadata; temporary backend failures are distinct from invalid credentials.",
     "Account identity rollout checks now cover old VK balance/jobs/payments visibility by account_id, implicit accounts for new VK users, idempotent email linking, conflict handling and ledger owner_account_id.",
-    "Email and phone identity linking now has real delivery boundaries: SMTP for email and generic HTTP SMS/OTP for phone; both remain fail-closed unless explicitly configured.",
+    "Email and phone linking use configured SMTP/HTTP delivery and fail closed when unavailable. Password/backup email changes enqueue verified-recipient security notices transactionally; bounded leased SMTP delivery retries independently, with one-day sent and seven-day pending retention and no PII logs.",
     "Current business tables have additive account ownership columns for dual-read/dual-write: jobs, payment_intents, artifacts, conversations, referrals and billing credit/ledger surfaces. Subscriptions are target-model only until a real table/domain model exists.",
     "DEV is the daily integration/testing contour; PROD secrets must not be copied from DEV.",
     "YooKassa payment values are contour-specific: do not value-sync payments.dev.env and payments.prod.env, and do not force YOOKASSA_SECRET_KEY, YOOKASSA_SHOP_ID or YooKassa return URLs to match across DEV, PROD, .env and dev.env.",

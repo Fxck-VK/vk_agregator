@@ -136,6 +136,66 @@ function StatefulWorkspace({
 }
 
 describe("MusicWorkspace", () => {
+  it("starts with quick creation and reveals song settings without losing the idea", () => {
+    const onRequestConfirmation = vi.fn();
+    render(<StatefulWorkspace onRequestConfirmation={onRequestConfirmation} />);
+    expect(screen.getByRole("heading", { name: "Что создадим?" })).toBeVisible();
+    expect(screen.queryByRole("textbox", { name: "Название" })).not.toBeInTheDocument();
+    expect(screen.queryByRole("slider", { name: "Вес описания" })).not.toBeInTheDocument();
+    fireEvent.change(screen.getByRole("textbox", { name: "Описание трека" }), {
+      target: { value: "A song about coming home" },
+    });
+    fireEvent.click(screen.getByRole("button", { name: "Песня по своему тексту" }));
+    expect(screen.getByRole("textbox", { name: "Свой текст песни" })).toBeVisible();
+    expect(screen.getByRole("textbox", { name: "Описание трека" })).toHaveValue("A song about coming home");
+    fireEvent.click(screen.getByRole("button", { name: "Настройки трека" }));
+    expect(screen.queryByRole("textbox", { name: "Название" })).not.toBeInTheDocument();
+    expect(onRequestConfirmation).not.toHaveBeenCalled();
+  });
+
+  it("opens the track library on demand and preserves selected sources when closed", () => {
+    render(<StatefulWorkspace tracks={tracks} />);
+    expect(screen.queryByText("Трек 1")).not.toBeInTheDocument();
+    const library = screen.getByRole("button", { name: /Мои треки/ });
+    fireEvent.click(library);
+    fireEvent.click(screen.getByRole("button", { name: "Выбрать трек 1" }));
+    fireEvent.click(library);
+    fireEvent.click(library);
+    expect(screen.getByRole("button", { name: "Убрать трек 1" })).toBeVisible();
+  });
+
+  it("adds and removes genre hints without replacing a custom style or submitting", () => {
+    const onRequestConfirmation = vi.fn();
+    render(<StatefulWorkspace initialDraft={{ ...baseDraft, style: "warm synth" }} onRequestConfirmation={onRequestConfirmation} />);
+    fireEvent.click(screen.getByRole("button", { name: "Поп" }));
+    fireEvent.click(screen.getByRole("button", { name: "Настройки трека" }));
+    expect(screen.getByRole("textbox", { name: "Стиль" })).toHaveValue("warm synth, pop");
+    fireEvent.click(screen.getByRole("button", { name: "Поп" }));
+    expect(screen.getByRole("textbox", { name: "Стиль" })).toHaveValue("warm synth");
+    expect(onRequestConfirmation).not.toHaveBeenCalled();
+  });
+
+  it("opens upload selection inside the chosen audio tool without enabling an unavailable operation", () => {
+    const onRequestOwnedUpload = vi.fn();
+    const onRequestConfirmation = vi.fn();
+    render(<StatefulWorkspace uploadsEnabled onRequestOwnedUpload={onRequestOwnedUpload} onRequestConfirmation={onRequestConfirmation} operations={[generateOperation, { id: "upload_cover", enabled: false, requirement: { ownedUpload: true, minUploads: 1, maxUploads: 1, minTracks: 0, maxTracks: 0 } }]} />);
+    fireEvent.click(screen.getByRole("button", { name: "Кавер из загрузки" }));
+    fireEvent.click(screen.getByRole("button", { name: "Выбрать аудио" }));
+    expect(onRequestOwnedUpload).toHaveBeenCalledTimes(1);
+    expect(screen.getByRole("button", { name: "Подготовить Кавер из загрузки" })).toBeDisabled();
+    expect(onRequestConfirmation).not.toHaveBeenCalled();
+  });
+
+  it("keeps less common catalog tools reachable and hides model diagnostics on the landing screen", () => {
+    render(<StatefulWorkspace models={[{ ...readyModels[0], operationDetails: ["internal verification details"] }]} operations={[generateOperation, { id: "bpm", enabled: true }]} />);
+    expect(screen.queryByText("internal verification details")).not.toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: "Все инструменты" }));
+    fireEvent.click(screen.getByRole("button", { name: "BPM" }));
+    expect(screen.getByRole("button", { name: "Подготовить BPM" })).toBeDisabled();
+    fireEvent.click(screen.getByRole("button", { name: "Закрыть инструмент" }));
+    expect(screen.queryByRole("button", { name: "Подготовить BPM" })).not.toBeInTheDocument();
+  });
+
   it("shows Lyria controls without cached Suno options or duration above 240 seconds", () => {
     render(<StatefulWorkspace
       selectedModelId="lyria_3_5"
@@ -143,18 +203,20 @@ describe("MusicWorkspace", () => {
       operations={[{ id: "generate", enabled: true, estimateCredits: 40 }]}
       initialDraft={{ ...baseDraft, descriptionPrompt: "synthetic piano", maxMode: true, targetDurationMode: "custom", targetDurationSec: 360 }}
     />);
+    fireEvent.click(screen.getByRole("button", { name: "Настройки трека" }));
     expect(screen.queryByRole("checkbox", { name: "Max mode" })).not.toBeInTheDocument();
     expect(screen.queryByRole("checkbox", { name: "Инструментал" })).not.toBeInTheDocument();
     expect(screen.queryByRole("button", { name: /Формат:/ })).not.toBeInTheDocument();
     expect(screen.queryByRole("slider", { name: "Вес описания" })).not.toBeInTheDocument();
     expect(screen.getByRole("slider", { name: "Целевая длительность" })).toHaveAttribute("max", "240");
     expect(screen.getByRole("slider", { name: "Целевая длительность" })).toHaveValue("240");
-    expect(screen.getByRole("button", { name: "Сгенерировать" })).toBeEnabled();
+    expect(screen.getByRole("button", { name: "Создать песню" })).toBeEnabled();
   });
 
   it("shows mode-specific fields and preserves controlled drafts across modes", () => {
     const onRequestOwnedUpload = vi.fn();
     render(<StatefulWorkspace onRequestOwnedUpload={onRequestOwnedUpload} uploadsEnabled />);
+    fireEvent.click(screen.getByRole("button", { name: "Настройки трека" }));
 
     fireEvent.change(screen.getByRole("textbox", { name: "Описание трека" }), {
       target: { value: "dark synth pop with a dry vocal" },
@@ -187,8 +249,8 @@ describe("MusicWorkspace", () => {
       />,
     );
 
-    expect(screen.getByLabelText("Оценка до: 40 звёзд")).toBeInTheDocument();
-    fireEvent.click(screen.getByRole("button", { name: "Сгенерировать" }));
+    expect(within(screen.getByRole("button", { name: "Создать песню" })).getByLabelText("до 40 звёзд")).toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: "Создать песню" }));
 
     expect(onRequestConfirmation).toHaveBeenCalledTimes(1);
     expect(onRequestConfirmation.mock.calls[0]).toHaveLength(1);
@@ -209,8 +271,8 @@ describe("MusicWorkspace", () => {
     );
 
     expect(screen.getByText("Max mode, persona и пользовательская модель требуют свой текст или инструментал")).toBeVisible();
-    expect(screen.getByRole("button", { name: "Сгенерировать" })).toBeDisabled();
-    fireEvent.click(screen.getByRole("button", { name: "Сгенерировать" }));
+    expect(screen.getByRole("button", { name: "Создать песню" })).toBeDisabled();
+    fireEvent.click(screen.getByRole("button", { name: "Создать песню" }));
     expect(onRequestConfirmation).not.toHaveBeenCalled();
   });
 
@@ -226,13 +288,14 @@ describe("MusicWorkspace", () => {
     );
 
     expect(screen.getByRole("status")).toHaveTextContent("Аудиомодели ждут verification");
-    expect(screen.getByRole("button", { name: "Сгенерировать" })).toBeDisabled();
-    fireEvent.click(screen.getByRole("button", { name: "Сгенерировать" }));
+    expect(screen.getByRole("button", { name: "Создать песню" })).toBeDisabled();
+    fireEvent.click(screen.getByRole("button", { name: "Создать песню" }));
     expect(onRequestConfirmation).not.toHaveBeenCalled();
   });
 
   it("renders every provided track and only plays same-origin artifact URLs", () => {
     const { container } = render(<StatefulWorkspace tracks={tracks} />);
+    fireEvent.click(screen.getByRole("button", { name: /Мои треки/ }));
 
     expect(screen.getByText("Трек 1")).toBeVisible();
     expect(screen.getByText("Трек 2")).toBeVisible();
@@ -270,7 +333,7 @@ describe("MusicWorkspace", () => {
     expect(screen.getByText("Результаты инструментов")).toBeVisible();
     expect(screen.getByText("Теги: dream pop, bright drums")).toBeVisible();
     expect(screen.getByText("BPM: 126 · диапазон 122–130")).toBeVisible();
-    expect(screen.getAllByText((_, element) => element?.textContent === "Первый куплет\nПрипев")).toHaveLength(2);
+    expect(screen.getByText((_, element) => element?.textContent === "Первый куплет\nПрипев")).toBeVisible();
     expect(screen.getByRole("link", { name: "Скачать файл TXT" })).toHaveAttribute(
       "href",
       "/web/v1/music-artifacts/33333333-3333-4333-8333-333333333333",

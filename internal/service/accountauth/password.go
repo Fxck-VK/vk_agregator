@@ -10,7 +10,6 @@ import (
 	"fmt"
 	"strconv"
 	"strings"
-	"time"
 
 	"github.com/google/uuid"
 	"golang.org/x/crypto/argon2"
@@ -67,10 +66,18 @@ func WithAccountAuditRepository(repo domain.AccountLinkAuditRepository) Option {
 // SetPasswordForVerifiedEmail enables password login for an email identity
 // already linked to the authenticated account.
 func (s *Service) SetPasswordForVerifiedEmail(ctx context.Context, actorAccountID, accountID uuid.UUID, email, password string) error {
+	return s.SetPasswordForVerifiedEmailSession(ctx, actorAccountID, accountID, email, password, uuid.Nil)
+}
+
+func (s *Service) SetPasswordForVerifiedEmailSession(ctx context.Context, actorAccountID, accountID uuid.UUID, email, password string, currentSessionID uuid.UUID) error {
 	if actorAccountID == uuid.Nil || accountID == uuid.Nil || actorAccountID != accountID {
 		return domain.ErrAccountIdentityOwnershipRequired
 	}
 	normalizedEmail, err := s.verifyLinkedEmail(ctx, accountID, email)
+	if err != nil {
+		return err
+	}
+	binding, err := s.passwordEmailBinding(ctx, normalizedEmail)
 	if err != nil {
 		return err
 	}
@@ -81,13 +88,13 @@ func (s *Service) SetPasswordForVerifiedEmail(ctx context.Context, actorAccountI
 	if err != nil {
 		return err
 	}
-	if _, err := s.credentials.CompareAndSwapCredential(ctx, credential, ""); err != nil {
+	if err := s.commitPasswordMutation(ctx, credential, *binding, "", currentSessionID, false, &actorAccountID); err != nil {
 		if errors.Is(err, domain.ErrConflict) {
 			return ErrPasswordConfirmationRequired
 		}
 		return err
 	}
-	return s.recordAudit(ctx, accountID, &actorAccountID, domain.AccountLinkActionPasswordSet, domain.IdentityProviderEmail)
+	return nil
 }
 
 // PasswordState exposes only whether a credential exists, never its verifier.
@@ -110,10 +117,18 @@ func (s *Service) PasswordState(ctx context.Context, accountID uuid.UUID) (*bool
 // ChangePasswordForVerifiedEmail replaces only the credential whose current
 // password was verified. Concurrent changes or recovery invalidate that proof.
 func (s *Service) ChangePasswordForVerifiedEmail(ctx context.Context, actorAccountID, accountID uuid.UUID, email, currentPassword, newPassword string) error {
+	return s.ChangePasswordForVerifiedEmailSession(ctx, actorAccountID, accountID, email, currentPassword, newPassword, uuid.Nil)
+}
+
+func (s *Service) ChangePasswordForVerifiedEmailSession(ctx context.Context, actorAccountID, accountID uuid.UUID, email, currentPassword, newPassword string, currentSessionID uuid.UUID) error {
 	if actorAccountID == uuid.Nil || accountID == uuid.Nil || actorAccountID != accountID {
 		return domain.ErrAccountIdentityOwnershipRequired
 	}
 	normalizedEmail, err := s.verifyLinkedEmail(ctx, accountID, email)
+	if err != nil {
+		return err
+	}
+	binding, err := s.passwordEmailBinding(ctx, normalizedEmail)
 	if err != nil {
 		return err
 	}
@@ -135,13 +150,13 @@ func (s *Service) ChangePasswordForVerifiedEmail(ctx context.Context, actorAccou
 	if err != nil {
 		return err
 	}
-	if _, err := s.credentials.CompareAndSwapCredential(ctx, credential, stored.SecretHash); err != nil {
+	if err := s.commitPasswordMutation(ctx, credential, *binding, stored.SecretHash, currentSessionID, false, &actorAccountID); err != nil {
 		if errors.Is(err, domain.ErrConflict) {
 			return ErrPasswordConfirmationRequired
 		}
 		return err
 	}
-	return s.recordAudit(ctx, accountID, &actorAccountID, domain.AccountLinkActionPasswordSet, domain.IdentityProviderEmail)
+	return nil
 }
 
 // ResetPasswordForVerifiedEmail updates a password after the caller has
@@ -154,6 +169,10 @@ func (s *Service) ResetPasswordForVerifiedEmail(ctx context.Context, accountID u
 	if err != nil {
 		return err
 	}
+	binding, err := s.passwordEmailBinding(ctx, normalizedEmail)
+	if err != nil {
+		return err
+	}
 	if err := s.checkRateLimit(ctx, "password_reset", domain.IdentityProviderEmail, normalizedEmail); err != nil {
 		return err
 	}
@@ -161,31 +180,7 @@ func (s *Service) ResetPasswordForVerifiedEmail(ctx context.Context, accountID u
 	if err != nil {
 		return err
 	}
-	// Production commits ownership validation, credential, revocation and audit
-	// in the same transaction/account lock used by email unlink/replacement.
-	if writer, ok := s.credentials.(interface {
-		ResetCredentialForLinkedEmail(context.Context, domain.AccountCredential, string, bool, bool, time.Time) error
-	}); ok {
-		return writer.ResetCredentialForLinkedEmail(ctx, credential, normalizedEmail, s.sessions != nil, s.audit != nil, s.currentTime())
-	}
-	// Memory/mock stores hold the identity mutex throughout the security writes.
-	guard, ok := s.resolver.(interface {
-		WithVerifiedEmailLock(context.Context, uuid.UUID, string, func(context.Context) error) error
-	})
-	if !ok {
-		return ErrPasswordStoreUnavailable
-	}
-	return guard.WithVerifiedEmailLock(ctx, accountID, normalizedEmail, func(ctx context.Context) error {
-		if _, err := s.credentials.UpsertCredential(ctx, credential); err != nil {
-			return err
-		}
-		if s.sessions != nil {
-			if _, err := s.sessions.RevokeAllSessions(ctx, accountID, s.currentTime()); err != nil {
-				return err
-			}
-		}
-		return s.recordAudit(ctx, accountID, nil, domain.AccountLinkActionPasswordReset, domain.IdentityProviderEmail)
-	})
+	return s.commitPasswordMutation(ctx, credential, *binding, "", uuid.Nil, true, nil)
 }
 
 // AuthenticateEmailPassword verifies an email/password pair and returns the

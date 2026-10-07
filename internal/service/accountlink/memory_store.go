@@ -74,6 +74,32 @@ func (s *MemoryStore) DeleteChallenge(_ context.Context, key string) error {
 	return nil
 }
 
+func (s *MemoryStore) ConsumeChallenge(ctx context.Context, key string, expected Challenge) error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if err := ctx.Err(); err != nil {
+		return err
+	}
+	item, ok := s.challenges[key]
+	if !ok || !sameChallenge(item.value, expected) {
+		return ErrInvalidCode
+	}
+	now := s.now()
+	if (!item.expiresAt.IsZero() && !now.Before(item.expiresAt)) ||
+		(!item.value.ExpiresAt.IsZero() && !now.Before(item.value.ExpiresAt)) {
+		delete(s.challenges, key)
+		return ErrExpiredCode
+	}
+	delete(s.challenges, key)
+	return nil
+}
+
+func sameChallenge(a, b Challenge) bool {
+	return a.AccountID == b.AccountID && a.IdentityHash == b.IdentityHash &&
+		a.CodeHash == b.CodeHash && a.BackupIdentityID == b.BackupIdentityID &&
+		a.BackupVersion.Equal(b.BackupVersion) && a.ExpiresAt.Equal(b.ExpiresAt)
+}
+
 func (s *MemoryStore) Increment(_ context.Context, key string, ttl time.Duration) (int64, error) {
 	s.mu.Lock()
 	defer s.mu.Unlock()

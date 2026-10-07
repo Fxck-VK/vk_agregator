@@ -124,7 +124,7 @@ describe("Sidebar", () => {
       { href: "/app/chats", icon: "edit", label: ru.navigation.chats, prefetch: true },
       { href: "/app/files", icon: "file", label: ru.navigation.files, prefetch: true },
       { href: "/app/models", icon: "grid", label: ru.navigation.models, prefetch: true },
-      { href: "/app/music", icon: "image", label: ru.navigation.music, prefetch: true },
+      { href: "/app/music", icon: "music", label: ru.navigation.music, prefetch: true },
       { href: "/app/speech", icon: "edit", label: "Речь", prefetch: true },
       { href: "/app/inspiration", icon: "image", label: ru.navigation.inspiration, prefetch: true },
     ]);
@@ -153,11 +153,11 @@ describe("Sidebar", () => {
       "Речь",
       ru.navigation.inspiration,
     ]);
-    expect(links.map((link) => link.querySelector("svg")?.getAttribute("data-icon"))).toEqual([
+    expect(links.map((link) => link.querySelector("[data-icon]")?.getAttribute("data-icon"))).toEqual([
       "edit",
       "file",
       "grid",
-      "image",
+      "music",
       "edit",
       "image",
     ]);

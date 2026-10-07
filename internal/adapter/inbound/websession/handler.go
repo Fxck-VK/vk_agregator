@@ -452,7 +452,15 @@ func (h *Handler) passwordLogin(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusBadRequest, "invalid password login request")
 		return
 	}
-	resolution, err := h.deps.Passwords.AuthenticateEmailPassword(r.Context(), req.Email, req.Password)
+	passwords, supported := h.deps.Passwords.(interface {
+		AuthenticateEmailPasswordSession(context.Context, string, string, accountauth.SessionMetadata) (accountauth.SessionTokens, error)
+	})
+	if !supported {
+		reportReadFailure(w, r, "password_authentication", http.StatusServiceUnavailable)
+		writeError(w, http.StatusServiceUnavailable, "authentication unavailable")
+		return
+	}
+	tokens, err := passwords.AuthenticateEmailPasswordSession(r.Context(), req.Email, req.Password, sessionMetadata(r, req.DeviceInfo))
 	if errors.Is(err, accountauth.ErrInvalidPasswordLogin) {
 		reportReadFailure(w, r, "password_credentials", http.StatusUnauthorized)
 		writeError(w, http.StatusUnauthorized, "invalid credentials")
@@ -463,14 +471,8 @@ func (h *Handler) passwordLogin(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusTooManyRequests, "authentication rate limited")
 		return
 	}
-	if err != nil || resolution.AccountID == uuid.Nil {
+	if err != nil || tokens.Session.AccountID == uuid.Nil {
 		reportReadFailure(w, r, "password_authentication", http.StatusServiceUnavailable)
-		writeError(w, http.StatusServiceUnavailable, "authentication unavailable")
-		return
-	}
-	tokens, err := h.deps.Sessions.IssueSession(r.Context(), resolution.AccountID, sessionMetadata(r, req.DeviceInfo))
-	if err != nil {
-		reportReadFailure(w, r, "password_session_issue", http.StatusServiceUnavailable)
 		writeError(w, http.StatusServiceUnavailable, "authentication unavailable")
 		return
 	}
@@ -479,7 +481,7 @@ func (h *Handler) passwordLogin(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusServiceUnavailable, "authentication unavailable")
 		return
 	}
-	w.Header().Set("X-NeiroHub-Account-ID", resolution.AccountID.String())
+	w.Header().Set("X-NeiroHub-Account-ID", tokens.Session.AccountID.String())
 	writeJSON(w, http.StatusCreated, safeSessionResponse{Session: tokens.Session})
 }
 

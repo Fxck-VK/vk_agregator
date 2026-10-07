@@ -23,6 +23,7 @@ import { FileIcon } from "@/components/icons/FileIcon";
 import { GridIcon } from "@/components/icons/GridIcon";
 import { ImageIcon } from "@/components/icons/ImageIcon";
 import { MenuIcon } from "@/components/icons/MenuIcon";
+import { MusicIcon } from "@/components/icons/MusicIcon";
 import { Button } from "@/components/ui/Button/Button";
 import { TooltipBubble } from "@/components/ui/Tooltip/Tooltip";
 import { SidebarConversationsActivityProvider } from "@/features/conversations/SidebarConversations/SidebarConversationsActivity";
@@ -54,7 +55,7 @@ export const getWorkspaceNavigationItems = (t: Dictionary) => [
   { href: "/app/chats", icon: "edit", label: t.navigation.chats, prefetch: true },
   { href: "/app/files", icon: "file", label: t.navigation.files, prefetch: true },
   { href: "/app/models", icon: "grid", label: t.navigation.models, prefetch: true },
-  { href: "/app/music", icon: "image", label: t.navigation.music, prefetch: true },
+  { href: "/app/music", icon: "music", label: t.navigation.music, prefetch: true },
   { href: "/app/speech", icon: "edit", label: t.navigation.speech, prefetch: true },
   { href: "/app/inspiration", icon: "image", label: t.navigation.inspiration, prefetch: true },
 ] as const;
@@ -66,6 +67,7 @@ const workspaceNavigationIcons = {
   file: FileIcon,
   grid: GridIcon,
   image: ImageIcon,
+  music: MusicIcon,
 } as const;
 
 type SidebarProps = {
@@ -455,7 +457,7 @@ export function Sidebar({ account, conversations, isDesktopCollapsed = false, on
                       prefetch={item.prefetch}
                     >
                       <Icon className={styles.navigationIcon} />
-                      <span>{item.label}</span>
+                      <span className={styles.navigationLabel}>{item.label}</span>
                     </Link>
                   </li>
                 );

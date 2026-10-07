@@ -32,6 +32,8 @@ type contextKey int
 
 const ctxAccountIDKey contextKey = iota
 
+const ctxBrowserPrincipalKey contextKey = iota + 1
+
 // Config holds account API auth settings.
 type Config struct {
 	// AppSecret is the VK Mini App protected key used to verify launch params.
@@ -591,7 +593,19 @@ func (h *Handler) setPassword(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	var err error
-	if req.CurrentPassword != "" {
+	if principal, ok := r.Context().Value(ctxBrowserPrincipalKey).(domain.RequestPrincipal); ok {
+		passwords, supported := h.deps.Passwords.(interface {
+			SetPasswordForVerifiedEmailSession(context.Context, uuid.UUID, uuid.UUID, string, string, uuid.UUID) error
+			ChangePasswordForVerifiedEmailSession(context.Context, uuid.UUID, uuid.UUID, string, string, string, uuid.UUID) error
+		})
+		if !supported || principal.Method != domain.AuthenticationMethodAccountSession || principal.SessionID == uuid.Nil {
+			err = accountauth.ErrPasswordStoreUnavailable
+		} else if req.CurrentPassword != "" {
+			err = passwords.ChangePasswordForVerifiedEmailSession(r.Context(), accountID, accountID, req.Email, req.CurrentPassword, req.Password, principal.SessionID)
+		} else {
+			err = passwords.SetPasswordForVerifiedEmailSession(r.Context(), accountID, accountID, req.Email, req.Password, principal.SessionID)
+		}
+	} else if req.CurrentPassword != "" {
 		err = h.deps.Passwords.ChangePasswordForVerifiedEmail(r.Context(), accountID, accountID, req.Email, req.CurrentPassword, req.Password)
 	} else {
 		err = h.deps.Passwords.SetPasswordForVerifiedEmail(r.Context(), accountID, accountID, req.Email, req.Password)
@@ -624,12 +638,14 @@ func (h *Handler) passwordLogin(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusBadRequest, "invalid password login request")
 		return
 	}
-	resolution, err := h.deps.Passwords.AuthenticateEmailPassword(r.Context(), req.Email, req.Password)
-	if err != nil {
-		writeError(w, statusForError(err), "password login failed")
+	passwords, ok := h.deps.Passwords.(interface {
+		AuthenticateEmailPasswordSession(context.Context, string, string, accountauth.SessionMetadata) (accountauth.SessionTokens, error)
+	})
+	if !ok {
+		writeError(w, http.StatusServiceUnavailable, "password login unavailable")
 		return
 	}
-	tokens, err := h.deps.Sessions.IssueSession(r.Context(), resolution.AccountID, sessionMetadataFromRequest(r, req.DeviceInfo))
+	tokens, err := passwords.AuthenticateEmailPasswordSession(r.Context(), req.Email, req.Password, sessionMetadataFromRequest(r, req.DeviceInfo))
 	if err != nil {
 		writeError(w, statusForError(err), "session unavailable")
 		return

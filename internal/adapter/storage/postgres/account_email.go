@@ -88,6 +88,11 @@ func (r *AccountIdentityRepository) linkEmailIdentity(ctx context.Context, accou
 	if err := scanAccountIdentity(tx.QueryRow(ctx, q, accountID, uuid.New(), externalID, normalizedID, uuid.New()), &identity); err != nil {
 		return nil, mapError(err)
 	}
+	if len(rows) > 0 {
+		if err := EnqueueAccountSecurityNotifications(ctx, tx, accountID, domain.AccountSecurityNoticeBackupEmailAdded, nil, identity.UpdatedAt); err != nil {
+			return nil, err
+		}
+	}
 	if err := tx.Commit(ctx); err != nil {
 		return nil, mapError(err)
 	}
@@ -139,6 +144,13 @@ func (r *AccountIdentityRepository) ReplaceBackupEmailIdentity(ctx context.Conte
 	}
 	if err != nil {
 		return nil, mapError(err)
+	}
+	var extra []string
+	if !target.VerifiedAt.IsZero() {
+		extra = []string{target.NormalizedID}
+	}
+	if err := EnqueueAccountSecurityNotifications(ctx, tx, accountID, domain.AccountSecurityNoticeBackupEmailReplaced, extra, identity.UpdatedAt); err != nil {
+		return nil, err
 	}
 	if err := tx.Commit(ctx); err != nil {
 		return nil, mapError(err)

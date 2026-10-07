@@ -374,7 +374,7 @@
     box-shadow: none;
   }
 
-  .panel[data-desktop-collapsed="true"] .navigationList a > span {
+  .panel[data-desktop-collapsed="true"] .navigationLabel {
     display: none;
   }
 

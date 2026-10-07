@@ -17,6 +17,11 @@ type competingCredentialStore struct {
 	beforeWrite func()
 }
 
+func (r *competingCredentialStore) ExecutePasswordSecurity(ctx context.Context, op domain.PasswordSecurityOperation, deps domain.PasswordSecurityDependencies) error {
+	r.beforeWrite()
+	return r.AccountCredentialRepository.(domain.AccountPasswordSecurityRepository).ExecutePasswordSecurity(ctx, op, deps)
+}
+
 func (r *competingCredentialStore) UpsertCredential(ctx context.Context, value domain.AccountCredential) (*domain.AccountCredential, error) {
 	r.beforeWrite()
 	return r.AccountCredentialRepository.UpsertCredential(ctx, value)

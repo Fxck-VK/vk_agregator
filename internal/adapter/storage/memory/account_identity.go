@@ -14,16 +14,18 @@ import (
 // AccountIdentityRepo is an in-memory implementation used by unit tests and
 // local mock runs. Production uses the PostgreSQL repository.
 type AccountIdentityRepo struct {
-	mu     sync.Mutex
-	byKey  map[string]*domain.AccountIdentity
-	byID   map[uuid.UUID]*domain.AccountIdentity
-	audits []domain.AccountLinkAuditEntry
+	mu      sync.Mutex
+	byKey   map[string]*domain.AccountIdentity
+	byID    map[uuid.UUID]*domain.AccountIdentity
+	audits  []domain.AccountLinkAuditEntry
+	notices map[uuid.UUID]*memorySecurityNotice
 }
 
 func NewAccountIdentityRepo() *AccountIdentityRepo {
 	return &AccountIdentityRepo{
-		byKey: map[string]*domain.AccountIdentity{},
-		byID:  map[uuid.UUID]*domain.AccountIdentity{},
+		byKey:   map[string]*domain.AccountIdentity{},
+		byID:    map[uuid.UUID]*domain.AccountIdentity{},
+		notices: map[uuid.UUID]*memorySecurityNotice{},
 	}
 }
 
@@ -123,6 +125,9 @@ func (r *AccountIdentityRepo) UnlinkIdentity(_ context.Context, accountID, ident
 	delete(r.byID, identityID)
 	delete(r.byKey, identityKey(identity.Provider, identity.NormalizedID))
 	r.appendAuditLocked(identity, domain.AccountLinkActionUnlinked)
+	if identity.Provider == domain.IdentityProviderEmail && !identity.VerifiedAt.IsZero() {
+		r.enqueueSecurityNoticesLocked(accountID, domain.AccountSecurityNoticeEmailRemoved, []string{identity.NormalizedID}, time.Now())
+	}
 	return nil
 }
 
@@ -137,6 +142,7 @@ func (r *AccountIdentityRepo) linkIdentity(accountID uuid.UUID, provider domain.
 		return cloneAccountIdentity(existing), nil
 	}
 	now := time.Now()
+	emailCount := 0
 	if provider == domain.IdentityProviderEmail {
 		count := 0
 		for _, row := range r.byID {
@@ -150,6 +156,7 @@ func (r *AccountIdentityRepo) linkIdentity(accountID uuid.UUID, provider domain.
 		if count >= domain.MaxAccountEmails {
 			return nil, domain.ErrAccountEmailLimit
 		}
+		emailCount = count
 	}
 	identity := &domain.AccountIdentity{
 		ID:           uuid.New(),
@@ -165,6 +172,9 @@ func (r *AccountIdentityRepo) linkIdentity(accountID uuid.UUID, provider domain.
 	r.byKey[key] = identity
 	r.byID[identity.ID] = identity
 	r.appendAuditLocked(identity, domain.AccountLinkActionLinked)
+	if provider == domain.IdentityProviderEmail && emailCount > 0 {
+		r.enqueueSecurityNoticesLocked(accountID, domain.AccountSecurityNoticeBackupEmailAdded, nil, now)
+	}
 	return cloneAccountIdentity(identity), nil
 }
 
@@ -224,6 +234,10 @@ func (r *AccountIdentityRepo) ReplaceBackupEmailIdentity(_ context.Context, acco
 		}
 		return nil, domain.ErrConflict
 	}
+	var extra []string
+	if !identity.VerifiedAt.IsZero() {
+		extra = []string{identity.NormalizedID}
+	}
 	r.appendAuditLocked(identity, domain.AccountLinkActionUnlinked)
 	delete(r.byKey, identityKey(identity.Provider, identity.NormalizedID))
 	now := time.Now()
@@ -237,6 +251,7 @@ func (r *AccountIdentityRepo) ReplaceBackupEmailIdentity(_ context.Context, acco
 	identity.UpdatedAt = now
 	r.byKey[key] = identity
 	r.appendAuditLocked(identity, domain.AccountLinkActionLinked)
+	r.enqueueSecurityNoticesLocked(accountID, domain.AccountSecurityNoticeBackupEmailReplaced, extra, now)
 	return cloneAccountIdentity(identity), nil
 }
 
@@ -254,5 +269,5 @@ func (r *AccountIdentityRepo) WithVerifiedEmailLock(ctx context.Context, account
 	if identity.VerifiedAt.IsZero() {
 		return domain.ErrUnverifiedLogin
 	}
-	return action(ctx)
+	return action(context.WithValue(ctx, noticeIdentityLockKey{}, r))
 }

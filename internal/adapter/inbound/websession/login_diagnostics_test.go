@@ -16,6 +16,24 @@ import (
 
 type failingPasswordLogin struct{ err error }
 
+type legacyOnlyPasswordLogin struct{ PasswordService }
+
+func TestBrowserPasswordLoginFailsClosedWithoutCombinedOperation(t *testing.T) {
+	h, passwords, _ := newTestHandler(t)
+	h.deps.Passwords = legacyOnlyPasswordLogin{PasswordService: passwords}
+	r := httptest.NewRequest(http.MethodPost, "/web/v1/auth/password/login", strings.NewReader(`{"email":"member@example.test","password":"synthetic-password"}`))
+	r.Header.Set("Origin", "https://app.example.test")
+	w := httptest.NewRecorder()
+	h.Routes().ServeHTTP(w, r)
+	if w.Code != http.StatusServiceUnavailable || passwords.calls != 0 || len(w.Result().Cookies()) != 0 {
+		t.Fatal("browser login used split password/session fallback")
+	}
+}
+
+func (s failingPasswordLogin) AuthenticateEmailPasswordSession(context.Context, string, string, accountauth.SessionMetadata) (accountauth.SessionTokens, error) {
+	return accountauth.SessionTokens{}, s.err
+}
+
 func (s failingPasswordLogin) AuthenticateEmailPassword(context.Context, string, string) (domain.IdentityResolution, error) {
 	return domain.IdentityResolution{}, s.err
 }

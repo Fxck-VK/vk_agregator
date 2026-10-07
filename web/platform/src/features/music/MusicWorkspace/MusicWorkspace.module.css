@@ -1,6 +1,6 @@
 .workspace {
   display: grid;
-  gap: var(--space-5);
+  gap: var(--space-6);
   inline-size: 100%;
   max-inline-size: var(--workspace-page-shell-width);
   margin-inline: auto;
@@ -11,73 +11,310 @@
 
 .header {
   display: grid;
-  grid-template-columns: minmax(0, 1fr) minmax(18rem, 28rem);
+  grid-template-columns: minmax(0, 1fr) auto;
   gap: var(--space-4);
-  align-items: end;
+  align-items: start;
 }
 
 .header h1,
 .card h2,
-.operationGroup h3,
 .actionForm h3 {
   margin: 0;
 }
 
 .header h1 {
-  font-size: var(--font-size-title);
-  line-height: var(--line-height-title);
+  font-size: clamp(1.75rem, 2.3vw, 2.25rem);
+  line-height: 1.2;
+  letter-spacing: -0.035em;
 }
 
-.eyebrow {
-  margin: 0 0 var(--space-1);
+.intro {
+  margin: var(--space-2) 0 0;
   color: var(--color-text-muted);
   font-size: var(--font-size-ui);
-  font-weight: var(--font-weight-semibold);
 }
 
-.modelSwitch {
-  min-inline-size: 0;
+.libraryButton {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: var(--space-2);
+  min-block-size: 2.75rem;
+  border-radius: var(--radius-pill, 999px);
+  white-space: nowrap;
 }
 
-.catalogStatus,
-.modelDetails {
-  border: 0.0625rem solid var(--color-border);
-  border-radius: var(--radius-md);
-  background: var(--color-surface);
+.libraryButton svg, .settingsButton svg {
+  inline-size: 1.1rem;
+  block-size: 1.1rem;
+  flex: none;
+}
+
+.trackCount {
   color: var(--color-text-muted);
 }
 
-.catalogStatus {
-  margin: 0;
-  padding: var(--space-3) var(--space-4);
-}
-
-.modelDetails {
+.quickCreator {
   display: grid;
-  gap: var(--space-2);
+  gap: var(--space-3);
   padding: var(--space-4);
 }
 
-.modelDetails p,
-.modelDetails ul {
-  margin: 0;
+.composerHeading, .composerFooter {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-3);
 }
 
-.modelDetails ul {
-  display: grid;
-  gap: var(--space-1);
-  padding-inline-start: var(--space-5);
+.composerHeading > span {
+  font-size: var(--font-size-ui);
+  color: var(--color-text-muted);
 }
 
-.layout {
-  display: grid;
-  grid-template-columns: minmax(0, 1fr) minmax(20rem, 24rem);
-  gap: var(--space-5);
+.modelChip {
+  min-block-size: 2rem;
+  padding: var(--space-1) var(--space-2);
+  font-size: var(--font-size-ui);
+}
+
+.quickPrompt {
+  inline-size: 100%;
+  min-block-size: 5rem;
+  max-block-size: 15rem;
+  resize: vertical;
+  border: 0;
+  outline: 0;
+  background: transparent;
+  color: var(--color-text);
+  font: inherit;
+  line-height: 1.6;
+}
+
+.quickPrompt::placeholder {
+  color: var(--color-text-muted);
+  opacity: 0.75;
+}
+
+.genreList {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-2);
+}
+
+.genreChip {
+  border: 1px solid var(--color-border);
+  border-radius: 999px;
+  padding: 0.35rem 0.7rem;
+  background: transparent;
+  color: var(--color-text);
+  font: inherit;
+  font-size: var(--font-size-ui);
+  cursor: pointer;
+  transition: border-color var(--motion-fast), background-color var(--motion-fast);
+}
+
+.genreChip[aria-pressed="true"] {
+  border-color: var(--color-accent);
+  background: color-mix(in srgb, var(--color-accent) 12%, transparent);
+}
+
+.createButton {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex-wrap: wrap;
+  gap: var(--space-2);
+  min-block-size: 2.75rem;
+  padding-inline: var(--space-4);
+  flex-shrink: 0;
+  border-radius: 999px;
+  background: var(--color-accent);
+  font-weight: var(--font-weight-semibold);
+}
+
+.createButton:hover:not(:disabled) {
+  background: var(--color-accent);
+  filter: brightness(1.08);
+}
+
+.createButton:disabled {
+  opacity: 0.6;
+}
+
+.creatorMeta {
+  display: flex;
+  justify-content: space-between;
   align-items: start;
+  gap: var(--space-3);
+  color: var(--color-text-muted);
+  font-size: var(--font-size-ui);
 }
 
-.creation,
-.sidePanel {
+.creatorNote {
+  min-inline-size: 0;
+  padding-block: var(--space-1);
+}
+
+.settingsButton, .moreToolsButton {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-2);
+  padding: var(--space-1) 0;
+  border: 0;
+  background: transparent;
+  color: var(--color-text-muted);
+  font: inherit;
+  font-size: var(--font-size-ui);
+  cursor: pointer;
+}
+
+.settingsButton {
+  margin-inline-start: auto;
+  white-space: nowrap;
+}
+
+.settingsButton[aria-expanded="true"], .settingsButton:hover, .moreToolsButton:hover {
+  color: var(--color-text);
+}
+
+.toolsSection {
+  display: grid;
+  gap: var(--space-3);
+  min-inline-size: 0;
+}
+
+.toolsSection h3 {
+  margin: var(--space-3) 0 0;
+  font-size: var(--font-size-ui);
+  color: var(--color-text-muted);
+}
+
+.toolGrid {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: var(--space-3);
+}
+
+.toolCard {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+  min-inline-size: 0;
+  padding: var(--space-4);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-lg);
+  background: var(--panel-surface-background);
+  color: var(--color-text);
+  text-align: start;
+  font: inherit;
+  cursor: pointer;
+  transition: border-color var(--motion-fast), background-color var(--motion-fast);
+}
+
+.toolCard:hover:not(:disabled), .toolCard[aria-pressed="true"] {
+  border-color: var(--color-accent);
+  background: color-mix(in srgb, var(--color-accent) 5%, var(--color-background));
+}
+
+.toolCard:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+.toolCardHeader {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+}
+
+.toolIcon {
+  display: grid;
+  place-items: center;
+  flex: none;
+  inline-size: 2.5rem;
+  block-size: 2.5rem;
+  border-radius: var(--radius-md);
+  background: color-mix(in srgb, var(--color-accent) 8%, transparent);
+  color: var(--color-accent);
+}
+
+.toolIcon svg {
+  inline-size: 1.25rem;
+  block-size: 1.25rem;
+}
+
+.toolName {
+  font-weight: var(--font-weight-semibold);
+  font-size: var(--font-size-body);
+  line-height: 1.25;
+}
+
+.toolDescription {
+  color: var(--color-text-muted);
+  font-size: var(--font-size-ui);
+  line-height: 1.5;
+}
+
+.toolDescription:empty {
+  display: none;
+}
+
+.toolCardFooter {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-2);
+  margin-block-start: auto;
+}
+
+.toolTag {
+  border-radius: 999px;
+  background: rgb(255 255 255 / 4%);
+  padding: 0.15rem 0.5rem;
+  color: var(--color-text-muted);
+  font-size: 0.75rem;
+}
+
+.toolPrice {
+  font-size: 0.75rem;
+  color: var(--color-text-muted);
+}
+
+.moreToolsButton {
+  justify-content: space-between;
+  inline-size: 100%;
+  min-block-size: 2.5rem;
+  border-block-end: 1px solid var(--color-border);
+}
+
+.selectedTool {
+  display: grid;
+  gap: var(--space-3);
+  scroll-margin-block: 5rem;
+}
+
+.selectedTool:empty, .workspace > div:empty {
+  display: none;
+}
+
+.genreChip:hover:not(:disabled), .genreChip:focus-visible, .toolCard:focus-visible {
+  border-color: var(--color-accent);
+}
+
+.genreChip:focus-visible, .toolCard:focus-visible, .settingsButton:focus-visible, .moreToolsButton:focus-visible, .createButton:focus-visible {
+  outline: 2px solid var(--color-accent);
+  outline-offset: 3px;
+}
+
+
+.catalogStatus {
+  margin: 0;
+  color: var(--color-text-muted);
+}
+
+.creation {
   display: grid;
   gap: var(--space-4);
   min-inline-size: 0;
@@ -101,9 +338,16 @@
 .sectionTitle {
   display: flex;
   align-items: center;
-  justify-content: space-between;
+  flex-wrap: wrap;
   gap: var(--space-3);
 }
+
+.sectionTitle h2, .card h2, .actionForm h3 {
+  margin: 0;
+  font-size: 1.1rem;
+  line-height: 1.4;
+}
+
 
 .sectionTitle > span {
   color: var(--color-text-muted);
@@ -351,45 +595,6 @@
   border-color: var(--color-accent);
 }
 
-.operationGroup {
-  display: grid;
-  gap: var(--space-2);
-}
-
-.operationGroup h3 {
-  color: var(--color-text-muted);
-  font-size: var(--font-size-ui);
-}
-
-.operationGrid {
-  display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: var(--space-2);
-}
-
-.operationButton {
-  display: grid;
-  gap: var(--space-1);
-  min-block-size: 4rem;
-  padding: var(--space-3);
-  border: 0.0625rem solid var(--color-border);
-  border-radius: var(--radius-sm);
-  background: transparent;
-  color: var(--color-text);
-  text-align: start;
-}
-
-.operationButton[data-active="true"],
-.operationButton:hover,
-.operationButton:focus-visible {
-  border-color: var(--color-accent);
-}
-
-.operationButton span:last-child {
-  color: var(--color-text-muted);
-  font-size: var(--font-size-ui);
-}
-
 .actionForm {
   display: grid;
   gap: var(--space-3);
@@ -526,14 +731,72 @@
 }
 
 @media (width < 60rem) {
-  .header,
-  .layout {
+  .toolGrid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .composerFooter {
+    flex-wrap: wrap;
+  }
+
+  .createButton {
+    margin-inline-start: auto;
+  }
+
+
+  .fieldGrid,
+  .sliders {
+    grid-template-columns: 1fr;
+  }
+}
+
+@media (width < 36rem) {
+  .workspace {
+    padding-block-start: 4.5rem;
+    gap: var(--space-5);
+  }
+
+  .header {
     grid-template-columns: 1fr;
   }
 
-  .fieldGrid,
-  .sliders,
-  .operationGrid {
+  .libraryButton {
+    justify-self: start;
+  }
+
+  .toolGrid {
     grid-template-columns: 1fr;
   }
+
+  .quickCreator {
+    padding: var(--space-3);
+  }
+
+  .composerHeading {
+    flex-wrap: wrap;
+  }
+
+  .createButton {
+    inline-size: 100%;
+  }
+
+  .creatorMeta {
+    flex-wrap: wrap;
+  }
+
+  .settingsButton {
+    margin-inline-start: 0;
+  }
+
+  .sectionTitle {
+    gap: var(--space-1);
+  }
+
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .toolCard, .genreChip {
+    transition: none;
+  }
+
 }

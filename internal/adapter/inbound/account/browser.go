@@ -29,6 +29,7 @@ func (h *Handler) ServeBrowserAccountAction(w http.ResponseWriter, r *http.Reque
 		return
 	}
 	r = r.WithContext(context.WithValue(r.Context(), ctxAccountIDKey, principal.AccountID))
+	r = r.WithContext(context.WithValue(r.Context(), ctxBrowserPrincipalKey, principal))
 	switch r.Method + " " + r.URL.Path {
 	case "POST /web/v1/account/identities/email/request-code":
 		h.requestEmailCode(w, r)

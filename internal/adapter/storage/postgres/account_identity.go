@@ -264,6 +264,10 @@ func (r *AccountIdentityRepository) UnlinkIdentity(ctx context.Context, accountI
 	if err := tx.QueryRow(ctx, "SELECT id FROM accounts WHERE id = $1 FOR UPDATE", accountID).Scan(&locked); err != nil {
 		return mapError(err)
 	}
+	var target domain.AccountIdentity
+	if err := scanAccountIdentity(tx.QueryRow(ctx, "SELECT "+accountIdentityColumns+" FROM account_identities WHERE account_id=$1 AND id=$2", accountID, identityID), &target); err != nil {
+		return mapError(err)
+	}
 	const q = `
 		WITH target AS (
 			SELECT id, account_id, provider
@@ -307,6 +311,11 @@ func (r *AccountIdentityRepository) UnlinkIdentity(ctx context.Context, accountI
 	}
 	switch status {
 	case "deleted":
+		if target.Provider == domain.IdentityProviderEmail && !target.VerifiedAt.IsZero() {
+			if err := EnqueueAccountSecurityNotifications(ctx, tx, accountID, domain.AccountSecurityNoticeEmailRemoved, []string{target.NormalizedID}, time.Now()); err != nil {
+				return err
+			}
+		}
 		return mapError(tx.Commit(ctx))
 	case "last_identity":
 		return domain.ErrAccountLastIdentity

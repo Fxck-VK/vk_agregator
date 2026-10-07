@@ -24,6 +24,7 @@ func (l unlinkRecoveryLimiter) Allow(context.Context, string) (bool, error) {
 func TestPostgresRecoveryRechecksEmailAndRollsBackAllSecurityWrites(t *testing.T) {
 	ctx := context.Background()
 	pool := conversationManagementIntegrationPool(t, ctx)
+	applySecurityNoticeMigration(t, pool)
 	if _, err := pool.Exec(ctx, `CREATE TABLE account_identities (
  id uuid PRIMARY KEY, account_id uuid NOT NULL REFERENCES accounts(id), provider text NOT NULL,
  external_id text NOT NULL, normalized_id text NOT NULL, verified_at timestamptz, last_used_at timestamptz,

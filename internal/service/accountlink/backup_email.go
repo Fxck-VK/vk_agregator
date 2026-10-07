@@ -61,7 +61,7 @@ func (s *Service) RequestBackupEmailCode(ctx context.Context, accountID, identit
 		return RequestResult{}, err
 	}
 	if err := s.sender.SendEmailLinkCode(ctx, normalized, code, expires); err != nil {
-		_ = s.store.DeleteChallenge(ctx, key)
+		_ = s.store.ConsumeChallenge(ctx, key, challenge)
 		return RequestResult{}, err
 	}
 	return RequestResult{Status: "verification_sent", ExpiresInSeconds: int64(s.cfg.CodeTTL.Seconds())}, nil
@@ -98,16 +98,14 @@ func (s *Service) VerifyBackupEmailCode(ctx context.Context, accountID, identity
 		return accountservice.AccountIdentitySafe{}, ErrInvalidCode
 	}
 	if !s.cfg.Now().Before(challenge.ExpiresAt) {
-		_ = s.store.DeleteChallenge(ctx, key)
 		return accountservice.AccountIdentitySafe{}, ErrExpiredCode
 	}
 	if !hmac.Equal([]byte(challenge.CodeHash), []byte(s.codeHash(accountID, backupProofIdentity(identityID, challenge.BackupVersion, normalized), code))) {
 		return accountservice.AccountIdentitySafe{}, ErrInvalidCode
 	}
-	if err := s.store.DeleteChallenge(ctx, key); err != nil {
+	if err := s.store.ConsumeChallenge(ctx, key, challenge); err != nil {
 		return accountservice.AccountIdentitySafe{}, err
 	}
-	// Repository CAS prevents simultaneous proof consumption from replacing a
-	// newer backup even when two callers loaded the same challenge.
+	// Repository CAS also rejects proofs for a superseded backup binding.
 	return account.ReplaceVerifiedBackupEmail(ctx, accountID, accountID, identityID, domain.VerifiedAccountLogin{Method: domain.AccountLoginEmailPassword, ExternalID: normalized, Verified: true}, challenge.BackupVersion)
 }

@@ -881,6 +881,15 @@ func safeConversationFields(t *testing.T, fields map[string]json.RawMessage) uui
 type passwordStub struct {
 	resolution domain.IdentityResolution
 	calls      int
+	sessions   *sessionStub
+}
+
+func (s *passwordStub) AuthenticateEmailPasswordSession(ctx context.Context, email, password string, meta accountauth.SessionMetadata) (accountauth.SessionTokens, error) {
+	resolution, err := s.AuthenticateEmailPassword(ctx, email, password)
+	if err != nil {
+		return accountauth.SessionTokens{}, err
+	}
+	return s.sessions.IssueSession(ctx, resolution.AccountID, meta)
 }
 
 func (s *passwordStub) AuthenticateEmailPassword(context.Context, string, string) (domain.IdentityResolution, error) {
@@ -933,7 +942,7 @@ func newTestHandler(t *testing.T) (*Handler, *passwordStub, *sessionStub) {
 	t.Helper()
 	repo := memory.NewAccountSessionRepo()
 	sessions := &sessionStub{Service: accountauth.New(nil, accountauth.WithSessionRepository(repo), accountauth.WithSessionTTL(time.Hour), accountauth.WithAccessTokenTTL(time.Hour))}
-	passwords := &passwordStub{}
+	passwords := &passwordStub{sessions: sessions}
 	profiles := &profileStub{}
 	return NewHandler(Config{WebOrigin: "https://app.example.test"}, Deps{Passwords: passwords, Sessions: sessions, Authenticator: sessions, Account: profiles}), passwords, sessions
 }
