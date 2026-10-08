@@ -23,7 +23,7 @@
     "test:packaging": "node scripts/assert-packaging.mjs"
   },
   "dependencies": {
-    "next": "16.3.6",
+    "next": "16.3.8",
     "react": "19.2.7",
     "react-dom": "19.2.7",
     "react-markdown": "^10.1.0",
@@ -51,7 +51,7 @@
     "@types/react": "19.2.7",
     "@types/react-dom": "19.2.3",
     "eslint": "9.39.5",
-    "eslint-config-next": "16.3.6",
+    "eslint-config-next": "16.3.8",
     "jsdom": "29.1.1",
     "typescript": "5.9.3",
     "vitest": "^4.1.11"

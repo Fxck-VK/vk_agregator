@@ -471,6 +471,15 @@ jobs:
           set -euo pipefail
           cd "${deploy_path}"
           bash scripts/deploy/smoke-dev.sh --env-file .env --timeout-seconds 60
+          if [[ -s .env.dev-google ]]; then
+            curl -fsS --max-time 20 http://127.0.0.1:8080/web/v1/auth/methods |
+              grep -Eq '"providers":\[[^]]*"google"'
+            curl -fsS --max-time 20 -H 'Origin: https://dev-web.neiirohub.ru' \
+              -H 'Content-Type: application/json' --data '{"locale":"ru"}' \
+              http://127.0.0.1:8080/web/v1/auth/oauth/google/start |
+              grep -Eq '"authorization_url":"https://accounts\.google\.com/o/oauth2/v2/auth\?'
+            echo 'DEV Google availability and OAuth start checked'
+          fi
           REMOTE
           } | ssh "${ssh_opts[@]}" "${DEV_DEPLOY_USER}@${DEV_DEPLOY_HOST}" bash -s
 

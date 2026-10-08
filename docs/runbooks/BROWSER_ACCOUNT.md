@@ -72,6 +72,8 @@ For DEV Google, create a Google OAuth client of type Web application with the ex
 
 Secrets belong in deployment secrets/runtime env, never NEXT_PUBLIC variables. Apple's secret is an operator-generated, signed client-secret JWT; renew before expiry. Apple uses code-only response_mode=query without name/email scopes. Telegram uses OIDC client credentials, not the legacy Login Widget bot token. Existing issuer/JWKS configuration still applies to OIDC verification.
 
+When `.env.dev-google` is present, the manual DEV post-deploy smoke also checks that the running API advertises Google and returns a Google authorization URL from the OAuth start route with the correct DEV origin. The response body, binding cookie, and OAuth state are not logged. This checks runtime configuration and transaction creation; completing the Google login and callback still requires an operator browser test.
+
 Login starts at `POST /web/v1/auth/oauth/{provider}/start`; profile linking starts at `/web/v1/account/oauth/{provider}/start`. They return the authorization URL. Server-owned Redis transactions expire after 10 minutes and bind provider, browser cookie, state, PKCE, nonce, locale and optional owning account. Consumption is atomic and one-use. Linking must have a valid session for the same account at completion; conflicts do not merge accounts.
 
 Provider tokens stay on the backend. Login issues existing Secure HttpOnly cookies. The frontend proxy permits only fixed 303 callback destinations, preserves separate Set-Cookie headers and sets Referrer-Policy=no-referrer. JWKS cache entries are bound to their source URL.
