@@ -337,6 +337,7 @@ jobs:
           bash scripts/deploy/test-title-worker-rollout.sh
           bash scripts/deploy/test-dev-env.sh
           bash scripts/deploy/test-dev-email.sh
+          bash scripts/deploy/test-dev-google.sh
           bash scripts/deploy/test-prod-env.sh
           bash scripts/deploy/test-env-parity.sh
           bash scripts/deploy/test-assemble-env-parts.sh

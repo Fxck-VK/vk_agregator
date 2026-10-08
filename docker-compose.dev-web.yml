@@ -3,6 +3,8 @@ services:
     env_file:
       - path: .env.dev-email
         required: false
+      - path: .env.dev-google
+        required: false
 
   platform:
     image: ${APP_IMAGE_REGISTRY}/platform:${IMAGE_TAG}

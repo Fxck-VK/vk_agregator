@@ -337,6 +337,8 @@ jobs:
           DEV_WEB_BASIC_AUTH_HTPASSWD: ${{ secrets.DEV_WEB_BASIC_AUTH_HTPASSWD }}
           DEPLOY_IMAGE_TAG: ${{ steps.release.outputs.image_tag }}
           DEV_ACCOUNT_EMAIL_SMTP_PASSWORD: ${{ secrets.DEV_ACCOUNT_EMAIL_SMTP_PASSWORD }}
+          DEV_ACCOUNT_OAUTH_GOOGLE_CLIENT_IDS: ${{ secrets.DEV_ACCOUNT_OAUTH_GOOGLE_CLIENT_IDS }}
+          DEV_ACCOUNT_WEB_OAUTH_GOOGLE_CLIENT_SECRET: ${{ secrets.DEV_ACCOUNT_WEB_OAUTH_GOOGLE_CLIENT_SECRET }}
         run: |
           set -euo pipefail
           ssh_opts=(-i "${HOME}/.ssh/deploy_key" -o StrictHostKeyChecking=yes -o UserKnownHostsFile="${HOME}/.ssh/known_hosts" -o GlobalKnownHostsFile=/dev/null)
@@ -344,10 +346,12 @@ jobs:
           raw_env="$(mktemp)"
           email_env="$(mktemp)"
           email_settings="$(mktemp)"
+          google_env="$(mktemp)"
+          google_settings="$(mktemp)"
           rendered_env="$(mktemp)"
           raw_auth_env="$(mktemp)"
           rendered_auth_env="$(mktemp)"
-          trap 'rm -f "${raw_env}" "${email_env}" "${email_settings}" "${rendered_env}" "${raw_auth_env}" "${rendered_auth_env}"' EXIT
+          trap 'rm -f "${raw_env}" "${email_env}" "${email_settings}" "${google_env}" "${google_settings}" "${rendered_env}" "${raw_auth_env}" "${rendered_auth_env}"' EXIT
 
           bash scripts/deploy/assemble-env-parts.sh \
             --target dev \
@@ -359,8 +363,13 @@ jobs:
             --output "${email_env}" \
             --settings-output "${email_settings}"
 
-          bash scripts/deploy/prepare-dev-env.sh \
+          bash scripts/deploy/prepare-dev-google.sh \
             --input "${email_env}" \
+            --output "${google_env}" \
+            --settings-output "${google_settings}"
+
+          bash scripts/deploy/prepare-dev-env.sh \
+            --input "${google_env}" \
             --output "${rendered_env}" \
             --image-tag "${DEPLOY_IMAGE_TAG}" \
             --ghcr-username "${GHCR_USERNAME}" \
@@ -383,6 +392,7 @@ jobs:
           : > .dev-web-auth.next
           chmod 600 .dev-web-auth.next
           rm -f .env.dev-email.next
+          rm -f .env.dev-google.next
           REMOTE
           } | ssh "${ssh_opts[@]}" "${DEV_DEPLOY_USER}@${DEV_DEPLOY_HOST}" bash -s
 
@@ -390,6 +400,9 @@ jobs:
           scp -p "${ssh_opts[@]}" "${rendered_auth_env}" "${DEV_DEPLOY_USER}@${DEV_DEPLOY_HOST}:${DEV_DEPLOY_PATH}/.dev-web-auth.next"
           if [[ -s "${email_settings}" ]]; then
             scp -p "${ssh_opts[@]}" "${email_settings}" "${DEV_DEPLOY_USER}@${DEV_DEPLOY_HOST}:${DEV_DEPLOY_PATH}/.env.dev-email.next"
+          fi
+          if [[ -s "${google_settings}" ]]; then
+            scp -p "${ssh_opts[@]}" "${google_settings}" "${DEV_DEPLOY_USER}@${DEV_DEPLOY_HOST}:${DEV_DEPLOY_PATH}/.env.dev-google.next"
           fi
           {
             printf 'deploy_path=%q\n' "${DEV_DEPLOY_PATH}"
@@ -403,6 +416,13 @@ jobs:
               exit 1
             fi
             mv -f .env.dev-email.next .env.dev-email
+          fi
+          if [[ -f .env.dev-google.next ]]; then
+            if [[ "$(stat -c '%a' .env.dev-google.next)" != "600" ]]; then
+              echo "DEV Google settings staging file must be mode 600" >&2
+              exit 1
+            fi
+            mv -f .env.dev-google.next .env.dev-google
           fi
           if [[ "$(stat -c '%a' .dev-web-auth.next)" != "600" ]]; then
             echo "DEV web auth staging file must be mode 600" >&2
