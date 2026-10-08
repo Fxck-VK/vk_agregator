@@ -107,9 +107,10 @@ func (s *Service) EnsureCode(ctx context.Context, userID uuid.UUID) (*domain.Ref
 
 // ApplyInput describes a referral code accepted from one VK surface.
 type ApplyInput struct {
-	Code           string
-	ReferredUserID uuid.UUID
-	Source         domain.ReferralSource
+	Code              string
+	ReferredUserID    uuid.UUID
+	ReferredAccountID uuid.UUID
+	Source            domain.ReferralSource
 }
 
 // ApplyResult reports how the referral code was handled.
@@ -142,7 +143,7 @@ func (s *Service) Apply(ctx context.Context, input ApplyInput) (ApplyResult, err
 	if err != nil {
 		return ApplyResult{}, err
 	}
-	if code.UserID == input.ReferredUserID {
+	if sameReferralOwner(code.UserID, code.AccountID, input.ReferredUserID, input.ReferredAccountID) {
 		metrics.ReferralRewards.WithLabelValues("self_referral").Inc()
 		return ApplyResult{SelfReferral: true}, nil
 	}
@@ -150,12 +151,14 @@ func (s *Service) Apply(ctx context.Context, input ApplyInput) (ApplyResult, err
 		input.Source = domain.ReferralSourceVKBot
 	}
 	referral := &domain.Referral{
-		ReferrerUserID: code.UserID,
-		ReferredUserID: input.ReferredUserID,
-		ReferralCode:   code.Code,
-		Source:         input.Source,
-		Status:         domain.ReferralStatusRegistered,
-		RewardStatus:   domain.ReferralRewardPending,
+		ReferrerUserID:    code.UserID,
+		ReferrerAccountID: code.AccountID,
+		ReferredUserID:    input.ReferredUserID,
+		ReferredAccountID: input.ReferredAccountID,
+		ReferralCode:      code.Code,
+		Source:            input.Source,
+		Status:            domain.ReferralStatusRegistered,
+		RewardStatus:      domain.ReferralRewardPending,
 	}
 	if err := s.repo.CreateReferral(ctx, referral); err != nil {
 		if !errors.Is(err, domain.ErrConflict) {
@@ -165,7 +168,7 @@ func (s *Service) Apply(ctx context.Context, input ApplyInput) (ApplyResult, err
 		if getErr != nil {
 			return ApplyResult{}, getErr
 		}
-		if existing.ReferrerUserID != code.UserID {
+		if !sameReferralOwner(existing.ReferrerUserID, existing.ReferrerAccountID, code.UserID, code.AccountID) {
 			metrics.ReferralRewards.WithLabelValues("already_applied_other_referrer").Inc()
 			return ApplyResult{AlreadyApplied: true, Referral: existing}, nil
 		}
@@ -180,8 +183,9 @@ func (s *Service) Apply(ctx context.Context, input ApplyInput) (ApplyResult, err
 
 // ActivateInput describes a product activation event for the referred user.
 type ActivateInput struct {
-	ReferredUserID uuid.UUID
-	Source         domain.ReferralSource
+	ReferredUserID    uuid.UUID
+	ReferredAccountID uuid.UUID
+	Source            domain.ReferralSource
 }
 
 // ActivateResult reports whether a referral was activated and rewarded.
@@ -196,15 +200,27 @@ type ActivateResult struct {
 // Activate marks the referred user's relation as activated and posts configured
 // signup rewards through the billing ledger exactly once.
 func (s *Service) Activate(ctx context.Context, input ActivateInput) (ActivateResult, error) {
-	if s == nil || s.repo == nil || input.ReferredUserID == uuid.Nil {
+	referredID := input.ReferredUserID
+	if referredID == uuid.Nil {
+		referredID = input.ReferredAccountID
+	}
+	if s == nil || s.repo == nil || referredID == uuid.Nil {
 		return ActivateResult{NotFound: true}, nil
 	}
-	referral, err := s.repo.GetReferralByReferredUserID(ctx, input.ReferredUserID)
+	referral, err := s.repo.GetReferralByReferredUserID(ctx, referredID)
 	if errors.Is(err, domain.ErrNotFound) {
 		return ActivateResult{NotFound: true}, nil
 	}
 	if err != nil {
 		return ActivateResult{}, err
+	}
+	if referral.Source == domain.ReferralSourceWeb {
+		metrics.ReferralRewards.WithLabelValues("web_source_ignored").Inc()
+		return ActivateResult{NotFound: true}, nil
+	}
+	if referral.ReferrerUserID == uuid.Nil || referral.ReferredUserID == uuid.Nil {
+		metrics.ReferralRewards.WithLabelValues("account_native_ignored").Inc()
+		return ActivateResult{NotFound: true}, nil
 	}
 	if referral.Status == domain.ReferralStatusRewarded || referral.RewardStatus == domain.ReferralRewardApplied {
 		metrics.ReferralRewards.WithLabelValues("already_rewarded").Inc()
@@ -232,6 +248,13 @@ func (s *Service) Activate(ctx context.Context, input ActivateInput) (ActivateRe
 	}
 	metrics.ReferralRewards.WithLabelValues("rewarded").Inc()
 	return ActivateResult{Activated: newlyActivated, Rewarded: true, Referral: referral}, nil
+}
+
+func sameReferralOwner(leftUserID, leftAccountID, rightUserID, rightAccountID uuid.UUID) bool {
+	if leftUserID != uuid.Nil && rightUserID != uuid.Nil && leftUserID == rightUserID {
+		return true
+	}
+	return leftAccountID != uuid.Nil && rightAccountID != uuid.Nil && leftAccountID == rightAccountID
 }
 
 // Stats returns the user's referral code and invited-user count.

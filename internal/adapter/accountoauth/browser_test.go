@@ -42,7 +42,7 @@ func TestBrowserCodeExchangeKeepsSecretsServerSideAndConsumesProof(t *testing.T)
 		t.Run(name, func(t *testing.T) {
 			store := &browserMemoryStore{data: map[string]BrowserTransaction{}}
 			proof := &browserProofAdapter{name: domain.IdentityProvider(name)}
-			cfg := BrowserConfig{WebOrigin: "https://app.example.test", GoogleClientID: "client", GoogleClientSecret: "secret", AppleClientID: "client", AppleClientSecret: "secret", TelegramClientID: "client", TelegramClientSecret: "secret", VKIDClientID: "client"}
+			cfg := BrowserConfig{WebOrigin: "https://app.example.test", GoogleEnabled: true, GoogleClientID: "client", GoogleClientSecret: "secret", AppleClientID: "client", AppleClientSecret: "secret", TelegramClientID: "client", TelegramClientSecret: "secret", VKIDClientID: "client"}
 			calls := 0
 			var state string
 			client := &http.Client{Transport: browserRoundTrip(func(r *http.Request) (*http.Response, error) {
@@ -101,7 +101,7 @@ func TestBrowserCodeExchangeKeepsSecretsServerSideAndConsumesProof(t *testing.T)
 
 func TestBrowserExpiredTransactionNeverExchangesCode(t *testing.T) {
 	store := &browserMemoryStore{data: map[string]BrowserTransaction{}}
-	b := NewBrowser(BrowserConfig{WebOrigin: "https://app.example.test", GoogleClientID: "client", GoogleClientSecret: "secret"}, store, NewRegistry(), nil)
+	b := NewBrowser(BrowserConfig{WebOrigin: "https://app.example.test", GoogleEnabled: true, GoogleClientID: "client", GoogleClientSecret: "secret"}, store, NewRegistry(), nil)
 	start, _ := b.Start(context.Background(), "google", "browser", "ru", "login", "")
 	tx := store.data[stateKey(start.State)]
 	tx.ExpiresAt = time.Now().Add(-time.Minute)
@@ -121,7 +121,7 @@ func (s *browserMemoryStore) Take(_ context.Context, key, binding string) (Brows
 
 func TestBrowserOAuthStartIsBoundAndFailClosed(t *testing.T) {
 	store := &browserMemoryStore{data: map[string]BrowserTransaction{}}
-	service := NewBrowser(BrowserConfig{WebOrigin: "https://app.example.test", GoogleClientID: "client", GoogleClientSecret: "server-secret"}, store, NewRegistry(), nil)
+	service := NewBrowser(BrowserConfig{WebOrigin: "https://app.example.test", GoogleEnabled: true, GoogleClientID: "client", GoogleClientSecret: "server-secret"}, store, NewRegistry(), nil)
 	start, err := service.Start(context.Background(), "google", "binding", "ru", "login", "")
 	if err != nil {
 		t.Fatal(err)
@@ -142,6 +142,18 @@ func TestBrowserOAuthStartIsBoundAndFailClosed(t *testing.T) {
 	}
 	if _, err := service.Start(context.Background(), "apple", "binding", "ru", "login", ""); !errors.Is(err, ErrUnavailable) {
 		t.Fatal("unconfigured provider enabled")
+	}
+}
+
+func TestBrowserOAuthGoogleDisabledByDefault(t *testing.T) {
+	store := &browserMemoryStore{data: map[string]BrowserTransaction{}}
+	service := NewBrowser(BrowserConfig{WebOrigin: "https://app.example.test", GoogleClientID: "client", GoogleClientSecret: "server-secret"}, store, NewRegistry(), nil)
+
+	if providers := service.Providers(); containsToken(providers, "google") {
+		t.Fatalf("providers = %v, want google omitted", providers)
+	}
+	if _, err := service.Start(context.Background(), "google", "binding", "ru", "login", ""); !errors.Is(err, ErrUnavailable) {
+		t.Fatalf("Start error = %v, want ErrUnavailable", err)
 	}
 }
 

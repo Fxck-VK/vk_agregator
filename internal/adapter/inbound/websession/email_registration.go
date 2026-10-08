@@ -74,6 +74,7 @@ func (h *Handler) emailRegistration(w http.ResponseWriter, r *http.Request) {
 		cookie.MaxAge = -1
 		http.SetCookie(w, cookie)
 		w.Header().Set("X-NeiroHub-Account-ID", tokens.Session.AccountID.String())
+		_ = h.acceptPendingReferral(w, r, tokens.Session.AccountID)
 		writeJSON(w, 201, safeSessionResponse{Session: tokens.Session})
 	}
 }

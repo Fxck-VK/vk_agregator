@@ -507,6 +507,7 @@ type Config struct {
 	AccountAuthRateLimitWindow time.Duration
 	// AccountOAuth* configure provider adapters. Missing provider-specific
 	// trust material keeps that provider fail-closed.
+	AccountOAuthGoogleEnabled           bool
 	AccountOAuthGoogleClientIDs         []string
 	AccountWebOAuthGoogleClientSecret   string
 	AccountWebOAuthAppleClientSecret    string
@@ -1581,6 +1582,7 @@ func Load() Config {
 		AccountPhoneHTTPTimeout:             envDuration("ACCOUNT_PHONE_HTTP_TIMEOUT", 10*time.Second),
 		AccountAuthRateLimitLimit:           envInt("ACCOUNT_AUTH_RATE_LIMIT_LIMIT", 30),
 		AccountAuthRateLimitWindow:          envDuration("ACCOUNT_AUTH_RATE_LIMIT_WINDOW", 15*time.Minute),
+		AccountOAuthGoogleEnabled:           envBool("ACCOUNT_OAUTH_GOOGLE_ENABLED", false),
 		AccountOAuthGoogleClientIDs:         envList("ACCOUNT_OAUTH_GOOGLE_CLIENT_IDS"),
 		AccountWebOAuthGoogleClientSecret:   env("ACCOUNT_WEB_OAUTH_GOOGLE_CLIENT_SECRET", ""),
 		AccountWebOAuthAppleClientSecret:    env("ACCOUNT_WEB_OAUTH_APPLE_CLIENT_SECRET", ""),

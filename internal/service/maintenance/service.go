@@ -26,6 +26,7 @@ const (
 	defaultCommandCleanupLimit        = 500
 	defaultJobErrorAggregateLookback  = 30 * 24 * time.Hour
 	defaultAnalyticsAggregateLookback = 7 * 24 * time.Hour
+	defaultWebReferralCleanupLimit    = 1000
 )
 
 // Store is the database-side maintenance contract.
@@ -50,6 +51,10 @@ type Store interface {
 	MarkMediaCleanupDeleted(ctx context.Context, candidate domain.MediaCleanupCandidate) error
 	ProductActiveUserCounts(ctx context.Context, since time.Time) ([]domain.ProductActiveUserCount, error)
 	BalanceMismatches(ctx context.Context, limit int) ([]domain.BalanceMismatch, error)
+}
+
+type webReferralVisitCleaner interface {
+	CleanupExpiredWebReferralVisits(ctx context.Context, now time.Time, limit int) (int64, error)
 }
 
 // StreamTrimmer is the Redis-side maintenance contract.
@@ -296,12 +301,18 @@ func (s *Service) Cleanup(ctx context.Context) error {
 	if err := s.ObserveProductStats(ctx); err != nil {
 		s.log.WarnContext(ctx, "product stats observation failed", logging.ErrorAttr(err))
 	}
+	webReferralVisitsDeleted, err := s.cleanupWebReferralVisits(ctx, now)
+	if err != nil {
+		return err
+	}
+	metrics.MaintenanceDeleted.WithLabelValues("web_referral_visits").Add(float64(webReferralVisitsDeleted))
 	if idemDeleted > 0 || outboxDeleted > 0 || mediaExpired > 0 || mediaDeleted > 0 ||
 		jobErrorsAggregated > 0 || dailyAnalyticsRefreshed > 0 || jobEventsDeleted > 0 ||
 		providerPayloadsExpired > 0 || providerPayloadsRedacted > 0 ||
 		conversationExpired > 0 || conversationRedacted > 0 ||
 		summaryExpired > 0 || summaryRedacted > 0 ||
 		inboundExpired > 0 || inboundRedacted > 0 ||
+		webReferralVisitsDeleted > 0 ||
 		commandsExpired > 0 || commandsRedacted > 0 {
 		s.log.InfoContext(ctx, "maintenance cleanup completed",
 			"idempotency_keys_deleted", idemDeleted,
@@ -319,10 +330,19 @@ func (s *Service) Cleanup(ctx context.Context) error {
 			"inbound_events_redacted", inboundRedacted,
 			"commands_raw_text_expired", commandsExpired,
 			"commands_raw_text_redacted", commandsRedacted,
+			"web_referral_visits_deleted", webReferralVisitsDeleted,
 			"media_artifacts_expired", mediaExpired,
 			"media_objects_deleted", mediaDeleted)
 	}
 	return nil
+}
+
+func (s *Service) cleanupWebReferralVisits(ctx context.Context, now time.Time) (int64, error) {
+	cleaner, ok := s.store.(webReferralVisitCleaner)
+	if !ok {
+		return 0, nil
+	}
+	return cleaner.CleanupExpiredWebReferralVisits(ctx, now, defaultWebReferralCleanupLimit)
 }
 
 func (s *Service) refreshDailyAnalytics(ctx context.Context, now time.Time) (int64, error) {

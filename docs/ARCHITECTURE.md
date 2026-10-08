@@ -11,6 +11,15 @@
 ---
 
 # Current implementation addendum: app surfaces and backend core
+Website invitations use webreferralservice and canonical account-owned codes,
+without creating legacy VK users. Hashed browser intents expire after 30 days;
+acceptance locks the intent/account and records eligible new accounts once.
+The website reports real visit and registration counters, while website
+activation/reward hooks stay disabled pending product rules. Legacy VK
+activation excludes website relations. Google login/linking is disabled by
+default with adapters/bindings retained; disabled providers cannot justify
+removing the last usable login. See [website invitations](runbooks/WEB_REFERRALS.md).
+
 Manual model testing on DEV uses `providermodels.RuntimeRegistry`, configured
 once by API/worker bootstrap after config validation. The explicitly enabled
 development flag adds priced text replies and text-input media candidates with pinned runtime

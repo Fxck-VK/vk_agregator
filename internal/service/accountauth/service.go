@@ -30,6 +30,7 @@ type Service struct {
 	sessionTTL     time.Duration
 	accessTokenTTL time.Duration
 	now            func() time.Time
+	loginMethods   map[domain.AccountLoginMethod]bool
 }
 
 // RateLimiter is the optional shared limiter for login/link flows.
@@ -39,6 +40,10 @@ type RateLimiter interface {
 
 // ErrRateLimited is returned when login/link/unlink throttling blocks a flow.
 var ErrRateLimited = errors.New("accountauth: rate limited")
+
+// ErrLoginMethodDisabled is returned when a verified assertion belongs to a
+// login flow disabled by runtime configuration.
+var ErrLoginMethodDisabled = errors.New("accountauth: login method disabled")
 
 // Option customizes the account auth service.
 type Option func(*Service)
@@ -59,6 +64,17 @@ func WithLimiter(limiter RateLimiter) Option {
 	}
 }
 
+// WithLoginMethodEnabled overrides whether a verified login method may enter
+// the shared account identity layer. Methods default to enabled.
+func WithLoginMethodEnabled(method domain.AccountLoginMethod, enabled bool) Option {
+	return func(s *Service) {
+		if s.loginMethods == nil {
+			s.loginMethods = map[domain.AccountLoginMethod]bool{}
+		}
+		s.loginMethods[normalizeLoginMethod(method)] = enabled
+	}
+}
+
 // ResolveOrCreate returns the account for a verified login assertion.
 func (s *Service) ResolveOrCreate(ctx context.Context, login domain.VerifiedAccountLogin) (domain.IdentityResolution, error) {
 	if s == nil || s.resolver == nil {
@@ -66,6 +82,9 @@ func (s *Service) ResolveOrCreate(ctx context.Context, login domain.VerifiedAcco
 	}
 	if !login.Verified {
 		return domain.IdentityResolution{}, domain.ErrUnverifiedLogin
+	}
+	if err := s.checkLoginMethod(login.Method); err != nil {
+		return domain.IdentityResolution{}, err
 	}
 	provider, externalID, normalizedID, err := providerIdentity(login)
 	if err != nil {
@@ -96,6 +115,9 @@ func (s *Service) LinkVerifiedIdentity(ctx context.Context, actorAccountID, acco
 	}
 	if !login.Verified {
 		return nil, domain.ErrUnverifiedLogin
+	}
+	if err := s.checkLoginMethod(login.Method); err != nil {
+		return nil, err
 	}
 	provider, externalID, normalizedID, err := providerIdentity(login)
 	if err != nil {
@@ -135,6 +157,9 @@ func (s *Service) ReplaceVerifiedBackupEmail(ctx context.Context, actorAccountID
 	}
 	if !login.Verified {
 		return nil, domain.ErrUnverifiedLogin
+	}
+	if err := s.checkLoginMethod(login.Method); err != nil {
+		return nil, err
 	}
 	provider, externalID, normalizedID, err := providerIdentity(login)
 	if err != nil {
@@ -223,7 +248,7 @@ func (s *Service) ResolveVKID(ctx context.Context, vkUserID int64) (domain.Ident
 }
 
 func providerIdentity(login domain.VerifiedAccountLogin) (domain.IdentityProvider, string, string, error) {
-	method := domain.AccountLoginMethod(strings.ToLower(strings.TrimSpace(string(login.Method))))
+	method := normalizeLoginMethod(login.Method)
 	externalID := strings.TrimSpace(login.ExternalID)
 	if externalID == "" {
 		return "", "", "", domain.ErrInvalidIdentity
@@ -266,6 +291,21 @@ func providerIdentity(login domain.VerifiedAccountLogin) (domain.IdentityProvide
 		return "", "", "", err
 	}
 	return provider, externalID, normalizedID, nil
+}
+
+func normalizeLoginMethod(method domain.AccountLoginMethod) domain.AccountLoginMethod {
+	return domain.AccountLoginMethod(strings.ToLower(strings.TrimSpace(string(method))))
+}
+
+func (s *Service) checkLoginMethod(method domain.AccountLoginMethod) error {
+	method = normalizeLoginMethod(method)
+	if s.loginMethods == nil {
+		return nil
+	}
+	if enabled, ok := s.loginMethods[method]; ok && !enabled {
+		return ErrLoginMethodDisabled
+	}
+	return nil
 }
 
 func validateEmail(value string) error {

@@ -8,6 +8,26 @@
   gap: var(--space-6);
 }
 
+.invitation {
+  display: grid;
+  gap: var(--space-3);
+  margin-block-start: var(--space-4);
+  min-inline-size: 0;
+}
+
+.invitation input {
+  box-sizing: border-box;
+  inline-size: 100%;
+  min-inline-size: 0;
+  padding: var(--space-3);
+  border: 0.0625rem solid var(--color-border);
+  border-radius: var(--radius-md);
+  background: var(--color-panel);
+  color: var(--color-text);
+}
+
+.invitation button { justify-self: start; }
+
 .launchCard,
 .statistic,
 .steps li {

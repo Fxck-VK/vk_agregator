@@ -1,4 +1,4 @@
-import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
+import { cleanup, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { AccountSecurity } from "./AccountSecurity";
 import { previewAuthMethods } from "@/lib/auth/methods";
@@ -14,6 +14,16 @@ vi.mock("next/navigation", () => ({ useRouter: () => navigation }));
 
 afterEach(() => { cleanup(); vi.clearAllMocks(); });
 describe("AccountSecurity", () => {
+  it.each(["apple", "telegram", "vk"])("protects email when the remaining %s binding has no browser login", (provider) => {
+    vi.mocked(webBrowserFetch).mockResolvedValue(Response.json({ items: [] }));
+    const profile = { ...localWorkspacePreviewProfile, password_set: true, identity_refs: [
+      { ...localWorkspacePreviewProfile.identity_refs[0], provider: "email" },
+      { ...localWorkspacePreviewProfile.identity_refs[0], id: "10000000-0000-4000-8000-000000000006", provider, label: "Stored binding" },
+    ] };
+    render(<AccountSecurity profile={profile} methods={{ ...previewAuthMethods, providers: [] }} />);
+    const emailRow = screen.getByText("Электронная почта").closest("li")!;
+    expect(within(emailRow).getByRole("button", { name: "Отвязать" })).toBeDisabled();
+  });
   const twoEmailProfile = () => ({ ...localWorkspacePreviewProfile, identity_refs: [
     { ...localWorkspacePreviewProfile.identity_refs[0], email_role: "primary" as const },
     { ...localWorkspacePreviewProfile.identity_refs[0], id: "10000000-0000-4000-8000-000000000003", label: "b***@example.test", email_role: "backup" as const },
@@ -125,6 +135,34 @@ describe("AccountSecurity", () => {
     render(<AccountSecurity profile={{ ...localWorkspacePreviewProfile, identity_refs: localWorkspacePreviewProfile.identity_refs.map(identity => ({ ...identity, provider: "google" })) }} methods={previewAuthMethods} preview />);
     expect(screen.getByRole("button", { name: "Добавить почту" })).toBeInTheDocument();
     expect(screen.queryByRole("button", { name: "Добавить резервную почту" })).not.toBeInTheDocument();
+  });
+  it("shows linked Google as disabled, hides stale Google linking, and keeps the primary email protected", () => {
+    const profile = {
+      ...localWorkspacePreviewProfile,
+      identity_refs: [
+        { ...localWorkspacePreviewProfile.identity_refs[0], email_role: "primary" as const },
+        {
+          ...localWorkspacePreviewProfile.identity_refs[0],
+          id: "10000000-0000-4000-8000-000000000003",
+          provider: "google",
+          label: "google-member@example.test",
+        },
+      ],
+    };
+
+    render(<AccountSecurity profile={profile} methods={{ ...previewAuthMethods, providers: ["google"] }} />);
+
+    expect(screen.getByText("Отключено")).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "Привязать Google" })).not.toBeInTheDocument();
+    expect(screen.getByText("Сохраните хотя бы один способ входа.")).toBeInTheDocument();
+
+    const emailRow = screen.getByText("Основная почта").closest("li");
+    const googleRow = screen.getByText("Google").closest("li");
+
+    expect(emailRow).not.toBeNull();
+    expect(googleRow).not.toBeNull();
+    expect(within(emailRow!).getByRole("button", { name: "Отвязать" })).toBeDisabled();
+    expect(within(googleRow!).getByRole("button", { name: "Отвязать" })).toBeEnabled();
   });
   it("does not treat an unconfirmed email as an existing recovery address", () => {
     render(<AccountSecurity profile={{ ...localWorkspacePreviewProfile, identity_refs: localWorkspacePreviewProfile.identity_refs.map(identity => ({ ...identity, verified: false })) }} methods={previewAuthMethods} preview />);

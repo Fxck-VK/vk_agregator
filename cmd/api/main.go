@@ -55,6 +55,7 @@ import (
 	"vk-ai-aggregator/internal/service/providerreference"
 	"vk-ai-aggregator/internal/service/resultservice"
 	"vk-ai-aggregator/internal/service/videorouter"
+	"vk-ai-aggregator/internal/service/webreferralservice"
 )
 
 type postgresReadyPool interface {
@@ -309,6 +310,7 @@ func main() {
 		Logger:      logger,
 	})
 	oauthRegistry := accountoauth.NewRegistryFromConfig(accountoauth.Config{
+		GoogleEnabled:     cfg.AccountOAuthGoogleEnabled,
 		GoogleClientIDs:   cfg.AccountOAuthGoogleClientIDs,
 		GoogleJWKSURL:     cfg.AccountOAuthGoogleJWKSURL,
 		AppleClientIDs:    cfg.AccountOAuthAppleClientIDs,
@@ -384,11 +386,15 @@ func main() {
 		ImageModels:                 webImageModelsFromRuntimeCatalog(runtimeCatalog.ImageModels()),
 		ImageArtifactRedirectPolicy: webArtifactRedirectPolicy,
 	}, websession.Deps{
-		EmailRegistration: emailRegistration,
-		AccountActions:    account,
-		OAuthLogins:       core.AccountAuth,
+		Referrals:                  webreferralservice.New(postgres.NewWebReferralRepository(pool)),
+		ReferralVisitLimiter:       ratelimit.NewRedisFixedWindowLimiter(rdb, "web_referral_visit", 1000, time.Minute),
+		ReferralVisitClientLimiter: ratelimit.NewRedisFixedWindowLimiter(rdb, "web_referral_browser", 20, time.Minute),
+		EmailRegistration:          emailRegistration,
+		AccountActions:             account,
+		OAuthLogins:                core.AccountAuth,
 		BrowserOAuth: accountoauth.NewBrowser(accountoauth.BrowserConfig{
 			WebOrigin:      cfg.WebOrigin,
+			GoogleEnabled:  cfg.AccountOAuthGoogleEnabled,
 			GoogleClientID: firstOAuthClientID(cfg.AccountOAuthGoogleClientIDs), GoogleClientSecret: cfg.AccountWebOAuthGoogleClientSecret,
 			AppleClientID: firstOAuthClientID(cfg.AccountOAuthAppleClientIDs), AppleClientSecret: cfg.AccountWebOAuthAppleClientSecret,
 			TelegramClientID: firstOAuthClientID(cfg.AccountOAuthTelegramClientIDs), TelegramClientSecret: cfg.AccountWebOAuthTelegramClientSecret,

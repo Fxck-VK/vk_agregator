@@ -125,9 +125,35 @@ describe("AccountControl", () => {
     };
     render(<AccountControl profile={unavailableProfile} />);
 
-    expect(screen.getByText(ru.account.unavailableLabel)).toBeInTheDocument();
+    expect(screen.getByText("Мой профиль")).toBeInTheDocument();
     expect(screen.queryByText(profile.identity_refs[0].label.trim())).not.toBeInTheDocument();
     expect(screen.queryByRole("img")).not.toBeInTheDocument();
+  });
+
+  it("uses the primary verified email instead of a linked Google identity for the menu title", () => {
+    render(
+      <AccountControl
+        profile={{
+          ...profile,
+          identity_refs: [
+            {
+              ...profile.identity_refs[0],
+              id: "d7c979f5-24e5-4f88-924b-a592d6e5a907",
+              provider: "google",
+              label: "google-member@example.com",
+            },
+            {
+              ...profile.identity_refs[0],
+              email_role: "primary",
+              label: "primary@example.com",
+            },
+          ],
+        }}
+      />,
+    );
+
+    expect(screen.getByText("primary@example.com")).toBeInTheDocument();
+    expect(screen.queryByText("google-member@example.com")).not.toBeInTheDocument();
   });
 
   it("switches and persists the selected appearance without closing the menu", () => {

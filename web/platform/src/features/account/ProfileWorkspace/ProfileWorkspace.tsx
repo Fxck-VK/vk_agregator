@@ -8,9 +8,9 @@ import { ProfileIdentityCard } from "@/features/account/ProfileIdentityCard/Prof
 import { ProfileLoginMethods } from "@/features/account/ProfileLoginMethods/ProfileLoginMethods";
 import { ProfileReferralProgram } from "@/features/account/ProfileReferralProgram/ProfileReferralProgram";
 import { AccountSecurity } from "@/features/account/AccountSecurity/AccountSecurity";
+import { getAccountDisplayIdentity } from "@/features/account/account-display";
 import { defaultAuthMethods, type AuthMethods } from "@/lib/auth/methods";
 import { useWorkspaceAccountSnapshot } from "@/features/account/WorkspaceAccount/WorkspaceAccount";
-import type { Dictionary } from "@/i18n/dictionary";
 import { useDictionary } from "@/i18n/LocaleProvider";
 
 import styles from "./ProfileWorkspace.module.css";
@@ -20,24 +20,10 @@ const referralTabId = "profile-referral-tab";
 const profilePanelId = "profile-content-panel";
 type ProfileTab = "overview" | "referral" | "security";
 
-type PrimaryIdentity = {
-  hasVerifiedIdentity: boolean;
-  label: string;
-};
-
-function getPrimaryIdentity(identityRefs: ReturnType<typeof useWorkspaceAccountSnapshot>["profile"]["identity_refs"], t: Dictionary): PrimaryIdentity {
-  const primaryIdentity = identityRefs.find((identity) => identity.verified && identity.label.trim() !== "");
-
-  return {
-    hasVerifiedIdentity: primaryIdentity !== undefined,
-    label: primaryIdentity?.label.trim() ?? t.account.unavailableLabel,
-  };
-}
-
 export function ProfileWorkspace({ methods = defaultAuthMethods, preview = false, oauthStatus }: { methods?: AuthMethods; preview?: boolean; oauthStatus?: string }) {
   const t = useDictionary();
   const { balance, profile } = useWorkspaceAccountSnapshot();
-  const primaryIdentity = getPrimaryIdentity(profile.identity_refs, t);
+  const primaryIdentity = getAccountDisplayIdentity(profile.identity_refs, t);
   const [activeTab, setActiveTab] = useState<ProfileTab>(oauthStatus ? "security" : "overview");
 
   return (
@@ -93,7 +79,7 @@ export function ProfileWorkspace({ methods = defaultAuthMethods, preview = false
         ) : activeTab === "security" ? (
           <AccountSecurity key={profile.account_id} profile={profile} methods={methods} preview={preview} oauthStatus={oauthStatus} />
         ) : (
-          <ProfileReferralProgram />
+          <ProfileReferralProgram key={profile.account_id} preview={preview} />
         )}
       </div>
     </section>

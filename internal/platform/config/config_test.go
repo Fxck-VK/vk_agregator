@@ -140,6 +140,22 @@ func TestLoadAccountDeliveryConfig(t *testing.T) {
 	}
 }
 
+func TestLoadAccountOAuthGoogleDefaultsDisabledAndCanEnable(t *testing.T) {
+	restore := clearEnv(t, "ACCOUNT_OAUTH_GOOGLE_ENABLED")
+	defer restore()
+
+	cfg := config.Load()
+	if cfg.AccountOAuthGoogleEnabled {
+		t.Fatal("AccountOAuthGoogleEnabled = true, want default false")
+	}
+
+	t.Setenv("ACCOUNT_OAUTH_GOOGLE_ENABLED", "true")
+	cfg = config.Load()
+	if !cfg.AccountOAuthGoogleEnabled {
+		t.Fatal("AccountOAuthGoogleEnabled = false, want explicit true")
+	}
+}
+
 func TestLoadProviderChain(t *testing.T) {
 	t.Setenv("PROVIDER", "mock")
 	t.Setenv("PROVIDER_CHAIN", "deepinfra,mock")

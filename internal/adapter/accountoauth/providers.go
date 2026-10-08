@@ -17,6 +17,7 @@ const (
 
 // Config contains all OAuth adapter configuration used by cmd/api.
 type Config struct {
+	GoogleEnabled   bool
 	GoogleClientIDs []string
 	GoogleJWKSURL   string
 	AppleClientIDs  []string
@@ -48,8 +49,9 @@ func NewRegistryFromConfig(cfg Config) *Registry {
 	if appleJWKSURL == "" {
 		appleJWKSURL = AppleJWKSURL
 	}
-	return NewRegistry(
-		NewOIDCAdapter(OIDCAdapterConfig{
+	adapters := []Adapter{}
+	if cfg.GoogleEnabled {
+		adapters = append(adapters, NewOIDCAdapter(OIDCAdapterConfig{
 			Provider: domain.IdentityProviderGoogle,
 			Method:   domain.AccountLoginGoogle,
 			Issuers:  []string{"accounts.google.com", "https://accounts.google.com"},
@@ -57,7 +59,9 @@ func NewRegistryFromConfig(cfg Config) *Registry {
 			JWKSURL:  googleJWKSURL,
 			Verifier: verifier,
 			Clock:    cfg.Clock,
-		}),
+		}))
+	}
+	adapters = append(adapters,
 		NewOIDCAdapter(OIDCAdapterConfig{
 			Provider: domain.IdentityProviderApple,
 			Method:   domain.AccountLoginApple,
@@ -86,4 +90,5 @@ func NewRegistryFromConfig(cfg Config) *Registry {
 			Verifier:  verifier,
 		}),
 	)
+	return NewRegistry(adapters...)
 }

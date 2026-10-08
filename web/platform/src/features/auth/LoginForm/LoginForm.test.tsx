@@ -78,6 +78,12 @@ describe("LoginForm", () => {
     await screen.findByText("Пароль обновлён. Войдите с новым паролем.");
     expect(webBrowserFetch).toHaveBeenLastCalledWith("/web/v1/auth/password/reset", expect.objectContaining({ body: JSON.stringify({ email: "backup@example.test", code: "123456", new_password: "replacement-password" }) }));
   });
+  it("hides stale Google sign-in methods even in local preview", () => {
+    render(<LoginForm preview methods={{ registration: false, password: true, recovery: true, email_link: true, phone_link: false, providers: ["google"] }} />);
+
+    expect(screen.queryByRole("button", { name: "Google" })).not.toBeInTheDocument();
+    expect(screen.queryByText(ru.auth.or)).not.toBeInTheDocument();
+  });
   it("does not consume the recovery code when a multibyte password exceeds the server limit", async () => {
     vi.mocked(webBrowserFetch).mockResolvedValue(new Response(null, { status: 202 }));
     render(<LoginForm methods={{ registration: false, password: true, recovery: true, email_link: true, phone_link: false, providers: [] }} />);

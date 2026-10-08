@@ -37,6 +37,22 @@ type fakeStore struct {
 	clearMediaCandidatesOnMark   bool
 }
 
+type fakeStoreWithWebReferralCleanup struct {
+	fakeStore
+	webReferralCleanupCalls   int
+	webReferralCleanupNow     time.Time
+	webReferralCleanupLimit   int
+	webReferralCleanupDeleted int64
+}
+
+func (s *fakeStoreWithWebReferralCleanup) CleanupExpiredWebReferralVisits(_ context.Context, now time.Time, limit int) (int64, error) {
+	s.operations = append(s.operations, "cleanup_web_referral_visits")
+	s.webReferralCleanupCalls++
+	s.webReferralCleanupNow = now
+	s.webReferralCleanupLimit = limit
+	return s.webReferralCleanupDeleted, nil
+}
+
 type analyticsAggregateWindow struct {
 	from time.Time
 	to   time.Time
@@ -292,6 +308,26 @@ func TestCleanupSkipsMediaWhenRetentionDisabled(t *testing.T) {
 	}
 	if len(objects.deleted) != 0 {
 		t.Fatalf("deleted objects = %d, want 0", len(objects.deleted))
+	}
+}
+
+func TestCleanupOptionallyDeletesExpiredWebReferralVisits(t *testing.T) {
+	store := &fakeStoreWithWebReferralCleanup{webReferralCleanupDeleted: 3}
+	now := time.Date(2026, 10, 8, 12, 0, 0, 0, time.UTC)
+	svc := New(store, nil, Config{}, WithClock(func() time.Time { return now }))
+
+	if err := svc.Cleanup(context.Background()); err != nil {
+		t.Fatalf("Cleanup() error = %v", err)
+	}
+
+	if store.webReferralCleanupCalls != 1 {
+		t.Fatalf("web referral cleanup calls = %d, want 1", store.webReferralCleanupCalls)
+	}
+	if !store.webReferralCleanupNow.Equal(now) {
+		t.Fatalf("web referral cleanup time = %s, want %s", store.webReferralCleanupNow, now)
+	}
+	if store.webReferralCleanupLimit <= 0 {
+		t.Fatalf("web referral cleanup limit = %d, want bounded positive limit", store.webReferralCleanupLimit)
 	}
 }
 

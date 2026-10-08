@@ -14,19 +14,35 @@ import (
 // AccountIdentityRepo is an in-memory implementation used by unit tests and
 // local mock runs. Production uses the PostgreSQL repository.
 type AccountIdentityRepo struct {
-	mu      sync.Mutex
-	byKey   map[string]*domain.AccountIdentity
-	byID    map[uuid.UUID]*domain.AccountIdentity
-	audits  []domain.AccountLinkAuditEntry
-	notices map[uuid.UUID]*memorySecurityNotice
+	mu                   sync.Mutex
+	byKey                map[string]*domain.AccountIdentity
+	byID                 map[uuid.UUID]*domain.AccountIdentity
+	audits               []domain.AccountLinkAuditEntry
+	notices              map[uuid.UUID]*memorySecurityNotice
+	usableLoginProviders domain.UsableLoginProviders
 }
 
-func NewAccountIdentityRepo() *AccountIdentityRepo {
-	return &AccountIdentityRepo{
-		byKey:   map[string]*domain.AccountIdentity{},
-		byID:    map[uuid.UUID]*domain.AccountIdentity{},
-		notices: map[uuid.UUID]*memorySecurityNotice{},
+type AccountIdentityRepoOption func(*AccountIdentityRepo)
+
+func WithUsableLoginProviders(providers domain.UsableLoginProviders) AccountIdentityRepoOption {
+	return func(r *AccountIdentityRepo) {
+		r.usableLoginProviders = providers.Clone()
 	}
+}
+
+func NewAccountIdentityRepo(opts ...AccountIdentityRepoOption) *AccountIdentityRepo {
+	repo := &AccountIdentityRepo{
+		byKey:                map[string]*domain.AccountIdentity{},
+		byID:                 map[uuid.UUID]*domain.AccountIdentity{},
+		notices:              map[uuid.UUID]*memorySecurityNotice{},
+		usableLoginProviders: domain.AccountUsableLoginProviders(false),
+	}
+	for _, opt := range opts {
+		if opt != nil {
+			opt(repo)
+		}
+	}
+	return repo
 }
 
 var _ domain.AccountIdentityRepository = (*AccountIdentityRepo)(nil)
@@ -114,12 +130,12 @@ func (r *AccountIdentityRepo) UnlinkIdentity(_ context.Context, accountID, ident
 	for _, row := range r.byID {
 		if row.AccountID == accountID {
 			linkedCount++
-			if row.ID != identityID && row.Provider != domain.IdentityProviderPhone && !row.VerifiedAt.IsZero() {
+			if row.ID != identityID && r.usableLoginProviders.Has(row.Provider) && !row.VerifiedAt.IsZero() {
 				remainingLogin++
 			}
 		}
 	}
-	if linkedCount <= 1 || (identity.Provider != domain.IdentityProviderPhone && remainingLogin == 0) {
+	if linkedCount <= 1 || (r.usableLoginProviders.Has(identity.Provider) && remainingLogin == 0) {
 		return domain.ErrAccountLastIdentity
 	}
 	delete(r.byID, identityID)

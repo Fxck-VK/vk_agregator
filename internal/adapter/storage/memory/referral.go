@@ -14,6 +14,7 @@ import (
 // ReferralRepo is an in-memory domain.ReferralRepository.
 type ReferralRepo struct {
 	mu             sync.Mutex
+	accountByUser  map[uuid.UUID]uuid.UUID
 	codesByUser    map[uuid.UUID]domain.ReferralCode
 	codesByValue   map[string]uuid.UUID
 	referralsByID  map[uuid.UUID]domain.Referral
@@ -25,6 +26,7 @@ type ReferralRepo struct {
 func NewReferralRepo() *ReferralRepo {
 	return &ReferralRepo{
 		codesByUser:    map[uuid.UUID]domain.ReferralCode{},
+		accountByUser:  map[uuid.UUID]uuid.UUID{},
 		codesByValue:   map[string]uuid.UUID{},
 		referralsByID:  map[uuid.UUID]domain.Referral{},
 		referredToID:   map[uuid.UUID]uuid.UUID{},
@@ -34,10 +36,23 @@ func NewReferralRepo() *ReferralRepo {
 
 var _ domain.ReferralRepository = (*ReferralRepo)(nil)
 
+func (r *ReferralRepo) LinkUserAccount(userID, accountID uuid.UUID) {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	if userID != uuid.Nil && accountID != uuid.Nil {
+		r.accountByUser[userID] = accountID
+	}
+}
+
 func (r *ReferralRepo) GetCodeByUserID(_ context.Context, userID uuid.UUID) (*domain.ReferralCode, error) {
 	r.mu.Lock()
 	defer r.mu.Unlock()
 	code, ok := r.codesByUser[userID]
+	if !ok {
+		if accountID := r.accountByUser[userID]; accountID != uuid.Nil {
+			code, ok = r.codesByUser[accountID]
+		}
+	}
 	if !ok {
 		return nil, domain.ErrNotFound
 	}
@@ -58,14 +73,31 @@ func (r *ReferralRepo) GetCode(_ context.Context, codeValue string) (*domain.Ref
 func (r *ReferralRepo) CreateCode(_ context.Context, code *domain.ReferralCode) error {
 	r.mu.Lock()
 	defer r.mu.Unlock()
-	if _, ok := r.codesByUser[code.UserID]; ok {
-		return domain.ErrConflict
+	if code.AccountID == uuid.Nil {
+		code.AccountID = r.accountByUser[code.UserID]
 	}
 	if code.AccountID == uuid.Nil {
 		code.AccountID = code.UserID
 	}
-	if code.AccountID != code.UserID {
+	ownerID := code.UserID
+	if ownerID == uuid.Nil {
+		ownerID = code.AccountID
+	}
+	if ownerID == uuid.Nil {
+		return domain.ErrConflict
+	}
+	if code.UserID != uuid.Nil {
+		if _, ok := r.codesByUser[code.UserID]; ok {
+			return domain.ErrConflict
+		}
+	}
+	if code.AccountID != uuid.Nil {
 		if _, ok := r.codesByUser[code.AccountID]; ok {
+			return domain.ErrConflict
+		}
+	}
+	if accountID := r.accountByUser[code.UserID]; accountID != uuid.Nil {
+		if _, ok := r.codesByUser[accountID]; ok {
 			return domain.ErrConflict
 		}
 	}
@@ -77,11 +109,13 @@ func (r *ReferralRepo) CreateCode(_ context.Context, code *domain.ReferralCode) 
 	}
 	now := time.Now()
 	code.CreatedAt, code.UpdatedAt = now, now
-	r.codesByUser[code.UserID] = *code
-	if code.AccountID != uuid.Nil && code.AccountID != code.UserID {
+	if code.UserID != uuid.Nil {
+		r.codesByUser[code.UserID] = *code
+	}
+	if code.AccountID != uuid.Nil {
 		r.codesByUser[code.AccountID] = *code
 	}
-	r.codesByValue[code.Code] = code.UserID
+	r.codesByValue[code.Code] = ownerID
 	return nil
 }
 
@@ -89,21 +123,33 @@ func (r *ReferralRepo) CreateReferral(_ context.Context, referral *domain.Referr
 	r.mu.Lock()
 	defer r.mu.Unlock()
 	if referral.ReferrerAccountID == uuid.Nil {
-		referral.ReferrerAccountID = referral.ReferrerUserID
+		referral.ReferrerAccountID = r.accountByUser[referral.ReferrerUserID]
+		if referral.ReferrerAccountID == uuid.Nil {
+			referral.ReferrerAccountID = referral.ReferrerUserID
+		}
 	}
 	if referral.ReferredAccountID == uuid.Nil {
-		referral.ReferredAccountID = referral.ReferredUserID
+		referral.ReferredAccountID = r.accountByUser[referral.ReferredUserID]
+		if referral.ReferredAccountID == uuid.Nil {
+			referral.ReferredAccountID = referral.ReferredUserID
+		}
 	}
-	if referral.ReferrerUserID == referral.ReferredUserID || referral.ReferrerAccountID == referral.ReferredAccountID {
+	if sameNonNilUUID(referral.ReferrerUserID, referral.ReferredUserID) ||
+		sameNonNilUUID(referral.ReferrerAccountID, referral.ReferredAccountID) {
 		return domain.ErrConflict
 	}
-	if _, ok := r.referredToID[referral.ReferredUserID]; ok {
-		return domain.ErrConflict
+	if referral.ReferredUserID != uuid.Nil {
+		if _, ok := r.referredToID[referral.ReferredUserID]; ok {
+			return domain.ErrConflict
+		}
 	}
-	if referral.ReferredAccountID != uuid.Nil && referral.ReferredAccountID != referral.ReferredUserID {
+	if referral.ReferredAccountID != uuid.Nil {
 		if _, ok := r.referredToID[referral.ReferredAccountID]; ok {
 			return domain.ErrConflict
 		}
+	}
+	if referral.ReferredUserID == uuid.Nil && referral.ReferredAccountID == uuid.Nil {
+		return domain.ErrConflict
 	}
 	if referral.ID == uuid.Nil {
 		referral.ID = uuid.New()
@@ -123,12 +169,16 @@ func (r *ReferralRepo) CreateReferral(_ context.Context, referral *domain.Referr
 		referral.FirstSeenAt = now
 	}
 	r.referralsByID[referral.ID] = *referral
-	r.referredToID[referral.ReferredUserID] = referral.ID
-	if referral.ReferredAccountID != uuid.Nil && referral.ReferredAccountID != referral.ReferredUserID {
+	if referral.ReferredUserID != uuid.Nil {
+		r.referredToID[referral.ReferredUserID] = referral.ID
+	}
+	if referral.ReferredAccountID != uuid.Nil {
 		r.referredToID[referral.ReferredAccountID] = referral.ID
 	}
-	r.referrerToRefs[referral.ReferrerUserID] = append(r.referrerToRefs[referral.ReferrerUserID], referral.ID)
-	if referral.ReferrerAccountID != uuid.Nil && referral.ReferrerAccountID != referral.ReferrerUserID {
+	if referral.ReferrerUserID != uuid.Nil {
+		r.referrerToRefs[referral.ReferrerUserID] = append(r.referrerToRefs[referral.ReferrerUserID], referral.ID)
+	}
+	if referral.ReferrerAccountID != uuid.Nil {
 		r.referrerToRefs[referral.ReferrerAccountID] = append(r.referrerToRefs[referral.ReferrerAccountID], referral.ID)
 	}
 	return nil
@@ -139,6 +189,11 @@ func (r *ReferralRepo) GetReferralByReferredUserID(_ context.Context, userID uui
 	defer r.mu.Unlock()
 	id, ok := r.referredToID[userID]
 	if !ok {
+		if accountID := r.accountByUser[userID]; accountID != uuid.Nil {
+			id, ok = r.referredToID[accountID]
+		}
+	}
+	if !ok {
 		return nil, domain.ErrNotFound
 	}
 	referral := r.referralsByID[id]
@@ -148,18 +203,43 @@ func (r *ReferralRepo) GetReferralByReferredUserID(_ context.Context, userID uui
 func (r *ReferralRepo) CountByReferrer(_ context.Context, referrerUserID uuid.UUID) (int, error) {
 	r.mu.Lock()
 	defer r.mu.Unlock()
-	return len(r.referrerToRefs[referrerUserID]), nil
+	ids := r.referrerIDsLocked(referrerUserID)
+	return len(ids), nil
 }
 
 func (r *ReferralRepo) CountByReferrerStatus(_ context.Context, referrerUserID uuid.UUID) (domain.ReferralStats, error) {
 	r.mu.Lock()
 	defer r.mu.Unlock()
 	var stats domain.ReferralStats
-	for _, id := range r.referrerToRefs[referrerUserID] {
+	for _, id := range r.referrerIDsLocked(referrerUserID) {
 		referral := r.referralsByID[id]
 		addReferralStatus(&stats, referral)
 	}
 	return stats, nil
+}
+
+func (r *ReferralRepo) referrerIDsLocked(referrerUserID uuid.UUID) []uuid.UUID {
+	seen := map[uuid.UUID]struct{}{}
+	var ids []uuid.UUID
+	for _, id := range r.referrerToRefs[referrerUserID] {
+		if _, ok := seen[id]; !ok {
+			ids = append(ids, id)
+			seen[id] = struct{}{}
+		}
+	}
+	if accountID := r.accountByUser[referrerUserID]; accountID != uuid.Nil {
+		for _, id := range r.referrerToRefs[accountID] {
+			if _, ok := seen[id]; !ok {
+				ids = append(ids, id)
+				seen[id] = struct{}{}
+			}
+		}
+	}
+	return ids
+}
+
+func sameNonNilUUID(left, right uuid.UUID) bool {
+	return left != uuid.Nil && right != uuid.Nil && left == right
 }
 
 func (r *ReferralRepo) StatsByReferralCode(_ context.Context, code string) (domain.ReferralCodeStats, error) {

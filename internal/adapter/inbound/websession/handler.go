@@ -313,35 +313,38 @@ type WebChatMessageLimiter interface {
 
 // Deps are services shared with other account adapters.
 type Deps struct {
-	EmailRegistration      EmailRegistrationService
-	AccountActions         BrowserAccountActions
-	BrowserOAuth           BrowserOAuthService
-	OAuthLogins            BrowserOAuthLogins
-	MusicInputArtifacts    MusicInputArtifactSaver
-	MusicInputProber       MusicInputProber
-	InputArtifacts         InputArtifactService
-	InputObjects           ImageArtifactObjectReader
-	Payments               WebPaymentService
-	ReceiptContacts        WebReceiptContacts
-	PaymentCreateLimiter   WebChatMessageLimiter
-	Authenticator          PrincipalAuthenticator
-	Sessions               SessionService
-	Passwords              PasswordService
-	Account                AccountService
-	Conversations          domain.ConversationRepository
-	ImageJobs              ImageJobService
-	ImageBalance           ImageBalanceService
-	ImagePricing           imagegeneration.SnapshotCatalog
-	ImageJobReader         ImageJobReader
-	ImageJobIdempotency    ImageJobIdempotencyReader
-	ImageJobPrepareLimiter ImageJobPrepareLimiter
-	ImageJobHistory        ImageJobHistoryReader
-	ImageJobExpiry         ImageJobExpiryReconciler
-	ImageResults           ImageResultReader
-	ImageArtifacts         ImageArtifactReader
-	ImageArtifactURLSigner ImageArtifactURLSigner
-	WebChatJobs            WebChatJobCreator
-	WebChatMessageLimiter  WebChatMessageLimiter
+	Referrals                  WebReferrals
+	ReferralVisitLimiter       WebChatMessageLimiter
+	ReferralVisitClientLimiter WebChatMessageLimiter
+	EmailRegistration          EmailRegistrationService
+	AccountActions             BrowserAccountActions
+	BrowserOAuth               BrowserOAuthService
+	OAuthLogins                BrowserOAuthLogins
+	MusicInputArtifacts        MusicInputArtifactSaver
+	MusicInputProber           MusicInputProber
+	InputArtifacts             InputArtifactService
+	InputObjects               ImageArtifactObjectReader
+	Payments                   WebPaymentService
+	ReceiptContacts            WebReceiptContacts
+	PaymentCreateLimiter       WebChatMessageLimiter
+	Authenticator              PrincipalAuthenticator
+	Sessions                   SessionService
+	Passwords                  PasswordService
+	Account                    AccountService
+	Conversations              domain.ConversationRepository
+	ImageJobs                  ImageJobService
+	ImageBalance               ImageBalanceService
+	ImagePricing               imagegeneration.SnapshotCatalog
+	ImageJobReader             ImageJobReader
+	ImageJobIdempotency        ImageJobIdempotencyReader
+	ImageJobPrepareLimiter     ImageJobPrepareLimiter
+	ImageJobHistory            ImageJobHistoryReader
+	ImageJobExpiry             ImageJobExpiryReconciler
+	ImageResults               ImageResultReader
+	ImageArtifacts             ImageArtifactReader
+	ImageArtifactURLSigner     ImageArtifactURLSigner
+	WebChatJobs                WebChatJobCreator
+	WebChatMessageLimiter      WebChatMessageLimiter
 }
 
 // Handler serves the browser-only /web/v1 endpoints.
@@ -358,6 +361,9 @@ func NewHandler(cfg Config, deps Deps) *Handler {
 // Routes returns the versioned browser API router.
 func (h *Handler) Routes() http.Handler {
 	mux := http.NewServeMux()
+	mux.HandleFunc("GET /web/v1/referrals", h.requirePrincipal(h.referralSummary))
+	mux.HandleFunc("POST /web/v1/referrals/visit", h.referralVisit)
+	mux.HandleFunc("POST /web/v1/referrals/accept", h.requireUnsafePrincipal(h.referralAccept))
 	mux.HandleFunc("GET /web/v1/auth/methods", h.accountMethods)
 	mux.HandleFunc("POST /web/v1/auth/email/request-code", h.emailRegistration)
 	mux.HandleFunc("POST /web/v1/auth/email/verify-code", h.emailRegistration)

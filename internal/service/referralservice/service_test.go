@@ -2,6 +2,7 @@ package referralservice_test
 
 import (
 	"context"
+	"errors"
 	"testing"
 	"time"
 
@@ -66,6 +67,164 @@ func TestApplyReferralRejectsSelfReferral(t *testing.T) {
 	count, _ := repo.CountByReferrer(ctx, userID)
 	if count != 0 {
 		t.Fatalf("self-referral must not be counted, got %d", count)
+	}
+}
+
+func TestActivateIgnoresWebReferralSourceWithoutActivationOrReward(t *testing.T) {
+	ctx := context.Background()
+	referrals := memory.NewReferralRepo()
+	billingRepo := memory.NewBillingRepo()
+	billing := billingservice.New(billingRepo, billingservice.WithStartingBalance(0))
+	now := time.Date(2026, 10, 8, 12, 0, 0, 0, time.UTC)
+	svc := referralservice.New(referrals, billing, referralservice.Config{
+		ReferrerSignupRewardCredits: 10,
+		ReferredSignupRewardCredits: 3,
+		RewardOnActivation:          true,
+	}, referralservice.WithClock(func() time.Time { return now }))
+
+	referrerAccountID := uuid.New()
+	referredAccountID := uuid.New()
+	referral := &domain.Referral{
+		ReferrerAccountID: referrerAccountID,
+		ReferredAccountID: referredAccountID,
+		ReferralCode:      "WEB23456",
+		Source:            domain.ReferralSourceWeb,
+		Status:            domain.ReferralStatusRegistered,
+		RewardStatus:      domain.ReferralRewardPending,
+	}
+	if err := referrals.CreateReferral(ctx, referral); err != nil {
+		t.Fatalf("create web referral: %v", err)
+	}
+
+	result, err := svc.Activate(ctx, referralservice.ActivateInput{
+		ReferredUserID:    referredAccountID,
+		ReferredAccountID: referredAccountID,
+		Source:            domain.ReferralSourceVKBot,
+	})
+	if err != nil {
+		t.Fatalf("activate web referral through legacy service: %v", err)
+	}
+	if !result.NotFound || result.Activated || result.Rewarded || result.AlreadyRewarded {
+		t.Fatalf("web referral should be ignored by legacy activation, got %+v", result)
+	}
+	stored, err := referrals.GetReferralByReferredUserID(ctx, referredAccountID)
+	if err != nil {
+		t.Fatalf("get stored referral: %v", err)
+	}
+	if stored.Status != domain.ReferralStatusRegistered || stored.RewardStatus != domain.ReferralRewardPending || stored.ActivatedAt != nil || stored.RewardedAt != nil {
+		t.Fatalf("web referral mutated by legacy activation: %+v", stored)
+	}
+	if _, err := billingRepo.GetAccountByUser(ctx, referrerAccountID, domain.CurrencyCredits); !errors.Is(err, domain.ErrNotFound) {
+		t.Fatalf("legacy activation created referrer billing account, err=%v", err)
+	}
+}
+
+func TestEnsureCodeReusesAccountOwnedCodeForLinkedLegacyUser(t *testing.T) {
+	ctx := context.Background()
+	referrals := memory.NewReferralRepo()
+	accountID := uuid.New()
+	userID := uuid.New()
+	existing := &domain.ReferralCode{
+		AccountID: accountID,
+		Code:      "WEB23456",
+	}
+	if err := referrals.CreateCode(ctx, existing); err != nil {
+		t.Fatalf("create account-owned code: %v", err)
+	}
+	referrals.LinkUserAccount(userID, accountID)
+	svc := referralservice.New(referrals, nil, referralservice.Config{},
+		referralservice.WithCodeGenerator(func(int) (string, error) { return "NEW23456", nil }),
+	)
+
+	got, err := svc.EnsureCode(ctx, userID)
+	if err != nil {
+		t.Fatalf("ensure code for linked user: %v", err)
+	}
+	if got.Code != "WEB23456" || got.AccountID != accountID {
+		t.Fatalf("ensure returned %+v, want account-owned code", got)
+	}
+}
+
+func TestApplyRejectsCanonicalAccountSelfReferral(t *testing.T) {
+	ctx := context.Background()
+	referrals := memory.NewReferralRepo()
+	accountID := uuid.New()
+	userID := uuid.New()
+	if err := referrals.CreateCode(ctx, &domain.ReferralCode{AccountID: accountID, Code: "SELF23456"}); err != nil {
+		t.Fatalf("create account-owned code: %v", err)
+	}
+	referrals.LinkUserAccount(userID, accountID)
+	svc := referralservice.New(referrals, nil, referralservice.Config{})
+
+	result, err := svc.Apply(ctx, referralservice.ApplyInput{
+		Code:              "SELF23456",
+		ReferredUserID:    userID,
+		ReferredAccountID: accountID,
+		Source:            domain.ReferralSourceVKBot,
+	})
+	if err != nil {
+		t.Fatalf("apply self canonical referral: %v", err)
+	}
+	if !result.SelfReferral || result.Applied {
+		t.Fatalf("expected canonical self-referral rejection, got %+v", result)
+	}
+}
+
+func TestActivateIgnoresCanonicalOnlyReferralBeforeLegacyReward(t *testing.T) {
+	ctx := context.Background()
+	referrals := memory.NewReferralRepo()
+	billingRepo := memory.NewBillingRepo()
+	billing := billingservice.New(billingRepo, billingservice.WithStartingBalance(0))
+	now := time.Date(2026, 10, 8, 13, 0, 0, 0, time.UTC)
+	referrerAccountID := uuid.New()
+	referredUserID := uuid.New()
+	referredAccountID := uuid.New()
+	if err := referrals.CreateCode(ctx, &domain.ReferralCode{AccountID: referrerAccountID, Code: "CAN23456"}); err != nil {
+		t.Fatalf("create account-owned code: %v", err)
+	}
+	referrals.LinkUserAccount(referredUserID, referredAccountID)
+	svc := referralservice.New(referrals, billing, referralservice.Config{
+		ReferrerSignupRewardCredits: 10,
+		ReferredSignupRewardCredits: 3,
+		RewardOnActivation:          true,
+	}, referralservice.WithClock(func() time.Time { return now }))
+
+	applied, err := svc.Apply(ctx, referralservice.ApplyInput{
+		Code:              "CAN23456",
+		ReferredUserID:    referredUserID,
+		ReferredAccountID: referredAccountID,
+		Source:            domain.ReferralSourceVKBot,
+	})
+	if err != nil {
+		t.Fatalf("apply canonical-only code: %v", err)
+	}
+	if !applied.Applied || applied.Referral == nil || applied.Referral.ReferrerUserID != uuid.Nil {
+		t.Fatalf("unexpected apply result: %+v", applied)
+	}
+
+	activated, err := svc.Activate(ctx, referralservice.ActivateInput{
+		ReferredUserID:    referredUserID,
+		ReferredAccountID: referredAccountID,
+		Source:            domain.ReferralSourceVKBot,
+	})
+	if err != nil {
+		t.Fatalf("activate canonical-only referral: %v", err)
+	}
+	if !activated.NotFound || activated.Activated || activated.Rewarded || activated.AlreadyRewarded {
+		t.Fatalf("canonical-only referral should be ignored by legacy activation, got %+v", activated)
+	}
+	stored, err := referrals.GetReferralByReferredUserID(ctx, referredUserID)
+	if err != nil {
+		t.Fatalf("get stored referral: %v", err)
+	}
+	if stored.Status != domain.ReferralStatusRegistered || stored.RewardStatus != domain.ReferralRewardPending || stored.ActivatedAt != nil || stored.RewardedAt != nil {
+		t.Fatalf("canonical-only referral mutated by activation: %+v", stored)
+	}
+	if _, err := billingRepo.GetAccountByUser(ctx, referrerAccountID, domain.CurrencyCredits); !errors.Is(err, domain.ErrNotFound) {
+		t.Fatalf("legacy activation created referrer billing account, err=%v", err)
+	}
+	if _, err := billingRepo.GetAccountByUser(ctx, referredUserID, domain.CurrencyCredits); !errors.Is(err, domain.ErrNotFound) {
+		t.Fatalf("legacy activation created referred billing account, err=%v", err)
 	}
 }
 

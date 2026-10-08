@@ -4,6 +4,7 @@ import { useDictionary } from "@/i18n/LocaleProvider";
 
 
 import { AccountMenu } from "@/features/account/AccountMenu/AccountMenu";
+import { getAccountDisplayIdentity } from "@/features/account/account-display";
 import { useWorkspaceLogout } from "@/features/session/WorkspaceLogout/WorkspaceLogoutBoundary";
 import type { AccountProfile } from "@/lib/web-api/contracts";
 
@@ -16,13 +17,12 @@ type AccountControlProps = {
 export function AccountControl({ profile }: AccountControlProps) {
   const t = useDictionary();
   const { logout } = useWorkspaceLogout();
-  const identity = profile.identity_refs.find((candidate) => candidate.verified && candidate.label.trim() !== "");
-  const label = identity?.label.trim();
+  const identity = getAccountDisplayIdentity(profile.identity_refs, t);
 
   return (
     <div className={styles.control}>
       <AccountMenu
-        identityLabel={label ?? t.account.unavailableLabel}
+        identityLabel={identity.label}
         isLogoutPending={false}
         onLogout={logout}
       />

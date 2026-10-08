@@ -1,6 +1,6 @@
 {
   "schema_version": 5,
-  "updated_at": "2026-10-07T16:44:04+03:00",
+  "updated_at": "2026-10-08T06:55:02+03:00",
   "branch": "fastlife_dev",
   "remote_tracking": "origin/dev-deploy",
   "purpose": "Short machine-readable current context and routing for agents. This file is not project history.",
@@ -59,6 +59,8 @@
     "loadtest_contour": "Mock providers, payments and delivery only; no production hosts or paid calls."
   },
   "recent_decisions": [
+    "Website referrals use canonical account-owned codes, first-touch hashed 30-day browser intents and transactional new-account acceptance. Website counters are real and source=web only; activation/rewards stay disabled pending rules. No synthetic VK users or direct credit grants. Operational details: docs/runbooks/WEB_REFERRALS.md.",
+    "Google login/linking is disabled by default with ACCOUNT_OAUTH_GOOGLE_ENABLED=false and hidden in web UI; adapter code, credentials and bindings remain. Last-login protection counts configured usable methods, and profile/menu labels prefer the verified primary email.",
     "DEV manual model smoke is explicitly authorized by the user: priced candidates run with dev-smoke status; production admission and paid-agent-call authorization remain unchanged.",
     "Default context is intentionally small: AGENTS.md, .agents/state.json and docs/ARCHITECTURE.md.",
     "docs/HANDOFF_CURRENT.md is the only active handoff slot; completed handoffs live under docs/archive/handoffs/.",

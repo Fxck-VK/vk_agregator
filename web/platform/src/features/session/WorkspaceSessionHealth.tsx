@@ -1,6 +1,7 @@
 "use client";
 
-import { useLayoutEffect, useState, type ReactNode } from "react";
+import { useEffect, useLayoutEffect, useState, type ReactNode } from "react";
+import { acceptPendingInvitation } from "@/features/referrals/attribution";
 import { useRouter } from "@/i18n/navigation";
 import { accountChangedEvent, devAccessRequiredEvent, navigateToDevAccess, sessionRequiredEvent } from "@/lib/web-api/browser-session";
 import { beginBrowserSession, endBrowserSession } from "@/lib/web-api/browser-session-state";
@@ -10,6 +11,17 @@ export function WorkspaceSessionHealth({ accountId, verification, children, gues
   const router = useRouter();
   const [state, setState] = useState({ verification, denied: false });
   if (state.verification !== verification) setState({ verification, denied: false });
+  useEffect(() => {
+    const controller = new AbortController();
+    let retry: ReturnType<typeof setTimeout> | undefined;
+    let tries = 0;
+    const accept = async () => {
+      const accepted = await acceptPendingInvitation(controller.signal);
+      if (!accepted && !controller.signal.aborted && ++tries < 3) retry = setTimeout(() => void accept(), 3_000);
+    };
+    void accept();
+    return () => { controller.abort(); clearTimeout(retry); };
+  }, [accountId, verification]);
   useLayoutEffect(() => {
     beginBrowserSession(accountId);
     let navigating = false;

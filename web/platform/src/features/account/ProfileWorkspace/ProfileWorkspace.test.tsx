@@ -1,4 +1,4 @@
-import { cleanup, fireEvent, render, screen } from "@testing-library/react";
+import { cleanup, fireEvent, render, screen, within } from "@testing-library/react";
 import { afterEach, describe, expect, it } from "vitest";
 
 import { WorkspaceAccountProvider } from "@/features/account/WorkspaceAccount/WorkspaceAccount";
@@ -66,9 +66,41 @@ describe("ProfileWorkspace", () => {
       </WorkspaceAccountProvider>,
     );
 
-    expect(screen.getByText(ru.account.unavailableLabel)).toBeInTheDocument();
+    expect(screen.getByText("Мой профиль")).toBeInTheDocument();
     expect(screen.getByText(ru.profile.noVerifiedIdentity)).toBeInTheDocument();
     expect(screen.queryByText(ru.profile.verifiedIdentity)).not.toBeInTheDocument();
+  });
+
+  it("keeps the profile title on the primary verified email when Google is linked first", () => {
+    render(
+      <WorkspaceAccountProvider
+        snapshot={{
+          balance: 104,
+          profile: {
+            ...profile,
+            identity_refs: [
+              {
+                ...profile.identity_refs[0],
+                id: "d7c979f5-24e5-4f88-924b-a592d6e5a907",
+                provider: "google",
+                label: "google-member@example.com",
+              },
+              {
+                ...profile.identity_refs[0],
+                email_role: "primary",
+                label: "primary@example.com",
+              },
+            ],
+          },
+        }}
+      >
+        <ProfileWorkspace />
+      </WorkspaceAccountProvider>,
+    );
+
+    const identityCard = screen.getByLabelText(ru.profile.identityCardLabel);
+    expect(within(identityCard).getByText("primary@example.com")).toBeInTheDocument();
+    expect(within(identityCard).queryByText("google-member@example.com")).not.toBeInTheDocument();
   });
 
   it("replaces the general panel with the referral panel content", () => {

@@ -2,6 +2,8 @@
 
 Local platform UI without backend/deploy: [local development scenarios](../web/platform/docs/local-development.md).
 
+Website invitation flow and deferred reward rules: [web referrals](../docs/runbooks/WEB_REFERRALS.md).
+
 This file is the canonical map for repository documentation. It tells agents
 which documents are active, which are task-scoped, and which are historical.
 

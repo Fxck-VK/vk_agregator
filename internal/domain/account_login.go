@@ -38,3 +38,40 @@ type VerifiedAccountLogin struct {
 	ExternalID string
 	Verified   bool
 }
+
+// UsableLoginProviders names identity providers that can currently authenticate
+// an account. Stored but disabled bindings must not satisfy last-login guards.
+type UsableLoginProviders map[IdentityProvider]bool
+
+// AccountUsableLoginProviders returns the conservative default provider set for
+// tests and repositories constructed without runtime config. Production wiring
+// should pass a config-derived provider set.
+func AccountUsableLoginProviders(googleEnabled bool) UsableLoginProviders {
+	providers := UsableLoginProviders{
+		IdentityProviderEmail: true,
+	}
+	if googleEnabled {
+		providers[IdentityProviderGoogle] = true
+	}
+	return providers
+}
+
+// Has reports whether provider is an enabled login provider.
+func (p UsableLoginProviders) Has(provider IdentityProvider) bool {
+	if p == nil {
+		p = AccountUsableLoginProviders(false)
+	}
+	return p[NormalizeIdentityProvider(provider)]
+}
+
+// Clone returns a defensive copy for repository/service options.
+func (p UsableLoginProviders) Clone() UsableLoginProviders {
+	if p == nil {
+		p = AccountUsableLoginProviders(false)
+	}
+	out := make(UsableLoginProviders, len(p))
+	for provider, enabled := range p {
+		out[NormalizeIdentityProvider(provider)] = enabled
+	}
+	return out
+}

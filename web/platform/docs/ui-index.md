@@ -14,6 +14,7 @@
 | Запрос / задача | Готовое решение | Читать точечно |
 | --- | --- | --- |
 | Вход, регистрация, восстановление, основная и одна резервная почта, замена и сессии | `LoginForm`, `EmailRegistration`, общий `completeSignIn` с проверкой cookie-сессии и новым документом; `CredentialField`, `AccountSecurity`, `InputSurface`, `Button`, `AsyncState` и серверная доступность способов | [Аккаунт](ui-catalog.md#browser-account) |
+| Приглашения на сайт и статистика аккаунта | `ProfileReferralProgram`, `InviteEntry`: общий `Button`/`StateNotice`, реальные данные `/web/v1/referrals`; бонусы пока выключены | [Контракт приглашений](../../../docs/runbooks/WEB_REFERRALS.md) |
 | Фирменная страница 404 с рабочим меню | `NotFoundContent` внутри WorkspaceFrame / GuestWorkspaceFrame; общий Button outline и языковой Link | [404](ui-catalog.md#not-found), [дизайн и проверка](not-found-page-plan.md) |
 | Всплывающее окно у кнопки, открыть под/над | `PopoverPanel` | [Панели](ui-catalog.md#panels), [пример 1](ui-catalog-examples.md#example-1) |
 | То же оформление окна; позиционирование уже есть | `PopoverSurface` | [Панели](ui-catalog.md#panels) |

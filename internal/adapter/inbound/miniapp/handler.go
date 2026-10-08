@@ -1674,9 +1674,10 @@ func (h *Handler) acceptReferral(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	result, err := h.deps.Referrals.Apply(r.Context(), referralservice.ApplyInput{
-		Code:           code,
-		ReferredUserID: user.ID,
-		Source:         domain.ReferralSourceVKMiniApp,
+		Code:              code,
+		ReferredUserID:    user.ID,
+		ReferredAccountID: user.EffectiveAccountID(),
+		Source:            domain.ReferralSourceVKMiniApp,
 	})
 	if err != nil {
 		writeError(w, http.StatusInternalServerError, "internal error")
@@ -1684,8 +1685,9 @@ func (h *Handler) acceptReferral(w http.ResponseWriter, r *http.Request) {
 	}
 	if !result.InvalidCode && !result.SelfReferral {
 		if _, err := h.deps.Referrals.Activate(r.Context(), referralservice.ActivateInput{
-			ReferredUserID: user.ID,
-			Source:         domain.ReferralSourceVKMiniApp,
+			ReferredUserID:    user.ID,
+			ReferredAccountID: user.EffectiveAccountID(),
+			Source:            domain.ReferralSourceVKMiniApp,
 		}); err != nil {
 			writeError(w, http.StatusInternalServerError, "internal error")
 			return

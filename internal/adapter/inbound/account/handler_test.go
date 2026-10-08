@@ -951,7 +951,11 @@ func newTestHandler(t *testing.T) (*Handler, testServices) {
 func newTestHandlerWithEmailConfig(t *testing.T, emailCfg accountlink.Config) (*Handler, testServices) {
 	t.Helper()
 	users := memory.NewUserRepo()
-	identities := memory.NewAccountIdentityRepo()
+	// This fixture explicitly provides VK authentication through its resolver.
+	identities := memory.NewAccountIdentityRepo(memory.WithUsableLoginProviders(domain.UsableLoginProviders{
+		domain.IdentityProviderEmail: true,
+		domain.IdentityProviderVK:    true,
+	}))
 	security := memory.NewAccountSecurityRepo()
 	resolver := identityresolver.New(users, identities, nil)
 	auth := accountauth.New(resolver,

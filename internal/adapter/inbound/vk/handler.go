@@ -874,12 +874,12 @@ func (h *Handler) process(ctx context.Context, cb callback, rawBody []byte, even
 	}
 
 	if code := h.referralCodeFromEvent(ref, parsed); code != "" {
-		if err := h.applyReferralCode(ctx, user.ID, code); err != nil {
+		if err := h.applyReferralCode(ctx, user.ID, user.EffectiveAccountID(), code); err != nil {
 			return fmt.Errorf("apply referral code: %w", err)
 		}
 	}
 	if activateReferral {
-		if err := h.activateReferral(ctx, user.ID); err != nil {
+		if err := h.activateReferral(ctx, user.ID, user.EffectiveAccountID()); err != nil {
 			return fmt.Errorf("activate referral: %w", err)
 		}
 	}
@@ -2649,14 +2649,15 @@ func referralCodeFromRaw(raw string) string {
 	return referralservice.NormalizeCode(fields[0])
 }
 
-func (h *Handler) applyReferralCode(ctx context.Context, userID uuid.UUID, code string) error {
+func (h *Handler) applyReferralCode(ctx context.Context, userID, accountID uuid.UUID, code string) error {
 	if h.deps.Referrals == nil {
 		return nil
 	}
 	result, err := h.deps.Referrals.Apply(ctx, referralservice.ApplyInput{
-		Code:           code,
-		ReferredUserID: userID,
-		Source:         domain.ReferralSourceVKBot,
+		Code:              code,
+		ReferredUserID:    userID,
+		ReferredAccountID: accountID,
+		Source:            domain.ReferralSourceVKBot,
 	})
 	if err != nil {
 		return err
@@ -2667,13 +2668,14 @@ func (h *Handler) applyReferralCode(ctx context.Context, userID uuid.UUID, code 
 	return nil
 }
 
-func (h *Handler) activateReferral(ctx context.Context, userID uuid.UUID) error {
+func (h *Handler) activateReferral(ctx context.Context, userID, accountID uuid.UUID) error {
 	if h.deps.Referrals == nil {
 		return nil
 	}
 	result, err := h.deps.Referrals.Activate(ctx, referralservice.ActivateInput{
-		ReferredUserID: userID,
-		Source:         domain.ReferralSourceVKBot,
+		ReferredUserID:    userID,
+		ReferredAccountID: accountID,
+		Source:            domain.ReferralSourceVKBot,
 	})
 	if err != nil {
 		return err

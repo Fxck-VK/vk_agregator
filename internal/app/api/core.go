@@ -4,6 +4,8 @@ package api
 import (
 	"context"
 	"errors"
+	"net/url"
+	"strings"
 
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgxpool"
@@ -96,7 +98,8 @@ func NewSharedCore(pool *pgxpool.Pool, cfg config.Config, opts ...SharedCoreOpti
 		return SharedCore{}, errors.New("api core: pricing catalog is required")
 	}
 	users := postgres.NewUserRepository(pool)
-	identities := postgres.NewAccountIdentityRepository(pool)
+	usableLoginProviders := usableLoginProvidersFromConfig(cfg)
+	identities := postgres.NewAccountIdentityRepository(pool, postgres.WithUsableLoginProviders(usableLoginProviders))
 	sessions := postgres.NewAccountSessionRepository(pool)
 	accountSecurity := postgres.NewAccountSecurityRepository(pool)
 	jobs := postgres.NewJobRepository(pool)
@@ -112,6 +115,7 @@ func NewSharedCore(pool *pgxpool.Pool, cfg config.Config, opts ...SharedCoreOpti
 		accountauth.WithCredentialRepository(accountSecurity),
 		accountauth.WithRegistrationRepository(identities),
 		accountauth.WithAccountAuditRepository(accountSecurity),
+		accountauth.WithLoginMethodEnabled(domain.AccountLoginGoogle, cfg.AccountOAuthGoogleEnabled),
 	}, options.accountAuthOptions...)
 	accountAuth := accountauth.New(identity, accountAuthOptions...)
 	accountSvc := accountservice.New(identities, accountAuth)
@@ -167,4 +171,54 @@ func NewSharedCore(pool *pgxpool.Pool, cfg config.Config, opts ...SharedCoreOpti
 		UnitOfWork:     unitOfWork,
 		PricingCatalog: options.pricingCatalog,
 	}, nil
+}
+
+func usableLoginProvidersFromConfig(cfg config.Config) domain.UsableLoginProviders {
+	providers := domain.UsableLoginProviders{
+		domain.IdentityProviderEmail: true,
+	}
+	browserOAuthAvailable := validBrowserOAuthOrigin(cfg.WebOrigin)
+	if browserOAuthAvailable &&
+		cfg.AccountOAuthGoogleEnabled &&
+		firstConfiguredOAuthClientID(cfg.AccountOAuthGoogleClientIDs) != "" &&
+		strings.TrimSpace(cfg.AccountWebOAuthGoogleClientSecret) != "" {
+		providers[domain.IdentityProviderGoogle] = true
+	}
+	if browserOAuthAvailable &&
+		firstConfiguredOAuthClientID(cfg.AccountOAuthAppleClientIDs) != "" &&
+		strings.TrimSpace(cfg.AccountWebOAuthAppleClientSecret) != "" {
+		providers[domain.IdentityProviderApple] = true
+	}
+	if strings.TrimSpace(cfg.AccountOAuthTelegramBotToken) != "" ||
+		(browserOAuthAvailable &&
+			firstConfiguredOAuthClientID(cfg.AccountOAuthTelegramClientIDs) != "" &&
+			strings.TrimSpace(cfg.AccountWebOAuthTelegramClientSecret) != "") {
+		providers[domain.IdentityProviderTelegram] = true
+	}
+	if strings.TrimSpace(cfg.VKAppSecret) != "" ||
+		strings.TrimSpace(cfg.VKSecret) != "" ||
+		(browserOAuthAvailable && firstConfiguredOAuthClientID(cfg.AccountOAuthVKIDClientIDs) != "") {
+		providers[domain.IdentityProviderVK] = true
+	}
+	return providers
+}
+
+func firstConfiguredOAuthClientID(ids []string) string {
+	for _, id := range ids {
+		if trimmed := strings.TrimSpace(id); trimmed != "" {
+			return trimmed
+		}
+	}
+	return ""
+}
+
+func validBrowserOAuthOrigin(raw string) bool {
+	origin, err := url.Parse(strings.TrimSpace(raw))
+	return err == nil &&
+		origin.Scheme == "https" &&
+		origin.Host != "" &&
+		origin.User == nil &&
+		(origin.Path == "" || origin.Path == "/") &&
+		origin.RawQuery == "" &&
+		origin.Fragment == ""
 }

@@ -136,5 +136,6 @@ func (h *Handler) browserOAuthCallback(w http.ResponseWriter, r *http.Request) {
 		failure(tx.Locale, tx.Intent)
 		return
 	}
+	_ = h.acceptPendingReferral(w, r, resolution.AccountID)
 	http.Redirect(w, r, "/"+tx.Locale+"/app", 303)
 }

@@ -40,6 +40,7 @@ type BrowserStore interface {
 
 type BrowserConfig struct {
 	WebOrigin                              string
+	GoogleEnabled                          bool
 	GoogleClientID, GoogleClientSecret     string
 	AppleClientID, AppleClientSecret       string
 	TelegramClientID, TelegramClientSecret string
@@ -81,6 +82,9 @@ func (b *Browser) provider(name string) (browserProvider, bool) {
 	var p browserProvider
 	switch name {
 	case "google":
+		if !b.cfg.GoogleEnabled {
+			return p, false
+		}
 		p = browserProvider{b.cfg.GoogleClientID, b.cfg.GoogleClientSecret, "https://accounts.google.com/o/oauth2/v2/auth", "https://oauth2.googleapis.com/token", "openid", true, false}
 	case "apple":
 		p = browserProvider{b.cfg.AppleClientID, b.cfg.AppleClientSecret, "https://appleid.apple.com/auth/authorize", "https://appleid.apple.com/auth/token", "", false, false}

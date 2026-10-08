@@ -11,7 +11,8 @@ import (
 
 func TestRegistryFromConfigRegistersProvidersFailClosed(t *testing.T) {
 	registry := NewRegistryFromConfig(Config{
-		Clock: func() time.Time { return time.Unix(1_700_000_000, 0) },
+		GoogleEnabled: true,
+		Clock:         func() time.Time { return time.Unix(1_700_000_000, 0) },
 	})
 
 	tests := []struct {
@@ -66,6 +67,19 @@ func TestRegistryFromConfigRegistersProvidersFailClosed(t *testing.T) {
 				t.Fatalf("error = %v, want ErrUnavailable", err)
 			}
 		})
+	}
+}
+
+func TestRegistryFromConfigDisablesGoogleByDefault(t *testing.T) {
+	registry := NewRegistryFromConfig(Config{
+		GoogleClientIDs: []string{"browser-client"},
+	})
+
+	if _, err := registry.Verify(context.Background(), VerifyRequest{
+		Provider: domain.IdentityProviderGoogle,
+		IDToken:  "signed-google-token",
+	}); !errors.Is(err, ErrUnsupportedProvider) {
+		t.Fatalf("error = %v, want ErrUnsupportedProvider", err)
 	}
 }
 

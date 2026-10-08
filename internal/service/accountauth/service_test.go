@@ -179,6 +179,30 @@ func TestLinkUnlinkAuditAndSafeRef(t *testing.T) {
 	}
 }
 
+func TestGoogleLoginMethodCanBeDisabled(t *testing.T) {
+	ctx := context.Background()
+	identities := memory.NewAccountIdentityRepo()
+	resolver := identityresolver.New(memory.NewUserRepo(), identities, nil)
+	service := accountauth.New(resolver, accountauth.WithLoginMethodEnabled(domain.AccountLoginGoogle, false))
+
+	login := domain.VerifiedAccountLogin{
+		Method:     domain.AccountLoginGoogle,
+		ExternalID: "google-subject",
+		Verified:   true,
+	}
+	if _, err := service.ResolveOrCreate(ctx, login); !errors.Is(err, accountauth.ErrLoginMethodDisabled) {
+		t.Fatalf("ResolveOrCreate error = %v, want ErrLoginMethodDisabled", err)
+	}
+
+	account, err := service.ResolveVerifiedEmailPassword(ctx, "owner@example.test")
+	if err != nil {
+		t.Fatalf("resolve email account: %v", err)
+	}
+	if _, err := service.LinkVerifiedIdentity(ctx, account.AccountID, account.AccountID, login); !errors.Is(err, accountauth.ErrLoginMethodDisabled) {
+		t.Fatalf("LinkVerifiedIdentity error = %v, want ErrLoginMethodDisabled", err)
+	}
+}
+
 func TestLinkIdentityRequiresSameActorAndVerifiedTarget(t *testing.T) {
 	ctx := context.Background()
 	resolver := identityresolver.New(memory.NewUserRepo(), memory.NewAccountIdentityRepo(), nil)

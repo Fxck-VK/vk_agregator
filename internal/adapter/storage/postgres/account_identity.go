@@ -14,12 +14,27 @@ import (
 // AccountIdentityRepository is the PostgreSQL implementation of
 // domain.AccountIdentityRepository.
 type AccountIdentityRepository struct {
-	db Querier
+	db                   Querier
+	usableLoginProviders domain.UsableLoginProviders
+}
+
+type AccountIdentityRepositoryOption func(*AccountIdentityRepository)
+
+func WithUsableLoginProviders(providers domain.UsableLoginProviders) AccountIdentityRepositoryOption {
+	return func(r *AccountIdentityRepository) {
+		r.usableLoginProviders = providers.Clone()
+	}
 }
 
 // NewAccountIdentityRepository builds an AccountIdentityRepository over db.
-func NewAccountIdentityRepository(db Querier) *AccountIdentityRepository {
-	return &AccountIdentityRepository{db: db}
+func NewAccountIdentityRepository(db Querier, opts ...AccountIdentityRepositoryOption) *AccountIdentityRepository {
+	repo := &AccountIdentityRepository{db: db, usableLoginProviders: domain.AccountUsableLoginProviders(false)}
+	for _, opt := range opts {
+		if opt != nil {
+			opt(repo)
+		}
+	}
+	return repo
 }
 
 var _ domain.AccountIdentityRepository = (*AccountIdentityRepository)(nil)
@@ -268,6 +283,7 @@ func (r *AccountIdentityRepository) UnlinkIdentity(ctx context.Context, accountI
 	if err := scanAccountIdentity(tx.QueryRow(ctx, "SELECT "+accountIdentityColumns+" FROM account_identities WHERE account_id=$1 AND id=$2", accountID, identityID), &target); err != nil {
 		return mapError(err)
 	}
+	usableProviders := r.usableLoginProviderCodes()
 	const q = `
 		WITH target AS (
 			SELECT id, account_id, provider
@@ -278,12 +294,12 @@ func (r *AccountIdentityRepository) UnlinkIdentity(ctx context.Context, accountI
 			SELECT
 				(SELECT count(*) FROM target) AS target_count,
 				(SELECT count(*) FROM account_identities WHERE account_id = $1) AS account_count,
-				(SELECT count(*) FROM account_identities WHERE account_id = $1 AND id <> $2 AND provider <> 'phone' AND verified_at IS NOT NULL) AS remaining_login
+				(SELECT count(*) FROM account_identities WHERE account_id = $1 AND id <> $2 AND provider = ANY($4::text[]) AND verified_at IS NOT NULL) AS remaining_login
 		),
 		guarded AS (
 			SELECT target.*
 			FROM target, stats
-			WHERE stats.account_count > 1 AND (target.provider = 'phone' OR stats.remaining_login > 0)
+			WHERE stats.account_count > 1 AND (target.provider <> ALL($4::text[]) OR stats.remaining_login > 0)
 		),
 		audit AS (
 			INSERT INTO account_links_audit (id, account_id, actor_account_id, action, provider, identity_id, created_at)
@@ -301,12 +317,12 @@ func (r *AccountIdentityRepository) UnlinkIdentity(ctx context.Context, accountI
 			(SELECT 'deleted' FROM deleted LIMIT 1),
 			CASE
 				WHEN (SELECT target_count FROM stats) = 0 THEN 'not_found'
-				WHEN (SELECT account_count FROM stats) <= 1 OR (SELECT remaining_login FROM stats) = 0 THEN 'last_identity'
+				WHEN (SELECT account_count FROM stats) <= 1 OR ((SELECT provider FROM target LIMIT 1) = ANY($4::text[]) AND (SELECT remaining_login FROM stats) = 0) THEN 'last_identity'
 				ELSE 'not_found'
 			END
 		)`
 	var status string
-	if err := tx.QueryRow(ctx, q, accountID, identityID, uuid.New()).Scan(&status); err != nil {
+	if err := tx.QueryRow(ctx, q, accountID, identityID, uuid.New(), usableProviders).Scan(&status); err != nil {
 		return mapError(err)
 	}
 	switch status {
@@ -322,6 +338,17 @@ func (r *AccountIdentityRepository) UnlinkIdentity(ctx context.Context, accountI
 	default:
 		return domain.ErrNotFound
 	}
+}
+
+func (r *AccountIdentityRepository) usableLoginProviderCodes() []string {
+	providers := r.usableLoginProviders.Clone()
+	out := make([]string, 0, len(providers))
+	for provider, enabled := range providers {
+		if enabled {
+			out = append(out, string(domain.NormalizeIdentityProvider(provider)))
+		}
+	}
+	return out
 }
 
 func scanAccountIdentity(row rowScanner, identity *domain.AccountIdentity) error {
