@@ -38,6 +38,7 @@ import {
   type ConversationMessage,
 } from "@/lib/web-api/contracts";
 import { webBrowserFetch, webBrowserMutation } from "@/lib/web-api/browser";
+import { startGenerationPolling } from "@/lib/generation-polling";
 
 import type { GenerationOptions } from "@/features/models/generation-options";
 
@@ -333,65 +334,41 @@ function ConversationHistoryReady({
       return;
     }
 
-    let active = true;
     const maxAttempts = pollRequest.media ? 450 : conversationRefreshMaxAttempts;
     const deadlineMs = pollRequest.media ? 900_000 : conversationRefreshDeadlineMs;
-    let attempts = 0;
     let afterSeq = pollRequest.baselineSeq;
-    let nextPollTimer: ReturnType<typeof setTimeout> | undefined;
-    let activeRequest: AbortController | undefined;
-
-    const stop = (clearActiveRefresh = true) => {
-      if (!active) {
-        return;
-      }
-      active = false;
-      if (nextPollTimer !== undefined) {
-        clearTimeout(nextPollTimer);
-      }
-      clearTimeout(deadlineTimer);
-      activeRequest?.abort();
-      if (clearActiveRefresh) {
-        setActiveRefreshID((currentID) => currentID === pollRequest.id ? null : currentID);
-      }
-    };
-
-    const poll = async () => {
-      if (!active || attempts >= maxAttempts) {
-        stop();
-        return;
-      }
-
-      attempts += 1;
+    const clearActiveRefresh = () => setActiveRefreshID((currentID) => currentID === pollRequest.id ? null : currentID);
+    const polling = startGenerationPolling({
+      delayMs: conversationRefreshIntervalMs, maxAttempts, timeoutMs: deadlineMs,
+      onExhausted: clearActiveRefresh,
+      poll: async (signal) => {
       const requestCursor = afterSeq;
-      const request = new AbortController();
-      activeRequest = request;
       let assistantObserved = false;
       try {
         if (pollRequest.jobID) {
-          const statusResponse = await webBrowserFetch(`/web/v1/conversations/${history.conversationId}/jobs/${pollRequest.jobID}`, {signal:request.signal});
+          const statusResponse = await webBrowserFetch(`/web/v1/conversations/${history.conversationId}/jobs/${pollRequest.jobID}`, { signal });
+          if (signal.aborted) return false;
           if (statusResponse.status === 200) {
             const job = parseWebChatJob(await statusResponse.json());
+            if (signal.aborted) return false;
             if (["failed_terminal","cancelled","expired","refunded","rejected","awaiting_payment"].includes(job.status)) {
               clearPendingMediaJob(history.conversationId);
               setRefreshDelayed(true);
               setPendingTurn(null);
-              stop();
-              return;
+              clearActiveRefresh();
+              return false;
             }
           }
         }
         const response = await webBrowserFetch(
           `/web/v1/conversations/${history.conversationId}/messages?after_seq=${requestCursor}&limit=${conversationHistoryPageLimit}` as `/web/v1/${string}`,
-          { signal: request.signal },
+          { signal },
         );
         if (response.status !== 200) {
           throw new Error("Unable to refresh conversation history.");
         }
         const page = parseConversationMessageList(await response.json());
-        if (!active) {
-          return;
-        }
+        if (signal.aborted) return false;
 
         const newerMessages = page.items
           .filter((message) => message.seq > requestCursor)
@@ -421,31 +398,16 @@ function ConversationHistoryReady({
         if (assistantObserved) {
           clearPendingMediaJob(history.conversationId);
           setRefreshDelayed(false);
-          stop();
+          clearActiveRefresh();
         }
       } catch {
-        if (active) {
+        if (!signal.aborted && navigator.onLine !== false) {
           setRefreshDelayed(true);
         }
-      } finally {
-        if (activeRequest === request) {
-          activeRequest = undefined;
-        }
-        if (!active) {
-          return;
-        }
-        if (attempts >= maxAttempts) {
-          stop();
-          return;
-        }
-        nextPollTimer = setTimeout(() => void poll(), conversationRefreshIntervalMs);
       }
-    };
-
-    const deadlineTimer = setTimeout(stop, deadlineMs);
-    void poll();
-
-    return () => stop(false);
+      return !assistantObserved;
+    } });
+    return polling.stop;
   }, [history.conversationId, pollRequest]);
 
   const pendingTurnIsActive = pendingTurn?.id === activeRefreshID && pendingTurn.status !== "failed";

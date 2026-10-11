@@ -4,6 +4,7 @@ import { useDictionary } from "@/i18n/LocaleProvider";
 
 import type { Dictionary } from "@/i18n/dictionary";
 import { InspirationGallery } from "@/features/inspiration/InspirationGallery/InspirationGallery";
+import { useRevalidateWorkspaceConversationList } from "@/features/conversations/WorkspaceConversationList/WorkspaceConversationList";
 
 import { WorkspaceLanding } from "../WorkspaceLanding/WorkspaceLanding";
 import { WorkspacePrompt } from "../WorkspacePrompt/WorkspacePrompt";
@@ -21,6 +22,7 @@ type WorkspaceHomeProps = {
 
 export function WorkspaceHome({ access = "authenticated", section = "home", chatModelId }: WorkspaceHomeProps) {
   const t = useDictionary();
+  useRevalidateWorkspaceConversationList(access === "authenticated" && section === "chats");
   const content = t.workspace.sections[section];
 
   if (section === "inspiration") {

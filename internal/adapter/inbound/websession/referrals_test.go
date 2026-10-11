@@ -2,6 +2,7 @@ package websession
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"github.com/google/uuid"
 	"net/http"
@@ -41,6 +42,10 @@ type referralStub struct {
 func (s *referralStub) Summary(_ context.Context, id uuid.UUID) (webreferralservice.Summary, error) {
 	s.accountID = id
 	return webreferralservice.Summary{Code: "INVITE1234", Visits: 7, Registered: 2}, nil
+}
+func (s *referralStub) Statistics(_ context.Context, id uuid.UUID) (webreferralservice.Statistics, error) {
+	s.accountID = id
+	return webreferralservice.Statistics{Visits: 7, Registered: 2}, nil
 }
 func (s *referralStub) Capture(_ context.Context, code, hash string, _ time.Time) error {
 	s.code, s.hash = code, hash
@@ -206,6 +211,54 @@ func TestReferralSummaryRequiresCookieSession(t *testing.T) {
 	h.Routes().ServeHTTP(rec, req)
 	if rec.Code != http.StatusUnauthorized {
 		t.Fatalf("status=%d, want401", rec.Code)
+	}
+}
+
+func TestReferralStatisticsUsesCookiePrincipalAndOmitsCode(t *testing.T) {
+	h, _, sessions := newTestHandler(t)
+	svc := &referralStub{}
+	h.deps.Referrals = svc
+	id := uuid.New()
+	tokens, err := sessions.IssueSession(context.Background(), id, accountauth.SessionMetadata{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	cookies := httptest.NewRecorder()
+	if err := h.setSessionCookies(cookies, tokens); err != nil {
+		t.Fatal(err)
+	}
+	for _, authenticated := range []bool{false, true} {
+		req := httptest.NewRequest(http.MethodGet, "/web/v1/referrals/stats?account_id="+uuid.NewString(), nil)
+		req.Header.Set("X-Account-ID", uuid.NewString())
+		if authenticated {
+			for _, cookie := range cookies.Result().Cookies() {
+				req.AddCookie(cookie)
+			}
+		}
+		rec := httptest.NewRecorder()
+		h.Routes().ServeHTTP(rec, req)
+		if !authenticated {
+			if rec.Code != http.StatusUnauthorized {
+				t.Fatalf("anonymous status=%d, want401", rec.Code)
+			}
+			continue
+		}
+		if rec.Code != http.StatusOK || svc.accountID != id {
+			t.Fatalf("status=%d or incorrect account", rec.Code)
+		}
+		if rec.Header().Get("Cache-Control") != "no-store" {
+			t.Fatal("statistics must not be cached")
+		}
+		var body map[string]any
+		if err := json.Unmarshal(rec.Body.Bytes(), &body); err != nil {
+			t.Fatal(err)
+		}
+		if _, ok := body["code"]; ok {
+			t.Fatal("statistics response must omit the code")
+		}
+		if body["visits"] != float64(7) || body["registered"] != float64(2) || body["rewards_enabled"] != false {
+			t.Fatalf("unexpected statistics: %v", body)
+		}
 	}
 }
 

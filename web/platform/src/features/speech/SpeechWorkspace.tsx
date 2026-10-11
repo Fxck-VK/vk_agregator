@@ -9,6 +9,7 @@ import { loadModelCatalog } from "@/features/models/model-catalog-cache";
 import type { PublicCatalogModel } from "@/features/models/model-catalog-contract";
 import { uploadMusicInput } from "@/features/music/music-api";
 import { useMessages } from "@/i18n/LocaleProvider";
+import { startGenerationPolling } from "@/lib/generation-polling";
 import { LocalizedError, renderMessage, type MessageReference } from "@/i18n/errors";
 import { activateSpeech, loadSpeechJob, loadSpeechResult, prepareSpeech, type SpeechArtifact, type SpeechPreparation, type SpeechRequest } from "./speech-api";
 import styles from "./SpeechWorkspace.module.css";
@@ -44,25 +45,22 @@ export function SpeechWorkspace() {
 
   useEffect(() => {
     if (jobId === null) return;
-    let cancelled = false;
-    let timer: ReturnType<typeof setTimeout>;
-    const poll = async () => {
+    const polling = startGenerationPolling({ delayMs: 2500, poll: async (signal) => {
       try {
-        const job = await loadSpeechJob(jobId);
-        if (cancelled) return;
+        const job = await loadSpeechJob(jobId, signal);
+        if (signal.aborted) return false;
         if (job.status === "succeeded") {
-          const artifacts = await loadSpeechResult(jobId);
-          if (!cancelled) { setResults(artifacts); setJobId(null); }
-          return;
+          const artifacts = await loadSpeechResult(jobId, signal);
+          if (!signal.aborted) { setResults(artifacts); setJobId(null); }
+          return false;
         }
         if (["failed_terminal", "cancelled", "expired", "refunded", "rejected"].includes(job.status)) {
-          setError({ key: "speech.terminalError" }); setJobId(null); return;
+          setError({ key: "speech.terminalError" }); setJobId(null); return false;
         }
-      } catch { if (!cancelled) setError({ key: "speech.pollError" }); }
-      if (!cancelled) timer = setTimeout(poll, 2500);
-    };
-    void poll();
-    return () => { cancelled = true; clearTimeout(timer); };
+      } catch { if (!signal.aborted && navigator.onLine !== false) setError({ key: "speech.pollError" }); }
+      return true;
+    } });
+    return polling.stop;
   }, [jobId]);
 
   const change = (action: () => void) => { setPrepared(null); pending.current = null; setError(null); action(); };

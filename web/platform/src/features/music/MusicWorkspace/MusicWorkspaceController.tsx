@@ -4,9 +4,12 @@ import { useCallback, useEffect, useMemo, useRef, useState, type ChangeEvent } f
 
 import { renderMessage, type MessageReference } from "@/i18n/errors";
 import { useMessages } from "@/i18n/LocaleProvider";
+import { startGenerationPolling } from "@/lib/generation-polling";
+import { useOptionalWorkspaceDataCache } from "@/features/workspace/WorkspaceDataCache/WorkspaceDataCache";
 import type { Translator } from "@/i18n/messages";
 
 import { loadMusicModelCatalog, localizeMusicModelCatalog, type MusicModelCatalog } from "../music-model-catalog";
+import { createMusicResultCache, createMusicResultReader } from "../music-result-cache";
 import {
   buildMusicPrepareBody,
   musicApi,
@@ -106,6 +109,19 @@ export function MusicWorkspaceController({
   uuidFactory = () => crypto.randomUUID(),
 }: Readonly<MusicWorkspaceControllerProps>) {
   const msg = useMessages();
+  const workspaceCache = useOptionalWorkspaceDataCache();
+  const [resultCache] = useState(() => workspaceCache?.musicResults ?? createMusicResultCache());
+  const [cachedResults] = useState(() => resultCache.getAll());
+  const activeReads = useRef<{ controller: AbortController; result: ReturnType<typeof createMusicResultReader> } | null>(null);
+  useEffect(() => {
+    const controller = new AbortController();
+    const reads = { controller, result: createMusicResultReader(resultCache, (id, signal) => api.loadMusicJobResult(id, signal), controller.signal) };
+    activeReads.current = reads;
+    return () => {
+      controller.abort();
+      if (activeReads.current === reads) activeReads.current = null;
+    };
+  }, [api, resultCache]);
   const [catalog, setCatalog] = useState<MusicModelCatalog>({ defaultModelId: "suno_v6", models: [] });
   const [modelsStatus, setModelsStatus] = useState<MusicWorkspaceState["modelsStatus"]>("loading");
   const [modelsMessage, setModelsMessage] = useState<string | null>(null);
@@ -114,8 +130,11 @@ export function MusicWorkspaceController({
   const [mode, setMode] = useState<MusicCreationMode>("description");
   const [draft, setDraft] = useState<MusicWorkspaceDraft>(defaultDraft);
   const [selectedTrackIds, setSelectedTrackIds] = useState<readonly string[]>([]);
-  const [tracks, setTracks] = useState<readonly MusicTrack[]>([]);
-  const [results, setResults] = useState<readonly MusicResultSummary[]>([]);
+  const [tracks, setTracks] = useState<readonly MusicTrack[]>(() => cachedResults.flatMap(musicTracksFromResult));
+  const [results, setResults] = useState<readonly MusicResultSummary[]>(() => cachedResults.flatMap(result => {
+    const summary = musicSummaryFromResult(result);
+    return summary ? [summary] : [];
+  }));
   const [prepareIntent, setPrepareIntent] = useState<PrepareIntent | null>(null);
   const [preparedJob, setPreparedJob] = useState<PreparedMusicJob | null>(null);
   const [confirmationState, setConfirmationState] = useState<ControllerConfirmation | null>(null);
@@ -171,15 +190,20 @@ export function MusicWorkspaceController({
   const uploadsEnabled = operations.some((operation) => operation.enabled && operation.supportsUploads === true);
 
   const loadHistoryPage = useCallback(async (cursor: string | null, placement: "append" | "refresh") => {
+    const reads = activeReads.current;
+    if (!reads) return;
+    const signal = reads.controller.signal;
     setHistoryLoading(true);
     try {
-      const history = await api.loadMusicJobs(8, cursor ?? undefined);
+      const history = await api.loadMusicJobs(8, cursor ?? undefined, signal);
+      if (signal.aborted) return;
       setHistoryCursor(history.next_cursor);
       setHistoryHasMore(history.has_more);
       const inProgressJob = history.items.find((job) => isPollableStatus(job.status));
       setPollingJobId((current) => current ?? inProgressJob?.id ?? null);
       const resultJobs = history.items.filter((job) => canLoadResult(job.status));
-      const resultLoads = await Promise.allSettled(resultJobs.map((job) => api.loadMusicJobResult(job.id)));
+      const resultLoads = await Promise.allSettled(resultJobs.map(job => reads.result(job)));
+      if (signal.aborted) return;
       const loadedResults = fulfilledMusicResults(resultLoads);
       const nextTracks = loadedResults.flatMap((result) => musicTracksFromResult(result));
       const nextSummaries = loadedResults.flatMap((result) => {
@@ -193,9 +217,9 @@ export function MusicWorkspaceController({
         ? uniqueResults([...current, ...nextSummaries])
         : uniqueResults([...nextSummaries, ...current]));
     } catch {
-      setTracks((current) => current);
+      // Keep loaded tracks and selections available during a failed refresh.
     } finally {
-      setHistoryLoading(false);
+      if (!signal.aborted) setHistoryLoading(false);
     }
   }, [api]);
 
@@ -212,16 +236,16 @@ export function MusicWorkspaceController({
 
   useEffect(() => {
     if (pollingJobId === null) return undefined;
-    let cancelled = false;
-    let timer: number | undefined;
-
-    const poll = async () => {
+    const reads = activeReads.current;
+    if (!reads) return undefined;
+    const polling = startGenerationPolling({ delayMs: pollIntervalMs, initialDelayMs: 0, poll: async (pollSignal) => {
+      const signal = AbortSignal.any([reads.controller.signal, pollSignal]);
       try {
-        const job = await api.loadMusicJob(pollingJobId);
-        if (cancelled) return;
+        const job = await api.loadMusicJob(pollingJobId, signal);
+        if (signal.aborted) return false;
         if (canLoadResult(job.status)) {
-          const result = await api.loadMusicJobResult(job.id);
-          if (cancelled) return;
+          const result = await reads.result(job, signal);
+          if (signal.aborted) return false;
           setTracks((current) => uniqueTracks([...musicTracksFromResult(result), ...current]));
           setResults((current) => {
             const summary = musicSummaryFromResult(result);
@@ -229,27 +253,23 @@ export function MusicWorkspaceController({
           });
           setPollingJobId(null);
           await refreshTracks();
-          return;
+          return false;
         }
         if (isTerminalFailure(job.status)) {
           setErrorMessage({ key: "music.error.noResult" });
           setPollingJobId(null);
-          return;
+          return false;
         }
-        timer = window.setTimeout(poll, pollIntervalMs);
+        return true;
       } catch {
-        if (!cancelled) {
+        if (!signal.aborted && navigator.onLine !== false) {
           setErrorMessage({ key: "music.error.poll" });
           setPollingJobId(null);
         }
+        return navigator.onLine === false;
       }
-    };
-
-    timer = window.setTimeout(poll, 0);
-    return () => {
-      cancelled = true;
-      if (timer !== undefined) window.clearTimeout(timer);
-    };
+    } });
+    return polling.stop;
   }, [api, pollingJobId, pollIntervalMs, refreshTracks]);
 
   const selectModel = useCallback((modelId: MusicModelID) => {
@@ -305,6 +325,9 @@ export function MusicWorkspaceController({
   const confirmAction = useCallback(async (request: MusicWorkspaceActionRequest, quote: MusicOperationQuote) => {
     void quote;
     if (preparedJob === null) return;
+    const reads = activeReads.current;
+    if (!reads) return;
+    const signal = reads.controller.signal;
     const operation = operations.find((candidate) => candidate.id === request.operationId);
     const signature = JSON.stringify(buildMusicPrepareBody(request, tracks, operation));
     if (signature !== preparedJob.signature) return;
@@ -314,8 +337,10 @@ export function MusicWorkspaceController({
     setPollingJobId(preparedJob.job.id);
     try {
       const activation = await api.activateMusicJob(preparedJob.job.id, preparedJob.activationKey);
+      if (signal.aborted) return;
       if (canLoadResult(activation.job.status)) {
-        const result = await api.loadMusicJobResult(activation.job.id);
+        const result = await reads.result(activation.job);
+        if (signal.aborted) return;
         setTracks((current) => uniqueTracks([...musicTracksFromResult(result), ...current]));
         setResults((current) => {
           const summary = musicSummaryFromResult(result);
@@ -329,6 +354,7 @@ export function MusicWorkspaceController({
       setPreparedJob(null);
       void refreshTracks();
     } catch (error) {
+      if (signal.aborted) return;
       setPollingJobId(null);
       setConfirmationState((current) => current ?? { kind: "retry", preparedJob });
       setErrorMessage(errorMessageForActivation(error));

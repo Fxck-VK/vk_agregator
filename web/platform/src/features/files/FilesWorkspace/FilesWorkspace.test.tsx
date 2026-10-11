@@ -1,5 +1,5 @@
 import { StrictMode } from "react";
-import { cleanup, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
+import { act, cleanup, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
 vi.mock("@/lib/web-api/browser", () => ({
@@ -14,7 +14,7 @@ vi.mock("@/features/files/VideoFiles/VideoFiles", () => ({
 }));
 
 import { ru } from "@/i18n/ru";
-import { webBrowserFetch } from "@/lib/web-api/browser";
+import { webBrowserFetch, webBrowserMutation } from "@/lib/web-api/browser";
 import type { ImageJobList } from "@/lib/web-api/contracts";
 import {
   useWorkspaceDataCache,
@@ -118,6 +118,43 @@ describe("FilesWorkspace", () => {
     vi.resetAllMocks();
   });
 
+  it("pauses a remembered retry job offline and reconciles it immediately online", async () => {
+    const queuedJob = { ...firstSucceededJob, status: "queued" as const };
+    vi.mocked(webBrowserFetch)
+      .mockResolvedValueOnce(Response.json({ items: [queuedJob], has_more: false, next_cursor: null }))
+      .mockResolvedValueOnce(Response.json({ job: firstSucceededJob }))
+      .mockResolvedValueOnce(Response.json(firstResult));
+    function RememberRetry() {
+      const cache = useWorkspaceDataCache();
+      cache.setImageFilesFirstPage({ items: [queuedJob], has_more: false, next_cursor: null });
+      cache.setImageFileRetryReplacement({ originalJobID: queuedJob.id, job: queuedJob });
+      return null;
+    }
+    vi.useFakeTimers();
+    const { unmount } = render(<WorkspaceDataCacheProvider><RememberRetry /><FilesWorkspace initialCategory="images" /></WorkspaceDataCacheProvider>);
+    try {
+      await act(async () => { await vi.advanceTimersByTimeAsync(0); });
+      await act(async () => {
+        Object.defineProperty(navigator, "onLine", { configurable: true, value: false });
+        window.dispatchEvent(new Event("offline"));
+        await vi.advanceTimersByTimeAsync(60000);
+      });
+      expect(webBrowserFetch).toHaveBeenCalledTimes(1);
+      await act(async () => {
+        Object.defineProperty(navigator, "onLine", { configurable: true, value: true });
+        window.dispatchEvent(new Event("online"));
+        window.dispatchEvent(new Event("online"));
+      });
+      expect(webBrowserFetch).toHaveBeenCalledTimes(3);
+      expect(screen.getByRole("img", { name: ru.files.generatedImageAlt })).toBeVisible();
+      expect(webBrowserMutation).not.toHaveBeenCalled();
+    } finally {
+      unmount();
+      Object.defineProperty(navigator, "onLine", { configurable: true, value: true });
+      vi.useRealTimers();
+    }
+  });
+
   it("opens the file category requested by the route", () => {
     vi.mocked(webBrowserFetch).mockResolvedValue(
       Response.json({ items: [], has_more: false, next_cursor: null }),
@@ -140,6 +177,33 @@ describe("FilesWorkspace", () => {
     expect(webBrowserFetch).toHaveBeenNthCalledWith(2, `/web/v1/image-jobs/${firstSucceededJob.id}/result`, expect.objectContaining({ signal: expect.any(AbortSignal) }));
     expect(image).toHaveAttribute("src", "/web/v1/image-artifacts/6ca96a58-a902-4f23-a92a-6726e1a0cd20?preview=1");
     expect(screen.queryByText("https://objects.example.test/private-key")).not.toBeInTheDocument();
+  });
+
+  it("restores loaded images on return and keeps the chosen category and open preview during refresh", async () => {
+    let finish!: (response: Response) => void;
+    vi.mocked(webBrowserFetch)
+      .mockResolvedValueOnce(Response.json({ items: [firstSucceededJob], has_more: false, next_cursor: null }))
+      .mockResolvedValueOnce(Response.json(firstResult))
+      .mockImplementationOnce(() => new Promise<Response>(resolve => { finish = resolve; }))
+      .mockResolvedValueOnce(Response.json(secondResult));
+    const workspace = (open: boolean) => (
+      <WorkspaceDataCacheProvider>{open ? <FilesWorkspace initialCategory="images" /> : null}</WorkspaceDataCacheProvider>
+    );
+    const view = render(workspace(true));
+    await screen.findByRole("button", { name: `Открыть файл: ${firstSucceededJob.prompt}` });
+    view.rerender(workspace(false));
+    view.rerender(workspace(true));
+    const openPreview = screen.getByRole("button", { name: `Открыть файл: ${firstSucceededJob.prompt}` });
+    expect(document.querySelector('[data-ui="skeleton"]')).toBeNull();
+    await waitFor(() => expect(webBrowserFetch).toHaveBeenCalledTimes(3));
+    fireEvent.click(openPreview);
+    const dialog = screen.getByRole("dialog", { name: `Просмотр файла: ${firstSucceededJob.prompt}` });
+    await act(async () => { finish(Response.json({ items: [firstSucceededJob, secondSucceededJob], has_more: false, next_cursor: null })); });
+
+    await screen.findByRole("button", { name: `Открыть файл: ${secondSucceededJob.prompt}` });
+    expect(screen.getByRole("dialog", { name: `Просмотр файла: ${firstSucceededJob.prompt}` })).toBe(dialog);
+    expect(screen.getByRole("tab", { name: ru.files.categories.images })).toHaveAttribute("aria-selected", "true");
+    expect(vi.mocked(webBrowserFetch).mock.calls.filter(([path]) => String(path) === `/web/v1/image-jobs/${firstSucceededJob.id}/result`)).toHaveLength(1);
   });
 
   it("opens a generated file in the shared modal backdrop and closes it from the dialog", async () => {

@@ -373,26 +373,29 @@ export async function activateMusicJob(jobId: string, idempotencyKey: string): P
   return musicJobActivationSchema.parse(await response.json());
 }
 
-export async function loadMusicJob(jobId: string): Promise<MusicJob> {
-  const response = await webBrowserFetch(`/web/v1/music-jobs/${jobId}`);
+export async function loadMusicJob(jobId: string, signal?: AbortSignal): Promise<MusicJob> {
+  const path = `/web/v1/music-jobs/${jobId}` as const;
+  const response = await (signal ? webBrowserFetch(path, { signal }) : webBrowserFetch(path));
   if (response.status !== 200) {
     throw new MusicApiError("Unable to load music job.", response.status);
   }
   return musicJobSchema.parse((await response.json()).job);
 }
 
-export async function loadMusicJobs(limit = 8, cursor?: string): Promise<MusicJobList> {
+export async function loadMusicJobs(limit = 8, cursor?: string, signal?: AbortSignal): Promise<MusicJobList> {
   const query = new URLSearchParams({ limit: String(limit) });
   if (cursor) query.set("cursor", cursor);
-  const response = await webBrowserFetch(`/web/v1/music-jobs?${query.toString()}` as `/web/v1/${string}`);
+  const path = `/web/v1/music-jobs?${query.toString()}` as `/web/v1/${string}`;
+  const response = await (signal ? webBrowserFetch(path, { signal }) : webBrowserFetch(path));
   if (response.status !== 200) {
     throw new MusicApiError("Unable to load music jobs.", response.status);
   }
   return musicJobListSchema.parse(await response.json());
 }
 
-export async function loadMusicJobResult(jobId: string): Promise<MusicJobResult> {
-  const response = await webBrowserFetch(`/web/v1/music-jobs/${jobId}/result`);
+export async function loadMusicJobResult(jobId: string, signal?: AbortSignal): Promise<MusicJobResult> {
+  const path = `/web/v1/music-jobs/${jobId}/result` as const;
+  const response = await (signal ? webBrowserFetch(path, { signal }) : webBrowserFetch(path));
   if (response.status !== 200) {
     throw new MusicApiError("Unable to load music result.", response.status);
   }

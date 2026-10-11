@@ -3,6 +3,7 @@ import { describe, expect, it } from "vitest";
 
 import type { ConversationHistoryData } from "@/features/conversations/conversation-history-data";
 import type { ImageJobList } from "@/lib/web-api/contracts";
+import type { VideoJobList, VideoJobResult } from "@/features/files/VideoFiles/video-data";
 
 import {
   createWorkspaceDataCache,
@@ -74,6 +75,33 @@ describe("WorkspaceDataCache", () => {
     expect(() => render(<WorkspaceDataCacheProbe onCache={() => undefined} />)).toThrow(
       "useWorkspaceDataCache must be used within WorkspaceDataCacheProvider.",
     );
+  });
+
+  it("replaces the video page and bounds result metadata independently for each cache owner", () => {
+    const cache = createWorkspaceDataCache();
+    const otherAccountCache = createWorkspaceDataCache();
+    const page: VideoJobList = { items: [], has_more: true, next_cursor: "next-video-page" };
+    const emptyPage: VideoJobList = { items: [], has_more: false, next_cursor: null };
+    cache.setVideoFilesFirstPage(page);
+    expect(cache.getVideoFilesFirstPage()).toBe(page);
+    cache.setVideoFilesFirstPage(emptyPage);
+    expect(cache.getVideoFilesFirstPage()).toBe(emptyPage);
+
+    const result = (jobID: string): VideoJobResult => ({
+      job_id: jobID, status: "succeeded", artifacts: [{
+        id: "6ca96a58-a902-4f23-a92a-6726e1a0cd20", mime_type: "video/mp4",
+        size_bytes: 1024, width: 1920, height: 1080, duration_ms: 5000,
+      }],
+    });
+    for (let index = 0; index < 60; index += 1) cache.setVideoResult(result(`job-${index}`));
+    cache.setVideoResult(result("job-0"));
+    cache.setVideoResult(result("job-60"));
+    expect(Object.keys(cache.getVideoResults())).toHaveLength(60);
+    expect(cache.getVideoResults()["job-1"]).toBeUndefined();
+    expect(cache.getVideoResults()["job-0"]).toEqual(result("job-0"));
+    expect(cache.getImageResults()).toEqual({});
+    expect(otherAccountCache.getVideoFilesFirstPage()).toBeUndefined();
+    expect(otherAccountCache.getVideoResults()).toEqual({});
   });
 
   it("keeps one cache instance for the provider lifetime", () => {

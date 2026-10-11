@@ -21,6 +21,7 @@ var referralTokenPattern = regexp.MustCompile(`^[A-Za-z0-9_-]{43}$`)
 
 type WebReferrals interface {
 	Summary(context.Context, uuid.UUID) (webreferralservice.Summary, error)
+	Statistics(context.Context, uuid.UUID) (webreferralservice.Statistics, error)
 	Capture(context.Context, string, string, time.Time) error
 	Accept(context.Context, string, uuid.UUID, time.Time) error
 }
@@ -52,6 +53,23 @@ func (h *Handler) referralSummary(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	writeJSON(w, 200, summary)
+}
+
+func (h *Handler) referralStatistics(w http.ResponseWriter, r *http.Request) {
+	w.Header().Set("Cache-Control", "no-store")
+	if h.deps.Referrals == nil {
+		writeError(w, 503, "referrals unavailable")
+		return
+	}
+	principal, _ := PrincipalFromContext(r.Context())
+	ctx, cancel := context.WithTimeout(r.Context(), 5*time.Second)
+	defer cancel()
+	stats, err := h.deps.Referrals.Statistics(ctx, principal.AccountID)
+	if err != nil {
+		writeError(w, 503, "referrals unavailable")
+		return
+	}
+	writeJSON(w, 200, stats)
 }
 
 func (h *Handler) referralVisit(w http.ResponseWriter, r *http.Request) {

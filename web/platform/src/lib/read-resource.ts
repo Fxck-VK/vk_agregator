@@ -3,8 +3,8 @@ export type ReadSnapshot<T> = Readonly<{ data: T | null; pending: boolean; faile
 
 // One owner, one in-flight read. A failed refresh keeps the last good snapshot.
 // Private resources must be created inside the account-scoped provider.
-export function createReadResource<T>(loader: (signal: AbortSignal) => Promise<T>, initial: T | null = null, ttlMs = 60_000) {
-  let snapshot: ReadSnapshot<T> = { data: initial, pending: false, failed: false, updatedAt: initial === null ? 0 : Date.now(), error: null };
+export function createReadResource<T>(loader: (signal: AbortSignal) => Promise<T>, initial: T | null = null, ttlMs = 60_000, initialUpdatedAt = Date.now()) {
+  let snapshot: ReadSnapshot<T> = { data: initial, pending: false, failed: false, updatedAt: initial === null ? 0 : Math.min(initialUpdatedAt, Date.now()), error: null };
   const serverSnapshot = snapshot;
   const listeners = new Set<() => void>();
   let request: AbortController | null = null;

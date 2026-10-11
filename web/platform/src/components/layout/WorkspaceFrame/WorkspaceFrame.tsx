@@ -15,7 +15,7 @@ import { WorkspaceDataCacheProvider } from "@/features/workspace/WorkspaceDataCa
 import { WorkspaceNavigationMetrics } from "@/features/workspace/WorkspaceNavigationMetrics/WorkspaceNavigationMetrics";
 import { GenerationCatalogProvider } from "@/features/models/GenerationCatalogProvider";
 import { WorkspaceSessionHealth } from "@/features/session/WorkspaceSessionHealth";
-import type { GenerationModelCatalog } from "@/features/models/generation-model-catalog";
+import type { ModelCatalogSnapshot } from "@/features/models/model-catalog-contract";
 import { Skeleton, StateNotice } from "@/components/ui/AsyncState/AsyncState";
 import { useDictionary } from "@/i18n/LocaleProvider";
 import { useRouter } from "@/i18n/navigation";
@@ -43,7 +43,7 @@ type WorkspaceFrameProps = {
   conversations: ConversationItem[];
   profile: AccountProfile;
   deferred?: boolean;
-  initialCatalog?: GenerationModelCatalog | null;
+  initialCatalog?: ModelCatalogSnapshot | null;
 };
 
 type WorkspaceChromeProps = {
@@ -96,7 +96,7 @@ function WorkspaceChrome({ account, balance = null, children, conversations, tra
 export function WorkspaceFrame({ account, accountId, balance = null, children, conversations, profile, deferred = false, initialCatalog = null }: WorkspaceFrameProps) {
   return (
     <WorkspaceSessionHealth accountId={accountId} verification={profile} key={accountId} guest={<GuestWorkspaceFrame><SessionFailureNotice /></GuestWorkspaceFrame>}>
-    <GenerationCatalogProvider initial={initialCatalog} key={accountId}>
+    <GenerationCatalogProvider initialSource={initialCatalog} key={accountId}>
     <WorkspaceAccountProvider deferred={deferred} snapshot={{ balance, profile }}>
       <WorkspaceConversationListProvider deferred={deferred} accountId={accountId} initialConversations={conversations} key={accountId}>
         <WorkspaceDataCacheProvider>

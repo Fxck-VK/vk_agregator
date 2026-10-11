@@ -11,6 +11,17 @@
 ---
 
 # Current implementation addendum: app surfaces and backend core
+Website image cards request `image-artifacts/:id?preview=1`. The web-session
+adapter authorizes the parent account, ready artifact, web job and moderated
+completed result before every thumbnail read. `imagepreview` reuses the private
+`thumbnail` artifact variant; a bounded first-view FFmpeg conversion saves it
+through `artifactservice` into S3 with existing delivery-variant retention.
+Same-artifact work is shared within an API process; the variant unique key
+selects the canonical row across processes. Next remains an API proxy, with
+the previous bounded Sharp path for offline fixtures and temporary preview
+503s. Original reads and worker/provider/moderation/billing boundaries stay
+unchanged. See [workspace loading](../web/platform/docs/preloading.md).
+
 Website invitations use webreferralservice and canonical account-owned codes,
 without creating legacy VK users. Hashed browser intents expire after 30 days;
 acceptance locks the intent/account and records eligible new accounts once.

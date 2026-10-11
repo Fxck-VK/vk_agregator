@@ -24,6 +24,49 @@ import { createPreviewImage } from "@/features/local-development/preview-image";
 import sharp from "sharp";
 
 describe("web API route local workspace preview", () => {
+  it("forwards private thumbnail reads to the backend without fetching or converting the original", async () => {
+    vi.stubEnv("NODE_ENV", "production");
+    vi.stubEnv("NEIROHUB_LOCAL_WORKSPACE_PREVIEW", "0");
+    const request = new Request("https://web.example.test/web/v1/image-artifacts/40000000-0000-4000-8000-000000000001?preview=1");
+    const saved = new Response("saved WebP", { headers: { "Content-Type": "image/webp", "Cache-Control": "private, no-store" } });
+    vi.mocked(proxyWebApiRequest).mockResolvedValueOnce(saved);
+    const response = await GET(request);
+    expect(response).toBe(saved);
+    expect(await response.text()).toBe("saved WebP");
+    expect(proxyWebApiRequest).toHaveBeenCalledTimes(1);
+    expect(proxyWebApiRequest).toHaveBeenCalledWith(request, "/web/v1/image-artifacts/40000000-0000-4000-8000-000000000001?preview=1", "http://backend.internal:8080");
+  });
+
+  it.each([401, 403, 404])("does not fetch an original after thumbnail access is denied: %s", async (status) => {
+    vi.stubEnv("NODE_ENV", "production");
+    vi.stubEnv("NEIROHUB_LOCAL_WORKSPACE_PREVIEW", "0");
+    const denied = new Response(null, { status });
+    vi.mocked(proxyWebApiRequest).mockResolvedValueOnce(denied);
+    expect(await GET(new Request("https://web.example.test/web/v1/image-artifacts/40000000-0000-4000-8000-000000000001?preview=1"))).toBe(denied);
+    expect(proxyWebApiRequest).toHaveBeenCalledTimes(1);
+  });
+
+  it("preserves an authenticated image preview during a backend thumbnail outage", async () => {
+    vi.stubEnv("NODE_ENV", "production");
+    vi.stubEnv("NEIROHUB_LOCAL_WORKSPACE_PREVIEW", "0");
+    const original = await sharp({ create: { width: 800, height: 1600, channels: 4, background: { r: 100, g: 20, b: 40, alpha: 0.5 } } }).png().toBuffer();
+    vi.mocked(proxyWebApiRequest)
+      .mockResolvedValueOnce(new Response(null, { status: 503 }))
+      .mockResolvedValueOnce(new Response(new Uint8Array(original), { headers: { "Content-Type": "image/png" } }));
+    const request = new Request("https://web.example.test/web/v1/image-artifacts/40000000-0000-4000-8000-000000000001?preview=1", { headers: { Cookie: "web_session=opaque", Range: "bytes=0-2", "If-Range": "etag" } });
+    const response = await GET(request);
+    expect(response.status).toBe(200);
+    expect(response.headers.get("Content-Type")).toBe("image/webp");
+    expect(response.headers.get("Cache-Control")).toBe("private, no-store");
+    expect(await sharp(Buffer.from(await response.arrayBuffer())).metadata()).toMatchObject({ width: 320, height: 640 });
+    expect(proxyWebApiRequest).toHaveBeenCalledTimes(2);
+    const [fallback, path] = vi.mocked(proxyWebApiRequest).mock.calls[1];
+    expect(path).toBe("/web/v1/image-artifacts/40000000-0000-4000-8000-000000000001");
+    expect(fallback.headers.get("Cookie")).toBe("web_session=opaque");
+    expect(fallback.headers.get("Range")).toBeNull();
+    expect(fallback.headers.get("If-Range")).toBeNull();
+  });
+
   it.each(["development", "production"] as const)("keeps empty music history limited to local development: %s", async (environment) => {
     vi.stubEnv("NODE_ENV", environment);
     vi.stubEnv("NEIROHUB_LOCAL_WORKSPACE_PREVIEW", "1");

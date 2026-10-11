@@ -6,6 +6,7 @@ import { MediaVideo } from "@/components/media/MediaVideo/MediaVideo";
 import { MediaState, SkeletonGrid, StateNotice } from "@/components/ui/AsyncState/AsyncState";
 import { Button } from "@/components/ui/Button/Button";
 import { MasonryGrid } from "@/components/ui/MasonryGrid/MasonryGrid";
+import { useOptionalWorkspaceDataCache } from "@/features/workspace/WorkspaceDataCache/WorkspaceDataCache";
 import { useDictionary, useMessages } from "@/i18n/LocaleProvider";
 
 import type { Dictionary } from "@/i18n/dictionary";
@@ -31,15 +32,19 @@ type VideoFilesProps = {
 
 export function VideoFiles({ showEmpty = true, visible }: Readonly<VideoFilesProps>) {
   const t = useDictionary();
-  const [jobs, setJobs] = useState<VideoJob[]>([]);
-  const [nextCursor, setNextCursor] = useState<string | null>(null);
-  const [pageState, setPageState] = useState<PageState>("idle");
+  const cache = useOptionalWorkspaceDataCache();
+  const [cachedFirstPage] = useState(() => cache?.getVideoFilesFirstPage());
+  const [jobs, setJobs] = useState<VideoJob[]>(cachedFirstPage?.items ?? []);
+  const [nextCursor, setNextCursor] = useState<string | null>(cachedFirstPage?.next_cursor ?? null);
+  const [hasLoaded, setHasLoaded] = useState(cachedFirstPage !== undefined);
+  const [pageState, setPageState] = useState<PageState>(cachedFirstPage === undefined ? "idle" : "ready");
   const [loadMoreState, setLoadMoreState] = useState<ResultState>("idle");
-  const [results, setResults] = useState<Record<string, VideoJobResult>>({});
+  const [results, setResults] = useState<Record<string, VideoJobResult>>(() => cache?.getVideoResults() ?? {});
   const [resultStates, setResultStates] = useState<Record<string, ResultState>>({});
   const mounted = useRef(false);
   const initialRequestStarted = useRef(false);
   const listRequestID = useRef(0);
+  const listRequest = useRef<AbortController | null>(null);
   const queue = useRef<ReturnType<typeof createVideoFilePreviewQueue> | null>(null);
 
   useEffect(() => {
@@ -48,6 +53,7 @@ export function VideoFiles({ showEmpty = true, visible }: Readonly<VideoFilesPro
       onStart: (job) => setResultStates((current) => ({ ...current, [job.id]: "loading" })),
       onFailure: (job) => setResultStates((current) => ({ ...current, [job.id]: "error" })),
       onSuccess: (job, result) => {
+        cache?.setVideoResult(result);
         setResults((current) => ({ ...current, [job.id]: result }));
         setResultStates((current) => ({ ...current, [job.id]: "idle" }));
       },
@@ -55,54 +61,70 @@ export function VideoFiles({ showEmpty = true, visible }: Readonly<VideoFilesPro
 
     return () => {
       mounted.current = false;
+      listRequest.current?.abort();
+      listRequest.current = null;
+      listRequestID.current += 1;
+      initialRequestStarted.current = false;
       queue.current?.dispose();
       queue.current = null;
     };
-  }, []);
+  }, [cache]);
 
   const loadFirstPage = useCallback(async () => {
     const requestID = listRequestID.current + 1;
     listRequestID.current = requestID;
+    listRequest.current?.abort();
+    const request = new AbortController();
+    listRequest.current = request;
     setPageState("loading");
     setLoadMoreState("idle");
     try {
-      const page = await fetchVideoFilesPage();
-      if (!mounted.current || requestID !== listRequestID.current) {
+      const page = await fetchVideoFilesPage(undefined, request.signal);
+      if (!mounted.current || request.signal.aborted || requestID !== listRequestID.current) {
         return;
       }
       applyFirstPage(page, setJobs, setNextCursor);
+      cache?.setVideoFilesFirstPage(page);
+      setHasLoaded(true);
       setPageState("ready");
     } catch {
-      if (!mounted.current || requestID !== listRequestID.current) {
+      if (!mounted.current || request.signal.aborted || requestID !== listRequestID.current) {
         return;
       }
       setPageState("error");
+    } finally {
+      if (listRequest.current === request) listRequest.current = null;
     }
-  }, []);
+  }, [cache]);
 
   const loadMore = useCallback(async () => {
-    if (nextCursor === null || loadMoreState === "loading") {
+    if (nextCursor === null || loadMoreState === "loading" || pageState === "loading") {
       return;
     }
     const cursor = nextCursor;
     const requestID = listRequestID.current + 1;
     listRequestID.current = requestID;
+    listRequest.current?.abort();
+    const request = new AbortController();
+    listRequest.current = request;
     setLoadMoreState("loading");
     try {
-      const page = await fetchVideoFilesPage(cursor);
-      if (!mounted.current || requestID !== listRequestID.current) {
+      const page = await fetchVideoFilesPage(cursor, request.signal);
+      if (!mounted.current || request.signal.aborted || requestID !== listRequestID.current) {
         return;
       }
       setJobs((current) => appendDistinctVideoJobs(current, page.items));
       setNextCursor(page.next_cursor);
       setLoadMoreState("idle");
     } catch {
-      if (!mounted.current || requestID !== listRequestID.current) {
+      if (!mounted.current || request.signal.aborted || requestID !== listRequestID.current) {
         return;
       }
       setLoadMoreState("error");
+    } finally {
+      if (listRequest.current === request) listRequest.current = null;
     }
-  }, [loadMoreState, nextCursor]);
+  }, [loadMoreState, nextCursor, pageState]);
 
   useEffect(() => {
     if (!visible || initialRequestStarted.current) {
@@ -135,9 +157,8 @@ export function VideoFiles({ showEmpty = true, visible }: Readonly<VideoFilesPro
     return null;
   }
 
-  const initialLoading = pageState === "loading" && jobs.length === 0;
-  const initialError = pageState === "error" && jobs.length === 0;
-  const empty = pageState === "ready" && jobs.length === 0;
+  const initialLoading = pageState === "loading" && !hasLoaded;
+  const empty = hasLoaded && jobs.length === 0;
 
   return (
     <section aria-busy={pageState === "loading" || loadMoreState === "loading" || undefined} aria-label={t.files.categories.video} className={styles.root}>
@@ -148,7 +169,7 @@ export function VideoFiles({ showEmpty = true, visible }: Readonly<VideoFilesPro
       </div>
 
       {initialLoading ? <SkeletonGrid count={6} label={t.files.loading} /> : null}
-      {initialError ? (
+      {pageState === "error" ? (
         <StateNotice action={{ label: t.files.retry, onClick: () => void loadFirstPage() }} kind="error">
           {t.files.loadFailure}
         </StateNotice>
@@ -181,7 +202,7 @@ export function VideoFiles({ showEmpty = true, visible }: Readonly<VideoFilesPro
       ) : null}
       {nextCursor !== null ? (
         <div className={styles.footer}>
-          <Button disabled={loadMoreState === "loading"} onClick={() => void loadMore()} variant="outline">
+          <Button disabled={loadMoreState === "loading" || pageState === "loading"} onClick={() => void loadMore()} variant="outline">
             {loadMoreState === "loading" ? t.files.loadingMore : t.files.loadMore}
           </Button>
         </div>

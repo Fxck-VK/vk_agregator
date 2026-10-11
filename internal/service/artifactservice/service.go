@@ -250,7 +250,11 @@ func (s *Service) SaveVariantWithMetadata(ctx context.Context, artifact *domain.
 	if ownerID == uuid.Nil {
 		ownerID = artifact.OwnerUserID
 	}
-	key := fmt.Sprintf("artifacts/%s/%s/%s-%s.%s", ownerID, artifact.ID, variantType, sha, extFor(artifact.MediaType))
+	extension := extFor(artifact.MediaType)
+	if artifact.MediaType == domain.MediaTypeImage && mimeType == "image/webp" {
+		extension = "webp"
+	}
+	key := fmt.Sprintf("artifacts/%s/%s/%s-%s.%s", ownerID, artifact.ID, variantType, sha, extension)
 	if err := s.store.Put(ctx, s.bucket, key, data, mimeType); err != nil {
 		return nil, fmt.Errorf("artifactservice: store variant object: %w", err)
 	}

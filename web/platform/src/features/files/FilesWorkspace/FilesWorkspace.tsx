@@ -23,6 +23,7 @@ import { recordWorkspaceDataLoad } from "@/features/workspace/WorkspaceNavigatio
 import { isTerminalImageJobStatus, nextImageJobPollDelay } from "@/features/image-generation/ImageJobTracker/image-job-polling";
 import type { Dictionary } from "@/i18n/dictionary";
 import type { ImageJob, ImageJobResult } from "@/lib/web-api/contracts";
+import { startGenerationPolling } from "@/lib/generation-polling";
 
 import {
   activateAwaitingPaymentImageJob,
@@ -188,76 +189,17 @@ type RetryJobPollerProps = {
 
 function RetryJobPoller({ jobID, onJobUpdate }: Readonly<RetryJobPollerProps>) {
   useEffect(() => {
-    let active = true;
-    let attempt = 0;
-    let generation = 0;
-    let timer: ReturnType<typeof setTimeout> | undefined;
-    let activeRequest: AbortController | undefined;
-
-    const isVisible = () => document.visibilityState !== "hidden";
-    const clearTimer = () => {
-      if (timer !== undefined) {
-        clearTimeout(timer);
-        timer = undefined;
-      }
-    };
-    const invalidateActiveRequest = () => {
-      generation += 1;
-      activeRequest?.abort();
-      activeRequest = undefined;
-    };
-    const schedule = () => {
-      clearTimer();
-      if (!active || !isVisible()) {
-        return;
-      }
-      const delay = nextImageJobPollDelay(attempt);
-      attempt += 1;
-      timer = setTimeout(() => void poll(), delay);
-    };
-    const poll = async () => {
-      if (!active || !isVisible()) {
-        return;
-      }
-
-      const requestGeneration = ++generation;
-      const request = new AbortController();
-      activeRequest = request;
-      try {
-        const updatedJob = await fetchImageFileJob(jobID, request.signal);
-        if (!active || !isVisible() || generation !== requestGeneration) {
-          return;
-        }
-        activeRequest = undefined;
-        const canonicalJob = onJobUpdate(updatedJob);
-        if (shouldTrackRetryJob(canonicalJob)) {
-          schedule();
-        }
-      } catch {
-        if (active && isVisible() && generation === requestGeneration) {
-          activeRequest = undefined;
-          schedule();
-        }
-      }
-    };
-    const onVisibilityChange = () => {
-      if (!isVisible()) {
-        clearTimer();
-        invalidateActiveRequest();
-        return;
-      }
-      attempt = 0;
-      void poll();
-    };
-
-    document.addEventListener("visibilitychange", onVisibilityChange);
-    schedule();
-    return () => {
-      active = false;
-      clearTimer();
-      invalidateActiveRequest();
-      document.removeEventListener("visibilitychange", onVisibilityChange);
-    };
+    const polling = startGenerationPolling({
+      delayMs: nextImageJobPollDelay, initialDelayMs: nextImageJobPollDelay(0), pauseWhenHidden: true,
+      poll: async (signal) => {
+        try {
+          const updatedJob = await fetchImageFileJob(jobID, signal);
+          if (signal.aborted) return false;
+          return shouldTrackRetryJob(onJobUpdate(updatedJob));
+        } catch { return true; }
+      },
+    });
+    return polling.stop;
   }, [jobID, onJobUpdate]);
 
   return null;

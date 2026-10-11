@@ -128,13 +128,13 @@ export function createVideoFilePreviewQueue({
   };
 }
 
-export async function fetchVideoFilesPage(cursor?: string): Promise<VideoJobList> {
+export async function fetchVideoFilesPage(cursor?: string, signal?: AbortSignal): Promise<VideoJobList> {
   const query = new URLSearchParams({ limit: String(videoFilesPageLimit) });
   if (cursor !== undefined) {
     query.set("cursor", cursor);
   }
 
-  const response = await webBrowserFetch(`/web/v1/video-jobs?${query.toString()}` as `/web/v1/${string}`);
+  const response = await webBrowserFetch(`/web/v1/video-jobs?${query.toString()}` as `/web/v1/${string}`, { signal });
   if (response.status !== 200) {
     throw new Error("Unable to load video files.");
   }

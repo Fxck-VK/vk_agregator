@@ -29,6 +29,11 @@ Read only the document that matches the current task:
 | Task scope | Active document |
 | --- | --- |
 | Browser login, verified email registration, Resend SMTP, recovery, OAuth, profile bindings and sessions | [Browser account access](../docs/runbooks/BROWSER_ACCOUNT.md) |
+| Cached personal invitation link, session isolation and independent referral statistics | [Implementation plan](superpowers/plans/2026-10-08-referral-link-cache.md); [website invitations](../docs/runbooks/WEB_REFERRALS.md) |
+| Immediate return to chats/files, background list checks and account-owned video metadata | [Implementation plan](superpowers/plans/2026-10-11-workspace-cached-return.md); [workspace loading](../web/platform/docs/preloading.md) |
+| Completed music result reuse, immediate library return and preserving old tracks during new generations | [Implementation plan](superpowers/plans/2026-10-11-music-result-cache.md); [workspace loading](../web/platform/docs/preloading.md) |
+| Stored private image thumbnails, repeated owner/moderation checks and bounded first-view conversion | [Implementation plan](superpowers/plans/2026-10-11-stored-image-thumbnails.md); [workspace loading](../web/platform/docs/preloading.md) |
+| Offline generation polling pause, immediate reconnect and unchanged online cadence | [Implementation plan](superpowers/plans/2026-10-11-generation-poll-connectivity.md); [workspace loading](../web/platform/docs/preloading.md) |
 | Confirmed password change, insert-only setup and safe profile password status | [Implementation plan](superpowers/plans/2026-10-04-password-change-confirmation.md); [account contract](../docs/ACCOUNT_IDENTITY_CONTRACT.md) |
 | Backup email confirmation and recovery through additional verified addresses | [Implementation plan](superpowers/plans/2026-10-04-backup-email.md); [browser account](../docs/runbooks/BROWSER_ACCOUNT.md) |
 | One primary and one backup email, atomic replacement and concurrent-tab limits | [Implementation plan](superpowers/plans/2026-10-05-single-backup-email.md); [account contract](../docs/ACCOUNT_IDENTITY_CONTRACT.md) |
@@ -62,6 +67,7 @@ Read only the document that matches the current task:
 | NeiroHub web static assets, reusable SVG icons and feature-local media | approved design: `docs/superpowers/specs/2026-08-19-web-asset-library-design.md`; implementation plan: `docs/superpowers/plans/2026-08-19-web-asset-library.md` |
 | Reusing NeiroHub web UI components, shared styles and tokens | Start with `web/platform/docs/ui-index.md`, then read only the linked catalog section/example. Workflow: `web/platform/AGENTS.md`. The archived draft inventory is supporting baseline evidence only. |
 | Workspace preloading, streamed shell, catalog seed, independent balance/history/files, private previews | [Architecture and checks](../web/platform/docs/preloading.md); [implementation plan](superpowers/plans/2026-09-20-workspace-preloading.md) |
+| Reusing the complete server model catalog in browser adapters and coalescing catalog reads | [Behavior and checks](../web/platform/docs/preloading.md); [implementation plan](superpowers/plans/2026-10-11-shared-catalog-reads.md) |
 | Video example posters and deferred MP4 loading | [Behavior](../web/platform/docs/preloading.md#обложки-видеопримеров); [implementation plan](superpowers/plans/2026-09-20-video-posters.md) |
 | Music studio task cards, quick creation and progressive settings | [UI contract](../web/platform/docs/ui-catalog.md#models); [implementation plan](superpowers/plans/2026-09-30-music-studio.md) |
 | Shared web loading/error/empty states and local visual review | Component contract: `web/platform/docs/ui-catalog.md#async-states`; consumer map: `web/platform/docs/shared-async-states.md`; scoped execution plan: `web/platform/docs/shared-async-states-plan.md`. |

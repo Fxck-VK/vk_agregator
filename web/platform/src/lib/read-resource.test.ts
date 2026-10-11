@@ -2,6 +2,19 @@ import { afterEach, expect, it, vi } from "vitest";
 import { createReadResource } from "./read-resource";
 import { ReadError } from "./web-api/read-error";
 afterEach(() => vi.useRealTimers());
+it("uses the server seed's original age instead of starting its TTL again", async () => {
+  vi.useFakeTimers();
+  vi.setSystemTime(100_000);
+  const loader = vi.fn().mockResolvedValue(2);
+  const resource = createReadResource(loader, 1, 60_000, 40_001);
+  await resource.resume();
+  expect(loader).not.toHaveBeenCalled();
+  vi.advanceTimersByTime(1);
+  await resource.resume();
+  expect(loader).toHaveBeenCalledTimes(1);
+  expect(resource.getSnapshot().data).toBe(2);
+  resource.dispose();
+});
 it("automatically recovers a transient read while retaining the visible snapshot", async () => {
   vi.useFakeTimers();
   const loader = vi.fn().mockRejectedValueOnce(new ReadError("unavailable", 503)).mockResolvedValue([2]);

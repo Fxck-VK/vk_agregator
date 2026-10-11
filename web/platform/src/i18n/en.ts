@@ -140,6 +140,8 @@ export const en = {
       },
     ],
     referralStatisticsTitle: "Statistics",
+    referralStatisticsLoading: "Updating statistics…",
+    referralStatisticsFailure: "Unable to update statistics. Please try again.",
     referralStatisticsUnavailable: "Statistics require signing in to a real account.",
     referralStatisticsCards: ["Visits", "Sign-ups", "Activations", "Rewards"],
     referralFaqTitle: "Frequently asked questions",

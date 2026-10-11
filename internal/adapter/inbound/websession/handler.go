@@ -300,6 +300,11 @@ type ImageArtifactObjectReader interface {
 	GetObject(ctx context.Context, bucket, key string) ([]byte, error)
 }
 
+// ImageThumbnailReader receives only an authorized, moderated parent artifact.
+type ImageThumbnailReader interface {
+	GetThumbnail(context.Context, *domain.Artifact) ([]byte, error)
+}
+
 // WebChatJobCreator queues a normalized text job through the shared
 // orchestrator. The adapter deliberately depends only on job creation.
 type WebChatJobCreator interface {
@@ -343,6 +348,7 @@ type Deps struct {
 	ImageResults               ImageResultReader
 	ImageArtifacts             ImageArtifactReader
 	ImageArtifactURLSigner     ImageArtifactURLSigner
+	ImageThumbnails            ImageThumbnailReader
 	WebChatJobs                WebChatJobCreator
 	WebChatMessageLimiter      WebChatMessageLimiter
 }
@@ -362,6 +368,7 @@ func NewHandler(cfg Config, deps Deps) *Handler {
 func (h *Handler) Routes() http.Handler {
 	mux := http.NewServeMux()
 	mux.HandleFunc("GET /web/v1/referrals", h.requirePrincipal(h.referralSummary))
+	mux.HandleFunc("GET /web/v1/referrals/stats", h.requirePrincipal(h.referralStatistics))
 	mux.HandleFunc("POST /web/v1/referrals/visit", h.referralVisit)
 	mux.HandleFunc("POST /web/v1/referrals/accept", h.requireUnsafePrincipal(h.referralAccept))
 	mux.HandleFunc("GET /web/v1/auth/methods", h.accountMethods)
@@ -1112,6 +1119,26 @@ func (h *Handler) getImageArtifact(w http.ResponseWriter, r *http.Request) {
 	}
 	if !safeArtifactResultContains(result, job.ID, artifactID, isVideo) {
 		writeError(w, http.StatusNotFound, "image artifact not found")
+		return
+	}
+	if !isVideo && r.URL.Query().Get("preview") == "1" {
+		w.Header().Set("Cache-Control", "private, no-store")
+		if h.deps.ImageThumbnails == nil {
+			writeError(w, http.StatusServiceUnavailable, "image preview unavailable")
+			return
+		}
+		data, err := h.deps.ImageThumbnails.GetThumbnail(r.Context(), artifact)
+		if err != nil || r.Context().Err() != nil || len(data) == 0 || len(data) > 2<<20 {
+			writeError(w, http.StatusServiceUnavailable, "image preview unavailable")
+			return
+		}
+		w.Header().Set("Content-Type", "image/webp")
+		w.Header().Set("X-Content-Type-Options", "nosniff")
+		w.Header().Set("Content-Length", strconv.Itoa(len(data)))
+		w.WriteHeader(http.StatusOK)
+		if r.Method != http.MethodHead {
+			_, _ = w.Write(data)
+		}
 		return
 	}
 	if objectReader, ok := h.deps.ImageArtifactURLSigner.(ImageArtifactObjectReader); ok {

@@ -1,20 +1,25 @@
 "use client";
-import { createContext, useCallback, useContext, useEffect, useState, useSyncExternalStore, type ReactNode } from "react";
+import { createContext, useCallback, useContext, useEffect, useLayoutEffect, useState, useSyncExternalStore, type ReactNode } from "react";
 import { createReadResource } from "@/lib/read-resource";
 import { ReadError } from "@/lib/web-api/read-error";
-import { loadGenerationModelCatalog, type GenerationModelCatalog } from "./generation-model-catalog";
+import { loadGenerationModelCatalog, projectGenerationModelCatalog, type GenerationModelCatalog } from "./generation-model-catalog";
+import { seedModelCatalog } from "./model-catalog-cache";
+import type { ModelCatalogSnapshot } from "./model-catalog-contract";
 
-function createCatalogResource(initial: GenerationModelCatalog | null) {
+function createCatalogResource(initial: GenerationModelCatalog | null, source: ModelCatalogSnapshot | null = null) {
   return createReadResource(async () => {
     const result = await loadGenerationModelCatalog({ throwOnError: true });
     if (!result.items.length && Object.keys(result.categoryErrors).length) throw new ReadError("invalid_payload");
     return result;
-  }, initial);
+  }, source ? projectGenerationModelCatalog(source.value) : initial, 60_000, source?.updatedAt);
 }
 const CatalogContext = createContext<ReturnType<typeof createCatalogResource> | null>(null);
 
-export function GenerationCatalogProvider({ initial = null, children }: { initial?: GenerationModelCatalog | null; children: ReactNode }) {
-  const [resource] = useState(() => createCatalogResource(initial));
+export function GenerationCatalogProvider({ initial = null, initialSource = null, children }: { initial?: GenerationModelCatalog | null; initialSource?: ModelCatalogSnapshot | null; children: ReactNode }) {
+  const [resource] = useState(() => createCatalogResource(initial, initialSource));
+  // Seed once committed in the browser, before child passive effects load raw
+  // catalogs. Do not mutate a module cache during server rendering.
+  useLayoutEffect(() => { if (initialSource) seedModelCatalog(initialSource); }, [initialSource]);
   useEffect(() => {
     void resource.resume();
     const refresh = () => { void resource.resume(); };

@@ -109,6 +109,28 @@ describe("ConversationHistoryLoader", () => {
     );
   });
 
+  it("restores a loaded conversation after navigation and preserves the new draft during refresh", async () => {
+    let finish!: (response: Response) => void;
+    vi.mocked(webBrowserFetch)
+      .mockResolvedValueOnce(Response.json({ items: cachedHistory.messages }))
+      .mockImplementationOnce(() => new Promise<Response>(resolve => { finish = resolve; }));
+    const workspace = (open: boolean) => (
+      <WorkspaceDataCacheProvider>{open ? <ConversationHistoryLoader conversationId={conversationId} /> : null}</WorkspaceDataCacheProvider>
+    );
+    const view = render(workspace(true));
+    await screen.findByText("cached private message");
+    view.rerender(workspace(false));
+    view.rerender(workspace(true));
+    expect(screen.getByText("cached private message")).toBeInTheDocument();
+    expect(document.querySelector('[data-ui="skeleton"]')).toBeNull();
+    const draft = screen.getByLabelText(ru.conversations.composerLabel);
+    fireEvent.change(draft, { target: { value: "Keep navigation draft" } });
+    await act(async () => { finish(Response.json({ items: [{ ...cachedHistory.messages[0], text: "updated history" }] })); });
+    expect(screen.getByText("updated history")).toBeInTheDocument();
+    expect(screen.getByLabelText(ru.conversations.composerLabel)).toBe(draft);
+    expect(draft).toHaveValue("Keep navigation draft");
+  });
+
   it("replaces cached messages when revalidation returns ready history", async () => {
     let resolveRevalidation: (response: Response) => void = () => {};
     vi.mocked(webBrowserFetch).mockReturnValueOnce(

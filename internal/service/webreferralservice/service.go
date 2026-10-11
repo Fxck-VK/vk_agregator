@@ -33,6 +33,15 @@ type Summary struct {
 	RewardsEnabled bool   `json:"rewards_enabled"`
 }
 
+// Statistics contains changing counters without reading or allocating a code.
+type Statistics struct {
+	Visits         int  `json:"visits"`
+	Registered     int  `json:"registered"`
+	Activated      int  `json:"activated"`
+	Rewarded       int  `json:"rewarded"`
+	RewardsEnabled bool `json:"rewards_enabled"`
+}
+
 // Repository is the storage boundary used by Service.
 type Repository interface {
 	CodeByAccountID(ctx context.Context, accountID uuid.UUID) (*domain.WebReferralCode, error)
@@ -106,6 +115,25 @@ func (s *Service) Summary(ctx context.Context, accountID uuid.UUID) (Summary, er
 	summary.Code = code.Code
 	summary.RewardsEnabled = false
 	return summary, nil
+}
+
+// Statistics refreshes the account-owned funnel independently of its stable code.
+func (s *Service) Statistics(ctx context.Context, accountID uuid.UUID) (Statistics, error) {
+	if s == nil || s.repo == nil {
+		return Statistics{}, errors.New("webreferralservice: repository is required")
+	}
+	if accountID == uuid.Nil {
+		return Statistics{}, domain.ErrForbidden
+	}
+	summary, err := s.repo.Summary(ctx, accountID)
+	if err != nil {
+		return Statistics{}, err
+	}
+	return Statistics{
+		Visits: summary.Visits, Registered: summary.Registered,
+		Activated: summary.Activated, Rewarded: summary.Rewarded,
+		RewardsEnabled: false,
+	}, nil
 }
 
 // Capture records the first referral visit for a hashed browser token.

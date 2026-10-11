@@ -140,6 +140,8 @@ export const ru = {
       },
     ],
     referralStatisticsTitle: "Статистика",
+    referralStatisticsLoading: "Обновляем статистику…",
+    referralStatisticsFailure: "Не удалось обновить статистику. Попробуйте ещё раз.",
     referralStatisticsUnavailable: "Статистика доступна после входа в настоящий аккаунт.",
     referralStatisticsCards: ["Переходы", "Регистрации", "Активации", "Начисления"],
     referralFaqTitle: "Частые вопросы",

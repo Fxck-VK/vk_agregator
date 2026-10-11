@@ -23,13 +23,13 @@ export async function activateSpeech(id: string) {
   if (response.status !== 200) throw new LocalizedError("speech.activateError");
   return z.object({ job: jobSchema }).strict().parse(await response.json()).job;
 }
-export async function loadSpeechJob(id: string) {
-  const response = await webBrowserFetch(`/web/v1/speech-jobs/${id}`);
+export async function loadSpeechJob(id: string, signal?: AbortSignal) {
+  const response = await webBrowserFetch(`/web/v1/speech-jobs/${id}`, { signal });
   if (!response.ok) throw new LocalizedError("speech.statusError");
   return z.object({ job: jobSchema }).strict().parse(await response.json()).job;
 }
-export async function loadSpeechResult(id: string) {
-  const response = await webBrowserFetch(`/web/v1/speech-jobs/${id}/result`);
+export async function loadSpeechResult(id: string, signal?: AbortSignal) {
+  const response = await webBrowserFetch(`/web/v1/speech-jobs/${id}/result`, { signal });
   if (!response.ok) throw new LocalizedError("speech.resultError");
   return z.object({ job_id: z.uuid(), artifacts: z.array(artifactSchema) }).strict().parse(await response.json()).artifacts;
 }

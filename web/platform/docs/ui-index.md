@@ -14,7 +14,7 @@
 | Запрос / задача | Готовое решение | Читать точечно |
 | --- | --- | --- |
 | Вход, регистрация, восстановление, основная и одна резервная почта, замена и сессии | `LoginForm`, `EmailRegistration`, общий `completeSignIn` с проверкой cookie-сессии и новым документом; `CredentialField`, `AccountSecurity`, `InputSurface`, `Button`, `AsyncState` и серверная доступность способов | [Аккаунт](ui-catalog.md#browser-account) |
-| Приглашения на сайт и статистика аккаунта | `ProfileReferralProgram`, `InviteEntry`: общий `Button`/`StateNotice`, реальные данные `/web/v1/referrals`; бонусы пока выключены | [Контракт приглашений](../../../docs/runbooks/WEB_REFERRALS.md) |
+| Приглашения на сайт и статистика аккаунта | `ProfileReferralProgram`: код в памяти текущей сессии, независимое обновление `/web/v1/referrals/stats`; `InviteEntry`, общий `Button`/`StateNotice`; бонусы пока выключены | [Аккаунт](ui-catalog.md#browser-account), [контракт приглашений](../../../docs/runbooks/WEB_REFERRALS.md) |
 | Фирменная страница 404 с рабочим меню | `NotFoundContent` внутри WorkspaceFrame / GuestWorkspaceFrame; общий Button outline и языковой Link | [404](ui-catalog.md#not-found), [дизайн и проверка](not-found-page-plan.md) |
 | Всплывающее окно у кнопки, открыть под/над | `PopoverPanel` | [Панели](ui-catalog.md#panels), [пример 1](ui-catalog-examples.md#example-1) |
 | То же оформление окна; позиционирование уже есть | `PopoverSurface` | [Панели](ui-catalog.md#panels) |
@@ -28,8 +28,9 @@
 | Выбор соотношения сторон или разрешения, в том числе в редакторе фото | `ImageAspectRatioSelector`, `ImageQualitySelector`; в модальном редакторе portalLayer=170 | [Ввод](ui-catalog.md#input), [панели](ui-catalog.md#panels) |
 | Кнопка с заливкой / прозрачная кнопка с обводкой | `Button`: `variant="filled"` по умолчанию; `variant="outline"` для прозрачного фона во всех состояниях | [Ввод](ui-catalog.md#input) |
 | Поле сообщения / запрос генерации / загрузка медиа | `ChatComposer`; в существующем сценарии — его адаптер | [Ввод](ui-catalog.md#input), [пример 5](ui-catalog-examples.md#example-5) |
-| Музыкальная workspace-страница / Suno и Lyria | `MusicWorkspaceController` + `MusicWorkspace` + `MusicStudioTools`: быстрое создание, карточки задач, раскрываемые настройки и «Мои треки»; каталог и prepare/activate | [Модели](ui-catalog.md#models), [Ввод](ui-catalog.md#input) |
+| Музыкальная workspace-страница / Suno и Lyria | `MusicWorkspaceController` + `MusicWorkspace` + `MusicStudioTools`: быстрое создание, карточки задач, раскрываемые настройки и «Мои треки»; кеш готовых результатов аккаунта, добавление новых без потери старых; каталог и prepare/activate | [Модели](ui-catalog.md#models), [Ввод](ui-catalog.md#input), [загрузка](preloading.md) |
 | Озвучка текста / распознавание записи | `SpeechWorkspace` в `/app/speech`; серверный prepare/activate, собственные MP3/WAV, WAV/текст на выходе; pending-модели не запускаются | [Модели](ui-catalog.md#models), [Ввод](ui-catalog.md#input) |
+| Проверка готовности генераций при обрыве связи | Общий `startGenerationPolling` в чате, фото, музыке, речи и повторных фото: пауза offline, одна проверка online, прежние интервалы и сохранённые результаты | [Общие состояния](ui-catalog.md#async-states), [загрузка](preloading.md#проверки-генераций-при-потере-сети) |
 | Стрелка к концу диалога, скрытая внизу | `ChatScrollToBottom` в `ConversationComposer` | [Ввод](ui-catalog.md#input) |
 | Перетаскивание файлов в правую панель | `WorkspaceFileDropZone` + `ChatComposer.attachmentController` | [Вложения](ui-catalog.md#раздельные-возможности-моделей) |
 | Превью фото, удаление, прогресс и повтор загрузки | `ChatAttachmentPreview` внутри `ChatComposer`: `ModalCloseButton size="compact"`, `Button variant="outline"` и общий `Tooltip` | [Вложения](ui-catalog.md#раздельные-возможности-моделей) |
@@ -39,8 +40,8 @@
 | Поверхность отдельного input/search | `InputSurface` + нативное поле | [Ввод](ui-catalog.md#input), [пример 4](ui-catalog-examples.md#example-4) |
 | Ползунок, толщина кисти | `RangeSlider` | [Ввод](ui-catalog.md#input), [пример 4](ui-catalog-examples.md#example-4) |
 | Привычная сетка фото, сохранить пропорции | `MasonryGrid`, непосредственные дети `li`; CSS-колонки | [Сетка и фото](ui-catalog.md#media), [пример 6](ui-catalog-examples.md#example-6) |
-| Карточка/просмотр результата в «Моих файлах» | `FileCard` + `FilePreviewDialog`; готовая сетка — `FilesGrid` | [Сетка и фото](ui-catalog.md#media), [пример 7](ui-catalog-examples.md#example-7) |
-| Видеорезультаты в «Моих файлах» | `VideoFiles` → `MasonryGrid` + `MediaVideo`; вкладки «Все файлы» и «Видео» | [Сетка и фото](ui-catalog.md#media) |
+| Карточка/просмотр результата в «Моих файлах» | `FileCard` + `FilePreviewDialog`; готовая сетка — `FilesGrid`; приватные превью сохраняются в бэкенде, просмотр использует оригинал | [Сетка и фото](ui-catalog.md#media), [пример 7](ui-catalog-examples.md#example-7), [хранение превью](preloading.md) |
+| Видеорезультаты в «Моих файлах» | `VideoFiles` → `MasonryGrid` + `MediaVideo`; первая страница и результаты из кеша аккаунта, проверка в фоне | [Сетка и фото](ui-catalog.md#media), [загрузка](preloading.md) |
 | Выбрать готовое фото для сообщения | `ChatFilePicker` → `MasonryGrid` + `FileCard selectionAction`; вкладки — `ModeSwitchPanel` | [Сетка и фото](ui-catalog.md#media) |
 | Фото в диалоге, просмотр только фото этого чата | `ConversationImageGallery` → общие FileCard/FilePreviewDialog | [Сетка и фото](ui-catalog.md#media) |
 | Ожидание нескольких фото по количеству и формату запроса | `ImageGenerationPlaceholders` → `MediaState`; общий `ImageGenerationGrid` для заглушек и готовых фото | [Общие состояния](ui-catalog.md#async-states), [локальный пример](http://localhost:7158/ru/app/ui-states#image-generation) |
@@ -54,7 +55,7 @@
 | Общая прокрутка / scrollbar | `ScrollArea` | [Прокрутка](ui-catalog.md#overlays), [пример 9](ui-catalog-examples.md#example-9) |
 | Выбор нейросети / карточка модели | `ModelSelector`, его адаптеры; `ModelCard` и `ModelIcon` | [Модели](ui-catalog.md#models), [пример 8](ui-catalog-examples.md#example-8) |
 | Цвет запасной иконки модели, белых кнопок и QR | Общие переменные в `globals.css`; `ModelIcon` окрашивает SVG через CSS-маску | [Токены](ui-catalog.md#tokens), [модели](ui-catalog.md#models) |
-| Единые данные моделей, категорий, возможностей и цен | `loadModelCatalog` → `/web/v1/models`; специализированные загрузчики — проекции | [Модели](ui-catalog.md#models), [контракт бэкенда](../../../docs/runbooks/MODEL_CATALOG.md) |
+| Единые данные моделей, категорий, возможностей и цен | `GenerationCatalogProvider.initialSource` → общий `loadModelCatalog` → `/web/v1/models`; специализированные загрузчики — проекции, свежий серверный снимок используется без повторного запроса | [Модели](ui-catalog.md#models), [загрузка и кеш](preloading.md), [контракт бэкенда](../../../docs/runbooks/MODEL_CATALOG.md) |
 | Лента подборок моделей, до пяти в категории | `ModelSelector categoryModelIds` → общий `ModeSwitchPanel`; выбор категории поднимает её блок, поиск охватывает все подборки | [Модели](ui-catalog.md#models), [панели](ui-catalog.md#panels) |
 | Модель слева от отправки в начатом диалоге | `ConversationModelSelector` → `ModelSelector variant="composer"`; общий generation-model-catalog и useGenerationControls | [Модели](ui-catalog.md#models) |
 | Быстрые кнопки моделей под полем на главной, переключить без перехода | `WorkspaceHero` + `FeaturedModelShortcuts`; один WorkspacePrompt → ChatComposer, сменные ImageGenerationControls | [Модели](ui-catalog.md#models), [ввод](ui-catalog.md#input) |

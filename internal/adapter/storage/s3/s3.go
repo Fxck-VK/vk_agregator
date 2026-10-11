@@ -140,6 +140,31 @@ func (s *Store) GetObject(ctx context.Context, bucket, key string) ([]byte, erro
 	return data, nil
 }
 
+// GetObjectBounded stops downloading after limit+1 bytes, including when stored
+// metadata understates the actual size. Storage coordinates stay out of errors.
+func (s *Store) GetObjectBounded(ctx context.Context, bucket, key string, limit int64) ([]byte, error) {
+	if limit <= 0 || limit == 1<<63-1 {
+		return nil, errors.New("s3: invalid object read limit")
+	}
+	obj, err := s.client.GetObject(ctx, bucket, key, minio.GetObjectOptions{})
+	if err != nil {
+		return nil, errors.New("s3: object read unavailable")
+	}
+	defer func() { _ = obj.Close() }()
+	return readObjectWithinLimit(obj, limit)
+}
+
+func readObjectWithinLimit(source io.Reader, limit int64) ([]byte, error) {
+	if limit <= 0 || limit == 1<<63-1 {
+		return nil, errors.New("s3: invalid object read limit")
+	}
+	data, err := io.ReadAll(io.LimitReader(source, limit+1))
+	if err != nil || len(data) == 0 || int64(len(data)) > limit {
+		return nil, errors.New("s3: object read unavailable")
+	}
+	return data, nil
+}
+
 // DeleteObject removes an object from storage. Error messages intentionally do
 // not include bucket/key because maintenance errors may be logged.
 func (s *Store) DeleteObject(ctx context.Context, bucket, key string) error {

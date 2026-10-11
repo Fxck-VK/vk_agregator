@@ -45,6 +45,7 @@ import (
 	"vk-ai-aggregator/internal/service/accountregistration"
 	"vk-ai-aggregator/internal/service/artifactservice"
 	"vk-ai-aggregator/internal/service/imagegeneration"
+	"vk-ai-aggregator/internal/service/imagepreview"
 	"vk-ai-aggregator/internal/service/joborchestrator"
 	"vk-ai-aggregator/internal/service/maintenance"
 	"vk-ai-aggregator/internal/service/mediaprobe"
@@ -340,8 +341,13 @@ func main() {
 	})
 	webArtifactURLSigner := newWebImageArtifactURLSigner(ctx, cfg, logger)
 	var musicInputs websession.MusicInputArtifactSaver
+	var imageThumbnails websession.ImageThumbnailReader
 	if objects, ok := webArtifactURLSigner.(artifactservice.ObjectStore); ok {
-		musicInputs = artifactservice.New(core.Artifacts, objects, cfg.S3Bucket)
+		saver := artifactservice.New(core.Artifacts, objects, cfg.S3Bucket)
+		musicInputs = saver
+		if reader, ok := objects.(imagepreview.ObjectReader); ok {
+			imageThumbnails = imagepreview.New(core.Artifacts, reader, saver, imagepreview.NewFFmpegRenderer(cfg.FFmpegPath, cfg.FFProbePath))
+		}
 	}
 	musicInputProber := mediaprobe.NewFFProbe(mediaprobe.Config{FFProbePath: cfg.FFProbePath, Timeout: cfg.MediaProbeTimeout})
 	webArtifactRedirectPolicy := newWebImageArtifactRedirectPolicy(cfg, logger)
@@ -420,6 +426,7 @@ func main() {
 		ImageResults:           webResults,
 		ImageArtifacts:         core.Artifacts,
 		ImageArtifactURLSigner: webArtifactURLSigner,
+		ImageThumbnails:        imageThumbnails,
 		MusicInputArtifacts:    musicInputs,
 		MusicInputProber:       musicInputProber,
 		WebChatJobs:            core.Orchestrator,

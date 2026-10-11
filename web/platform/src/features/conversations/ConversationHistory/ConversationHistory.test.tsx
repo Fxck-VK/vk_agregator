@@ -999,6 +999,44 @@ describe("ConversationHistory", () => {
     unmount();
   });
 
+  it("preserves the pending response and waiting budget offline, then checks immediately online", async () => {
+    vi.useFakeTimers();
+    vi.mocked(webBrowserMutation).mockResolvedValueOnce(Response.json(queuedJob, { status: 201 }));
+    vi.mocked(webBrowserFetch).mockResolvedValue(Response.json({ items: [] }));
+    const { unmount } = render(<ConversationHistory history={initialHistory as never} />);
+    await setComposerPrompt("Продолжить");
+    await act(async () => {
+      fireEvent.click(screen.getByRole("button", { name: ru.conversations.composerSubmit }));
+      await vi.advanceTimersByTimeAsync(0);
+    });
+    expect(webBrowserFetch).toHaveBeenCalledTimes(1);
+    try {
+      await act(async () => {
+        Object.defineProperty(navigator, "onLine", { configurable: true, value: false });
+        window.dispatchEvent(new Event("offline"));
+        await vi.advanceTimersByTimeAsync(900000);
+      });
+      expect(webBrowserFetch).toHaveBeenCalledTimes(1);
+      expect(screen.getByRole("status", { name: ru.conversations.composerAwaitingResponse })).toBeVisible();
+      expect(screen.queryByText(ru.conversations.refreshDelayed)).toBeNull();
+      vi.mocked(webBrowserFetch).mockResolvedValueOnce(Response.json({ items: [{
+        id: "55555555-5555-4555-8555-555555555555", seq: 104, role: "assistant",
+        text: "Ответ после восстановления сети", created_at: "2026-08-01T12:00:04Z",
+      }] }));
+      await act(async () => {
+        Object.defineProperty(navigator, "onLine", { configurable: true, value: true });
+        window.dispatchEvent(new Event("online"));
+        window.dispatchEvent(new Event("online"));
+      });
+      expect(webBrowserFetch).toHaveBeenCalledTimes(2);
+      expect(screen.getByText("Ответ после восстановления сети")).toBeVisible();
+      expect(webBrowserMutation).toHaveBeenCalledTimes(1);
+    } finally {
+      unmount();
+      Object.defineProperty(navigator, "onLine", { configurable: true, value: true });
+    }
+  });
+
   it("stops polling at fifteen attempts and never fetches after the thirty-second deadline", async () => {
     vi.useFakeTimers();
     vi.mocked(webBrowserMutation).mockResolvedValueOnce(Response.json(queuedJob, { status: 201 }));

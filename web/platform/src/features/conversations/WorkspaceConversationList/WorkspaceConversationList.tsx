@@ -16,6 +16,7 @@ type WorkspaceConversationList = {
   pending: boolean;
   failed: boolean;
   retry: () => void;
+  revalidate: () => void;
   hasData: boolean;
   removeConversation: (conversationID: string) => void;
   conversations: WorkspaceConversationItem[];
@@ -77,6 +78,10 @@ export function WorkspaceConversationListProvider(props: WorkspaceConversationLi
 
 function AccountConversationListProvider({ accountId, children, initialConversations: seed, deferred = false }: WorkspaceConversationListProviderProps) {
   const resource = useReadResource(loadConversations, deferred ? null : seed, deferred, seed);
+  const retry = resource.retry;
+  const revalidate = useCallback(() => {
+    if (deferred && document.visibilityState !== "hidden" && navigator.onLine !== false) retry();
+  }, [deferred, retry]);
   const seedResource = resource.seed;
   useEffect(() => {
     if (!deferred) return;
@@ -187,8 +192,8 @@ function AccountConversationListProvider({ accountId, children, initialConversat
   }, []);
 
   const value = useMemo(
-    () => ({ conversations, hasData: resource.data !== null, pending: resource.pending, failed: resource.failed, retry: resource.retry, removeConversation, discardPendingConversation, replaceConversation, resolvePendingConversation, updateConversationTitle, upsertConversation }),
-    [conversations, resource.data, resource.pending, resource.failed, resource.retry, removeConversation, discardPendingConversation, replaceConversation, resolvePendingConversation, updateConversationTitle, upsertConversation],
+    () => ({ conversations, hasData: resource.data !== null, pending: resource.pending, failed: resource.failed, retry: resource.retry, revalidate, removeConversation, discardPendingConversation, replaceConversation, resolvePendingConversation, updateConversationTitle, upsertConversation }),
+    [conversations, resource.data, resource.pending, resource.failed, resource.retry, revalidate, removeConversation, discardPendingConversation, replaceConversation, resolvePendingConversation, updateConversationTitle, upsertConversation],
   );
 
   return (
@@ -200,6 +205,14 @@ function AccountConversationListProvider({ accountId, children, initialConversat
 
 export function useOptionalWorkspaceConversationList() {
   return useContext(WorkspaceConversationListContext);
+}
+
+/** Check for changes on chat entry without clearing the shared list or interrupting an existing read. */
+export function useRevalidateWorkspaceConversationList(enabled = true) {
+  const revalidate = useOptionalWorkspaceConversationList()?.revalidate;
+  useEffect(() => {
+    if (enabled) revalidate?.();
+  }, [enabled, revalidate]);
 }
 
 export function useWorkspaceConversationList() {

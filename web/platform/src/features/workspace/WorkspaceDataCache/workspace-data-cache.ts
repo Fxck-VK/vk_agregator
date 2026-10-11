@@ -1,4 +1,6 @@
 import type { ConversationHistoryData } from "@/features/conversations/conversation-history-data";
+import type { VideoJobList, VideoJobResult } from "@/features/files/VideoFiles/video-data";
+import { createMusicResultCache, type MusicResultCache } from "@/features/music/music-result-cache";
 import type { ImageJob, ImageJobList, ImageJobResult } from "@/lib/web-api/contracts";
 
 export const maxCachedConversationHistoryPages = 8;
@@ -11,6 +13,7 @@ export type ImageFileRetryReplacement = {
 };
 
 export type WorkspaceDataCache = {
+  musicResults: MusicResultCache;
   getImageResults: () => Record<string, ImageJobResult>;
   setImageResult: (result: ImageJobResult) => void;
   getConversationHistory: (conversationId: string) => ReadyConversationHistory | undefined;
@@ -18,6 +21,10 @@ export type WorkspaceDataCache = {
   deleteConversationHistory: (conversationId: string) => void;
   getImageFilesFirstPage: () => ImageJobList | undefined;
   setImageFilesFirstPage: (page: ImageJobList) => void;
+  getVideoFilesFirstPage: () => VideoJobList | undefined;
+  setVideoFilesFirstPage: (page: VideoJobList) => void;
+  getVideoResults: () => Record<string, VideoJobResult>;
+  setVideoResult: (result: VideoJobResult) => void;
   getImageFileRetryReplacements: () => ImageFileRetryReplacement[];
   setImageFileRetryReplacement: (replacement: ImageFileRetryReplacement) => void;
 };
@@ -27,8 +34,11 @@ export function createWorkspaceDataCache(): WorkspaceDataCache {
   const imageFileRetryReplacements = new Map<string, ImageJob>();
   let imageFilesFirstPage: ImageJobList | undefined;
   const imageResults = new Map<string, ImageJobResult>();
+  let videoFilesFirstPage: VideoJobList | undefined;
+  const videoResults = new Map<string, VideoJobResult>();
 
   return {
+    musicResults: createMusicResultCache(),
     getImageResults: () => Object.fromEntries(imageResults),
     setImageResult(result) {
       imageResults.delete(result.job_id);
@@ -67,6 +77,18 @@ export function createWorkspaceDataCache(): WorkspaceDataCache {
     },
     setImageFilesFirstPage(page) {
       imageFilesFirstPage = page;
+    },
+    getVideoFilesFirstPage() {
+      return videoFilesFirstPage;
+    },
+    setVideoFilesFirstPage(page) {
+      videoFilesFirstPage = page;
+    },
+    getVideoResults: () => Object.fromEntries(videoResults),
+    setVideoResult(result) {
+      videoResults.delete(result.job_id);
+      videoResults.set(result.job_id, result);
+      if (videoResults.size > 60) videoResults.delete(videoResults.keys().next().value!);
     },
     getImageFileRetryReplacements() {
       return [...imageFileRetryReplacements].map(([originalJobID, job]) => ({ originalJobID, job }));

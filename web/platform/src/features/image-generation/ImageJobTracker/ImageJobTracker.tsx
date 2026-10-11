@@ -15,6 +15,7 @@ import {
   type ImageJobResult,
 } from "@/lib/web-api/contracts";
 import { webBrowserFetch } from "@/lib/web-api/browser";
+import { startGenerationPolling } from "@/lib/generation-polling";
 
 import { isTerminalImageJobStatus, nextImageJobPollDelay } from "./image-job-polling";
 import styles from "./ImageJobTracker.module.css";
@@ -32,125 +33,72 @@ export function ImageJobTracker({ job, onError, onJobUpdate, onResult }: Readonl
   const t = useDictionary();
   const [error, setError] = useState<TrackerError>(null);
   const [isRefreshing, setIsRefreshing] = useState(false);
-  const refreshInFlight = useRef(false);
+  const pollingRef = useRef<ReturnType<typeof startGenerationPolling> | null>(null);
   const requestedStatusJobID = useRef<string | null>(null);
   const jobIsTerminal = isTerminalImageJobStatus(job.status);
 
-  const refresh = useCallback(async (): Promise<ImageJob | null> => {
-    if (refreshInFlight.current) {
-      return null;
-    }
-
-    refreshInFlight.current = true;
-    requestedStatusJobID.current = job.id;
+  const refresh = useCallback(async (signal: AbortSignal): Promise<ImageJob | null> => {
     setIsRefreshing(true);
     setError(null);
 
     let updatedJob: ImageJob;
     try {
-      const response = await webBrowserFetch(`/web/v1/image-jobs/${job.id}`);
+      const response = await webBrowserFetch(`/web/v1/image-jobs/${job.id}`, { signal });
       if (response.status !== 200) {
         throw new Error("Unable to load image job.");
       }
       updatedJob = parseImageJobActivation(await response.json()).job;
+      if (signal.aborted) return null;
     } catch {
+      if (signal.aborted || navigator.onLine === false) return null;
+      requestedStatusJobID.current = job.id;
       setError("status");
       onError?.("status");
-      refreshInFlight.current = false;
       setIsRefreshing(false);
       return null;
     }
 
-    onJobUpdate(updatedJob);
-
     if (updatedJob.status === "succeeded") {
       try {
-        const resultResponse = await webBrowserFetch(`/web/v1/image-jobs/${updatedJob.id}/result`);
+        const resultResponse = await webBrowserFetch(`/web/v1/image-jobs/${updatedJob.id}/result`, { signal });
         if (resultResponse.status !== 200) {
           throw new Error("Unable to load image result.");
         }
         const result = parseImageJobResult(await resultResponse.json());
+        if (signal.aborted) return null;
         if (result.job_id !== updatedJob.id) {
           throw new Error("Image result does not match its job.");
         }
         onResult(result);
       } catch {
+        if (signal.aborted || navigator.onLine === false) return null;
         setError("result");
         onError?.("result");
       }
     }
 
-    refreshInFlight.current = false;
+    // Do not publish a terminal status before its result read survives cancellation.
+    requestedStatusJobID.current = job.id;
+    onJobUpdate(updatedJob);
     setIsRefreshing(false);
     return updatedJob;
   }, [job.id, onError, onJobUpdate, onResult]);
 
   useEffect(() => {
-    if (job.status === "succeeded") {
-      if (requestedStatusJobID.current !== job.id) {
-        void refresh();
-      }
-      return;
-    }
-
-    if (jobIsTerminal) {
-      return;
-    }
-
-    let active = true;
-    let attempt = 0;
-    let timer: ReturnType<typeof setTimeout> | undefined;
-
-    const clearTimer = () => {
-      if (timer !== undefined) {
-        clearTimeout(timer);
-        timer = undefined;
-      }
-    };
-
-    const isVisible = () => typeof document === "undefined" || document.visibilityState !== "hidden";
-
-    const schedule = () => {
-      clearTimer();
-      if (!active || !isVisible()) {
-        return;
-      }
-      const delay = nextImageJobPollDelay(attempt);
-      attempt += 1;
-      timer = setTimeout(() => {
-        void poll();
-      }, delay);
-    };
-
-    const poll = async () => {
-      if (!active || !isVisible()) {
-        return;
-      }
-      const updatedJob = await refresh();
-      if (!active || !isVisible()) {
-        return;
-      }
-      if (updatedJob === null || !isTerminalImageJobStatus(updatedJob.status)) {
-        schedule();
-      }
-    };
-
-    const onVisibilityChange = () => {
-      if (!isVisible()) {
-        clearTimer();
-        return;
-      }
-      attempt = 0;
-      void poll();
-    };
-
-    document.addEventListener("visibilitychange", onVisibilityChange);
-    schedule();
-
+    const polling = startGenerationPolling({
+      delayMs: nextImageJobPollDelay,
+      initialDelayMs: jobIsTerminal ? undefined : nextImageJobPollDelay(0),
+      autoStart: !jobIsTerminal || (job.status === "succeeded" && requestedStatusJobID.current !== job.id),
+      pauseWhenHidden: !jobIsTerminal,
+      poll: async (signal) => {
+        const updatedJob = await refresh(signal);
+        return updatedJob === null ? !jobIsTerminal : !isTerminalImageJobStatus(updatedJob.status);
+      },
+    });
+    pollingRef.current = polling;
     return () => {
-      active = false;
-      clearTimer();
-      document.removeEventListener("visibilitychange", onVisibilityChange);
+      polling.stop();
+      if (pollingRef.current === polling) pollingRef.current = null;
     };
   }, [job.id, job.status, jobIsTerminal, refresh]);
 
@@ -167,7 +115,7 @@ export function ImageJobTracker({ job, onError, onJobUpdate, onResult }: Readonl
       </div>
       <div className={styles.actions}>
         {canRefresh ? (
-          <Button variant="outline" onClick={() => void refresh()}>
+          <Button variant="outline" onClick={() => pollingRef.current?.refresh()}>
             {isRefreshing ? t.imageGeneration.statusRefreshing : t.imageGeneration.statusRefresh}
           </Button>
         ) : null}

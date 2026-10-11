@@ -1,5 +1,6 @@
-import { cleanup, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
+import { act, cleanup, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
+import { StrictMode } from "react";
 
 vi.mock("@/lib/web-api/browser", () => ({
   webBrowserFetch: vi.fn(),
@@ -8,6 +9,7 @@ vi.mock("@/lib/web-api/browser", () => ({
 import { ru } from "@/i18n/ru";
 import { getTranslator } from "@/i18n/messages";
 import { webBrowserFetch } from "@/lib/web-api/browser";
+import { WorkspaceDataCacheProvider, useWorkspaceDataCache, type WorkspaceDataCache } from "@/features/workspace/WorkspaceDataCache/WorkspaceDataCache";
 
 import { VideoFiles } from "./VideoFiles";
 
@@ -62,11 +64,126 @@ function resultResponse(jobID: string, artifactID = firstResult.artifacts[0]!.id
   });
 }
 
+function CacheProbe({ onCache }: { onCache: (cache: WorkspaceDataCache) => void }) {
+  onCache(useWorkspaceDataCache());
+  return null;
+}
+
 describe("VideoFiles", () => {
   afterEach(() => {
     cleanup();
     vi.restoreAllMocks();
     vi.resetAllMocks();
+  });
+
+  it("restores video cards and result metadata immediately after leaving and returning", async () => {
+    let finish!: (response: Response) => void;
+    vi.mocked(webBrowserFetch)
+      .mockResolvedValueOnce(listResponse())
+      .mockResolvedValueOnce(Response.json(firstResult))
+      .mockImplementationOnce(() => new Promise<Response>(resolve => { finish = resolve; }));
+    const workspace = (open: boolean) => (
+      <WorkspaceDataCacheProvider>{open ? <VideoFiles visible /> : null}</WorkspaceDataCacheProvider>
+    );
+    const view = render(workspace(true));
+    await screen.findByLabelText(`${ru.files.categories.video}: ${firstJob.prompt}`);
+    view.rerender(workspace(false));
+    view.rerender(workspace(true));
+
+    const player = screen.getByLabelText(`${ru.files.categories.video}: ${firstJob.prompt}`);
+    expect(document.querySelector('[data-ui="skeleton"]')).toBeNull();
+    expect(webBrowserFetch).toHaveBeenCalledTimes(3);
+    await act(async () => { finish(listResponse([{ ...firstJob, prompt: "updated video title" }])); });
+    expect(screen.getByLabelText(`${ru.files.categories.video}: updated video title`)).toBe(player);
+    expect(webBrowserFetch).toHaveBeenCalledTimes(3);
+  });
+
+  it("keeps cached video cards after a failed background refresh and offers a retry", async () => {
+    vi.mocked(webBrowserFetch)
+      .mockResolvedValueOnce(listResponse())
+      .mockResolvedValueOnce(Response.json(firstResult))
+      .mockResolvedValueOnce(new Response(null, { status: 503 }))
+      .mockResolvedValueOnce(listResponse([secondJob]))
+      .mockResolvedValueOnce(resultResponse(secondJob.id));
+    const workspace = (open: boolean) => (
+      <WorkspaceDataCacheProvider>{open ? <VideoFiles visible /> : null}</WorkspaceDataCacheProvider>
+    );
+    const view = render(workspace(true));
+    await screen.findByLabelText(`${ru.files.categories.video}: ${firstJob.prompt}`);
+    view.rerender(workspace(false));
+    view.rerender(workspace(true));
+
+    expect(await screen.findByRole("alert")).toHaveTextContent(ru.files.loadFailure);
+    expect(screen.getByLabelText(`${ru.files.categories.video}: ${firstJob.prompt}`)).toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: ru.files.retry }));
+    expect(await screen.findByLabelText(`${ru.files.categories.video}: ${secondJob.prompt}`)).toBeInTheDocument();
+    expect(screen.queryByRole("alert")).not.toBeInTheDocument();
+  });
+
+  it("does not replace a cached empty video page with skeletons on return", async () => {
+    vi.mocked(webBrowserFetch)
+      .mockResolvedValueOnce(listResponse([]))
+      .mockReturnValueOnce(new Promise<Response>(() => {}));
+    const workspace = (open: boolean) => (
+      <WorkspaceDataCacheProvider>{open ? <VideoFiles visible /> : null}</WorkspaceDataCacheProvider>
+    );
+    const view = render(workspace(true));
+    await screen.findByText(ru.files.emptyVideoDescription);
+    view.rerender(workspace(false));
+    view.rerender(workspace(true));
+
+    expect(screen.getByText(ru.files.emptyVideoDescription)).toBeInTheDocument();
+    expect(document.querySelector('[data-ui="skeleton"]')).toBeNull();
+    expect(webBrowserFetch).toHaveBeenCalledTimes(2);
+  });
+
+  it("aborts the discarded StrictMode read and prevents its late result from overwriting the cache", async () => {
+    let finishOld!: (response: Response) => void;
+    let cache!: WorkspaceDataCache;
+    vi.mocked(webBrowserFetch)
+      .mockImplementationOnce(() => new Promise<Response>(resolve => { finishOld = resolve; }))
+      .mockResolvedValueOnce(listResponse([secondJob]))
+      .mockResolvedValueOnce(resultResponse(secondJob.id));
+    render(
+      <StrictMode>
+        <WorkspaceDataCacheProvider>
+          <CacheProbe onCache={value => { cache = value; }} />
+          <VideoFiles visible />
+        </WorkspaceDataCacheProvider>
+      </StrictMode>,
+    );
+    await screen.findByLabelText(`${ru.files.categories.video}: ${secondJob.prompt}`);
+    const discardedSignal = vi.mocked(webBrowserFetch).mock.calls[0]![1]?.signal;
+    expect(discardedSignal?.aborted).toBe(true);
+    await act(async () => { finishOld(listResponse([firstJob])); });
+    expect(screen.queryByText(firstJob.prompt)).not.toBeInTheDocument();
+    expect(cache.getVideoFilesFirstPage()?.items).toEqual([secondJob]);
+  });
+
+  it("clears cached private videos on an account boundary and ignores the old account refresh", async () => {
+    let finishOld!: (response: Response) => void;
+    let finishNew!: (response: Response) => void;
+    vi.mocked(webBrowserFetch)
+      .mockResolvedValueOnce(listResponse())
+      .mockResolvedValueOnce(Response.json(firstResult))
+      .mockImplementationOnce(() => new Promise<Response>(resolve => { finishOld = resolve; }))
+      .mockImplementationOnce(() => new Promise<Response>(resolve => { finishNew = resolve; }))
+      .mockResolvedValueOnce(resultResponse(secondJob.id));
+    const workspace = (accountId: string, open: boolean) => (
+      <WorkspaceDataCacheProvider key={accountId}>{open ? <VideoFiles visible /> : null}</WorkspaceDataCacheProvider>
+    );
+    const view = render(workspace("account-a", true));
+    await screen.findByLabelText(`${ru.files.categories.video}: ${firstJob.prompt}`);
+    view.rerender(workspace("account-a", false));
+    view.rerender(workspace("account-a", true));
+    expect(screen.getByText(firstJob.prompt)).toBeInTheDocument();
+    view.rerender(workspace("account-b", true));
+    expect(screen.queryByText(firstJob.prompt)).not.toBeInTheDocument();
+    expect(vi.mocked(webBrowserFetch).mock.calls[2]![1]?.signal?.aborted).toBe(true);
+    await act(async () => { finishOld(listResponse([thirdJob])); });
+    expect(screen.queryByText(thirdJob.prompt)).not.toBeInTheDocument();
+    await act(async () => { finishNew(listResponse([secondJob])); });
+    expect(await screen.findByLabelText(`${ru.files.categories.video}: ${secondJob.prompt}`)).toBeInTheDocument();
   });
 
   it("does not fetch while hidden and keeps loaded videos across visibility switches", async () => {
@@ -79,7 +196,7 @@ describe("VideoFiles", () => {
     view.rerender(<VideoFiles visible />);
 
     const video = await screen.findByLabelText(`${ru.files.categories.video}: ${firstJob.prompt}`);
-    expect(webBrowserFetch).toHaveBeenNthCalledWith(1, "/web/v1/video-jobs?limit=12");
+    expect(webBrowserFetch).toHaveBeenNthCalledWith(1, "/web/v1/video-jobs?limit=12", expect.objectContaining({ signal: expect.any(AbortSignal) }));
     expect(webBrowserFetch).toHaveBeenNthCalledWith(2, `/web/v1/video-jobs/${firstJob.id}/result`, expect.objectContaining({ signal: expect.any(AbortSignal) }));
     expect(video).toHaveAttribute("controls");
     expect(video).toHaveAttribute("src", `/web/v1/video-artifacts/${firstResult.artifacts[0]!.id}`);
@@ -120,7 +237,7 @@ describe("VideoFiles", () => {
     await screen.findByText(firstJob.prompt);
     fireEvent.click(screen.getByRole("button", { name: ru.files.loadMore }));
     expect(await screen.findByText(secondJob.prompt)).toBeInTheDocument();
-    expect(webBrowserFetch).toHaveBeenCalledWith("/web/v1/video-jobs?limit=12&cursor=next-page");
+    expect(webBrowserFetch).toHaveBeenCalledWith("/web/v1/video-jobs?limit=12&cursor=next-page", expect.objectContaining({ signal: expect.any(AbortSignal) }));
 
     fireEvent.click(screen.getByRole("button", { name: ru.imageHistory.refresh }));
     await screen.findByText(thirdJob.prompt);

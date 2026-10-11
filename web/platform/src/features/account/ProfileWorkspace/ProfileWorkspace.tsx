@@ -79,7 +79,7 @@ export function ProfileWorkspace({ methods = defaultAuthMethods, preview = false
         ) : activeTab === "security" ? (
           <AccountSecurity key={profile.account_id} profile={profile} methods={methods} preview={preview} oauthStatus={oauthStatus} />
         ) : (
-          <ProfileReferralProgram key={profile.account_id} preview={preview} />
+          <ProfileReferralProgram key={profile.account_id} accountId={profile.account_id} preview={preview} />
         )}
       </div>
     </section>

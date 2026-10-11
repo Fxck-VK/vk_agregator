@@ -1,8 +1,8 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
-import { fireEvent, render, screen, waitFor } from "@testing-library/react";
+import { act, fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { SpeechWorkspace } from "./SpeechWorkspace";
 import { loadModelCatalog } from "@/features/models/model-catalog-cache";
-import { activateSpeech, loadSpeechJob, prepareSpeech } from "./speech-api";
+import { activateSpeech, loadSpeechJob, loadSpeechResult, prepareSpeech } from "./speech-api";
 import type { PublicCatalog } from "@/features/models/model-catalog-contract";
 import { LocaleProvider } from "@/i18n/LocaleProvider";
 
@@ -26,6 +26,51 @@ describe("Speech workspace admission", () => {
     fireEvent.change(screen.getByRole("combobox", { name: "Модель" }), { target: { value: "whisper_1" } });
     await waitFor(() => expect(screen.getByLabelText("Аудиозапись")).toBeDisabled());
     expect(screen.getByText(/MP3 или WAV/)).toBeInTheDocument();
+  });
+
+  it("waits offline after activation and resumes status/result reads without repeating the write", async () => {
+    const catalog = await loadModelCatalog();
+    vi.mocked(loadModelCatalog).mockResolvedValue({ ...catalog, items: catalog.items.map((model) => ({
+      ...model, verification: "verified-contract", operations: model.operations.map((operation) => ({ ...operation, enabled: true })),
+    })) });
+    const job = { id: "22222222-2222-4222-8222-222222222222", model_id: "gpt_4o_mini_tts", status: "queued", cost_estimate: 25, created_at: "2026-09-20T00:00:00Z" };
+    vi.mocked(prepareSpeech).mockResolvedValue({ job, balance: 100, can_afford: true });
+    vi.mocked(activateSpeech).mockResolvedValue(job);
+    vi.mocked(loadSpeechJob).mockResolvedValue({ ...job, status: "succeeded" });
+    vi.mocked(loadSpeechResult).mockResolvedValue([{ id: job.id, kind: "audio", format: "wav", url: `/web/v1/speech-artifacts/${job.id}` }]);
+    const { unmount } = render(<SpeechWorkspace />);
+    fireEvent.change(screen.getByRole("textbox", { name: "Текст" }), { target: { value: "synthetic" } });
+    const calculate = screen.getByRole("button", { name: "Рассчитать стоимость" });
+    await waitFor(() => expect(calculate).toBeEnabled());
+    fireEvent.click(calculate);
+    const confirm = await screen.findByRole("button", { name: "Подтвердить запуск" });
+    vi.useFakeTimers();
+    try {
+      await act(async () => {
+        Object.defineProperty(navigator, "onLine", { configurable: true, value: false });
+        window.dispatchEvent(new Event("offline"));
+        fireEvent.click(confirm);
+      });
+      await act(async () => { await vi.advanceTimersByTimeAsync(60000); });
+      expect(screen.getByText("Задание выполняется…")).toBeVisible();
+      expect(loadSpeechJob).not.toHaveBeenCalled();
+      expect(screen.queryByRole("alert")).toBeNull();
+      await act(async () => {
+        Object.defineProperty(navigator, "onLine", { configurable: true, value: true });
+        window.dispatchEvent(new Event("online"));
+        window.dispatchEvent(new Event("online"));
+      });
+      expect(loadSpeechJob).toHaveBeenCalledTimes(1);
+      expect(loadSpeechJob).toHaveBeenCalledWith(job.id, expect.any(AbortSignal));
+      expect(loadSpeechResult).toHaveBeenCalledWith(job.id, expect.any(AbortSignal));
+      expect(screen.getByRole("link", { name: "Скачать аудио" })).toBeVisible();
+      expect(prepareSpeech).toHaveBeenCalledTimes(1);
+      expect(activateSpeech).toHaveBeenCalledTimes(1);
+    } finally {
+      unmount();
+      Object.defineProperty(navigator, "onLine", { configurable: true, value: true });
+      vi.useRealTimers();
+    }
   });
 
   it("switches labels and safe errors without resetting the speech draft or refetching", async () => {

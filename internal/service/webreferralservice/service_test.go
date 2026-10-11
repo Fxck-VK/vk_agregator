@@ -75,6 +75,31 @@ func TestSummaryGeneratesCodeAndRetriesUniqueConflict(t *testing.T) {
 	}
 }
 
+func TestStatisticsReadsCountersWithoutLookingUpOrCreatingCode(t *testing.T) {
+	id := uuid.New()
+	repo := &fakeRepository{summary: webreferralservice.Summary{Visits: 7, Registered: 2, Activated: 1, Rewarded: 1, RewardsEnabled: true}}
+	got, err := webreferralservice.New(repo).Statistics(context.Background(), id)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got.Visits != 7 || got.Registered != 2 || got.Activated != 1 || got.Rewarded != 1 || got.RewardsEnabled {
+		t.Fatalf("unexpected statistics: %+v", got)
+	}
+	if repo.codeReads != 0 || repo.created != nil || repo.summaryAccountID != id {
+		t.Fatal("statistics must read only this account's counters")
+	}
+	if _, err := webreferralservice.New(repo).Statistics(context.Background(), uuid.Nil); !errors.Is(err, domain.ErrForbidden) {
+		t.Fatalf("nil account: %v", err)
+	}
+	if _, err := webreferralservice.New(nil).Statistics(context.Background(), id); err == nil {
+		t.Fatal("missing repository must fail")
+	}
+	repo.summaryErr = errors.New("storage unavailable")
+	if _, err := webreferralservice.New(repo).Statistics(context.Background(), id); !errors.Is(err, repo.summaryErr) {
+		t.Fatalf("storage error: %v", err)
+	}
+}
+
 func TestCaptureNormalizesCodeAndStoresFirstTouchVisit(t *testing.T) {
 	ctx := context.Background()
 	now := time.Date(2026, 10, 8, 9, 30, 0, 0, time.UTC)
@@ -141,11 +166,14 @@ func TestAcceptRejectsNilAccount(t *testing.T) {
 }
 
 type fakeRepository struct {
-	code       *domain.WebReferralCode
-	codeErrs   []error
-	summary    webreferralservice.Summary
-	created    *domain.WebReferralCode
-	createErrs []error
+	codeReads        int
+	summaryAccountID uuid.UUID
+	summaryErr       error
+	code             *domain.WebReferralCode
+	codeErrs         []error
+	summary          webreferralservice.Summary
+	created          *domain.WebReferralCode
+	createErrs       []error
 
 	createdCodes []string
 
@@ -157,6 +185,7 @@ type fakeRepository struct {
 }
 
 func (r *fakeRepository) CodeByAccountID(_ context.Context, accountID uuid.UUID) (*domain.WebReferralCode, error) {
+	r.codeReads++
 	if len(r.codeErrs) > 0 {
 		err := r.codeErrs[0]
 		r.codeErrs = r.codeErrs[1:]
@@ -185,8 +214,9 @@ func (r *fakeRepository) CreateCode(_ context.Context, code *domain.WebReferralC
 	return nil
 }
 
-func (r *fakeRepository) Summary(context.Context, uuid.UUID) (webreferralservice.Summary, error) {
-	return r.summary, nil
+func (r *fakeRepository) Summary(_ context.Context, id uuid.UUID) (webreferralservice.Summary, error) {
+	r.summaryAccountID = id
+	return r.summary, r.summaryErr
 }
 
 func (r *fakeRepository) Capture(_ context.Context, visit domain.WebReferralVisit) error {

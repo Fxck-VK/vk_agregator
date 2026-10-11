@@ -23,6 +23,13 @@ export const runtime = "nodejs";
 async function handle(request: Request): Promise<Response> {
   const url = new URL(request.url);
   if (request.method === "GET" && url.searchParams.get("preview") === "1" && /^\/web\/v1\/image-artifacts\/[0-9a-f-]{36}$/i.test(url.pathname)) {
+    if (!isLocalWorkspacePreviewEnabled()) {
+      const thumbnail = await handleSource(request);
+      if (thumbnail.status !== 503) return thumbnail;
+      // Preserve the existing image UX during backend conversion/storage outages.
+      // The fallback original still passes the full owner/moderation checks.
+      await thumbnail.body?.cancel().catch(() => undefined);
+    }
     // Reuse normal authorization. The browser cannot supply an upstream URL.
     url.search = "";
     const headers = new Headers(request.headers);

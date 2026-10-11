@@ -298,6 +298,7 @@ export const modelCatalogSchema = z.object({
 });
 
 export type PublicCatalog = z.infer<typeof modelCatalogSchema>;
+export type ModelCatalogSnapshot = { value: PublicCatalog; updatedAt: number };
 export type PublicCatalogModel = PublicCatalog["items"][number];
 export type PublicOperation = PublicCatalogModel["operations"][number];
 export type PublicCatalogCategory = PublicCatalogModel["categories"][number];

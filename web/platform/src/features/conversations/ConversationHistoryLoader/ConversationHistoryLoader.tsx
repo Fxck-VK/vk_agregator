@@ -8,6 +8,7 @@ import { useEffect, useRef, useState } from "react";
 import { z } from "zod";
 
 import { ConversationHistory } from "@/features/conversations/ConversationHistory/ConversationHistory";
+import { useRevalidateWorkspaceConversationList } from "@/features/conversations/WorkspaceConversationList/WorkspaceConversationList";
 import {
   conversationHistoryPageLimit,
   type ConversationHistoryData,
@@ -52,6 +53,7 @@ function ConversationHistoryLoaderContent({
   initialRefresh: boolean;
 }): ReactNode {
   const t = useDictionary();
+  useRevalidateWorkspaceConversationList();
   const cache = useWorkspaceDataCache();
   const [initialHistory] = useState<ConversationHistoryData>(
     () => cache.getConversationHistory(conversationId) ?? { kind: "loading" },

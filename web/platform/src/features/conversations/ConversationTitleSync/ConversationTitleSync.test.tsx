@@ -20,8 +20,29 @@ const metadata = {
 describe("ConversationTitleSync", () => {
   afterEach(() => {
     cleanup();
+    Object.defineProperty(navigator, "onLine", { configurable: true, value: true });
     vi.useRealTimers();
     vi.clearAllMocks();
+  });
+
+  it("does not exhaust generated-title checks offline and publishes the title on reconnect", async () => {
+    vi.useFakeTimers();
+    Object.defineProperty(navigator, "onLine", { configurable: true, value: false });
+    const onConversation = vi.fn();
+    const onComplete = vi.fn();
+    vi.mocked(webBrowserFetch).mockResolvedValue(Response.json({ ...metadata, title: "План запуска продукта" }));
+    render(<ConversationTitleSync conversationId={conversationId} fallbackTitle={fallbackTitle} onComplete={onComplete} onConversation={onConversation} />);
+    await act(async () => { await vi.advanceTimersByTimeAsync(60000); });
+    expect(webBrowserFetch).not.toHaveBeenCalled();
+    expect(onComplete).not.toHaveBeenCalled();
+    await act(async () => {
+      Object.defineProperty(navigator, "onLine", { configurable: true, value: true });
+      window.dispatchEvent(new Event("online"));
+      window.dispatchEvent(new Event("online"));
+    });
+    expect(webBrowserFetch).toHaveBeenCalledTimes(1);
+    expect(onConversation).toHaveBeenCalledWith({ ...metadata, title: "План запуска продукта" });
+    expect(onComplete).toHaveBeenCalledOnce();
   });
 
   it("polls one fresh conversation sequentially and only publishes a changed semantic title", async () => {

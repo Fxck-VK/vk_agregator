@@ -1,9 +1,11 @@
-import { fireEvent, render, screen, waitFor } from "@testing-library/react";
+import { act, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
+import { StrictMode } from "react";
 import { describe, expect, it, vi } from "vitest";
 
 import { LocaleProvider } from "@/i18n/LocaleProvider";
+import { WorkspaceDataCacheProvider, useWorkspaceDataCache, type WorkspaceDataCache } from "@/features/workspace/WorkspaceDataCache/WorkspaceDataCache";
 
-import { MusicApiError } from "../music-api";
+import { MusicApiError, type MusicJob, type MusicJobList, type MusicJobResult } from "../music-api";
 import { MusicWorkspaceController, type MusicWorkspaceAPI } from "./MusicWorkspaceController";
 import type { MusicModelCatalog } from "../music-model-catalog";
 
@@ -66,7 +68,181 @@ const pendingCatalog: MusicModelCatalog = {
   ],
 };
 
+const oldMusicJob: MusicJob = {
+  action: "generate", cost_estimate: 37, created_at: "2026-09-16T10:00:00Z",
+  id: "33333333-3333-4333-8333-333333333333", model_id: "suno_v6", status: "succeeded",
+};
+const newMusicJob: MusicJob = { ...oldMusicJob, id: "44444444-4444-4444-8444-444444444444", created_at: "2026-09-16T11:00:00Z" };
+function audioResult(job: MusicJob, title: string): MusicJobResult {
+  return {
+    artifacts: [], job_id: job.id,
+    tracks: [{ audio_index: 1, job_id: job.id, title, audio_url: `/web/v1/music-artifacts/${job.id}`, duration_sec: 120 }],
+  };
+}
+const loadedCatalog = () => Promise.resolve(enabledCatalog);
+
 describe("MusicWorkspaceController", () => {
+  it("keeps old tracks and polling state after disconnect and resumes only reads on reconnect", async () => {
+    vi.useFakeTimers();
+    let failRead!: (reason: Error) => void;
+    const pendingJob: MusicJob = { ...newMusicJob, status: "queued" };
+    const api = apiStub({
+      loadMusicJobs: vi.fn().mockResolvedValue({ items: [oldMusicJob, pendingJob], has_more: false, next_cursor: null }),
+      loadMusicJob: vi.fn().mockImplementationOnce(() => new Promise((_resolve, reject) => { failRead = reject; }))
+        .mockResolvedValue(newMusicJob),
+      loadMusicJobResult: vi.fn(async id => audioResult(id === oldMusicJob.id ? oldMusicJob : newMusicJob, id === oldMusicJob.id ? "Старый трек" : "Новый трек")),
+    });
+    const { unmount } = render(<MusicWorkspaceController api={api} catalogLoader={loadedCatalog} />);
+    try {
+      await act(async () => { await vi.advanceTimersByTimeAsync(0); });
+      fireEvent.click(screen.getByRole("button", { name: /^Мои треки/ }));
+      await act(async () => { await vi.advanceTimersByTimeAsync(0); });
+      expect(screen.getByText("Старый трек")).toBeVisible();
+      expect(api.loadMusicJob).toHaveBeenCalledTimes(1);
+      await act(async () => {
+        Object.defineProperty(navigator, "onLine", { configurable: true, value: false });
+        window.dispatchEvent(new Event("offline"));
+        failRead(new TypeError("network disconnected"));
+        await vi.advanceTimersByTimeAsync(60000);
+      });
+      expect(screen.getByText("Старый трек")).toBeVisible();
+      expect(api.loadMusicJob).toHaveBeenCalledTimes(1);
+      expect(screen.queryByRole("alert")).toBeNull();
+      await act(async () => {
+        Object.defineProperty(navigator, "onLine", { configurable: true, value: true });
+        window.dispatchEvent(new Event("online"));
+        window.dispatchEvent(new Event("online"));
+      });
+      expect(api.loadMusicJob).toHaveBeenCalledTimes(2);
+      expect(screen.getByRole("heading", { name: "Новый трек", level: 3 })).toBeVisible();
+      expect(screen.getByText("Старый трек")).toBeVisible();
+      expect(api.activateMusicJob).not.toHaveBeenCalled();
+      expect(api.prepareMusicJob).not.toHaveBeenCalled();
+    } finally {
+      unmount();
+      Object.defineProperty(navigator, "onLine", { configurable: true, value: true });
+      vi.useRealTimers();
+    }
+  });
+  it("keeps cached tracks and lyrics visible when history revalidation fails", async () => {
+    const api = apiStub({
+      loadMusicJobs: vi.fn()
+        .mockResolvedValueOnce({ items: [oldMusicJob], has_more: false, next_cursor: null })
+        .mockRejectedValueOnce(new Error("offline")),
+      loadMusicJobResult: vi.fn().mockResolvedValue({
+        ...audioResult(oldMusicJob, "Cached track"),
+        lyrics: [{ text: "Cached lyrics", title: "Cached song" }],
+      }),
+    });
+    const workspace = (open: boolean) => (
+      <WorkspaceDataCacheProvider>{open ? <MusicWorkspaceController api={api} catalogLoader={loadedCatalog} /> : null}</WorkspaceDataCacheProvider>
+    );
+    const view = render(workspace(true));
+    fireEvent.click(screen.getByRole("button", { name: /Мои треки/ }));
+    await screen.findByRole("heading", { name: "Cached track" });
+    await screen.findByText("Cached lyrics");
+    view.rerender(workspace(false));
+    view.rerender(workspace(true));
+    fireEvent.click(screen.getByRole("button", { name: /Мои треки/ }));
+    expect(screen.getByRole("heading", { name: "Cached track" })).toBeVisible();
+    expect(screen.getByText("Cached lyrics")).toBeVisible();
+    await waitFor(() => expect(api.loadMusicJobs).toHaveBeenCalledTimes(2));
+    expect(screen.getByRole("heading", { name: "Cached track" })).toBeVisible();
+    expect(api.loadMusicJobResult).toHaveBeenCalledTimes(1);
+  });
+
+  it("aborts reads on account change and does not cache or show a late old-account result", async () => {
+    let finishOldResult!: (result: MusicJobResult) => void;
+    let oldCache!: WorkspaceDataCache;
+    function CaptureCache() {
+      oldCache = useWorkspaceDataCache();
+      return null;
+    }
+    const oldApi = apiStub({
+      loadMusicJobs: vi.fn().mockResolvedValue({ items: [oldMusicJob], has_more: false, next_cursor: null }),
+      loadMusicJobResult: vi.fn(() => new Promise<MusicJobResult>(resolve => { finishOldResult = resolve; })),
+    });
+    const newApi = apiStub();
+    const workspace = (owner: "old" | "new") => (
+      <WorkspaceDataCacheProvider key={owner}>
+        {owner === "old" ? <CaptureCache /> : null}
+        <MusicWorkspaceController api={owner === "old" ? oldApi : newApi} catalogLoader={loadedCatalog} />
+      </WorkspaceDataCacheProvider>
+    );
+    const view = render(workspace("old"));
+    await waitFor(() => expect(oldApi.loadMusicJobResult).toHaveBeenCalledTimes(1));
+    const oldSignal = vi.mocked(oldApi.loadMusicJobResult).mock.calls[0][1]!;
+    view.rerender(workspace("new"));
+    expect(oldSignal.aborted).toBe(true);
+    await act(async () => { finishOldResult(audioResult(oldMusicJob, "Private old track")); });
+    fireEvent.click(screen.getByRole("button", { name: /Мои треки/ }));
+    expect(screen.queryByRole("heading", { name: "Private old track" })).not.toBeInTheDocument();
+    expect(oldCache.musicResults.getAll()).toEqual([]);
+    expect(newApi.loadMusicJobResult).not.toHaveBeenCalled();
+  });
+
+  it("loads completed history after StrictMode effect replay without duplicate result reads", async () => {
+    const api = apiStub({
+      loadMusicJobs: vi.fn().mockResolvedValue({ items: [oldMusicJob], has_more: false, next_cursor: null }),
+      loadMusicJobResult: vi.fn().mockResolvedValue(audioResult(oldMusicJob, "Strict track")),
+    });
+    render(<StrictMode><WorkspaceDataCacheProvider><MusicWorkspaceController api={api} catalogLoader={loadedCatalog} /></WorkspaceDataCacheProvider></StrictMode>);
+    fireEvent.click(screen.getByRole("button", { name: /Мои треки/ }));
+    await screen.findByRole("heading", { name: "Strict track" });
+    expect(api.loadMusicJobResult).toHaveBeenCalledTimes(1);
+    expect(vi.mocked(api.loadMusicJobResult).mock.calls[0][1]?.aborted).toBe(false);
+  });
+
+  it("restores completed tracks immediately on return and fetches only newly completed results", async () => {
+    let finishHistory!: (page: MusicJobList) => void;
+    const api = apiStub({
+      loadMusicJobs: vi.fn()
+        .mockResolvedValueOnce({ items: [oldMusicJob], has_more: false, next_cursor: null })
+        .mockImplementationOnce(() => new Promise(resolve => { finishHistory = resolve; })),
+      loadMusicJobResult: vi.fn(async id => audioResult(id === oldMusicJob.id ? oldMusicJob : newMusicJob, id === oldMusicJob.id ? "Old track" : "New track")),
+    });
+    const workspace = (open: boolean) => (
+      <WorkspaceDataCacheProvider>{open ? <MusicWorkspaceController api={api} catalogLoader={loadedCatalog} /> : null}</WorkspaceDataCacheProvider>
+    );
+    const view = render(workspace(true));
+    fireEvent.click(screen.getByRole("button", { name: /Мои треки/ }));
+    await screen.findByRole("heading", { name: "Old track" });
+    view.rerender(workspace(false));
+    view.rerender(workspace(true));
+    fireEvent.click(screen.getByRole("button", { name: /Мои треки/ }));
+    const oldCard = screen.getByRole("heading", { name: "Old track" }).closest("article")!;
+    const player = oldCard.querySelector("audio");
+    fireEvent.click(within(oldCard).getByRole("button", { name: /Выбрать трек/ }));
+    await waitFor(() => expect(api.loadMusicJobs).toHaveBeenCalledTimes(2));
+    await act(async () => { finishHistory({ items: [newMusicJob, oldMusicJob], has_more: false, next_cursor: null }); });
+    await screen.findByRole("heading", { name: "New track" });
+    expect(screen.getByRole("heading", { name: "Old track" }).closest("article")?.querySelector("audio")).toBe(player);
+    expect(oldCard).toHaveAttribute("data-selected", "true");
+    expect(vi.mocked(api.loadMusicJobResult).mock.calls.filter(([id]) => id === oldMusicJob.id)).toHaveLength(1);
+    expect(vi.mocked(api.loadMusicJobResult).mock.calls.filter(([id]) => id === newMusicJob.id)).toHaveLength(1);
+  });
+
+  it("adds a completed new generation while retaining old tracks and their loaded results", async () => {
+    const api = apiStub({
+      loadMusicJobs: vi.fn().mockResolvedValue({ items: [oldMusicJob], has_more: false, next_cursor: null }),
+      loadMusicJobResult: vi.fn(async id => audioResult(id === oldMusicJob.id ? oldMusicJob : newMusicJob, id === oldMusicJob.id ? "Old track" : "New track")),
+      prepareMusicJob: vi.fn().mockResolvedValue({ balance: 100, can_afford: true, job: { ...newMusicJob, status: "prepared" } }),
+      activateMusicJob: vi.fn().mockResolvedValue({ job: newMusicJob }),
+      loadMusicJob: vi.fn().mockResolvedValue(newMusicJob),
+    });
+    render(<MusicWorkspaceController api={api} catalogLoader={loadedCatalog} />);
+    fireEvent.click(screen.getByRole("button", { name: /Мои треки/ }));
+    await screen.findByRole("heading", { name: "Old track" });
+    const player = screen.getByRole("heading", { name: "Old track" }).closest("article")?.querySelector("audio");
+    fireEvent.change(screen.getByRole("textbox", { name: "Описание трека" }), { target: { value: "A new song" } });
+    fireEvent.click(screen.getByRole("button", { name: "Создать песню" }));
+    fireEvent.click(await screen.findByRole("button", { name: /Подтвердить/ }));
+    await screen.findByRole("heading", { name: "New track" });
+    await waitFor(() => expect(vi.mocked(api.loadMusicJobs).mock.calls.length).toBeGreaterThanOrEqual(2));
+    expect(screen.getByRole("heading", { name: "Old track" }).closest("article")?.querySelector("audio")).toBe(player);
+    expect(vi.mocked(api.loadMusicJobResult).mock.calls.filter(([id]) => id === oldMusicJob.id)).toHaveLength(1);
+    expect(vi.mocked(api.loadMusicJobResult).mock.calls.filter(([id]) => id === newMusicJob.id)).toHaveLength(1);
+  });
   it("selects a linked catalog model and responds to music-to-music navigation without starting jobs", async () => {
     const api = apiStub();
     const catalog: MusicModelCatalog = {
@@ -242,7 +418,7 @@ describe("MusicWorkspaceController", () => {
 
     render(<MusicWorkspaceController api={api} catalogLoader={() => Promise.resolve(enabledCatalog)} />);
 
-    await waitFor(() => expect(api.loadMusicJobResult).toHaveBeenCalledWith("33333333-3333-4333-8333-333333333333"));
+    await waitFor(() => expect(api.loadMusicJobResult).toHaveBeenCalledWith("33333333-3333-4333-8333-333333333333", expect.any(AbortSignal)));
     expect(await screen.findByText((_, element) => element?.textContent === "line one\nline two")).toBeVisible();
     expect(screen.getByText("Теги: synth pop")).toBeVisible();
     expect(screen.getByText("BPM: 124 · диапазон 120–128")).toBeVisible();
@@ -280,7 +456,7 @@ describe("MusicWorkspaceController", () => {
     render(<MusicWorkspaceController api={api} catalogLoader={() => Promise.resolve(enabledCatalog)} pollIntervalMs={1} />);
 
     await waitFor(() => expect(api.loadMusicJob).toHaveBeenCalledTimes(2));
-    expect(api.loadMusicJobResult).toHaveBeenCalledWith(job.id);
+    expect(api.loadMusicJobResult).toHaveBeenCalledWith(job.id, expect.any(AbortSignal));
     expect(await screen.findByText("ready lyric")).toBeVisible();
   });
 
@@ -332,7 +508,7 @@ describe("MusicWorkspaceController", () => {
     fireEvent.click(await screen.findByRole("button", { name: "Загрузить ещё" }));
     fireEvent.click(screen.getByRole("button", { name: "Настройки трека" }));
 
-    await waitFor(() => expect(api.loadMusicJobs).toHaveBeenLastCalledWith(8, "older-page"));
+    await waitFor(() => expect(api.loadMusicJobs).toHaveBeenLastCalledWith(8, "older-page", expect.any(AbortSignal)));
     expect(await screen.findByRole("option", { name: "Bright persona" })).toBeInTheDocument();
     expect(await screen.findByRole("option", { name: "Lead model" })).toBeInTheDocument();
   });

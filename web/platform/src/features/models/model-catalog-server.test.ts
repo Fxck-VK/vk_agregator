@@ -13,7 +13,9 @@ describe("server model seed", () => {
     const { loadServerModelCatalog } = await import("./model-catalog-server");
     vi.mocked(webServerFetch).mockResolvedValueOnce(Response.json(rawCatalog));
     const [first, second] = await Promise.all([loadServerModelCatalog(), loadServerModelCatalog()]);
-    expect(first?.items.length).toBeGreaterThan(0);
+    expect(first?.value.items.length).toBeGreaterThan(0);
+    expect(first?.value.items.some(model => model.id === "gpt_4o_mini_tts")).toBe(true);
+    expect(first?.updatedAt).toBeGreaterThan(0);
     expect(second).toBe(first);
     expect(await loadServerModelCatalog()).toBe(first);
     expect(webServerFetch).toHaveBeenCalledTimes(1);
@@ -30,6 +32,19 @@ describe("server model seed", () => {
     expect(await pending).toBeNull();
     expect(webServerFetch).toHaveBeenCalledTimes(2);
     finish(Response.json(rawCatalog));
-    expect((await loadServerModelCatalog())?.items.length).toBeGreaterThan(0);
+    expect((await loadServerModelCatalog())?.value.items.length).toBeGreaterThan(0);
+  });
+  it("preserves the seed age on cache hits and reloads after 60 seconds", async () => {
+    vi.useFakeTimers();
+    vi.setSystemTime(100_000);
+    const { loadServerModelCatalog } = await import("./model-catalog-server");
+    vi.mocked(webServerFetch).mockImplementation(async () => Response.json(rawCatalog));
+    const seed = await loadServerModelCatalog();
+    expect(seed?.updatedAt).toBe(100_000);
+    vi.advanceTimersByTime(59_999);
+    expect(await loadServerModelCatalog()).toBe(seed);
+    vi.advanceTimersByTime(1);
+    expect((await loadServerModelCatalog())?.updatedAt).toBe(160_000);
+    expect(webServerFetch).toHaveBeenCalledTimes(2);
   });
 });
