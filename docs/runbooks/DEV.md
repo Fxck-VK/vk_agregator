@@ -339,8 +339,11 @@ pwsh -NoProfile -File scripts/ci/dev-deploy-preflight.ps1
 ```
 
 Use a patched Go toolchain. For the current release baseline, set
-`$env:GOTOOLCHAIN = 'go1.25.14'` in this shell when a newer but unpatched Go
+`$env:GOTOOLCHAIN = 'go1.26.9'` in this shell when a newer but unpatched Go
 installation would otherwise take precedence over `go.mod`.
+The October 8 security baseline uses Go 1.26.9 and `golang.org/x/net` v0.60.0.
+All Go build images use the same pinned Go release and immutable digest.
+See the [Go release history](https://go.dev/doc/devel/release#go1.26.9).
 
 It runs source tests, npm audits, `govulncheck`, documentation/infrastructure
 policy and the pinned Trivy filesystem scan in that order. Policy v2 includes
