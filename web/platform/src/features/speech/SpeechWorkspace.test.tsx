@@ -5,9 +5,11 @@ import { loadModelCatalog } from "@/features/models/model-catalog-cache";
 import { activateSpeech, loadSpeechJob, loadSpeechResult, prepareSpeech } from "./speech-api";
 import type { PublicCatalog } from "@/features/models/model-catalog-contract";
 import { LocaleProvider } from "@/i18n/LocaleProvider";
+import { uploadMusicInput } from "@/features/music/music-api";
 
 vi.mock("@/features/models/model-catalog-cache", () => ({ loadModelCatalog: vi.fn(), resetModelCatalogCacheForTests: vi.fn() }));
 vi.mock("./speech-api", () => ({ prepareSpeech: vi.fn(), activateSpeech: vi.fn(), loadSpeechJob: vi.fn(), loadSpeechResult: vi.fn() }));
+vi.mock("@/features/music/music-api",()=>({uploadMusicInput:vi.fn()}));
 
 describe("Speech workspace admission", () => {
   beforeEach(() => {
@@ -15,6 +17,24 @@ describe("Speech workspace admission", () => {
     vi.mocked(loadModelCatalog).mockResolvedValue({ schema_version: 1, default_model_id: "gpt_4o_mini_tts", items: [
       { id: "gpt_4o_mini_tts", name: "GPT-4o Mini TTS", kind: "audio", description: "", categories: [], verification: "pending-verification", operations: [{ id: "speak", kind: "audio", enabled: false, inputs: { images: { support: "unsupported", enabled: false }, video: { support: "unsupported", enabled: false }, audio: { support: "unsupported", enabled: false }, documents: { support: "unsupported", enabled: false }, max_total_bytes: 0 }, audio: { tasks: ["tts"] } }] },
     ] } satisfies PublicCatalog);
+  });
+  it("opens enabled Whisper and confirms only the server price after an owned upload", async () => {
+    const catalog=await loadModelCatalog();
+    const base=catalog.items[0];
+    vi.mocked(loadModelCatalog).mockResolvedValue({...catalog,items:[...catalog.items,{...base,id:"whisper_1",name:"Whisper 1",verification:"dev-smoke",operations:[{...base.operations[0],id:"transcribe",enabled:true,audio:{tasks:["transcribe"],formats:["json"],credits_per_started_minute:25},inputs:{...base.operations[0].inputs,audio:{support:"supported",enabled:true,max_bytes:25_000_000,max_duration_sec:480}}}]}]});
+    vi.mocked(uploadMusicInput).mockResolvedValue({artifact_id:"11111111-1111-4111-8111-111111111111",mime_type:"audio/wav",duration_ms:60001,size_bytes:100});
+    const job={id:"22222222-2222-4222-8222-222222222222",model_id:"whisper_1",status:"prepared",cost_estimate:50,created_at:"2026-10-19T00:00:00Z"};
+    vi.mocked(prepareSpeech).mockResolvedValue({job,balance:100,can_afford:true});
+    render(<SpeechWorkspace />);
+    const file=await screen.findByLabelText("Аудиозапись");
+    expect(file).toBeEnabled();
+    expect(screen.getByText("25 кредитов за каждую начатую минуту.")).toBeVisible();
+    fireEvent.change(file,{target:{files:[new File(["synthetic"],"speech.wav",{type:"audio/wav"})]}});
+    fireEvent.click(screen.getByRole("button",{name:"Рассчитать стоимость"}));
+    await screen.findByRole("button",{name:"Подтвердить запуск"});
+    expect(prepareSpeech).toHaveBeenCalledWith({model_id:"whisper_1",audio_artifact_id:"11111111-1111-4111-8111-111111111111",speech:{format:"json"}},expect.any(String));
+    expect(activateSpeech).not.toHaveBeenCalled();
+    expect(screen.getByRole("combobox",{name:"Модель"})).toHaveValue("whisper_1");
   });
   it("shows pending speech separately and cannot submit a paid request", async () => {
     render(<SpeechWorkspace />);

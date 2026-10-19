@@ -63,6 +63,15 @@ func buildDEVSmokeRegistry() Registry {
 	}
 	for _, c := range MediaCandidates() {
 		switch c.Kind {
+		case "audio":
+			if c.PublicID == "whisper_1" {
+				for seconds := 60; seconds <= domain.WhisperMaxInputDurationSec; seconds += 60 {
+					q, err := pricingcatalog.WhisperDEVQuote(seconds)
+					if err == nil {
+						r.smokePrices = append(r.smokePrices, smokePrice(q))
+					}
+				}
+			}
 		case "image":
 			qualities := []string{}
 			for _, quality := range ImageCandidateQualities(c) {
@@ -156,6 +165,10 @@ func (r Registry) IsDEVSmokeModel(id string) bool {
 		return false
 	}
 	if c.Kind == "audio" {
+		if id == "whisper_1" {
+			_, err := pricingcatalog.WhisperDEVQuote(60)
+			return err == nil
+		}
 		_, err := pricingcatalog.MusicCandidateQuote(id, "generate", false)
 		return err == nil
 	}
@@ -164,7 +177,8 @@ func (r Registry) IsDEVSmokeModel(id string) bool {
 
 // MediaCandidateRunnable distinguishes manual DEV smoke from verified admission.
 // Owned Suno task continuation is available for manual DEV smoke.
-// Uploads, other transforms and unmetered speech remain closed.
+// Whisper transcription uses the explicit fixed DEV minute tariff. Other
+// transforms and unmetered text-to-speech remain closed.
 func (r Registry) MediaCandidateRunnable(id, operation string) bool {
 	if r.MediaCandidateAdmitted(id, operation) {
 		return true
@@ -175,6 +189,9 @@ func (r Registry) MediaCandidateRunnable(id, operation string) bool {
 	c, ok := MediaCandidateByID(id)
 	if !ok {
 		return false
+	}
+	if id == "whisper_1" {
+		return operation == "transcribe"
 	}
 	if c.Kind == "video" {
 		if VideoCandidateRequiresImages(id) {

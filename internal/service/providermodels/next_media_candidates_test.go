@@ -30,6 +30,9 @@ func TestNextSixMediaCandidatesExposeDatedDraftFacts(t *testing.T) {
 		if tt.kind == "video" {
 			checkedAt = "2026-09-30"
 		}
+		if tt.publicID == "whisper_1" {
+			checkedAt = "2026-10-19"
+		}
 		candidate, ok := providermodels.MediaCandidateByID(tt.publicID)
 		if !ok {
 			t.Fatalf("missing candidate %s", tt.publicID)
@@ -122,7 +125,7 @@ func TestImagenLyriaAndSpeechDraftsKeepKnownBoundsOnly(t *testing.T) {
 
 	whisper, _ := providermodels.MediaCandidateByID("whisper_1")
 	whisperOp := onlyOperation(t, providermodels.DraftMediaContract(whisper), "transcribe")
-	if whisperOp.Kind != "text" || whisperOp.Inputs.Audio.Support != modelcontract.Supported || whisperOp.Inputs.Audio.MaxBytes != 25<<20 || whisperOp.Text == nil || whisperOp.Audio != nil {
+	if whisperOp.Kind != "text" || whisperOp.Inputs.Audio.Support != modelcontract.Supported || whisperOp.Inputs.Audio.MaxBytes != 25_000_000 || whisperOp.Text == nil || whisperOp.Audio != nil {
 		t.Fatalf("whisper contract = %+v", whisperOp)
 	}
 }

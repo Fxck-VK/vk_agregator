@@ -35,12 +35,16 @@ Lyria exposes `generate`; Suno V6/Wild/Mini also expose `extend` from an owned,
 succeeded music Job (2026-10-19). Upload-based continuation and other transforms
 remain closed. Continuation keeps the existing server quote (30 credits, 60 in
 Max mode), confirmation, reservation and worker-only provider submission.
-GPT-4o Mini TTS and Whisper remain disabled until
-bounded per-job billing is implemented. Reference-only legacy routes remain subject
+GPT-4o Mini TTS remains disabled. Whisper-1 is enabled for manual DEV smoke with
+the operator-approved retail price of 25 credits per started minute (maximum
+200 credits for 8 minutes), bound to owned, probed MP3/WAV inputs up to 25 MB.
+This is not a verified APIMart minute tariff; provider cost remains unknown.
+See [Whisper policy and live evidence](../../docs/runbooks/MODEL_CATALOG.md#whisper-dev-fixed-minute-pricing-2026-10-19).
+Reference-only legacy routes remain subject
 to their existing surface/input restrictions.
 
 The September 30 image extension and October 2 video pricing/wiring bring the
-prepared media count to 31. Ten new video candidates use exact APIMart Gold
+prepared media count to 31; the October 19 Whisper activation makes 32. Ten new video candidates use exact APIMart Gold
 rates, x3 rounded up to five credits. Vidu Q3 Standard/Mix require 1-7 owned
 PNG/JPEG inputs and working artifact storage; other new video routes are
 text-only. Gemini Omni Flash Preview has automatic 3-10s output and a fixed

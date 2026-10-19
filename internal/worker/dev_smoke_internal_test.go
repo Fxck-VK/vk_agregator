@@ -84,6 +84,18 @@ func TestDEVSmokePublicControlsReachAdapterWithoutNetwork(t *testing.T) {
 			t.Fatalf("incorrect verification status for %s", m.ID)
 		}
 		if m.Kind == "audio" {
+			if m.ID == "whisper_1" {
+				if len(m.Operations) != 1 || !m.Operations[0].Enabled || !m.Operations[0].Inputs.Audio.Enabled {
+					t.Fatal("Whisper controls unavailable")
+				}
+				p, job, _ := whisperWorkerFixture(t)
+				request, err := p.buildSpeechRequest(context.Background(), job, 1)
+				if err != nil {
+					t.Fatal(err)
+				}
+				checkRequest(m.ID, request)
+				continue
+			}
 			enabled := 0
 			for _, op := range m.Operations {
 				if op.Enabled {
@@ -189,7 +201,7 @@ func TestDEVSmokePublicControlsReachAdapterWithoutNetwork(t *testing.T) {
 			}
 		}
 	}
-	if count != 31 {
-		t.Fatalf("enabled candidates %d, want 31", count)
+	if count != 32 {
+		t.Fatalf("enabled candidates %d, want 32", count)
 	}
 }

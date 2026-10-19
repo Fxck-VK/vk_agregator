@@ -26,6 +26,9 @@ func (r mediaContractRegistry) validateProviderSubmit(provider domain.ProviderNa
 	if req.Modality != domain.ModalityVideo || req.Operation != domain.OperationVideoGenerate {
 		return nil, nil
 	}
+	if estimate.Unknown {
+		return nil, providerContractError{message: "worker: video provider cost is unknown"}
+	}
 	contract, ok := r.find(provider, req.ModelCode, req.Modality)
 	if !ok {
 		if provider == domain.ProviderMock && len(r.contracts) == 0 {

@@ -1,5 +1,5 @@
-// Package speechgeneration defines speech jobs without provider IO. Prices must
-// come from a verified server catalog; token tariffs alone cannot quote audio.
+// Package speechgeneration defines speech jobs without provider IO. Quotes are
+// server-owned; the fixed DEV retail policy does not infer provider audio tokens.
 package speechgeneration
 
 import (
@@ -7,6 +7,7 @@ import (
 	"errors"
 	"github.com/google/uuid"
 	"vk-ai-aggregator/internal/domain"
+	"vk-ai-aggregator/internal/service/mediaprobe"
 	"vk-ai-aggregator/internal/service/pricingcatalog"
 	"vk-ai-aggregator/internal/service/providermodels"
 )
@@ -21,8 +22,9 @@ type Request struct {
 }
 type JobParams struct {
 	Request
-	Provider  domain.ProviderName `json:"provider"`
-	ModelCode string              `json:"model_code"`
+	InputDurationMS int64               `json:"input_duration_ms,omitempty"`
+	Provider        domain.ProviderName `json:"provider"`
+	ModelCode       string              `json:"model_code"`
 }
 type PriceCatalog interface {
 	Snapshot(pricingcatalog.ProductKey) (pricingcatalog.PricingSnapshot, error)
@@ -69,22 +71,63 @@ func (r Request) Validate() error {
 	}
 	return nil
 }
-func Resolve(r Request, registry providermodels.Registry, prices PriceCatalog) (JobParams, pricingcatalog.PricingSnapshot, error) {
+func (p JobParams) Key() pricingcatalog.ProductKey {
+	k := p.Request.Key()
+	if p.Operation() == domain.OperationAudioSTT {
+		seconds, err := pricingcatalog.WhisperBillableDurationSec(p.InputDurationMS)
+		if err != nil {
+			k.DurationSec = -1
+		} else {
+			k.DurationSec = seconds
+		}
+	}
+	return k
+}
+
+func (p JobParams) Validate() error {
+	if p.Request.Validate() != nil {
+		return ErrInvalidRequest
+	}
+	if p.Operation() == domain.OperationAudioSTT {
+		if _, err := pricingcatalog.WhisperBillableDurationSec(p.InputDurationMS); err != nil {
+			return ErrInvalidRequest
+		}
+	} else if p.InputDurationMS != 0 {
+		return ErrInvalidRequest
+	}
+	return nil
+}
+
+func ValidateTranscriptionInput(a *domain.Artifact, owner uuid.UUID) error {
+	if mediaprobe.ValidateMusicInputArtifact(a, owner) != nil || a.SizeBytes > domain.WhisperMaxInputBytes || (a.MimeType != "audio/mpeg" && a.MimeType != "audio/wav" && a.MimeType != "audio/x-wav") {
+		return ErrInvalidRequest
+	}
+	if _, err := pricingcatalog.WhisperBillableDurationSec(a.DurationMS); err != nil {
+		return ErrInvalidRequest
+	}
+	return nil
+}
+
+func Resolve(r Request, registry providermodels.Registry, prices PriceCatalog, inputDurationMS int64) (JobParams, pricingcatalog.PricingSnapshot, error) {
 	if err := r.Validate(); err != nil {
 		return JobParams{}, pricingcatalog.PricingSnapshot{}, err
 	}
-	if !registry.MediaCandidateAdmitted(r.ModelID, r.Action()) || prices == nil {
+	if !registry.MediaCandidateRunnable(r.ModelID, r.Action()) || prices == nil {
 		return JobParams{}, pricingcatalog.PricingSnapshot{}, ErrUnavailable
 	}
 	c, ok := providermodels.MediaCandidateByID(r.ModelID)
 	if !ok {
 		return JobParams{}, pricingcatalog.PricingSnapshot{}, ErrUnavailable
 	}
-	s, err := prices.Snapshot(r.Key())
-	if err != nil || !s.Valid() || s.Key != r.Key() {
+	p := JobParams{Request: r, Provider: c.Provider, ModelCode: c.ModelCode, InputDurationMS: inputDurationMS}
+	if err := p.Validate(); err != nil {
+		return JobParams{}, pricingcatalog.PricingSnapshot{}, err
+	}
+	s, err := prices.Snapshot(p.Key())
+	if err != nil || !s.Valid() || s.Key != p.Key() {
 		return JobParams{}, pricingcatalog.PricingSnapshot{}, ErrUnavailable
 	}
-	return JobParams{Request: r, Provider: c.Provider, ModelCode: c.ModelCode}, s, nil
+	return p, s, nil
 }
 func DecodeJob(job *domain.Job) (JobParams, error) {
 	var p JobParams

@@ -1,6 +1,6 @@
 {
   "schema_version": 5,
-  "updated_at": "2026-10-08T06:55:02+03:00",
+  "updated_at": "2026-10-19T12:47:07.0211911+03:00",
   "branch": "fastlife_dev",
   "remote_tracking": "origin/dev-deploy",
   "purpose": "Short machine-readable current context and routing for agents. This file is not project history.",
@@ -59,6 +59,7 @@
     "loadtest_contour": "Mock providers, payments and delivery only; no production hosts or paid calls."
   },
   "recent_decisions": [
+    "Whisper-1 is DEV-only with the explicitly approved fixed site tariff of 25 credits per started minute, up to 8 minutes; owned probed MP3/WAV only, provider cost remains unknown, production admission unchanged. See docs/runbooks/MODEL_CATALOG.md#whisper-dev-fixed-minute-pricing-2026-10-19.",
     "Website referrals use canonical account-owned codes, first-touch hashed 30-day browser intents and transactional new-account acceptance. Website counters are real and source=web only; activation/rewards stay disabled pending rules. No synthetic VK users or direct credit grants. Operational details: docs/runbooks/WEB_REFERRALS.md.",
     "Google login/linking is disabled by default with ACCOUNT_OAUTH_GOOGLE_ENABLED=false and hidden in web UI; adapter code, credentials and bindings remain. Last-login protection counts configured usable methods, and profile/menu labels prefer the verified primary email.",
     "DEV manual model smoke is explicitly authorized by the user: priced candidates run with dev-smoke status; production admission and paid-agent-call authorization remain unchanged.",

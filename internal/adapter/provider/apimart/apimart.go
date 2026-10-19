@@ -196,6 +196,12 @@ func (p *Provider) Capabilities(ctx context.Context) ([]domain.Capability, error
 // estimates.
 func (p *Provider) Estimate(ctx context.Context, req domain.ProviderRequest) (domain.CostEstimate, error) {
 	if isSpeechModel(req.ModelCode) {
+		if req.ModelCode == ModelWhisper1 {
+			if err := validateSpeechRequest(req); err != nil {
+				return domain.CostEstimate{}, err
+			}
+			return domain.CostEstimate{Currency: "credits", Estimated: true, Unknown: true}, nil
+		}
 		return domain.CostEstimate{}, &Error{Class: domain.ProviderErrModelUnavailable, Message: "speech billing awaits verification"}
 	}
 	if isNextVisualModel(req.ModelCode) {

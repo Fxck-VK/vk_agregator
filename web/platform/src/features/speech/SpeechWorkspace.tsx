@@ -38,7 +38,15 @@ export function SpeechWorkspace() {
 
   useEffect(() => {
     let cancelled = false;
-    loadModelCatalog().then((catalog) => { if (!cancelled) setModels(catalog.items.filter((m) => m.id === "gpt_4o_mini_tts" || m.id === "whisper_1")); })
+    loadModelCatalog().then((catalog) => {
+      if (cancelled) return;
+      const speechModels = catalog.items.filter((m) => m.id === "gpt_4o_mini_tts" || m.id === "whisper_1");
+      setModels(speechModels);
+      setModelId((current) => {
+        if (speechModels.some((m) => m.id === current && m.operations.some((op) => op.enabled))) return current;
+        return speechModels.find((m) => m.operations.some((op) => op.enabled))?.id as SpeechRequest["model_id"] | undefined ?? current;
+      });
+    })
       .catch(() => { if (!cancelled) setError({ key: "speech.catalogError" }); });
     return () => { cancelled = true; };
   }, []);
@@ -106,12 +114,13 @@ export function SpeechWorkspace() {
     </> : <>
       <label className={styles.field}>{msg("speech.recording")}<input type="file" accept=".mp3,.wav,audio/mpeg,audio/wav" disabled={locked || !enabled} onChange={(e) => change(() => setFile(e.target.files?.[0] ?? null))} /></label>
       <p>{msg("speech.sttLimits")}</p>
+      {operation?.audio?.credits_per_started_minute ? <p>{msg("speech.minutePrice", { credits: operation.audio.credits_per_started_minute })}</p> : null}
       <label className={styles.field}>{msg("speech.language")}<InputSurface><select disabled={locked} value={language} onChange={(e) => change(() => setLanguage(e.target.value))}><option value="">{msg("speech.autoLanguage")}</option><option value="ru">{msg("speech.russian")}</option><option value="en">{msg("speech.english")}</option></select></InputSurface></label>
     </>}
     {error ? <p role="alert">{renderMessage(msg, error)}</p> : null}
     {jobId ? <p role="status">{msg("speech.running")}</p> : null}
     {prepared ? <div className={styles.row}><CreditAmount prefix={msg("speech.cost")} value={prepared.job.cost_estimate} /><Button disabled={locked || !prepared.can_afford} onClick={() => void activate()}>{msg("speech.confirm")}</Button>{!prepared.can_afford ? <span>{msg("speech.insufficientCredits")}</span> : null}</div>
-      : <Button disabled={locked || !enabled || (tts ? !text.trim() || speed < 0.25 || speed > 4 : !file || file.size > 25 * 1024 * 1024)} onClick={() => void prepare()}>{msg("speech.estimate")}</Button>}
+      : <Button disabled={locked || !enabled || (tts ? !text.trim() || speed < 0.25 || speed > 4 : !file || file.size > (operation?.inputs.audio.max_bytes ?? 25_000_000))} onClick={() => void prepare()}>{msg("speech.estimate")}</Button>}
     {results.map((artifact) => <div key={artifact.id}>{artifact.kind === "audio" ? <audio controls src={artifact.url} /> : null}<a href={artifact.url} download>{msg(artifact.kind === "audio" ? "speech.downloadAudio" : "speech.downloadText")}</a></div>)}
   </section></WorkspacePageFrame>;
 }

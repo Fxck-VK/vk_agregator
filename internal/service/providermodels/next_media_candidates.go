@@ -11,7 +11,7 @@ func nextMediaCandidates() []MediaCandidate {
 		nextImageCandidate(),
 		nextAudioCandidate("lyria_3_5", "Lyria 3.5", "flowmusic-lyria-3.5", "https://docs.apimart.ai/en/api-reference/audios/flow-music/music-lyria-3-5", "music"),
 		nextAudioCandidate("gpt_4o_mini_tts", "GPT-4o Mini TTS", "gpt-4o-mini-tts", "https://docs.apimart.ai/en/api-reference/audios/tts", "speech"),
-		nextAudioCandidate("whisper_1", "Whisper 1", "whisper-1", "https://docs.apimart.ai/en/api-reference/audios/whisper-1", "transcribe"),
+		nextAudioCandidate("whisper_1", "Whisper 1", "whisper-1", "https://docs.apimart.ai/ru/api-reference/audios/whisper-1", "transcribe"),
 	}
 }
 
@@ -83,7 +83,9 @@ func nextImageCandidate() MediaCandidate {
 
 func nextAudioCandidate(id, name, native, doc, output string) MediaCandidate {
 	apiAudio := noInput()
+	checkedAt := nextMediaCandidateCheckedAt
 	if id == "whisper_1" {
+		checkedAt = "2026-10-19"
 		apiAudio = inputCapability(Supported, integer(1), "mp3", "mp4", "mpeg", "mpga", "m4a", "wav", "webm")
 	}
 	audio := AudioCapabilities{Audio: apiAudio, Videos: noInput(), Output: output}
@@ -95,7 +97,7 @@ func nextAudioCandidate(id, name, native, doc, output string) MediaCandidate {
 		Provider:      domain.ProviderAPIMart,
 		ModelCode:     native,
 		Documentation: doc,
-		CheckedAt:     nextMediaCandidateCheckedAt,
+		CheckedAt:     checkedAt,
 		Capabilities: ModelCapabilities{SchemaVersion: 1,
 			API:         CapabilityProfile{Audio: &audio, Notes: []string{"Документированные возможности APIMart сохранены как pending facts; retail billing is not active."}},
 			Application: CapabilityProfile{Audio: &app, Notes: []string{"Ожидает допуска; операция выключена, цена для speech/transcribe не опубликована."}},

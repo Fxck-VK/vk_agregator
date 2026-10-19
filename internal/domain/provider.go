@@ -264,6 +264,9 @@ type ProviderTaskRef struct {
 // safety caps and telemetry. It is not a user billing contract; user-facing
 // generation price must come from the backend pricing catalog snapshot.
 type CostEstimate struct {
+	// Unknown means the adapter cannot quote a provider-side amount. It is not
+	// a free request; any product charge still requires its own immutable quote.
+	Unknown bool `json:"unknown,omitempty"`
 	// AmountCredits is the predicted provider-side cost in the unit named by
 	// Currency. Legacy providers may still report generic "credits" until their
 	// config cleanup narrows the unit.

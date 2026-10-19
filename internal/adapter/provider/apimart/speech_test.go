@@ -11,6 +11,23 @@ import (
 	"vk-ai-aggregator/internal/domain"
 )
 
+func TestWhisperEstimateDoesNotInventProviderCost(t *testing.T) {
+	p := New(Config{})
+	r := domain.ProviderRequest{ModelCode: ModelWhisper1, Operation: domain.OperationAudioSTT, Modality: domain.ModalityText, IdempotencyKey: "estimate-only", Speech: &domain.SpeechRequest{Format: "json", FileExtension: "wav", FileBytes: []byte("synthetic audio")}}
+	estimate, err := p.Estimate(context.Background(), r)
+	if err != nil || !estimate.Unknown || !estimate.Estimated || estimate.AmountCredits != 0 {
+		t.Fatalf("Whisper provider cost was invented: %+v %v", estimate, err)
+	}
+	r.Speech.FileBytes = nil
+	if _, err := p.Estimate(context.Background(), r); err == nil {
+		t.Fatal("invalid input estimated")
+	}
+	r.ModelCode = ModelGPT4oMiniTTS
+	if _, err := p.Estimate(context.Background(), r); err == nil {
+		t.Fatal("Whisper enabled TTS")
+	}
+}
+
 func TestSpeechNativeTransport(t *testing.T) {
 	posts := 0
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {

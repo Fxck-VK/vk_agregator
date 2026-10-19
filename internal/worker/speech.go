@@ -33,7 +33,7 @@ func (p *processor) buildSpeechRequest(ctx context.Context, job *domain.Job, att
 		if err != nil {
 			return domain.ProviderRequest{}, err
 		}
-		if mediaprobe.ValidateMusicInputArtifact(a, job.AccountID) != nil {
+		if speechgeneration.ValidateTranscriptionInput(a, job.AccountID) != nil || a.DurationMS != params.InputDurationMS {
 			return domain.ProviderRequest{}, musicInvalidRequestError("speech input is not owned or inspected")
 		}
 		switch a.MimeType {

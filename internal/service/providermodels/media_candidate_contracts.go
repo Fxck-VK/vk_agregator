@@ -4,6 +4,7 @@ import (
 	"net/url"
 	"strings"
 
+	"vk-ai-aggregator/internal/domain"
 	"vk-ai-aggregator/internal/service/modelcontract"
 )
 
@@ -480,7 +481,7 @@ func mediaCandidateSourceURL(sourceID string) string {
 	case "gpt_4o_mini_tts_speak":
 		return "https://docs.apimart.ai/en/api-reference/audios/tts"
 	case "whisper_1_transcription":
-		return "https://docs.apimart.ai/en/api-reference/audios/whisper-1"
+		return "https://docs.apimart.ai/ru/api-reference/audios/whisper-1"
 	default:
 		return ""
 	}
@@ -692,8 +693,8 @@ func mediaCandidateVideoOperation(candidate MediaCandidate, fact MediaCandidateO
 func mediaCandidateAudioOperation(candidate MediaCandidate, fact MediaCandidateOperationFact) modelcontract.Operation {
 	inputs := explicitUnsupportedInputs()
 	if candidate.PublicID == "whisper_1" {
-		inputs.Audio = enabledAudioInput(true, 1, []int{1}, whisperAudioFormats(), 25<<20, 0)
-		inputs.MaxTotalBytes = 25 << 20
+		inputs.Audio = enabledAudioInput(true, 1, []int{1}, whisperAudioFormats(), domain.WhisperMaxInputBytes, 0)
+		inputs.MaxTotalBytes = domain.WhisperMaxInputBytes
 	}
 	switch fact.ID {
 	case "inspo":

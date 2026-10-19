@@ -3,7 +3,23 @@ package productcatalog
 import (
 	"slices"
 	"testing"
+	"vk-ai-aggregator/internal/service/providermodels"
 )
+
+func TestWhisperDEVPublicControlsUseRetailMinutePolicy(t *testing.T) {
+	if err := providermodels.ConfigureDEVSmoke("development", true); err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = providermodels.ConfigureDEVSmoke("development", false) })
+	w := pendingByID(t, WorkspaceCatalog(WorkspaceConfig{IncludePendingMedia: true}), "whisper_1")
+	op := w.Operations[0]
+	if w.Verification != "dev-smoke" || !op.Enabled || !op.Inputs.Audio.Enabled || op.Inputs.Audio.MaxBytes != 25_000_000 || op.Inputs.Audio.MaxDurationSec != 480 || len(op.Inputs.Audio.Formats) != 2 || !slices.Equal(op.Audio.Formats, []string{"json"}) || op.Audio.CreditsPerStartedMinute != 25 {
+		t.Fatalf("Whisper DEV controls = %+v", op)
+	}
+	if tts := pendingByID(t, WorkspaceCatalog(WorkspaceConfig{IncludePendingMedia: true}), "gpt_4o_mini_tts"); tts.Operations[0].Enabled {
+		t.Fatal("TTS enabled by Whisper change")
+	}
+}
 
 func TestNextPendingVisualCandidates(t *testing.T) {
 	list := WorkspaceCatalog(WorkspaceConfig{IncludePendingMedia: true})

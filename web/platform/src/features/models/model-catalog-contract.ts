@@ -204,6 +204,7 @@ const videoControlsSchema = z.object({
 });
 
 const audioControlsSchema = z.object({
+	credits_per_started_minute: positiveInt.optional(),
   tasks: z.array(nonEmptyString).optional(),
   languages: z.array(nonEmptyString).optional(),
   voices: z.array(nonEmptyString).optional(),

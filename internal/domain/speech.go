@@ -8,6 +8,11 @@ import (
 	"unicode/utf8"
 )
 
+const (
+	WhisperMaxInputBytes       = 25_000_000
+	WhisperMaxInputDurationSec = 480
+)
+
 // SpeechRequest holds normalized speech controls. File bytes are supplied only
 // by the worker from an owned, inspected private input artifact.
 type SpeechRequest struct {
@@ -45,7 +50,7 @@ func ValidateSpeechRequest(s SpeechRequest, op OperationType, requireFile bool) 
 	if s.Language != "" && (len(s.Language) != 2 || s.Language[0] < 'a' || s.Language[0] > 'z' || s.Language[1] < 'a' || s.Language[1] > 'z') {
 		return bad
 	}
-	if len(s.FileBytes) > 25<<20 || (requireFile && len(s.FileBytes) == 0) {
+	if len(s.FileBytes) > WhisperMaxInputBytes || (requireFile && len(s.FileBytes) == 0) {
 		return bad
 	}
 	if (requireFile || len(s.FileBytes) > 0 || s.FileExtension != "") && !slices.Contains([]string{"mp3", "mp4", "mpeg", "mpga", "m4a", "wav", "webm"}, s.FileExtension) {

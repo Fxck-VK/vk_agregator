@@ -63,11 +63,12 @@ type WorkspaceText struct {
 // Output duration and language coverage stay absent when the API does not
 // establish an upper bound for this particular operation.
 type WorkspaceAudio struct {
-	Tasks          []string `json:"tasks"`
-	Languages      []string `json:"languages"`
-	Voices         []string `json:"voices"`
-	Formats        []string `json:"formats"`
-	MaxDurationSec int      `json:"max_duration_sec,omitempty"`
+	CreditsPerStartedMinute int64    `json:"credits_per_started_minute,omitempty"`
+	Tasks                   []string `json:"tasks"`
+	Languages               []string `json:"languages"`
+	Voices                  []string `json:"voices"`
+	Formats                 []string `json:"formats"`
+	MaxDurationSec          int      `json:"max_duration_sec,omitempty"`
 }
 
 type WorkspaceImage struct {

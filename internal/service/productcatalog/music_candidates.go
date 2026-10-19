@@ -2,6 +2,7 @@ package productcatalog
 
 import (
 	"strconv"
+	"vk-ai-aggregator/internal/domain"
 	"vk-ai-aggregator/internal/service/modelcontract"
 	"vk-ai-aggregator/internal/service/musicgeneration"
 	"vk-ai-aggregator/internal/service/pricingcatalog"
@@ -26,7 +27,13 @@ func pendingMediaWorkspaceModels() []WorkspaceModel {
 			ops := musicgeneration.OperationsForModel(c.PublicID)
 			if len(ops) == 0 {
 				model.Description = "Ожидает проверки тарификации перед запуском."
-				model.Operations = append(model.Operations, pendingSpeechOperation(c))
+				op := pendingSpeechOperation(c)
+				model.Operations = append(model.Operations, op)
+				if op.Enabled {
+					model.Verification = "dev-smoke"
+					model.Description = "Распознавание собственных MP3/WAV. Доступно для ручного тестирования на DEV."
+					model.Capabilities = workspaceCapabilities(c.PublicID, op)
+				}
 				break
 			}
 			for _, op := range ops {
@@ -162,11 +169,18 @@ func pendingSpeechOperation(c providermodels.MediaCandidate) WorkspaceOperation 
 	case "whisper_1":
 		inputs.Audio.Support = modelcontract.Supported
 		inputs.Audio.MaxCount = 1
-		inputs.Audio.MaxBytes = 25 << 20
+		inputs.Audio.MaxBytes = domain.WhisperMaxInputBytes
 		audio.Tasks = []string{"transcribe"}
 		audio.Formats = []string{"json", "text", "srt", "vtt", "verbose_json"}
 	default:
 		audio.Tasks = []string{"audio"}
+	}
+	if c.PublicID == "whisper_1" && providermodels.RuntimeRegistry().MediaCandidateRunnable(c.PublicID, "transcribe") {
+		inputs.Audio = modelcontract.Input{Support: modelcontract.Supported, Enabled: true, Required: true, Processing: "native", MaxCount: 1, AllowedCounts: []int{1}, MaxBytes: domain.WhisperMaxInputBytes, MaxDurationSec: domain.WhisperMaxInputDurationSec, Formats: []modelcontract.FileFormat{{Extension: ".mp3", MIME: "audio/mpeg"}, {Extension: ".wav", MIME: "audio/wav"}}}
+		inputs.MaxTotalBytes = domain.WhisperMaxInputBytes
+		audio.Formats = []string{"json"}
+		audio.CreditsPerStartedMinute = pricingcatalog.WhisperDEVCreditsPerStartedMinute
+		return WorkspaceOperation{ID: "transcribe", Kind: "audio", Enabled: true, Inputs: inputs, Audio: audio}
 	}
 	return WorkspaceOperation{ID: pendingSpeechOperationID(c.PublicID), Kind: "audio", Enabled: false, Inputs: inputs, Audio: audio}
 }

@@ -31,7 +31,10 @@ func TestDEVSmokeRegistryDoesNotGrantAdmission(t *testing.T) {
 				op = "reference_image_to_video"
 			}
 		}
-		want := c.PublicID != "gpt_4o_mini_tts" && c.PublicID != "whisper_1"
+		if c.PublicID == "whisper_1" {
+			op = "transcribe"
+		}
+		want := c.PublicID != "gpt_4o_mini_tts"
 		if got := r.MediaCandidateRunnable(c.PublicID, op); got != want {
 			t.Errorf("%s runnable=%t want %t", c.PublicID, got, want)
 		}
@@ -45,6 +48,11 @@ func TestDEVSmokeRegistryDoesNotGrantAdmission(t *testing.T) {
 	for _, id := range []string{"suno_v6", "suno_v6_wild", "suno_v6_mini", "lyria_3_5"} {
 		if r.MediaCandidateRunnable(id, "upload_cover") {
 			t.Fatal("unverified input operation enabled")
+		}
+	}
+	for _, op := range []string{"generate", "speak", "translate"} {
+		if r.MediaCandidateRunnable("whisper_1", op) {
+			t.Fatalf("unsupported Whisper operation enabled: %s", op)
 		}
 	}
 	prices, err := pricingcatalog.NewStaticCatalog()

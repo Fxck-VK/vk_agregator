@@ -9,7 +9,6 @@ import (
 	"time"
 	"vk-ai-aggregator/internal/domain"
 	"vk-ai-aggregator/internal/service/joborchestrator"
-	"vk-ai-aggregator/internal/service/mediaprobe"
 	"vk-ai-aggregator/internal/service/providermodels"
 	"vk-ai-aggregator/internal/service/speechgeneration"
 )
@@ -63,13 +62,14 @@ func (h *Handler) prepareSpeechJob(w http.ResponseWriter, r *http.Request) {
 		writeError(w, 503, "speech unavailable")
 		return
 	}
-	params, price, err := speechgeneration.Resolve(request, providermodels.RuntimeRegistry(), h.deps.ImagePricing)
-	if err != nil {
-		writeError(w, 503, "speech awaits verification and pricing")
+	durationMS, valid := h.validateSpeechInput(r, principal.AccountID, request)
+	if !valid {
+		writeError(w, 400, "invalid speech input")
 		return
 	}
-	if !h.validateSpeechInput(r, principal.AccountID, request) {
-		writeError(w, 400, "invalid speech input")
+	params, price, err := speechgeneration.Resolve(request, providermodels.RuntimeRegistry(), h.deps.ImagePricing, durationMS)
+	if err != nil {
+		writeError(w, 503, "speech awaits verification and pricing")
 		return
 	}
 	allowed, err := h.deps.ImageJobPrepareLimiter.Allow(r.Context(), "speech:"+principal.AccountID.String())
@@ -132,15 +132,18 @@ func (h *Handler) writeSpeechPreparation(w http.ResponseWriter, r *http.Request,
 		CanAfford bool          `json:"can_afford"`
 	}{dto, balance, balance >= dto.CostEstimate})
 }
-func (h *Handler) validateSpeechInput(r *http.Request, account uuid.UUID, request speechgeneration.Request) bool {
+func (h *Handler) validateSpeechInput(r *http.Request, account uuid.UUID, request speechgeneration.Request) (int64, bool) {
 	if request.AudioArtifactID == uuid.Nil {
-		return true
+		return 0, true
 	}
 	if h.deps.ImageArtifacts == nil {
-		return false
+		return 0, false
 	}
 	a, err := h.deps.ImageArtifacts.GetByIDForAccount(r.Context(), account, request.AudioArtifactID)
-	return err == nil && mediaprobe.ValidateMusicInputArtifact(a, account) == nil && (a.MimeType == "audio/mpeg" || a.MimeType == "audio/wav" || a.MimeType == "audio/x-wav")
+	if err != nil || speechgeneration.ValidateTranscriptionInput(a, account) != nil {
+		return 0, false
+	}
+	return a.DurationMS, true
 }
 func (h *Handler) loadSpeechJob(w http.ResponseWriter, r *http.Request) (*domain.Job, uuid.UUID, bool) {
 	w.Header().Set("Cache-Control", "no-store")
@@ -187,11 +190,12 @@ func (h *Handler) activateSpeechJob(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	params, _ := speechgeneration.DecodeJob(job)
-	if h.deps.ImageJobs == nil || !providermodels.RuntimeRegistry().MediaCandidateAdmitted(params.ModelID, params.Action()) {
+	if h.deps.ImageJobs == nil || !providermodels.RuntimeRegistry().MediaCandidateRunnable(params.ModelID, params.Action()) {
 		writeError(w, 503, "speech awaits verification")
 		return
 	}
-	if !h.validateSpeechInput(r, account, params.Request) {
+	durationMS, valid := h.validateSpeechInput(r, account, params.Request)
+	if !valid || durationMS != params.InputDurationMS {
 		writeError(w, 400, "invalid speech input")
 		return
 	}

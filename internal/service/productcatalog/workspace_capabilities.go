@@ -6,6 +6,11 @@ import "vk-ai-aggregator/internal/service/providermodels"
 // Native support never enables uploads or controls on the web surface.
 func workspaceCapabilities(id string, op WorkspaceOperation) *providermodels.ModelCapabilities {
 	if c, ok := providermodels.MediaCandidateByID(id); ok {
+		if id == "whisper_1" && op.Enabled && op.Inputs.Audio.Enabled && c.Capabilities.Application.Audio != nil {
+			maximum := 1
+			c.Capabilities.Application.Audio.Audio = providermodels.InputCapability{Support: providermodels.Supported, MaxCount: &maximum, Extensions: []string{"mp3", "wav"}}
+			c.Capabilities.Application.Notes = []string{"Собственные MP3/WAV до 25 МБ и 8 минут; ручное тестирование на DEV."}
+		}
 		if providermodels.IsVideoExpansion(id) && op.Kind == "video" && op.Enabled && c.Capabilities.Application.Video != nil {
 			app := c.Capabilities.Application.Video
 			c.Capabilities.Application.Notes = []string{"Доступна для ручного тестирования на DEV; проверка результатов ещё не завершена."}

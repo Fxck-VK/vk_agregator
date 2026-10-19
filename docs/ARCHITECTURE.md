@@ -3244,9 +3244,14 @@ IDs before the terminal provider checkpoint. Recovery reuses that checkpoint;
 ambiguous paid submissions cannot automatically replay. Prepared confirmation
 expiry covers TTS/STT through additive migration 000054.
 
-GPT-4o Mini TTS and Whisper-1 remain disabled until audio metering and live
-outputs are verified; token price tables alone are not per-job quotes. All six
-models remain outside active bindings/runtime prices until canonical admission.
+Whisper-1 is manually runnable only in DEV (2026-10-19), using the explicitly
+approved retail policy of 25 credits per started minute, capped at 8 minutes.
+The owned MP3/WAV input is probed and limited to 25,000,000 bytes. Its exact
+duration and immutable minute quote are persisted in the Job and rechecked
+before activation and worker submission. This is an internal-credit price,
+not an inferred APIMart audio tariff. Unknown provider cost is explicit in
+CostEstimate; it is not a free routing quote and cannot bypass video spend caps.
+GPT-4o Mini TTS stays disabled; static/production admission stays unchanged.
 See runbooks/MODEL_CATALOG.md for application limits and remaining rollout gates.
 ## Platform localization ownership (2026-09-16)
 

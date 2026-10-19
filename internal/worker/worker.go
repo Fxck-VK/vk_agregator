@@ -275,6 +275,14 @@ func (r *Registry) ForRequest(ctx context.Context, req domain.ProviderRequest) (
 		if req.Music != nil {
 			action = string(req.Music.Action)
 		}
+		if req.Speech != nil {
+			switch req.Operation {
+			case domain.OperationAudioSTT:
+				action = "transcribe"
+			case domain.OperationAudioTTS:
+				action = "speak"
+			}
+		}
 		if !providermodels.RuntimeRegistry().MediaCandidateRunnable(candidate.PublicID, action) {
 			return nil, providerResultError{class: domain.ProviderErrModelUnavailable, message: "model admission pending"}
 		}
@@ -409,15 +417,16 @@ func isMediaProviderBudgetedRequest(req domain.ProviderRequest) bool {
 }
 
 type providerCandidate struct {
-	provider   domain.Provider
-	name       domain.ProviderName
-	modelClass string
-	cost       int64
-	latency    time.Duration
-	open       bool
-	quality    providerQualityStatus
-	preferred  bool
-	order      int
+	costUnknown bool
+	provider    domain.Provider
+	name        domain.ProviderName
+	modelClass  string
+	cost        int64
+	latency     time.Duration
+	open        bool
+	quality     providerQualityStatus
+	preferred   bool
+	order       int
 }
 
 type breakerState struct {
@@ -472,6 +481,9 @@ func (r *Registry) candidates(ctx context.Context, req domain.ProviderRequest) (
 			}
 			estimate.AmountCredits = int64(idx + 1)
 		}
+		if estimate.Unknown {
+			estimate.AmountCredits = 0
+		}
 		modelClass := qualityModelClassForRequest(contracts, name, req)
 		quality := providerQualityHealthy
 		if state, ok := qualityStates[qualityKey{provider: name, modelClass: modelClass, modality: req.Modality}]; ok && state.status != "" {
@@ -479,15 +491,16 @@ func (r *Registry) candidates(ctx context.Context, req domain.ProviderRequest) (
 		}
 		st := states[name]
 		candidate := providerCandidate{
-			provider:   provider,
-			name:       name,
-			modelClass: modelClass,
-			cost:       estimate.AmountCredits,
-			latency:    st.latency,
-			open:       !st.openedUntil.IsZero() && now.Before(st.openedUntil),
-			quality:    quality,
-			preferred:  preferred != "" && name == preferred,
-			order:      idx,
+			costUnknown: estimate.Unknown,
+			provider:    provider,
+			name:        name,
+			modelClass:  modelClass,
+			cost:        estimate.AmountCredits,
+			latency:     st.latency,
+			open:        !st.openedUntil.IsZero() && now.Before(st.openedUntil),
+			quality:     quality,
+			preferred:   preferred != "" && name == preferred,
+			order:       idx,
 		}
 		if qualityPolicy.enabled && candidate.quality == providerQualityDisabled {
 			disabled = append(disabled, candidate)
@@ -531,6 +544,9 @@ func sortCandidates(c []providerCandidate) {
 	sort.SliceStable(c, func(i, j int) bool {
 		if c[i].preferred != c[j].preferred {
 			return c[i].preferred
+		}
+		if c[i].costUnknown != c[j].costUnknown {
+			return !c[i].costUnknown
 		}
 		if c[i].cost != c[j].cost {
 			return c[i].cost < c[j].cost
@@ -779,7 +795,7 @@ func (p *routedProvider) Submit(ctx context.Context, req domain.ProviderRequest)
 	budget, budgeted := p.registry.mediaProviderBudgetFor(req)
 	routeSnapshot, hasRouteSnapshot := videoRouteSnapshotFromParams(req.Params)
 	for idx, candidate := range p.candidates {
-		contract, err := p.registry.validateProviderMediaContract(candidate.name, req, domain.CostEstimate{AmountCredits: candidate.cost, Currency: "credits"})
+		contract, err := p.registry.validateProviderMediaContract(candidate.name, req, domain.CostEstimate{AmountCredits: candidate.cost, Currency: "credits", Unknown: candidate.costUnknown})
 		if err != nil {
 			last = err
 			continue
