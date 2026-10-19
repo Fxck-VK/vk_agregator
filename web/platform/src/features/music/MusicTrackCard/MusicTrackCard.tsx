@@ -101,7 +101,7 @@ export function MusicTrackCard({ track, onContinue, continueHref, selected, onSe
       <PopoverPanel align="end" anchorRef={menuRef} id={menuID} isOpen={menuOpen} itemVariant="action"
         label={msg("music.card.actions", { title })} onClose={() => setMenuOpen(false)} role="menu" width={248}>
         <div className={styles.menu}>
-          {downloads.map(a => <a className={styles.menuItem} download href={a.url} key={a.url} role="menuitem" onClick={() => setMenuOpen(false)}>
+          {downloads.map(a => <a className={styles.menuItem} download href={a.url} key={a.url} role="menuitem">
             {musicArtifactLabel(a.kind, a.format, msg)}
           </a>)}
           {onContinue ? <button className={styles.menuItem} onClick={() => { setMenuOpen(false); onContinue(continueAt); }} role="menuitem" type="button">{msg("music.card.continue")}</button> : null}

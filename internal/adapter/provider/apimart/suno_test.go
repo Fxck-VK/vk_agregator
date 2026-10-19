@@ -460,6 +460,34 @@ func TestPollSunoUsesMusicTaskEndpointAndNormalizesResults(t *testing.T) {
 			wantText:   "line one\nline two",
 		},
 		{
+			name:       "legacy lyrics prompt result",
+			body:       `{"code":200,"data":{"id":"task_lyrics","status":"completed","result":{"lyrics":[{"title":"First","prompt":"first verse\nfirst chorus","tags":"pop"},{"title":"Second","prompt":"second verse","tags":"folk"}]}}}`,
+			wantStatus: domain.ProviderTaskSucceeded,
+			wantText:   "first verse\nfirst chorus",
+			check: func(t *testing.T, res domain.ProviderTaskResult) {
+				if res.Music == nil || len(res.Music.Lyrics) != 2 || res.Music.Lyrics[1].Text != "second verse" {
+					t.Fatal("legacy lyric variants must retain their text")
+				}
+			},
+		},
+		{
+			name:       "documented lyrics text takes precedence",
+			body:       `{"code":200,"data":{"id":"task_lyrics","status":"completed","result":{"lyrics":[{"text":"documented text","prompt":"legacy text"}]}}}`,
+			wantStatus: domain.ProviderTaskSucceeded,
+			wantText:   "documented text",
+		},
+		{
+			name:       "blank documented text falls back to legacy prompt",
+			body:       `{"code":200,"data":{"id":"task_lyrics","status":"completed","result":{"lyrics":[{"text":"  ","prompt":"legacy verse"}]}}}`,
+			wantStatus: domain.ProviderTaskSucceeded,
+			wantText:   "legacy verse",
+		},
+		{
+			name:       "lyrics metadata without text is not successful output",
+			body:       `{"code":200,"data":{"id":"task_lyrics","status":"completed","result":{"lyrics":[{"title":"Song","tags":"pop"}]}}}`,
+			wantStatus: domain.ProviderTaskFailed,
+		},
+		{
 			name:       "export files",
 			body:       `{"code":200,"data":{"id":"task_export","status":"completed","result":{"files":[{"format":"wav","url":"https://private.example/song.wav?token=secret"},{"format":"mp3","url":"https://private.example/song.mp3?token=secret"}]}}}`,
 			wantStatus: domain.ProviderTaskSucceeded,

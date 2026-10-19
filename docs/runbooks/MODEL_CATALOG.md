@@ -519,10 +519,29 @@ invalid options, source ownership/index/family, uploaded-source requirements,
 duration boundaries; server quotes, unchanged ledger lifecycle and output
 checkpoint/moderation; catalog and UI preparation without activation.
 Commands: focused Go packages, platform music/files tests, and complete DEV
-preflight before push. Live-output, MP3/WAV live-input and actual billing for
-these newly enabled tools remain **not_run**. No new paid provider calls were
-authorized or issued for this extension. Existing generation smoke cannot count
-as evidence for transforms. Other native tools remain pending.
+preflight before push. A separately authorized Suno V6 smoke (no Max; at most
+$1 provider cost and 500 site credits; one call per each of 13 cases) then ran
+8 cases on 2026-10-19: lyrics, sounds, cover, mashup, stems, stems_all,
+upsample_tags and extend. Each has one provider task and one successful ledger
+capture. APIMart task cost totals $0.5116; captures total 315 credits. Audio
+results include 2 sound, 2 cover, 2 mix, 4 stem, 24 full-stem and 2 continuation
+tracks. These counts are provider output, not a promised fixed number of files.
+Playback of an extracted vocal reached readyState 4 and advanced normally.
+
+The live lyrics response used `result.lyrics[].prompt` instead of documented
+`text`; the adapter now falls back to this legacy field and gives nonempty
+`text` precedence. A free re-poll of the same completed task verified both text
+variants; no second generation or charge was made. The original test Job's
+already completed artifact still contains only its pre-fix metadata. MP3 download links now keep the popover active during their native click
+action, instead of making the link inert before Chrome handles its download.
+Browser verification is recorded separately; source authorization and
+byte-serving are unchanged.
+
+The five upload-dependent cases (upload, upload_cover, upload_extend,
+add_vocals, add_instrumental) are still **not_run** while manual file selection
+is pending. This partial smoke does not verify Wild/Mini transforms, WAV/MP3
+live input, all output formats, Max, or production admission. Other native tools
+remain pending.
 
 ### Video pricing and DEV wiring checked 2026-10-02
 

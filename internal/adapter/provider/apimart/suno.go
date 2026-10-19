@@ -1063,8 +1063,24 @@ func (r sunoTaskResult) lyricsResults() ([]domain.MusicLyricsResult, string) {
 		item := domain.MusicLyricsResult{Title: strings.TrimSpace(r.Title), Text: strings.TrimSpace(r.Text), Tags: strings.TrimSpace(r.Tags)}
 		return []domain.MusicLyricsResult{item}, item.Text
 	}
-	var list []domain.MusicLyricsResult
-	if err := json.Unmarshal(r.Lyrics, &list); err == nil {
+	// Some completed tasks still return the legacy prompt field in each
+	// variant. Normalize it here so workers persist the actual lyrics.
+	var variants []struct {
+		domain.MusicLyricsResult
+		Prompt string `json:"prompt"`
+	}
+	if err := json.Unmarshal(r.Lyrics, &variants); err == nil {
+		list := make([]domain.MusicLyricsResult, 0, len(variants))
+		for _, variant := range variants {
+			item := variant.MusicLyricsResult
+			if strings.TrimSpace(item.Text) == "" {
+				item.Text = strings.TrimSpace(variant.Prompt)
+			}
+			if strings.TrimSpace(item.Text) == "" {
+				continue
+			}
+			list = append(list, item)
+		}
 		text := ""
 		if len(list) > 0 {
 			text = strings.TrimSpace(list[0].Text)

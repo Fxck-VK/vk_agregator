@@ -45,6 +45,18 @@ describe("MusicTrackCard", () => {
     expect(play).toHaveBeenCalledOnce();
   });
 
+  it("keeps the download link active while the browser handles its default action", () => {
+    render(<MusicTrackCard track={track} />);
+    fireEvent.click(screen.getByRole("button", { name: "Действия: Forest song" }));
+    const download = screen.getByRole("menuitem", { name: "Скачать аудио MP3" });
+    // Observe the link after React's click handlers, before the native download.
+    fireEvent.click(download);
+    expect(screen.getByRole("menu")).not.toHaveAttribute("inert");
+    expect(download.closest("[inert]")).toBeNull();
+    expect(download).toHaveAttribute("download");
+    expect(download).toHaveAttribute("href", track.artifactPlaybackUrl);
+  });
+
   it("does not expose a continuation or unsafe media when they are unavailable", () => {
     vi.spyOn(HTMLMediaElement.prototype, "pause").mockImplementation(() => {});
     const { container } = render(<MusicTrackCard track={{ ...track, artifactPlaybackUrl: "https://foreign.example/audio", downloads: [] }} />);
