@@ -17,7 +17,7 @@ type ModelPresentationSource = {
 };
 
 export function modelWorkspaceHref(model: { id: string; category?: unknown }): string {
-  const path = model.category === "audio" ? "/app/music" : "/app/chats";
+  const path = model.id === "whisper_1" ? "/app/speech" : model.category === "audio" ? "/app/music" : "/app/chats";
   return `${path}?model=${encodeURIComponent(model.id)}`;
 }
 

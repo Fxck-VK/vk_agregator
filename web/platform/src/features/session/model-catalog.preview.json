@@ -25469,7 +25469,7 @@
               "support": "supported",
               "enabled": false,
               "max_count": 1,
-              "max_bytes": 26214400
+              "max_bytes": 25000000
             },
             "documents": {
               "support": "unknown",

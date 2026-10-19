@@ -9,6 +9,9 @@ function readSource(path: string) {
 }
 
 describe("shared model-card integration", () => {
+  it("opens Whisper in the speech workspace", () => {
+    expect(getModelPresentation({ id: "whisper_1", name: "Whisper 1", category: "audio" }).href).toBe("/app/speech?model=whisper_1");
+  });
   it("keeps model content, artwork, and route in one presentation resolver", () => {
     const presentation = readSource(
       "src/features/models/ModelCard/model-card-content.ts",
