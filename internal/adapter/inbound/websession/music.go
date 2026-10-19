@@ -118,7 +118,14 @@ func musicReplayMatches(job *domain.Job, account uuid.UUID, key string, request 
 		return false
 	}
 	p, err := musicgeneration.DecodeJob(job)
-	return err == nil && reflect.DeepEqual(p.Request, request)
+	if err != nil || !slices.Equal(p.Sources, request.Sources) || !slices.Equal(p.AudioArtifactIDs, request.AudioArtifactIDs) {
+		return false
+	}
+	// Empty collections are omitted in persisted JSON and reload as nil.
+	// Compare their contents above, then retain strict equality for all other inputs.
+	p.Sources, request.Sources = nil, nil
+	p.AudioArtifactIDs, request.AudioArtifactIDs = nil, nil
+	return reflect.DeepEqual(p.Request, request)
 }
 func (h *Handler) writeMusicPreparation(w http.ResponseWriter, r *http.Request, job *domain.Job, account uuid.UUID) {
 	dto, ok := musicJobDTO(job, account)
