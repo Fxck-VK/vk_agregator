@@ -529,6 +529,7 @@ function confirmationFromState(
 function errorMessageForPrepare(error: unknown): MessageReference {
   if (error instanceof MusicApiError) {
     if (error.status === 400) return { key: "music.error.prepare.invalid" };
+    if (error.status === 408) return { key: "music.error.prepare.timeout" };
     if (error.status === 409) return { key: "music.error.prepare.stale" };
     if (error.status === 429) return { key: "music.error.prepare.rateLimited" };
     if (error.status === 503) return { key: "music.error.prepare.notAdmitted" };

@@ -159,6 +159,25 @@ function StatefulWorkspace({
 }
 
 describe("MusicWorkspace", () => {
+  it("keeps the chosen playback second when opening continuation for the first time", () => {
+    const source: MusicTrack = { ...tracks[0], modelId: "suno_v6" };
+    render(<StatefulWorkspace tracks={[source]} results={[{ id: "source-result", tracks: [source], artifacts: [], lyrics: [] }]}
+      operations={[generateOperation, { id: "extend", enabled: true, requirement: { minTracks: 1, maxTracks: 1 } }]} />);
+    fireEvent.change(screen.getByRole("slider", { name: "Перемотка: First" }), { target: { value: "45" } });
+    fireEvent.click(screen.getByRole("button", { name: "Действия: First" }));
+    fireEvent.click(screen.getByRole("menuitem", { name: "Продолжить трек" }));
+    expect(screen.getByRole("spinbutton", { name: "Старт, сек." })).toHaveValue(45);
+    expect(screen.getByRole("button", { name: "Продолжить трек" })).toBeEnabled();
+  });
+
+  it("describes its own pending preparation without warning about a previous action", () => {
+    render(<StatefulWorkspace activeOperationId="extend" tracks={[tracks[0]]} initialSelectedTrackIds={[tracks[0].id]}
+      operations={[{ id: "extend", enabled: true, requirement: { minTracks: 1, maxTracks: 1 } }]} state={{ preparing: true }} />);
+    expect(screen.queryByText("Дождитесь завершения текущего действия")).not.toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Подождите…" })).toBeDisabled();
+    expect(screen.getByRole("button", { name: "Подождите…" })).toHaveAttribute("aria-busy", "true");
+  });
+
   it("starts with quick creation and reveals song settings without losing the idea", () => {
     const onRequestConfirmation = vi.fn();
     render(<StatefulWorkspace onRequestConfirmation={onRequestConfirmation} />);

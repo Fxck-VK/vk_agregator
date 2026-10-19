@@ -728,6 +728,13 @@ export function MusicWorkspace({
       editorRef.current?.focus({ preventScroll: true });
     });
   };
+  const focusTool = (operationId: MusicOperationID) => {
+    onActiveOperationChange(operationId);
+    requestAnimationFrame(() => {
+      toolRef.current?.scrollIntoView?.({ block: "center", behavior: "smooth" });
+      toolRef.current?.focus({ preventScroll: true });
+    });
+  };
   const openTool = (operationId: MusicOperationID) => {
     if (!draft.actionParameters?.[operationId]) updateActionDraft(operationId, {
       maxMode: false,
@@ -735,11 +742,7 @@ export function MusicWorkspace({
       ...(creativeTools.has(operationId) ? { customMode: false } : {}),
       ...(operationId === "upsample_tags" ? { prompt: draft.style } : {}),
     });
-    onActiveOperationChange(operationId);
-    requestAnimationFrame(() => {
-      toolRef.current?.scrollIntoView?.({ block: "center", behavior: "smooth" });
-      toolRef.current?.focus({ preventScroll: true });
-    });
+    focusTool(operationId);
   };
   const continueTrack = (track: MusicTrack, continueAtSec: number) => {
     if (busy) return;
@@ -747,9 +750,9 @@ export function MusicWorkspace({
     onSelectedTrackIdsChange([track.id]);
     onModeChange("description");
     updateDraft({ maxMode: false, actionParameters: {
-      ...draft.actionParameters, extend: { seekSec: continueAtSec },
+      ...draft.actionParameters, extend: { seekSec: continueAtSec, maxMode: false, outputFormat: "mp3" },
     } });
-    openTool("extend");
+    focusTool("extend");
   };
   const canContinueTrack = (track: MusicTrack) => !busy && (track.durationSec ?? 0) > 1 && (continuationModelIds
     ? continuationModelIds.includes(track.modelId ?? selectedModelId)
@@ -984,6 +987,7 @@ export function MusicWorkspace({
           {operationConsumesSelectedTracks(activeOperation) ? trackLibrary : null}
           <ActionParameterForm
             busy={busy}
+            preparing={state?.preparing === true}
             disabledReason={getDisabledReason(activeOperation, activeTrackIds, draft, busy, msg, modelDisabledReason)}
             draft={draft.actionParameters?.[activeOperationId] ?? {}}
             uploadDuration={getOwnedUploads(draft)[0]?.durationSec}
@@ -1496,6 +1500,7 @@ function TrackSourceList({
 
 function ActionParameterForm({
   busy,
+  preparing,
   disabledReason,
   draft,
   onChange,
@@ -1506,6 +1511,7 @@ function ActionParameterForm({
   uploadDuration,
 }: Readonly<{
   busy: boolean;
+  preparing: boolean;
   disabledReason: string | null;
   draft: MusicActionParameterDraft;
   onChange: (patch: MusicActionParameterDraft) => void;
@@ -1517,7 +1523,7 @@ function ActionParameterForm({
 }>) {
   const msg = useMessages();
   const label = operationLabel(operation, operation.id, msg);
-  const runLabel = msg("music.operation.prepare", { name: label });
+  const runLabel = operation.id === "extend" ? msg("music.card.continue") : msg("music.operation.prepare", { name: label });
   const disabled = disabledReason !== null;
   const selectedTracks = selectedTracksById(tracks, selectedTrackIds);
 
@@ -1821,9 +1827,9 @@ function ActionParameterForm({
             <p className={styles.muted}>{msg("music.operation.noControls")}</p>
           ) : null}
       </div>
-      {disabledReason ? <p className={styles.warning} role="status">{disabledReason}</p> : null}
-      <Button disabled={disabled} onClick={onRun} type="button">
-        {runLabel}
+      {disabledReason && !preparing ? <p className={styles.warning} role="status">{disabledReason}</p> : null}
+      <Button aria-busy={preparing || undefined} disabled={disabled} onClick={onRun} type="button">
+        {preparing ? msg("music.operation.preparing") : runLabel}
       </Button>
     </div>
   );

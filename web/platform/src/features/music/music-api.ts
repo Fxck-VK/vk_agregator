@@ -365,18 +365,30 @@ export function musicSummaryFromResult(result: MusicJobResult, job?: MusicJob): 
 }
 
 export async function prepareMusicJob(body: MusicPrepareBody, idempotencyKey: string): Promise<MusicJobPreparation> {
-  const response = await webBrowserMutation("/web/v1/music-jobs/prepare", {
-    body: JSON.stringify(body),
-    headers: {
-      "Content-Type": "application/json",
-      "X-Idempotency-Key": idempotencyKey,
-    },
-    method: "POST",
-  });
-  if (response.status !== 201) {
-    throw new MusicApiError("Unable to prepare music job.", response.status);
+  // Preparation does not reserve credits or submit to a provider. A manual
+  // retry keeps the same key if the server saved its quote before this deadline.
+  const deadline = new AbortController();
+  const timer = setTimeout(() => deadline.abort(), 20_000);
+  try {
+    const response = await webBrowserMutation("/web/v1/music-jobs/prepare", {
+      body: JSON.stringify(body),
+      headers: {
+        "Content-Type": "application/json",
+        "X-Idempotency-Key": idempotencyKey,
+      },
+      method: "POST",
+      signal: deadline.signal,
+    });
+    if (response.status !== 201) {
+      throw new MusicApiError("Unable to prepare music job.", response.status);
+    }
+    return musicJobPreparationSchema.parse(await response.json());
+  } catch (error) {
+    if (deadline.signal.aborted) throw new MusicApiError("Music preparation timed out.", 408);
+    throw error;
+  } finally {
+    clearTimeout(timer);
   }
-  return musicJobPreparationSchema.parse(await response.json());
 }
 
 export async function activateMusicJob(jobId: string, idempotencyKey: string): Promise<MusicJobActivation> {

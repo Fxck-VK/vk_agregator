@@ -97,12 +97,45 @@ describe("MusicWorkspaceController", () => {
     expect(api.prepareMusicJob).not.toHaveBeenCalled();
     expect(api.activateMusicJob).not.toHaveBeenCalled();
     fireEvent.change(screen.getByRole("textbox", { name: "Как продолжить трек" }), { target: { value: "Continue with soft piano" } });
-    fireEvent.click(screen.getByRole("button", { name: "Подготовить Продлить" }));
+    fireEvent.click(screen.getByRole("button", { name: "Продолжить трек" }));
     await waitFor(() => expect(api.prepareMusicJob).toHaveBeenCalledOnce());
     expect(api.prepareMusicJob).toHaveBeenCalledWith(expect.objectContaining({
       model_id: "suno_v6", sources: [{ job_id: oldMusicJob.id, audio_index: 1 }],
       music: expect.objectContaining({ action: "extend", custom: false, continue_at_sec: 45, gpt_description: "Continue with soft piano" }),
     }), expect.any(String));
+    expect(api.activateMusicJob).not.toHaveBeenCalled();
+  });
+
+  it("unlocks continuation after a price timeout and manually retries the same quote key", async () => {
+    const catalog = { ...enabledCatalog, models: enabledCatalog.models.map(model => ({ ...model, operations: [...model.operations,
+      { enabled: true, id: "extend" as const, estimateCredits: 30, requirement: { minTracks: 1, maxTracks: 1 } },
+    ] })) };
+    const api = apiStub({
+      loadMusicJobs: vi.fn().mockResolvedValue({ has_more: false, items: [oldMusicJob], next_cursor: null }),
+      loadMusicJobResult: vi.fn().mockResolvedValue(audioResult(oldMusicJob, "Source song")),
+      prepareMusicJob: vi.fn().mockRejectedValueOnce(new MusicApiError("timeout", 408)).mockResolvedValueOnce({
+        balance: 100, can_afford: true, job: { ...newMusicJob, action: "extend", status: "prepared", cost_estimate: 30 },
+      }),
+    });
+    render(<MusicWorkspaceController api={api} catalogLoader={() => Promise.resolve(catalog)} />);
+    await screen.findByRole("heading", { name: "Source song" });
+    fireEvent.change(screen.getByRole("slider", { name: "Перемотка: Source song" }), { target: { value: "45" } });
+    fireEvent.click(screen.getByRole("button", { name: "Действия: Source song" }));
+    fireEvent.click(screen.getByRole("menuitem", { name: "Продолжить трек" }));
+    const input = screen.getByRole("textbox", { name: "Как продолжить трек" });
+    fireEvent.change(input, { target: { value: "synthetic continuation" } });
+    fireEvent.click(screen.getByRole("button", { name: "Продолжить трек" }));
+    expect(await screen.findByRole("alert")).toHaveTextContent("Сервер долго не отвечает. Повторите попытку; списания не было.");
+    expect(input).toHaveValue("synthetic continuation");
+    expect(screen.getByRole("button", { name: "Продолжить трек" })).toBeEnabled();
+    expect(api.prepareMusicJob).toHaveBeenCalledTimes(1);
+    fireEvent.click(screen.getByRole("button", { name: "Продолжить трек" }));
+    await screen.findByRole("heading", { name: "Подтверждение запуска" });
+    const calls = vi.mocked(api.prepareMusicJob).mock.calls;
+    expect(calls).toHaveLength(2);
+    expect(calls[1][1]).toBe(calls[0][1]);
+    expect(calls[1][0]).toEqual(calls[0][0]);
+    expect(calls[1][0]).toMatchObject({ sources: [{ job_id: oldMusicJob.id, audio_index: 1 }], music: { continue_at_sec: 45 } });
     expect(api.activateMusicJob).not.toHaveBeenCalled();
   });
 
