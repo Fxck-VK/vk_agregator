@@ -53,14 +53,25 @@ func TestDraftMediaContractsRemainNotReady(t *testing.T) {
 			t.Fatalf("%s missing sources/operations/checks: %+v", candidate.PublicID, contract)
 		}
 		for _, source := range contract.Sources {
+			if source.ID == "suno_studio_pricing" {
+				if source.CheckedAt != "2026-10-19" || source.URL != "https://api.apimart.ai/api/pricing/model?model=suno" {
+					t.Fatal("invalid Suno tariff evidence")
+				}
+				continue
+			}
 			if providermodels.IsVideoExpansion(candidate.PublicID) && source.ID == candidate.PublicID+"_pricing" {
 				if source.CheckedAt != "2026-10-02" || source.URL != "https://api.apimart.ai/api/pricing/model?model="+url.QueryEscape(candidate.ModelCode) {
 					t.Fatalf("%s invalid tariff evidence", candidate.PublicID)
 				}
 				continue
 			}
-			if source.CheckedAt != candidate.CheckedAt {
-				t.Fatalf("%s source %s checked_at = %q, want %q", candidate.PublicID, source.ID, source.CheckedAt, candidate.CheckedAt)
+			expectedDate := candidate.CheckedAt
+			switch source.ID {
+			case "suno_overview", "suno_lyrics", "suno_sounds", "suno_upload", "suno_upload_cover", "suno_upload_extend", "suno_cover_song", "suno_mashup", "suno_stems", "suno_stems_all", "suno_add_vocals", "suno_add_instrumental", "suno_upsample_tags":
+				expectedDate = "2026-10-19"
+			}
+			if source.CheckedAt != expectedDate {
+				t.Fatalf("%s source %s checked_at = %q, want %q", candidate.PublicID, source.ID, source.CheckedAt, expectedDate)
 			}
 			if !strings.HasPrefix(source.URL, "https://docs.apimart.ai/") {
 				t.Fatalf("%s source %s URL = %q", candidate.PublicID, source.ID, source.URL)

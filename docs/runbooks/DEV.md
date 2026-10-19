@@ -31,10 +31,14 @@ verify the file library. Keep the image-only history endpoint unchanged.
 This adds 16 media candidates: Nano Banana, Imagen 4.0; HappyHorse 1.0/1.1, SkyReels V4
 Fast/Standard, Wan 3.0, Vidu Q3 Pro, Grok Imagine 1.5 Video, Kling 2.6, Seedance 2.0
 Standard/Mini; Suno V6/Wild/Mini and Lyria 3.5. Images and videos accept text only;
-Lyria exposes `generate`; Suno V6/Wild/Mini also expose `extend` from an owned,
-succeeded music Job (2026-10-19). Upload-based continuation and other transforms
-remain closed. Continuation keeps the existing server quote (30 credits, 60 in
-Max mode), confirmation, reservation and worker-only provider submission.
+Lyria exposes `generate`. Suno V6/Wild/Mini expose generation, owned continuation
+and the dated [studio tool allowlist](../../docs/runbooks/MODEL_CATALOG.md#suno-studio-tools-2026-10-19).
+Upload tools require the existing `PROVIDER_REFERENCE_BASE_URL` and
+`PROVIDER_REFERENCE_SIGNING_KEY`: API and worker now start the signed gateway
+when these exact DEV routes are runnable, independently of Motion Control.
+Invalid/missing signing configuration fails startup; never expose unsigned
+storage URLs. MP3/WAV inputs are inspected and bound to the account and Job.
+Confirmation, reservation and worker-only provider submission remain mandatory.
 GPT-4o Mini TTS remains disabled. Whisper-1 is enabled for manual DEV smoke with
 the operator-approved retail price of 25 credits per started minute (maximum
 200 credits for 8 minutes), bound to owned, probed MP3/WAV inputs up to 25 MB.

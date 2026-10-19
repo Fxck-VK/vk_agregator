@@ -2,7 +2,7 @@ package pricingcatalog
 
 import "vk-ai-aggregator/internal/domain"
 
-// APIMart public action tariff, checked 2026-09-16:
+// APIMart public action tariff, rechecked 2026-10-19 (unchanged):
 // https://api.apimart.ai/api/pricing/model?model=suno
 // Values below are USD micros AFTER the published 20% discount. Quotes use
 // the existing $0.005 internal-credit conversion, x3 rounded up to five.

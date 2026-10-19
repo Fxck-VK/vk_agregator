@@ -60,6 +60,9 @@ func validateSunoRequest(req domain.ProviderRequest) error {
 	if err != nil {
 		return err
 	}
+	if domain.ValidateSunoToolOptions(music) != nil {
+		return sunoInvalid("invalid Suno tool options")
+	}
 	spec, ok := sunoActionSpec(music.Action)
 	if !ok {
 		return sunoInvalid("unsupported Suno action")

@@ -159,7 +159,7 @@ func (h *Handler) validateMusicSources(ctx context.Context, account uuid.UUID, r
 		if err != nil || mediaprobe.ValidateMusicInputArtifact(a, account) != nil {
 			return domain.ErrNotFound
 		}
-		if (request.Music.Action == domain.MusicActionUploadCover || request.Music.Action == domain.MusicActionUploadExtend) && a.DurationMS >= 480000 {
+		if musicgeneration.ValidateUpload(request.Music, a) != nil {
 			return domain.ErrNotFound
 		}
 		if request.Music.Action == domain.MusicActionVoice && a.MimeType != "audio/mpeg" && a.MimeType != "audio/wav" && a.MimeType != "audio/x-wav" {

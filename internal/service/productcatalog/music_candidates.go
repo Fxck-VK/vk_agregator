@@ -3,6 +3,7 @@ package productcatalog
 import (
 	"strconv"
 	"vk-ai-aggregator/internal/domain"
+	"vk-ai-aggregator/internal/service/mediaprobe"
 	"vk-ai-aggregator/internal/service/modelcontract"
 	"vk-ai-aggregator/internal/service/musicgeneration"
 	"vk-ai-aggregator/internal/service/pricingcatalog"
@@ -57,6 +58,13 @@ func pendingMediaWorkspaceModels() []WorkspaceModel {
 				if providermodels.RuntimeRegistry().MediaCandidateRunnable(c.PublicID, op.ID) && op.Music != nil {
 					op.Enabled = true
 					op.Music.UnavailableReason = ""
+					if op.Music.MaxUploads > 0 {
+						op.Inputs.Audio = modelcontract.Input{Support: modelcontract.Supported, Enabled: true, Required: true, Processing: "native", MaxCount: 1, AllowedCounts: []int{1}, MaxBytes: mediaprobe.MaxMusicInputBytes, MaxDurationSec: mediaprobe.MaxMusicInputDurationSec, Formats: []modelcontract.FileFormat{{Extension: ".mp3", MIME: "audio/mpeg"}, {Extension: ".wav", MIME: "audio/wav"}}}
+						op.Inputs.MaxTotalBytes = mediaprobe.MaxMusicInputBytes
+						maximum := 1
+						model.Capabilities.Application.Audio.Audio = providermodels.InputCapability{Support: providermodels.Supported, MaxCount: &maximum, Extensions: []string{"mp3", "wav"}}
+						model.Capabilities.Application.Notes = []string{"На DEV доступны собственные MP3/WAV до 25 МиБ; кавер и продолжение требуют запись короче 8 минут. Проверка результатов не завершена."}
+					}
 				}
 			}
 			out[len(out)-1] = model

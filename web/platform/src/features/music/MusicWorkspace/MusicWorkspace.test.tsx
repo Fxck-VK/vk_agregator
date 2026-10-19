@@ -57,6 +57,28 @@ const generateOperation: MusicWorkspaceOperation = {
   supportsMaxMode: true,
 };
 
+describe("Suno tool prerequisites", () => {
+  it("offers preparation and only imported tracks for adding vocals", () => {
+    const upload = vi.fn();
+    render(<StatefulWorkspace activeOperationId="add_vocals" uploadsEnabled onRequestOwnedUpload={upload}
+      operations={[{ id: "add_vocals", enabled: true }, { id: "upload", enabled: true, estimateCredits: 5, supportsUploads: true, requirement: { minTracks: 0, maxTracks: 0, minUploads: 1, maxUploads: 1 } }]}
+      tracks={[
+        { ...tracks[0], title: "Generated source", modelId: "suno_v6", sourceAction: "generate" },
+        { ...tracks[1], title: "Imported source", modelId: "suno_v6", sourceAction: "upload" },
+      ]} />);
+    expect(screen.queryByRole("heading", { name: "Generated source" })).not.toBeInTheDocument();
+    expect(screen.getByRole("heading", { name: "Imported source" })).toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: /Подготовить запись/ }));
+    fireEvent.click(screen.getByRole("button", { name: "Выбрать аудио" }));
+    expect(upload).toHaveBeenCalledTimes(1);
+  });
+  it("requires a lyrics topic before preparation", () => {
+    const confirm = vi.fn();
+    render(<StatefulWorkspace operations={[{ id: "lyrics", enabled: true, requirement: { minTracks: 0, maxTracks: 0 } }]} activeOperationId="lyrics" onRequestConfirmation={confirm} />);
+    expect(screen.getByRole("button", { name: "Подготовить Текст песни" })).toBeDisabled();
+  });
+});
+
 const mashupOperation: MusicWorkspaceOperation = {
   details: ["Исходные треки: 2", "Результат: аудио"],
   enabled: true,
@@ -100,6 +122,7 @@ type HarnessProps = Partial<MusicWorkspaceProps> & {
 };
 
 function StatefulWorkspace({
+  activeOperationId: initialActiveOperationId = null,
   initialDraft = baseDraft,
   initialMode = "description",
   initialSelectedTrackIds = [],
@@ -109,7 +132,7 @@ function StatefulWorkspace({
   const [mode, setMode] = useState<MusicCreationMode>(initialMode);
   const [selectedTrackIds, setSelectedTrackIds] = useState<readonly string[]>(initialSelectedTrackIds);
   const [activeOperationId, setActiveOperationId] = useState<MusicOperationID | null>(
-    props.activeOperationId ?? null,
+    initialActiveOperationId,
   );
 
   return (
@@ -214,7 +237,7 @@ describe("MusicWorkspace", () => {
 
   it("shows mode-specific fields and preserves controlled drafts across modes", () => {
     const onRequestOwnedUpload = vi.fn();
-    render(<StatefulWorkspace onRequestOwnedUpload={onRequestOwnedUpload} uploadsEnabled />);
+    render(<StatefulWorkspace onRequestOwnedUpload={onRequestOwnedUpload} uploadsEnabled operations={[generateOperation, { id: "upload_cover", enabled: true, supportsUploads: true, requirement: { minTracks: 0, maxTracks: 0, minUploads: 1, maxUploads: 1 } }]} />);
     fireEvent.click(screen.getByRole("button", { name: "Настройки трека" }));
 
     fireEvent.change(screen.getByRole("textbox", { name: "Описание трека" }), {
@@ -224,10 +247,11 @@ describe("MusicWorkspace", () => {
     fireEvent.change(screen.getByRole("textbox", { name: "Свой текст песни" }), {
       target: { value: "verse one\nchorus" },
     });
-    fireEvent.click(screen.getByRole("tab", { name: "Загрузка" }));
+    fireEvent.click(screen.getByRole("button", { name: "Кавер из загрузки" }));
     fireEvent.click(screen.getByRole("button", { name: "Выбрать аудио" }));
 
     expect(onRequestOwnedUpload).toHaveBeenCalledTimes(1);
+    fireEvent.click(screen.getByRole("button", { name: "Закрыть инструмент" }));
 
     fireEvent.click(screen.getByRole("tab", { name: "Описание" }));
     expect(screen.getByRole("textbox", { name: "Описание трека" })).toHaveValue(
@@ -356,7 +380,7 @@ describe("MusicWorkspace", () => {
     fireEvent.click(screen.getByRole("button", { name: "Выбрать трек 1" }));
     expect(screen.getByRole("button", { name: "Подготовить Mashup" })).toBeDisabled();
 
-    fireEvent.click(screen.getByRole("button", { name: "Выбрать трек 2" }));
+    fireEvent.change(screen.getByRole("combobox", { name: "Второй трек для mashup" }), { target: { value: "track-b" } });
     const actionForm = screen.getByRole("button", { name: "Подготовить Mashup" }).closest("div");
     expect(actionForm).not.toBeNull();
     expect(within(actionForm!).getByLabelText("Второй трек для mashup")).toHaveValue("track-b");

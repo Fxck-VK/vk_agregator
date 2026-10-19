@@ -45,10 +45,8 @@ func TestDEVSmokeRegistryDoesNotGrantAdmission(t *testing.T) {
 			t.Fatal("unknown operation enabled")
 		}
 	}
-	for _, id := range []string{"suno_v6", "suno_v6_wild", "suno_v6_mini", "lyria_3_5"} {
-		if r.MediaCandidateRunnable(id, "upload_cover") {
-			t.Fatal("unverified input operation enabled")
-		}
+	if r.MediaCandidateRunnable("lyria_3_5", "upload_cover") {
+		t.Fatal("Suno input operation enabled for Lyria")
 	}
 	for _, op := range []string{"generate", "speak", "translate"} {
 		if r.MediaCandidateRunnable("whisper_1", op) {
@@ -72,7 +70,7 @@ func TestDEVSmokeRegistryDoesNotGrantAdmission(t *testing.T) {
 	}
 }
 
-func TestDEVSmokeAllowsOnlySunoTaskContinuation(t *testing.T) {
+func TestDEVSmokeSunoKeepsUnpreparedToolsClosed(t *testing.T) {
 	if err := ConfigureDEVSmoke("development", true); err != nil {
 		t.Fatal(err)
 	}
@@ -84,7 +82,7 @@ func TestDEVSmokeAllowsOnlySunoTaskContinuation(t *testing.T) {
 		if StaticRegistry().MediaCandidateRunnable(id, "extend") || RuntimeRegistry().MediaCandidateAdmitted(id, "extend") {
 			t.Fatal("DEV continuation changed permanent admission")
 		}
-		for _, operation := range []string{"upload_extend", "cover", "stems", "create_model"} {
+		for _, operation := range []string{"create_model", "voice", "persona", "midi", "export"} {
 			if RuntimeRegistry().MediaCandidateRunnable(id, operation) {
 				t.Fatalf("unrequested operation %s became runnable", operation)
 			}

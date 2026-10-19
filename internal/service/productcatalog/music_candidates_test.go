@@ -50,7 +50,7 @@ func TestDEVSmokeCatalogOffersOwnedSunoContinuation(t *testing.T) {
 			t.Fatal("permanent admission changed")
 		}
 		for _, op := range model.Operations {
-			want := op.ID == "generate" || op.ID == "extend"
+			want := providermodels.RuntimeRegistry().MediaCandidateRunnable(model.ID, op.ID)
 			if op.Enabled != want {
 				t.Fatalf("unexpected availability %s/%s", model.ID, op.ID)
 			}

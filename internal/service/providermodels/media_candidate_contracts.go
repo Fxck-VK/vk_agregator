@@ -316,21 +316,21 @@ func sunoOperationFacts(nativeVersion string) []MediaCandidateOperationFact {
 	}
 	facts := []MediaCandidateOperationFact{
 		versioned("generate", "/music/generations", "suno_generation", []string{"prompt or instrumental", "version or custom_model_id"}, []string{"version v6/v6-wild/v6-mini; custom_model_id excludes version and persona_id", "prompt <=3000 chars, lyrics <=5000 chars, style/tags <=1000 chars, title <=80 chars", "duration 10..360 seconds when present", "audio_format mp3/m4a/wav"}),
-		unversioned("lyrics", "/music/generations/lyrics", "suno_lyrics", []string{"prompt"}, []string{"model suno", "prompt required", "lyrics_model optional"}),
+		unversioned("lyrics", "/music/generations/lyrics", "suno_lyrics", []string{"prompt"}, []string{"model suno", "nonempty prompt required", "lyrics_model classic/remi optional", "result.lyrics array; text/string lyrics fallback"}),
 		versioned("inspo", "/music/generations/inspo", "suno_inspo", []string{"audio_urls 1..4", "version or custom_model_id"}, []string{"audio_urls must be public audio URLs", "version v6/v6-wild/v6-mini by candidate", "audio_format mp3/m4a/wav"}),
-		versioned("sounds", "/music/generations/sounds", "suno_sounds", []string{"prompt", "version"}, []string{"prompt required", "type/bpm/key optional", "audio_format mp3/m4a/wav", "custom_model_id not documented for sounds"}),
+		versioned("sounds", "/music/generations/sounds", "suno_sounds", []string{"prompt", "version"}, []string{"prompt required", "type one-shot/loop; bpm 1..300; key sharp major/minor", "audio_format mp3/m4a/wav", "no custom_model_id, Max, variety or target duration"}),
 		unversioned("upsample_tags", "/music/generations/upsampleTags", "suno_upsample_tags", []string{"tags"}, []string{"tags required", "model suno"}),
 		unversioned("upload", "/music/generations/uploadTask", "suno_upload", []string{"audioFilePath"}, []string{"public HTTP(S) audio URL only", "JSON endpoint does not upload binary files", "no version or audio_format"}),
-		versioned("upload_cover", "/music/generations/uploadCover", "suno_upload_cover", []string{"audio_url", "version or custom_model_id"}, []string{"single public audio_url", "duration_s supported", "audio_format mp3/m4a/wav"}),
-		versioned("upload_extend", "/music/generations/uploadExtend", "suno_upload_extend", []string{"audio_url", "continue_at", "version or custom_model_id"}, []string{"single public audio_url", "continue_at required", "duration_s supported", "audio_format mp3/m4a/wav"}),
+		versioned("upload_cover", "/music/generations/uploadCover", "suno_upload_cover", []string{"audio_url", "version or custom_model_id"}, []string{"single public audio_url; source shorter than 480 seconds", "explicit custom; gpt_description for false; lyrics required for custom vocals", "duration_s supported", "audio_format mp3/m4a/wav"}),
+		versioned("upload_extend", "/music/generations/uploadExtend", "suno_upload_extend", []string{"audio_url", "continue_at", "version or custom_model_id"}, []string{"single public audio_url; source shorter than 480 seconds", "1 <= continue_at < inspected source duration", "duration_s supported", "audio_format mp3/m4a/wav"}),
 		unversioned("create_model", "/music/generations/createModel", "suno_create_model", []string{"name", "audio_urls 6..24"}, []string{"6..24 direct public HTTP(S) audio URLs", "recommended MP3/WAV/M4A", "returns model_id for custom_model_id use"}),
 		versioned("extend", "/music/generations/extend", "suno_extend", []string{"task_id", "audio_index optional", "continue_at", "version or custom_model_id"}, []string{"source task required", "continue_at required", "duration_s supported", "audio_format mp3/m4a/wav"}),
 		versioned("cover", "/music/generations/coverSong", "suno_cover_song", []string{"task_id", "audio_index optional", "version or custom_model_id"}, []string{"source task required", "duration_s supported", "custom_model_id excludes version/persona_id", "audio_format mp3/m4a/wav"}),
 		unversioned("remaster", "/music/generations/remaster", "suno_remaster", []string{"task_id", "audio_index optional"}, []string{"source task required", "variation_category optional", "audio_format mp3/m4a/wav"}),
 		unversioned("stems", "/music/generations/stems", "suno_stems", []string{"task_id", "audio_index optional"}, []string{"source task required", "stem_type optional", "audio_format mp3/m4a/wav"}),
 		unversioned("stems_all", "/music/generations/stemsAll", "suno_stems_all", []string{"task_id", "audio_index optional"}, []string{"source task required", "audio_format mp3/m4a/wav"}),
-		versioned("add_vocals", "/music/generations/addVocals", "suno_add_vocals", []string{"task_id", "audio_index optional", "version or custom_model_id"}, []string{"source task required", "vocal_gender optional", "audio_format mp3/m4a/wav"}),
-		versioned("add_instrumental", "/music/generations/addInstrumental", "suno_add_instrumental", []string{"task_id", "audio_index optional", "version or custom_model_id"}, []string{"source task required", "vocal_gender optional", "audio_format mp3/m4a/wav"}),
+		versioned("add_vocals", "/music/generations/addVocals", "suno_add_vocals", []string{"task_id", "audio_index optional", "version or custom_model_id"}, []string{"source must be uploadTask", "vocal_gender optional", "audio_format mp3/m4a/wav", "no auto_lyrics, persona_id, instrumental or target duration"}),
+		versioned("add_instrumental", "/music/generations/addInstrumental", "suno_add_instrumental", []string{"task_id", "audio_index optional", "version or custom_model_id"}, []string{"source must be uploadTask", "vocal_gender optional", "audio_format mp3/m4a/wav", "no auto_lyrics, persona_id, instrumental or target duration"}),
 		versioned("add_stem", "/music/generations/addStem", "suno_add_stem", []string{"task_id", "audio_index optional", "version or custom_model_id"}, []string{"source task required", "audio_format mp3/m4a/wav"}),
 		unversioned("voice", "/music/generations/createVoice", "suno_create_voice", []string{"audio_url"}, []string{"single public MP3/WAV audio_url", "returns voice_id"}),
 		unversioned("persona", "/music/generations/persona", "suno_persona", []string{"task_id", "audio_index optional"}, []string{"source task required", "name/describe/styles optional", "vocal_start_s/vocal_end_s optional range"}),
@@ -420,17 +420,18 @@ func mediaCandidateSources(candidate MediaCandidate, facts []MediaCandidateOpera
 			return
 		}
 		seen[id] = true
-		sources = append(sources, modelcontract.Source{ID: id, URL: url, CheckedAt: candidate.CheckedAt})
+		sources = append(sources, modelcontract.Source{ID: id, URL: url, CheckedAt: sunoStudioSourceDate(id, candidate.CheckedAt)})
 	}
 	add := func(id, path string) {
 		if id == "" || seen[id] {
 			return
 		}
 		seen[id] = true
-		sources = append(sources, modelcontract.Source{ID: id, URL: apimartDocsBase + path, CheckedAt: candidate.CheckedAt})
+		sources = append(sources, modelcontract.Source{ID: id, URL: apimartDocsBase + path, CheckedAt: sunoStudioSourceDate(id, candidate.CheckedAt)})
 	}
 	if strings.HasPrefix(candidate.PublicID, "suno_") {
 		add("suno_overview", "audios/suno/overview")
+		addURL("suno_studio_pricing", "https://api.apimart.ai/api/pricing/model?model=suno")
 	}
 	for _, fact := range facts {
 		if url := mediaCandidateSourceURL(fact.SourceID); url != "" {
@@ -448,6 +449,15 @@ func mediaCandidateSources(candidate MediaCandidate, facts []MediaCandidateOpera
 		sources = append(sources, modelcontract.Source{ID: candidate.PublicID + "_pricing", URL: "https://api.apimart.ai/api/pricing/model?model=" + url.QueryEscape(candidate.ModelCode), CheckedAt: "2026-10-02"})
 	}
 	return sources
+}
+
+func sunoStudioSourceDate(id, fallback string) string {
+	switch id {
+	case "suno_overview", "suno_lyrics", "suno_sounds", "suno_upload", "suno_upload_cover", "suno_upload_extend", "suno_cover_song", "suno_mashup", "suno_stems", "suno_stems_all", "suno_add_vocals", "suno_add_instrumental", "suno_upsample_tags", "suno_studio_pricing":
+		return "2026-10-19"
+	default:
+		return fallback
+	}
 }
 
 func mediaCandidateSourceURL(sourceID string) string {

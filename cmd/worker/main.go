@@ -395,7 +395,7 @@ func main() {
 	}
 
 	var referenceSigner worker.ReferenceVideoSigner
-	if cfg.FeatureAPIMartKling26MotionEnabled || providermodels.MusicReferencesAdmitted() {
+	if cfg.FeatureAPIMartKling26MotionEnabled || providermodels.MusicReferencesRunnable() {
 		gateway, err := providerreference.New(cfg.ProviderReferenceBaseURL, cfg.ProviderReferenceSigningKey, jobs, artRepo, store)
 		if err != nil {
 			logger.Error("provider reference gateway configuration invalid")

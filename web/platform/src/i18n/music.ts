@@ -1,4 +1,15 @@
 export const messagesMusicRu = {
+  "music.tools.invalidSeek": "Начало продолжения должно быть от 1 секунды и до конца записи",
+  "music.tools.importRequired": "Для этой операции выберите запись, подготовленную в Suno. Подготовка оплачивается отдельно; затем вернитесь к этому инструменту.",
+  "music.tools.importSource": "Подготовить запись",
+  "music.tools.mode": "Режим",
+  "music.tools.style": "Музыкальный стиль",
+  "music.tools.imported": "Запись для обработки",
+  "music.tools.max": "Max — двойная цена",
+  "music.tools.oneShot": "Одиночный звук",
+  "music.tools.loop": "Зацикленный звук",
+  "music.tools.classic": "Classic",
+  "music.tools.remi": "Remi",
   "music.card.actions": "Действия: {title}",
   "music.card.play": "Воспроизвести: {title}",
   "music.card.lyrics": "Текст песни",
@@ -262,6 +273,17 @@ export const messagesMusicRu = {
 } as const;
 
 export const messagesMusicEn: Record<keyof typeof messagesMusicRu, string> = {
+  "music.tools.invalidSeek": "Continuation must start at or after 1 second and before the end of the recording",
+  "music.tools.importRequired": "Select a recording prepared in Suno. Preparation is charged separately; return to this tool afterwards.",
+  "music.tools.importSource": "Prepare recording",
+  "music.tools.mode": "Mode",
+  "music.tools.style": "Music style",
+  "music.tools.imported": "Recording for processing",
+  "music.tools.max": "Max — double price",
+  "music.tools.oneShot": "One-shot",
+  "music.tools.loop": "Loop",
+  "music.tools.classic": "Classic",
+  "music.tools.remi": "Remi",
   "music.card.actions": "Actions: {title}",
   "music.card.play": "Play: {title}",
   "music.card.lyrics": "Lyrics",

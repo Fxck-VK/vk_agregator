@@ -475,10 +475,54 @@ The browser passes application Job IDs only. API and worker check ownership,
 completed/moderated sources, audio index, compatible model family and time bounds;
 provider task IDs are resolved inside the worker. The existing 30-credit quote
 (60 with Max) and confirmation/reservation/capture/release lifecycle are reused.
-Uploads and unrelated transforms remain disabled. Offline tests cover payloads,
+The later same-day studio extension below opens the requested tools on DEV.
+Offline tests cover payloads,
 source authorization and lifecycle; live continuation and its actual billing
 remain unverified until a separately authorized paid test. Earlier generation
 smoke does not establish continuation verification.
+
+### Suno studio tools 2026-10-19
+
+The official [overview](https://docs.apimart.ai/ru/api-reference/audios/suno/overview)
+and operation references were read on 2026-10-19. Runtime enables only the following
+studio routes for Suno V6, Wild and Mini under the existing manual DEV smoke flag.
+Static admission, approved contracts and production are unchanged.
+
+| Operation / official reference | Input | Retail credits |
+| --- | --- | ---: |
+| [lyrics](https://docs.apimart.ai/ru/api-reference/audios/suno/lyrics) | Nonempty topic; Classic/Remi optional | 5 |
+| [sounds](https://docs.apimart.ai/ru/api-reference/audios/suno/sounds) | Description; one-shot/loop; optional BPM 1–300 and sharp major/minor key | 10 |
+| [cover](https://docs.apimart.ai/ru/api-reference/audios/suno/cover-song) | One owned completed Suno track | 30 / Max 60 |
+| [mashup](https://docs.apimart.ai/ru/api-reference/audios/suno/mashup) | Exactly two owned Suno tracks, preserving original indexes | 30 / Max 60 |
+| [stems](https://docs.apimart.ai/ru/api-reference/audios/suno/stems) | One owned track; lead_vocal default or another documented stem | 60 |
+| [stems_all](https://docs.apimart.ai/ru/api-reference/audios/suno/stems-all) | One owned track; no stem_type/version/Max | 145 |
+| [add_vocals](https://docs.apimart.ai/ru/api-reference/audios/suno/add-vocals), [add_instrumental](https://docs.apimart.ai/ru/api-reference/audios/suno/add-instrumental) | Owned **uploadTask** Job; generated sources rejected | 30 / Max 60 each |
+| [upload](https://docs.apimart.ai/ru/api-reference/audios/suno/upload) | One owned inspected audio artifact; result may have audio_id without playback URL | 5 |
+| [upload_cover](https://docs.apimart.ai/ru/api-reference/audios/suno/upload-cover), [upload_extend](https://docs.apimart.ai/ru/api-reference/audios/suno/upload-extend) | One owned MP3/WAV shorter than 480 seconds; continuation 1 ≤ second < inspected duration | 30 / Max 60 each |
+| [upsample_tags](https://docs.apimart.ai/ru/api-reference/audios/suno/upsample-tags) | Nonempty style tags | 5 |
+
+The public [pricing API](https://api.apimart.ai/api/pricing/model?model=suno)
+was rechecked on 2026-10-19: effective action prices, 20% discount and Max ×2
+are unchanged. Existing site conversion ($0.005 per internal credit, cost ×3,
+round up to five) is reused; no inferred minute-based Suno tariff.
+
+Application file policy is MP3/WAV, 25 MiB, at most 480 seconds, stricter than
+unspecified provider file-size bounds. Cover/continuation additionally reject
+exactly 480 seconds. The API and worker both validate the inspected duration;
+clients cannot supply native IDs, private URLs, duration metadata or prices.
+The signed Job-bound gateway is active only with valid existing credentials.
+Adding vocals/music requires the separately confirmed 5-credit upload step.
+
+Offline coverage: typed request/endpoint mappings; all 14 runnable actions across
+three versions through Resolve → owned worker hydration → adapter estimate;
+invalid options, source ownership/index/family, uploaded-source requirements,
+duration boundaries; server quotes, unchanged ledger lifecycle and output
+checkpoint/moderation; catalog and UI preparation without activation.
+Commands: focused Go packages, platform music/files tests, and complete DEV
+preflight before push. Live-output, MP3/WAV live-input and actual billing for
+these newly enabled tools remain **not_run**. No new paid provider calls were
+authorized or issued for this extension. Existing generation smoke cannot count
+as evidence for transforms. Other native tools remain pending.
 
 ### Video pricing and DEV wiring checked 2026-10-02
 

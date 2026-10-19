@@ -37,7 +37,7 @@ export function MusicTrackCard({ track, onContinue, continueHref, selected, onSe
   const [positionChosen, setPositionChosen] = useState(false);
   const [mediaDuration, setMediaDuration] = useState(0);
   const [failed, setFailed] = useState(false);
-  const title = track.title || msg("music.track.titleFallback");
+  const title = track.title || msg(track.sourceAction === "upload" ? "music.tools.imported" : "music.track.titleFallback");
   const source = normalizeMusicArtifactURL(track.artifactPlaybackUrl);
   const cover = normalizeMusicArtifactURL(track.coverImageUrl);
   const duration = mediaDuration || track.durationSec || 0;

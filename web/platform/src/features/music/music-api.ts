@@ -234,21 +234,21 @@ export function buildMusicPrepareBody(
     : undefined;
   const custom = customFlagForRequest(request, personaJobId, customModelJobId);
   const generateCustom = request.operationId !== "generate" || custom === true;
-  const useOwnLyricsPrompt = request.mode === "own_lyrics"
+  const useOwnLyricsPrompt = parameters.customMode === undefined && request.mode === "own_lyrics"
     && lyricPromptActions.has(request.operationId);
   const prompt = useOwnLyricsPrompt ? ownLyrics : descriptionPrompt;
   const durationSec = request.operationId === "fade_in" || request.operationId === "fade_out"
     ? clampInteger(parameters.fadeSeconds ?? 5, 1, 60)
-    : request.draft.targetDurationMode === "custom"
+    : ["generate", "extend", "cover", "upload_cover", "upload_extend"].includes(request.operationId) && (request.operationId === "upload_extend" || custom !== false) && request.draft.targetDurationMode === "custom"
       ? clampInteger(request.draft.targetDurationSec, 10, 360)
       : undefined;
-  const exportFormat = normalizeOutputFormat(request.draft.outputFormat);
+  const exportFormat = normalizeOutputFormat(parameters.outputFormat ?? request.draft.outputFormat);
   const music = compactRecord({
     action: request.operationId,
     audio_format: operation?.supportsAudioFormat === true ? exportFormat : undefined,
     audio_weight: generateCustom ? unitInterval(request.draft.promptWeight) : undefined,
-    auto_lyrics: useOwnLyricsPrompt ? false : undefined,
-    bpm: positiveInteger(parameters.bpm),
+    auto_lyrics: useOwnLyricsPrompt && ["generate", "inspo", "upload_cover", "upload_extend", "extend", "mashup", "sample"].includes(request.operationId) ? false : undefined,
+    bpm: positiveInteger(request.operationId === "sounds" ? parameters.bpm ?? 120 : parameters.bpm),
     continue_at_sec: nonNegative(parameters.seekSec),
     custom,
     description: operationDescription,
@@ -258,12 +258,12 @@ export function buildMusicPrepareBody(
     formats: request.operationId === "export" ? [exportFormat] : undefined,
     gpt_description: gptDescriptionActions.has(request.operationId) ? operationDescription : undefined,
     infill_lyrics: nonEmpty(parameters.infillLyrics),
-    instrumental: instrumentalActions.has(request.operationId) ? request.draft.instrumental : undefined,
+    instrumental: instrumentalActions.has(request.operationId) ? parameters.instrumental ?? request.draft.instrumental : undefined,
     key: request.operationId === "sounds" ? nonEmpty(parameters.musicalKey) : undefined,
     keep_pitch: request.operationId === "adjust_speed" ? true : undefined,
     lyrics: useOwnLyricsPrompt ? ownLyrics : undefined,
     lyrics_model: nonEmpty(parameters.lyricsModel),
-    max_mode: operation?.supportsMaxMode === true && request.draft.maxMode ? true : undefined,
+    max_mode: operation?.supportsMaxMode === true && (parameters.maxMode ?? (parameters.customMode === undefined && request.draft.maxMode)) ? true : undefined,
     name: nameOperation(request.operationId) ? operationName : undefined,
     negative_tags: nonEmpty(parameters.negativeTags),
     prompt,
@@ -274,7 +274,7 @@ export function buildMusicPrepareBody(
     style: generateCustom ? style : undefined,
     style_weight: generateCustom ? unitInterval(request.draft.styleWeight) : undefined,
     styles: generateCustom ? nonEmpty(parameters.styles) ?? style : undefined,
-    tags: generateCustom ? style : undefined,
+    tags: request.operationId === "upsample_tags" ? descriptionPrompt ?? style : generateCustom ? style : undefined,
     title: generateCustom ? nonEmpty(request.draft.title) : undefined,
     variation_category: nonEmpty(parameters.variationCategory),
     variety: generateCustom ? varietyLevel(request.draft.variety) : undefined,
@@ -317,6 +317,7 @@ export function musicTracksFromResult(result: MusicJobResult, job?: MusicJob): M
       id: `${track.job_id}:${track.audio_index}`,
       lyrics: result.lyrics?.[result.lyrics.length === 1 ? 0 : index]?.text,
       modelId: job && isMusicModelId(job.model_id) ? job.model_id : undefined,
+      sourceAction: job?.action,
       originalIndex: Math.max(0, track.audio_index - 1),
       sourceJobId: track.job_id,
       title: track.title ?? null,
@@ -593,7 +594,8 @@ function customFlagForRequest(
   customModelJobId: string | undefined,
 ): boolean | undefined {
   if (!customFieldActions.has(request.operationId)) return undefined;
-  if (request.operationId === "extend") return request.mode === "description" && !request.draft.maxMode ? false : undefined;
+  if (request.parameters.customMode !== undefined) return request.parameters.customMode;
+  if (request.operationId === "extend") return request.mode === "description" && !(request.parameters.maxMode ?? request.draft.maxMode) ? false : undefined;
   if (request.mode === "own_lyrics") return true;
   if (personaJobId !== undefined || customModelJobId !== undefined) return true;
   if (request.draft.maxMode && maxModeRequiresCustom(request.operationId)) return true;

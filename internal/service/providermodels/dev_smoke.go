@@ -176,9 +176,8 @@ func (r Registry) IsDEVSmokeModel(id string) bool {
 }
 
 // MediaCandidateRunnable distinguishes manual DEV smoke from verified admission.
-// Owned Suno task continuation is available for manual DEV smoke.
-// Whisper transcription uses the explicit fixed DEV minute tariff. Other
-// transforms and unmetered text-to-speech remain closed.
+// The dated Suno studio allowlist is available for manual DEV smoke.
+// Whisper uses the explicit fixed DEV minute tariff; TTS remains closed.
 func (r Registry) MediaCandidateRunnable(id, operation string) bool {
 	if r.MediaCandidateAdmitted(id, operation) {
 		return true
@@ -199,8 +198,14 @@ func (r Registry) MediaCandidateRunnable(id, operation string) bool {
 		}
 		return operation == "text_to_video"
 	}
-	if operation == "extend" {
-		return id == "suno_v6" || id == "suno_v6_wild" || id == "suno_v6_mini"
+	if id == "suno_v6" || id == "suno_v6_wild" || id == "suno_v6_mini" {
+		switch operation {
+		case "generate", "extend", "lyrics", "sounds", "upsample_tags", "upload", "upload_cover", "upload_extend", "cover", "mashup", "stems", "stems_all", "add_vocals", "add_instrumental":
+			_, err := pricingcatalog.MusicCandidateQuote(id, operation, false)
+			return err == nil
+		default:
+			return false
+		}
 	}
 	return operation == "generate"
 }

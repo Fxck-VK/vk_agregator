@@ -80,6 +80,10 @@ export type MusicOwnedUpload = {
 
 export type MusicActionParameterDraft = {
   bpm?: number;
+  customMode?: boolean;
+  maxMode?: boolean;
+  outputFormat?: MusicOutputFormat;
+  instrumental?: boolean;
   customModelJobId?: string | null;
   description?: string;
   fadeSeconds?: number;
@@ -169,6 +173,7 @@ export type MusicTrack = {
   sourceJobId: string;
   title?: string | null;
   modelId?: MusicModelID;
+  sourceAction?: MusicOperationID;
 };
 
 export type MusicResultArtifact = {
@@ -362,7 +367,11 @@ const twoTrackOperations = new Set<MusicOperationID>(["concat", "mashup"]);
 const uploadOperations = new Set<MusicOperationID>(["upload", "upload_cover", "upload_extend"]);
 const rangeOperations = new Set<MusicOperationID>(["replace_section", "remove_section", "crop"]);
 const seekOperations = new Set<MusicOperationID>(["extend", "sample", "upload_extend"]);
+const creativeTools = new Set<MusicOperationID>(["cover", "mashup", "add_vocals", "add_instrumental", "upload_cover"]);
 const descriptionRequiredOperations = new Set<MusicOperationID>([
+  "lyrics",
+  "sounds",
+  "upsample_tags",
   "add_instrumental",
   "add_stem",
   "add_vocals",
@@ -487,13 +496,17 @@ function getDisabledReason(
   if (ownedUploads.length > maxUploads) return msg("music.disabled.audioTooMany", { count: maxUploads });
   if (descriptionRequiredOperations.has(operation.id)) {
     const parameters = draft.actionParameters?.[operation.id] ?? {};
-    const description = parameters.description?.trim() || parameters.prompt?.trim() || draft.descriptionPrompt.trim();
-    if (description.length === 0) return msg("music.disabled.descriptionRequired");
+    const description = parameters.customMode !== undefined ? parameters.prompt?.trim() : parameters.description?.trim() || parameters.prompt?.trim() || draft.descriptionPrompt.trim();
+    if (!description) return msg("music.disabled.descriptionRequired");
   }
   if (nameRequiredOperations.has(operation.id)) {
     const parameters = draft.actionParameters?.[operation.id] ?? {};
     const name = parameters.name?.trim() || draft.title.trim();
     if (name.length === 0) return msg("music.disabled.nameRequired");
+  }
+  if (operation.id === "upload_extend") {
+    const seek = draft.actionParameters?.upload_extend?.seekSec ?? 1;
+    if (seek < 1 || seek >= (ownedUploads[0]?.durationSec ?? 0)) return msg("music.tools.invalidSeek");
   }
   if (operation.id === "generate") {
     if (mode === "own_lyrics" && draft.lyrics.trim().length === 0) return msg("music.disabled.ownLyricsRequired");
@@ -558,7 +571,10 @@ function buildActionRequest({
     mode,
     modelId: selectedModelId,
     operationId,
-    parameters: operationId === "extend" ? {
+    parameters: operationId === "upload_extend" ? {
+      seekSec: 1,
+      ...draft.actionParameters?.[operationId],
+    } : operationId === "extend" ? {
       seekSec: Math.max(1, Math.floor(selectedTracks[0]?.durationSec ?? 2) - 1),
       ...draft.actionParameters?.[operationId],
     } : draft.actionParameters?.[operationId] ?? {},
@@ -643,7 +659,7 @@ export function MusicWorkspace({
 
   const requestConfirmation = (operationId: MusicOperationID) => {
     const operation = operationById.get(operationId);
-    const requestTrackIds = operationConsumesSelectedTracks(operation) ? selectedTrackIds : [];
+    const requestTrackIds = operationConsumesSelectedTracks(operation) ? selectedTrackIds.filter(id => sourceTracks.some(track => track.id === id)) : [];
     const disabledReason = getDisabledReason(
       operation,
       requestTrackIds,
@@ -682,6 +698,10 @@ export function MusicWorkspace({
       },
     });
     onOperationDraftChange?.(operationId, next);
+    if (operationId === "mashup" && patch.secondaryTrackId !== undefined) {
+      const first = selectedTrackIds.find(id => id !== current.secondaryTrackId);
+      onSelectedTrackIdsChange([...(first && first !== patch.secondaryTrackId ? [first] : []), ...(patch.secondaryTrackId ? [patch.secondaryTrackId] : [])]);
+    }
   };
 
   const toggleSelectedTrack = (trackId: string) => {
@@ -709,6 +729,12 @@ export function MusicWorkspace({
     });
   };
   const openTool = (operationId: MusicOperationID) => {
+    if (!draft.actionParameters?.[operationId]) updateActionDraft(operationId, {
+      maxMode: false,
+      outputFormat: "mp3",
+      ...(creativeTools.has(operationId) ? { customMode: false } : {}),
+      ...(operationId === "upsample_tags" ? { prompt: draft.style } : {}),
+    });
     onActiveOperationChange(operationId);
     requestAnimationFrame(() => {
       toolRef.current?.scrollIntoView?.({ block: "center", behavior: "smooth" });
@@ -749,7 +775,9 @@ export function MusicWorkspace({
       unavailable={!operation.enabled || modelDisabledReason !== null}
     />
   );
-  const activeTrackIds = operationConsumesSelectedTracks(activeOperation) ? selectedTrackIds : [];
+  const requiresImportedSource = activeOperationId === "add_vocals" || activeOperationId === "add_instrumental";
+  const sourceTracks = tracks.filter(track => track.modelId !== "lyria_3_5" && (!requiresImportedSource || track.sourceAction === "upload"));
+  const activeTrackIds = operationConsumesSelectedTracks(activeOperation) ? selectedTrackIds.filter(id => sourceTracks.some(track => track.id === id)) : [];
   const trackLibrary = (
     <TrackSourceList
       busy={busy}
@@ -758,7 +786,7 @@ export function MusicWorkspace({
       onLoadMore={onLoadMoreHistory}
       onToggle={toggleSelectedTrack}
       selectedTrackIds={selectedTrackIds}
-      tracks={activeOperationId === "extend" && selectedTrackIds.length === 1 ? tracks.filter(track => selectedTrackIds.includes(track.id)) : tracks}
+      tracks={activeOperationId === "extend" && activeTrackIds.length === 1 ? sourceTracks.filter(track => activeTrackIds.includes(track.id)) : sourceTracks}
     />
   );
 
@@ -872,7 +900,7 @@ export function MusicWorkspace({
                 <ModeSwitchPanel
                   activeID={mode}
                   ariaLabel={msg("music.workspace.descriptionLabel")}
-                  items={creationModeItems(msg).map((item) => ({
+                  items={creationModeItems(msg).filter(item => item.id !== "upload").map((item) => ({
                     ...item,
                     disabled: busy || (item.id === "upload" && !uploadsEnabled),
                     title: item.id === "upload" && !uploadsEnabled ? msg("music.workspace.uploadDisabled") : item.title,
@@ -884,8 +912,8 @@ export function MusicWorkspace({
                   lyria={selectedModelId === "lyria_3_5"}
                   busy={busy}
                   draft={draft}
-                  onEnhanceStyle={onEnhanceStyle}
-                  onRequestSuggestedLyrics={onRequestSuggestedLyrics}
+                  onEnhanceStyle={onEnhanceStyle ?? (operationById.get("upsample_tags")?.enabled ? () => openTool("upsample_tags") : undefined)}
+                  onRequestSuggestedLyrics={onRequestSuggestedLyrics ?? (operationById.get("lyrics")?.enabled ? () => openTool("lyrics") : undefined)}
                   updateDraft={updateDraft}
                 />
                 <ModeSpecificFields
@@ -952,16 +980,18 @@ export function MusicWorkspace({
         {toolOpen && activeOperation && activeOperationId ? <>
           <div className={styles.sectionTitle}><span>{msg("music.operation.exactPriceAfterPrepare")}</span><Button disabled={busy} onClick={() => onActiveOperationChange(null)} type="button" variant="outline">{msg("music.studio.closeTool")}</Button></div>
           {operationConsumesOwnedUploads(activeOperation) ? <ModeSpecificFields busy={busy} draft={draft} mode="upload" onRequestOwnedUpload={onRequestOwnedUpload} uploadsEnabled={uploadsEnabled} updateDraft={updateDraft} /> : null}
+          {requiresImportedSource ? <div className={styles.creatorNote}><p>{msg("music.tools.importRequired")}</p><Button disabled={busy || !operationById.get("upload")?.enabled} onClick={() => openTool("upload")} type="button" variant="outline">{msg("music.tools.importSource")} <MusicOperationPrice operation={operationById.get("upload")} /></Button></div> : null}
           {operationConsumesSelectedTracks(activeOperation) ? trackLibrary : null}
           <ActionParameterForm
             busy={busy}
             disabledReason={getDisabledReason(activeOperation, activeTrackIds, draft, busy, msg, modelDisabledReason)}
             draft={draft.actionParameters?.[activeOperationId] ?? {}}
+            uploadDuration={getOwnedUploads(draft)[0]?.durationSec}
             onChange={(patch) => updateActionDraft(activeOperationId, patch)}
             onRun={() => requestConfirmation(activeOperationId)}
             operation={activeOperation}
             selectedTrackIds={activeTrackIds}
-            tracks={tracks}
+            tracks={sourceTracks}
           />
         </> : null}
       </section>
@@ -1473,6 +1503,7 @@ function ActionParameterForm({
   operation,
   selectedTrackIds,
   tracks,
+  uploadDuration,
 }: Readonly<{
   busy: boolean;
   disabledReason: string | null;
@@ -1482,6 +1513,7 @@ function ActionParameterForm({
   operation: MusicWorkspaceOperation;
   selectedTrackIds: readonly string[];
   tracks: readonly MusicTrack[];
+  uploadDuration?: number;
 }>) {
   const msg = useMessages();
   const label = operationLabel(operation, operation.id, msg);
@@ -1499,6 +1531,17 @@ function ActionParameterForm({
         </ul>
       ) : null}
       <div className={styles.actionFields}>
+        {creativeTools.has(operation.id) ? <>
+          <label className={styles.field}><span>{msg("music.tools.mode")}</span><InputSurface className={styles.inputSurface}>
+            <select disabled={busy} onChange={event => onChange({ customMode: event.target.value === "lyrics", maxMode: false })} value={draft.customMode ? "lyrics" : "description"}>
+              <option value="description">{msg("music.mode.description")}</option><option value="lyrics">{msg("music.mode.ownLyrics")}</option>
+            </select>
+          </InputSurface></label>
+          {draft.customMode ? <label className={styles.field}><span>{msg("music.tools.style")}</span><InputSurface className={styles.inputSurface}><input disabled={busy} maxLength={1000} onChange={event => onChange({ style: event.target.value })} value={draft.style ?? ""} /></InputSurface></label> : null}
+          {operation.id === "mashup" || operation.id === "upload_cover" ? <label className={styles.checkboxRow}><input checked={draft.instrumental ?? false} disabled={busy} onChange={event => onChange({ instrumental: event.target.checked })} type="checkbox" />{msg("music.shared.instrumental")}</label> : null}
+        </> : null}
+        {operation.supportsAudioFormat ? <OutputFormatSelector disabled={busy} onChange={outputFormat => onChange({ outputFormat })} value={draft.outputFormat ?? "mp3"} /> : null}
+        {operation.supportsMaxMode ? <label className={styles.checkboxRow}><input checked={draft.maxMode ?? false} disabled={busy || (creativeTools.has(operation.id) && !draft.customMode)} onChange={event => onChange({ maxMode: event.target.checked })} type="checkbox" />{msg("music.tools.max")}</label> : null}
         {selectedTracks.length > 0 ? (
           <p className={styles.muted}>
             {msg("music.operation.source", { value: selectedTracks.map((track) => msg("music.operation.sourceTrack", { index: track.originalIndex + 1 })).join(", ") })}
@@ -1516,7 +1559,7 @@ function ActionParameterForm({
                 value={draft.secondaryTrackId ?? selectedTrackIds[1] ?? ""}
               >
                 <option value="">{msg("music.parameters.secondTrackPlaceholder")}</option>
-                {tracks.map((track) => (
+                {tracks.filter(track => track.id !== selectedTrackIds[0]).map((track) => (
                   <option key={track.id} value={track.id}>
                     {msg("music.track.track", { index: track.originalIndex + 1 })}
                   </option>
@@ -1595,10 +1638,10 @@ function ActionParameterForm({
           <NumberField
             disabled={busy}
             label={msg("music.parameters.seek")}
-            max={operation.id === "extend" ? Math.max(1, Math.floor(selectedTracks[0]?.durationSec ?? 2) - 1) : 360}
-            min={operation.id === "extend" ? 1 : 0}
+            max={operation.id === "upload_extend" ? Math.max(1, (uploadDuration ?? 2) - 0.01) : operation.id === "extend" ? Math.max(1, Math.floor(selectedTracks[0]?.durationSec ?? 2) - 1) : 360}
+            min={operation.id === "extend" || operation.id === "upload_extend" ? 1 : 0}
             onChange={(seekSec) => onChange({ seekSec })}
-            value={draft.seekSec ?? (operation.id === "extend" ? Math.max(1, Math.floor(selectedTracks[0]?.durationSec ?? 2) - 1) : 0)}
+            value={draft.seekSec ?? (operation.id === "upload_extend" ? 1 : operation.id === "extend" ? Math.max(1, Math.floor(selectedTracks[0]?.durationSec ?? 2) - 1) : 0)}
           />
         ) : null}
 
@@ -1650,11 +1693,12 @@ function ActionParameterForm({
 
         {promptOperations.has(operation.id) ? (
           <label className={styles.field}>
-            <span>{msg(operation.id === "extend" ? "music.parameters.continuation" : "music.parameters.prompt")}</span>
+            <span>{msg(draft.customMode ? "music.mode.ownLyrics" : operation.id === "extend" ? "music.parameters.continuation" : "music.parameters.prompt")}</span>
             <InputSurface className={styles.textareaSurfaceSmall}>
               <textarea
                 aria-label={msg(operation.id === "extend" ? "music.parameters.continuation" : "music.parameters.promptAria")}
                 disabled={busy}
+                maxLength={draft.customMode ? 5000 : 3000}
                 onChange={(event) => onChange({ prompt: event.target.value })}
                 placeholder={msg(operation.id === "extend" ? "music.parameters.continuationPlaceholder" : "music.parameters.promptPlaceholder")}
                 value={draft.prompt ?? ""}
@@ -1683,20 +1727,18 @@ function ActionParameterForm({
             <label className={styles.field}>
               <span>{msg("music.parameters.soundType")}</span>
               <InputSurface className={styles.inputSurface}>
-                <input
+                <select
                   disabled={busy}
                   onChange={(event) => onChange({ soundType: event.target.value })}
-                  placeholder={msg("music.parameters.soundTypePlaceholder")}
-                  type="text"
-                  value={draft.soundType ?? ""}
-                />
+                  value={draft.soundType ?? "one-shot"}
+                ><option value="one-shot">{msg("music.tools.oneShot")}</option><option value="loop">{msg("music.tools.loop")}</option></select>
               </InputSurface>
             </label>
             <div className={styles.rangeGrid}>
               <NumberField
                 disabled={busy}
                 label={msg("music.action.bpm")}
-                max={240}
+                max={300}
                 min={1}
                 onChange={(bpm) => onChange({ bpm })}
                 value={draft.bpm ?? 120}
@@ -1704,13 +1746,11 @@ function ActionParameterForm({
               <label className={styles.field}>
                 <span>{msg("music.parameters.key")}</span>
                 <InputSurface className={styles.inputSurface}>
-                  <input
+                  <select
                     disabled={busy}
                     onChange={(event) => onChange({ musicalKey: event.target.value })}
-                    placeholder={msg("music.parameters.keyPlaceholder")}
-                    type="text"
                     value={draft.musicalKey ?? ""}
-                  />
+                  ><option value="">{msg("music.parameters.optional")}</option>{["C", "C#", "D", "D#", "E", "F", "F#", "G", "G#", "A", "A#", "B"].flatMap(key => [key, `${key}m`]).map(key => <option key={key} value={key}>{key}</option>)}</select>
                 </InputSurface>
               </label>
             </div>
@@ -1721,13 +1761,11 @@ function ActionParameterForm({
           <label className={styles.field}>
             <span>{msg("music.parameters.lyricsModel")}</span>
             <InputSurface className={styles.inputSurface}>
-              <input
+              <select
                 disabled={busy}
                 onChange={(event) => onChange({ lyricsModel: event.target.value })}
-                placeholder={msg("music.parameters.optional")}
-                type="text"
                 value={draft.lyricsModel ?? ""}
-              />
+              ><option value="">{msg("music.parameters.optional")}</option><option value="classic">{msg("music.tools.classic")}</option><option value="remi">{msg("music.tools.remi")}</option></select>
             </InputSurface>
           </label>
         ) : null}
@@ -1751,13 +1789,11 @@ function ActionParameterForm({
           <label className={styles.field}>
             <span>{msg("music.parameters.stemKind")}</span>
             <InputSurface className={styles.inputSurface}>
-              <input
+              <select
                 disabled={busy}
                 onChange={(event) => onChange({ stemKind: event.target.value })}
-                placeholder={msg("music.parameters.stemKindPlaceholder")}
-                type="text"
-                value={draft.stemKind ?? ""}
-              />
+                value={draft.stemKind ?? "lead_vocal"}
+              >{["lead_vocal", "backing_vocals", "drum_kit", "bass", "piano", "electric_guitar"].map(stem => <option key={stem} value={stem}>{stem}</option>)}</select>
             </InputSurface>
           </label>
         ) : null}

@@ -180,6 +180,24 @@ func TestBuildMusicRequestHydratesAudioArtifactReferences(t *testing.T) {
 			t.Fatalf("buildMusicRequest error = %v, want strict duration rejection", err)
 		}
 	})
+	t.Run("uploaded continuation stays inside inspected duration", func(t *testing.T) {
+		for _, seconds := range []float64{0.5, 1, 119.9, 120, 121} {
+			id := createMusicInputArtifactForTest(t, ctx, artifacts, owner, 120_000)
+			target := createMusicJobForTest(t, ctx, jobs, owner, domain.MusicActionUploadExtend, nil, []uuid.UUID{id})
+			var params musicgeneration.JobParams
+			if err := json.Unmarshal(target.Params, &params); err != nil {
+				t.Fatal(err)
+			}
+			params.Music.ContinueAtSec = &seconds
+			target.Params, _ = json.Marshal(params)
+			target.InputArtifactIDs = []uuid.UUID{id}
+			p := &processor{jobs: jobs, tasks: memory.NewProviderTaskRepo(), artifactRepo: artifacts, providerReferences: fakeMusicReferenceSigner{}}
+			_, err := p.buildMusicRequest(ctx, target, 1)
+			if got, want := err == nil, seconds >= 1 && seconds < 120; got != want {
+				t.Errorf("continue %.1f accepted=%v want %v", seconds, got, want)
+			}
+		}
+	})
 }
 
 func TestBuildMusicRequestRequiresUploadedSourceForAddVocals(t *testing.T) {

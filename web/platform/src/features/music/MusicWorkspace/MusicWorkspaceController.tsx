@@ -456,6 +456,7 @@ export function MusicWorkspaceController({
   return (
     <>
       <input
+        accept="audio/mpeg,audio/wav,audio/x-wav,.mp3,.wav"
         aria-hidden="true"
         onChange={(event) => void handleOwnedUploadChange(event)}
         ref={uploadInputRef}

@@ -647,7 +647,7 @@ func newWebImageArtifactRedirectPolicy(cfg config.Config, logger *slog.Logger) w
 }
 
 func newProviderReferenceGateway(ctx context.Context, cfg config.Config, core apiapp.SharedCore) (http.Handler, error) {
-	if !cfg.FeatureAPIMartKling26MotionEnabled && !providermodels.MusicReferencesAdmitted() {
+	if !cfg.FeatureAPIMartKling26MotionEnabled && !providermodels.MusicReferencesRunnable() {
 		return nil, nil
 	}
 	store, err := s3store.New(ctx, s3store.Config{
@@ -665,7 +665,7 @@ func newProviderReferenceGateway(ctx context.Context, cfg config.Config, core ap
 }
 
 func newProviderReferenceGatewayWithObjects(cfg config.Config, core apiapp.SharedCore, objects providerreference.ObjectStore) (http.Handler, error) {
-	if !cfg.FeatureAPIMartKling26MotionEnabled && !providermodels.MusicReferencesAdmitted() {
+	if !cfg.FeatureAPIMartKling26MotionEnabled && !providermodels.MusicReferencesRunnable() {
 		return nil, nil
 	}
 	gateway, err := providerreference.New(cfg.ProviderReferenceBaseURL, cfg.ProviderReferenceSigningKey, core.Jobs, core.Artifacts, objects)

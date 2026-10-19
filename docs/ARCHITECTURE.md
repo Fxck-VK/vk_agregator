@@ -3214,7 +3214,7 @@ Audio inputs are private Artifacts checked by content and ffprobe. Workers issue
 expiring Job-bound provider-reference URLs through the signed gateway. Results
 are served to the authenticated owner after completion and moderation; private
 storage/provider URLs never reach the browser. Gateway startup requires music
-admission or the existing Motion Control flag plus valid signing configuration.
+admission, the exact runnable DEV Suno upload routes or the existing Motion Control flag plus valid signing configuration.
 
 HappyHorse 1.0/1.1, SkyReels V4 Fast/Std and Suno V6/Wild/Mini have native adapters,
 dated facts, draft contracts and cost-times-three candidate quotes. They remain

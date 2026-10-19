@@ -100,12 +100,12 @@ func TestDEVSmokePublicControlsReachAdapterWithoutNetwork(t *testing.T) {
 			for _, op := range m.Operations {
 				if op.Enabled {
 					enabled++
-					if op.ID != "generate" && (op.ID != "extend" || m.ID == "lyria_3_5") {
-						t.Fatal("advanced music operation enabled")
+					if !registry.MediaCandidateRunnable(m.ID, op.ID) {
+						t.Fatal("unprepared music operation enabled")
 					}
 				}
 			}
-			wantEnabled := 2
+			wantEnabled := 14
 			if m.ID == "lyria_3_5" {
 				wantEnabled = 1
 			}

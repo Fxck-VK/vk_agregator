@@ -66,6 +66,9 @@ func (r Request) Validate() error {
 	if _, ok := providermodels.MediaCandidateByID(r.ModelID); !ok || !m.Action.Valid() {
 		return ErrInvalidRequest
 	}
+	if domain.ValidateSunoToolOptions(m) != nil {
+		return ErrInvalidRequest
+	}
 	if m.SourceTaskID != "" || len(m.SourceTaskIDs) > 0 || m.SourceAudioIndex != 0 || len(m.SourceAudioIndexes) > 0 || m.PersonaID != "" || m.CustomModelID != "" || m.AudioURL != "" || len(m.AudioURLs) > 0 {
 		return ErrInvalidRequest
 	}
@@ -98,7 +101,7 @@ func (r Request) Validate() error {
 	if r.PersonaJobID != uuid.Nil && r.CustomModelJobID != uuid.Nil {
 		return ErrInvalidRequest
 	}
-	if utf8.RuneCountInString(m.Prompt) > 5000 || utf8.RuneCountInString(m.Lyrics) > 5000 || utf8.RuneCountInString(m.Title) > 80 || utf8.RuneCountInString(m.Style) > 1000 || len(m.GPTDescription) > 12000 {
+	if utf8.RuneCountInString(m.Prompt) > 5000 || utf8.RuneCountInString(m.Lyrics) > 5000 || utf8.RuneCountInString(m.Title) > 80 || utf8.RuneCountInString(m.Style) > 1000 || utf8.RuneCountInString(m.Tags) > 1000 || utf8.RuneCountInString(m.GPTDescription) > 3000 {
 		return ErrInvalidRequest
 	}
 	op, ok := OperationByID(m.Action)
@@ -122,6 +125,30 @@ func (r Request) Validate() error {
 	}
 	if r.PersonaJobID != uuid.Nil {
 		if !op.SupportsPersona || boolPtrFalse(m.Custom) || (m.Action == domain.MusicActionGenerate && !boolPtrValue(m.Custom)) {
+			return ErrInvalidRequest
+		}
+	}
+	return nil
+}
+
+// ValidateUpload checks owned, inspected metadata, never browser durations.
+// It runs both before billing and when workers resolve signed media references.
+func ValidateUpload(m domain.MusicRequest, artifact *domain.Artifact) error {
+	if artifact == nil {
+		return ErrInvalidRequest
+	}
+	if m.Action == domain.MusicActionUpload || m.Action == domain.MusicActionUploadCover || m.Action == domain.MusicActionUploadExtend {
+		if artifact.MimeType != "audio/mpeg" && artifact.MimeType != "audio/wav" && artifact.MimeType != "audio/x-wav" {
+			return ErrInvalidRequest
+		}
+	}
+	if m.Action == domain.MusicActionUploadCover || m.Action == domain.MusicActionUploadExtend {
+		if artifact.DurationMS >= 480000 {
+			return ErrInvalidRequest
+		}
+	}
+	if m.Action == domain.MusicActionUploadExtend {
+		if m.ContinueAtSec == nil || *m.ContinueAtSec < 1 || *m.ContinueAtSec >= float64(artifact.DurationMS)/1000 {
 			return ErrInvalidRequest
 		}
 	}

@@ -112,6 +112,12 @@ func MusicReferencesAdmitted() bool {
 	return false
 }
 
+// MusicReferencesRunnable also starts the signed gateway for the exact DEV
+// upload routes. It does not change production admission or URL authorization.
+func MusicReferencesRunnable() bool {
+	return MusicReferencesAdmitted() || RuntimeRegistry().MediaCandidateRunnable("suno_v6", "upload")
+}
+
 // DraftMediaContract supplies dated source facts without fabricating live checks,
 // output FPS, active registry fingerprints or rollout readiness.
 func DraftMediaContract(c MediaCandidate) modelcontract.Contract {

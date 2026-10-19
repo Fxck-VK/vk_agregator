@@ -51,6 +51,26 @@ const tracks: readonly MusicTrack[] = [
 ];
 
 describe("music API helpers", () => {
+  it("uses the continuation tool's own Max choice and excludes custom-only duration in inspiration cover", () => {
+    const continuation = buildMusicPrepareBody({ ...request, operationId: "extend", parameters: { seekSec: 30, maxMode: true }, draft: { ...request.draft, maxMode: false } }, tracks, { enabled: true, id: "extend", supportsMaxMode: true });
+    expect(continuation.music.custom).toBeUndefined();
+    expect(continuation.music.max_mode).toBe(true);
+    const cover = buildMusicPrepareBody({ ...request, operationId: "cover", parameters: { prompt: "gentle melody", customMode: false } }, tracks, { enabled: true, id: "cover" });
+    expect(cover.music.duration_sec).toBeUndefined();
+  });
+  it("sends explicit inspiration mode and excludes unsupported target duration for transforms", () => {
+    const body = buildMusicPrepareBody({ ...request, operationId: "mashup", parameters: { prompt: "blend hooks", customMode: false }, draft: { ...request.draft, maxMode: false } }, tracks, operation);
+    expect(body.music.custom).toBe(false);
+    expect(body.music.gpt_description).toBe("blend hooks");
+    expect(body.music.duration_sec).toBeUndefined();
+  });
+  it("uses a tool's own lyrics instead of a hidden song draft", () => {
+    const body = buildMusicPrepareBody({ ...request, mode: "own_lyrics", operationId: "add_vocals", parameters: { prompt: "New tool verse", customMode: true }, draft: { ...request.draft, lyrics: "Old verse", maxMode: false } }, tracks, { enabled: true, id: "add_vocals" });
+    expect(body.music.custom).toBe(true);
+    expect(body.music.prompt).toBe("New tool verse");
+    expect(body.music.auto_lyrics).toBeUndefined();
+    expect(body.music.duration_sec).toBeUndefined();
+  });
   it("keeps downloads with their track and hides duplicate covers and metadata from music cards", () => {
     const url = (n: number) => `/web/v1/music-artifacts/${String(n).repeat(8)}-1111-4111-8111-111111111111`;
     const jobID = "11111111-1111-4111-8111-111111111111";
@@ -94,7 +114,6 @@ describe("music API helpers", () => {
         audio_weight: 0.7,
         custom: true,
         description: "blend hooks",
-        duration_sec: 185,
         gpt_description: "blend hooks",
         instrumental: false,
         max_mode: true,
