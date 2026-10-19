@@ -1,0 +1,22 @@
+.card { display: grid; grid-template-columns: 48px minmax(0,1fr) auto; align-items: center; gap: 14px; padding: 14px; border: 1px solid var(--color-border); border-radius: 14px; background: var(--color-panel); }
+.card[data-selected] { border-color: var(--color-accent); }
+.play { position: relative; width: 48px; height: 48px; padding: 0; overflow: hidden; border: 0; border-radius: 10px; background: var(--color-workspace); color: var(--color-text); cursor: pointer; }
+.play:disabled { opacity: .45; cursor: default; }
+.play img { width: 100%; height: 100%; object-fit: cover; }
+.note { font-size: 26px; opacity: .5; }
+.playIcon { position: absolute; inset: 0; display: grid; place-items: center; background: rgb(0 0 0 / 30%); color: #fff; font-size: 17px; }
+.body { min-width: 0; }
+.body h3 { margin: 0 0 8px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 14px; font-weight: var(--font-weight-semibold); line-height: 1.3; }
+.progress { display: flex; gap: 12px; align-items: center; }
+.progress input { width: 100%; min-width: 32px; height: 12px; margin: 0; accent-color: var(--color-accent); cursor: pointer; }
+.time { flex: none; color: var(--color-text-muted); font-size: 11px; font-variant-numeric: tabular-nums; white-space: nowrap; }
+.actions { display: flex; align-items: center; gap: 4px; }
+.menuButton,.select { display: grid; place-items: center; width: 32px; height: 36px; padding: 0; border: 0; border-radius: 8px; background: transparent; color: var(--color-text-muted); cursor: pointer; font-size: 24px; }
+.menuButton:hover,.select:hover { color: var(--color-text); background: var(--color-workspace); }
+.menu { display: grid; gap: 2px; padding: 6px; }
+.menuItem { display: block; width: 100%; padding: 10px 12px; border: 0; border-radius: 8px; background: transparent; color: inherit; text-align: left; text-decoration: none; font: inherit; font-size: 14px; cursor: pointer; }
+.menuItem:hover { background: var(--color-workspace); }
+.error,.empty { margin: 6px 0 0; color: var(--color-text-muted); font-size: 12px; }
+.lyrics { grid-column: 1 / -1; margin: 0; white-space: pre-wrap; overflow-wrap: anywhere; font: inherit; font-size: 13px; line-height: 1.6; color: var(--color-text-muted); }
+.play:focus-visible,.menuButton:focus-visible,.select:focus-visible,.menuItem:focus-visible { outline: 2px solid var(--color-accent); outline-offset: 2px; }
+@media (max-width: 600px) { .card { grid-template-columns: 44px minmax(0,1fr) auto; gap: 10px; padding: 12px; } .play { width: 44px; height: 44px; } .menuButton,.select { width: 36px; height: 44px; } .progress { gap: 7px; } .time { font-size: 10px; } }

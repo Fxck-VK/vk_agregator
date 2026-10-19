@@ -394,6 +394,7 @@ export const ru = {
     categories: {
       all: "Все файлы",
       images: "Изображения",
+      music: "Музыка",
       reports: "Рефераты",
       presentations: "Презентации",
       video: "Видео",

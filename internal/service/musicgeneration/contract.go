@@ -79,6 +79,9 @@ func (r Request) Validate() error {
 			return ErrInvalidRequest
 		}
 	}
+	if m.Action == domain.MusicActionExtend && m.ContinueAtSec != nil && *m.ContinueAtSec < 1 {
+		return ErrInvalidRequest
+	}
 	if len(r.Sources) > 2 || len(r.AudioArtifactIDs) > 24 {
 		return ErrInvalidRequest
 	}

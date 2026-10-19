@@ -88,12 +88,16 @@ func TestDEVSmokePublicControlsReachAdapterWithoutNetwork(t *testing.T) {
 			for _, op := range m.Operations {
 				if op.Enabled {
 					enabled++
-					if op.ID != "generate" {
+					if op.ID != "generate" && (op.ID != "extend" || m.ID == "lyria_3_5") {
 						t.Fatal("advanced music operation enabled")
 					}
 				}
 			}
-			if enabled != 1 {
+			wantEnabled := 2
+			if m.ID == "lyria_3_5" {
+				wantEnabled = 1
+			}
+			if enabled != wantEnabled {
 				t.Fatal("missing music generation")
 			}
 			params, quote, err := musicgeneration.Resolve(musicgeneration.Request{ModelID: m.ID, Music: domain.MusicRequest{Action: domain.MusicActionGenerate, Prompt: "Instrumental landscape"}}, registry)
@@ -108,6 +112,31 @@ func TestDEVSmokePublicControlsReachAdapterWithoutNetwork(t *testing.T) {
 				t.Fatalf("%s hydration: %v", m.ID, err)
 			}
 			checkRequest(m.ID, request)
+			if m.ID != "lyria_3_5" {
+				ctx := context.Background()
+				jobs, tasks := memory.NewJobRepo(), memory.NewProviderTaskRepo()
+				source := createMusicJobForTest(t, ctx, jobs, owner, domain.MusicActionGenerate, nil, nil)
+				addSucceededMusicResult(t, ctx, jobs, source, domain.MusicResult{Tracks: []domain.MusicTrackResult{{OriginalAudioIndex: 2, DurationSec: 120}}})
+				createProviderTaskForTest(t, ctx, tasks, source.ID, "music:owned-source")
+				at, custom := 45.0, false
+				params, quote, err := musicgeneration.Resolve(musicgeneration.Request{ModelID: m.ID,
+					Music:   domain.MusicRequest{Action: domain.MusicActionExtend, Custom: &custom, GPTDescription: "Gentle ending", ContinueAtSec: &at},
+					Sources: []musicgeneration.Source{{JobID: source.ID, AudioIndex: 2}}}, registry)
+				if err != nil {
+					t.Fatalf("%s extend resolve: %v", m.ID, err)
+				}
+				raw, _ := json.Marshal(params)
+				price, _ := json.Marshal(quote)
+				p := processor{jobs: jobs, tasks: tasks}
+				request, err := p.buildMusicRequest(ctx, &domain.Job{ID: uuid.New(), AccountID: owner, OperationType: domain.OperationAudioMusic, Modality: domain.ModalityAudio, Params: raw, PricingSnapshot: price, CostEstimate: quote.InternalCredits}, 1)
+				if err != nil {
+					t.Fatalf("%s extend hydrate: %v", m.ID, err)
+				}
+				if request.Music.SourceTaskID != "music:owned-source" || request.Music.SourceAudioIndex != 2 {
+					t.Fatal("continuation lost source binding")
+				}
+				checkRequest(m.ID, request)
+			}
 			continue
 		}
 		for _, op := range m.Operations {

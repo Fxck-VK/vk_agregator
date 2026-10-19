@@ -1,6 +1,8 @@
 import { MusicWorkspaceController } from "@/features/music/MusicWorkspace";
+import { parseMusicContinuation } from "@/features/music/music-navigation";
 
-export default async function MusicPage({ searchParams }: { searchParams: Promise<{ model?: string | string[] }> }) {
-  const { model } = await searchParams;
-  return <MusicWorkspaceController requestedModelId={typeof model === "string" ? model : undefined} />;
+export default async function MusicPage({ searchParams }: { searchParams: Promise<Record<string, string | string[] | undefined>> }) {
+  const params = await searchParams;
+  return <MusicWorkspaceController requestedModelId={typeof params.model === "string" ? params.model : undefined}
+    requestedContinuation={parseMusicContinuation(params)} />;
 }

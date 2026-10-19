@@ -427,6 +427,26 @@ documented switch exists. Generated sound in MiniMax Max/Gemini has no switch.
 Video/audio inputs, continuation, editing and draft/finalization remain closed.
 Wan 2.7's contradictory image+audio example does not enable that combination.
 
+### Suno owned-task continuation 2026-10-19
+
+The official [APIMart Suno extend reference](https://docs.apimart.ai/ru/api-reference/audios/suno/extend)
+was read on 2026-10-19. `POST /v1/music/generations/extend` accepts the original
+task and one-based audio index, `1 <= continue_at < source duration`, and public
+versions `v6`, `v6-wild`, `v6-mini`. `custom` defaults true; idea-based continuation
+must explicitly send `custom=false` with `gpt_description`. Existing typed music
+contracts, native mappings and pricing keys cover this operation.
+
+Only the explicit DEV smoke runtime enables these three owned-task `extend`
+routes. Static/frozen admission, approved contracts and production stay unchanged.
+The browser passes application Job IDs only. API and worker check ownership,
+completed/moderated sources, audio index, compatible model family and time bounds;
+provider task IDs are resolved inside the worker. The existing 30-credit quote
+(60 with Max) and confirmation/reservation/capture/release lifecycle are reused.
+Uploads and unrelated transforms remain disabled. Offline tests cover payloads,
+source authorization and lifecycle; live continuation and its actual billing
+remain unverified until a separately authorized paid test. Earlier generation
+smoke does not establish continuation verification.
+
 ### Video pricing and DEV wiring checked 2026-10-02
 
 After the user's tariff authorization, prices were read from the official

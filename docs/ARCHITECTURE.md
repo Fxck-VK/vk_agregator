@@ -55,6 +55,12 @@ fields without raising other endpoint limits. Field validation remains strict.
 Generated music/speech artifacts keep owner and moderation checks; byte responses
 include safe UUID-based filenames with extensions matching stored MIME types.
 Playback remains inline and supports Range; unknown documents stay attachments.
+The music workspace and My Files share compact track players and the bounded
+account-owned result cache. File navigation may preselect a source Job/track/time
+for continuation but never prepares or activates paid work automatically.
+DEV smoke additionally permits owned succeeded Suno V6/Wild/Mini task continuation;
+uploads and other transforms stay closed. API/worker validate source ownership,
+moderation, index and duration before the existing reserved-credit worker path.
 
 The current implementation is a production-shaped modular monolith. It has one
 shared backend core and two user-facing app surfaces:

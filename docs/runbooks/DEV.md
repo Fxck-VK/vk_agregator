@@ -31,7 +31,11 @@ verify the file library. Keep the image-only history endpoint unchanged.
 This adds 16 media candidates: Nano Banana, Imagen 4.0; HappyHorse 1.0/1.1, SkyReels V4
 Fast/Standard, Wan 3.0, Vidu Q3 Pro, Grok Imagine 1.5 Video, Kling 2.6, Seedance 2.0
 Standard/Mini; Suno V6/Wild/Mini and Lyria 3.5. Images and videos accept text only;
-music exposes `generate` only. GPT-4o Mini TTS and Whisper remain disabled until
+Lyria exposes `generate`; Suno V6/Wild/Mini also expose `extend` from an owned,
+succeeded music Job (2026-10-19). Upload-based continuation and other transforms
+remain closed. Continuation keeps the existing server quote (30 credits, 60 in
+Max mode), confirmation, reservation and worker-only provider submission.
+GPT-4o Mini TTS and Whisper remain disabled until
 bounded per-job billing is implemented. Reference-only legacy routes remain subject
 to their existing surface/input restrictions.
 

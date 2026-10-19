@@ -3,6 +3,7 @@ import { defaultLocale } from "@/i18n/locales";
 import { getTranslator, type Translator } from "@/i18n/messages";
 
 import { webBrowserFetch, webBrowserMutation } from "@/lib/web-api/browser";
+import { isMusicModelId } from "./music-model-catalog";
 
 import type {
   MusicOperationQuote,
@@ -297,19 +298,33 @@ export function buildMusicPrepareBody(
   }) as MusicPrepareBody;
 }
 
-export function musicTracksFromResult(result: MusicJobResult): MusicTrack[] {
-  return result.tracks.map((track) => ({
-    artifactPlaybackUrl: normalizeMusicArtifactURL(track.audio_url) ?? "about:invalid",
-    coverImageUrl: normalizeMusicArtifactURL(track.image_url),
-    durationSec: track.duration_sec,
-    id: `${track.job_id}:${track.audio_index}`,
-    originalIndex: Math.max(0, track.audio_index - 1),
-    sourceJobId: track.job_id,
-    title: track.title ?? null,
-  }));
+export function musicTracksFromResult(result: MusicJobResult, job?: MusicJob): MusicTrack[] {
+  return result.tracks.map((track, index) => {
+    const downloads = result.artifacts.flatMap((artifact): MusicResultArtifact[] => {
+      const url = normalizeMusicArtifactURL(artifact.url);
+      if (!url) return [];
+      const audio = artifact.kind === "audio" && (result.tracks.length === 1 || url === track.audio_url);
+      const cover = artifact.kind === "image" && url === track.image_url;
+      return audio || cover ? [{ kind: artifact.kind, format: artifact.format, url, label: musicArtifactLabel(artifact.kind, artifact.format) }] : [];
+    });
+    const audioDownloads = downloads.filter(artifact => artifact.kind === "audio");
+    const preferredAudio = audioDownloads.find(a => a.format === "mp3") ?? audioDownloads.find(a => a.format === "m4a") ?? audioDownloads[0];
+    return {
+      artifactPlaybackUrl: preferredAudio?.url ?? normalizeMusicArtifactURL(track.audio_url) ?? "about:invalid",
+      coverImageUrl: normalizeMusicArtifactURL(track.image_url),
+      downloads,
+      durationSec: track.duration_sec,
+      id: `${track.job_id}:${track.audio_index}`,
+      lyrics: result.lyrics?.[result.lyrics.length === 1 ? 0 : index]?.text,
+      modelId: job && isMusicModelId(job.model_id) ? job.model_id : undefined,
+      originalIndex: Math.max(0, track.audio_index - 1),
+      sourceJobId: track.job_id,
+      title: track.title ?? null,
+    };
+  });
 }
 
-export function musicSummaryFromResult(result: MusicJobResult): MusicResultSummary | null {
+export function musicSummaryFromResult(result: MusicJobResult, job?: MusicJob): MusicResultSummary | null {
   const lyrics = (result.lyrics ?? []).flatMap((lyric) => {
     const text = lyric.text?.trim() ?? "";
     return text.length > 0 ? [{
@@ -334,9 +349,10 @@ export function musicSummaryFromResult(result: MusicJobResult): MusicResultSumma
   const persona = reusableAssetFromDTO(result.persona);
   const model = reusableAssetFromDTO(result.model);
   const voice = reusableAssetFromDTO(result.voice);
-  if (lyrics.length === 0 && artifacts.length === 0 && !tags && !hasBpm && !persona && !model && !voice) return null;
+  if (result.tracks.length === 0 && lyrics.length === 0 && artifacts.length === 0 && !tags && !hasBpm && !persona && !model && !voice) return null;
   return {
     artifacts,
+    ...(result.tracks.length > 0 ? { tracks: musicTracksFromResult(result, job) } : {}),
     bpm: result.bpm ?? null,
     id: result.job_id,
     lyrics,
@@ -575,9 +591,9 @@ function customFlagForRequest(
   request: MusicWorkspaceActionRequest,
   personaJobId: string | undefined,
   customModelJobId: string | undefined,
-): true | undefined {
+): boolean | undefined {
   if (!customFieldActions.has(request.operationId)) return undefined;
-  if (request.operationId === "extend") return undefined;
+  if (request.operationId === "extend") return request.mode === "description" && !request.draft.maxMode ? false : undefined;
   if (request.mode === "own_lyrics") return true;
   if (personaJobId !== undefined || customModelJobId !== undefined) return true;
   if (request.draft.maxMode && maxModeRequiresCustom(request.operationId)) return true;

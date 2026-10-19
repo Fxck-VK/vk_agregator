@@ -163,7 +163,8 @@ func (r Registry) IsDEVSmokeModel(id string) bool {
 }
 
 // MediaCandidateRunnable distinguishes manual DEV smoke from verified admission.
-// Advanced input/transform operations and unmetered speech remain closed.
+// Owned Suno task continuation is available for manual DEV smoke.
+// Uploads, other transforms and unmetered speech remain closed.
 func (r Registry) MediaCandidateRunnable(id, operation string) bool {
 	if r.MediaCandidateAdmitted(id, operation) {
 		return true
@@ -180,6 +181,9 @@ func (r Registry) MediaCandidateRunnable(id, operation string) bool {
 			return operation == "reference_image_to_video"
 		}
 		return operation == "text_to_video"
+	}
+	if operation == "extend" {
+		return id == "suno_v6" || id == "suno_v6_wild" || id == "suno_v6_mini"
 	}
 	return operation == "generate"
 }

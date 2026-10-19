@@ -4,8 +4,14 @@ export const maxCachedMusicResults = 60;
 
 /** Private result metadata owned by one account workspace; never persisted. */
 export function createMusicResultCache() {
-  const results = new Map<string, { createdAt: string; result: MusicJobResult }>();
+  const results = new Map<string, { createdAt: string; job: MusicJob; result: MusicJobResult }>();
   return {
+    getJob(jobID: string) {
+      return results.get(jobID)?.job;
+    },
+    getEntries() {
+      return [...results.values()].sort((left, right) => Date.parse(right.createdAt) - Date.parse(left.createdAt));
+    },
     get(jobID: string) {
       const entry = results.get(jobID);
       if (entry) {
@@ -22,7 +28,7 @@ export function createMusicResultCache() {
     remember(job: MusicJob, result: MusicJobResult) {
       if (job.status !== "succeeded" || result.job_id !== job.id) throw new Error("Music result does not match a completed job.");
       results.delete(job.id);
-      results.set(job.id, { createdAt: job.created_at, result });
+      results.set(job.id, { createdAt: job.created_at, job: { ...job }, result });
       if (results.size > maxCachedMusicResults) results.delete(results.keys().next().value!);
     },
   };

@@ -33,3 +33,33 @@ func TestPendingMediaCatalogIsInformational(t *testing.T) {
 		}
 	}
 }
+
+func TestDEVSmokeCatalogOffersOwnedSunoContinuation(t *testing.T) {
+	if err := providermodels.ConfigureDEVSmoke("development", true); err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = providermodels.ConfigureDEVSmoke("development", false) })
+	list := WorkspaceCatalog(WorkspaceConfig{IncludePendingMedia: true})
+	found := 0
+	for _, model := range list.Items {
+		if model.ID != "suno_v6" && model.ID != "suno_v6_wild" && model.ID != "suno_v6_mini" {
+			continue
+		}
+		found++
+		if model.Verification != "dev-smoke" {
+			t.Fatal("permanent admission changed")
+		}
+		for _, op := range model.Operations {
+			want := op.ID == "generate" || op.ID == "extend"
+			if op.Enabled != want {
+				t.Fatalf("unexpected availability %s/%s", model.ID, op.ID)
+			}
+			if op.ID == "extend" && (op.Music == nil || op.Music.UnavailableReason != "" || op.Music.EstimateCredits != 30) {
+				t.Fatal("missing continuation quote/controls")
+			}
+		}
+	}
+	if found != 3 {
+		t.Fatalf("Suno count %d", found)
+	}
+}

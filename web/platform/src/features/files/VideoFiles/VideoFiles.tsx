@@ -28,9 +28,10 @@ type PageState = "idle" | "loading" | "ready" | "error";
 type VideoFilesProps = {
   visible: boolean;
   showEmpty?: boolean;
+  onHasFilesChange?: (hasFiles: boolean) => void;
 };
 
-export function VideoFiles({ showEmpty = true, visible }: Readonly<VideoFilesProps>) {
+export function VideoFiles({ showEmpty = true, visible, onHasFilesChange }: Readonly<VideoFilesProps>) {
   const t = useDictionary();
   const cache = useOptionalWorkspaceDataCache();
   const [cachedFirstPage] = useState(() => cache?.getVideoFilesFirstPage());
@@ -152,6 +153,10 @@ export function VideoFiles({ showEmpty = true, visible }: Readonly<VideoFilesPro
     setResultStates((current) => ({ ...current, [job.id]: "idle" }));
     queue.current?.enqueue(job);
   }, []);
+
+  useEffect(() => {
+    if (hasLoaded) onHasFilesChange?.(jobs.length > 0);
+  }, [hasLoaded, jobs.length, onHasFilesChange]);
 
   if (!visible) {
     return null;

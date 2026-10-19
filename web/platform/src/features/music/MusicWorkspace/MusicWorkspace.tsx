@@ -1,6 +1,5 @@
 "use client";
 
-/* eslint-disable @next/next/no-img-element */
 
 import { useId, useRef, useState, type ChangeEvent } from "react";
 
@@ -14,9 +13,11 @@ import { PopoverPanel } from "@/components/ui/PopoverPanel/PopoverPanel";
 import { RangeSlider } from "@/components/ui/RangeSlider/RangeSlider";
 import { ScrollArea } from "@/components/ui/ScrollArea/ScrollArea";
 import { useMessages } from "@/i18n/LocaleProvider";
+import Link from "@/i18n/Link";
 import type { MessageKey, Translator } from "@/i18n/messages";
 
 import { musicArtifactLabel } from "../music-api";
+import { MusicTrackCard } from "../MusicTrackCard/MusicTrackCard";
 import { MusicOperationPrice, MusicToolCard, MusicToolIcon } from "./MusicStudioTools";
 
 import styles from "./MusicWorkspace.module.css";
@@ -160,12 +161,14 @@ export type MusicWorkspaceOperation = {
 export type MusicTrack = {
   artifactPlaybackUrl: string;
   coverImageUrl?: string | null;
+  downloads?: readonly MusicResultArtifact[];
   durationSec?: number;
   id: string;
   lyrics?: string | null;
   originalIndex: number;
   sourceJobId: string;
   title?: string | null;
+  modelId?: MusicModelID;
 };
 
 export type MusicResultArtifact = {
@@ -183,6 +186,7 @@ export type MusicResultLyric = {
 
 export type MusicResultSummary = {
   artifacts: readonly MusicResultArtifact[];
+  tracks?: readonly MusicTrack[];
   bpm?: {
     average?: number | null;
     maximum?: number | null;
@@ -243,7 +247,8 @@ export type MusicWorkspaceProps = {
   draft: MusicWorkspaceDraft;
   mode: MusicCreationMode;
   models: readonly MusicWorkspaceModel[];
-  onActiveOperationChange: (operationId: MusicOperationID) => void;
+  continuationModelIds?: readonly MusicModelID[];
+  onActiveOperationChange: (operationId: MusicOperationID | null) => void;
   onCancelConfirmation: () => void;
   onConfirmAction: (request: MusicWorkspaceActionRequest, quote: MusicOperationQuote) => void;
   onDraftChange: (draft: MusicWorkspaceDraft) => void;
@@ -419,18 +424,6 @@ function operationLabel(operation: MusicWorkspaceOperation | undefined, operatio
   return operation?.label ?? msg(operationLabelKeys[operationId]);
 }
 
-function isSameOriginArtifactPlaybackURL(url: string) {
-  if (url.startsWith("/") && !url.startsWith("//")) return true;
-  if (typeof window === "undefined") return false;
-
-  try {
-    const parsed = new URL(url, window.location.origin);
-    return parsed.origin === window.location.origin && ["http:", "https:"].includes(parsed.protocol);
-  } catch {
-    return false;
-  }
-}
-
 function getRequirement(operation: MusicWorkspaceOperation | undefined): Required<MusicOperationRequirement> {
   const operationId = operation?.id ?? "generate";
   const baseMinTracks = operationsWithoutSource.has(operationId)
@@ -565,7 +558,10 @@ function buildActionRequest({
     mode,
     modelId: selectedModelId,
     operationId,
-    parameters: draft.actionParameters?.[operationId] ?? {},
+    parameters: operationId === "extend" ? {
+      seekSec: Math.max(1, Math.floor(selectedTracks[0]?.durationSec ?? 2) - 1),
+      ...draft.actionParameters?.[operationId],
+    } : draft.actionParameters?.[operationId] ?? {},
     sourceJobIds: selectedTracks.map((track) => track.sourceJobId),
     sourceTrackIds: selectedTracks.map((track) => track.id),
   };
@@ -602,6 +598,7 @@ export function MusicWorkspace({
   draft,
   mode,
   models,
+  continuationModelIds,
   onActiveOperationChange,
   onCancelConfirmation,
   onConfirmAction,
@@ -626,12 +623,9 @@ export function MusicWorkspace({
 }: Readonly<MusicWorkspaceProps>) {
   const msg = useMessages();
   const [settingsOpen, setSettingsOpen] = useState(mode !== "description");
-  const [libraryOpen, setLibraryOpen] = useState(false);
-  const [toolOpen, setToolOpen] = useState(activeOperationId !== null);
   const [modelMenuOpen, setModelMenuOpen] = useState(false);
   const [moreToolsOpen, setMoreToolsOpen] = useState(false);
   const settingsId = useId();
-  const libraryId = useId();
   const modelMenuId = useId();
   const modelButtonRef = useRef<HTMLButtonElement>(null);
   const moreToolsId = useId();
@@ -640,6 +634,7 @@ export function MusicWorkspace({
   const operationById = new Map(operations.map((operation) => [operation.id, operation]));
   const selectedModel = models.find((model) => model.id === selectedModelId);
   const activeOperation = activeOperationId === null ? undefined : operationById.get(activeOperationId);
+  const toolOpen = activeOperationId !== null;
   const generateOperation = operationById.get("generate");
   const busy = state?.preparing === true || state?.polling === true;
   const modelDisabledReason = getModelDisabledReason(selectedModel, state, msg);
@@ -707,7 +702,7 @@ export function MusicWorkspace({
     onModeChange(nextMode);
     updateDraft({ instrumental });
     setSettingsOpen(true);
-    setToolOpen(false);
+    onActiveOperationChange(null);
     requestAnimationFrame(() => {
       editorRef.current?.scrollIntoView?.({ block: "center", behavior: "smooth" });
       editorRef.current?.focus({ preventScroll: true });
@@ -715,12 +710,24 @@ export function MusicWorkspace({
   };
   const openTool = (operationId: MusicOperationID) => {
     onActiveOperationChange(operationId);
-    setToolOpen(true);
     requestAnimationFrame(() => {
       toolRef.current?.scrollIntoView?.({ block: "center", behavior: "smooth" });
       toolRef.current?.focus({ preventScroll: true });
     });
   };
+  const continueTrack = (track: MusicTrack, continueAtSec: number) => {
+    if (busy) return;
+    if (track.modelId && track.modelId !== selectedModelId) onModelChange(track.modelId);
+    onSelectedTrackIdsChange([track.id]);
+    onModeChange("description");
+    updateDraft({ maxMode: false, actionParameters: {
+      ...draft.actionParameters, extend: { seekSec: continueAtSec },
+    } });
+    openTool("extend");
+  };
+  const canContinueTrack = (track: MusicTrack) => !busy && (track.durationSec ?? 0) > 1 && (continuationModelIds
+    ? continuationModelIds.includes(track.modelId ?? selectedModelId)
+    : operations.some(operation => operation.id === "extend" && operation.enabled));
   const primaryAudioIds: readonly MusicOperationID[] = [
     "cover", "mashup", "stems", "stems_all", "add_vocals", "add_instrumental", "upload_cover", "upload_extend",
   ];
@@ -751,7 +758,7 @@ export function MusicWorkspace({
       onLoadMore={onLoadMoreHistory}
       onToggle={toggleSelectedTrack}
       selectedTrackIds={selectedTrackIds}
-      tracks={tracks}
+      tracks={activeOperationId === "extend" && selectedTrackIds.length === 1 ? tracks.filter(track => selectedTrackIds.includes(track.id)) : tracks}
     />
   );
 
@@ -762,11 +769,10 @@ export function MusicWorkspace({
           <h1>{msg("music.studio.heading")}</h1>
           <p className={styles.intro}>{msg("music.studio.intro")}</p>
         </div>
-        <Button aria-controls={libraryId} aria-expanded={libraryOpen} className={styles.libraryButton} onClick={() => setLibraryOpen(!libraryOpen)} type="button" variant="outline">
-          <MusicToolIcon kind="folder" />{msg("music.studio.myTracks")}<span className={styles.trackCount}>{tracks.length}</span>
-        </Button>
+        <Link className={styles.libraryButton} href="/app/files?category=music">
+          <MusicToolIcon kind="folder" />{msg("music.studio.myTracks")}
+        </Link>
       </div>
-      <div id={libraryId}>{libraryOpen ? trackLibrary : null}</div>
       <div className={styles.creation}>
         <div className={styles.sectionTitle}>
           <h2>{msg("music.studio.newTrack")}</h2>
@@ -944,9 +950,9 @@ export function MusicWorkspace({
 
       <section className={styles.selectedTool} ref={toolRef} tabIndex={-1}>
         {toolOpen && activeOperation && activeOperationId ? <>
-          <div className={styles.sectionTitle}><span>{msg("music.operation.exactPriceAfterPrepare")}</span><Button disabled={busy} onClick={() => setToolOpen(false)} type="button" variant="outline">{msg("music.studio.closeTool")}</Button></div>
+          <div className={styles.sectionTitle}><span>{msg("music.operation.exactPriceAfterPrepare")}</span><Button disabled={busy} onClick={() => onActiveOperationChange(null)} type="button" variant="outline">{msg("music.studio.closeTool")}</Button></div>
           {operationConsumesOwnedUploads(activeOperation) ? <ModeSpecificFields busy={busy} draft={draft} mode="upload" onRequestOwnedUpload={onRequestOwnedUpload} uploadsEnabled={uploadsEnabled} updateDraft={updateDraft} /> : null}
-          {!libraryOpen && operationConsumesSelectedTracks(activeOperation) ? trackLibrary : null}
+          {operationConsumesSelectedTracks(activeOperation) ? trackLibrary : null}
           <ActionParameterForm
             busy={busy}
             disabledReason={getDisabledReason(activeOperation, activeTrackIds, draft, busy, msg, modelDisabledReason)}
@@ -960,13 +966,15 @@ export function MusicWorkspace({
         </> : null}
       </section>
 
-      <MusicResultsPanel results={results} />
+      <MusicResultsPanel results={results} canContinue={canContinueTrack} onContinue={continueTrack} />
+      {state?.historyHasMore && !toolOpen ? <Button disabled={busy || state.historyLoading || !onLoadMoreHistory} onClick={onLoadMoreHistory} type="button" variant="outline">
+        {msg(state.historyLoading ? "music.track.loadingMore" : "music.track.loadMore")}
+      </Button> : null}
       <WorkspaceStatus state={state} />
       <ConfirmationDialog
         confirmation={state?.confirmation ?? null}
         onCancel={onCancelConfirmation}
         onConfirm={(request, quote) => {
-          setLibraryOpen(true);
           onConfirmAction(request, quote);
         }}
       />
@@ -1433,42 +1441,11 @@ function TrackSourceList({
         <ul className={styles.trackList}>
           {tracks.map((track) => {
             const selected = selectedTrackIds.includes(track.id);
-            const playbackUrl = isSameOriginArtifactPlaybackURL(track.artifactPlaybackUrl)
-              ? track.artifactPlaybackUrl
-              : null;
-
             return (
               <li key={track.id}>
-                <article className={styles.trackCard} data-selected={selected || undefined}>
-                  {track.coverImageUrl && isSameOriginArtifactPlaybackURL(track.coverImageUrl) ? (
-                    <img alt="" className={styles.cover} src={track.coverImageUrl} />
-                  ) : (
-                    <div aria-hidden="true" className={styles.coverPlaceholder}>♪</div>
-                  )}
-                  <div className={styles.trackBody}>
-                    <p>{msg("music.track.track", { index: track.originalIndex + 1 })}</p>
-                    <h3>{track.title || msg("music.track.titleFallback")}</h3>
-                    <p>{durationLabel(track.durationSec, msg)}</p>
-                    {playbackUrl ? (
-                      <audio controls preload="none" src={playbackUrl}>
-                        <a href={playbackUrl}>{msg("music.track.openAudio")}</a>
-                      </audio>
-                    ) : (
-                      <p role="status">{msg("music.track.sourceUnavailable")}</p>
-                    )}
-                    {track.lyrics ? <p className={styles.trackLyrics}>{track.lyrics}</p> : null}
-                  </div>
-                  <button
-                    aria-label={selected ? msg("music.track.unchooseAria", { index: track.originalIndex + 1 }) : msg("music.track.chooseAria", { index: track.originalIndex + 1 })}
-                    aria-pressed={selected}
-                    className={styles.selectTrack}
-                    disabled={busy}
-                    onClick={() => onToggle(track.id)}
-                    type="button"
-                  >
-                    {selected ? msg("music.track.selected") : msg("music.track.choose")}
-                  </button>
-                </article>
+                <MusicTrackCard track={track} selected={selected} selectionDisabled={busy}
+                  onSelect={() => onToggle(track.id)}
+                  selectLabel={msg(selected ? "music.track.unchooseAria" : "music.track.chooseAria", { index: track.originalIndex + 1 })} />
               </li>
             );
           })}
@@ -1618,10 +1595,10 @@ function ActionParameterForm({
           <NumberField
             disabled={busy}
             label={msg("music.parameters.seek")}
-            max={360}
-            min={0}
+            max={operation.id === "extend" ? Math.max(1, Math.floor(selectedTracks[0]?.durationSec ?? 2) - 1) : 360}
+            min={operation.id === "extend" ? 1 : 0}
             onChange={(seekSec) => onChange({ seekSec })}
-            value={draft.seekSec ?? 0}
+            value={draft.seekSec ?? (operation.id === "extend" ? Math.max(1, Math.floor(selectedTracks[0]?.durationSec ?? 2) - 1) : 0)}
           />
         ) : null}
 
@@ -1673,13 +1650,13 @@ function ActionParameterForm({
 
         {promptOperations.has(operation.id) ? (
           <label className={styles.field}>
-            <span>{msg("music.parameters.prompt")}</span>
+            <span>{msg(operation.id === "extend" ? "music.parameters.continuation" : "music.parameters.prompt")}</span>
             <InputSurface className={styles.textareaSurfaceSmall}>
               <textarea
-                aria-label={msg("music.parameters.promptAria")}
+                aria-label={msg(operation.id === "extend" ? "music.parameters.continuation" : "music.parameters.promptAria")}
                 disabled={busy}
                 onChange={(event) => onChange({ prompt: event.target.value })}
-                placeholder={msg("music.parameters.promptPlaceholder")}
+                placeholder={msg(operation.id === "extend" ? "music.parameters.continuationPlaceholder" : "music.parameters.promptPlaceholder")}
                 value={draft.prompt ?? ""}
               />
             </InputSurface>
@@ -1852,7 +1829,11 @@ function NumberField({
   );
 }
 
-function MusicResultsPanel({ results }: Readonly<{ results: readonly MusicResultSummary[] }>) {
+function MusicResultsPanel({ results, canContinue, onContinue }: Readonly<{
+  results: readonly MusicResultSummary[];
+  canContinue: (track: MusicTrack) => boolean;
+  onContinue: (track: MusicTrack, continueAtSec: number) => void;
+}>) {
   const msg = useMessages();
   if (results.length === 0) return null;
 
@@ -1863,7 +1844,12 @@ function MusicResultsPanel({ results }: Readonly<{ results: readonly MusicResult
         <span>{results.length}</span>
       </div>
       <div className={styles.resultList}>
-        {results.map((result, index) => (
+        {results.map((result, index) => result.tracks && result.tracks.length > 0 ? (
+          <div className={styles.compactTracks} key={result.id}>
+            {result.tracks.map(track => <MusicTrackCard key={track.id} track={track}
+              onContinue={canContinue(track) ? seconds => onContinue(track, seconds) : undefined} />)}
+          </div>
+        ) : (
           <article className={styles.resultCard} key={result.id}>
             <h3>{result.title ?? msg("music.result.result", { index: index + 1 })}</h3>
             {result.tags ? <p className={styles.muted}>{msg("music.result.tags", { value: result.tags })}</p> : null}

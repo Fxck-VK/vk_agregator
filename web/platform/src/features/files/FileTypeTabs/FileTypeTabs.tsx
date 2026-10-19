@@ -6,7 +6,7 @@ import { ModeSwitchPanel } from "@/components/ui/ModeSwitchPanel/ModeSwitchPanel
 
 import styles from "./FileTypeTabs.module.css";
 
-const fileCategories = ["all", "images", "reports", "presentations", "video", "uploads"] as const;
+const fileCategories = ["all", "images", "music", "reports", "presentations", "video", "uploads"] as const;
 
 export type FileCategory = (typeof fileCategories)[number];
 

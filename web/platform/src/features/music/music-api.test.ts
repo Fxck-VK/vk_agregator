@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 
 import type { MusicWorkspaceActionRequest, MusicWorkspaceOperation, MusicTrack } from "./MusicWorkspace";
-import { buildMusicPrepareBody, musicSummaryFromResult, normalizeMusicArtifactURL } from "./music-api";
+import { buildMusicPrepareBody, musicSummaryFromResult, musicTracksFromResult, normalizeMusicArtifactURL } from "./music-api";
 
 const operation: MusicWorkspaceOperation = {
   enabled: true,
@@ -51,6 +51,39 @@ const tracks: readonly MusicTrack[] = [
 ];
 
 describe("music API helpers", () => {
+  it("keeps downloads with their track and hides duplicate covers and metadata from music cards", () => {
+    const url = (n: number) => `/web/v1/music-artifacts/${String(n).repeat(8)}-1111-4111-8111-111111111111`;
+    const jobID = "11111111-1111-4111-8111-111111111111";
+    const result = { job_id: jobID, tracks: [
+      { job_id: jobID, audio_index: 1, audio_url: url(1), image_url: url(3), title: "First" },
+      { job_id: jobID, audio_index: 2, audio_url: url(2), image_url: url(4), title: "Second" },
+    ], artifacts: [
+      { id: jobID, kind: "audio", format: "mp3", url: url(1) },
+      { id: jobID, kind: "audio", format: "mp3", url: url(2) },
+      { id: jobID, kind: "image", format: "jpeg", url: url(3) },
+      { id: jobID, kind: "image", format: "jpeg", url: url(4) },
+      { id: jobID, kind: "image", format: "jpeg", url: url(5) },
+      { id: jobID, kind: "metadata", format: "json", url: url(6) },
+    ] };
+    const cards = musicTracksFromResult(result);
+    expect(cards[0].downloads?.map(a => a.url)).toEqual([url(1), url(3)]);
+    expect(cards[1].downloads?.map(a => a.url)).toEqual([url(2), url(4)]);
+    expect(musicSummaryFromResult(result)?.tracks).toHaveLength(2);
+  });
+
+  it("keeps both Lyria formats on one track and prefers the smaller streaming format", () => {
+    const jobID = "11111111-1111-4111-8111-111111111111";
+    const m4a = "/web/v1/music-artifacts/22222222-2222-4222-8222-222222222222";
+    const wav = "/web/v1/music-artifacts/33333333-3333-4333-8333-333333333333";
+    const result = { job_id: jobID, tracks: [{ job_id: jobID, audio_index: 1, audio_url: wav }], artifacts: [
+      { id: jobID, kind: "audio", format: "m4a", url: m4a },
+      { id: jobID, kind: "audio", format: "wav", url: wav },
+      { id: jobID, kind: "audio", format: "mp3", url: "https://foreign.example/private" },
+    ] };
+    const [card] = musicTracksFromResult(result);
+    expect(card.artifactPlaybackUrl).toBe(m4a);
+    expect(card.downloads?.map(a => a.format)).toEqual(["m4a", "wav"]);
+  });
   it("builds provider-neutral prepare bodies without trusting callback source jobs", () => {
     expect(buildMusicPrepareBody(request, tracks, operation)).toEqual({
       audio_artifact_ids: [],

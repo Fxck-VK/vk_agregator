@@ -5,7 +5,7 @@ type FilesPageProps = {
   searchParams: Promise<{ category?: string | string[] }>;
 };
 
-const fileCategories = new Set<FileCategory>(["all", "images", "reports", "presentations", "video", "uploads"]);
+const fileCategories = new Set<FileCategory>(["all", "images", "music", "reports", "presentations", "video", "uploads"]);
 
 function requestedFileCategory(value: string | string[] | undefined): FileCategory {
   const category = Array.isArray(value) ? value[0] : value;

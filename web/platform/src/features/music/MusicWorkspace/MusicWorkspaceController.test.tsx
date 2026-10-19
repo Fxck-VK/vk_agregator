@@ -1,4 +1,4 @@
-import { act, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
+import { act, fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { StrictMode } from "react";
 import { describe, expect, it, vi } from "vitest";
 
@@ -82,6 +82,41 @@ function audioResult(job: MusicJob, title: string): MusicJobResult {
 const loadedCatalog = () => Promise.resolve(enabledCatalog);
 
 describe("MusicWorkspaceController", () => {
+  it("opens an owned track from My Files and only prepares continuation after a user action", async () => {
+    const catalog = { ...enabledCatalog, models: enabledCatalog.models.map(model => ({ ...model, operations: [...model.operations,
+      { enabled: true, id: "extend" as const, estimateCredits: 30, requirement: { minTracks: 1, maxTracks: 1 } },
+    ] })) };
+    const api = apiStub({
+      loadMusicJob: vi.fn().mockResolvedValue(oldMusicJob),
+      loadMusicJobResult: vi.fn().mockResolvedValue(audioResult(oldMusicJob, "Source song")),
+      prepareMusicJob: vi.fn().mockRejectedValue(new MusicApiError("synthetic", 400)),
+    });
+    render(<MusicWorkspaceController api={api} catalogLoader={() => Promise.resolve(catalog)}
+      requestedContinuation={{ modelId: "suno_v6", jobId: oldMusicJob.id, audioIndex: 1, continueAtSec: 45 }} />);
+    await screen.findByRole("heading", { name: "Продлить" });
+    expect(api.prepareMusicJob).not.toHaveBeenCalled();
+    expect(api.activateMusicJob).not.toHaveBeenCalled();
+    fireEvent.change(screen.getByRole("textbox", { name: "Как продолжить трек" }), { target: { value: "Continue with soft piano" } });
+    fireEvent.click(screen.getByRole("button", { name: "Подготовить Продлить" }));
+    await waitFor(() => expect(api.prepareMusicJob).toHaveBeenCalledOnce());
+    expect(api.prepareMusicJob).toHaveBeenCalledWith(expect.objectContaining({
+      model_id: "suno_v6", sources: [{ job_id: oldMusicJob.id, audio_index: 1 }],
+      music: expect.objectContaining({ action: "extend", custom: false, continue_at_sec: 45, gpt_description: "Continue with soft piano" }),
+    }), expect.any(String));
+    expect(api.activateMusicJob).not.toHaveBeenCalled();
+  });
+
+  it("rejects a missing or foreign continuation source without preparing or activating", async () => {
+    const catalog = { ...enabledCatalog, models: enabledCatalog.models.map(model => ({ ...model, operations: [...model.operations,
+      { enabled: true, id: "extend" as const, requirement: { minTracks: 1, maxTracks: 1 } },
+    ] })) };
+    const api = apiStub({ loadMusicJob: vi.fn().mockRejectedValue(new MusicApiError("not found", 404)) });
+    render(<MusicWorkspaceController api={api} catalogLoader={() => Promise.resolve(catalog)}
+      requestedContinuation={{ modelId: "suno_v6", jobId: oldMusicJob.id, audioIndex: 1 }} />);
+    await screen.findByText("Не удалось открыть исходный трек для продолжения.");
+    expect(api.prepareMusicJob).not.toHaveBeenCalled();
+    expect(api.activateMusicJob).not.toHaveBeenCalled();
+  });
   it("keeps old tracks and polling state after disconnect and resumes only reads on reconnect", async () => {
     vi.useFakeTimers();
     let failRead!: (reason: Error) => void;
@@ -95,7 +130,6 @@ describe("MusicWorkspaceController", () => {
     const { unmount } = render(<MusicWorkspaceController api={api} catalogLoader={loadedCatalog} />);
     try {
       await act(async () => { await vi.advanceTimersByTimeAsync(0); });
-      fireEvent.click(screen.getByRole("button", { name: /^Мои треки/ }));
       await act(async () => { await vi.advanceTimersByTimeAsync(0); });
       expect(screen.getByText("Старый трек")).toBeVisible();
       expect(api.loadMusicJob).toHaveBeenCalledTimes(1);
@@ -138,13 +172,15 @@ describe("MusicWorkspaceController", () => {
       <WorkspaceDataCacheProvider>{open ? <MusicWorkspaceController api={api} catalogLoader={loadedCatalog} /> : null}</WorkspaceDataCacheProvider>
     );
     const view = render(workspace(true));
-    fireEvent.click(screen.getByRole("button", { name: /Мои треки/ }));
     await screen.findByRole("heading", { name: "Cached track" });
+    fireEvent.click(screen.getByRole("button", { name: "Действия: Cached track" }));
+    fireEvent.click(screen.getByRole("menuitem", { name: "Текст песни" }));
     await screen.findByText("Cached lyrics");
     view.rerender(workspace(false));
     view.rerender(workspace(true));
-    fireEvent.click(screen.getByRole("button", { name: /Мои треки/ }));
     expect(screen.getByRole("heading", { name: "Cached track" })).toBeVisible();
+    fireEvent.click(screen.getByRole("button", { name: "Действия: Cached track" }));
+    fireEvent.click(screen.getByRole("menuitem", { name: "Текст песни" }));
     expect(screen.getByText("Cached lyrics")).toBeVisible();
     await waitFor(() => expect(api.loadMusicJobs).toHaveBeenCalledTimes(2));
     expect(screen.getByRole("heading", { name: "Cached track" })).toBeVisible();
@@ -175,7 +211,6 @@ describe("MusicWorkspaceController", () => {
     view.rerender(workspace("new"));
     expect(oldSignal.aborted).toBe(true);
     await act(async () => { finishOldResult(audioResult(oldMusicJob, "Private old track")); });
-    fireEvent.click(screen.getByRole("button", { name: /Мои треки/ }));
     expect(screen.queryByRole("heading", { name: "Private old track" })).not.toBeInTheDocument();
     expect(oldCache.musicResults.getAll()).toEqual([]);
     expect(newApi.loadMusicJobResult).not.toHaveBeenCalled();
@@ -187,7 +222,6 @@ describe("MusicWorkspaceController", () => {
       loadMusicJobResult: vi.fn().mockResolvedValue(audioResult(oldMusicJob, "Strict track")),
     });
     render(<StrictMode><WorkspaceDataCacheProvider><MusicWorkspaceController api={api} catalogLoader={loadedCatalog} /></WorkspaceDataCacheProvider></StrictMode>);
-    fireEvent.click(screen.getByRole("button", { name: /Мои треки/ }));
     await screen.findByRole("heading", { name: "Strict track" });
     expect(api.loadMusicJobResult).toHaveBeenCalledTimes(1);
     expect(vi.mocked(api.loadMusicJobResult).mock.calls[0][1]?.aborted).toBe(false);
@@ -205,19 +239,15 @@ describe("MusicWorkspaceController", () => {
       <WorkspaceDataCacheProvider>{open ? <MusicWorkspaceController api={api} catalogLoader={loadedCatalog} /> : null}</WorkspaceDataCacheProvider>
     );
     const view = render(workspace(true));
-    fireEvent.click(screen.getByRole("button", { name: /Мои треки/ }));
     await screen.findByRole("heading", { name: "Old track" });
     view.rerender(workspace(false));
     view.rerender(workspace(true));
-    fireEvent.click(screen.getByRole("button", { name: /Мои треки/ }));
     const oldCard = screen.getByRole("heading", { name: "Old track" }).closest("article")!;
     const player = oldCard.querySelector("audio");
-    fireEvent.click(within(oldCard).getByRole("button", { name: /Выбрать трек/ }));
     await waitFor(() => expect(api.loadMusicJobs).toHaveBeenCalledTimes(2));
     await act(async () => { finishHistory({ items: [newMusicJob, oldMusicJob], has_more: false, next_cursor: null }); });
     await screen.findByRole("heading", { name: "New track" });
     expect(screen.getByRole("heading", { name: "Old track" }).closest("article")?.querySelector("audio")).toBe(player);
-    expect(oldCard).toHaveAttribute("data-selected", "true");
     expect(vi.mocked(api.loadMusicJobResult).mock.calls.filter(([id]) => id === oldMusicJob.id)).toHaveLength(1);
     expect(vi.mocked(api.loadMusicJobResult).mock.calls.filter(([id]) => id === newMusicJob.id)).toHaveLength(1);
   });
@@ -231,7 +261,6 @@ describe("MusicWorkspaceController", () => {
       loadMusicJob: vi.fn().mockResolvedValue(newMusicJob),
     });
     render(<MusicWorkspaceController api={api} catalogLoader={loadedCatalog} />);
-    fireEvent.click(screen.getByRole("button", { name: /Мои треки/ }));
     await screen.findByRole("heading", { name: "Old track" });
     const player = screen.getByRole("heading", { name: "Old track" }).closest("article")?.querySelector("audio");
     fireEvent.change(screen.getByRole("textbox", { name: "Описание трека" }), { target: { value: "A new song" } });
@@ -503,8 +532,6 @@ describe("MusicWorkspaceController", () => {
     });
 
     render(<MusicWorkspaceController api={api} catalogLoader={() => Promise.resolve(enabledCatalog)} />);
-
-    fireEvent.click(screen.getByRole("button", { name: /Мои треки/ }));
     fireEvent.click(await screen.findByRole("button", { name: "Загрузить ещё" }));
     fireEvent.click(screen.getByRole("button", { name: "Настройки трека" }));
 

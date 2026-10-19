@@ -63,3 +63,26 @@ func TestDEVSmokeRegistryDoesNotGrantAdmission(t *testing.T) {
 		t.Fatal("changed smoke binding accepted")
 	}
 }
+
+func TestDEVSmokeAllowsOnlySunoTaskContinuation(t *testing.T) {
+	if err := ConfigureDEVSmoke("development", true); err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = ConfigureDEVSmoke("development", false) })
+	for _, id := range []string{"suno_v6", "suno_v6_wild", "suno_v6_mini"} {
+		if !RuntimeRegistry().MediaCandidateRunnable(id, "extend") {
+			t.Errorf("%s continuation is not wired on DEV", id)
+		}
+		if StaticRegistry().MediaCandidateRunnable(id, "extend") || RuntimeRegistry().MediaCandidateAdmitted(id, "extend") {
+			t.Fatal("DEV continuation changed permanent admission")
+		}
+		for _, operation := range []string{"upload_extend", "cover", "stems", "create_model"} {
+			if RuntimeRegistry().MediaCandidateRunnable(id, operation) {
+				t.Fatalf("unrequested operation %s became runnable", operation)
+			}
+		}
+	}
+	if RuntimeRegistry().MediaCandidateRunnable("lyria_3_5", "extend") {
+		t.Fatal("Lyria continuation is unsupported")
+	}
+}

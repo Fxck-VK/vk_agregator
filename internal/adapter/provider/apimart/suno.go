@@ -763,7 +763,7 @@ func validateSunoActionInputs(req domain.ProviderRequest, music domain.MusicRequ
 		if err := validateSunoSingleSource(music); err != nil {
 			return err
 		}
-		if music.ContinueAtSec == nil || *music.ContinueAtSec <= 0 {
+		if music.ContinueAtSec == nil || *music.ContinueAtSec < 1 {
 			return sunoInvalid("Suno continue_at is required")
 		}
 	case domain.MusicActionReplaceSection, domain.MusicActionRemoveSection, domain.MusicActionCrop, domain.MusicActionSample:

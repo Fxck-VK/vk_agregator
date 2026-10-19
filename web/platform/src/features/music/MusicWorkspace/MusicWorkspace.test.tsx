@@ -153,14 +153,13 @@ describe("MusicWorkspace", () => {
     expect(onRequestConfirmation).not.toHaveBeenCalled();
   });
 
-  it("opens the track library on demand and preserves selected sources when closed", () => {
-    render(<StatefulWorkspace tracks={tracks} />);
-    expect(screen.queryByText("Трек 1")).not.toBeInTheDocument();
-    const library = screen.getByRole("button", { name: /Мои треки/ });
-    fireEvent.click(library);
+  it("links the track library to My Files and preserves selected sources when the tool is reopened", () => {
+    render(<StatefulWorkspace tracks={tracks} operations={[generateOperation, mashupOperation]} />);
+    expect(screen.getByRole("link", { name: /Мои треки/ })).toHaveAttribute("href", "/ru/app/files?category=music");
+    fireEvent.click(screen.getByRole("button", { name: /^Mashup/ }));
     fireEvent.click(screen.getByRole("button", { name: "Выбрать трек 1" }));
-    fireEvent.click(library);
-    fireEvent.click(library);
+    fireEvent.click(screen.getByRole("button", { name: "Закрыть инструмент" }));
+    fireEvent.click(screen.getByRole("button", { name: /^Mashup/ }));
     expect(screen.getByRole("button", { name: "Убрать трек 1" })).toBeVisible();
   });
 
@@ -294,18 +293,18 @@ describe("MusicWorkspace", () => {
   });
 
   it("renders every provided track and only plays same-origin artifact URLs", () => {
-    const { container } = render(<StatefulWorkspace tracks={tracks} />);
-    fireEvent.click(screen.getByRole("button", { name: /Мои треки/ }));
+    const { container } = render(<StatefulWorkspace tracks={tracks} operations={[generateOperation, mashupOperation]} />);
+    fireEvent.click(screen.getByRole("button", { name: /^Mashup/ }));
 
-    expect(screen.getByText("Трек 1")).toBeVisible();
-    expect(screen.getByText("Трек 2")).toBeVisible();
-    expect(screen.getByText("Трек 6")).toBeVisible();
-    expect(screen.getByText("2:01")).toBeVisible();
-    expect(screen.getByText("1:38")).toBeVisible();
-    expect(screen.getByText("1:04")).toBeVisible();
+    expect(screen.getByRole("heading", { name: "First" })).toBeVisible();
+    expect(screen.getByRole("heading", { name: "Second" })).toBeVisible();
+    expect(screen.getByRole("heading", { name: "Remote" })).toBeVisible();
+    expect(screen.getByText("0:00 / 2:01")).toBeVisible();
+    expect(screen.getByText("0:00 / 1:38")).toBeVisible();
+    expect(screen.getByText("0:00 / 1:04")).toBeVisible();
     expect(screen.queryByText(/job-a/)).not.toBeInTheDocument();
     expect(container.querySelectorAll("audio")).toHaveLength(2);
-    expect(screen.getByText("Источник недоступен для воспроизведения")).toBeVisible();
+    expect(screen.getByRole("button", { name: "Воспроизвести: Remote" })).toBeDisabled();
   });
 
   it("shows text tool results and safe artifact downloads", () => {
@@ -330,7 +329,7 @@ describe("MusicWorkspace", () => {
       />,
     );
 
-    expect(screen.getByText("Результаты инструментов")).toBeVisible();
+    expect(screen.getByText("Результаты")).toBeVisible();
     expect(screen.getByText("Теги: dream pop, bright drums")).toBeVisible();
     expect(screen.getByText("BPM: 126 · диапазон 122–130")).toBeVisible();
     expect(screen.getByText((_, element) => element?.textContent === "Первый куплет\nПрипев")).toBeVisible();

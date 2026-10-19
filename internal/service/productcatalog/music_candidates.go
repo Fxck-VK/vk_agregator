@@ -47,7 +47,7 @@ func pendingMediaWorkspaceModels() []WorkspaceModel {
 			model.Description = "Доступна для ручного тестирования на DEV. Проверка модели не завершена."
 			for i := range model.Operations {
 				op := &model.Operations[i]
-				if op.ID == "generate" && op.Music != nil {
+				if providermodels.RuntimeRegistry().MediaCandidateRunnable(c.PublicID, op.ID) && op.Music != nil {
 					op.Enabled = true
 					op.Music.UnavailableReason = ""
 				}

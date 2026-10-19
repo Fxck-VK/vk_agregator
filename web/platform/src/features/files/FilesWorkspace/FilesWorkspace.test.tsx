@@ -12,6 +12,9 @@ vi.mock("@/lib/web-api/browser", () => ({
 vi.mock("@/features/files/VideoFiles/VideoFiles", () => ({
   VideoFiles: ({ visible }: { visible: boolean }) => visible ? <div data-testid="video-files" /> : null,
 }));
+vi.mock("@/features/files/MusicFiles/MusicFiles", () => ({
+  MusicFiles: ({ visible }: { visible: boolean }) => visible ? <div data-testid="music-files" /> : null,
+}));
 
 import { ru } from "@/i18n/ru";
 import { webBrowserFetch, webBrowserMutation } from "@/lib/web-api/browser";
@@ -43,7 +46,7 @@ function renderFilesWorkspace({
   strictMode = false,
 }: {
   cachePage?: ImageJobList;
-  initialCategory?: "all" | "images" | "reports" | "presentations" | "video" | "uploads";
+  initialCategory?: "all" | "images" | "music" | "reports" | "presentations" | "video" | "uploads";
   strictMode?: boolean;
 } = {}) {
   const workspace = <FilesWorkspace initialCategory={initialCategory} />;
@@ -404,6 +407,7 @@ describe("FilesWorkspace", () => {
     expect(screen.getAllByRole("tab").map((tab) => tab.textContent)).toEqual([
       "Все файлы",
       "Изображения",
+      "Музыка",
       "Рефераты",
       "Презентации",
       "Видео",
@@ -426,7 +430,8 @@ describe("FilesWorkspace", () => {
 
     fireEvent.keyDown(screen.getByRole("tab", { name: "Изображения" }), { key: "ArrowRight" });
 
-    expect(screen.getByRole("tab", { name: "Рефераты" })).toHaveAttribute("aria-selected", "true");
+    expect(screen.getByRole("tab", { name: "Музыка" })).toHaveAttribute("aria-selected", "true");
+    expect(screen.getByTestId("music-files")).toBeInTheDocument();
   });
 
   it("uses the illustrated library empty state when there are no image files", async () => {

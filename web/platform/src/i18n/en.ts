@@ -394,6 +394,7 @@ export const en = {
     categories: {
       all: "All files",
       images: "Images",
+      music: "Music",
       reports: "Reports",
       presentations: "Presentations",
       video: "Video",

@@ -74,6 +74,15 @@ func TestMusicRequestValidateRejectsInvalidMaxCustomModeBeforeQuote(t *testing.T
 	}
 }
 
+func TestContinuationRejectsBeforeFirstSecond(t *testing.T) {
+	for _, at := range []float64{0, 0.5, 1, 1.5} {
+		r := Request{ModelID: "suno_v6", Music: domain.MusicRequest{Action: domain.MusicActionExtend, Prompt: "ending", ContinueAtSec: &at}, Sources: []Source{{JobID: uuid.New(), AudioIndex: 1}}}
+		if got := r.Validate() == nil; got != (at >= 1) {
+			t.Fatalf("continue_at %.1f accepted=%v", at, got)
+		}
+	}
+}
+
 func TestEveryOperationHasExactPrices(t *testing.T) {
 	seen := map[domain.MusicAction]bool{}
 	for _, op := range Operations() {

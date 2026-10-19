@@ -42,6 +42,11 @@
   min-block-size: 2.75rem;
   border-radius: var(--radius-pill, 999px);
   white-space: nowrap;
+  padding-inline: var(--space-4);
+  border: 1px solid var(--color-border);
+  color: var(--color-text);
+  font-size: var(--font-size-ui);
+  text-decoration: none;
 }
 
 .libraryButton svg, .settingsButton svg {
@@ -517,84 +522,6 @@
   list-style: none;
 }
 
-.trackCard {
-  display: grid;
-  grid-template-columns: 4rem minmax(0, 1fr);
-  gap: var(--space-3);
-  position: relative;
-  padding: var(--space-3);
-  border: 0.0625rem solid var(--color-border);
-  border-radius: var(--radius-md);
-  background: rgb(255 255 255 / 4%);
-}
-
-.trackCard[data-selected="true"] {
-  border-color: var(--color-accent);
-}
-
-.cover,
-.coverPlaceholder {
-  inline-size: 4rem;
-  block-size: 4rem;
-  border-radius: var(--radius-sm);
-  object-fit: cover;
-}
-
-.coverPlaceholder {
-  display: grid;
-  place-items: center;
-  background: var(--color-surface-raised);
-  color: var(--color-text-muted);
-  font-size: 1.5rem;
-}
-
-.trackBody {
-  display: grid;
-  gap: var(--space-2);
-  min-inline-size: 0;
-}
-
-.trackBody p,
-.trackBody h3 {
-  margin: 0;
-}
-
-.trackBody p {
-  color: var(--color-text-muted);
-  font-size: var(--font-size-ui);
-}
-
-.trackBody h3 {
-  overflow-wrap: anywhere;
-  font-size: var(--font-size-body);
-}
-
-.trackBody audio {
-  inline-size: 100%;
-  max-inline-size: 100%;
-}
-
-.trackLyrics {
-  display: -webkit-box;
-  overflow: hidden;
-  -webkit-line-clamp: 3;
-  -webkit-box-orient: vertical;
-}
-
-.selectTrack {
-  grid-column: 1 / -1;
-  min-block-size: 2.5rem;
-  border: 0.0625rem solid var(--color-border);
-  border-radius: var(--radius-sm);
-  background: transparent;
-  color: var(--color-text);
-}
-
-.selectTrack:hover:not(:disabled),
-.selectTrack:focus-visible {
-  border-color: var(--color-accent);
-}
-
 .actionForm {
   display: grid;
   gap: var(--space-3);
@@ -644,6 +571,7 @@
 }
 
 .resultList,
+.compactTracks,
 .lyricsList,
 .artifactList {
   display: grid;

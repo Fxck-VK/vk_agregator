@@ -17,6 +17,7 @@ import {
 import { FilesEmptyState } from "@/features/files/FilesEmptyState/FilesEmptyState";
 import { FilesGrid } from "@/features/files/FilesGrid/FilesGrid";
 import { VideoFiles } from "@/features/files/VideoFiles/VideoFiles";
+import { MusicFiles } from "@/features/files/MusicFiles/MusicFiles";
 import { FileTypeTabs, type FileCategory } from "@/features/files/FileTypeTabs/FileTypeTabs";
 import { useWorkspaceDataCache } from "@/features/workspace/WorkspaceDataCache/WorkspaceDataCache";
 import { recordWorkspaceDataLoad } from "@/features/workspace/WorkspaceNavigationMetrics/workspace-navigation-metrics";
@@ -209,7 +210,7 @@ function isImageCategory(category: FileCategory): category is "all" | "images" {
   return category === "all" || category === "images";
 }
 
-function futureCategoryDescription(category: Exclude<FileCategory, "all" | "images" | "video">, t: Dictionary): string {
+function futureCategoryDescription(category: Exclude<FileCategory, "all" | "images" | "video" | "music">, t: Dictionary): string {
   switch (category) {
     case "reports":
       return t.files.emptyReportsDescription;
@@ -239,6 +240,8 @@ export function FilesWorkspace({ initialCategory = "all" }: Readonly<FilesWorksp
   const [isLoadingMore, setIsLoadingMore] = useState(false);
   const [loadFailed, setLoadFailed] = useState(false);
   const [fileCategory, setFileCategory] = useState<FileCategory>(initialCategory);
+  const [videoHasFiles, setVideoHasFiles] = useState<boolean>();
+  const [musicHasFiles, setMusicHasFiles] = useState<boolean>();
   const [resultsByJobID, setResultsByJobID] = useState<Record<string, ImageJobResult>>(() => cache.getImageResults());
   const [resultStatesByJobID, setResultStatesByJobID] = useState<Record<string, FileResultState>>({});
   const [selectedPreviewArtifactID, setSelectedPreviewArtifactID] = useState<string | null>(null);
@@ -596,7 +599,7 @@ export function FilesWorkspace({ initialCategory = "all" }: Readonly<FilesWorksp
           id="files-panel"
           role="tabpanel"
         >
-          {!hasImageCategory && fileCategory !== "video" ? (
+          {!hasImageCategory && fileCategory !== "video" && fileCategory !== "music" ? (
             <FilesEmptyState
               description={futureCategoryDescription(fileCategory, t)}
               title={t.files.emptyLibraryTitle}
@@ -632,8 +635,13 @@ export function FilesWorkspace({ initialCategory = "all" }: Readonly<FilesWorksp
           ) : null}
           <VideoFiles
             visible={fileCategory === "all" || fileCategory === "video"}
-            showEmpty={fileCategory === "video" || (hasLoaded && !hasImageJobs)}
+            showEmpty={fileCategory === "video"}
+            onHasFilesChange={setVideoHasFiles}
           />
+          <MusicFiles visible={fileCategory === "all" || fileCategory === "music"}
+            showEmpty={fileCategory === "music"} onHasFilesChange={setMusicHasFiles} />
+          {fileCategory === "all" && hasLoaded && !hasImageJobs && videoHasFiles === false && musicHasFiles === false
+            ? <FilesEmptyState description={t.files.emptyAllDescription} title={t.files.emptyLibraryTitle} /> : null}
         </section>
       </section>
       {selectedPreviewIndex >= 0 ? (
