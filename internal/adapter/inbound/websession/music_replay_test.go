@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
+	"strings"
 	"testing"
 
 	"github.com/google/uuid"
@@ -22,19 +23,40 @@ func TestMusicPreparationReplay(t *testing.T) {
 	for _, model := range []struct {
 		id      string
 		credits int64
+		lyrics  bool
 	}{
-		{"suno_v6", 30},
-		{"suno_v6_wild", 30},
-		{"suno_v6_mini", 30},
-		{"lyria_3_5", 40},
+		{"suno_v6", 30, false},
+		{"suno_v6_wild", 30, false},
+		{"suno_v6_mini", 30, false},
+		{"lyria_3_5", 40, false},
+		{"suno_v6", 30, true},
+		{"suno_v6_wild", 30, true},
+		{"suno_v6_mini", 30, true},
 	} {
-		t.Run(model.id, func(t *testing.T) {
+		name := model.id
+		if model.lyrics {
+			name += "_own_lyrics"
+		}
+		t.Run(name, func(t *testing.T) {
 			accountID, key := uuid.New(), uuid.NewString()
 			request := musicgeneration.Request{
 				ModelID:          model.id,
 				Music:            domain.MusicRequest{Action: domain.MusicActionGenerate, Prompt: "Synthetic test music"},
 				Sources:          []musicgeneration.Source{},
 				AudioArtifactIDs: []uuid.UUID{},
+			}
+			if model.lyrics {
+				custom, instrumental := true, false
+				// Match the browser's duplicated fields at the Unicode limits,
+				// including four-byte characters: the JSON exceeds 64 KiB.
+				text := strings.Repeat("\U0001F3B5", 5000)
+				style := strings.Repeat("\U0001F3B5", 1000)
+				request.Music = domain.MusicRequest{
+					Action: domain.MusicActionGenerate, Custom: &custom,
+					Instrumental: &instrumental, AutoLyrics: &instrumental,
+					Prompt: text, Lyrics: text, Description: text,
+					Style: style, Styles: style, Tags: style,
+				}
 			}
 			params, quote, err := musicgeneration.Resolve(request, providermodels.RuntimeRegistry())
 			if err != nil {
@@ -113,7 +135,7 @@ func TestMusicPreparationReplay(t *testing.T) {
 				}},
 				{"upload", func(r *musicgeneration.Request) { r.AudioArtifactIDs = []uuid.UUID{uuid.New()} }},
 				{"explicit_option", func(r *musicgeneration.Request) {
-					value := false
+					value := true
 					r.Music.Instrumental = &value
 				}},
 			} {
@@ -127,6 +149,28 @@ func TestMusicPreparationReplay(t *testing.T) {
 			}
 			if musicReplayMatches(job, uuid.New(), key, request) || musicReplayMatches(job, accountID, uuid.NewString(), request) {
 				t.Fatal("preparation accepted a different owner or idempotency key")
+			}
+		})
+	}
+}
+
+func TestMusicPreparationKeepsJSONAndFieldBounds(t *testing.T) {
+	for _, tc := range []struct {
+		name  string
+		music map[string]any
+	}{
+		{"body_too_large", map[string]any{"action": "generate", "prompt": "test", "description": strings.Repeat("x", 128<<10)}},
+		{"lyrics_too_long", map[string]any{"action": "generate", "custom": true, "lyrics": strings.Repeat("я", 5001)}},
+		{"unknown_field", map[string]any{"action": "generate", "prompt": "test", "untrusted_option": true}},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			h, jobs, sessions := newImageJobTestHandler(t)
+			r := safeImageMutationRequest(t, sessions, uuid.New(), http.MethodPost, "/web/v1/music-jobs/prepare", map[string]any{"model_id": "suno_v6", "music": tc.music})
+			r.Header.Set("X-Idempotency-Key", uuid.NewString())
+			w := httptest.NewRecorder()
+			h.Routes().ServeHTTP(w, r)
+			if w.Code != http.StatusBadRequest || jobs.prepareCalls != 0 || jobs.activateCalls != 0 {
+				t.Fatal("invalid request reached job preparation or activation")
 			}
 		})
 	}

@@ -565,8 +565,12 @@ func normalizedVocalGender(value string) string {
 }
 
 func validateSunoTextBounds(music domain.MusicRequest) error {
-	if runeLen(music.Prompt) > 3000 {
-		return sunoInvalid("Suno prompt exceeds 3000 characters")
+	promptLimit := 3000
+	if music.Action == domain.MusicActionGenerate && boolValue(music.Custom) {
+		promptLimit = 5000
+	}
+	if runeLen(music.Prompt) > promptLimit {
+		return sunoInvalid("Suno prompt exceeds " + strconv.Itoa(promptLimit) + " characters")
 	}
 	if runeLen(music.GPTDescription) > 3000 {
 		return sunoInvalid("Suno gpt_description exceeds 3000 characters")

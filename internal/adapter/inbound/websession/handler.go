@@ -1921,7 +1921,11 @@ func sessionMetadata(r *http.Request, deviceInfo string) accountauth.SessionMeta
 }
 
 func decodeJSON(w http.ResponseWriter, r *http.Request, dst any) bool {
-	decoder := json.NewDecoder(http.MaxBytesReader(w, r.Body, maxRequestBytes))
+	return decodeJSONWithLimit(w, r, dst, maxRequestBytes)
+}
+
+func decodeJSONWithLimit(w http.ResponseWriter, r *http.Request, dst any, maxBytes int64) bool {
+	decoder := json.NewDecoder(http.MaxBytesReader(w, r.Body, maxBytes))
 	decoder.DisallowUnknownFields()
 	if err := decoder.Decode(dst); err != nil {
 		writeError(w, http.StatusBadRequest, "invalid request")

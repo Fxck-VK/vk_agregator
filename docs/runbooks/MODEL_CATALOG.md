@@ -1,5 +1,22 @@
 # Единый каталог моделей
 
+## Music lyrics and downloads checked 2026-10-19
+
+Music preparation accepts bounded 128 KiB JSON in the web proxy and Go handler;
+other endpoint limits and per-field validation are unchanged. This covers the
+existing browser payload's repeated Unicode lyrics/arrangement fields.
+The Suno generate adapter uses the documented 5000-character custom prompt
+limit and retains 3000 for non-custom prompts. Source checked on this date:
+[APIMart Suno generation](https://docs.apimart.ai/ru/api-reference/audios/suno/generation).
+Versions, prices, operations and frozen admission contracts are unchanged.
+
+Generated artifact responses include safe filenames with MIME-based extensions
+and preserve owner/moderation checks, private caching and Range playback.
+Lyria returns [M4A/WAV](https://docs.apimart.ai/ru/api-reference/audios/flow-music/music); filenames reflect those actual formats, without relabeling
+them as MP3. Offline checks cover all three Suno versions, Unicode boundary
+payloads, replay, oversize/unknown-field rejection and named downloads. Paid
+Suno live output remains unverified; no paid agent calls were made.
+
 <a id="contract-corrections-2026-10-03"></a>
 
 ## Исправления контрактов 2026-10-03

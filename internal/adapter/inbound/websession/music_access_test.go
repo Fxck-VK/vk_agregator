@@ -2,6 +2,7 @@ package websession
 
 import (
 	"encoding/json"
+	"mime"
 	"net/http"
 	"net/http/httptest"
 	"strings"
@@ -87,6 +88,40 @@ func TestMusicResultUsesSameOriginArtifactPathsAndOriginalTrackIndex(t *testing.
 	}
 	if got.Model == nil || got.Model.JobID != job.ID || got.Model.Name != "Моя модель" || got.Voice == nil || got.Voice.JobID != job.ID || got.Voice.Name != "Мой голос" {
 		t.Fatal("provider receipts without names need safe display labels")
+	}
+}
+
+func TestMusicArtifactDownloadsHaveNamesMatchingTheirActualFormat(t *testing.T) {
+	for _, tc := range []struct{ mimeType, ext, disposition string }{
+		{"audio/mpeg", ".mp3", "inline"},
+		{"audio/mp4", ".m4a", "inline"},
+		{"audio/wav", ".wav", "inline"},
+		{"application/json", ".json", "attachment"},
+		{"application/octet-stream", ".bin", "attachment"},
+	} {
+		t.Run(tc.ext, func(t *testing.T) {
+			h, _, sessions := newTestHandler(t)
+			owner := uuid.New()
+			job, artifact := musicAccessFixture(t, owner)
+			artifact.MimeType = tc.mimeType
+			h.deps.ImageJobReader = &imageJobReaderStub{job: job}
+			h.deps.ImageArtifacts = &imageArtifactReaderStub{artifact: artifact}
+			h.deps.ImageResults = &imageResultReaderStub{result: resultservice.Result{ID: job.ID, Artifacts: []resultservice.ArtifactMetadata{{ID: artifact.ID}}}}
+			h.deps.ImageArtifactURLSigner = &imageArtifactObjectStoreStub{data: []byte("0123456789")}
+			r := safeConversationManagementRequest(t, http.MethodGet, "/web/v1/music-artifacts/"+artifact.ID.String(), sessions, owner, "")
+			w := httptest.NewRecorder()
+			h.Routes().ServeHTTP(w, r)
+			if w.Code != http.StatusOK || w.Body.String() != "0123456789" {
+				t.Fatal("download did not preserve the stored file")
+			}
+			disposition, params, err := mime.ParseMediaType(w.Header().Get("Content-Disposition"))
+			if err != nil || disposition != tc.disposition || params["filename"] != "neirohub-"+artifact.ID.String()+tc.ext {
+				t.Fatalf("download has no safe filename for %s: %q", tc.mimeType, w.Header().Get("Content-Disposition"))
+			}
+			if w.Header().Get("X-Content-Type-Options") != "nosniff" || w.Header().Get("Cache-Control") != "private, no-store" {
+				t.Fatal("download lost private-serving safeguards")
+			}
+		})
 	}
 }
 

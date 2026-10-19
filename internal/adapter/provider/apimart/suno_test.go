@@ -113,6 +113,48 @@ func TestSubmitSunoGenerateMapsCustomLyricsAndZeroWeights(t *testing.T) {
 	}
 }
 
+func TestSubmitSunoGenerateCustomPromptLimit(t *testing.T) {
+	for _, model := range []string{ModelSunoV6, ModelSunoV6Wild, ModelSunoV6Mini} {
+		t.Run(model, func(t *testing.T) {
+			calls := 0
+			srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+				calls++
+				var body map[string]any
+				if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+					t.Fatal(err)
+				}
+				if body["prompt"] != strings.Repeat("я", 5000) || body["custom"] != true || body["version"] != sunoVersionFromModelCode(model) {
+					t.Fatal("custom lyrics changed before provider submission")
+				}
+				_, _ = w.Write([]byte(`{"code":200,"data":[{"status":"submitted","task_id":"task_long_lyrics"}]}`))
+			}))
+			defer srv.Close()
+			p := New(Config{APIKey: "test-key", BaseURL: srv.URL, HTTPClient: srv.Client()})
+			req := sunoProviderRequest(t, domain.MusicRequest{
+				Action: domain.MusicActionGenerate, Custom: boolRef(true), Instrumental: boolRef(false),
+				Prompt: strings.Repeat("я", 5000), Lyrics: strings.Repeat("я", 5000),
+			})
+			req.ModelCode = model
+			if _, err := p.submitSuno(context.Background(), req); err != nil {
+				t.Fatalf("documented custom lyrics rejected: %v", err)
+			}
+			for _, custom := range []bool{true, false} {
+				invalid := req
+				music := *req.Music
+				music.Custom = boolRef(custom)
+				music.Prompt = strings.Repeat("я", 5001)
+				invalid.Music = &music
+				if _, err := p.submitSuno(context.Background(), invalid); err == nil {
+					t.Fatal("oversized prompt reached provider")
+				}
+			}
+			if calls != 1 {
+				t.Fatalf("provider calls = %d, want one", calls)
+			}
+		})
+	}
+}
+
 func TestSubmitSunoCanonicalActionsUseDocumentedEndpoints(t *testing.T) {
 	type actionCase struct {
 		action       domain.MusicAction
@@ -356,7 +398,7 @@ func TestValidateSunoRequestRejectsBadInputs(t *testing.T) {
 		{name: "unsupported model", model: ModelSeedance25, mutate: func(*domain.MusicRequest) {}},
 		{name: "missing action", mutate: func(r *domain.MusicRequest) { r.Action = "" }},
 		{name: "deprecated vox action", mutate: func(r *domain.MusicRequest) { r.Action = "vox" }},
-		{name: "prompt too long", mutate: func(r *domain.MusicRequest) { r.Prompt = strings.Repeat("a", 3001) }},
+		{name: "prompt too long", mutate: func(r *domain.MusicRequest) { r.Custom = boolRef(false); r.Prompt = strings.Repeat("a", 3001) }},
 		{name: "title too long", mutate: func(r *domain.MusicRequest) { r.Title = strings.Repeat("a", 81) }},
 		{name: "style too long", mutate: func(r *domain.MusicRequest) { r.Style = strings.Repeat("a", 1001) }},
 		{name: "weight above one", mutate: func(r *domain.MusicRequest) { r.StyleWeight = floatRef(1.01) }},

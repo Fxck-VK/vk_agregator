@@ -5,6 +5,7 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"mime"
 	"net/http"
 	"reflect"
 	"slices"
@@ -18,6 +19,10 @@ import (
 	"vk-ai-aggregator/internal/service/musicgeneration"
 	"vk-ai-aggregator/internal/service/providermodels"
 )
+
+// Lyrics and arrangement fields can each contain thousands of Unicode runes.
+// Keep the larger transport bound local to preparation; field limits still apply.
+const maxMusicRequestBytes = 128 << 10
 
 type safeMusicJob struct {
 	ID           uuid.UUID          `json:"id"`
@@ -44,7 +49,7 @@ func (h *Handler) prepareMusicJob(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Cache-Control", "no-store")
 	principal, _ := PrincipalFromContext(r.Context())
 	var request musicgeneration.Request
-	if !decodeJSON(w, r, &request) {
+	if !decodeJSONWithLimit(w, r, &request, maxMusicRequestBytes) {
 		return
 	}
 	if request.Validate() != nil {
@@ -498,11 +503,49 @@ func (h *Handler) serveGeneratedArtifact(w http.ResponseWriter, r *http.Request,
 	}
 	// No redirect to private storage/provider URLs, and no executable document
 	// rendering. Same-origin byte serving supports the player's Range requests.
+	disposition := "inline"
 	if strings.HasPrefix(a.MimeType, "audio/") || a.MimeType == "video/mp4" || a.MimeType == "image/png" || a.MimeType == "image/jpeg" || strings.HasPrefix(a.MimeType, "text/plain") {
 		w.Header().Set("Content-Type", a.MimeType)
 	} else {
 		w.Header().Set("Content-Type", "application/octet-stream")
-		w.Header().Set("Content-Disposition", "attachment")
+		disposition = "attachment"
 	}
+	w.Header().Set("Content-Disposition", mime.FormatMediaType(disposition, map[string]string{
+		"filename": "neirohub-" + id.String() + generatedArtifactExtension(a.MimeType),
+	}))
 	http.ServeContent(w, r, id.String(), a.UpdatedAt, bytes.NewReader(data))
+}
+
+func generatedArtifactExtension(contentType string) string {
+	mediaType, _, _ := mime.ParseMediaType(contentType)
+	switch mediaType {
+	case "audio/mpeg":
+		return ".mp3"
+	case "audio/mp4", "audio/x-m4a":
+		return ".m4a"
+	case "audio/wav", "audio/x-wav":
+		return ".wav"
+	case "audio/aac":
+		return ".aac"
+	case "audio/flac":
+		return ".flac"
+	case "audio/ogg":
+		return ".ogg"
+	case "audio/midi", "audio/x-midi":
+		return ".mid"
+	case "video/mp4":
+		return ".mp4"
+	case "image/png":
+		return ".png"
+	case "image/jpeg":
+		return ".jpg"
+	case "text/plain":
+		return ".txt"
+	case "application/json":
+		return ".json"
+	case "application/zip":
+		return ".zip"
+	default:
+		return ".bin"
+	}
 }

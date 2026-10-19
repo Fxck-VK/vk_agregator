@@ -49,6 +49,13 @@ worker provider set. Provider-selected Runway resolution retains an internal
 tariff key while the public UI exposes no unsupported output-size choice.
 See [current contract corrections](runbooks/MODEL_CATALOG.md#contract-corrections-2026-10-03).
 
+Website music preparation has a bounded 128 KiB JSON transport limit in both
+the Next proxy and Go handler, allowing the existing Unicode lyrics/arrangement
+fields without raising other endpoint limits. Field validation remains strict.
+Generated music/speech artifacts keep owner and moderation checks; byte responses
+include safe UUID-based filenames with extensions matching stored MIME types.
+Playback remains inline and supports Range; unknown documents stay attachments.
+
 The current implementation is a production-shaped modular monolith. It has one
 shared backend core and two user-facing app surfaces:
 

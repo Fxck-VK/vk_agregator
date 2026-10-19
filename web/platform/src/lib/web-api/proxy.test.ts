@@ -81,11 +81,33 @@ describe("proxyWebApiRequest", () => {
     expect((await proxyWebApiRequest(upload, uploadPath, internalOrigin)).status).toBe(201);
     expect(upstream).toHaveBeenCalledTimes(1);
     const preparePath = "/web/v1/music-jobs/prepare";
-    const prepare = new Request(`https://platform.example${preparePath}`, {method: "POST", body: payload});
+    const prepare = new Request(`https://platform.example${preparePath}`, {method: "POST", body: new Uint8Array(128 * 1024 + 1)});
     expect((await proxyWebApiRequest(prepare, preparePath, internalOrigin)).status).toBe(413);
     const oversized = new Request(`https://platform.example${uploadPath}`, {method: "POST", headers: {"Content-Length": String(25 * 1024 * 1024 + 1)}});
     expect((await proxyWebApiRequest(oversized, uploadPath, internalOrigin)).status).toBe(413);
     expect(upstream).toHaveBeenCalledTimes(1);
+  });
+
+  it("forwards full Unicode music lyrics only within the music preparation body limit", async () => {
+    const upstream = vi.fn().mockImplementation(async () => new Response("{}", { status: 201 }));
+    vi.stubGlobal("fetch", upstream);
+    const text = "🎵".repeat(5000);
+    const style = "🎵".repeat(1000);
+    const body = JSON.stringify({ model_id: "suno_v6", music: {
+      action: "generate", custom: true, instrumental: false,
+      prompt: text, lyrics: text, description: text, style, styles: style, tags: style,
+    }, sources: [], audio_artifact_ids: [] });
+    expect(new TextEncoder().encode(body).byteLength).toBeGreaterThan(maxProxyRequestBodyBytes);
+    for (const [path, method, status] of [
+      ["/web/v1/music-jobs/prepare", "POST", 201],
+      ["/web/v1/music-jobs/prepare", "PUT", 413],
+      ["/web/v1/conversations", "POST", 413],
+    ] as const) {
+      const response = await proxyWebApiRequest(new Request(`https://platform.example${path}`, { method, body }), path, internalOrigin);
+      expect(response.status).toBe(status);
+    }
+    expect(upstream).toHaveBeenCalledTimes(1);
+    expect(new TextDecoder().decode(upstream.mock.calls[0][1].body)).toBe(body);
   });
 
   it("preserves music artifact download and nosniff headers", async () => {

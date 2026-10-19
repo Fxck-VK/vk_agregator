@@ -20,6 +20,7 @@ const imageArtifactPathPattern =
   /^\/web\/v1\/(?:image|video)-artifacts\/[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
 export const MAX_PROXY_REQUEST_BODY_BYTES = 64 * 1024;
+export const MAX_MUSIC_PREPARE_BODY_BYTES = 128 * 1024;
 export const MAX_MUSIC_UPLOAD_BODY_BYTES = 25 * 1024 * 1024;
 
 type ProxyRequestBody =
@@ -189,6 +190,7 @@ export async function proxyWebApiRequest(
     const pathname = safePath.split("?", 1)[0];
     let bodyLimit = MAX_PROXY_REQUEST_BODY_BYTES;
     if (request.method === "POST") {
+      if (pathname === "/web/v1/music-jobs/prepare") bodyLimit = MAX_MUSIC_PREPARE_BODY_BYTES;
       if (pathname === "/web/v1/music-inputs") bodyLimit = MAX_MUSIC_UPLOAD_BODY_BYTES;
       if (pathname === "/web/v1/input-artifacts") bodyLimit = 21 * 1024 * 1024;
     }
