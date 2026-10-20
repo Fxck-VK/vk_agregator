@@ -199,6 +199,47 @@ finally {
     }
 }
 
+$yandexCanaryRoot = Join-Path ([IO.Path]::GetTempPath()) ("vk-aggregator-yandex-fixture-canary-" + [guid]::NewGuid().ToString("N"))
+$yandexDeployRoot = Join-Path $yandexCanaryRoot "scripts/deploy"
+New-Item -ItemType Directory -Path $yandexDeployRoot -Force | Out-Null
+try {
+    $fixtureClientID = "0123456789" + "abcdef0123456789abcdef"
+    $otherClientID = "fedcba9876" + "543210fedcba9876543210"
+    $clientAssignment = "DEV_ACCOUNT_OAUTH_YANDEX_CLIENT_ID="
+    Set-Content -LiteralPath (Join-Path $yandexDeployRoot "test-dev-yandex.sh") -Value @(
+        ($clientAssignment + $fixtureClientID),
+        ($clientAssignment + $otherClientID)
+    ) -Encoding ascii
+    Set-Content -LiteralPath (Join-Path $yandexDeployRoot "other.sh") `
+        -Value ($clientAssignment + $fixtureClientID) -Encoding ascii
+    $yandexReport = Join-Path $yandexCanaryRoot "redacted-report.json"
+    $yandexResult = Invoke-Quiet -Executable $GitleaksPath -WorkingDirectory $yandexCanaryRoot -Arguments @(
+        "dir", "--config", $configPath, "--redact", "--no-banner", "--no-color",
+        "--report-format", "json", "--report-path", $yandexReport, "."
+    )
+    if ($yandexResult.ExitCode -ne 1) {
+        throw "Other Client ID values and paths must still trigger the generic API key rule."
+    }
+    $yandexFindings = @(Get-Content -Raw $yandexReport | ConvertFrom-Json)
+    $samePathFindings = @($yandexFindings | Where-Object { $_.File.Replace('\', '/') -eq 'scripts/deploy/test-dev-yandex.sh' })
+    $otherPathFindings = @($yandexFindings | Where-Object { $_.File.Replace('\', '/') -eq 'scripts/deploy/other.sh' })
+    if ($yandexFindings.Count -ne 2 -or $samePathFindings.Count -ne 1 -or
+        $samePathFindings[0].StartLine -ne 2 -or $otherPathFindings.Count -ne 1 -or
+        @($yandexFindings | Where-Object { $_.RuleID -ne 'generic-api-key' }).Count -ne 0) {
+        throw "Only the exact public Yandex Client ID fixture in its one test file may be allowed."
+    }
+    Write-Output "Yandex fixture canary preserved detection of other values and paths."
+}
+finally {
+    $canaryTempParent = [IO.Path]::GetFullPath([IO.Path]::GetTempPath()).TrimEnd('\', '/') + [IO.Path]::DirectorySeparatorChar
+    $canaryResolvedRoot = [IO.Path]::GetFullPath($yandexCanaryRoot)
+    if (-not $canaryResolvedRoot.StartsWith($canaryTempParent, [StringComparison]::OrdinalIgnoreCase) -or
+        [IO.Path]::GetFileName($canaryResolvedRoot) -notlike 'vk-aggregator-yandex-fixture-canary-*') {
+        throw "Refusing cleanup outside the named temporary canary directory."
+    }
+    Remove-Item -LiteralPath $canaryResolvedRoot -Recurse -Force
+}
+
 $tempRoot = Join-Path ([IO.Path]::GetTempPath()) ("vk-aggregator-secret-canary-" + [guid]::NewGuid().ToString("N"))
 $canaryConfig = Join-Path $tempRoot ".gitleaks.toml"
 $canaryReport = Join-Path $tempRoot "canary-report.json"

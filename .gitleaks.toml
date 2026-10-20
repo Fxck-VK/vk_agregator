@@ -194,6 +194,13 @@ keywords = [
 id = "generic-api-key"
 
   [[rules.allowlists]]
+  description = "Exact public synthetic Yandex Client ID in the DEV renderer test"
+  condition = "AND"
+  regexTarget = "secret"
+  paths = ['''^scripts/deploy/test-dev-yandex\.sh$''']
+  regexes = ['''^0123456789abcdef0123456789abcdef$''']
+
+  [[rules.allowlists]]
   description = "Exact non-secret H3 job idempotency fixture"
   condition = "AND"
   regexTarget = "secret"
