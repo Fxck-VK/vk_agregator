@@ -354,5 +354,5 @@ function hostnameFromURL(value, name) {
 
 function isProductionHost(hostname) {
   const host = String(hostname || "").toLowerCase();
-  return host === "vk.neiirohub.ru" || host === "app.neiirohub.ru" || host === "neiirohub.ru";
+  return host === "vk.epifera.com" || host === "app.epifera.com" || host === "epifera.com";
 }

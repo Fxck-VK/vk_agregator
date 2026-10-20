@@ -74,10 +74,10 @@ server-managed cookie sessions. The browser must not receive backend origins,
 tokens, provider credentials, or trusted account and billing state.
 
 The approved DEV-only remote DEV deployment hostname is
-`https://dev-web.neiirohub.ru`. Its dashboard-managed Cloudflare route is
-`dev-web.neiirohub.ru/* -> http://127.0.0.1:8088`; Nginx applies a gateway
+`https://dev-web.epifera.com`. Its dashboard-managed Cloudflare route is
+`dev-web.epifera.com/* -> http://127.0.0.1:8088`; Nginx applies a gateway
 before forwarding every path to this platform. The DEV API must set exactly
-`WEB_ORIGIN=https://dev-web.neiirohub.ru`, preserving the same-origin
+`WEB_ORIGIN=https://dev-web.epifera.com`, preserving the same-origin
 `/web/v1/*` rule required by host-only session cookies.
 
 This hostname is supplied by the remote DEV deployment's

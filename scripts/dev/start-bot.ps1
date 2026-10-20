@@ -81,7 +81,7 @@ try {
             $TunnelMode = Get-ConfigValue -Root $root -Name "VK_BOT_TUNNEL_MODE" -Default "quick"
         }
         if ([string]::IsNullOrWhiteSpace($TunnelHostname)) {
-            $TunnelHostname = Get-ConfigValue -Root $root -Name "VK_BOT_TUNNEL_HOSTNAME" -Default "vk.neiirohub.ru"
+            $TunnelHostname = Get-ConfigValue -Root $root -Name "VK_BOT_TUNNEL_HOSTNAME" -Default "vk.epifera.com"
         }
         if ([string]::IsNullOrWhiteSpace($TunnelName)) {
             $TunnelName = Get-ConfigValue -Root $root -Name "VK_BOT_TUNNEL_NAME" -Default "neiirohub-vk-bot"

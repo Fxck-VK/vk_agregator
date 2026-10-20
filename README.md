@@ -369,10 +369,10 @@ For a stable local VK Callback URL, configure a named Cloudflare Tunnel once:
 The default named-tunnel hostname is:
 
 ```text
-https://vk.neiirohub.ru/webhooks/vk
+https://vk.epifera.com/webhooks/vk
 ```
 
-This requires the `neiirohub.ru` DNS zone to be active in Cloudflare. The
+This requires the `epifera.com` DNS zone to be active in Cloudflare. The
 tunnel config and credentials stay under `.runtime/vk-bot/` and the user's
 Cloudflare profile; they are not committed.
 On named-tunnel startup, `start-bot.ps1` verifies the local VK confirmation

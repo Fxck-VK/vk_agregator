@@ -360,9 +360,9 @@ if (Is-TrueValue (Get-Value -Values $envValues -Name "VK_MENU_TOP_UP_ENABLED")) 
 
 if ($WithCloudflare) {
     Require-Value -Values $envValues -Problems $problems -Name "CLOUDFLARED_TUNNEL_TOKEN" -Reason "required when deploying with Cloudflare tunnel; store it only in the server .env"
-    Require-HttpsUrl -Values $envValues -Problems $problems -Name "PUBLIC_VK_BASE_URL" -Reason "required for Cloudflare deploy smoke, expected https://vk.neiirohub.ru"
-    Require-HttpsUrl -Values $envValues -Problems $problems -Name "PUBLIC_APP_BASE_URL" -Reason "required for Cloudflare deploy smoke, expected https://app.neiirohub.ru"
-    Require-HttpsUrl -Values $envValues -Problems $problems -Name "PUBLIC_PAYMENT_WEBHOOK_URL" -Reason "required for Cloudflare deploy smoke, expected https://neiirohub.ru/billing/webhooks/yookassa"
+    Require-HttpsUrl -Values $envValues -Problems $problems -Name "PUBLIC_VK_BASE_URL" -Reason "required for Cloudflare deploy smoke, expected https://vk.epifera.com"
+    Require-HttpsUrl -Values $envValues -Problems $problems -Name "PUBLIC_APP_BASE_URL" -Reason "required for Cloudflare deploy smoke, expected https://app.epifera.com"
+    Require-HttpsUrl -Values $envValues -Problems $problems -Name "PUBLIC_PAYMENT_WEBHOOK_URL" -Reason "required for Cloudflare deploy smoke, expected https://epifera.com/billing/webhooks/yookassa"
 }
 
 if ($BackupBeforeDeploy) {

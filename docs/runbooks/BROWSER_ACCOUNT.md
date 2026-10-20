@@ -41,14 +41,14 @@ Fixed Russian templates contain only event/time information, with no password, c
 
 ### Resend sending configuration
 
-The verified sending domain is `notify.neiirohub.ru`. Use the existing SMTP adapter; no Resend key or SDK belongs in the frontend. Configure the selected backend runtime with these non-secret values:
+The verified sending domain is `notify.epifera.com`. Use the existing SMTP adapter; no Resend key or SDK belongs in the frontend. Configure the selected backend runtime with these non-secret values:
 
 ```dotenv
 ACCOUNT_EMAIL_DELIVERY_PROVIDER=smtp
 ACCOUNT_EMAIL_SMTP_HOST=smtp.resend.com
 ACCOUNT_EMAIL_SMTP_PORT=587
 ACCOUNT_EMAIL_SMTP_USERNAME=resend
-ACCOUNT_EMAIL_SMTP_FROM=noreply@notify.neiirohub.ru
+ACCOUNT_EMAIL_SMTP_FROM=noreply@notify.epifera.com
 ACCOUNT_EMAIL_SMTP_TLS_MODE=starttls
 ACCOUNT_EMAIL_SMTP_TIMEOUT=10s
 ```
@@ -68,7 +68,7 @@ Register the exact HTTPS callback `${WEB_ORIGIN}/web/v1/auth/oauth/{provider}/ca
 | VK ID | `ACCOUNT_OAUTH_VK_ID_CLIENT_IDS` | code + PKCE + state, server-side user_info |
 | Telegram | `ACCOUNT_OAUTH_TELEGRAM_CLIENT_IDS`, `ACCOUNT_WEB_OAUTH_TELEGRAM_CLIENT_SECRET` | code + PKCE, verified OIDC token and nonce |
 
-For DEV Google, create a Google OAuth client of type Web application with the exact callback `https://dev-web.neiirohub.ru/web/v1/auth/oauth/google/callback`. Store its client ID in the dedicated repository secret `DEV_ACCOUNT_OAUTH_GOOGLE_CLIENT_IDS` and its client secret in `DEV_ACCOUNT_WEB_OAUTH_GOOGLE_CLIENT_SECRET`. Keep downloaded credentials outside Git. Both dedicated secrets are required together; missing both preserves existing configuration, while a partial or malformed configuration stops deployment. The first dedicated client ID is the browser client; existing mobile audiences are retained and deduplicated. `scripts/deploy/prepare-dev-google.sh` renders only the two Google settings to the server-only `.env.dev-google` overlay, mode 600, read by the DEV API after its base env and email overlay. Manual `Deploy DEV` applies the settings; the overlay persists through subsequent automatic deployments. The overlay is ignored by Git and Docker build context. Do not reuse this DEV client or copy its secrets into production. Ordinary HTTP localhost remains unavailable for OAuth in the current backend, which requires an HTTPS web origin; local OAuth needs a separately registered HTTPS callback.
+For DEV Google, create a Google OAuth client of type Web application with the exact callback `https://dev-web.epifera.com/web/v1/auth/oauth/google/callback`. Store its client ID in the dedicated repository secret `DEV_ACCOUNT_OAUTH_GOOGLE_CLIENT_IDS` and its client secret in `DEV_ACCOUNT_WEB_OAUTH_GOOGLE_CLIENT_SECRET`. Keep downloaded credentials outside Git. Both dedicated secrets are required together; missing both preserves existing configuration, while a partial or malformed configuration stops deployment. The first dedicated client ID is the browser client; existing mobile audiences are retained and deduplicated. `scripts/deploy/prepare-dev-google.sh` renders only the two Google settings to the server-only `.env.dev-google` overlay, mode 600, read by the DEV API after its base env and email overlay. Manual `Deploy DEV` applies the settings; the overlay persists through subsequent automatic deployments. The overlay is ignored by Git and Docker build context. Do not reuse this DEV client or copy its secrets into production. Ordinary HTTP localhost remains unavailable for OAuth in the current backend, which requires an HTTPS web origin; local OAuth needs a separately registered HTTPS callback.
 
 Secrets belong in deployment secrets/runtime env, never NEXT_PUBLIC variables. Apple's secret is an operator-generated, signed client-secret JWT; renew before expiry. Apple uses code-only response_mode=query without name/email scopes. Telegram uses OIDC client credentials, not the legacy Login Widget bot token. Existing issuer/JWKS configuration still applies to OIDC verification.
 

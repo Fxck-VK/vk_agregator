@@ -377,8 +377,8 @@ by at least one of these controls:
 A public `2xx` response from `/admin/*` is a production incident. `3xx` is
 acceptable only when it is the expected Cloudflare Access/VPN identity redirect,
 not an application redirect to an admin page.
-Production smoke checks probe representative admin routes on `neiirohub.ru`,
-`vk.neiirohub.ru` and `app.neiirohub.ru`. Prometheus also runs the
+Production smoke checks probe representative admin routes on `epifera.com`,
+`vk.epifera.com` and `app.epifera.com`. Prometheus also runs the
 `blackbox-public-admin` job and raises `PublicAdminSurfaceOpen` when a public
 admin route becomes reachable.
 

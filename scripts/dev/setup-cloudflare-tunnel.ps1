@@ -1,6 +1,6 @@
 param(
     [string]$TunnelName = "neiirohub-vk-bot",
-    [string]$Hostname = "vk.neiirohub.ru",
+    [string]$Hostname = "vk.epifera.com",
     [string]$LocalUrl = "",
     [ValidateSet("http2", "quic")][string]$TunnelProtocol = "http2",
     [switch]$Login,

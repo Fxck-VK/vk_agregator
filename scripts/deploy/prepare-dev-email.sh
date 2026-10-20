@@ -41,7 +41,7 @@ sed \
   printf '\nACCOUNT_EMAIL_DELIVERY_PROVIDER=smtp\n'
   printf 'ACCOUNT_EMAIL_SMTP_HOST=smtp.resend.com\nACCOUNT_EMAIL_SMTP_PORT=587\n'
   printf 'ACCOUNT_EMAIL_SMTP_USERNAME=resend\nACCOUNT_EMAIL_SMTP_PASSWORD=%s\n' "${password}"
-  printf 'ACCOUNT_EMAIL_SMTP_FROM=noreply@notify.neiirohub.ru\n'
+  printf 'ACCOUNT_EMAIL_SMTP_FROM=noreply@notify.epifera.com\n'
   printf 'ACCOUNT_EMAIL_SMTP_TLS_MODE=starttls\nACCOUNT_EMAIL_SMTP_TIMEOUT=10s\n'
 } >> "${output}"
 chmod 600 "${output}"

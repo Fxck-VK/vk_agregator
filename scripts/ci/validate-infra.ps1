@@ -156,7 +156,7 @@ function New-ComposeValidationEnvFile {
         "MINIO_ROOT_PASSWORD=minio-config",
         "CLOUDFLARED_TUNNEL_TOKEN=compose-validate-token",
         "DEV_WEB_BASIC_AUTH_HTPASSWD=compose-validation-placeholder",
-        "WEB_ORIGIN=https://dev-web.neiirohub.ru",
+        "WEB_ORIGIN=https://dev-web.epifera.com",
         "COMPOSE_NETWORK_NAME=vk-ai-aggregator-prod"
     )
     [IO.File]::WriteAllLines($path, $lines, [Text.UTF8Encoding]::new($false))
@@ -215,12 +215,12 @@ function Assert-ReverseProxyConfig {
     $content = Get-Content -LiteralPath $path -Raw
     $requiredSnippets = @(
         "include /etc/nginx/dev-web.conf;",
-        "vk.neiirohub.ru",
-        "app.neiirohub.ru",
-        "neiirohub.ru",
-        "dev-vk.neiirohub.ru",
-        "dev-app.neiirohub.ru",
-        "dev.neiirohub.ru",
+        "vk.epifera.com",
+        "app.epifera.com",
+        "epifera.com",
+        "dev-vk.epifera.com",
+        "dev-app.epifera.com",
+        "dev.epifera.com",
         "location = /webhooks/vk",
         "location = /billing/webhooks/yookassa",
         "location ^~ /miniapp/",
@@ -279,7 +279,7 @@ function Assert-ReverseProxyConfig {
         "upstream platform_frontend",
         "server platform:3000;",
         "keepalive 16;",
-        "server_name dev-web.neiirohub.ru;",
+        "server_name dev-web.epifera.com;",
         'auth_basic "NeiroHub development";',
         "auth_basic_user_file /tmp/dev-web.htpasswd;",
         "location = /__dev/login",
@@ -474,10 +474,10 @@ function Assert-DevReverseProxySmokeScript {
     $content = Get-Content -LiteralPath $path -Raw
     $requiredSnippets = @(
         "http://127.0.0.1:8088",
-        "dev-vk.neiirohub.ru",
-        "dev-app.neiirohub.ru",
-        "dev.neiirohub.ru",
-        "dev-web.neiirohub.ru",
+        "dev-vk.epifera.com",
+        "dev-app.epifera.com",
+        "dev.epifera.com",
+        "dev-web.epifera.com",
         "/health",
         "/miniapp/balance",
         "/billing/webhooks/yookassa",
@@ -529,9 +529,9 @@ function Assert-DevStartStackScript {
         "YOOKASSA_SECRET_KEY must be a YooKassa test key in DEV",
         "check-dev-reverse-proxy.ps1",
         "-SkipDevWebGatewayCheck",
-        "https://dev-vk.neiirohub.ru/health",
-        "https://dev-app.neiirohub.ru/",
-        "https://dev.neiirohub.ru/billing/webhooks/yookassa",
+        "https://dev-vk.epifera.com/health",
+        "https://dev-app.epifera.com/",
+        "https://dev.epifera.com/billing/webhooks/yookassa",
         "DEV stack is running."
     )
 
@@ -573,9 +573,9 @@ function Assert-DevStopStatusScripts {
                 "VK_GROUP_ID must not be the production group id",
                 "YOOKASSA_SECRET_KEY must be a YooKassa test key in DEV",
                 "cloudflared.pid",
-                "dev-vk.neiirohub.ru",
-                "dev-app.neiirohub.ru",
-                "dev.neiirohub.ru",
+                "dev-vk.epifera.com",
+                "dev-app.epifera.com",
+                "dev.epifera.com",
                 "/webhooks/vk",
                 "/miniapp/balance",
                 "/billing/webhooks/yookassa",
@@ -614,10 +614,10 @@ function Assert-DevPublicSmokeScript {
 
     $content = Get-Content -LiteralPath $path -Raw
     $requiredSnippets = @(
-        "https://dev-vk.neiirohub.ru",
-        "https://dev-app.neiirohub.ru",
-        "https://dev.neiirohub.ru",
-        "https://dev-web.neiirohub.ru",
+        "https://dev-vk.epifera.com",
+        "https://dev-app.epifera.com",
+        "https://dev.epifera.com",
+        "https://dev-web.epifera.com",
         "must use HTTPS",
         "/health",
         "/webhooks/vk",
@@ -638,9 +638,9 @@ function Assert-DevPublicSmokeScript {
     }
 
     $forbiddenSnippets = @(
-        "https://vk.neiirohub.ru",
-        "https://app.neiirohub.ru",
-        "https://neiirohub.ru/billing/webhooks/yookassa"
+        "https://vk.epifera.com",
+        "https://app.epifera.com",
+        "https://epifera.com/billing/webhooks/yookassa"
     )
 
     foreach ($snippet in $forbiddenSnippets) {
@@ -664,7 +664,7 @@ function Assert-DevDeploySmokeScript {
 
     $content = Get-Content -LiteralPath $path -Raw
     foreach ($snippet in @(
-        "https://dev-web.neiirohub.ru",
+        "https://dev-web.epifera.com",
         "DEV web gateway required",
         '"401"',
         "--stabilization-seconds",
@@ -699,7 +699,9 @@ function Assert-DevDeployWorkflow {
     foreach ($snippet in @(
         "scripts/deploy/assemble-env-parts.sh",
         "--target dev",
-        "--web-origin https://dev-web.neiirohub.ru"
+        '--web-origin "https://${dev_web_host}"',
+        "deployments/nginx/dev-web.conf",
+        'dev_domain_args=(--dev-public-domain "${dev_web_host#dev-web.}")'
     )) {
         if (-not $uploadBody.Contains($snippet)) {
             throw "DEV deploy workflow Upload DEV env step is missing required snippet: $snippet"
@@ -713,14 +715,14 @@ function Assert-DevWebOperatorDocs {
     $documents = @{
         "deployments/cloudflare/README.md" = @(
             "dashboard-managed",
-            "dev-web.neiirohub.ru/* -> http://127.0.0.1:8088",
+            "dev-web.epifera.com/* -> http://127.0.0.1:8088",
             "DEV-only",
             "three local hostnames",
             "remote DEV browser platform",
             "docker-compose.dev-web.yml"
         )
         "docs/DEV_CONTOUR.md" = @(
-            "WEB_ORIGIN=https://dev-web.neiirohub.ru",
+            "WEB_ORIGIN=https://dev-web.epifera.com",
             "DEV_WEB_BASIC_AUTH_HTPASSWD",
             "single pre-hashed htpasswd entry",
             "never a plaintext password",
@@ -735,8 +737,8 @@ function Assert-DevWebOperatorDocs {
             "-SkipDevWebGatewayCheck"
         )
         "web/platform/README.md" = @(
-            "https://dev-web.neiirohub.ru",
-            "WEB_ORIGIN=https://dev-web.neiirohub.ru",
+            "https://dev-web.epifera.com",
+            "WEB_ORIGIN=https://dev-web.epifera.com",
             "DEV-only",
             "remote DEV deployment",
             "docker-compose.dev-web.yml",
@@ -789,9 +791,9 @@ function Assert-CloudflareDeploymentConfig {
     }
 
     $requiredSnippets = @(
-        "hostname: vk.neiirohub.ru",
-        "hostname: app.neiirohub.ru",
-        "hostname: neiirohub.ru",
+        "hostname: vk.epifera.com",
+        "hostname: app.epifera.com",
+        "hostname: epifera.com",
         "service: http://127.0.0.1:8088",
         "service: http_status:404"
     )
@@ -803,12 +805,12 @@ function Assert-CloudflareDeploymentConfig {
     }
 
     $requiredReadmeSnippets = @(
-        "vk.neiirohub.ru",
-        "app.neiirohub.ru",
-        "https://neiirohub.ru/billing/webhooks/yookassa",
-        "dev-vk.neiirohub.ru",
-        "dev-app.neiirohub.ru",
-        "https://dev.neiirohub.ru/billing/webhooks/yookassa",
+        "vk.epifera.com",
+        "app.epifera.com",
+        "https://epifera.com/billing/webhooks/yookassa",
+        "dev-vk.epifera.com",
+        "dev-app.epifera.com",
+        "https://dev.epifera.com/billing/webhooks/yookassa",
         "CLOUDFLARED_TUNNEL_TOKEN",
         "PUBLIC_PAYMENT_WEBHOOK_URL",
         'Do not route broad `/billing/*`'

@@ -137,7 +137,7 @@ func newHarnessWithReferenceDownloaderAndOrchestratorOptions(control vkdelivery.
 		PaymentMode:    "full_prepayment",
 	})
 	payment := paymentservice.New(payments, paymentmock.New(), paymentservice.Config{
-		ReturnURL: "https://neiirohub.ru/payments/return",
+		ReturnURL: "https://epifera.com/payments/return",
 	})
 	refs := memory.NewReferralRepo()
 	referrals := referralservice.New(refs, billing, referralservice.Config{

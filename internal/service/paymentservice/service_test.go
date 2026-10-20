@@ -35,7 +35,7 @@ func TestCreateIntentCreatesProviderPaymentAndIsIdempotent(t *testing.T) {
 	}
 	repo.PutProduct(product)
 	provider := paymentmock.New()
-	svc := paymentservice.New(repo, provider, paymentservice.Config{ReturnURL: "https://neiirohub.ru/payments/return"})
+	svc := paymentservice.New(repo, provider, paymentservice.Config{ReturnURL: "https://epifera.com/payments/return"})
 	userID := uuid.New()
 
 	first, err := svc.CreateIntent(ctx, paymentservice.CreateIntentInput{
@@ -123,7 +123,7 @@ func TestCreateAccountIntentUsesOnlyCanonicalAccountOwnershipAndExactReplay(t *t
 		Currency: domain.CurrencyRUB, Credits: 100, PriceVersion: 3, IsActive: true,
 	})
 	svc := paymentservice.New(repo, paymentmock.New(), paymentservice.Config{
-		ReturnURL: "https://neiirohub.ru/payments/return",
+		ReturnURL: "https://epifera.com/payments/return",
 	})
 	accountID := uuid.New()
 	in := paymentservice.CreateAccountIntentInput{
@@ -149,7 +149,7 @@ func TestCreateAccountIntentUsesOnlyCanonicalAccountOwnershipAndExactReplay(t *t
 	if err := json.Unmarshal(first.Intent.Metadata, &metadata); err != nil {
 		t.Fatalf("decode metadata: %v", err)
 	}
-	if metadata["source"] != "web" || metadata["return_url"] != "https://neiirohub.ru/payments/return" || metadata["capture"] != true {
+	if metadata["source"] != "web" || metadata["return_url"] != "https://epifera.com/payments/return" || metadata["capture"] != true {
 		t.Fatalf("native intent must use server-owned facts, got %+v", metadata)
 	}
 
@@ -173,7 +173,7 @@ func TestCreateAccountIntentUsesOnlyCanonicalAccountOwnershipAndExactReplay(t *t
 	}
 	capture := false
 	if _, err := paymentservice.New(repo, paymentmock.New(), paymentservice.Config{
-		ReturnURL: "https://neiirohub.ru/payments/return", AccountIntentCapture: &capture,
+		ReturnURL: "https://epifera.com/payments/return", AccountIntentCapture: &capture,
 	}).CreateAccountIntent(ctx, in); !errors.Is(err, domain.ErrConflict) {
 		t.Fatalf("changed capture policy replay error = %v, want conflict", err)
 	}
@@ -519,7 +519,7 @@ func TestCreateIntentRejectsUnsafeProviderConfirmationURLAndCanRetry(t *testing.
 		code:            domain.PaymentProviderMock,
 		confirmationURL: "http://payments.local/insecure",
 	}
-	svc := paymentservice.New(repo, provider, paymentservice.Config{ReturnURL: "https://neiirohub.ru/payments/return"})
+	svc := paymentservice.New(repo, provider, paymentservice.Config{ReturnURL: "https://epifera.com/payments/return"})
 	userID := uuid.New()
 	key := "miniapp_payment:777:unsafe-confirmation"
 

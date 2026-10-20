@@ -137,9 +137,9 @@ scrape_configs:
         - public_prometheus_metrics
     static_configs:
       - targets:
-          - https://neiirohub.ru/metrics
-          - https://app.neiirohub.ru/metrics
-          - https://vk.neiirohub.ru/metrics
+          - https://epifera.com/metrics
+          - https://app.epifera.com/metrics
+          - https://vk.epifera.com/metrics
     relabel_configs:
       - source_labels:
           - __address__
@@ -157,9 +157,9 @@ scrape_configs:
         - public_admin_route_closed
     static_configs:
       - targets:
-          - https://neiirohub.ru/admin/access/operator
-          - https://app.neiirohub.ru/admin/access/operator
-          - https://vk.neiirohub.ru/admin/access/operator
+          - https://epifera.com/admin/access/operator
+          - https://app.epifera.com/admin/access/operator
+          - https://vk.epifera.com/admin/access/operator
     relabel_configs:
       - source_labels:
           - __address__

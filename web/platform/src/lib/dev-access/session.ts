@@ -4,7 +4,7 @@ import { createHash, createHmac, randomBytes, timingSafeEqual } from "node:crypt
 
 const cookieName = "__Host-nh-dev-access";
 const lifetimeSeconds = 30 * 24 * 60 * 60;
-const devOrigin = "https://dev-web.neiirohub.ru";
+const devOrigin = "https://dev-web.epifera.com";
 const credentialPattern = /^[A-Za-z0-9][A-Za-z0-9._-]{0,63}:(\$2[aby]\$[0-9]{2}\$[./A-Za-z0-9]{53}|\$apr1\$[./A-Za-z0-9]{1,8}\$[./A-Za-z0-9]{22})$/;
 
 type DevAccessConfig = { username: string; signingKey: Buffer; issuerProof: string };

@@ -67,26 +67,26 @@ function Invoke-DevProxyRequest {
 $checks = @(
     @{
         Name = "DEV VK health"
-        HostName = "dev-vk.neiirohub.ru"
+        HostName = "dev-vk.epifera.com"
         Path = "/health"
         ExpectedStatuses = @(200)
     },
     @{
         Name = "DEV Mini App frontend"
-        HostName = "dev-app.neiirohub.ru"
+        HostName = "dev-app.epifera.com"
         Path = "/"
         ExpectedStatuses = @(200)
     },
     @{
         Name = "DEV Mini App BFF route"
-        HostName = "dev-app.neiirohub.ru"
+        HostName = "dev-app.epifera.com"
         Path = "/miniapp/balance"
         ExpectedStatuses = @(400, 401, 403)
         ForbiddenStatuses = @(404, 500, 502, 503, 504)
     },
     @{
         Name = "DEV YooKassa webhook route"
-        HostName = "dev.neiirohub.ru"
+        HostName = "dev.epifera.com"
         Path = "/billing/webhooks/yookassa"
         Method = "POST"
         Body = "{}"
@@ -95,14 +95,14 @@ $checks = @(
     },
     @{
         Name = "DEV Mini App metrics blocked"
-        HostName = "dev-app.neiirohub.ru"
+        HostName = "dev-app.epifera.com"
         Path = "/metrics"
         ExpectedStatuses = @(404)
         ForbiddenStatuses = @(200, 500, 502, 503, 504)
     },
     @{
         Name = "DEV VK admin blocked"
-        HostName = "dev-vk.neiirohub.ru"
+        HostName = "dev-vk.epifera.com"
         Path = "/admin/jobs"
         ExpectedStatuses = @(404)
         ForbiddenStatuses = @(200, 500, 502, 503, 504)
@@ -112,7 +112,7 @@ $checks = @(
 if (-not $SkipDevWebGatewayCheck) {
     $checks += @{
         Name = "DEV web gateway required"
-        HostName = "dev-web.neiirohub.ru"
+        HostName = "dev-web.epifera.com"
         Path = "/"
         ExpectedStatuses = @(401)
         ForbiddenStatuses = @(200, 400, 403, 404, 500, 502, 503, 504)

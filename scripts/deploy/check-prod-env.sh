@@ -334,9 +334,9 @@ fi
 
 if [[ "${with_cloudflare}" == "true" ]]; then
   require_value CLOUDFLARED_TUNNEL_TOKEN "required when deploying with Cloudflare tunnel; store it only in the server .env"
-  require_https_url PUBLIC_VK_BASE_URL "required for Cloudflare deploy smoke, expected https://vk.neiirohub.ru"
-  require_https_url PUBLIC_APP_BASE_URL "required for Cloudflare deploy smoke, expected https://app.neiirohub.ru"
-  require_https_url PUBLIC_PAYMENT_WEBHOOK_URL "required for Cloudflare deploy smoke, expected https://neiirohub.ru/billing/webhooks/yookassa"
+  require_https_url PUBLIC_VK_BASE_URL "required for Cloudflare deploy smoke, expected https://vk.epifera.com"
+  require_https_url PUBLIC_APP_BASE_URL "required for Cloudflare deploy smoke, expected https://app.epifera.com"
+  require_https_url PUBLIC_PAYMENT_WEBHOOK_URL "required for Cloudflare deploy smoke, expected https://epifera.com/billing/webhooks/yookassa"
 fi
 
 if [[ "${backup_before_deploy}" == "true" ]]; then

@@ -242,7 +242,7 @@ func newTestFixtureWithConfigAndPaymentProvider(appSecret string, limiter interf
 		payProvider = paymentmock.New()
 	}
 	payment := paymentservice.New(paymentRepo, payProvider, paymentservice.Config{
-		ReturnURL: "https://neiirohub.ru/payments/return",
+		ReturnURL: "https://epifera.com/payments/return",
 	})
 	referrals := referralservice.New(referralRepo, billing, referralservice.Config{
 		ReferrerSignupRewardCredits: 10,
@@ -254,7 +254,7 @@ func newTestFixtureWithConfigAndPaymentProvider(appSecret string, limiter interf
 		JobRateLimiter:                      limiter,
 		ReferralLinkBase:                    "https://vk.com/write-239332376",
 		ReferralReferrerSignupRewardCredits: 10,
-		PaymentReturnURL:                    "https://neiirohub.ru/payments/return",
+		PaymentReturnURL:                    "https://epifera.com/payments/return",
 		ImageModels:                         defaultTestImageModels(),
 	}
 	if configure != nil {
@@ -2991,7 +2991,7 @@ func TestHandler_CreatePaymentIntentIgnoresClientReturnURL(t *testing.T) {
 	if len(provider.createInputs) != 1 {
 		t.Fatalf("expected one provider call, got %d", len(provider.createInputs))
 	}
-	if got := provider.createInputs[0].ReturnURL; got != "https://neiirohub.ru/payments/return" {
+	if got := provider.createInputs[0].ReturnURL; got != "https://epifera.com/payments/return" {
 		t.Fatalf("client return_url was not ignored, got %q", got)
 	}
 }

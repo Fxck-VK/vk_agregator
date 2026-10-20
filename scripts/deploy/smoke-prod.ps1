@@ -187,13 +187,13 @@ function Assert-ControlledWebhookReject {
 Import-SmokeEnvFile -Path $EnvFile
 
 if ([string]::IsNullOrWhiteSpace($VkBaseUrl)) {
-    $VkBaseUrl = Get-SmokeEnvValue -Name "PUBLIC_VK_BASE_URL" -Default (Get-SmokeEnvValue -Name "VK_BASE_URL" -Default "https://vk.neiirohub.ru")
+    $VkBaseUrl = Get-SmokeEnvValue -Name "PUBLIC_VK_BASE_URL" -Default (Get-SmokeEnvValue -Name "VK_BASE_URL" -Default "https://vk.epifera.com")
 }
 if ([string]::IsNullOrWhiteSpace($AppBaseUrl)) {
-    $AppBaseUrl = Get-SmokeEnvValue -Name "PUBLIC_APP_BASE_URL" -Default (Get-SmokeEnvValue -Name "APP_BASE_URL" -Default "https://app.neiirohub.ru")
+    $AppBaseUrl = Get-SmokeEnvValue -Name "PUBLIC_APP_BASE_URL" -Default (Get-SmokeEnvValue -Name "APP_BASE_URL" -Default "https://app.epifera.com")
 }
 if ([string]::IsNullOrWhiteSpace($PaymentWebhookUrl)) {
-    $PaymentWebhookUrl = Get-SmokeEnvValue -Name "PUBLIC_PAYMENT_WEBHOOK_URL" -Default (Get-SmokeEnvValue -Name "PAYMENT_WEBHOOK_URL" -Default "https://neiirohub.ru/billing/webhooks/yookassa")
+    $PaymentWebhookUrl = Get-SmokeEnvValue -Name "PUBLIC_PAYMENT_WEBHOOK_URL" -Default (Get-SmokeEnvValue -Name "PAYMENT_WEBHOOK_URL" -Default "https://epifera.com/billing/webhooks/yookassa")
 }
 $PaymentBaseUrl = Get-SmokeEnvValue -Name "PUBLIC_PAYMENT_BASE_URL" -Default ""
 if ([string]::IsNullOrWhiteSpace($PaymentBaseUrl)) {

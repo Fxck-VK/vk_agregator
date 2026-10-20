@@ -18,14 +18,14 @@ loopback only.
 
 | Public hostname/path | Cloudflare Tunnel service | Reverse proxy target |
 |---|---|---|
-| `vk.neiirohub.ru` | `http://127.0.0.1:8088` | `cmd/api` for `/webhooks/vk` and `/health` |
-| `app.neiirohub.ru` | `http://127.0.0.1:8088` | Mini App static for `/`, `cmd/api` for `/miniapp/*` |
-| `neiirohub.ru` | `http://127.0.0.1:8088` | `cmd/provider-webhook` only for `/billing/webhooks/yookassa` |
+| `vk.epifera.com` | `http://127.0.0.1:8088` | `cmd/api` for `/webhooks/vk` and `/health` |
+| `app.epifera.com` | `http://127.0.0.1:8088` | Mini App static for `/`, `cmd/api` for `/miniapp/*` |
+| `epifera.com` | `http://127.0.0.1:8088` | `cmd/provider-webhook` only for `/billing/webhooks/yookassa` |
 
 The canonical YooKassa webhook URL is:
 
 ```text
-https://neiirohub.ru/billing/webhooks/yookassa
+https://epifera.com/billing/webhooks/yookassa
 ```
 
 Do not route broad `/billing/*`, `/admin/*`, `/metrics`, `/debug/*` or private
@@ -33,7 +33,7 @@ health/readiness endpoints publicly.
 
 The Mini App host also routes `/provider-references/*` to `cmd/api` for
 HMAC-signed, one-hour, job-bound video reads. The private object store stays
-unexposed. Use `https://dev-app.neiirohub.ru` for DEV
+unexposed. Use `https://dev-app.epifera.com` for DEV
 `PROVIDER_REFERENCE_BASE_URL`; production requires its own signing key and host.
 Unsigned/expired reads must return 403. Proxy access logs are disabled on this
 path; query tokens must never be logged.
@@ -46,25 +46,25 @@ same loopback reverse-proxy origin:
 
 | Public hostname/path | Cloudflare Tunnel service | Reverse proxy target |
 |---|---|---|
-| `dev-vk.neiirohub.ru` | `http://127.0.0.1:8088` | `cmd/api` for `/webhooks/vk` and `/health` |
-| `dev-app.neiirohub.ru` | `http://127.0.0.1:8088` | Mini App static for `/`, `cmd/api` for `/miniapp/*` |
-| `dev.neiirohub.ru` | `http://127.0.0.1:8088` | `cmd/provider-webhook` only for `/billing/webhooks/yookassa` |
+| `dev-vk.epifera.com` | `http://127.0.0.1:8088` | `cmd/api` for `/webhooks/vk` and `/health` |
+| `dev-app.epifera.com` | `http://127.0.0.1:8088` | Mini App static for `/`, `cmd/api` for `/miniapp/*` |
+| `dev.epifera.com` | `http://127.0.0.1:8088` | `cmd/provider-webhook` only for `/billing/webhooks/yookassa` |
 
 The remote DEV browser platform is a separate `docker-compose.dev-web.yml`
-overlay. Its DEV-only route is `dev-web.neiirohub.ru/* -> http://127.0.0.1:8088`;
+overlay. Its DEV-only route is `dev-web.epifera.com/* -> http://127.0.0.1:8088`;
 it is published only with the remote DEV deployment and is behind the
 reverse-proxy gateway.
 
 The dev VK callback URL is:
 
 ```text
-https://dev-vk.neiirohub.ru/webhooks/vk
+https://dev-vk.epifera.com/webhooks/vk
 ```
 
 The dev YooKassa webhook URL is:
 
 ```text
-https://dev.neiirohub.ru/billing/webhooks/yookassa
+https://dev.epifera.com/billing/webhooks/yookassa
 ```
 
 ### DEV Dashboard Setup
@@ -76,18 +76,18 @@ Add these three local published application routes:
 
 | Hostname | Path | Service |
 |---|---|---|
-| `dev-vk.neiirohub.ru` | `*` | `http://127.0.0.1:8088` |
-| `dev-app.neiirohub.ru` | `*` | `http://127.0.0.1:8088` |
-| `dev.neiirohub.ru` | `*` | `http://127.0.0.1:8088` |
+| `dev-vk.epifera.com` | `*` | `http://127.0.0.1:8088` |
+| `dev-app.epifera.com` | `*` | `http://127.0.0.1:8088` |
+| `dev.epifera.com` | `*` | `http://127.0.0.1:8088` |
 
 For the remote DEV browser-platform overlay, add the DEV-only dashboard-managed
-route `dev-web.neiirohub.ru/* -> http://127.0.0.1:8088` to that same DEV
+route `dev-web.epifera.com/* -> http://127.0.0.1:8088` to that same DEV
 tunnel. It is not a production route.
 
 Use these values in the DEV VK community Callback API settings:
 
 ```text
-URL: https://dev-vk.neiirohub.ru/webhooks/vk
+URL: https://dev-vk.epifera.com/webhooks/vk
 Secret key: VK_SECRET from the local DEV .env
 Confirmation string: VK_CONFIRMATION_TOKEN from the local DEV .env
 Events: message_new and any DEV-only event types under test
@@ -96,7 +96,7 @@ Events: message_new and any DEV-only event types under test
 Use these values in the YooKassa test shop webhook settings:
 
 ```text
-URL: https://dev.neiirohub.ru/billing/webhooks/yookassa
+URL: https://dev.epifera.com/billing/webhooks/yookassa
 Events: payment.succeeded, payment.canceled, refund.succeeded
 ```
 
@@ -111,7 +111,7 @@ Local DEV lifecycle:
 The local lifecycle starts only the three local routes; it does not start the
 remote browser-platform overlay. Run `scripts/dev/smoke-dev.ps1` after the
 remote DEV deployment to retain the strict unauthenticated `401` check for
-`dev-web.neiirohub.ru` without supplying gateway credentials.
+`dev-web.epifera.com` without supplying gateway credentials.
 
 The standard DEV startup rebuilds app images from the current working tree.
 This keeps DEV as a production-shaped copy with different env/tunnel/community
@@ -131,9 +131,9 @@ settings and env secrets must stay isolated from production.
 Required values live in the real server `.env`:
 
 ```text
-PUBLIC_VK_BASE_URL=https://vk.neiirohub.ru
-PUBLIC_APP_BASE_URL=https://app.neiirohub.ru
-PUBLIC_PAYMENT_WEBHOOK_URL=https://neiirohub.ru/billing/webhooks/yookassa
+PUBLIC_VK_BASE_URL=https://vk.epifera.com
+PUBLIC_APP_BASE_URL=https://app.epifera.com
+PUBLIC_PAYMENT_WEBHOOK_URL=https://epifera.com/billing/webhooks/yookassa
 CLOUDFLARED_TUNNEL_TOKEN=<dashboard-managed tunnel token>
 CLOUDFLARED_METRICS_PORT=2000
 ```

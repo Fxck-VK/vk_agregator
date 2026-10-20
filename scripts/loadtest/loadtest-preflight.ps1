@@ -201,7 +201,7 @@ foreach ($key in $realSecretKeys) {
     }
 }
 
-$prodHosts = @("vk.neiirohub.ru", "app.neiirohub.ru", "neiirohub.ru")
+$prodHosts = @("vk.epifera.com", "app.epifera.com", "epifera.com")
 foreach ($key in ($values.Keys | Sort-Object)) {
     $value = [string]$values[$key]
     if ([string]::IsNullOrWhiteSpace($value)) {

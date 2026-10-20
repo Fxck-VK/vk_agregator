@@ -1,6 +1,6 @@
 param(
     [string]$TunnelName = "neiirohub-vk-bot",
-    [string]$Hostname = "app.neiirohub.ru",
+    [string]$Hostname = "app.epifera.com",
     [string]$LocalUrl = "http://localhost:5173",
     [string]$TunnelConfigPath = "",
     [switch]$SkipDnsRoute

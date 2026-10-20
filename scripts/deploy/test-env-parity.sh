@@ -42,9 +42,9 @@ write_prod_contract() {
   local output="$1"
   cat > "${output}" <<'EOF'
 APP_ENV=production
-PUBLIC_VK_BASE_URL=https://vk.neiirohub.ru
-PUBLIC_APP_BASE_URL=https://app.neiirohub.ru
-PUBLIC_PAYMENT_WEBHOOK_URL=https://neiirohub.ru/billing/webhooks/yookassa
+PUBLIC_VK_BASE_URL=https://vk.epifera.com
+PUBLIC_APP_BASE_URL=https://app.epifera.com
+PUBLIC_PAYMENT_WEBHOOK_URL=https://epifera.com/billing/webhooks/yookassa
 PAYMENT_PROVIDER=yookassa
 YOOKASSA_SHOP_ID=CHANGE_ME
 YOOKASSA_SECRET_KEY=CHANGE_ME
@@ -63,9 +63,9 @@ valid_dev="${tmpdir}/valid.dev.env"
 valid_prod="${tmpdir}/valid.prod.env"
 cat > "${valid_dev}" <<'EOF'
 APP_ENV=development
-PUBLIC_VK_BASE_URL=https://dev-vk.neiirohub.ru
-PUBLIC_APP_BASE_URL=https://dev-app.neiirohub.ru
-PUBLIC_PAYMENT_WEBHOOK_URL=https://dev.neiirohub.ru/billing/webhooks/yookassa
+PUBLIC_VK_BASE_URL=https://dev-vk.epifera.com
+PUBLIC_APP_BASE_URL=https://dev-app.epifera.com
+PUBLIC_PAYMENT_WEBHOOK_URL=https://dev.epifera.com/billing/webhooks/yookassa
 PAYMENT_PROVIDER=yookassa
 YOOKASSA_SHOP_ID=dev-secret-shop
 YOOKASSA_SECRET_KEY=dev-secret-key
@@ -76,9 +76,9 @@ EOF
 
 cat > "${valid_prod}" <<'EOF'
 APP_ENV=production
-PUBLIC_VK_BASE_URL=https://vk.neiirohub.ru
-PUBLIC_APP_BASE_URL=https://app.neiirohub.ru
-PUBLIC_PAYMENT_WEBHOOK_URL=https://neiirohub.ru/billing/webhooks/yookassa
+PUBLIC_VK_BASE_URL=https://vk.epifera.com
+PUBLIC_APP_BASE_URL=https://app.epifera.com
+PUBLIC_PAYMENT_WEBHOOK_URL=https://epifera.com/billing/webhooks/yookassa
 PAYMENT_PROVIDER=yookassa
 YOOKASSA_SHOP_ID=prod-secret-shop
 YOOKASSA_SECRET_KEY=prod-secret-key

@@ -353,9 +353,19 @@ jobs:
           rendered_auth_env="$(mktemp)"
           trap 'rm -f "${raw_env}" "${email_env}" "${email_settings}" "${google_env}" "${google_settings}" "${rendered_env}" "${raw_auth_env}" "${rendered_auth_env}"' EXIT
 
+          dev_web_host="$(awk '$1 == "server_name" { sub(/\r$/, "", $2); sub(/;$/, "", $2); print $2 }' deployments/nginx/dev-web.conf)"
+          if [[ ! "${dev_web_host}" =~ ^dev-web\.[a-z0-9]+([.-][a-z0-9]+)*\.[a-z]{2,}$ ]]; then
+            echo 'DEV web host must be one canonical DNS hostname' >&2
+            exit 1
+          fi
+          dev_domain_args=()
+          if grep -Fq -- '--dev-public-domain)' scripts/deploy/assemble-env-parts.sh; then
+            dev_domain_args=(--dev-public-domain "${dev_web_host#dev-web.}")
+          fi
           bash scripts/deploy/assemble-env-parts.sh \
             --target dev \
-            --web-origin https://dev-web.neiirohub.ru \
+            --web-origin "https://${dev_web_host}" \
+            "${dev_domain_args[@]}" \
             --output "${raw_env}"
 
           bash scripts/deploy/prepare-dev-email.sh \
@@ -471,13 +481,18 @@ jobs:
           set -euo pipefail
           cd "${deploy_path}"
           bash scripts/deploy/smoke-dev.sh --env-file .env --timeout-seconds 60
+          dev_web_origin="$(awk -F= '$1 == "WEB_ORIGIN" { print substr($0, index($0, "=") + 1) }' .env | tail -n 1)"
+          if [[ ! "${dev_web_origin}" =~ ^https://dev-web\.[a-z0-9]+([.-][a-z0-9]+)*\.[a-z]{2,}$ ]]; then
+            echo 'DEV smoke requires a canonical WEB_ORIGIN' >&2
+            exit 1
+          fi
           auth_methods="$(curl -fsS --max-time 20 http://127.0.0.1:8080/web/v1/auth/methods)"
           if grep -Eq '"providers":\[[^]]*"google"' <<< "${auth_methods}"; then
             echo 'Google login unexpectedly enabled on DEV' >&2
             exit 1
           fi
           google_status="$(curl -sS --max-time 20 -o /dev/null -w '%{http_code}' \
-            -H 'Origin: https://dev-web.neiirohub.ru' -H 'Content-Type: application/json' \
+            -H "Origin: ${dev_web_origin}" -H 'Content-Type: application/json' \
             --data '{"locale":"ru"}' http://127.0.0.1:8080/web/v1/auth/oauth/google/start)"
           [[ "${google_status}" == 503 ]]
           echo 'DEV Google login disabled; stored credentials retained'
@@ -515,7 +530,10 @@ jobs:
           echo "==> DEV cloudflared logs after stabilization"
           "${compose[@]}" logs --no-color --tail=200 cloudflared || true
           echo "==> DEV public status after stabilization"
-          curl --silent --show-error --output /dev/null --write-out 'HTTP %{http_code}\n' --max-time 20 https://dev-web.neiirohub.ru/ || true
+          dev_web_origin="$(awk -F= '$1 == "WEB_ORIGIN" { print substr($0, index($0, "=") + 1) }' .env | tail -n 1)"
+          if [[ "${dev_web_origin}" =~ ^https://dev-web\.[a-z0-9]+([.-][a-z0-9]+)*\.[a-z]{2,}$ ]]; then
+            curl --silent --show-error --output /dev/null --write-out 'HTTP %{http_code}\n' --max-time 20 "${dev_web_origin}/" || true
+          fi
           REMOTE
 
       - name: Collect DEV diagnostics after failed deploy or smoke

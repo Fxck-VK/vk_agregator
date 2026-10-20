@@ -46,13 +46,13 @@ Migration `000041_star_denomination` introduces denomination v2:
 Production/test webhook URL:
 
 ```text
-https://neiirohub.ru/billing/webhooks/yookassa
+https://epifera.com/billing/webhooks/yookassa
 ```
 
 DEV webhook URL:
 
 ```text
-https://dev.neiirohub.ru/billing/webhooks/yookassa
+https://dev.epifera.com/billing/webhooks/yookassa
 ```
 
 Events:

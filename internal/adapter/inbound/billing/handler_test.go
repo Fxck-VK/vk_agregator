@@ -57,7 +57,7 @@ func setupWithBillingConfig(t *testing.T, cfg billing.Config) (*billing.Handler,
 		IsActive:     true,
 	})
 	service := paymentservice.New(payments, provider, paymentservice.Config{
-		ReturnURL: "https://neiirohub.ru/payments/return",
+		ReturnURL: "https://epifera.com/payments/return",
 	})
 	billingSvc := billingservice.New(billingRepo, billingservice.WithStartingBalance(0))
 	tx := paymentservice.TxRunnerFunc(func(ctx context.Context, fn func(context.Context, domain.PaymentRepository, domain.BillingRepository) error) error {
@@ -96,7 +96,7 @@ func setupWithAuditsAndConfig(t *testing.T, cfg billing.Config) (*billing.Handle
 		IsActive:     true,
 	})
 	service := paymentservice.New(payments, provider, paymentservice.Config{
-		ReturnURL: "https://neiirohub.ru/payments/return",
+		ReturnURL: "https://epifera.com/payments/return",
 	})
 	billingSvc := billingservice.New(billingRepo, billingservice.WithStartingBalance(0))
 	tx := paymentservice.TxRunnerFunc(func(ctx context.Context, fn func(context.Context, domain.PaymentRepository, domain.BillingRepository) error) error {

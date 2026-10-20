@@ -175,7 +175,7 @@ from local tests; see [Qwen architecture](../../docs/ARCHITECTURE.md#qwen-image-
 
 ## Remembered browser DEV access
 
-The outer gate at `https://dev-web.neiirohub.ru` remembers successful access
+The outer gate at `https://dev-web.epifera.com` remembers successful access
 for a fixed 30 days. This is separate from the platform's account session.
 Nginx verifies the existing username/password only at `/__dev/login` and
 forwards a private issuer proof to the server-only platform route. The issued
@@ -229,11 +229,11 @@ workaround. This rollout does not change production authentication.
 
 | Surface | URL |
 | --- | --- |
-| VK Callback API | `https://dev-vk.neiirohub.ru/webhooks/vk` |
-| VK health | `https://dev-vk.neiirohub.ru/health` |
-| Mini App | `https://dev-app.neiirohub.ru` |
-| Mini App BFF | `https://dev-app.neiirohub.ru/miniapp/*` |
-| YooKassa webhook | `https://dev.neiirohub.ru/billing/webhooks/yookassa` |
+| VK Callback API | `https://dev-vk.epifera.com/webhooks/vk` |
+| VK health | `https://dev-vk.epifera.com/health` |
+| Mini App | `https://dev-app.epifera.com` |
+| Mini App BFF | `https://dev-app.epifera.com/miniapp/*` |
+| YooKassa webhook | `https://dev.epifera.com/billing/webhooks/yookassa` |
 
 ## Local DEV Start
 
@@ -323,11 +323,28 @@ it with `scripts/deploy/prepare-dev-env.sh`, validates it with
 `scripts/deploy/check-dev-env.sh`, uploads it to the DEV VPS, deploys, then runs
 DEV smoke.
 
+The DEV workflow resolves the web origin from the checked-out
+`deployments/nginx/dev-web.conf`, including when its `workflow_run` definition
+comes from the default branch. Its readiness requests read the deployed
+`WEB_ORIGIN`; they must not retain a literal domain from another release.
+Ship this compatible workflow definition to the default branch before the
+domain cutover: older source revisions without `--dev-public-domain` retain
+their existing assembly behavior, while the cutover revision opts in.
+
+`assemble-env-parts.sh --target dev --dev-public-domain epifera.com` rewrites
+only existing DEV public channel origins and owned payment return URLs from
+the previous domain. URL paths, queries, quote style, external return targets
+and all credential fields are preserved. PROD or unknown public channel
+origins are rejected; the option cannot be used with `--target prod`.
+Split GitHub Secrets remain encrypted and are not reconstructed or overwritten.
+Verify the new mail sender and external OAuth/VK/payment settings before
+releasing the new hosts; DNS aliases alone do not complete that cutover.
+
 For browser email registration and recovery, set the optional repository secret
 `DEV_ACCOUNT_EMAIL_SMTP_PASSWORD` to the Resend sending key. The DEV workflow
 runs `scripts/deploy/prepare-dev-email.sh` before the existing env preparation;
 it overrides only email delivery keys with Resend STARTTLS on port 587 and the
-verified sender `noreply@notify.neiirohub.ru`. An absent secret preserves the
+verified sender `noreply@notify.epifera.com`. An absent secret preserves the
 assembled email configuration. When configured, the workflow also installs only
 the email settings into the ignored `.env.dev-email` file with mode 600. The DEV
 API reads that optional overlay after its main env file, so subsequent automatic
@@ -635,7 +652,7 @@ All model flags retain false application defaults. New flag names:
 `FEATURE_APIMART_VEO_3_1_FAST_ENABLED`,
 `FEATURE_APIMART_VEO_3_1_QUALITY_ENABLED`.
 
-Motion requires `PROVIDER_REFERENCE_BASE_URL=https://dev-app.neiirohub.ru` and
+Motion requires `PROVIDER_REFERENCE_BASE_URL=https://dev-app.epifera.com` and
 `PROVIDER_REFERENCE_SIGNING_KEY` (dedicated random secret, at least 32 bytes),
 owned by the DEV secret env part. API now needs ffprobe, included in its image.
 Nginx forwards signed provider reads and permits 101 MiB multipart requests on
