@@ -71,6 +71,27 @@ keywords = [
 ]
 
   [[rules.allowlists]]
+  description = "Exact non-secret password of the disposable PostgreSQL CI service"
+  condition = "AND"
+  regexTarget = "secret"
+  paths = ['''^\.github/workflows/ci\.yml$''']
+  regexes = ['''^session_test_fixture$''']
+
+  [[rules.allowlists]]
+  description = "Exact mock SMTP credential used by the DEV email script test"
+  condition = "AND"
+  regexTarget = "secret"
+  paths = ['''^scripts/deploy/test-dev-email\.sh$''']
+  regexes = ['''^fixture-smtp-value$''']
+
+  [[rules.allowlists]]
+  description = "Exact non-secret domain-preservation fixture in env assembly tests"
+  condition = "AND"
+  regexTarget = "secret"
+  paths = ['''^scripts/deploy/test-assemble-env-parts\.sh$''']
+  regexes = ['''^fixture-neiirohub\.ru-secret$''']
+
+  [[rules.allowlists]]
   description = "Exact non-secret values in committed environment templates"
   condition = "AND"
   regexTarget = "secret"
@@ -163,6 +184,30 @@ keywords = [
 
 [[rules]]
 id = "generic-api-key"
+
+  [[rules.allowlists]]
+  description = "Exact non-secret H3 job idempotency fixture"
+  condition = "AND"
+  regexTarget = "secret"
+  paths = ['''^internal/service/joborchestrator/turbo_h3_test\.go$''']
+  regexes = ['''^h3-priced-job$''']
+
+  [[rules.allowlists]]
+  description = "Exact non-secret Kling contract-test idempotency marker"
+  condition = "AND"
+  regexTarget = "secret"
+  paths = ['''^internal/adapter/provider/apimart/kling_veo_test\.go$''']
+  regexes = ['''^kling-v3-contract$''']
+
+  [[rules.allowlists]]
+  description = "Exact non-secret UUID fixtures in pending conversation tests"
+  condition = "AND"
+  regexTarget = "secret"
+  paths = [
+    '''^web/platform/src/features/conversations/pending-conversation-bootstrap\.test\.ts$''',
+    '''^web/platform/src/features/conversations/PendingConversationBootstrap/PendingConversationBootstrap\.test\.tsx$''',
+  ]
+  regexes = ['''^(?:c7c979f5-24e5-4f88-924b-a592d6e5a906|e7c979f5-24e5-4f88-924b-a592d6e5a906)$''']
 
   [[rules.allowlists]]
   description = "UUID request identifiers in exact historical web platform tests"
