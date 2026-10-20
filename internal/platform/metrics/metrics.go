@@ -1552,7 +1552,7 @@ func privateHost(hostport string) bool {
 		return ip.IsLoopback() || ip.IsPrivate() || ip.IsLinkLocalUnicast()
 	}
 	// Docker Compose service names are single-label internal hostnames. Public
-	// domains such as app.neiirohub.ru are deliberately not accepted here.
+	// domains such as app.epifera.com are deliberately not accepted here.
 	return !strings.Contains(host, ".")
 }
 

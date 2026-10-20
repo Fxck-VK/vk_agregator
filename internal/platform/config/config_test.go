@@ -1833,12 +1833,12 @@ func TestReferralRewardOnActivationDefaultEnabled(t *testing.T) {
 }
 
 func TestLoadPaymentConfig(t *testing.T) {
-	t.Setenv("PUBLIC_VK_BASE_URL", "https://vk.neiirohub.ru")
+	t.Setenv("PUBLIC_VK_BASE_URL", "https://vk.epifera.com")
 	t.Setenv("PAYMENT_PROVIDER", "yookassa")
 	t.Setenv("YOOKASSA_SHOP_ID", "shop-1")
 	t.Setenv("YOOKASSA_SECRET_KEY", "secret")
 	t.Setenv("YOOKASSA_BASE_URL", "https://example.com/v3")
-	t.Setenv("YOOKASSA_RETURN_URL", "https://neiirohub.ru/payments/return")
+	t.Setenv("YOOKASSA_RETURN_URL", "https://epifera.com/payments/return")
 	t.Setenv("YOOKASSA_RETURN_URL_MINIAPP", "https://vk.com/app54623372?section_type=public_r_app")
 	t.Setenv("YOOKASSA_RETURN_URL_VK_BOT", "https://vk.com/write-239332376")
 	t.Setenv("YOOKASSA_WEBHOOK_IP_ALLOWLIST_ENABLED", "true")
@@ -1856,13 +1856,13 @@ func TestLoadPaymentConfig(t *testing.T) {
 	if cfg.PaymentProvider != "yookassa" {
 		t.Fatalf("PaymentProvider = %q, want yookassa", cfg.PaymentProvider)
 	}
-	if cfg.PublicVKBaseURL != "https://vk.neiirohub.ru" {
+	if cfg.PublicVKBaseURL != "https://vk.epifera.com" {
 		t.Fatalf("PublicVKBaseURL = %q", cfg.PublicVKBaseURL)
 	}
 	if cfg.YooKassaShopID != "shop-1" || cfg.YooKassaSecretKey != "secret" {
 		t.Fatalf("unexpected YooKassa credentials: shop=%q secret=%q", cfg.YooKassaShopID, cfg.YooKassaSecretKey)
 	}
-	if cfg.YooKassaBaseURL != "https://example.com/v3" || cfg.YooKassaReturnURL != "https://neiirohub.ru/payments/return" {
+	if cfg.YooKassaBaseURL != "https://example.com/v3" || cfg.YooKassaReturnURL != "https://epifera.com/payments/return" {
 		t.Fatalf("unexpected YooKassa URLs: base=%q return=%q", cfg.YooKassaBaseURL, cfg.YooKassaReturnURL)
 	}
 	if cfg.YooKassaReturnURLMiniApp != "https://vk.com/app54623372?section_type=public_r_app" || cfg.YooKassaReturnURLVKBot != "https://vk.com/write-239332376" {
@@ -2923,7 +2923,7 @@ func productionDeepInfraConfig() config.Config {
 		PaymentProvider:              "yookassa",
 		YooKassaShopID:               "shop-id",
 		YooKassaSecretKey:            "live-yookassa-secret",
-		YooKassaReturnURL:            "https://neiirohub.ru/payment-return",
+		YooKassaReturnURL:            "https://epifera.com/payment-return",
 		PaymentWebhookTrustedProxies: []string{"127.0.0.1"},
 		Provider:                     "deepinfra",
 		ProviderChain:                []string{"deepinfra"},

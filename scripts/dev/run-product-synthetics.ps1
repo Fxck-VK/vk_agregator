@@ -3,8 +3,8 @@ param(
     [string]$ProviderWebhookBaseUrl = "http://127.0.0.1:8082",
     [string]$MiniAppBaseUrl = "http://127.0.0.1:5173",
     [string]$MiniAppLaunchParams = $env:VITE_DEV_LAUNCH_PARAMS,
-    [string]$PublicAppBaseUrl = "https://app.neiirohub.ru",
-    [string]$PublicVkBaseUrl = "https://vk.neiirohub.ru",
+    [string]$PublicAppBaseUrl = "https://app.epifera.com",
+    [string]$PublicVkBaseUrl = "https://vk.epifera.com",
     [switch]$AllowMockEstimate,
     [switch]$CheckPublicMetricsExposure,
     [switch]$Strict

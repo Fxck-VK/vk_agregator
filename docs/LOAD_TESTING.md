@@ -93,8 +93,8 @@ Load tests must run against one of these safe contours:
 
 1. **Local mock contour**: Docker Postgres/Redis/MinIO, mock providers, mock
    payment provider, mock or disabled VK delivery.
-2. **DEV contour**: `dev-vk.neiirohub.ru`, `dev-app.neiirohub.ru` and
-   `dev.neiirohub.ru` with DEV VK community and mock providers by default.
+2. **DEV contour**: `dev-vk.epifera.com`, `dev-app.epifera.com` and
+   `dev.epifera.com` with DEV VK community and mock providers by default.
 3. **Dedicated staging/loadtest contour**: production-shaped infrastructure,
    separate data stores, separate secrets and no paid provider calls unless a
    separate live-smoke approval is given.
@@ -335,7 +335,7 @@ failing CI when no API server is running, the script is disabled by default and
 performs a no-op unless `K6_BASE_URL` or `K6_RUN=1` is set.
 
 All checked-in k6 scripts refuse known production hostnames such as
-`vk.neiirohub.ru`, `app.neiirohub.ru` and `neiirohub.ru` by default. The
+`vk.epifera.com`, `app.epifera.com` and `epifera.com` by default. The
 override `K6_ALLOW_PRODUCTION_LIVE_SMOKE=true` is reserved only for a separate,
 human-approved live smoke; it must not be used for generic load tests or
 capacity runs.

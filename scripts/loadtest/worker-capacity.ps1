@@ -298,7 +298,7 @@ if ($BaseUrl -eq "") {
     throw "K6_BASE_URL is required. Set it in $EnvFile or pass -BaseUrl."
 }
 
-$blockedHosts = @("vk.neiirohub.ru", "app.neiirohub.ru", "neiirohub.ru")
+$blockedHosts = @("vk.epifera.com", "app.epifera.com", "epifera.com")
 $baseUrlHost = Get-UrlHost $BaseUrl
 if ($blockedHosts -contains $baseUrlHost) {
     throw "Refusing to run worker capacity test against production host: $baseUrlHost"

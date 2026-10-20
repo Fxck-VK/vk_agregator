@@ -141,14 +141,14 @@ case "${app_env_lc}" in
     ;;
 esac
 
-require_dev_url PUBLIC_VK_BASE_URL "https://dev-vk.neiirohub.ru"
-require_dev_url PUBLIC_APP_BASE_URL "https://dev-app.neiirohub.ru"
-require_dev_url PUBLIC_PAYMENT_WEBHOOK_URL "https://dev.neiirohub.ru"
+require_dev_url PUBLIC_VK_BASE_URL "https://dev-vk.epifera.com"
+require_dev_url PUBLIC_APP_BASE_URL "https://dev-app.epifera.com"
+require_dev_url PUBLIC_PAYMENT_WEBHOOK_URL "https://dev.epifera.com"
 
 for forbidden in \
-  "PUBLIC_VK_BASE_URL=https://vk.neiirohub.ru" \
-  "PUBLIC_APP_BASE_URL=https://app.neiirohub.ru" \
-  "PUBLIC_PAYMENT_WEBHOOK_URL=https://neiirohub.ru"
+  "PUBLIC_VK_BASE_URL=https://vk.epifera.com" \
+  "PUBLIC_APP_BASE_URL=https://app.epifera.com" \
+  "PUBLIC_PAYMENT_WEBHOOK_URL=https://epifera.com"
 do
   if grep -Fq "${forbidden}" "${input_file}"; then
     echo "Production public URL found in DEV env: ${forbidden%%=*}" >&2

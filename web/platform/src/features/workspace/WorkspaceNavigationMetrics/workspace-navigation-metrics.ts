@@ -9,7 +9,7 @@ declare global {
   }
 }
 
-const metricsHosts = new Set(["localhost", "127.0.0.1", "dev-web.neiirohub.ru"]);
+const metricsHosts = new Set(["localhost", "127.0.0.1", "dev-web.epifera.com"]);
 const maxPendingNavigationDurationMs = 10_000;
 const fixedTargets: Record<string, Exclude<WorkspaceMetricTarget, "conversation">> = {
   "/app": "workspace",

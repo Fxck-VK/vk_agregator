@@ -228,9 +228,9 @@ validate_dev_env() {
     require_value "${required}" "required for DEV server runtime"
   done
 
-  require_dev_url PUBLIC_VK_BASE_URL "https://dev-vk.neiirohub.ru"
-  require_dev_url PUBLIC_APP_BASE_URL "https://dev-app.neiirohub.ru"
-  require_dev_url PUBLIC_PAYMENT_WEBHOOK_URL "https://dev.neiirohub.ru/billing/webhooks/yookassa"
+  require_dev_url PUBLIC_VK_BASE_URL "https://dev-vk.epifera.com"
+  require_dev_url PUBLIC_APP_BASE_URL "https://dev-app.epifera.com"
+  require_dev_url PUBLIC_PAYMENT_WEBHOOK_URL "https://dev.epifera.com/billing/webhooks/yookassa"
 
   if [[ "${with_cloudflare}" == "true" ]]; then
     require_value CLOUDFLARED_TUNNEL_TOKEN "required when deploying DEV with Cloudflare tunnel"

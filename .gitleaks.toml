@@ -82,6 +82,13 @@ keywords = [
   ]
 
   [[rules.allowlists]]
+  description = "Exact non-secret domain-preservation fixture in env assembly tests"
+  condition = "AND"
+  regexTarget = "secret"
+  paths = ['''^scripts/deploy/test-assemble-env-parts\.sh$''']
+  regexes = ['''^fixture-neiirohub\.ru-secret$''']
+
+  [[rules.allowlists]]
   description = "Exact non-secret values in committed environment templates"
   condition = "AND"
   regexTarget = "secret"

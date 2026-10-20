@@ -25,7 +25,7 @@ func TestNewProviderYooKassa(t *testing.T) {
 		YooKassaShopID:    "shop-1",
 		YooKassaSecretKey: "secret",
 		YooKassaBaseURL:   "https://example.com/v3",
-		YooKassaReturnURL: "https://neiirohub.ru/payments/return",
+		YooKassaReturnURL: "https://epifera.com/payments/return",
 	})
 	if err != nil {
 		t.Fatalf("new provider: %v", err)

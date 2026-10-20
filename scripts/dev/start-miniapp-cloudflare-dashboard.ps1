@@ -7,7 +7,7 @@ param(
     [int]$WorkerMetricsPort = 9090,
     [int]$VkUserID = 777,
     [int]$TimeoutSeconds = 120,
-    [string]$Hostname = "app.neiirohub.ru",
+    [string]$Hostname = "app.epifera.com",
     [ValidateSet("auto", "quic", "http2")]
     [string]$Protocol = "http2",
     [switch]$RememberToken

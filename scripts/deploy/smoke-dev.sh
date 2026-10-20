@@ -16,10 +16,10 @@ Usage: scripts/deploy/smoke-dev.sh [options]
 
 Options:
   --env-file PATH                    DEV server env file to read, for example .env
-  --vk-base-url URL                  DEV VK/API base URL. Default: PUBLIC_VK_BASE_URL or https://dev-vk.neiirohub.ru
-  --app-base-url URL                 DEV Mini App base URL. Default: PUBLIC_APP_BASE_URL or https://dev-app.neiirohub.ru
-  --payment-webhook-url URL          DEV YooKassa webhook URL. Default: PUBLIC_PAYMENT_WEBHOOK_URL or https://dev.neiirohub.ru/billing/webhooks/yookassa
-  --dev-web-base-url URL              DEV web gateway URL. Default: https://dev-web.neiirohub.ru
+  --vk-base-url URL                  DEV VK/API base URL. Default: PUBLIC_VK_BASE_URL or https://dev-vk.epifera.com
+  --app-base-url URL                 DEV Mini App base URL. Default: PUBLIC_APP_BASE_URL or https://dev-app.epifera.com
+  --payment-webhook-url URL          DEV YooKassa webhook URL. Default: PUBLIC_PAYMENT_WEBHOOK_URL or https://dev.epifera.com/billing/webhooks/yookassa
+  --dev-web-base-url URL              DEV web gateway URL. Default: https://dev-web.epifera.com
   --timeout-seconds SECONDS          HTTP timeout. Default: 10
   --stabilization-seconds SECONDS    Recheck the public tunnel after this delay. Default: 60
   --skip-local-health                Skip local API/worker/provider-webhook/Mini App/reverse-proxy health checks
@@ -107,25 +107,25 @@ assert_dev_url() {
 
 assert_dev_web_url() {
   local url="$1"
-  if [[ "${url}" != "https://dev-web.neiirohub.ru" ]]; then
-    echo "[FAIL] DEV web gateway URL must be exactly https://dev-web.neiirohub.ru, got ${url}" >&2
+  if [[ "${url}" != "https://dev-web.epifera.com" ]]; then
+    echo "[FAIL] DEV web gateway URL must be exactly https://dev-web.epifera.com, got ${url}" >&2
     exit 1
   fi
 }
 
 load_env_file "${env_file}"
 
-vk_base_url="${vk_base_url:-$(get_env_value PUBLIC_VK_BASE_URL "https://dev-vk.neiirohub.ru")}"
-app_base_url="${app_base_url:-$(get_env_value PUBLIC_APP_BASE_URL "https://dev-app.neiirohub.ru")}"
-payment_webhook_url="${payment_webhook_url:-$(get_env_value PUBLIC_PAYMENT_WEBHOOK_URL "https://dev.neiirohub.ru/billing/webhooks/yookassa")}"
-dev_web_base_url="${dev_web_base_url:-https://dev-web.neiirohub.ru}"
+vk_base_url="${vk_base_url:-$(get_env_value PUBLIC_VK_BASE_URL "https://dev-vk.epifera.com")}"
+app_base_url="${app_base_url:-$(get_env_value PUBLIC_APP_BASE_URL "https://dev-app.epifera.com")}"
+payment_webhook_url="${payment_webhook_url:-$(get_env_value PUBLIC_PAYMENT_WEBHOOK_URL "https://dev.epifera.com/billing/webhooks/yookassa")}"
+dev_web_base_url="${dev_web_base_url:-https://dev-web.epifera.com}"
 
 vk_base_url="${vk_base_url%/}"
 app_base_url="${app_base_url%/}"
 
-assert_dev_url "DEV VK base URL" "${vk_base_url}" "https://dev-vk.neiirohub.ru"
-assert_dev_url "DEV Mini App base URL" "${app_base_url}" "https://dev-app.neiirohub.ru"
-assert_dev_url "DEV payment webhook URL" "${payment_webhook_url}" "https://dev.neiirohub.ru/billing/webhooks/yookassa"
+assert_dev_url "DEV VK base URL" "${vk_base_url}" "https://dev-vk.epifera.com"
+assert_dev_url "DEV Mini App base URL" "${app_base_url}" "https://dev-app.epifera.com"
+assert_dev_url "DEV payment webhook URL" "${payment_webhook_url}" "https://dev.epifera.com/billing/webhooks/yookassa"
 assert_dev_web_url "${dev_web_base_url}"
 
 args=(

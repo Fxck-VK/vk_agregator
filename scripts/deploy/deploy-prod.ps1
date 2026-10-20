@@ -559,9 +559,9 @@ try {
         $healthStatus = "passed"
 
         if ($WithCloudflare -and -not $SkipPublicSmoke) {
-            $publicVkUrl = Get-PublicUrlValue -Path $EnvFile -PrimaryName "PUBLIC_VK_BASE_URL" -LegacyName "VK_BASE_URL" -Default "https://vk.neiirohub.ru"
-            $publicAppUrl = Get-PublicUrlValue -Path $EnvFile -PrimaryName "PUBLIC_APP_BASE_URL" -LegacyName "APP_BASE_URL" -Default "https://app.neiirohub.ru"
-            $publicPaymentWebhookUrl = Get-PublicUrlValue -Path $EnvFile -PrimaryName "PUBLIC_PAYMENT_WEBHOOK_URL" -LegacyName "PAYMENT_WEBHOOK_URL" -Default "https://neiirohub.ru/billing/webhooks/yookassa"
+            $publicVkUrl = Get-PublicUrlValue -Path $EnvFile -PrimaryName "PUBLIC_VK_BASE_URL" -LegacyName "VK_BASE_URL" -Default "https://vk.epifera.com"
+            $publicAppUrl = Get-PublicUrlValue -Path $EnvFile -PrimaryName "PUBLIC_APP_BASE_URL" -LegacyName "APP_BASE_URL" -Default "https://app.epifera.com"
+            $publicPaymentWebhookUrl = Get-PublicUrlValue -Path $EnvFile -PrimaryName "PUBLIC_PAYMENT_WEBHOOK_URL" -LegacyName "PAYMENT_WEBHOOK_URL" -Default "https://epifera.com/billing/webhooks/yookassa"
             Invoke-Step "public Cloudflare/DNS smoke" {
                 & (Join-Path $PSScriptRoot "smoke-prod.ps1") `
                     -EnvFile $EnvFile `

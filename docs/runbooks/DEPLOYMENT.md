@@ -121,17 +121,57 @@ The active immutable `IMAGE_TAG` in the VPS `.env` is the source of truth when
 capturing the previous release. This keeps a retry recoverable when a failed
 rollout updated the repository checkout before runtime rollback completed.
 
+## Epifera cutover preparation
+
+Only DEV is currently provisioned. The new Cloudflare zone and certificate
+are active. DEV aliases `dev-web`, `dev-vk`, `dev-app` and `dev` on
+`epifera.com` use the existing DEV tunnel at `http://127.0.0.1:8088`.
+The `vk`, `app` and apex routes for future PROD are prepared, but their tunnel
+has no active connector. The imported apex Beget A record still exists;
+the future PROD apex CNAME was not created automatically.
+
+The disabled Cloudflare rule `Temporary Epifera website to protected DEV`
+redirects GET/HEAD website paths (`/`, `/ru`, `/en` and their descendants)
+from apex/www to `dev-web.epifera.com`, preserving path and query with a
+temporary 302. Enable it only after the protected new DEV host passes smoke.
+It deliberately excludes API/OAuth callbacks and payment webhook POSTs.
+
+Cutover order:
+
+1. Update the default-branch DEV workflow to resolve origins from the source
+   Nginx config, retaining compatibility with pre-cutover DEV revisions.
+2. Confirm `notify.epifera.com` with the mail provider and configure the exact
+   supplied DNS records. Do not assume that the old sender's key or verification
+   automatically grants sending rights on the new domain.
+3. Update enabled OAuth callbacks/allowed origins, VK launch settings and
+   contour-specific YooKassa webhook/return settings. Google remains disabled.
+4. Release immutable DEV images, run the full post-deploy smoke and check
+   browser login, referral URL generation, uploads and callbacks on the new hosts.
+5. Enable the temporary apex redirect and account for pending payments/jobs
+   and expiring signed URLs before retiring the old routes and DNS records.
+
+Image-only rollback does not restore the previous hostname contract. If the
+cutover fails, keep the old Cloudflare routes and deploy a forward revert of
+the domain cutover commit so that the previous Nginx rules, origin checks and
+sender configuration are restored together. The unchanged split secrets still
+support that source revision. Do not roll database schemas back for this change.
+
+Host-only browser cookies require signing in again on the new host. Preserve
+the existing database, account IDs, balances, artifacts and referral codes.
+Future PROD also needs a provisioned server and the browser platform/reverse
+proxy wiring before the temporary redirect can be removed.
+
 ## Public Routes
 
 Expected production routing:
 
 | Public route | Internal target |
 | --- | --- |
-| `https://vk.neiirohub.ru/webhooks/vk` | `cmd/api:8080` |
-| `https://vk.neiirohub.ru/health` | `cmd/api:8080` |
-| `https://neiirohub.ru/billing/webhooks/yookassa` | `cmd/provider-webhook:8082` |
-| `https://app.neiirohub.ru` | Mini App static frontend |
-| `https://app.neiirohub.ru/miniapp/*` | `cmd/api:8080` |
+| `https://vk.epifera.com/webhooks/vk` | `cmd/api:8080` |
+| `https://vk.epifera.com/health` | `cmd/api:8080` |
+| `https://epifera.com/billing/webhooks/yookassa` | `cmd/provider-webhook:8082` |
+| `https://app.epifera.com` | Mini App static frontend |
+| `https://app.epifera.com/miniapp/*` | `cmd/api:8080` |
 
 Must stay closed publicly:
 

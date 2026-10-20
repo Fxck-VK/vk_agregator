@@ -132,7 +132,7 @@ function Assert-DevSecurity {
     }
 
     $expectedTunnelName = Get-EnvValue -Values $Values -Name "DEV_EXPECTED_TUNNEL_NAME" -Default "neiirohub-vk-dev"
-    $expectedTunnelHost = Get-EnvValue -Values $Values -Name "DEV_EXPECTED_TUNNEL_HOSTNAME" -Default "dev-vk.neiirohub.ru"
+    $expectedTunnelHost = Get-EnvValue -Values $Values -Name "DEV_EXPECTED_TUNNEL_HOSTNAME" -Default "dev-vk.epifera.com"
     $actualTunnelName = Get-EnvValue -Values $Values -Name "VK_BOT_TUNNEL_NAME"
     $actualTunnelHost = Get-EnvValue -Values $Values -Name "VK_BOT_TUNNEL_HOSTNAME"
     if ($actualTunnelName -ne $expectedTunnelName) {
@@ -217,9 +217,9 @@ function Assert-DevEnv {
     }
 
     $expectedUrls = @{
-        PUBLIC_VK_BASE_URL = "https://dev-vk.neiirohub.ru"
-        PUBLIC_APP_BASE_URL = "https://dev-app.neiirohub.ru"
-        PUBLIC_PAYMENT_WEBHOOK_URL = "https://dev.neiirohub.ru/billing/webhooks/yookassa"
+        PUBLIC_VK_BASE_URL = "https://dev-vk.epifera.com"
+        PUBLIC_APP_BASE_URL = "https://dev-app.epifera.com"
+        PUBLIC_PAYMENT_WEBHOOK_URL = "https://dev.epifera.com/billing/webhooks/yookassa"
     }
     foreach ($entry in $expectedUrls.GetEnumerator()) {
         $value = Get-EnvValue -Values $Values -Name $entry.Key
@@ -242,9 +242,9 @@ function Assert-DevEnv {
     }
 
     $prodMarkers = @(
-        "https://vk.neiirohub.ru",
-        "https://app.neiirohub.ru",
-        "https://neiirohub.ru/billing/webhooks/yookassa",
+        "https://vk.epifera.com",
+        "https://app.epifera.com",
+        "https://epifera.com/billing/webhooks/yookassa",
         "vk-ai-aggregator-prod"
     )
     foreach ($marker in $prodMarkers) {
@@ -658,9 +658,9 @@ try {
         }
 
         if (-not $SkipPublicSmoke) {
-            Wait-Http -Name "DEV public VK health" -Url "https://dev-vk.neiirohub.ru/health" -ExpectedStatuses @(200) -TimeoutSeconds $TimeoutSeconds
-            Wait-Http -Name "DEV public Mini App" -Url "https://dev-app.neiirohub.ru/" -ExpectedStatuses @(200) -TimeoutSeconds $TimeoutSeconds
-            Wait-Http -Name "DEV public YooKassa webhook route" -Url "https://dev.neiirohub.ru/billing/webhooks/yookassa" -Method "POST" -Body "{}" -ExpectedStatuses @(400, 401, 403) -TimeoutSeconds $TimeoutSeconds
+            Wait-Http -Name "DEV public VK health" -Url "https://dev-vk.epifera.com/health" -ExpectedStatuses @(200) -TimeoutSeconds $TimeoutSeconds
+            Wait-Http -Name "DEV public Mini App" -Url "https://dev-app.epifera.com/" -ExpectedStatuses @(200) -TimeoutSeconds $TimeoutSeconds
+            Wait-Http -Name "DEV public YooKassa webhook route" -Url "https://dev.epifera.com/billing/webhooks/yookassa" -Method "POST" -Body "{}" -ExpectedStatuses @(400, 401, 403) -TimeoutSeconds $TimeoutSeconds
         }
     }
 
@@ -671,9 +671,9 @@ try {
     Write-Host ""
     Write-Host "DEV stack is running."
     Write-Host "Reverse proxy:      http://127.0.0.1:$reverseProxyPort"
-    Write-Host "DEV VK callback:    https://dev-vk.neiirohub.ru/webhooks/vk"
-    Write-Host "DEV Mini App:       https://dev-app.neiirohub.ru"
-    Write-Host "DEV YooKassa hook:  https://dev.neiirohub.ru/billing/webhooks/yookassa"
+    Write-Host "DEV VK callback:    https://dev-vk.epifera.com/webhooks/vk"
+    Write-Host "DEV Mini App:       https://dev-app.epifera.com"
+    Write-Host "DEV YooKassa hook:  https://dev.epifera.com/billing/webhooks/yookassa"
     Write-Host "Status:             .\scripts\dev\start-dev-stack.ps1 -StatusOnly"
     Write-Host "Stop:               .\scripts\dev\start-dev-stack.ps1 -StopOnly"
     Write-Host "Runtime logs:       $script:RuntimeDir"

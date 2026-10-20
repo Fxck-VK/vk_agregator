@@ -96,7 +96,7 @@ an ngrok warning page — switch to `*.lhr.life`.
 **Do not use free ngrok for VK Mini App dev** — the interstitial cannot be
 passed in VK WebView.
 
-**Stable alternative:** Cloudflare named tunnel `app.neiirohub.ru → localhost:5173`
+**Stable alternative:** Cloudflare named tunnel `app.epifera.com → localhost:5173`
 via `scripts/dev/setup-miniapp-cloudflare-route.ps1` (see `RUNBOOK.md`).
 
 ### Using vk-bridge-mock (optional)

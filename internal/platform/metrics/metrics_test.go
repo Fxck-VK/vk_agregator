@@ -12,7 +12,7 @@ import (
 )
 
 func TestPrivateHandlerRejectsPublicHost(t *testing.T) {
-	req := httptest.NewRequest(http.MethodGet, "https://app.neiirohub.ru/metrics", nil)
+	req := httptest.NewRequest(http.MethodGet, "https://app.epifera.com/metrics", nil)
 	req.RemoteAddr = "203.0.113.10:12345"
 	w := httptest.NewRecorder()
 
@@ -38,7 +38,7 @@ func TestPrivateHandlerAllowsLocalScrape(t *testing.T) {
 func TestPrivateHandlerRejectsPublicForwardedHost(t *testing.T) {
 	req := httptest.NewRequest(http.MethodGet, "http://localhost:8080/metrics", nil)
 	req.RemoteAddr = "127.0.0.1:12345"
-	req.Header.Set("X-Forwarded-Host", "vk.neiirohub.ru")
+	req.Header.Set("X-Forwarded-Host", "vk.epifera.com")
 	w := httptest.NewRecorder()
 
 	PrivateHandler().ServeHTTP(w, req)
@@ -64,7 +64,7 @@ func TestPrivateHandlerRejectsPublicForwardedClient(t *testing.T) {
 func TestPrivateHandlerRejectsPublicForwardedHeader(t *testing.T) {
 	req := httptest.NewRequest(http.MethodGet, "http://localhost:8080/metrics", nil)
 	req.RemoteAddr = "127.0.0.1:12345"
-	req.Header.Set("Forwarded", `for=198.51.100.10;host=vk.neiirohub.ru;proto=https`)
+	req.Header.Set("Forwarded", `for=198.51.100.10;host=vk.epifera.com;proto=https`)
 	w := httptest.NewRecorder()
 
 	PrivateHandler().ServeHTTP(w, req)
@@ -77,7 +77,7 @@ func TestPrivateHandlerRejectsPublicForwardedHeader(t *testing.T) {
 func TestPrivateHandlerRejectsPublicOriginalHost(t *testing.T) {
 	req := httptest.NewRequest(http.MethodGet, "http://localhost:8080/metrics", nil)
 	req.RemoteAddr = "127.0.0.1:12345"
-	req.Header.Set("X-Original-Host", "app.neiirohub.ru")
+	req.Header.Set("X-Original-Host", "app.epifera.com")
 	w := httptest.NewRecorder()
 
 	PrivateHandler().ServeHTTP(w, req)

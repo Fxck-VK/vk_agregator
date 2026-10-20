@@ -15,7 +15,7 @@ param(
     [string]$PaymentProvider = "mock",
     [ValidateSet("auto", "quic", "http2")]
     [string]$CloudflareProtocol = "http2",
-    [string[]]$PublicHostnames = @("local-app.neiirohub.ru", "local-vk.neiirohub.ru", "local-pay.neiirohub.ru"),
+    [string[]]$PublicHostnames = @("local-app.epifera.com", "local-vk.epifera.com", "local-pay.epifera.com"),
     [int]$ApiPort = 8080,
     [int]$WorkerMetricsPort = 9090,
     [int]$ProviderWebhookPort = 8082,
@@ -263,9 +263,9 @@ Write-Host "Prometheus:        http://127.0.0.1:$PrometheusPort"
 Write-Host "Alertmanager:      http://127.0.0.1:$AlertmanagerPort"
 Write-Host "Cloudflare:        $cloudflareState"
 if (-not $NoCloudflare) {
-    Write-Host "Public Mini App:   https://local-app.neiirohub.ru"
-    Write-Host "Public VK API:     https://local-vk.neiirohub.ru"
-    Write-Host "Public payment:    https://local-pay.neiirohub.ru"
+    Write-Host "Public Mini App:   https://local-app.epifera.com"
+    Write-Host "Public VK API:     https://local-vk.epifera.com"
+    Write-Host "Public payment:    https://local-pay.epifera.com"
 }
 Write-Host "Status:            .\scripts\dev\start-all.ps1 -StatusOnly"
 Write-Host "Stop apps:         .\scripts\dev\start-all.ps1 -StopOnly"

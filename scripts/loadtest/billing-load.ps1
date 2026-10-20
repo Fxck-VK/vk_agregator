@@ -287,7 +287,7 @@ if ($ProductCode -eq "") {
     $ProductCode = Get-Setting $envValues "K6_PAYMENT_PRODUCT_CODE" "crystals_99"
 }
 
-$blockedHosts = @("vk.neiirohub.ru", "app.neiirohub.ru", "neiirohub.ru")
+$blockedHosts = @("vk.epifera.com", "app.epifera.com", "epifera.com")
 foreach ($hostValue in @((Get-UrlHost $BaseUrl), (Get-UrlHost $WebhookBaseUrl))) {
     if ($blockedHosts -contains $hostValue) {
         throw "Refusing to run billing load test against production host: $hostValue"

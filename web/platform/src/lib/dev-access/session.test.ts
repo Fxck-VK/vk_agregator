@@ -11,7 +11,7 @@ const now = new Date("2026-09-29T12:00:00Z");
 
 function configure(entry = fixture) {
   vi.stubEnv("DEV_WEB_BASIC_AUTH_HTPASSWD", entry);
-  vi.stubEnv("WEB_ORIGIN", "https://dev-web.neiirohub.ru");
+  vi.stubEnv("WEB_ORIGIN", "https://dev-web.epifera.com");
   return getDevAccessConfig()!;
 }
 
@@ -64,7 +64,7 @@ describe("DEV access cookie", () => {
 
   it("only enables on the configured HTTPS DEV host; supports existing APR1 secrets", () => {
     expect(configure("dev-user:$apr1$devsalt$" + "a".repeat(22))).not.toBeNull();
-    for (const origin of ["", "http://dev-web.neiirohub.ru", "https://neiirohub.ru", "https://dev-web.neiirohub.ru/path"]) {
+    for (const origin of ["", "http://dev-web.epifera.com", "https://epifera.com", "https://dev-web.epifera.com/path"]) {
       vi.stubEnv("WEB_ORIGIN", origin);
       expect(getDevAccessConfig()).toBeNull();
     }

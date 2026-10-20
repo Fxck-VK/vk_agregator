@@ -29,7 +29,7 @@ describe.skipIf(!binary)("real DEV Nginx gateway", () => {
 
   // Native HTTP preserves Sec-Fetch-Mode; Node fetch overwrites it with "cors".
   const request = (path: string, headers: Record<string, string> = {}, method = "GET") => new Promise<Response>((resolve, reject) => {
-    const req = httpRequest(base + path, { method, headers: { host: "dev-web.neiirohub.ru", ...headers } }, res => {
+    const req = httpRequest(base + path, { method, headers: { host: "dev-web.epifera.com", ...headers } }, res => {
       const chunks: Buffer[] = [];
       res.on("data", chunk => chunks.push(chunk));
       res.on("end", () => {
@@ -43,11 +43,11 @@ describe.skipIf(!binary)("real DEV Nginx gateway", () => {
   });
 
   beforeAll(async () => {
-    vi.stubEnv("WEB_ORIGIN", "https://dev-web.neiirohub.ru");
+    vi.stubEnv("WEB_ORIGIN", "https://dev-web.epifera.com");
     vi.stubEnv("DEV_WEB_BASIC_AUTH_HTPASSWD", credential);
     upstream = createServer(async (req, res) => {
       try {
-        const url = new URL(req.url!, "https://dev-web.neiirohub.ru");
+        const url = new URL(req.url!, "https://dev-web.epifera.com");
         if (url.pathname.startsWith("/web/dev-access/")) {
           const headers = new Headers();
           for (const [key, value] of Object.entries(req.headers)) if (value) headers.set(key, String(value));

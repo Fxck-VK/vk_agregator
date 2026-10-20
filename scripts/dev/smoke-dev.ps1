@@ -1,9 +1,9 @@
 [CmdletBinding()]
 param(
-    [string]$VkBaseUrl = "https://dev-vk.neiirohub.ru",
-    [string]$AppBaseUrl = "https://dev-app.neiirohub.ru",
-    [string]$DevBaseUrl = "https://dev.neiirohub.ru",
-    [string]$DevWebBaseUrl = "https://dev-web.neiirohub.ru",
+    [string]$VkBaseUrl = "https://dev-vk.epifera.com",
+    [string]$AppBaseUrl = "https://dev-app.epifera.com",
+    [string]$DevBaseUrl = "https://dev.epifera.com",
+    [string]$DevWebBaseUrl = "https://dev-web.epifera.com",
     [int]$TimeoutSeconds = 10
 )
 
@@ -79,8 +79,8 @@ function Assert-DevWebRootUrl {
         [Parameter(Mandatory = $true)][string]$Url
     )
 
-    if ($Url -ne "https://dev-web.neiirohub.ru") {
-        throw "DEV web base URL must be exactly https://dev-web.neiirohub.ru, got $Url"
+    if ($Url -ne "https://dev-web.epifera.com") {
+        throw "DEV web base URL must be exactly https://dev-web.epifera.com, got $Url"
     }
 }
 
@@ -88,9 +88,9 @@ $VkBaseUrl = $VkBaseUrl.TrimEnd("/")
 $AppBaseUrl = $AppBaseUrl.TrimEnd("/")
 $DevBaseUrl = $DevBaseUrl.TrimEnd("/")
 
-Assert-DevUrl -Name "VK DEV base URL" -Url $VkBaseUrl -ExpectedHost "dev-vk.neiirohub.ru"
-Assert-DevUrl -Name "Mini App DEV base URL" -Url $AppBaseUrl -ExpectedHost "dev-app.neiirohub.ru"
-Assert-DevUrl -Name "Shared DEV base URL" -Url $DevBaseUrl -ExpectedHost "dev.neiirohub.ru"
+Assert-DevUrl -Name "VK DEV base URL" -Url $VkBaseUrl -ExpectedHost "dev-vk.epifera.com"
+Assert-DevUrl -Name "Mini App DEV base URL" -Url $AppBaseUrl -ExpectedHost "dev-app.epifera.com"
+Assert-DevUrl -Name "Shared DEV base URL" -Url $DevBaseUrl -ExpectedHost "dev.epifera.com"
 Assert-DevWebRootUrl -Url $DevWebBaseUrl
 
 Write-Host "== DEV public smoke"

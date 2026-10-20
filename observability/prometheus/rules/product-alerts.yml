@@ -82,7 +82,7 @@ groups:
           description: Blackbox probe получил 2xx от публичного /metrics. Метрики должны оставаться приватными.
           impact: Внешний пользователь может увидеть внутренние labels, названия сервисов, счетчики ошибок и структуру продукта.
           dashboard: Grafana -> Product Observability / Security Config
-          action: Срочно закрой публичный /metrics на Cloudflare/nginx/tunnel; оставь доступ только localhost/VPN/SSH tunnel; перепроверь https://app.neiirohub.ru/metrics и https://vk.neiirohub.ru/metrics.
+          action: Срочно закрой публичный /metrics на Cloudflare/nginx/tunnel; оставь доступ только localhost/VPN/SSH tunnel; перепроверь https://app.epifera.com/metrics и https://vk.epifera.com/metrics.
           safe_logs: В чат отправляй только URL и HTTP status; не отправляй полный metrics output.
 
       - alert: PublicAdminSurfaceOpen

@@ -165,12 +165,12 @@ Current VPS data contract:
 Production routing must keep process boundaries explicit:
 
 ```text
-vk.neiirohub.ru/webhooks/vk                    -> cmd/api
-vk.neiirohub.ru/health                         -> cmd/api
-vk.neiirohub.ru/billing/webhooks/yookassa       -> cmd/provider-webhook
-neiirohub.ru/billing/webhooks/yookassa          -> cmd/provider-webhook (compat exact route)
-app.neiirohub.ru/                              -> web/miniapp/dist
-app.neiirohub.ru/miniapp/*                     -> cmd/api
+vk.epifera.com/webhooks/vk                    -> cmd/api
+vk.epifera.com/health                         -> cmd/api
+vk.epifera.com/billing/webhooks/yookassa       -> cmd/provider-webhook
+epifera.com/billing/webhooks/yookassa          -> cmd/provider-webhook (compat exact route)
+app.epifera.com/                              -> web/miniapp/dist
+app.epifera.com/miniapp/*                     -> cmd/api
 ```
 
 `/metrics`, Grafana, Prometheus, Loki, Tempo, Alertmanager, storage consoles and
@@ -180,7 +180,7 @@ hostnames. TLS may terminate at Cloudflare/nginx, but payment webhooks must
 arrive at `cmd/provider-webhook` with HTTPS scheme headers preserved.
 
 Cloudflare is the public HTTPS edge for the production VPS. Public DNS records
-for `vk.neiirohub.ru`, `app.neiirohub.ru` and the optional root-domain YooKassa
+for `vk.epifera.com`, `app.epifera.com` and the optional root-domain YooKassa
 compatibility route must be proxied and routed through Cloudflare Tunnel to the
 reverse proxy. Cloudflare Access must stay disabled on VK callback, Mini App and
 YooKassa webhook routes. The exact YooKassa webhook location must forward

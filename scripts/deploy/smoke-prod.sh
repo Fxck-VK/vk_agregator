@@ -22,9 +22,9 @@ Usage: scripts/deploy/smoke-prod.sh [options]
 
 Options:
   --env-file PATH                    Server env file to read, for example .env
-  --vk-base-url URL                  Public VK/API base URL. Default: PUBLIC_VK_BASE_URL or https://vk.neiirohub.ru
-  --app-base-url URL                 Public Mini App base URL. Default: PUBLIC_APP_BASE_URL or https://app.neiirohub.ru
-  --payment-webhook-url URL          Public YooKassa webhook URL. Default: PUBLIC_PAYMENT_WEBHOOK_URL or https://neiirohub.ru/billing/webhooks/yookassa
+  --vk-base-url URL                  Public VK/API base URL. Default: PUBLIC_VK_BASE_URL or https://vk.epifera.com
+  --app-base-url URL                 Public Mini App base URL. Default: PUBLIC_APP_BASE_URL or https://app.epifera.com
+  --payment-webhook-url URL          Public YooKassa webhook URL. Default: PUBLIC_PAYMENT_WEBHOOK_URL or https://epifera.com/billing/webhooks/yookassa
   --api-health-url URL               Local API readiness URL. Default: http://127.0.0.1:8080/readyz
   --worker-health-url URL            Local worker readiness URL. Default: http://127.0.0.1:9090/readyz
   --maintenance-worker-health-url URL Local maintenance-worker readiness URL. Default: http://127.0.0.1:9091/readyz
@@ -173,9 +173,9 @@ url_from_listen_addr() {
 
 load_env_file "$env_file"
 
-vk_base_url="${vk_base_url:-$(get_env_value PUBLIC_VK_BASE_URL "$(get_env_value VK_BASE_URL "https://vk.neiirohub.ru")")}"
-app_base_url="${app_base_url:-$(get_env_value PUBLIC_APP_BASE_URL "$(get_env_value APP_BASE_URL "https://app.neiirohub.ru")")}"
-payment_webhook_url="${payment_webhook_url:-$(get_env_value PUBLIC_PAYMENT_WEBHOOK_URL "$(get_env_value PAYMENT_WEBHOOK_URL "https://neiirohub.ru/billing/webhooks/yookassa")")}"
+vk_base_url="${vk_base_url:-$(get_env_value PUBLIC_VK_BASE_URL "$(get_env_value VK_BASE_URL "https://vk.epifera.com")")}"
+app_base_url="${app_base_url:-$(get_env_value PUBLIC_APP_BASE_URL "$(get_env_value APP_BASE_URL "https://app.epifera.com")")}"
+payment_webhook_url="${payment_webhook_url:-$(get_env_value PUBLIC_PAYMENT_WEBHOOK_URL "$(get_env_value PAYMENT_WEBHOOK_URL "https://epifera.com/billing/webhooks/yookassa")")}"
 payment_base_url="$(get_env_value PUBLIC_PAYMENT_BASE_URL "")"
 if [[ -z "$payment_base_url" ]]; then
   payment_base_url="${payment_webhook_url%/billing/webhooks/yookassa}"

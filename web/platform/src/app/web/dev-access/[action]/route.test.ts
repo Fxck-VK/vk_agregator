@@ -6,7 +6,7 @@ vi.mock("server-only", () => ({}));
 import { GET } from "./route";
 
 const fixture = "dev-user:$2y$12$" + "a".repeat(53);
-const origin = "https://dev-web.neiirohub.ru";
+const origin = "https://dev-web.epifera.com";
 const proof = createHash("sha256").update(`neirohub-dev-web-issuer-v1:${fixture}`).digest("hex");
 const issuer = { "x-dev-web-proof": proof, "x-dev-web-user": "dev-user" };
 

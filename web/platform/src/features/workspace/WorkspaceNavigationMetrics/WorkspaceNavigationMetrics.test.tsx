@@ -31,7 +31,7 @@ describe("workspace navigation metrics", () => {
   });
 
   it("does not collect metrics on a production hostname", () => {
-    vi.stubGlobal("location", new URL("https://neiirohub.ru/app"));
+    vi.stubGlobal("location", new URL("https://epifera.com/app"));
 
     recordWorkspaceDataLoad({ type: "data", target: "files", source: "network", durationMs: 24 });
 
@@ -39,7 +39,7 @@ describe("workspace navigation metrics", () => {
   });
 
   it("does not install a document click listener on a production hostname", async () => {
-    vi.stubGlobal("location", new URL("https://neiirohub.ru/app"));
+    vi.stubGlobal("location", new URL("https://epifera.com/app"));
     const addEventListener = vi.spyOn(document, "addEventListener");
 
     render(<WorkspaceNavigationMetrics />);

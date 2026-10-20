@@ -22,7 +22,7 @@ describe("VideoPlayer", () => {
     const { container } = render(
       <VideoPlayer
         poster="/assets/images/video/how-it-works-poster.webp"
-        source={{ src: "https://cdn.neirohub.ru/video/how-it-works.mp4", type: "video/mp4" }}
+        source={{ src: "https://cdn.epifera.com/video/how-it-works.mp4", type: "video/mp4" }}
         title="Как работает NeiroHub"
       />,
     );
@@ -42,7 +42,7 @@ describe("VideoPlayer", () => {
     expect(video).toHaveAttribute("preload", "none");
     expect(container.querySelector("source")).toHaveAttribute(
       "src",
-      "https://cdn.neirohub.ru/video/how-it-works.mp4",
+      "https://cdn.epifera.com/video/how-it-works.mp4",
     );
     expect(container.querySelector("source")).toHaveAttribute("type", "video/mp4");
 
@@ -57,7 +57,7 @@ describe("VideoPlayer", () => {
     vi.spyOn(HTMLMediaElement.prototype, "play").mockRejectedValue(new Error("blocked"));
     render(
       <VideoPlayer
-        source={{ src: "https://cdn.neirohub.ru/video/how-it-works.mp4", type: "video/mp4" }}
+        source={{ src: "https://cdn.epifera.com/video/how-it-works.mp4", type: "video/mp4" }}
         title="Как работает NeiroHub"
       />,
     );
@@ -75,7 +75,7 @@ describe("VideoPlayer", () => {
     render(
       <VideoPlayer
         poster="/assets/images/video/how-it-works-poster.webp"
-        source={{ src: "https://cdn.neirohub.ru/video/how-it-works.mp4", type: "video/mp4" }}
+        source={{ src: "https://cdn.epifera.com/video/how-it-works.mp4", type: "video/mp4" }}
         title="Как работает NeiroHub"
       />,
     );
@@ -100,7 +100,7 @@ describe("VideoPlayer", () => {
     const pause = vi.spyOn(HTMLMediaElement.prototype, "pause").mockImplementation(() => undefined);
     render(
       <VideoPlayer
-        source={{ src: "https://cdn.neirohub.ru/video/how-it-works.mp4", type: "video/mp4" }}
+        source={{ src: "https://cdn.epifera.com/video/how-it-works.mp4", type: "video/mp4" }}
         title="Как работает NeiroHub"
       />,
     );
@@ -140,7 +140,7 @@ describe("VideoPlayer", () => {
     const pause = vi.spyOn(HTMLMediaElement.prototype, "pause").mockImplementation(() => undefined);
     render(
       <VideoPlayer
-        source={{ src: "https://cdn.neirohub.ru/video/how-it-works.mp4", type: "video/mp4" }}
+        source={{ src: "https://cdn.epifera.com/video/how-it-works.mp4", type: "video/mp4" }}
         title="Как работает NeiroHub"
       />,
     );
@@ -158,7 +158,7 @@ describe("VideoPlayer", () => {
   it("shows a neutral error state when playback fails", () => {
     render(
       <VideoPlayer
-        source={{ src: "https://cdn.neirohub.ru/video/how-it-works.mp4", type: "video/mp4" }}
+        source={{ src: "https://cdn.epifera.com/video/how-it-works.mp4", type: "video/mp4" }}
         title="Как работает NeiroHub"
       />,
     );

@@ -52,7 +52,7 @@ func TestCreatePaymentSendsYooKassaContract(t *testing.T) {
 		Currency:       domain.CurrencyRUB,
 		Credits:        500,
 		Description:    "NeiroHub credits",
-		ReturnURL:      "https://neiirohub.ru/return/custom",
+		ReturnURL:      "https://epifera.com/return/custom",
 		ReceiptEmail:   "user@example.com",
 		VATCode:        &vatCode,
 		PaymentSubject: "service",
@@ -80,7 +80,7 @@ func TestCreatePaymentSendsYooKassaContract(t *testing.T) {
 	if seen.Body.Amount.Value != "100.00" || seen.Body.Amount.Currency != "RUB" {
 		t.Fatalf("unexpected amount: %#v", seen.Body.Amount)
 	}
-	if seen.Body.Confirmation.Type != "redirect" || seen.Body.Confirmation.ReturnURL != "https://neiirohub.ru/return/custom" {
+	if seen.Body.Confirmation.Type != "redirect" || seen.Body.Confirmation.ReturnURL != "https://epifera.com/return/custom" {
 		t.Fatalf("unexpected confirmation: %#v", seen.Body.Confirmation)
 	}
 	if seen.Body.Receipt.Customer.Email != "user@example.com" {
@@ -118,7 +118,7 @@ func TestCreatePaymentUsesCanonicalMetadataAndProtectsReservedKeys(t *testing.T)
 	provider := newTestProvider(t, server.URL)
 	if _, err := provider.CreatePayment(context.Background(), domain.CreatePaymentInput{
 		IntentID: intentID, AccountID: accountID, Amount: 10000, Currency: domain.CurrencyRUB,
-		Credits: 100, ReceiptEmail: "account@example.com", ReturnURL: "https://neiirohub.ru/payments/return",
+		Credits: 100, ReceiptEmail: "account@example.com", ReturnURL: "https://epifera.com/payments/return",
 		IdempotencyKey: "pay:" + intentID.String(),
 		Metadata:       json.RawMessage(`{"user_id":"forged-user","account_id":"forged-account","intent_id":"forged-intent","custom":"kept"}`),
 	}); err != nil {
@@ -393,7 +393,7 @@ func newTestProvider(t *testing.T, baseURL string) *Provider {
 		ShopID:    "shop-1",
 		SecretKey: "secret",
 		BaseURL:   baseURL,
-		ReturnURL: "https://neiirohub.ru/payments/return",
+		ReturnURL: "https://epifera.com/payments/return",
 		HTTPClient: &http.Client{
 			Transport: http.DefaultTransport,
 		},

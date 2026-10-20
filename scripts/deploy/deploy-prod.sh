@@ -521,9 +521,9 @@ if [[ "${no_health_check}" != "true" ]]; then
   health_status="passed"
 
   if [[ "${with_cloudflare}" == "true" && "${skip_public_smoke}" != "true" ]]; then
-    public_vk_url="$(get_public_url PUBLIC_VK_BASE_URL VK_BASE_URL https://vk.neiirohub.ru)"
-    public_app_url="$(get_public_url PUBLIC_APP_BASE_URL APP_BASE_URL https://app.neiirohub.ru)"
-    public_payment_webhook_url="$(get_public_url PUBLIC_PAYMENT_WEBHOOK_URL PAYMENT_WEBHOOK_URL https://neiirohub.ru/billing/webhooks/yookassa)"
+    public_vk_url="$(get_public_url PUBLIC_VK_BASE_URL VK_BASE_URL https://vk.epifera.com)"
+    public_app_url="$(get_public_url PUBLIC_APP_BASE_URL APP_BASE_URL https://app.epifera.com)"
+    public_payment_webhook_url="$(get_public_url PUBLIC_PAYMENT_WEBHOOK_URL PAYMENT_WEBHOOK_URL https://epifera.com/billing/webhooks/yookassa)"
     run_public_smoke "${public_vk_url}" "${public_app_url}" "${public_payment_webhook_url}"
     public_smoke_status="passed"
   fi

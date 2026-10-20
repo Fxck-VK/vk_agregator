@@ -119,7 +119,7 @@ function Assert-DevStatusSecurity {
     }
 
     $expectedTunnelName = Get-EnvValue -Values $Values -Name "DEV_EXPECTED_TUNNEL_NAME" -Default "neiirohub-vk-dev"
-    $expectedTunnelHost = Get-EnvValue -Values $Values -Name "DEV_EXPECTED_TUNNEL_HOSTNAME" -Default "dev-vk.neiirohub.ru"
+    $expectedTunnelHost = Get-EnvValue -Values $Values -Name "DEV_EXPECTED_TUNNEL_HOSTNAME" -Default "dev-vk.epifera.com"
     if ((Get-EnvValue -Values $Values -Name "VK_BOT_TUNNEL_NAME") -ne $expectedTunnelName) {
         [void]$Problems.Add("VK_BOT_TUNNEL_NAME must be DEV tunnel $expectedTunnelName")
     }
@@ -187,9 +187,9 @@ function Assert-DevStatusEnv {
     }
 
     $expectedUrls = @{
-        PUBLIC_VK_BASE_URL = "https://dev-vk.neiirohub.ru"
-        PUBLIC_APP_BASE_URL = "https://dev-app.neiirohub.ru"
-        PUBLIC_PAYMENT_WEBHOOK_URL = "https://dev.neiirohub.ru/billing/webhooks/yookassa"
+        PUBLIC_VK_BASE_URL = "https://dev-vk.epifera.com"
+        PUBLIC_APP_BASE_URL = "https://dev-app.epifera.com"
+        PUBLIC_PAYMENT_WEBHOOK_URL = "https://dev.epifera.com/billing/webhooks/yookassa"
     }
     foreach ($entry in $expectedUrls.GetEnumerator()) {
         $value = Get-EnvValue -Values $Values -Name $entry.Key
@@ -199,9 +199,9 @@ function Assert-DevStatusEnv {
     }
 
     $prodMarkers = @(
-        "https://vk.neiirohub.ru",
-        "https://app.neiirohub.ru",
-        "https://neiirohub.ru/billing/webhooks/yookassa",
+        "https://vk.epifera.com",
+        "https://app.epifera.com",
+        "https://epifera.com/billing/webhooks/yookassa",
         "vk-ai-aggregator-prod"
     )
     foreach ($marker in $prodMarkers) {
@@ -448,7 +448,7 @@ function Test-VKCallbackConfirmation {
     $result = Invoke-RawHttp `
         -Url "http://127.0.0.1:$ReverseProxyPort/webhooks/vk" `
         -Method "POST" `
-        -HostHeader "dev-vk.neiirohub.ru" `
+        -HostHeader "dev-vk.epifera.com" `
         -Body $body `
         -TimeoutSec $TimeoutSeconds
 
@@ -517,13 +517,13 @@ try {
 
     Write-Host ""
     Write-Host "== DEV reverse proxy routes"
-    Test-HttpStatus -Name "DEV VK health" -Url "http://127.0.0.1:$reverseProxyPort/health" -HostHeader "dev-vk.neiirohub.ru" -ExpectedStatuses @(200) | Out-Null
+    Test-HttpStatus -Name "DEV VK health" -Url "http://127.0.0.1:$reverseProxyPort/health" -HostHeader "dev-vk.epifera.com" -ExpectedStatuses @(200) | Out-Null
     Test-VKCallbackConfirmation -Values $envValues -ReverseProxyPort $reverseProxyPort
-    Test-HttpStatus -Name "DEV Mini App" -Url "http://127.0.0.1:$reverseProxyPort/" -HostHeader "dev-app.neiirohub.ru" -ExpectedStatuses @(200) | Out-Null
-    Test-HttpStatus -Name "DEV Mini App BFF" -Url "http://127.0.0.1:$reverseProxyPort/miniapp/balance" -HostHeader "dev-app.neiirohub.ru" -ExpectedStatuses @(400, 401, 403) | Out-Null
-    Test-HttpStatus -Name "DEV YooKassa webhook" -Url "http://127.0.0.1:$reverseProxyPort/billing/webhooks/yookassa" -HostHeader "dev.neiirohub.ru" -Method "POST" -Body "{}" -ExpectedStatuses @(400, 401, 403) | Out-Null
-    Test-HttpStatus -Name "DEV metrics blocked" -Url "http://127.0.0.1:$reverseProxyPort/metrics" -HostHeader "dev-app.neiirohub.ru" -ExpectedStatuses @(404) | Out-Null
-    Test-HttpStatus -Name "DEV admin blocked" -Url "http://127.0.0.1:$reverseProxyPort/admin/jobs" -HostHeader "dev-vk.neiirohub.ru" -ExpectedStatuses @(404) | Out-Null
+    Test-HttpStatus -Name "DEV Mini App" -Url "http://127.0.0.1:$reverseProxyPort/" -HostHeader "dev-app.epifera.com" -ExpectedStatuses @(200) | Out-Null
+    Test-HttpStatus -Name "DEV Mini App BFF" -Url "http://127.0.0.1:$reverseProxyPort/miniapp/balance" -HostHeader "dev-app.epifera.com" -ExpectedStatuses @(400, 401, 403) | Out-Null
+    Test-HttpStatus -Name "DEV YooKassa webhook" -Url "http://127.0.0.1:$reverseProxyPort/billing/webhooks/yookassa" -HostHeader "dev.epifera.com" -Method "POST" -Body "{}" -ExpectedStatuses @(400, 401, 403) | Out-Null
+    Test-HttpStatus -Name "DEV metrics blocked" -Url "http://127.0.0.1:$reverseProxyPort/metrics" -HostHeader "dev-app.epifera.com" -ExpectedStatuses @(404) | Out-Null
+    Test-HttpStatus -Name "DEV admin blocked" -Url "http://127.0.0.1:$reverseProxyPort/admin/jobs" -HostHeader "dev-vk.epifera.com" -ExpectedStatuses @(404) | Out-Null
 
     Write-Host ""
     Write-Host "== DEV tunnel"

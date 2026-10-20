@@ -149,14 +149,14 @@ if [[ "${app_env_lc}" != "development" ]]; then
   exit 1
 fi
 
-require_dev_url PUBLIC_VK_BASE_URL "https://dev-vk.neiirohub.ru"
-require_dev_url PUBLIC_APP_BASE_URL "https://dev-app.neiirohub.ru"
-require_dev_url PUBLIC_PAYMENT_WEBHOOK_URL "https://dev.neiirohub.ru"
-require_exact WEB_ORIGIN "https://dev-web.neiirohub.ru"
+require_dev_url PUBLIC_VK_BASE_URL "https://dev-vk.epifera.com"
+require_dev_url PUBLIC_APP_BASE_URL "https://dev-app.epifera.com"
+require_dev_url PUBLIC_PAYMENT_WEBHOOK_URL "https://dev.epifera.com"
+require_exact WEB_ORIGIN "https://dev-web.epifera.com"
 
-reject_exact_value PUBLIC_VK_BASE_URL "https://vk.neiirohub.ru"
-reject_exact_value PUBLIC_APP_BASE_URL "https://app.neiirohub.ru"
-reject_exact_value PUBLIC_PAYMENT_WEBHOOK_URL "https://neiirohub.ru"
+reject_exact_value PUBLIC_VK_BASE_URL "https://vk.epifera.com"
+reject_exact_value PUBLIC_APP_BASE_URL "https://app.epifera.com"
+reject_exact_value PUBLIC_PAYMENT_WEBHOOK_URL "https://epifera.com"
 
 vk_group_id="$(get_env_value VK_GROUP_ID)"
 if is_placeholder "${vk_group_id}"; then
@@ -190,9 +190,9 @@ if grep -Eiq '^(PROD_|PRODUCTION_)' "${env_file}"; then
 fi
 
 for forbidden_domain in \
-  "https://vk.neiirohub.ru" \
-  "https://app.neiirohub.ru" \
-  "https://neiirohub.ru/billing/webhooks/yookassa"
+  "https://vk.epifera.com" \
+  "https://app.epifera.com" \
+  "https://epifera.com/billing/webhooks/yookassa"
 do
   if grep -Fq "${forbidden_domain}" "${env_file}"; then
     printf 'Production domain found in DEV env: %s\n' "${forbidden_domain}" >&2

@@ -18,7 +18,7 @@ if [[ "${log}" == *"${DEV_ACCOUNT_EMAIL_SMTP_PASSWORD}"* ]]; then
   echo 'SMTP password leaked to output' >&2; exit 1
 fi
 grep -Fx 'VK_APP_SECRET=fixture' "${output}" >/dev/null
-grep -Fx 'ACCOUNT_EMAIL_SMTP_FROM=noreply@notify.neiirohub.ru' "${output}" >/dev/null
+grep -Fx 'ACCOUNT_EMAIL_SMTP_FROM=noreply@notify.epifera.com' "${output}" >/dev/null
 grep -Fx 'ACCOUNT_EMAIL_SMTP_HOST=smtp.resend.com' "${output}" >/dev/null
 grep -Fx 'ACCOUNT_EMAIL_SMTP_PORT=587' "${output}" >/dev/null
 grep -Fx 'ACCOUNT_EMAIL_SMTP_TLS_MODE=starttls' "${output}" >/dev/null

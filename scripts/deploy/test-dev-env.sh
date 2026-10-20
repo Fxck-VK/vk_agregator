@@ -35,10 +35,10 @@ write_common_dev_env() {
   cat > "${output}" <<EOF
 APP_ENV=development
 DEV_EXPECTED_VK_GROUP_ID=239658332
-PUBLIC_VK_BASE_URL=https://dev-vk.neiirohub.ru
-PUBLIC_APP_BASE_URL=https://dev-app.neiirohub.ru
-PUBLIC_PAYMENT_WEBHOOK_URL=https://dev.neiirohub.ru/billing/webhooks/yookassa
-WEB_ORIGIN=https://dev-web.neiirohub.ru
+PUBLIC_VK_BASE_URL=https://dev-vk.epifera.com
+PUBLIC_APP_BASE_URL=https://dev-app.epifera.com
+PUBLIC_PAYMENT_WEBHOOK_URL=https://dev.epifera.com/billing/webhooks/yookassa
+WEB_ORIGIN=https://dev-web.epifera.com
 VK_GROUP_ID=239658332
 VK_ACCESS_TOKEN=VK_TEST
 VK_SECRET=VK_CB_TEST
@@ -59,7 +59,7 @@ RUNWAYML_BASE_URL=https://api.dev.runwayml.com/v1
 DEV_ALLOW_REAL_PAYMENTS=false
 YOOKASSA_SHOP_ID=dev-test-shop
 YOOKASSA_SECRET_KEY=YK_TEST
-YOOKASSA_RETURN_URL=https://dev-app.neiirohub.ru/
+YOOKASSA_RETURN_URL=https://dev-app.epifera.com/
 EOF
 }
 
@@ -68,10 +68,10 @@ write_nonvideo_dev_env() {
   cat > "${output}" <<EOF
 APP_ENV=development
 DEV_EXPECTED_VK_GROUP_ID=239658332
-PUBLIC_VK_BASE_URL=https://dev-vk.neiirohub.ru
-PUBLIC_APP_BASE_URL=https://dev-app.neiirohub.ru
-PUBLIC_PAYMENT_WEBHOOK_URL=https://dev.neiirohub.ru/billing/webhooks/yookassa
-WEB_ORIGIN=https://dev-web.neiirohub.ru
+PUBLIC_VK_BASE_URL=https://dev-vk.epifera.com
+PUBLIC_APP_BASE_URL=https://dev-app.epifera.com
+PUBLIC_PAYMENT_WEBHOOK_URL=https://dev.epifera.com/billing/webhooks/yookassa
+WEB_ORIGIN=https://dev-web.epifera.com
 VK_GROUP_ID=239658332
 VK_ACCESS_TOKEN=VK_TEST
 VK_SECRET=VK_CB_TEST
@@ -91,7 +91,7 @@ FFPROBE_PATH=/opt/custom/ffprobe
 DEV_ALLOW_REAL_PAYMENTS=false
 YOOKASSA_SHOP_ID=dev-test-shop
 YOOKASSA_SECRET_KEY=YK_TEST
-YOOKASSA_RETURN_URL=https://dev-app.neiirohub.ru/
+YOOKASSA_RETURN_URL=https://dev-app.epifera.com/
 EOF
 }
 
@@ -106,8 +106,8 @@ run_valid_case() {
   if [[ "${payment_provider}" == "yookassa" ]]; then
     {
       echo "DEV_ALLOW_REAL_PAYMENTS=true"
-      echo "YOOKASSA_RETURN_URL_MINIAPP=https://dev-app.neiirohub.ru/"
-      echo "YOOKASSA_RETURN_URL_VK_BOT=https://dev-vk.neiirohub.ru/payments/return"
+      echo "YOOKASSA_RETURN_URL_MINIAPP=https://dev-app.epifera.com/"
+      echo "YOOKASSA_RETURN_URL_VK_BOT=https://dev-vk.epifera.com/payments/return"
     } >> "${raw}"
   fi
 
@@ -229,12 +229,12 @@ run_valid_case "yookassa-dev" "yookassa"
 
 prod_url_env="${tmpdir}/prod-url.env"
 write_common_dev_env "${prod_url_env}" "mock"
-sed -i 's#PUBLIC_VK_BASE_URL=https://dev-vk.neiirohub.ru#PUBLIC_VK_BASE_URL=https://vk.neiirohub.ru#' "${prod_url_env}"
+sed -i 's#PUBLIC_VK_BASE_URL=https://dev-vk.epifera.com#PUBLIC_VK_BASE_URL=https://vk.epifera.com#' "${prod_url_env}"
 expect_failure "prod URL in DEV env" bash "${check_script}" --env-file "${prod_url_env}"
 
 wrong_web_origin_env="${tmpdir}/wrong-web-origin.env"
 write_common_dev_env "${wrong_web_origin_env}" "mock"
-sed -i 's#WEB_ORIGIN=https://dev-web.neiirohub.ru#WEB_ORIGIN=https://dev-app.neiirohub.ru#' "${wrong_web_origin_env}"
+sed -i 's#WEB_ORIGIN=https://dev-web.epifera.com#WEB_ORIGIN=https://dev-app.epifera.com#' "${wrong_web_origin_env}"
 expect_failure "wrong DEV web origin" bash "${check_script}" --env-file "${wrong_web_origin_env}"
 
 disabled_media_pipeline_env="${tmpdir}/disabled-media-pipeline.env"

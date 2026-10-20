@@ -26,11 +26,11 @@ webhook/reconciliation and billing ledger.
 
 | Surface | DEV URL | Production URL |
 |---|---|---|
-| VK Callback API | `https://dev-vk.neiirohub.ru/webhooks/vk` | `https://vk.neiirohub.ru/webhooks/vk` |
-| Mini App | `https://dev-app.neiirohub.ru` | `https://app.neiirohub.ru` |
-| Mini App BFF | `https://dev-app.neiirohub.ru/miniapp/*` | `https://app.neiirohub.ru/miniapp/*` |
-| YooKassa webhook | `https://dev.neiirohub.ru/billing/webhooks/yookassa` | `https://neiirohub.ru/billing/webhooks/yookassa` |
-| Browser platform | `https://dev-web.neiirohub.ru` | not published in this rollout |
+| VK Callback API | `https://dev-vk.epifera.com/webhooks/vk` | `https://vk.epifera.com/webhooks/vk` |
+| Mini App | `https://dev-app.epifera.com` | `https://app.epifera.com` |
+| Mini App BFF | `https://dev-app.epifera.com/miniapp/*` | `https://app.epifera.com/miniapp/*` |
+| YooKassa webhook | `https://dev.epifera.com/billing/webhooks/yookassa` | `https://epifera.com/billing/webhooks/yookassa` |
+| Browser platform | `https://dev-web.epifera.com` | not published in this rollout |
 
 The three local DEV hostnames (`dev-vk`, `dev-app`, and `dev`) point through
 the existing dashboard-managed Cloudflare Tunnel for DEV, separate from
@@ -45,11 +45,11 @@ hostname/path:
 
 | DEV hostname/path | Target service |
 |---|---|
-| `dev-vk.neiirohub.ru/webhooks/vk` | `cmd/api` |
-| `dev-vk.neiirohub.ru/health` | `cmd/api` |
-| `dev-app.neiirohub.ru/` | Mini App frontend |
-| `dev-app.neiirohub.ru/miniapp/*` | `cmd/api` |
-| `dev.neiirohub.ru/billing/webhooks/yookassa` | `cmd/provider-webhook` |
+| `dev-vk.epifera.com/webhooks/vk` | `cmd/api` |
+| `dev-vk.epifera.com/health` | `cmd/api` |
+| `dev-app.epifera.com/` | Mini App frontend |
+| `dev-app.epifera.com/miniapp/*` | `cmd/api` |
+| `dev.epifera.com/billing/webhooks/yookassa` | `cmd/provider-webhook` |
 
 The local reverse proxy listens on `127.0.0.1:8088`. Cloudflare must not route
 directly to `cmd/api`, `cmd/provider-webhook` or the Mini App dev server; all
@@ -60,7 +60,7 @@ The browser platform is a remote-only browser platform overlay. It is supplied
 by `docker-compose.dev-web.yml` on the remote DEV deployment, not by the
 standard local `start-dev-stack.ps1` Compose set. When that remote overlay is
 published, its additional DEV-only route is
-`dev-web.neiirohub.ru/* -> http://127.0.0.1:8088` and Nginx requires the
+`dev-web.epifera.com/* -> http://127.0.0.1:8088` and Nginx requires the
 gateway before forwarding to the platform.
 
 After the local services and DEV Cloudflare tunnel are running, verify the
@@ -75,12 +75,12 @@ headers. It expects the API/Mini App/webhook paths to be routed and sensitive
 paths such as `/admin/*` and `/metrics` to stay blocked. The explicit
 `-SkipDevWebGatewayCheck` is required only because the standard local stack
 does not include the remote platform overlay. Without that switch, the script
-strictly requires `dev-web.neiirohub.ru/` to return `401`.
+strictly requires `dev-web.epifera.com/` to return `401`.
 
 `smoke-dev.ps1` verifies the remote DEV deployment's public Cloudflare routes
 over HTTPS after its browser-platform overlay is published. It checks the DEV
 VK health/callback route, Mini App frontend and BFF, YooKassa webhook entrypoint,
-an unauthenticated `https://dev-web.neiirohub.ru/` gateway response of exactly
+an unauthenticated `https://dev-web.epifera.com/` gateway response of exactly
 `401`, and confirms that `/admin/*` and `/metrics` are not publicly open. It
 refuses non-HTTPS URLs and production hostnames. Smoke scripts never read, send
 or log gateway credentials.
@@ -266,12 +266,12 @@ data and does not touch production infrastructure.
 after that deployment has published `docker-compose.dev-web.yml` to verify:
 
 ```text
-https://dev-vk.neiirohub.ru/health
-https://dev-vk.neiirohub.ru/webhooks/vk
-https://dev-app.neiirohub.ru
-https://dev-app.neiirohub.ru/miniapp/balance
-https://dev.neiirohub.ru/billing/webhooks/yookassa
-https://dev-web.neiirohub.ru/ -> exactly 401 without gateway credentials
+https://dev-vk.epifera.com/health
+https://dev-vk.epifera.com/webhooks/vk
+https://dev-app.epifera.com
+https://dev-app.epifera.com/miniapp/balance
+https://dev.epifera.com/billing/webhooks/yookassa
+https://dev-web.epifera.com/ -> exactly 401 without gateway credentials
 ```
 
 The same smoke also verifies that public `/admin/*` and `/metrics` routes are
@@ -338,10 +338,10 @@ notepad dev.env
 ```
 
 ```text
-PUBLIC_VK_BASE_URL=https://dev-vk.neiirohub.ru
-PUBLIC_APP_BASE_URL=https://dev-app.neiirohub.ru
-PUBLIC_PAYMENT_WEBHOOK_URL=https://dev.neiirohub.ru/billing/webhooks/yookassa
-WEB_ORIGIN=https://dev-web.neiirohub.ru
+PUBLIC_VK_BASE_URL=https://dev-vk.epifera.com
+PUBLIC_APP_BASE_URL=https://dev-app.epifera.com
+PUBLIC_PAYMENT_WEBHOOK_URL=https://dev.epifera.com/billing/webhooks/yookassa
+WEB_ORIGIN=https://dev-web.epifera.com
 
 VK_ACCESS_TOKEN=<dev VK community token>
 VK_SECRET=<dev VK Callback API secret>
@@ -411,12 +411,12 @@ The local DEV tunnel publishes these three host routes:
 
 | Hostname | Service |
 |---|---|
-| `dev-vk.neiirohub.ru` | `http://127.0.0.1:8088` |
-| `dev-app.neiirohub.ru` | `http://127.0.0.1:8088` |
-| `dev.neiirohub.ru` | `http://127.0.0.1:8088` |
+| `dev-vk.epifera.com` | `http://127.0.0.1:8088` |
+| `dev-app.epifera.com` | `http://127.0.0.1:8088` |
+| `dev.epifera.com` | `http://127.0.0.1:8088` |
 
 The remote DEV browser-platform overlay additionally publishes
-`dev-web.neiirohub.ru/* -> http://127.0.0.1:8088` through that same DEV tunnel.
+`dev-web.epifera.com/* -> http://127.0.0.1:8088` through that same DEV tunnel.
 It is not part of the local start flow.
 
 Do not add broad public routes for `/admin/*`, `/metrics`, `/debug/*` or broad
@@ -427,24 +427,24 @@ Do not add broad public routes for `/admin/*`, `/metrics`, `/debug/*` or broad
 The remote DEV deployment is ready when all checks pass:
 
 ```text
-https://dev-vk.neiirohub.ru/health -> 200
-https://dev-vk.neiirohub.ru/webhooks/vk -> controlled non-5xx for invalid GET
-https://dev-app.neiirohub.ru -> Mini App frontend
-https://dev-app.neiirohub.ru/miniapp/* -> API/BFF responses
-https://dev.neiirohub.ru/billing/webhooks/yookassa -> controlled non-5xx for invalid body
-https://dev-web.neiirohub.ru/ -> exactly 401 without gateway credentials
+https://dev-vk.epifera.com/health -> 200
+https://dev-vk.epifera.com/webhooks/vk -> controlled non-5xx for invalid GET
+https://dev-app.epifera.com -> Mini App frontend
+https://dev-app.epifera.com/miniapp/* -> API/BFF responses
+https://dev.epifera.com/billing/webhooks/yookassa -> controlled non-5xx for invalid body
+https://dev-web.epifera.com/ -> exactly 401 without gateway credentials
 .\scripts\dev\smoke-dev.ps1 -> public DEV smoke passes
 ```
 
 ## DEV Web Manual Acceptance
 
 After the DEV-only dashboard-managed route
-`dev-web.neiirohub.ru/* -> http://127.0.0.1:8088` is published, use this exact
+`dev-web.epifera.com/* -> http://127.0.0.1:8088` is published, use this exact
 manual sequence:
 
 `401 outside gate`; gateway credentials then password login; Secure host-only Lax cookies; `/web/v1/me`; CSRF reject; deep-link return.
 
-1. From outside the gateway, request `https://dev-web.neiirohub.ru/` and verify
+1. From outside the gateway, request `https://dev-web.epifera.com/` and verify
    `401 outside the gateway`.
 2. Complete the outer DEV gateway login without disabling the gate. Before platform sign-in, verify
    `/web/v1/me -> 401` from the anonymous BFF and a protected administrative
@@ -452,13 +452,13 @@ manual sequence:
 3. Restore the gateway, enter the gateway credentials, then password login
    with a verified DEV account.
 4. Confirm `Secure, host-only, SameSite=Lax cookies` on
-   `dev-web.neiirohub.ru`.
+   `dev-web.epifera.com`.
 5. Verify the authenticated `/web/v1/me` response.
 6. Submit a mutation without its CSRF value and verify CSRF rejection.
 7. Start at a protected deep link, sign in, and verify deep-link return.
 
 The DEV API value must be exactly
-`WEB_ORIGIN=https://dev-web.neiirohub.ru`. The outer gateway uses the distinct
+`WEB_ORIGIN=https://dev-web.epifera.com`. The outer gateway uses the distinct
 `DEV_WEB_BASIC_AUTH_HTPASSWD` Development secret as one single pre-hashed
 htpasswd entry, never a plaintext password.
 
