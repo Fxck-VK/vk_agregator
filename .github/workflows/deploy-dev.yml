@@ -336,15 +336,22 @@ jobs:
           ENV_PAYMENTS_DEV: ${{ secrets.ENV_PAYMENTS_DEV }}
           DEV_WEB_BASIC_AUTH_HTPASSWD: ${{ secrets.DEV_WEB_BASIC_AUTH_HTPASSWD }}
           DEPLOY_IMAGE_TAG: ${{ steps.release.outputs.image_tag }}
+          DEV_ACCOUNT_EMAIL_SMTP_PASSWORD: ${{ secrets.DEV_ACCOUNT_EMAIL_SMTP_PASSWORD }}
+          DEV_ACCOUNT_OAUTH_GOOGLE_CLIENT_IDS: ${{ secrets.DEV_ACCOUNT_OAUTH_GOOGLE_CLIENT_IDS }}
+          DEV_ACCOUNT_WEB_OAUTH_GOOGLE_CLIENT_SECRET: ${{ secrets.DEV_ACCOUNT_WEB_OAUTH_GOOGLE_CLIENT_SECRET }}
         run: |
           set -euo pipefail
           ssh_opts=(-i "${HOME}/.ssh/deploy_key" -o StrictHostKeyChecking=yes -o UserKnownHostsFile="${HOME}/.ssh/known_hosts" -o GlobalKnownHostsFile=/dev/null)
 
           raw_env="$(mktemp)"
+          email_env="$(mktemp)"
+          email_settings="$(mktemp)"
+          google_env="$(mktemp)"
+          google_settings="$(mktemp)"
           rendered_env="$(mktemp)"
           raw_auth_env="$(mktemp)"
           rendered_auth_env="$(mktemp)"
-          trap 'rm -f "${raw_env}" "${rendered_env}" "${raw_auth_env}" "${rendered_auth_env}"' EXIT
+          trap 'rm -f "${raw_env}" "${email_env}" "${email_settings}" "${google_env}" "${google_settings}" "${rendered_env}" "${raw_auth_env}" "${rendered_auth_env}"' EXIT
 
           dev_web_host="$(awk '$1 == "server_name" { sub(/\r$/, "", $2); sub(/;$/, "", $2); print $2 }' deployments/nginx/dev-web.conf)"
           if [[ ! "${dev_web_host}" =~ ^dev-web\.[a-z0-9]+([.-][a-z0-9]+)*\.[a-z]{2,}$ ]]; then
@@ -361,8 +368,18 @@ jobs:
             "${dev_domain_args[@]}" \
             --output "${raw_env}"
 
-          bash scripts/deploy/prepare-dev-env.sh \
+          bash scripts/deploy/prepare-dev-email.sh \
             --input "${raw_env}" \
+            --output "${email_env}" \
+            --settings-output "${email_settings}"
+
+          bash scripts/deploy/prepare-dev-google.sh \
+            --input "${email_env}" \
+            --output "${google_env}" \
+            --settings-output "${google_settings}"
+
+          bash scripts/deploy/prepare-dev-env.sh \
+            --input "${google_env}" \
             --output "${rendered_env}" \
             --image-tag "${DEPLOY_IMAGE_TAG}" \
             --ghcr-username "${GHCR_USERNAME}" \
@@ -384,17 +401,39 @@ jobs:
           umask 077
           : > .dev-web-auth.next
           chmod 600 .dev-web-auth.next
+          rm -f .env.dev-email.next
+          rm -f .env.dev-google.next
           REMOTE
           } | ssh "${ssh_opts[@]}" "${DEV_DEPLOY_USER}@${DEV_DEPLOY_HOST}" bash -s
 
           scp "${ssh_opts[@]}" "${rendered_env}" "${DEV_DEPLOY_USER}@${DEV_DEPLOY_HOST}:${DEV_DEPLOY_PATH}/.env.next"
           scp -p "${ssh_opts[@]}" "${rendered_auth_env}" "${DEV_DEPLOY_USER}@${DEV_DEPLOY_HOST}:${DEV_DEPLOY_PATH}/.dev-web-auth.next"
+          if [[ -s "${email_settings}" ]]; then
+            scp -p "${ssh_opts[@]}" "${email_settings}" "${DEV_DEPLOY_USER}@${DEV_DEPLOY_HOST}:${DEV_DEPLOY_PATH}/.env.dev-email.next"
+          fi
+          if [[ -s "${google_settings}" ]]; then
+            scp -p "${ssh_opts[@]}" "${google_settings}" "${DEV_DEPLOY_USER}@${DEV_DEPLOY_HOST}:${DEV_DEPLOY_PATH}/.env.dev-google.next"
+          fi
           {
             printf 'deploy_path=%q\n' "${DEV_DEPLOY_PATH}"
             cat <<'REMOTE'
           set -euo pipefail
           cd "${deploy_path}"
           install -m 600 .env.next .env
+          if [[ -f .env.dev-email.next ]]; then
+            if [[ "$(stat -c '%a' .env.dev-email.next)" != "600" ]]; then
+              echo "DEV email settings staging file must be mode 600" >&2
+              exit 1
+            fi
+            mv -f .env.dev-email.next .env.dev-email
+          fi
+          if [[ -f .env.dev-google.next ]]; then
+            if [[ "$(stat -c '%a' .env.dev-google.next)" != "600" ]]; then
+              echo "DEV Google settings staging file must be mode 600" >&2
+              exit 1
+            fi
+            mv -f .env.dev-google.next .env.dev-google
+          fi
           if [[ "$(stat -c '%a' .dev-web-auth.next)" != "600" ]]; then
             echo "DEV web auth staging file must be mode 600" >&2
             exit 1
@@ -442,8 +481,60 @@ jobs:
           set -euo pipefail
           cd "${deploy_path}"
           bash scripts/deploy/smoke-dev.sh --env-file .env --timeout-seconds 60
+          dev_web_origin="$(awk -F= '$1 == "WEB_ORIGIN" { print substr($0, index($0, "=") + 1) }' .env | tail -n 1)"
+          if [[ ! "${dev_web_origin}" =~ ^https://dev-web\.[a-z0-9]+([.-][a-z0-9]+)*\.[a-z]{2,}$ ]]; then
+            echo 'DEV smoke requires a canonical WEB_ORIGIN' >&2
+            exit 1
+          fi
+          auth_methods="$(curl -fsS --max-time 20 http://127.0.0.1:8080/web/v1/auth/methods)"
+          if grep -Eq '"providers":\[[^]]*"google"' <<< "${auth_methods}"; then
+            echo 'Google login unexpectedly enabled on DEV' >&2
+            exit 1
+          fi
+          google_status="$(curl -sS --max-time 20 -o /dev/null -w '%{http_code}' \
+            -H "Origin: ${dev_web_origin}" -H 'Content-Type: application/json' \
+            --data '{"locale":"ru"}' http://127.0.0.1:8080/web/v1/auth/oauth/google/start)"
+          [[ "${google_status}" == 503 ]]
+          echo 'DEV Google login disabled; stored credentials retained'
           REMOTE
           } | ssh "${ssh_opts[@]}" "${DEV_DEPLOY_USER}@${DEV_DEPLOY_HOST}" bash -s
+
+      - name: Observe DEV Cloudflare tunnel after stabilization
+        if: ${{ always() && steps.dev_deploy.outcome == 'success' }}
+        shell: bash
+        env:
+          DEV_DEPLOY_HOST: ${{ secrets.DEV_DEPLOY_HOST }}
+          DEV_DEPLOY_USER: ${{ secrets.DEV_DEPLOY_USER }}
+          DEV_DEPLOY_PATH: ${{ secrets.DEV_DEPLOY_PATH }}
+        run: |
+          set -euo pipefail
+          ssh_opts=(-i "${HOME}/.ssh/deploy_key" -o StrictHostKeyChecking=yes -o UserKnownHostsFile="${HOME}/.ssh/known_hosts" -o GlobalKnownHostsFile=/dev/null)
+
+          ssh "${ssh_opts[@]}" "${DEV_DEPLOY_USER}@${DEV_DEPLOY_HOST}" 'bash -s' -- "${DEV_DEPLOY_PATH}" <<'REMOTE'
+          set +e
+          deploy_path="$1"
+          cd "${deploy_path}" || exit 0
+          sleep 75
+
+          compose=(docker compose --project-name vk-ai-aggregator-dev --env-file .env -f docker-compose.prod.yml)
+          if [[ -f docker-compose.data.yml ]]; then
+            compose+=(-f docker-compose.data.yml)
+          fi
+          if [[ -f docker-compose.dev-web.yml && -f .dev-web-auth.env ]]; then
+            compose+=(--env-file .dev-web-auth.env -f docker-compose.dev-web.yml)
+          fi
+          compose+=(--profile cloudflare --profile provider-balance)
+
+          echo "==> DEV cloudflared status after stabilization"
+          "${compose[@]}" ps cloudflared || true
+          echo "==> DEV cloudflared logs after stabilization"
+          "${compose[@]}" logs --no-color --tail=200 cloudflared || true
+          echo "==> DEV public status after stabilization"
+          dev_web_origin="$(awk -F= '$1 == "WEB_ORIGIN" { print substr($0, index($0, "=") + 1) }' .env | tail -n 1)"
+          if [[ "${dev_web_origin}" =~ ^https://dev-web\.[a-z0-9]+([.-][a-z0-9]+)*\.[a-z]{2,}$ ]]; then
+            curl --silent --show-error --output /dev/null --write-out 'HTTP %{http_code}\n' --max-time 20 "${dev_web_origin}/" || true
+          fi
+          REMOTE
 
       - name: Collect DEV diagnostics after failed deploy or smoke
         if: ${{ failure() && (steps.dev_deploy.outcome == 'failure' || steps.dev_smoke.outcome == 'failure') }}
@@ -476,7 +567,7 @@ jobs:
           echo "==> DEV diagnostic migrate logs"
           "${compose[@]}" logs --no-color --tail=200 migrate || true
 
-          for service in api worker maintenance-worker provider-webhook provider-balance-bot miniapp platform reverse-proxy; do
+          for service in api worker maintenance-worker provider-webhook provider-balance-bot miniapp platform reverse-proxy cloudflared; do
             echo "==> DEV diagnostic ${service} logs"
             "${compose[@]}" logs --no-color --tail=80 "${service}" || true
           done
