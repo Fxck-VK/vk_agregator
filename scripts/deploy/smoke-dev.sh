@@ -168,6 +168,21 @@ check_dev_web_gateway() {
 }
 
 check_dev_web_gateway "initial"
+if [[ "${skip_local_health}" != "true" ]]; then
+  auth_methods="$(curl -fsS --max-time "${timeout_seconds}" http://127.0.0.1:8080/web/v1/auth/methods)"
+  if ! grep -Eq '"providers"[[:space:]]*:[[:space:]]*\[[^]]*"vk"' <<< "${auth_methods}"; then
+    echo '[FAIL] DEV API must advertise configured VK ID login' >&2
+    exit 1
+  fi
+  docker exec -i vk-ai-aggregator-dev-platform-1 node --input-type=module - <<'NODE'
+const response = await fetch('http://127.0.0.1:3000/ru/login', { signal: AbortSignal.timeout(20000) });
+if (!response.ok || !/<button\b[^>]*>\s*VK\s*<\/button>/.test(await response.text())) {
+  console.error('[FAIL] DEV login page does not render the VK button');
+  process.exit(1);
+}
+console.log('[OK] DEV VK ID advertised by API and rendered on login page');
+NODE
+fi
 if (( stabilization_seconds > 0 )); then
   echo "Waiting ${stabilization_seconds}s to verify that the Cloudflare tunnel remains connected"
   sleep "${stabilization_seconds}"

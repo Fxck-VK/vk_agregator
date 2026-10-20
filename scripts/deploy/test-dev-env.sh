@@ -134,6 +134,7 @@ run_valid_case() {
 
   assert_file_contains "${rendered}" "APIMART_PROVIDER_ENABLED=true"
   assert_file_contains "${rendered}" "IMAGE_TAG=sha-test123"
+  assert_file_contains "${rendered}" "ACCOUNT_OAUTH_VK_ID_CLIENT_IDS=54810695"
   assert_file_contains "${rendered}" "BACKUP_IMAGE_TAG=sha-test123"
   assert_file_contains "${rendered}" "WORKER_CPU_LIMIT=1.00"
   assert_file_contains "${rendered}" "POYO_PROVIDER_ENABLED=true"
@@ -275,5 +276,23 @@ write_common_dev_env "${wide_video_containers_env}" "mock"
   echo "FFPROBE_PATH=ffprobe"
 } >> "${wide_video_containers_env}"
 expect_failure "video route with broad DEV video containers" bash "${check_script}" --env-file "${wide_video_containers_env}"
+
+vkid_raw="${tmpdir}/vkid.raw.env"
+vkid_rendered="${tmpdir}/vkid.rendered.env"
+write_common_dev_env "${vkid_raw}" mock
+printf 'ACCOUNT_OAUTH_VK_ID_CLIENT_IDS="777, 54810695,777"\n' >> "${vkid_raw}"
+bash "${prepare_script}" --input "${vkid_raw}" --output "${vkid_rendered}" \
+  --image-tag sha-test123 --ghcr-username test-ghcr-user --ghcr-token GHCR_TEST >/dev/null
+assert_file_contains "${vkid_rendered}" "ACCOUNT_OAUTH_VK_ID_CLIENT_IDS=54810695,777"
+[[ "$(grep -c '^ACCOUNT_OAUTH_VK_ID_CLIENT_IDS=' "${vkid_rendered}")" == 1 ]]
+assert_file_contains "${vkid_rendered}" 'VK_SECRET=VK_CB_TEST'
+
+invalid_vkid_raw="${tmpdir}/invalid-vkid.raw.env"
+write_common_dev_env "${invalid_vkid_raw}" mock
+printf 'ACCOUNT_OAUTH_VK_ID_CLIENT_IDS=not-a-vk-client-id\n' >> "${invalid_vkid_raw}"
+expect_failure "invalid VK ID audience" bash "${prepare_script}" \
+  --input "${invalid_vkid_raw}" --output "${tmpdir}/invalid-vkid.rendered.env" \
+  --image-tag sha-test123 --ghcr-username test-ghcr-user --ghcr-token GHCR_TEST
+[[ ! -e "${tmpdir}/invalid-vkid.rendered.env" ]]
 
 echo "DEV deploy env script tests passed"

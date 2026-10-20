@@ -68,6 +68,19 @@ Register the exact HTTPS callback `${WEB_ORIGIN}/web/v1/auth/oauth/{provider}/ca
 | VK ID | `ACCOUNT_OAUTH_VK_ID_CLIENT_IDS` | code + PKCE + state, server-side user_info |
 | Telegram | `ACCOUNT_OAUTH_TELEGRAM_CLIENT_IDS`, `ACCOUNT_WEB_OAUTH_TELEGRAM_CLIENT_SECRET` | code + PKCE, verified OIDC token and nonce |
 
+The selected public DEV web application ID is versioned in
+`deployments/dev-web-vkid-client-id.txt` (currently `54810695`).
+`prepare-dev-env.sh` puts it first in `ACCOUNT_OAUTH_VK_ID_CLIENT_IDS`, retaining
+and deduplicating existing numeric audiences. This is the website application,
+independent of the Mini App's `VK_APP_ID`; no VK client secret is needed by the
+browser PKCE flow. In that existing VK ID application, register base domain
+`dev-web.epifera.com` and exact redirect
+`https://dev-web.epifera.com/web/v1/auth/oauth/vk/callback`.
+The DEV post-deploy smoke requires the API to advertise VK and the actual
+server-rendered login page to contain its button. These read-only probes do not
+prove a completed external VK sign-in; verify that separately with an operator
+account. The DEV selection does not change PROD configuration.
+
 For DEV Google, create a Google OAuth client of type Web application with the exact callback `https://dev-web.epifera.com/web/v1/auth/oauth/google/callback`. Store its client ID in the dedicated repository secret `DEV_ACCOUNT_OAUTH_GOOGLE_CLIENT_IDS` and its client secret in `DEV_ACCOUNT_WEB_OAUTH_GOOGLE_CLIENT_SECRET`. Keep downloaded credentials outside Git. Both dedicated secrets are required together; missing both preserves existing configuration, while a partial or malformed configuration stops deployment. The first dedicated client ID is the browser client; existing mobile audiences are retained and deduplicated. `scripts/deploy/prepare-dev-google.sh` renders only the two Google settings to the server-only `.env.dev-google` overlay, mode 600, read by the DEV API after its base env and email overlay. Manual `Deploy DEV` applies the settings; the overlay persists through subsequent automatic deployments. The overlay is ignored by Git and Docker build context. Do not reuse this DEV client or copy its secrets into production. Ordinary HTTP localhost remains unavailable for OAuth in the current backend, which requires an HTTPS web origin; local OAuth needs a separately registered HTTPS callback.
 
 Secrets belong in deployment secrets/runtime env, never NEXT_PUBLIC variables. Apple's secret is an operator-generated, signed client-secret JWT; renew before expiry. Apple uses code-only response_mode=query without name/email scopes. Telegram uses OIDC client credentials, not the legacy Login Widget bot token. Existing issuer/JWKS configuration still applies to OIDC verification.

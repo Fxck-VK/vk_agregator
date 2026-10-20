@@ -156,6 +156,20 @@ do
   fi
 done
 
+script_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+# Public web application ID selected for this DEV deployment, not VK_APP_ID
+# (which belongs to the independent Mini App). Existing audiences are retained.
+vkid_browser_client_id="$(tr -d '\r\n' < "${script_dir}/../../deployments/dev-web-vkid-client-id.txt")"
+if [[ ! "${vkid_browser_client_id}" =~ ^[1-9][0-9]{0,19}$ ]]; then
+  echo 'Invalid public DEV VK ID web application configuration' >&2
+  exit 1
+fi
+vkid_client_ids="$(printf '%s,%s' "${vkid_browser_client_id}" "$(get_raw_env_value ACCOUNT_OAUTH_VK_ID_CLIENT_IDS)" | awk -F, '{ for (i=1; i<=NF; i++) { gsub(/^[[:space:]]+|[[:space:]]+$/, "", $i); if ($i != "" && !seen[$i]++) { if (count++) printf ","; printf "%s", $i } } }')"
+if [[ ! "${vkid_client_ids}" =~ ^[1-9][0-9]{0,19}(,[1-9][0-9]{0,19})*$ ]]; then
+  echo 'Invalid existing DEV VK ID client IDs' >&2
+  exit 1
+fi
+
 has_provider_balance_key() {
   has_raw_env_value APIMART_API_KEY ||
     has_raw_env_value POYO_API_KEY ||
@@ -394,6 +408,7 @@ fi
 
 sed \
   -e '/^APP_ENV=/d' \
+  -e '/^ACCOUNT_OAUTH_VK_ID_CLIENT_IDS=/d' \
   -e '/^GHCR_USERNAME=/d' \
   -e '/^GHCR_TOKEN=/d' \
   -e '/^IMAGE_TAG=/d' \
@@ -458,6 +473,7 @@ sed \
 {
   printf '\n'
   printf 'APP_ENV=development\n'
+  printf 'ACCOUNT_OAUTH_VK_ID_CLIENT_IDS=%s\n' "${vkid_client_ids}"
   printf 'APP_ENV_FILE=.env\n'
   printf 'IMAGE_TAG=%s\n' "${image_tag}"
   printf 'BACKUP_IMAGE_TAG=%s\n' "${image_tag}"
