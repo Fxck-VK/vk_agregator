@@ -2,3 +2,5 @@
 # 000052: adds text_model_id and replaces UNIQUE/CHECK constraints atomically;
 # existing image/video rows and job snapshots are retained; no prices activated.
 efdab0751e54ea55897906249108db9d81a5c7d7478a87347b02f47e7433468a  000052_text_model_pricing.up.sql
+# 000058: extends identity/audit provider CHECKs atomically; all rows retained.
+8427121d106c518ccc51b2f6621fcc45d564d33aa239e9ba52e80c66d6e54989  000058_yandex_identity.up.sql

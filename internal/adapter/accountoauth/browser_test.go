@@ -56,7 +56,7 @@ func TestBrowserCodeExchangeKeepsSecretsServerSideAndConsumesProof(t *testing.T)
 					if r.Form.Get("access_token") != "provider-access" {
 						t.Fatal("missing provider proof")
 					}
-					body = `{"user":{"user_id":"12345"}}`
+					body = `{"user":{"user_id":"12345","first_name":"Тестовый","last_name":"Пользователь"}}`
 				} else {
 					if r.Form.Get("code") != "code" || r.Form.Get("client_id") != "client" || r.Form.Get("redirect_uri") != "https://app.example.test/web/v1/auth/oauth/"+name+"/callback" {
 						t.Fatal("bad exchange binding")
@@ -90,6 +90,12 @@ func TestBrowserCodeExchangeKeepsSecretsServerSideAndConsumesProof(t *testing.T)
 			tx, login, err := b.Complete(context.Background(), name, "browser", q)
 			if err != nil || !login.Verified || tx.Locale != "en" {
 				t.Fatalf("completion failed: %v", err)
+			}
+			if name == "vk" && login.DisplayName != "Тестовый Пользователь" {
+				t.Fatal("verified VK profile name was discarded")
+			}
+			if name == "vk" && calls != 2 {
+				t.Fatal("profile name required an additional provider request")
 			}
 			before := calls
 			if _, _, err := b.Complete(context.Background(), name, "browser", q); err == nil || calls != before {

@@ -26,6 +26,7 @@ type Service struct {
 	sessions       domain.AccountSessionRepository
 	credentials    domain.AccountCredentialRepository
 	registration   domain.AccountRegistrationRepository
+	profiles       domain.AccountProfileRepository
 	audit          domain.AccountLinkAuditRepository
 	sessionTTL     time.Duration
 	accessTokenTTL time.Duration
@@ -55,6 +56,22 @@ func New(resolver domain.IdentityResolver, opts ...Option) *Service {
 		opt(s)
 	}
 	return s
+}
+
+// WithProfileRepository enables account-owned presentation metadata persistence.
+func WithProfileRepository(repo domain.AccountProfileRepository) Option {
+	return func(s *Service) { s.profiles = repo }
+}
+
+func (s *Service) initializeVKProfileName(ctx context.Context, identity *domain.AccountIdentity, login domain.VerifiedAccountLogin) error {
+	name := domain.NormalizeAccountDisplayName(login.DisplayName)
+	if s.profiles == nil || normalizeLoginMethod(login.Method) != domain.AccountLoginVKID || name == "" {
+		return nil
+	}
+	if !login.Verified || identity == nil || identity.Provider != domain.IdentityProviderVK || identity.VerifiedAt.IsZero() {
+		return domain.ErrUnverifiedLogin
+	}
+	return s.profiles.SetAccountDisplayNameIfEmpty(ctx, identity.AccountID, identity.ID, name)
 }
 
 // WithLimiter enables shared throttling for login/link/unlink flows.
@@ -100,6 +117,9 @@ func (s *Service) ResolveOrCreate(ctx context.Context, login domain.VerifiedAcco
 	if resolution.AccountID == uuid.Nil {
 		return domain.IdentityResolution{}, errors.New("accountauth: resolver returned empty account id")
 	}
+	if err := s.initializeVKProfileName(ctx, resolution.Identity, login); err != nil {
+		return domain.IdentityResolution{}, err
+	}
 	return resolution, nil
 }
 
@@ -130,7 +150,13 @@ func (s *Service) LinkVerifiedIdentity(ctx context.Context, actorAccountID, acco
 	if errors.Is(err, domain.ErrConflict) {
 		return nil, domain.ErrAccountMergeRequiresConfirmation
 	}
-	return identity, err
+	if err != nil {
+		return nil, err
+	}
+	if err := s.initializeVKProfileName(ctx, identity, login); err != nil {
+		return nil, err
+	}
+	return identity, nil
 }
 
 // UnlinkIdentity removes an identity from the current account. The current
@@ -272,6 +298,8 @@ func providerIdentity(login domain.VerifiedAccountLogin) (domain.IdentityProvide
 		provider = domain.IdentityProviderGoogle
 	case domain.AccountLoginApple:
 		provider = domain.IdentityProviderApple
+	case domain.AccountLoginYandex:
+		provider = domain.IdentityProviderYandex
 	case domain.AccountLoginTelegram:
 		if err := validatePositiveInt(externalID); err != nil {
 			return "", "", "", err

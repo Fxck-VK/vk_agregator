@@ -5,7 +5,7 @@ import { Button } from "@/components/ui/Button/Button";
 import { LoadingIndicator, StateNotice } from "@/components/ui/AsyncState/AsyncState";
 import { CredentialField } from "@/features/auth/CredentialField";
 import { isDisabledAccountProvider, isUsableAccountLoginIdentity } from "@/features/account/account-display";
-import { useDictionary, useLocale } from "@/i18n/LocaleProvider";
+import { useDictionary, useLocale, useMessages } from "@/i18n/LocaleProvider";
 import { useRouter } from "@/i18n/navigation";
 import { providerNames, safeAuthorizationURL, visibleOAuthProvidersForUI, type AuthMethods, type OAuthProvider } from "@/lib/auth/methods";
 import { accountSessionsSchema, type AccountSession } from "@/lib/auth/sessions";
@@ -20,6 +20,8 @@ import styles from "./AccountSecurity.module.css";
 type FormKind = "email" | "phone" | "password";
 export function AccountSecurity({ profile: initialProfile, methods, preview = false, oauthStatus }: { profile: AccountProfile; methods: AuthMethods; preview?: boolean; oauthStatus?: string }) {
   const t = useDictionary(); const locale = useLocale(); const router = useRouter();
+  const msg = useMessages();
+  const providerLabel = (provider: OAuthProvider) => provider === "yandex" ? msg("profileLoginMethods.yandex") : providerNames[provider];
   const [profile, setProfile] = useState(initialProfile);
   const [sessions, setSessions] = useState<AccountSession[] | null>(null);
   const [sessionsFailed, setSessionsFailed] = useState(false); const [attempt, setAttempt] = useState(0);
@@ -137,12 +139,12 @@ export function AccountSecurity({ profile: initialProfile, methods, preview = fa
     {error ? <StateNotice inline kind="error">{error}</StateNotice> : null}{message ? <StateNotice inline kind="success">{message}</StateNotice> : null}
     {pending ? <LoadingIndicator label={t.auth.pending} /> : null}
     <section className={styles.card} aria-labelledby="security-identities"><h2 id="security-identities">{t.auth.identities}</h2>
-      <ul className={styles.list}>{verified.map(identity => <li className={styles.row} key={identity.id}><div className={styles.details}><strong>{Object.hasOwn(providerNames, identity.provider) ? providerNames[identity.provider as OAuthProvider] : identity.provider === "phone" ? t.auth.phone : identity.provider === "password" ? t.login.passwordLabel : emailLabel(identity.email_role)}</strong><span>{identity.label}</span>{isDisabledAccountProvider(identity.provider) ? <span className={styles.badge}>{t.auth.providerDisabled}</span> : null}</div><div className={styles.actions}>{identity.provider === "email" && identity.email_role === "backup" && methods.email_link ? <Button variant="outline" disabled={pending} onClick={() => openForm("email", identity.id)}>{t.auth.backupEmailReplace}</Button> : null}<Button variant="outline" disabled={pending || preview || !canUnlink(identity.id, identity.provider)} onClick={() => setConfirm({ kind: "identity", id: identity.id })}>{t.auth.unlink}</Button></div></li>)}</ul>
+      <ul className={styles.list}>{verified.map(identity => <li className={styles.row} key={identity.id}><div className={styles.details}><strong>{Object.hasOwn(providerNames, identity.provider) ? providerLabel(identity.provider as OAuthProvider) : identity.provider === "phone" ? t.auth.phone : identity.provider === "password" ? t.login.passwordLabel : emailLabel(identity.email_role)}</strong><span>{identity.label}</span>{isDisabledAccountProvider(identity.provider) ? <span className={styles.badge}>{t.auth.providerDisabled}</span> : null}</div><div className={styles.actions}>{identity.provider === "email" && identity.email_role === "backup" && methods.email_link ? <Button variant="outline" disabled={pending} onClick={() => openForm("email", identity.id)}>{t.auth.backupEmailReplace}</Button> : null}<Button variant="outline" disabled={pending || preview || !canUnlink(identity.id, identity.provider)} onClick={() => setConfirm({ kind: "identity", id: identity.id })}>{t.auth.unlink}</Button></div></li>)}</ul>
       {usableVerified.length <= 1 ? <p>{t.auth.lastIdentity}</p> : null}
       <div className={styles.actions}>
         {methods.email_link && emailCount < 2 ? <Button variant="outline" disabled={pending} onClick={() => openForm("email")}>{hasVerifiedEmail ? t.auth.backupEmailAdd : t.auth.emailLink}</Button> : null}
         {methods.phone_link ? <Button variant="outline" disabled={pending} onClick={() => openForm("phone")}>{t.auth.phoneLink}</Button> : null}
-        {visibleOAuthProvidersForUI(methods.providers).filter(provider => !verified.some(identity => identity.provider === provider)).map(provider => <Button variant="outline" disabled={pending || preview} key={provider} onClick={() => linkProvider(provider)}>{t.auth.link} {providerNames[provider]}</Button>)}
+        {visibleOAuthProvidersForUI(methods.providers).filter(provider => !verified.some(identity => identity.provider === provider)).map(provider => <Button variant="outline" disabled={pending || preview} key={provider} onClick={() => linkProvider(provider)}>{t.auth.link} {providerLabel(provider)}</Button>)}
         {methods.password && typeof profile.password_set === "boolean" && verified.some(item => item.provider === "email") ? <Button variant="outline" disabled={pending} onClick={() => openForm("password")}>{profile.password_set ? t.auth.passwordChange : t.auth.passwordSetup}</Button> : null}
       </div>
       {form ? <form className={styles.form} onSubmit={submit}>

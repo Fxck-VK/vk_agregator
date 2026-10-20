@@ -31,6 +31,14 @@ activation excludes website relations. Google login/linking is disabled by
 default with adapters/bindings retained; disabled providers cannot justify
 removing the last usable login. See [website invitations](runbooks/WEB_REFERRALS.md).
 
+Browser VK ID login/link may initialize account-owned `display_name` from the
+already authenticated provider response. Accountauth persists it only after
+identity resolution/linking; the repository locks the account, rechecks the
+verified VK binding and never replaces an existing name. Accountservice exposes
+this optional bounded text in the authenticated profile. The sidebar reuses it
+without extra VK calls; login-method labels and ownership stay unchanged. See
+[account identity contract](ACCOUNT_IDENTITY_CONTRACT.md#account-boundary).
+
 Manual model testing on DEV uses `providermodels.RuntimeRegistry`, configured
 once by API/worker bootstrap after config validation. The explicitly enabled
 development flag adds priced text replies and text-input media candidates with pinned runtime
@@ -867,6 +875,7 @@ POST /webhooks/vk/{group_id}
 ## 4.4. User / Identity Service
 
 Browser account integration (2026-10-04): websession owns cookie/Origin/CSRF authentication for login, recovery, identity linking and session management. The shared account adapter exposes narrow internal action/recovery entrypoints; browser token-returning routes remain excluded. accountoauth owns external authorization-code exchange and verified assertions. Redis stores browser-bound, one-use OAuth transactions with a 10-minute TTL. OIDC checks nonce and provider-scoped JWKS material. Credentials remain server-side; UI availability comes from /web/v1/auth/methods. Configuration: docs/runbooks/BROWSER_ACCOUNT.md.
+Yandex browser login uses confidential authorization code + PKCE S256 and the same one-use browser/account binding. The adapter checks the authenticated profile's client_id, reduces its stable case-sensitive id to a verified Account Layer assertion, and discards the token. Both server credentials and HTTPS are required to advertise Yandex and count it in last-login guards. Migration 000058 extends only identity/audit provider constraints; downgrade refuses existing Yandex records without deleting data. Setup and real-login verification: [browser account runbook](runbooks/BROWSER_ACCOUNT.md#yandex-id-browser-setup).
 
 Target account identity architecture is defined in `docs/ACCOUNT_IDENTITY_CONTRACT.md`. `account_id` is the future canonical owner of billing, jobs, artifacts, conversations and referrals. `vk_user_id`, Telegram ID, email, phone, Google, Apple and password credentials are identity bindings only. Current implementation is in VK compatibility mode: `IdentityResolver` is wired through SharedCore and both VK Bot and VK Mini App resolve verified VK identities through it. Business storage now has additive account ownership columns for jobs, payments, artifacts, conversations, referrals and billing ledger surfaces, while repository reads/writes remain compatible with legacy `user_id` during the rollout.
 

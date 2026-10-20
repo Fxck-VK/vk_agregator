@@ -3,7 +3,7 @@
 import { type FormEvent, useEffect, useRef, useState } from "react";
 import { StateNotice, LoadingIndicator } from "@/components/ui/AsyncState/AsyncState";
 import { Button } from "@/components/ui/Button/Button";
-import { useDictionary, useLocale } from "@/i18n/LocaleProvider";
+import { useDictionary, useLocale, useMessages } from "@/i18n/LocaleProvider";
 import { LanguageSwitcher } from "@/i18n/LanguageSwitcher";
 import { classifySignInFailure, completeSignIn, reportSignInFailure, signInFailureText, signInResponseFailure, type SignInStage } from "@/lib/auth/sign-in-completion";
 import { isPasswordTooLong } from "@/lib/auth/password";
@@ -16,6 +16,7 @@ import styles from "./LoginForm.module.css";
 type Step = "login" | "email" | "code" | "complete";
 export function LoginForm({ returnTo, methods = defaultAuthMethods, preview = false, oauthFailed = false }: Readonly<{ returnTo?: string; methods?: AuthMethods; preview?: boolean; oauthFailed?: boolean }>) {
   const t = useDictionary(); const locale = useLocale();
+  const msg = useMessages();
   const providers = visibleOAuthProvidersForUI(methods.providers);
   const [step, setStep] = useState<Step>("login");
   const [registering, setRegistering] = useState(false);
@@ -109,7 +110,7 @@ export function LoginForm({ returnTo, methods = defaultAuthMethods, preview = fa
         setPending(true); setError(""); try { await requestCode(); setCode(""); } catch { setError(t.auth.recoveryFailure); } finally { setPending(false); }
       }}>{t.auth.resend}{resendSeconds > 0 ? ` (${resendSeconds})` : ""}</button> : null}
     </form>}
-    {step === "login" && providers.length ? <div className={styles.external}><p>{t.auth.or}</p><div className={styles.providers}>{providers.map(provider => <Button key={provider} variant="outline" disabled={pending || preview} onClick={() => oauth(provider)}>{providerNames[provider]}</Button>)}</div>{preview ? <small>{t.auth.configuredOnly}</small> : null}</div> : null}
+    {step === "login" && providers.length ? <div className={styles.external}><p>{t.auth.or}</p><div className={styles.providers}>{providers.map(provider => <Button key={provider} variant="outline" disabled={pending || preview} onClick={() => oauth(provider)}>{provider === "yandex" ? msg("profileLoginMethods.yandex") : providerNames[provider]}</Button>)}</div>{preview ? <small>{t.auth.configuredOnly}</small> : null}</div> : null}
     {step === "login" && !methods.recovery ? <small className={styles.hint}>{t.auth.recoveryUnavailable}</small> : null}
     {step === "login" && methods.registration ? <Button variant="outline" disabled={pending} onClick={() => { move("login"); setRegistering(true); }}>{t.auth.createAccount}</Button> : null}
   </section>;

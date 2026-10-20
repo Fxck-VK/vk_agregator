@@ -17,4 +17,11 @@ describe("browser authentication boundary", () => {
   it("accepts a pinned provider authorize endpoint", () => {
     expect(safeAuthorizationURL("https://accounts.google.com/o/oauth2/v2/auth?state=synthetic", "google")).toContain("accounts.google.com");
   });
+  it("accepts configured Yandex and pins its authorization endpoint", () => {
+    expect(authMethodsSchema.safeParse({ password: true, recovery: false, email_link: false, phone_link: false, providers: ["yandex"] }).success).toBe(true);
+    expect(safeAuthorizationURL("https://oauth.yandex.ru/authorize?state=synthetic", "yandex")).toBe("https://oauth.yandex.ru/authorize?state=synthetic");
+    for (const value of ["http://oauth.yandex.ru/authorize", "https://oauth.yandex.ru.attacker.test/authorize", "https://user@oauth.yandex.ru/authorize", "https://oauth.yandex.ru/token", "https://oauth.yandex.ru/authorize#fragment"]) {
+      expect(safeAuthorizationURL(value, "yandex")).toBeNull();
+    }
+  });
 });

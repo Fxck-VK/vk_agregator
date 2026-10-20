@@ -19,6 +19,7 @@ type AccountIdentityRepo struct {
 	byID                 map[uuid.UUID]*domain.AccountIdentity
 	audits               []domain.AccountLinkAuditEntry
 	notices              map[uuid.UUID]*memorySecurityNotice
+	displayNames         map[uuid.UUID]string
 	usableLoginProviders domain.UsableLoginProviders
 }
 
@@ -35,6 +36,7 @@ func NewAccountIdentityRepo(opts ...AccountIdentityRepoOption) *AccountIdentityR
 		byKey:                map[string]*domain.AccountIdentity{},
 		byID:                 map[uuid.UUID]*domain.AccountIdentity{},
 		notices:              map[uuid.UUID]*memorySecurityNotice{},
+		displayNames:         map[uuid.UUID]string{},
 		usableLoginProviders: domain.AccountUsableLoginProviders(false),
 	}
 	for _, opt := range opts {

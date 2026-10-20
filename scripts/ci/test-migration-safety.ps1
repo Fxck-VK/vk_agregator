@@ -19,9 +19,14 @@ try {
     [IO.File]::WriteAllText($envFile, "APP_ENV=development`n", $utf8)
     $reviewedName = "000052_text_model_pricing.up.sql"
     $reviewedSql = [IO.File]::ReadAllText((Join-Path $repoRoot "migrations/$reviewedName")).Replace("`r`n", "`n")
+    $yandexName = "000058_yandex_identity.up.sql"
+    $yandexSql = [IO.File]::ReadAllText((Join-Path $repoRoot "migrations/$yandexName")).Replace("`r`n", "`n")
     $cases = @(
         @{ Name = "additive"; File = "000001_test.up.sql"; SQL = "CREATE TABLE test (id integer);`n"; Exit = 0 },
         @{ Name = "reviewed constraint replacement"; File = $reviewedName; SQL = $reviewedSql; Exit = 0 },
+        @{ Name = "reviewed Yandex provider extension"; File = $yandexName; SQL = $yandexSql; Exit = 0 },
+        @{ Name = "modified Yandex migration"; File = $yandexName; SQL = $yandexSql + "DROP TABLE users;`n"; Exit = 1 },
+        @{ Name = "Yandex content under another name"; File = "000059_test.up.sql"; SQL = $yandexSql; Exit = 1 },
         @{ Name = "modified reviewed migration"; File = $reviewedName; SQL = $reviewedSql + "DROP TABLE users;`n"; Exit = 1 },
         @{ Name = "review does not permit another migration"; File = $reviewedName; SQL = $reviewedSql; ExtraSQL = "DROP TABLE users;`n"; Exit = 1 },
         @{ Name = "reviewed content under another name"; File = "000053_test.up.sql"; SQL = $reviewedSql; Exit = 1 },

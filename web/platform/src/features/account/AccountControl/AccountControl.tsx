@@ -22,7 +22,7 @@ export function AccountControl({ profile }: AccountControlProps) {
   return (
     <div className={styles.control}>
       <AccountMenu
-        identityLabel={identity.label}
+        identityLabel={profile.display_name?.trim() || identity.label}
         isLogoutPending={false}
         onLogout={logout}
       />

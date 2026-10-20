@@ -31,6 +31,25 @@ const profile: AccountProfile = {
 };
 
 describe("AccountControl", () => {
+  it("shows the stored account name instead of a provider or email label", () => {
+    const namedProfile = { ...profile, display_name: "Тестовый Пользователь" };
+    render(<AccountControl profile={namedProfile} />);
+    expect(screen.getByText(namedProfile.display_name)).toHaveAttribute("title", namedProfile.display_name);
+    expect(screen.queryByText("member@example.com")).not.toBeInTheDocument();
+  });
+
+  it("renders a stored name as text without trusting markup", () => {
+    const name = "<img src=x onerror=alert(1)>";
+    const { container } = render(<AccountControl profile={{ ...profile, display_name: name }} />);
+    expect(screen.getByText(name)).toBeInTheDocument();
+    expect(container.querySelector("img")).toBeNull();
+  });
+
+  it("uses the existing VK fallback when the provider did not supply a name", () => {
+    render(<AccountControl profile={{ ...profile, identity_refs: [{ ...profile.identity_refs[0], provider: "vk", label: "VK" }] }} />);
+    expect(screen.getByText("VK")).toBeInTheDocument();
+  });
+
   afterEach(() => {
     cleanup();
     vi.clearAllMocks();

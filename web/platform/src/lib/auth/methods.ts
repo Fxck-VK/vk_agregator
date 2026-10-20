@@ -1,8 +1,8 @@
 import { z } from "zod";
 
-export const oauthProviders = ["google", "apple", "vk", "telegram"] as const;
+export const oauthProviders = ["google", "apple", "vk", "yandex", "telegram"] as const;
 export type OAuthProvider = typeof oauthProviders[number];
-export const providerNames: Record<OAuthProvider, string> = { google: "Google", apple: "Apple", vk: "VK", telegram: "Telegram" };
+export const providerNames: Record<OAuthProvider, string> = { google: "Google", apple: "Apple", vk: "VK", yandex: "Yandex", telegram: "Telegram" };
 const disabledUIOAuthProviders = new Set<OAuthProvider>(["google"]);
 export const authMethodsSchema = z.object({
   registration: z.boolean().default(false),
@@ -19,7 +19,7 @@ export function visibleOAuthProvidersForUI(providers: readonly OAuthProvider[]):
 
 export function safeAuthorizationURL(value: unknown, provider: OAuthProvider): string | null {
   if (typeof value !== "string") return null;
-  const origins: Record<OAuthProvider, string> = { google: "https://accounts.google.com", apple: "https://appleid.apple.com", vk: "https://id.vk.ru", telegram: "https://oauth.telegram.org" };
-  const paths: Record<OAuthProvider, string> = { google: "/o/oauth2/v2/auth", apple: "/auth/authorize", vk: "/authorize", telegram: "/auth" };
+  const origins: Record<OAuthProvider, string> = { google: "https://accounts.google.com", apple: "https://appleid.apple.com", vk: "https://id.vk.ru", yandex: "https://oauth.yandex.ru", telegram: "https://oauth.telegram.org" };
+  const paths: Record<OAuthProvider, string> = { google: "/o/oauth2/v2/auth", apple: "/auth/authorize", vk: "/authorize", yandex: "/authorize", telegram: "/auth" };
   try { const url = new URL(value); return url.origin === origins[provider] && url.pathname === paths[provider] && !url.username && !url.password && !url.hash ? value : null; } catch { return null; }
 }

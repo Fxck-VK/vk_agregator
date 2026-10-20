@@ -40,11 +40,24 @@ type IdentityLinker interface {
 type Service struct {
 	identities IdentityStore
 	linker     IdentityLinker
+	profiles   domain.AccountProfileRepository
+}
+
+type Option func(*Service)
+
+// WithProfileRepository exposes stored presentation metadata only to the
+// authenticated account profile, independently of login-method labels.
+func WithProfileRepository(repo domain.AccountProfileRepository) Option {
+	return func(s *Service) { s.profiles = repo }
 }
 
 // New builds an account service.
-func New(identities IdentityStore, linker IdentityLinker) *Service {
-	return &Service{identities: identities, linker: linker}
+func New(identities IdentityStore, linker IdentityLinker, opts ...Option) *Service {
+	s := &Service{identities: identities, linker: linker}
+	for _, opt := range opts {
+		opt(s)
+	}
+	return s
 }
 
 // AccountProfile is safe to expose to authenticated product surfaces.
@@ -52,6 +65,7 @@ type AccountProfile struct {
 	AccountID    uuid.UUID             `json:"account_id"`
 	IdentityRefs []AccountIdentitySafe `json:"identity_refs"`
 	PasswordSet  *bool                 `json:"password_set,omitempty"`
+	DisplayName  string                `json:"display_name,omitempty"`
 }
 
 // AccountIdentitySafe is a display-safe account identity DTO. It intentionally
@@ -82,10 +96,18 @@ func (s *Service) Profile(ctx context.Context, accountID uuid.UUID) (AccountProf
 			return AccountProfile{}, err
 		}
 	}
+	var displayName string
+	if s.profiles != nil {
+		displayName, err = s.profiles.GetAccountDisplayName(ctx, accountID)
+		if err != nil {
+			return AccountProfile{}, err
+		}
+	}
 	return AccountProfile{
 		AccountID:    accountID,
 		IdentityRefs: identities,
 		PasswordSet:  passwordSet,
+		DisplayName:  displayName,
 	}, nil
 }
 
@@ -252,6 +274,8 @@ func identityLabel(identity domain.AccountIdentity) string {
 		return "Telegram"
 	case domain.IdentityProviderGoogle:
 		return "Google"
+	case domain.IdentityProviderYandex:
+		return "Yandex"
 	case domain.IdentityProviderApple:
 		return "Apple"
 	case domain.IdentityProviderPassword:

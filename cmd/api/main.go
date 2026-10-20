@@ -402,6 +402,7 @@ func main() {
 			WebOrigin:      cfg.WebOrigin,
 			GoogleEnabled:  cfg.AccountOAuthGoogleEnabled,
 			GoogleClientID: firstOAuthClientID(cfg.AccountOAuthGoogleClientIDs), GoogleClientSecret: cfg.AccountWebOAuthGoogleClientSecret,
+			YandexClientID: cfg.AccountOAuthYandexClientID, YandexClientSecret: cfg.AccountWebOAuthYandexClientSecret,
 			AppleClientID: firstOAuthClientID(cfg.AccountOAuthAppleClientIDs), AppleClientSecret: cfg.AccountWebOAuthAppleClientSecret,
 			TelegramClientID: firstOAuthClientID(cfg.AccountOAuthTelegramClientIDs), TelegramClientSecret: cfg.AccountWebOAuthTelegramClientSecret,
 			VKIDClientID: firstOAuthClientID(cfg.AccountOAuthVKIDClientIDs),

@@ -19,6 +19,7 @@ export const accountProfileSchema = z
     account_id: z.string().uuid(),
     identity_refs: z.array(safeIdentityRefSchema),
     password_set: z.boolean().optional(),
+    display_name: z.string().trim().min(1).refine(name => Array.from(name).length <= 160).optional(),
   })
   .strict();
 

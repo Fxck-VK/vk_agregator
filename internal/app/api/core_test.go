@@ -7,6 +7,25 @@ import (
 	"vk-ai-aggregator/internal/platform/config"
 )
 
+func TestYandexUsabilityRequiresCompleteBrowserConfiguration(t *testing.T) {
+	for _, tc := range []struct {
+		origin, client, secret string
+		want                   bool
+	}{
+		{"https://app.example.test", "client", "secret", true},
+		{"https://app.example.test", "client", "", false},
+		{"https://app.example.test", "", "secret", false},
+		{"http://app.example.test", "client", "secret", false},
+		{"https://app.example.test/path", "client", "secret", false},
+		{" https://app.example.test ", "client", "secret", false},
+	} {
+		cfg := config.Config{WebOrigin: tc.origin, AccountOAuthYandexClientID: tc.client, AccountWebOAuthYandexClientSecret: tc.secret}
+		if got := usableLoginProvidersFromConfig(cfg).Has(domain.IdentityProvider("yandex")); got != tc.want {
+			t.Fatal("incorrect Yandex last-login capability")
+		}
+	}
+}
+
 func TestUsableLoginProvidersFromConfigRequiresWorkingCapabilities(t *testing.T) {
 	providers := usableLoginProvidersFromConfig(config.Config{
 		WebOrigin:                         "https://app.example.test",

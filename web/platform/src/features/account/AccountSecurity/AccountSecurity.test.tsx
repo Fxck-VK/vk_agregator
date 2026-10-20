@@ -14,7 +14,7 @@ vi.mock("next/navigation", () => ({ useRouter: () => navigation }));
 
 afterEach(() => { cleanup(); vi.clearAllMocks(); });
 describe("AccountSecurity", () => {
-  it.each(["apple", "telegram", "vk"])("protects email when the remaining %s binding has no browser login", (provider) => {
+  it.each(["apple", "telegram", "vk", "yandex"])("protects email when the remaining %s binding has no browser login", (provider) => {
     vi.mocked(webBrowserFetch).mockResolvedValue(Response.json({ items: [] }));
     const profile = { ...localWorkspacePreviewProfile, password_set: true, identity_refs: [
       { ...localWorkspacePreviewProfile.identity_refs[0], provider: "email" },

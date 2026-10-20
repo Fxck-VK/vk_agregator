@@ -9,7 +9,7 @@ future user surfaces: VK Bot, VK Mini App, Telegram Bot, Web and Mobile.
 ## Goal
 
 One human or organization should have one internal `account_id`. Messenger IDs,
-VK Mini App launch identities, email, phone, Google, Apple and future login
+VK Mini App launch identities, email, phone, Google, Apple, Yandex and future login
 methods are only ways to access that account.
 
 ```text
@@ -39,6 +39,7 @@ External identities are login or channel bindings only:
 - phone;
 - Google subject;
 - Apple subject;
+- Yandex stable user ID;
 - username/password credential;
 - future OAuth or enterprise identity.
 
@@ -56,13 +57,14 @@ accounts
   locale
   timezone
   risk_level
+  display_name: optional account-owned presentation text
   created_at
   updated_at
 
 account_identities
   id
   account_id
-  provider: vk | telegram | google | apple | email | phone | password
+  provider: vk | telegram | google | apple | yandex | email | phone | password
   external_id
   normalized_id
   verified_at
@@ -159,6 +161,21 @@ Responsibilities:
 Product surfaces must not read `account_identities` directly and must not build
 identity DTOs from raw repository rows.
 
+The authenticated profile may also return optional `display_name` (up to 160
+Unicode code points). Browser VK ID login/link initializes it from `first_name`
+and `last_name` in the authenticated server-side `user_info` response. Missing or
+oversized names do not prevent login. Formatting/control characters are
+normalized; the name is plain text, never identity proof or trusted HTML.
+The initializer locks the canonical account, rechecks its verified VK binding
+and fills only an empty name. Existing account names are never overwritten.
+An ownership conflict or unverified/removed binding cannot populate a profile.
+This metadata is not logged and is not included in identity labels or public
+responses. `/web/v1/me` remains authenticated and `no-store`; reading it never
+calls VK. Existing accounts acquire the name on their next VK login or link,
+without background provider calls or changes to balances/history/ownership.
+Migration `000057_account_display_name` must precede the new API rollout.
+This change does not add a manual profile editor.
+
 ## Account HTTP API
 
 `cmd/api` exposes the account boundary under `/account/*`.
@@ -188,7 +205,7 @@ Response rules:
 - return `account_id` and safe identity refs only;
 - never return raw `external_id` or `normalized_id`;
 - mask email and phone labels;
-- use provider labels such as `VK`, `Telegram`, `Google`, `Apple`;
+- use provider labels such as `VK`, `Telegram`, `Google`, `Apple`, `Yandex`;
 - do not echo raw identity input in errors.
 
 `unlink` is active for identities owned by the current account and routes
@@ -283,6 +300,7 @@ Rules:
 - Google, Apple and VK ID are OIDC/JWKS adapters and must validate signature,
   issuer, audience and expiry before returning a login assertion;
 - Google and Apple identities use stable `sub`, never display email or name;
+- Yandex browser login uses authorization code + PKCE S256 and a browser-bound one-use state. The backend fetches the profile with the token in the Authorization header, verifies the response's `client_id`, and resolves the case-sensitive stable `id`; email/login/display metadata never merge accounts. No Yandex token enters the browser or persistent sessions. Both server client settings and HTTPS are required for provider availability and last-login guards. Migration 000058 allows Yandex bindings and audits; its downgrade refuses existing Yandex data instead of deleting it. See [setup and live smoke](runbooks/BROWSER_ACCOUNT.md#yandex-id-browser-setup).
 - VK ID and Telegram identities use verified numeric platform identity;
 - Telegram supports OIDC ID tokens and a legacy HMAC auth-data path for
   compatibility;
@@ -303,6 +321,7 @@ Supported target methods:
 - phone OTP;
 - Google OAuth subject;
 - Apple OAuth subject;
+- Yandex stable user ID from the authenticated profile;
 - Telegram user id;
 - VK ID / VK user id.
 

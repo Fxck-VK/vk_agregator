@@ -114,11 +114,12 @@ func NewSharedCore(pool *pgxpool.Pool, cfg config.Config, opts ...SharedCoreOpti
 		accountauth.WithSessionRepository(sessions),
 		accountauth.WithCredentialRepository(accountSecurity),
 		accountauth.WithRegistrationRepository(identities),
+		accountauth.WithProfileRepository(identities),
 		accountauth.WithAccountAuditRepository(accountSecurity),
 		accountauth.WithLoginMethodEnabled(domain.AccountLoginGoogle, cfg.AccountOAuthGoogleEnabled),
 	}, options.accountAuthOptions...)
 	accountAuth := accountauth.New(identity, accountAuthOptions...)
-	accountSvc := accountservice.New(identities, accountAuth)
+	accountSvc := accountservice.New(identities, accountAuth, accountservice.WithProfileRepository(identities))
 	paymentProvider, err := paymentadapter.NewProvider(cfg)
 	if err != nil {
 		return SharedCore{}, err
@@ -178,6 +179,9 @@ func usableLoginProvidersFromConfig(cfg config.Config) domain.UsableLoginProvide
 		domain.IdentityProviderEmail: true,
 	}
 	browserOAuthAvailable := validBrowserOAuthOrigin(cfg.WebOrigin)
+	if browserOAuthAvailable && strings.TrimSpace(cfg.AccountOAuthYandexClientID) != "" && strings.TrimSpace(cfg.AccountWebOAuthYandexClientSecret) != "" {
+		providers[domain.IdentityProviderYandex] = true
+	}
 	if browserOAuthAvailable &&
 		cfg.AccountOAuthGoogleEnabled &&
 		firstConfiguredOAuthClientID(cfg.AccountOAuthGoogleClientIDs) != "" &&
@@ -213,7 +217,9 @@ func firstConfiguredOAuthClientID(ids []string) string {
 }
 
 func validBrowserOAuthOrigin(raw string) bool {
-	origin, err := url.Parse(strings.TrimSpace(raw))
+	// Match Browser.provider exactly: an unusable origin must not permit
+	// removal of an account's last working sign-in method.
+	origin, err := url.Parse(raw)
 	return err == nil &&
 		origin.Scheme == "https" &&
 		origin.Host != "" &&

@@ -223,7 +223,7 @@ export async function proxyWebApiRequest(
   if (upstream.status >= 300 && upstream.status < 400) {
     const oauthLocation = upstream.headers.get("Location");
     if (request.method === "GET" && upstream.status === 303
-      && /^\/web\/v1\/auth\/oauth\/(google|apple|vk|telegram)\/callback$/.test(safePath.split("?", 1)[0])
+      && /^\/web\/v1\/auth\/oauth\/(google|apple|vk|yandex|telegram)\/callback$/.test(safePath.split("?", 1)[0])
       && oauthLocation && /^\/(ru|en)\/(app|app\/profile\?oauth=(linked|failed)|login\?oauth=failed)$/.test(oauthLocation)) {
       const headers = proxyResponseHeaders(upstream.headers);
       headers.set("Location", oauthLocation); headers.set("Cache-Control", "no-store"); headers.set("Referrer-Policy", "no-referrer");

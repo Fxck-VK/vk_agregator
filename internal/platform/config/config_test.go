@@ -26,6 +26,15 @@ func TestValidateProductionSecrets(t *testing.T) {
 	}
 }
 
+func TestLoadYandexBrowserCredentials(t *testing.T) {
+	t.Setenv("ACCOUNT_OAUTH_YANDEX_CLIENT_ID", "synthetic-client")
+	t.Setenv("ACCOUNT_WEB_OAUTH_YANDEX_CLIENT_SECRET", "synthetic-secret")
+	cfg := config.Load()
+	if cfg.AccountOAuthYandexClientID != "synthetic-client" || cfg.AccountWebOAuthYandexClientSecret != "synthetic-secret" {
+		t.Fatal("Yandex credentials not loaded from server environment")
+	}
+}
+
 func TestValidateRejectsInsecureWebImageArtifactHTTPOutsideDevelopment(t *testing.T) {
 	err := (config.Config{
 		Env:                               "staging",

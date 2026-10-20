@@ -15,6 +15,7 @@ var ErrInvalidIdentity = errors.New("domain: invalid identity")
 type IdentityProvider string
 
 const (
+	IdentityProviderYandex   IdentityProvider = "yandex"
 	IdentityProviderVK       IdentityProvider = "vk"
 	IdentityProviderTelegram IdentityProvider = "telegram"
 	IdentityProviderGoogle   IdentityProvider = "google"
@@ -34,6 +35,17 @@ func NormalizeExternalIdentity(provider IdentityProvider, externalID string) (st
 	provider = NormalizeIdentityProvider(provider)
 	normalized := strings.TrimSpace(externalID)
 	switch provider {
+	case IdentityProviderYandex:
+		// Provider subjects are opaque and case-sensitive. Reject unbounded or
+		// whitespace/control-bearing keys rather than accepting profile text.
+		if len(normalized) > 256 {
+			return "", ErrInvalidIdentity
+		}
+		for _, r := range normalized {
+			if r < 33 || r > 126 {
+				return "", ErrInvalidIdentity
+			}
+		}
 	case IdentityProviderVK, IdentityProviderTelegram:
 		normalized = strings.TrimLeft(normalized, "+")
 	case IdentityProviderGoogle, IdentityProviderApple, IdentityProviderPassword:

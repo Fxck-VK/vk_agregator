@@ -42,6 +42,7 @@ type BrowserConfig struct {
 	WebOrigin                              string
 	GoogleEnabled                          bool
 	GoogleClientID, GoogleClientSecret     string
+	YandexClientID, YandexClientSecret     string
 	AppleClientID, AppleClientSecret       string
 	TelegramClientID, TelegramClientSecret string
 	VKIDClientID                           string
@@ -81,6 +82,8 @@ func (b *Browser) provider(name string) (browserProvider, bool) {
 	}
 	var p browserProvider
 	switch name {
+	case "yandex":
+		p = browserProvider{strings.TrimSpace(b.cfg.YandexClientID), strings.TrimSpace(b.cfg.YandexClientSecret), "https://oauth.yandex.ru/authorize", "https://oauth.yandex.ru/token", "login:info", true, false}
 	case "google":
 		if !b.cfg.GoogleEnabled {
 			return p, false
@@ -100,7 +103,7 @@ func (b *Browser) provider(name string) (browserProvider, bool) {
 
 func (b *Browser) Providers() []string {
 	out := []string{}
-	for _, name := range []string{"google", "apple", "vk", "telegram"} {
+	for _, name := range []string{"google", "apple", "vk", "yandex", "telegram"} {
 		if _, ok := b.provider(name); ok {
 			out = append(out, name)
 		}
@@ -155,8 +158,11 @@ func (b *Browser) Start(ctx context.Context, name, binding, locale, intent, acco
 	if p.scope != "" {
 		q.Set("scope", p.scope)
 	}
-	if name != "vk" {
+	if name != "vk" && name != "yandex" {
 		q.Set("nonce", nonce)
+	}
+	if name == "yandex" {
+		q.Set("force_confirm", "yes")
 	}
 	if name == "apple" {
 		q.Set("response_mode", "query")
@@ -215,13 +221,19 @@ func (b *Browser) Complete(ctx context.Context, name, binding string, query url.
 	if err := b.post(ctx, p.token, form, p, &tokens); err != nil || tokens.Error != "" {
 		return tx, empty, ErrInvalidAssertion
 	}
+	if name == "yandex" {
+		login, err := b.yandexProfile(ctx, p.id, tokens.AccessToken)
+		return tx, login, err
+	}
 	if name == "vk" {
 		if tokens.AccessToken == "" || subtle.ConstantTimeCompare([]byte(tokens.State), []byte(state)) != 1 {
 			return tx, empty, ErrInvalidAssertion
 		}
 		var info struct {
 			User struct {
-				ID string `json:"user_id"`
+				ID        string `json:"user_id"`
+				FirstName string `json:"first_name"`
+				LastName  string `json:"last_name"`
 			} `json:"user"`
 			Error string `json:"error"`
 		}
@@ -232,7 +244,10 @@ func (b *Browser) Complete(ctx context.Context, name, binding string, query url.
 		if err != nil || id <= 0 {
 			return tx, empty, ErrInvalidAssertion
 		}
-		return tx, domain.VerifiedAccountLogin{Method: domain.AccountLoginVKID, ExternalID: info.User.ID, Verified: true}, nil
+		return tx, domain.VerifiedAccountLogin{
+			Method: domain.AccountLoginVKID, ExternalID: info.User.ID, Verified: true,
+			DisplayName: domain.NormalizeAccountDisplayName(info.User.FirstName + " " + info.User.LastName),
+		}, nil
 	}
 	login, err := b.registry.Verify(ctx, VerifyRequest{Provider: domain.IdentityProvider(name), IDToken: tokens.IDToken, ExpectedNonce: tx.Nonce})
 	return tx, login, err

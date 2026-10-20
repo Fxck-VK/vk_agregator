@@ -510,6 +510,8 @@ type Config struct {
 	AccountOAuthGoogleEnabled           bool
 	AccountOAuthGoogleClientIDs         []string
 	AccountWebOAuthGoogleClientSecret   string
+	AccountOAuthYandexClientID          string
+	AccountWebOAuthYandexClientSecret   string
 	AccountWebOAuthAppleClientSecret    string
 	AccountWebOAuthTelegramClientSecret string
 	AccountOAuthGoogleJWKSURL           string
@@ -1585,6 +1587,8 @@ func Load() Config {
 		AccountOAuthGoogleEnabled:           envBool("ACCOUNT_OAUTH_GOOGLE_ENABLED", false),
 		AccountOAuthGoogleClientIDs:         envList("ACCOUNT_OAUTH_GOOGLE_CLIENT_IDS"),
 		AccountWebOAuthGoogleClientSecret:   env("ACCOUNT_WEB_OAUTH_GOOGLE_CLIENT_SECRET", ""),
+		AccountOAuthYandexClientID:          env("ACCOUNT_OAUTH_YANDEX_CLIENT_ID", ""),
+		AccountWebOAuthYandexClientSecret:   env("ACCOUNT_WEB_OAUTH_YANDEX_CLIENT_SECRET", ""),
 		AccountWebOAuthAppleClientSecret:    env("ACCOUNT_WEB_OAUTH_APPLE_CLIENT_SECRET", ""),
 		AccountWebOAuthTelegramClientSecret: env("ACCOUNT_WEB_OAUTH_TELEGRAM_CLIENT_SECRET", ""),
 		AccountOAuthGoogleJWKSURL:           env("ACCOUNT_OAUTH_GOOGLE_JWKS_URL", "https://www.googleapis.com/oauth2/v3/certs"),

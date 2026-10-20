@@ -9,6 +9,15 @@ const maxProxyRequestBodyBytes = 64 * 1024;
 type StreamingRequestInit = RequestInit & { duplex: "half" };
 
 describe("proxyWebApiRequest", () => {
+  it("passes the Yandex callback session cookies and fixed redirect", async () => {
+    vi.stubGlobal("fetch", vi.fn(async () => new Response(null, { status: 303, headers: { Location: "/ru/app", "Set-Cookie": "nh_access=synthetic; HttpOnly; Secure" } })));
+    const path = "/web/v1/auth/oauth/yandex/callback?state=synthetic&code=synthetic";
+    const response = await proxyWebApiRequest(new Request(`https://platform.example${path}`), path, internalOrigin);
+    expect(response.status).toBe(303);
+    expect(response.headers.get("Location")).toBe("/ru/app");
+    expect(response.headers.getSetCookie()).toHaveLength(1);
+    expect(response.headers.get("Referrer-Policy")).toBe("no-referrer");
+  });
   it.each(["/ru/app", "/en/app/profile?oauth=linked", "/ru/login?oauth=failed"])("permits only a fixed OAuth callback redirect and preserves session cookies: %s", async (location) => {
     vi.stubGlobal("fetch", vi.fn(async () => new Response(null, { status: 303, headers: { Location: location, "Set-Cookie": "nh_access=synthetic; HttpOnly; Secure" } })));
     const path = "/web/v1/auth/oauth/google/callback?state=synthetic&code=synthetic";

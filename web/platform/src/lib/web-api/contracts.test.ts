@@ -11,6 +11,13 @@ import {
 } from "./contracts";
 
 describe("AccountProfile contract", () => {
+  it("accepts the bounded optional account display name", () => {
+    const profile = { account_id: "62d33e7f-7b0e-4a26-975b-41080b55d78d", identity_refs: [], display_name: "Тестовый Пользователь" };
+    expect(parseAccountProfile(profile).display_name).toBe(profile.display_name);
+    expect(() => parseAccountProfile({ ...profile, display_name: "x".repeat(161) })).toThrow();
+    expect(() => parseAccountProfile({ ...profile, display_name: 123 })).toThrow();
+    expect(parseAccountProfile({ ...profile, display_name: "\u{1f33a}".repeat(160) }).display_name).toHaveLength(320);
+  });
   it("accepts safe password status without exposing credential data", () => {
     const profile = { account_id: "62d33e7f-7b0e-4a26-975b-41080b55d78d", identity_refs: [], password_set: true };
     expect(parseAccountProfile(profile).password_set).toBe(true);

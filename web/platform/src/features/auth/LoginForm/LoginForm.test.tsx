@@ -22,6 +22,13 @@ const replace = vi.mocked(replaceSignInDocument);
 const profile = { account_id: "10000000-0000-4000-8000-000000000001", identity_refs: [], password_set: true };
 
 describe("LoginForm", () => {
+  it("offers Yandex only when the backend enables it", () => {
+    const methods = { registration: false, password: true, recovery: false, email_link: false, phone_link: false };
+    const { rerender } = render(<LoginForm methods={{ ...methods, providers: ["yandex"] }} />);
+    expect(screen.getByRole("button", { name: "Яндекс" })).toBeEnabled();
+    rerender(<LoginForm methods={{ ...methods, providers: [] }} />);
+    expect(screen.queryByRole("button", { name: "Яндекс" })).not.toBeInTheDocument();
+  });
   it("keeps visible progress and blocks duplicate submits until cookie confirmation and document navigation", async () => {
     let confirm!: (response: Response) => void;
     vi.mocked(webBrowserFetch).mockResolvedValue(new Response(null, { status: 201 }));

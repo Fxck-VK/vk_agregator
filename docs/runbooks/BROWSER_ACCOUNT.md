@@ -59,13 +59,14 @@ For delivery smoke, use an explicitly provided recipient and the selected contou
 
 ## External login
 
-Register the exact HTTPS callback `${WEB_ORIGIN}/web/v1/auth/oauth/{provider}/callback` (`google`, `apple`, `vk`, `telegram`). WEB_ORIGIN is the public frontend origin. The first client ID in each existing audience list is the browser client; mobile IDs follow it.
+Register the exact HTTPS callback `${WEB_ORIGIN}/web/v1/auth/oauth/{provider}/callback` (`google`, `apple`, `vk`, `yandex`, `telegram`). WEB_ORIGIN is the public frontend origin. The first client ID in each existing audience list is the browser client; mobile IDs follow it. Yandex uses one separately configured browser client ID.
 
 | Provider | Browser configuration | Proof |
 | --- | --- | --- |
 | Google | `ACCOUNT_OAUTH_GOOGLE_CLIENT_IDS`, `ACCOUNT_WEB_OAUTH_GOOGLE_CLIENT_SECRET` | code + PKCE, verified OIDC token and nonce |
 | Apple | `ACCOUNT_OAUTH_APPLE_CLIENT_IDS`, `ACCOUNT_WEB_OAUTH_APPLE_CLIENT_SECRET` | code, verified OIDC token and nonce |
 | VK ID | `ACCOUNT_OAUTH_VK_ID_CLIENT_IDS` | code + PKCE + state, server-side user_info |
+| Yandex | `ACCOUNT_OAUTH_YANDEX_CLIENT_ID`, `ACCOUNT_WEB_OAUTH_YANDEX_CLIENT_SECRET` | code + PKCE S256 + browser-bound state, authenticated profile with matching client_id |
 | Telegram | `ACCOUNT_OAUTH_TELEGRAM_CLIENT_IDS`, `ACCOUNT_WEB_OAUTH_TELEGRAM_CLIENT_SECRET` | code + PKCE, verified OIDC token and nonce |
 
 The selected public DEV web application ID is versioned in
@@ -86,6 +87,16 @@ For DEV Google, create a Google OAuth client of type Web application with the ex
 Secrets belong in deployment secrets/runtime env, never NEXT_PUBLIC variables. Apple's secret is an operator-generated, signed client-secret JWT; renew before expiry. Apple uses code-only response_mode=query without name/email scopes. Telegram uses OIDC client credentials, not the legacy Login Widget bot token. Existing issuer/JWKS configuration still applies to OIDC verification.
 
 Google is currently disabled for the website. `ACCOUNT_OAUTH_GOOGLE_ENABLED` defaults to `false`; saved credentials and bindings do not enable login or linking. DEV post-deploy smoke checks Google is absent from advertised methods and its start route returns 503, including when `.env.dev-google` remains present. The website also hides Google buttons. Re-enabling it is a separate product change requiring both backend configuration and UI availability changes; retaining the adapters is not activation. See [website invitations and account availability](../../docs/runbooks/WEB_REFERRALS.md).
+
+### Yandex ID browser setup
+
+Create or select an application in [Yandex OAuth](https://oauth.yandex.ru/) of type **For user authorization** (not API-only). Register website platform and the exact DEV callback `https://dev-web.epifera.com/web/v1/auth/oauth/yandex/callback`. Request only `login:info`; the flow does not need email, phone, avatar or API-service permissions. [Application registration](https://yandex.ru/dev/id/doc/ru/register-client), [authorization code and PKCE](https://yandex.ru/dev/id/doc/ru/codes/code-url).
+
+Store its client ID as `ACCOUNT_OAUTH_YANDEX_CLIENT_ID` and client secret as `ACCOUNT_WEB_OAUTH_YANDEX_CLIENT_SECRET` in the server environment. For persistent DEV deployment, create the dedicated GitHub repository secrets `DEV_ACCOUNT_OAUTH_YANDEX_CLIENT_ID` and `DEV_ACCOUNT_WEB_OAUTH_YANDEX_CLIENT_SECRET`; keep the existing split env secrets unchanged. Manual `Deploy DEV` renders them through `prepare-dev-yandex.sh` into a server-only `.env.dev-yandex` overlay (mode 600), read only by the API after its base env and email/Google overlays. It survives automatic deployments and is excluded from Git and Docker build context. Partial or malformed dedicated settings stop deployment without printing their values; both absent preserves existing configuration. Clearing GitHub secrets alone does not disable an existing overlay: explicitly clear both runtime values and the overlay when disabling the method. Do not put the secret in frontend env, source, URLs, logs, shell command arguments or chat. An environment change takes effect after an API restart/deploy. Do not enable this before the API, frontend callback allowlist and migration `000058_yandex_identity` are released together. Missing either runtime setting hides the provider and rejects start; a stored disabled Yandex binding does not satisfy last-login protection.
+
+The adapter exchanges the code at the pinned token endpoint, then calls `GET https://login.yandex.ru/info?format=json` with the server-only `Authorization: OAuth` header. It checks the returned `client_id` against this application and uses the case-sensitive stable `id` as the identity key. Login/email/display names never merge accounts. Tokens are discarded after this check, never returned to the browser or saved as sessions. Link starts require the current account and CSRF; the callback requires that same logged-in account. [Profile response and token transport](https://yandex.ru/dev/id/doc/ru/user-information).
+
+After deployment, check `/web/v1/auth/methods` advertises `yandex`, the localized login page shows its button, and start returns only the authorization URL with S256 and the exact callback, without secrets. Then complete a real login in the same browser, logout/login again (same account and history), and link from an existing email/VK account. A subject already bound to another account must fail without a merge. Mock tests are not proof of live Yandex configuration. Ordinary HTTP localhost is unavailable for real OAuth; use the registered HTTPS contour. Roll back the runtime without automatically rolling back schema; down migration refuses existing Yandex bindings or audit history rather than deleting them.
 
 Login starts at `POST /web/v1/auth/oauth/{provider}/start`; profile linking starts at `/web/v1/account/oauth/{provider}/start`. They return the authorization URL. Server-owned Redis transactions expire after 10 minutes and bind provider, browser cookie, state, PKCE, nonce, locale and optional owning account. Consumption is atomic and one-use. Linking must have a valid session for the same account at completion; conflicts do not merge accounts.
 

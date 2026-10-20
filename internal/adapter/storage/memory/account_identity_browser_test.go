@@ -95,7 +95,7 @@ func TestUnlinkDoesNotCountUnconfiguredAlternateProvidersAsUsableLogin(t *testin
 	if err != nil {
 		t.Fatal(err)
 	}
-	for _, provider := range []domain.IdentityProvider{domain.IdentityProviderApple, domain.IdentityProviderTelegram, domain.IdentityProviderVK} {
+	for _, provider := range []domain.IdentityProvider{domain.IdentityProviderApple, domain.IdentityProviderTelegram, domain.IdentityProviderVK, domain.IdentityProviderYandex} {
 		if _, err := repo.LinkIdentity(context.Background(), accountID, provider, string(provider)+"-subject", string(provider)+"-subject"); err != nil {
 			t.Fatal(err)
 		}

@@ -23,6 +23,7 @@ var ErrAccountMergeRequiresConfirmation = errors.New("domain: account merge requ
 type AccountLoginMethod string
 
 const (
+	AccountLoginYandex        AccountLoginMethod = "yandex"
 	AccountLoginEmailPassword AccountLoginMethod = "email_password"
 	AccountLoginPhoneOTP      AccountLoginMethod = "phone_otp"
 	AccountLoginGoogle        AccountLoginMethod = "google"
@@ -37,6 +38,9 @@ type VerifiedAccountLogin struct {
 	Method     AccountLoginMethod
 	ExternalID string
 	Verified   bool
+	// DisplayName is optional presentation metadata from the verified provider
+	// response. It is never identity proof or authority for account ownership.
+	DisplayName string
 }
 
 // UsableLoginProviders names identity providers that can currently authenticate

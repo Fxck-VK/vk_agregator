@@ -5,6 +5,8 @@ services:
         required: false
       - path: .env.dev-google
         required: false
+      - path: .env.dev-yandex
+        required: false
 
   platform:
     image: ${APP_IMAGE_REGISTRY}/platform:${IMAGE_TAG}
