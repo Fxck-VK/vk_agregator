@@ -346,9 +346,19 @@ jobs:
           rendered_auth_env="$(mktemp)"
           trap 'rm -f "${raw_env}" "${rendered_env}" "${raw_auth_env}" "${rendered_auth_env}"' EXIT
 
+          dev_web_host="$(awk '$1 == "server_name" { sub(/\r$/, "", $2); sub(/;$/, "", $2); print $2 }' deployments/nginx/dev-web.conf)"
+          if [[ ! "${dev_web_host}" =~ ^dev-web\.[a-z0-9]+([.-][a-z0-9]+)*\.[a-z]{2,}$ ]]; then
+            echo 'DEV web host must be one canonical DNS hostname' >&2
+            exit 1
+          fi
+          dev_domain_args=()
+          if grep -Fq -- '--dev-public-domain)' scripts/deploy/assemble-env-parts.sh; then
+            dev_domain_args=(--dev-public-domain "${dev_web_host#dev-web.}")
+          fi
           bash scripts/deploy/assemble-env-parts.sh \
             --target dev \
-            --web-origin https://dev-web.neiirohub.ru \
+            --web-origin "https://${dev_web_host}" \
+            "${dev_domain_args[@]}" \
             --output "${raw_env}"
 
           bash scripts/deploy/prepare-dev-env.sh \
