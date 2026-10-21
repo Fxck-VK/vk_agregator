@@ -342,6 +342,25 @@ func TestMusicReferenceURLMatchesAudioFormat(t *testing.T) {
 	}
 }
 
+func TestReferenceURLPreservesExistingVideoFormats(t *testing.T) {
+	f := newFixture(t)
+	for _, mimeType := range []string{"video/mp4", "video/quicktime", " Video/MP4 "} {
+		signed, err := f.service.URL(f.job.ID, f.artifact.ID, mimeType)
+		if err != nil {
+			t.Errorf("existing video format %q rejected: %v", mimeType, err)
+			continue
+		}
+		if !strings.HasSuffix(parseTestURL(t, signed).Path, ".mp4") {
+			t.Fatal("legacy video path changed")
+		}
+	}
+	for _, mimeType := range []string{"text/html", "image/png", "application/octet-stream"} {
+		if _, err := f.service.URL(f.job.ID, f.artifact.ID, mimeType); err != ErrInvalidURL {
+			t.Errorf("unsupported format %q accepted", mimeType)
+		}
+	}
+}
+
 func TestServeHTTPRejectsMusicArtifactOutsideParams(t *testing.T) {
 	f := newMusicFixture(t)
 	params := musicParams(t, uuid.New())

@@ -93,8 +93,9 @@ func (s *Service) URL(jobID, artifactID uuid.UUID, mimeType string) (string, err
 	}
 	expires := s.now().Add(DefaultTTL).Unix()
 	expiresValue := strconv.FormatInt(expires, 10)
+	mimeType = strings.ToLower(strings.TrimSpace(mimeType))
 	extension := providerReferenceExtension(&domain.Artifact{MimeType: mimeType})
-	if mimeType != "video/mp4" && extension == ".mp4" {
+	if mimeType != "video/mp4" && mimeType != "video/quicktime" && extension == ".mp4" {
 		return "", ErrInvalidURL
 	}
 	path := referencePath(jobID, artifactID, extension)
