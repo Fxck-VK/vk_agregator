@@ -13,7 +13,7 @@ import (
 
 type motionTestSigner struct{ calls int }
 
-func (s *motionTestSigner) URL(jobID, artifactID uuid.UUID) (string, error) {
+func (s *motionTestSigner) URL(jobID, artifactID uuid.UUID, mimeType string) (string, error) {
 	s.calls++
 	return "https://media.example/provider-references/" + jobID.String() + "/" + artifactID.String() + ".mp4?signature=synthetic", nil
 }

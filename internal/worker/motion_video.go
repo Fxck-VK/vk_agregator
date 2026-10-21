@@ -11,7 +11,7 @@ import (
 )
 
 type ReferenceVideoSigner interface {
-	URL(jobID, artifactID uuid.UUID) (string, error)
+	URL(jobID, artifactID uuid.UUID, mimeType string) (string, error)
 }
 
 func (p *processor) motionReferenceURL(ctx context.Context, job *domain.Job, pp promptParams, model string, duration int) (string, error) {
@@ -43,5 +43,5 @@ func (p *processor) motionReferenceURL(ctx context.Context, job *domain.Job, pp 
 	if err != nil || seconds != duration || json.Unmarshal(job.PricingSnapshot, &price) != nil || !price.Valid() || price.Key.VideoRouteAlias != domain.VideoRouteKling26Motion || price.Key.DurationSec != seconds {
 		return "", invalid
 	}
-	return p.providerReferences.URL(job.ID, a.ID)
+	return p.providerReferences.URL(job.ID, a.ID, a.MimeType)
 }

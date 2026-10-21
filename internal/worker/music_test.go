@@ -768,7 +768,7 @@ func createMusicInputArtifactForTest(t *testing.T, ctx context.Context, repo dom
 
 type fakeMusicReferenceSigner struct{}
 
-func (fakeMusicReferenceSigner) URL(jobID, artifactID uuid.UUID) (string, error) {
+func (fakeMusicReferenceSigner) URL(jobID, artifactID uuid.UUID, _ string) (string, error) {
 	return "https://provider-reference.test/" + jobID.String() + "/" + artifactID.String(), nil
 }
 

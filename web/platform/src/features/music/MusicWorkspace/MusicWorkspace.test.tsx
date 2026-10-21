@@ -58,6 +58,29 @@ const generateOperation: MusicWorkspaceOperation = {
 };
 
 describe("Suno tool prerequisites", () => {
+  it("lets an uploaded continuation time be cleared, typed and selected on a timeline", () => {
+    const confirm = vi.fn();
+    render(<StatefulWorkspace activeOperationId="upload_extend" initialMode="upload"
+      initialDraft={{ ...baseDraft, ownedUploads: [{ id: "33333333-3333-4333-8333-333333333333", label: "synthetic.mp3", durationSec: 61.344 }], actionParameters: { upload_extend: { prompt: "synthetic continuation" } } }}
+      operations={[{ id: "upload_extend", enabled: true, supportsUploads: true, requirement: { minTracks: 0, maxTracks: 0, minUploads: 1, maxUploads: 1 } }]}
+      onRequestConfirmation={confirm} />);
+    const seconds = screen.getByRole("spinbutton", { name: "Старт, сек." });
+    fireEvent.focus(seconds);
+    fireEvent.change(seconds, { target: { value: "" } });
+    expect(seconds).toHaveValue(null);
+    fireEvent.change(seconds, { target: { value: "30" } });
+    fireEvent.blur(seconds);
+    expect(seconds).toHaveValue(30);
+    const timeline = screen.getByRole("slider", { name: "Момент продолжения" });
+    expect(timeline).toHaveValue("30");
+    expect(Number(timeline.getAttribute("max"))).toBeLessThan(61.344);
+    fireEvent.change(timeline, { target: { value: "45" } });
+    expect(seconds).toHaveValue(45);
+    expect(screen.getByText("0:45 / 1:01")).toBeVisible();
+    fireEvent.click(screen.getByRole("button", { name: "Продолжить трек" }));
+    expect(confirm).toHaveBeenCalledWith(expect.objectContaining({ operationId: "upload_extend", parameters: expect.objectContaining({ seekSec: 45 }) }));
+  });
+
   it("offers preparation and only imported tracks for adding vocals", () => {
     const upload = vi.fn();
     render(<StatefulWorkspace activeOperationId="add_vocals" uploadsEnabled onRequestOwnedUpload={upload}

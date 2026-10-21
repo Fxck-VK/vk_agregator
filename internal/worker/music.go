@@ -127,7 +127,7 @@ func (p *processor) applyMusicAudioArtifacts(ctx context.Context, job *domain.Jo
 		if musicgeneration.ValidateUpload(params.Music, artifact) != nil {
 			return musicInvalidRequestError("music upload duration bound exceeded")
 		}
-		signedURL, err := p.providerReferences.URL(job.ID, artifact.ID)
+		signedURL, err := p.providerReferences.URL(job.ID, artifact.ID, artifact.MimeType)
 		if err != nil {
 			return musicBuildError(domain.ProviderErrUnsupportedCapab, "music audio artifact reference gateway is unavailable")
 		}

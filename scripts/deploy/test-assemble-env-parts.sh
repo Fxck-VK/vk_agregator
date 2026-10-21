@@ -66,6 +66,7 @@ fi
 
 export ENV_COMMON=$'APP_ENV=development\nWEB_ORIGIN=https://dev-web.neiirohub.ru\nPUBLIC_VK_BASE_URL="https://dev-vk.neiirohub.ru"\nPUBLIC_APP_BASE_URL=https://dev-app.neiirohub.ru/miniapp\nPUBLIC_PAYMENT_WEBHOOK_URL=https://dev.neiirohub.ru/webhooks/yookassa'
 export ENV_SECRETS_DEV='ADMIN_TOKEN=fixture-neiirohub.ru-secret'
+export ENV_PROVIDERS_COMMON=$'PROVIDER=fixture\nPROVIDER_REFERENCE_BASE_URL="https://dev-app.neiirohub.ru"'
 export ENV_PAYMENTS_DEV=$'PAYMENT_PROVIDER=mock\nYOOKASSA_RETURN_URL_MINIAPP=https://dev-app.neiirohub.ru/payment?payment_id=fixture\nYOOKASSA_RETURN_URL_VK_BOT=https://vk.com/app123'
 
 cutover="${tmpdir}/cutover.env"
@@ -77,12 +78,30 @@ grep -Fx 'PUBLIC_PAYMENT_WEBHOOK_URL=https://dev.epifera.com/webhooks/yookassa' 
 grep -Fx 'YOOKASSA_RETURN_URL_MINIAPP=https://dev-app.epifera.com/payment?payment_id=fixture' "${cutover}" >/dev/null
 grep -Fx 'YOOKASSA_RETURN_URL_VK_BOT=https://vk.com/app123' "${cutover}" >/dev/null
 grep -Fx 'ADMIN_TOKEN=fixture-neiirohub.ru-secret' "${cutover}" >/dev/null
+grep -Fx 'PROVIDER_REFERENCE_BASE_URL="https://dev-app.epifera.com"' "${cutover}" >/dev/null
 
 export ENV_COMMON="${ENV_COMMON//neiirohub.ru/epifera.com}"
+export ENV_PROVIDERS_COMMON="${ENV_PROVIDERS_COMMON//neiirohub.ru/epifera.com}"
 export ENV_PAYMENTS_DEV="${ENV_PAYMENTS_DEV//neiirohub.ru/epifera.com}"
 bash "${script}" --target dev --output "${tmpdir}/idempotent.env" \
   --web-origin https://dev-web.epifera.com --dev-public-domain epifera.com
 cmp "${cutover}" "${tmpdir}/idempotent.env"
+
+export ENV_PROVIDERS_COMMON=$'PROVIDER=fixture\nPROVIDER_REFERENCE_BASE_URL='
+bash "${script}" --target dev --output "${tmpdir}/disabled-reference.env" \
+  --dev-public-domain epifera.com
+grep -Fx 'PROVIDER_REFERENCE_BASE_URL=' "${tmpdir}/disabled-reference.env" >/dev/null
+
+for wrong_reference_url in 'https://app.neiirohub.ru' 'http://dev-app.neiirohub.ru' 'https://unknown.invalid'; do
+  export ENV_PROVIDERS_COMMON="PROVIDER=fixture
+PROVIDER_REFERENCE_BASE_URL=${wrong_reference_url}"
+  if bash "${script}" --target dev --output "${tmpdir}/wrong-reference.env" \
+    --dev-public-domain epifera.com >/dev/null 2>&1; then
+    echo "Expected invalid provider reference origin in DEV to fail" >&2
+    exit 1
+  fi
+done
+export ENV_PROVIDERS_COMMON='PROVIDER=fixture'
 
 export ENV_COMMON=$'APP_ENV=development\nPUBLIC_VK_BASE_URL=https://vk.neiirohub.ru\nPUBLIC_APP_BASE_URL=https://dev-app.neiirohub.ru\nPUBLIC_PAYMENT_WEBHOOK_URL=https://dev.neiirohub.ru'
 if bash "${script}" --target dev --output "${tmpdir}/wrong-contour.env" \

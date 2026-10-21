@@ -3348,3 +3348,10 @@ Single backup email (2026-10-05): accounts accept at most two email bindings. Ac
 Recovery/unlink safety (2026-10-05): accountauth routes PostgreSQL password recovery through the credential repository's transaction, locking the account before rechecking verified email ownership, credential update, session revocation and reset audit. This shares the unlink/replacement account lock and rolls back all security writes on failure. Memory tests hold the identity mutex across security writes; unsupported guarded recovery fails closed.
 
 Password and proof security (2026-10-05): accountlink atomically consumes the exact validated email/phone/recovery/backup challenge; Redis or memory failures cannot authorize it, and stale readers or delivery cleanup cannot delete a replacement. accountauth uses a password-security transaction that rechecks the verified email binding and exact credential before login session issuance. Password mutation, identity unlink/replacement and refresh rotation serialize on the account lock. Credential, audit, session revocation and security notices commit together; a browser mutation preserves only its active server-established session, while recovery/legacy mutation revoke all. Security notices enter a private transactional outbox (migration 000055), with verified recipient snapshots and bounded leased SMTP delivery outside the transaction. Delivery failures retry without changing the successful security response. Fixed templates and logs contain no credentials or raw recipient data; sent snapshots expire after one day, pending snapshots after seven days. See docs/runbooks/BROWSER_ACCOUNT.md.
+
+## Provider audio reference format (2026-10-21)
+
+Worker-signed audio reference paths use the inspected MP3/WAV/AAC extension.
+The extension is covered by HMAC; GET, HEAD and ranges retain ownership, Job
+binding, active-status and expiry checks. Existing MP4 video paths stay valid.
+DEV domain assembly also migrates the provider-reference public origin.

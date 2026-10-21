@@ -1523,7 +1523,7 @@ function ActionParameterForm({
 }>) {
   const msg = useMessages();
   const label = operationLabel(operation, operation.id, msg);
-  const runLabel = operation.id === "extend" ? msg("music.card.continue") : msg("music.operation.prepare", { name: label });
+  const runLabel = operation.id === "extend" || operation.id === "upload_extend" ? msg("music.card.continue") : msg("music.operation.prepare", { name: label });
   const disabled = disabledReason !== null;
   const selectedTracks = selectedTracksById(tracks, selectedTrackIds);
 
@@ -1640,14 +1640,21 @@ function ActionParameterForm({
           </>
         ) : null}
 
-        {isSeekAction(operation.id) ? (
+        {operation.id === "extend" || operation.id === "upload_extend" ? (
+          <ContinuationTimeField
+            disabled={busy}
+            duration={operation.id === "upload_extend" ? uploadDuration : selectedTracks[0]?.durationSec}
+            onChange={(seekSec) => onChange({ seekSec })}
+            value={draft.seekSec ?? (operation.id === "upload_extend" ? 1 : Math.max(1, Math.floor(selectedTracks[0]?.durationSec ?? 2) - 1))}
+          />
+        ) : isSeekAction(operation.id) ? (
           <NumberField
             disabled={busy}
             label={msg("music.parameters.seek")}
-            max={operation.id === "upload_extend" ? Math.max(1, (uploadDuration ?? 2) - 0.01) : operation.id === "extend" ? Math.max(1, Math.floor(selectedTracks[0]?.durationSec ?? 2) - 1) : 360}
-            min={operation.id === "extend" || operation.id === "upload_extend" ? 1 : 0}
+            max={360}
+            min={0}
             onChange={(seekSec) => onChange({ seekSec })}
-            value={draft.seekSec ?? (operation.id === "upload_extend" ? 1 : operation.id === "extend" ? Math.max(1, Math.floor(selectedTracks[0]?.durationSec ?? 2) - 1) : 0)}
+            value={draft.seekSec ?? 0}
           />
         ) : null}
 
@@ -1833,6 +1840,47 @@ function ActionParameterForm({
       </Button>
     </div>
   );
+}
+
+function ContinuationTimeField({ disabled, duration, onChange, value }: Readonly<{
+  disabled: boolean;
+  duration?: number;
+  onChange: (value: number) => void;
+  value: number;
+}>) {
+  const msg = useMessages();
+  const [editing, setEditing] = useState(false);
+  const [text, setText] = useState("");
+  const max = Math.max(1, (Math.ceil((duration ?? 1) * 10) - 1) / 10);
+  const unavailable = disabled || duration === undefined || duration <= 1;
+  const commit = () => {
+    const next = text.trim() === "" ? value : Number(text);
+    onChange(clamp(Number.isFinite(next) ? next : value, 1, max));
+    setEditing(false);
+  };
+  const clock = (seconds: number) => `${Math.floor(seconds / 60)}:${String(Math.floor(seconds % 60)).padStart(2, "0")}`;
+  return <div className={styles.actionFields}>
+    <label className={styles.field}>
+      <span>{msg("music.parameters.seek")}</span>
+      <InputSurface className={styles.inputSurface}>
+        <input disabled={unavailable} min={1} max={max} step={0.1} type="number"
+          value={editing ? text : value}
+          onFocus={() => { setText(String(value)); setEditing(true); }}
+          onChange={(event) => {
+            const raw = event.target.value;
+            setText(raw);
+            setEditing(true);
+            const next = Number(raw);
+            if (raw !== "" && Number.isFinite(next) && next >= 1 && next <= max) onChange(next);
+          }}
+          onBlur={commit}
+          onKeyDown={(event) => { if (event.key === "Enter") { event.preventDefault(); commit(); } }} />
+      </InputSurface>
+    </label>
+    <RangeSlider aria-label={msg("music.parameters.continuationPoint")} disabled={unavailable}
+      min={1} max={max} step={0.1} value={clamp(value, 1, max)} onValueChange={onChange} />
+    <output className={styles.muted}>{clock(value)} / {clock(duration ?? 0)}</output>
+  </div>;
 }
 
 function NumberField({

@@ -82,6 +82,19 @@ function audioResult(job: MusicJob, title: string): MusicJobResult {
 const loadedCatalog = () => Promise.resolve(enabledCatalog);
 
 describe("MusicWorkspaceController", () => {
+  it("keeps the inspected upload duration precise when choosing continuation time", async () => {
+    const catalog: MusicModelCatalog = { ...enabledCatalog, models: enabledCatalog.models.map(model => ({ ...model, operations: [...model.operations,
+      { enabled: true, id: "upload_extend", supportsUploads: true, requirement: { minTracks: 0, maxTracks: 0, minUploads: 1, maxUploads: 1 } },
+    ] })) };
+    const api = apiStub({ uploadMusicInput: vi.fn().mockResolvedValue({ artifact_id: "33333333-3333-4333-8333-333333333333", mime_type: "audio/mpeg", duration_ms: 61344, size_bytes: 1000 }) });
+    const { container } = render(<MusicWorkspaceController api={api} catalogLoader={() => Promise.resolve(catalog)} />);
+    fireEvent.click(await screen.findByRole("button", { name: "Продлить загрузку" }));
+    fireEvent.change(container.querySelector('input[type="file"]')!, { target: { files: [new File(["synthetic"], "synthetic.mp3", { type: "audio/mpeg" })] } });
+    await waitFor(() => expect(screen.getByRole("slider", { name: "Момент продолжения" })).toBeEnabled());
+    expect(screen.getByRole("slider", { name: "Момент продолжения" })).toHaveAttribute("max", "61.3");
+    expect(api.activateMusicJob).not.toHaveBeenCalled();
+  });
+
   it("opens an owned track from My Files and only prepares continuation after a user action", async () => {
     const catalog = { ...enabledCatalog, models: enabledCatalog.models.map(model => ({ ...model, operations: [...model.operations,
       { enabled: true, id: "extend" as const, estimateCredits: 30, requirement: { minTracks: 1, maxTracks: 1 } },

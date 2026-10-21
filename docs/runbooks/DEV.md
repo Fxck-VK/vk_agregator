@@ -332,13 +332,22 @@ domain cutover: older source revisions without `--dev-public-domain` retain
 their existing assembly behavior, while the cutover revision opts in.
 
 `assemble-env-parts.sh --target dev --dev-public-domain epifera.com` rewrites
-only existing DEV public channel origins and owned payment return URLs from
+only existing DEV public channel origins, the signed provider-reference origin
+(`PROVIDER_REFERENCE_BASE_URL`) and owned payment return URLs from
 the previous domain. URL paths, queries, quote style, external return targets
 and all credential fields are preserved. PROD or unknown public channel
 origins are rejected; the option cannot be used with `--target prod`.
 Split GitHub Secrets remain encrypted and are not reconstructed or overwritten.
 Verify the new mail sender and external OAuth/VK/payment settings before
 releasing the new hosts; DNS aliases alone do not complete that cutover.
+
+Audio uploads require the worker and API to use the same reachable
+`PROVIDER_REFERENCE_BASE_URL`. A stale hostname can make Suno report an invalid
+input even after MP3/WAV inspection succeeds. Compare only the configured public
+hostname and test the unsigned gateway path (403 is expected); never print signed
+URLs or signing keys. Provider links use the inspected format extension, and
+GET/HEAD/range reads retain their signature, ownership, Job binding and expiry
+checks.
 
 For browser email registration and recovery, set the optional repository secret
 `DEV_ACCOUNT_EMAIL_SMTP_PASSWORD` to the Resend sending key. The DEV workflow

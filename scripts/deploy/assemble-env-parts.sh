@@ -17,7 +17,7 @@ The optional VK menu override is production-only and replaces the assembled
 VK_MENU_TOP_UP_ENABLED value without printing it.
 The optional web origin override is DEV-only and replaces WEB_ORIGIN without
 reading or printing split secret values.
-The DEV public domain option migrates only public channel URLs and owned
+The DEV public domain option migrates public channel/reference URLs and owned
 payment return URLs. Secret values and external return URLs are preserved;
 production channel URLs in DEV are rejected rather than silently rewritten.
 USAGE
@@ -169,7 +169,7 @@ rewrite_dev_public_url() {
   local key="$1" line="$2" prefix="" value quote="" domain origin authority host suffix
   case "${key}" in
     PUBLIC_VK_BASE_URL) prefix="dev-vk" ;;
-    PUBLIC_APP_BASE_URL) prefix="dev-app" ;;
+    PUBLIC_APP_BASE_URL|PROVIDER_REFERENCE_BASE_URL) prefix="dev-app" ;;
     PUBLIC_PAYMENT_WEBHOOK_URL) prefix="dev" ;;
     YOOKASSA_RETURN_URL|YOOKASSA_RETURN_URL_MINIAPP|YOOKASSA_RETURN_URL_VK_BOT) ;;
     *) printf '%s' "${line}"; return ;;
@@ -180,6 +180,11 @@ rewrite_dev_public_url() {
   if [[ "${value}" == \"*\" || "${value}" == \'*\' ]]; then
     quote="${value:0:1}"
     value="${value:1:${#value}-2}"
+  fi
+
+  if [[ "${key}" == PROVIDER_REFERENCE_BASE_URL && -z "${value}" ]]; then
+    printf '%s' "${line}"
+    return
   fi
 
   if [[ -n "${prefix}" ]]; then

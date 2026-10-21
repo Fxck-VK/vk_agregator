@@ -130,7 +130,7 @@ func TestServeHTTPRejectsNotBoundArtifact(t *testing.T) {
 
 func TestServeHTTPRejectsMissingRows(t *testing.T) {
 	f := newFixture(t)
-	signed, err := f.service.URL(uuid.New(), uuid.New())
+	signed, err := f.service.URL(uuid.New(), uuid.New(), "video/mp4")
 	if err != nil {
 		t.Fatalf("url: %v", err)
 	}
@@ -268,7 +268,7 @@ func motionParams(t *testing.T, artifactID uuid.UUID) json.RawMessage {
 
 func (f *testFixture) mustURL(t *testing.T) string {
 	t.Helper()
-	signed, err := f.service.URL(f.job.ID, f.artifact.ID)
+	signed, err := f.service.URL(f.job.ID, f.artifact.ID, f.artifact.MimeType)
 	if err != nil {
 		t.Fatalf("URL: %v", err)
 	}
@@ -303,6 +303,42 @@ func TestServeHTTPValidMusicAudioRead(t *testing.T) {
 	}
 	if got := rec.Header().Get("Content-Type"); !strings.HasPrefix(got, "audio/mpeg") {
 		t.Fatalf("Content-Type = %q", got)
+	}
+}
+
+func TestMusicReferenceURLMatchesAudioFormat(t *testing.T) {
+	for _, tc := range []struct{ mime, codec, container, extension string }{
+		{"audio/mpeg", "mp3", "mp3", ".mp3"},
+		{"audio/wav", "pcm_s16le", "wav", ".wav"},
+		{"audio/aac", "aac", "aac", ".aac"},
+	} {
+		t.Run(tc.mime, func(t *testing.T) {
+			f := newMusicFixture(t)
+			f.artifact.MimeType, f.artifact.Codec, f.artifact.Container = tc.mime, tc.codec, tc.container
+			if err := f.artifacts.Update(f.ctx, f.artifact); err != nil {
+				t.Fatal(err)
+			}
+			signed := f.mustURL(t)
+			if !strings.HasSuffix(parseTestURL(t, signed).Path, tc.extension) {
+				t.Fatalf("audio reference path must end in %s", tc.extension)
+			}
+			head := f.serve(t, http.MethodHead, signed)
+			if head.Code != http.StatusOK || head.Body.Len() != 0 || head.Header().Get("Content-Type") != tc.mime {
+				t.Fatalf("HEAD status=%d content-type=%q", head.Code, head.Header().Get("Content-Type"))
+			}
+			req := httptest.NewRequest(http.MethodGet, signed, nil)
+			req.Header.Set("Range", "bytes=1-3")
+			rec := httptest.NewRecorder()
+			f.service.ServeHTTP(rec, req)
+			if rec.Code != http.StatusPartialContent || rec.Body.String() != string(f.body[1:4]) {
+				t.Fatal("audio range read failed")
+			}
+			u := parseTestURL(t, signed)
+			u.Path = strings.TrimSuffix(u.Path, tc.extension) + ".mp4"
+			if f.serve(t, http.MethodGet, u.String()).Code != http.StatusForbidden {
+				t.Fatal("changing audio extension must invalidate signature")
+			}
+		})
 	}
 }
 
@@ -342,11 +378,12 @@ func TestServeHTTPRejectsMusicCanonicalProviderModelMismatch(t *testing.T) {
 
 func TestServeHTTPRejectsInvalidMusicAudioMetadata(t *testing.T) {
 	f := newMusicFixture(t)
+	signed := f.mustURL(t)
 	f.artifact.MimeType = "audio/mp4"
 	if err := f.artifacts.Update(f.ctx, f.artifact); err != nil {
 		t.Fatalf("update artifact: %v", err)
 	}
-	rec := f.serve(t, http.MethodGet, f.mustURL(t))
+	rec := f.serve(t, http.MethodGet, signed)
 	if rec.Code != http.StatusForbidden {
 		t.Fatalf("status = %d, want 403", rec.Code)
 	}

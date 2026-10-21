@@ -87,13 +87,17 @@ func ValidateConfig(baseURL, secret string) error {
 }
 
 // URL signs a short-lived provider URL for one job-bound reference artifact.
-func (s *Service) URL(jobID, artifactID uuid.UUID) (string, error) {
+func (s *Service) URL(jobID, artifactID uuid.UUID, mimeType string) (string, error) {
 	if s == nil || jobID == uuid.Nil || artifactID == uuid.Nil {
 		return "", ErrInvalidURL
 	}
 	expires := s.now().Add(DefaultTTL).Unix()
 	expiresValue := strconv.FormatInt(expires, 10)
-	path := referencePath(jobID, artifactID)
+	extension := providerReferenceExtension(&domain.Artifact{MimeType: mimeType})
+	if mimeType != "video/mp4" && extension == ".mp4" {
+		return "", ErrInvalidURL
+	}
+	path := referencePath(jobID, artifactID, extension)
 
 	u := s.baseURL
 	u.Path = path
@@ -347,8 +351,8 @@ func containsUUID(values []uuid.UUID, want uuid.UUID) bool {
 	return false
 }
 
-func referencePath(jobID, artifactID uuid.UUID) string {
-	return PathPrefix + jobID.String() + "/" + artifactID.String() + ".mp4"
+func referencePath(jobID, artifactID uuid.UUID, extension string) string {
+	return PathPrefix + jobID.String() + "/" + artifactID.String() + extension
 }
 
 func parseReferencePath(path string) (uuid.UUID, uuid.UUID, error) {
@@ -357,14 +361,26 @@ func parseReferencePath(path string) (uuid.UUID, uuid.UUID, error) {
 		return uuid.Nil, uuid.Nil, ErrNotFound
 	}
 	parts := strings.Split(rest, "/")
-	if len(parts) != 2 || !strings.HasSuffix(parts[1], ".mp4") {
+	if len(parts) != 2 {
+		return uuid.Nil, uuid.Nil, ErrNotFound
+	}
+	name := parts[1]
+	matched := false
+	for _, extension := range []string{".mp4", ".mp3", ".wav", ".aac"} {
+		if strings.HasSuffix(name, extension) {
+			name = strings.TrimSuffix(name, extension)
+			matched = true
+			break
+		}
+	}
+	if !matched {
 		return uuid.Nil, uuid.Nil, ErrNotFound
 	}
 	jobID, err := uuid.Parse(parts[0])
 	if err != nil {
 		return uuid.Nil, uuid.Nil, ErrNotFound
 	}
-	artifactID, err := uuid.Parse(strings.TrimSuffix(parts[1], ".mp4"))
+	artifactID, err := uuid.Parse(name)
 	if err != nil {
 		return uuid.Nil, uuid.Nil, ErrNotFound
 	}

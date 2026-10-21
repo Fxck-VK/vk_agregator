@@ -421,7 +421,7 @@ export function MusicWorkspaceController({
       const uploaded = await Promise.all(files.map(async (file): Promise<MusicOwnedUpload> => {
         const upload = await api.uploadMusicInput(file);
         return {
-          durationSec: Math.round(upload.duration_ms / 1000),
+          durationSec: upload.duration_ms / 1000,
           id: upload.artifact_id,
           label: file.name || upload.mime_type,
         };
