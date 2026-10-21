@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { brandName } from "@/config/brand";
 import { modelCapabilitiesSchema } from "@/lib/web-api/model-capabilities-schema";
 
 import {
@@ -336,7 +337,13 @@ export type VideoModelList = z.infer<typeof videoModelListSchema>;
 export type VideoModel = VideoModelList["items"][number];
 
 export function parseModelCatalog(payload: unknown): PublicCatalog {
-  return modelCatalogSchema.parse(payload);
+  const catalog = modelCatalogSchema.parse(payload);
+  // The backend's built-in chat label is presentation copy. Keep its canonical
+  // ID, operations and prices, as well as every external provider name, intact.
+  catalog.items = catalog.items.map(model => model.id === "chatgpt" && model.name === "NeiroHub Chat"
+    ? { ...model, name: `${brandName} Chat` }
+    : model);
+  return catalog;
 }
 
 function enabledOperation(model: PublicCatalogModel, kind: PublicOperation["kind"]) {

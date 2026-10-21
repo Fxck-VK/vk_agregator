@@ -1,5 +1,7 @@
 "use client";
 
+import { BrandText } from "@/components/brand/BrandName/BrandName";
+
 import { StateNotice, LoadingIndicator } from "@/components/ui/AsyncState/AsyncState";
 import { useMessages, useDictionary } from "@/i18n/LocaleProvider";
 
@@ -424,7 +426,7 @@ export function ModelSelector({
       >
         {status === "loading" ? <LoadingIndicator label={t.modelSelector.loading} className={styles.modelIcon} /> : <ModelIcon className={styles.modelIcon} src={selectedModelPresentation?.artworkSrc} />}
         <span className={styles.triggerText}>
-          {visibleTriggerText}
+          <BrandText>{visibleTriggerText}</BrandText>
         </span>
         <span aria-hidden="true" className={`${styles.chevron} ${isOpen ? styles.chevronOpen : ""}`}>
           <Image alt="" height={8} src={assetPaths.icons.ui.faqArrow} unoptimized width={14} />

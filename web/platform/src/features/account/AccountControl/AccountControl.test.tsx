@@ -71,7 +71,8 @@ describe("AccountControl", () => {
     expect(screen.queryByText(profile.identity_refs[0].provider)).not.toBeInTheDocument();
     expect(screen.queryByRole("img")).not.toBeInTheDocument();
     const avatar = container.querySelector('[data-account-avatar="true"]');
-    expect(avatar).toHaveTextContent("NH");
+    expect(avatar).not.toHaveTextContent("NH");
+    expect(avatar?.querySelector('[data-icon="account-avatar"]')).toBeInTheDocument();
     expect(avatar).toHaveAttribute("aria-hidden", "true");
 
     fireEvent.click(trigger);

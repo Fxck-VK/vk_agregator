@@ -1,3 +1,4 @@
+import { brandName } from "@/config/brand";
 vi.mock("server-only", () => ({}));
 vi.mock("next/headers", () => ({ headers: vi.fn(async () => new Headers()), cookies: vi.fn(async () => ({ get: () => undefined })) }));
 import { renderToStaticMarkup } from "react-dom/server";
@@ -140,7 +141,7 @@ describe("Workspace destinations", () => {
       </WorkspaceConversationListProvider>,
     );
 
-    expect(markup).toContain("Задайте вопрос NeiroHub");
+    expect(markup).toContain(`Задайте вопрос ${brandName}`);
     expect(markup).not.toContain("Новости");
     expect(markup).not.toContain("Всё нужное для работы с AI — рядом");
     expect(markup).toContain("Популярные нейросети");

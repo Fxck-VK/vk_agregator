@@ -364,6 +364,15 @@ existing overlay; disabling mail also requires clearing its settings and
 recreating the API container. This hook does not alter production secrets.
 See [browser account access](../../docs/runbooks/BROWSER_ACCOUNT.md) for registration and smoke.
 
+Website and email brand settings share `web/platform/branding/brand.json`.
+Rebuild both platform and API images after a rename; the API embeds the file.
+An empty `ACCOUNT_EMAIL_SMTP_SUBJECT` follows the shared name. Custom subjects
+may use `{{brand}}`; custom literal subjects remain explicit overrides.
+The previous built-in subjects `Код подтверждения НейроХаб` and
+`NeiroHub verification code` are automatically treated as the new default,
+including values retained in an existing email overlay. SMTP credentials, From
+addresses, transport/TLS and security-notice delivery rules are unchanged.
+
 DEV deploy does not read production env secrets. Run DEV/PROD parity as a
 separate operator check when changing env structure.
 
@@ -377,15 +386,17 @@ pwsh -NoProfile -File scripts/ci/dev-deploy-preflight.ps1
 ```
 
 Use a patched Go toolchain. For the current release baseline, set
-`$env:GOTOOLCHAIN = 'go1.26.9'` in this shell when a newer but unpatched Go
+`$env:GOTOOLCHAIN = 'go1.26.10'` in this shell when a newer but unpatched Go
 installation would otherwise take precedence over `go.mod`.
-The October 8 security baseline uses Go 1.26.9 and `golang.org/x/net` v0.60.0.
+The October 21 security baseline uses Go 1.26.10 and `golang.org/x/net` v0.60.0.
 All Go build images use the same pinned Go release and immutable digest.
-See the [Go release history](https://go.dev/doc/devel/release#go1.26.9).
+See the [Go release history](https://go.dev/doc/devel/release#go1.26.10).
 
 It runs source tests, npm audits, `govulncheck`, documentation/infrastructure
-policy and the pinned Trivy filesystem scan in that order. Policy v2 includes
-the same documentation regression and routing checks as CI before push.
+policy and the pinned Trivy filesystem scan in that order. Policy v3 includes
+the same documentation regression and routing checks as CI before push and
+validates the filesystem exclusions before consulting cached results.
+It also checks the Bash runtime prerequisites before any long stage starts.
 Only one full preflight may run in
 a worktree at a time. A successful result is cached under private Git metadata
 for the exact commit, policy version, and completed stage. If a late stage
@@ -398,14 +409,40 @@ Bash and Docker. Trivy runs from the immutable image digest recorded in the scri
 reuses a private cache under the worktree Git directory. It never installs or
 runs an unpinned `latest` scanner.
 
+Windows Bash checks use the absolute system `wsl.exe` through
+`scripts/ci/BashRuntime.psm1`, rather than a `bash` found in Windows `PATH`.
+Prepare the default WSL Linux distribution with Bash, `curl` and `jq`; a missing
+runtime or command fails with an explicit prerequisite error. No automatic
+fallback to Git Bash or changes to the default WSL distribution are made.
+Both the workflow-monitor and migration-safety checks use this runtime, with
+`wslpath` conversion for Windows fixture paths. Linux/CI uses native Bash.
+Arguments are passed individually, and nonzero script exits are preserved.
+`scripts/ci/test-bash-runtime.ps1` checks these boundaries without changing the
+machine-wide PATH, installing software or altering shell profiles.
+
 Frontend dependencies are installed with `npm ci` only when a package lockfile
 changes or that package's local executable set is missing. The successful
 lockfile hash is cached under private Git metadata; dependency installation
 failures never create a marker.
 
-The Trivy filesystem scan skips installed `node_modules` trees and scans npm
-dependencies from their validated lockfiles instead. IaC and source
-misconfiguration scanning remain enabled.
+Platform Vitest tests use the worker limit in `web/platform/vitest.config.ts`:
+at most four concurrent workers, or available CPU parallelism minus one with
+a minimum of one on smaller machines. Local preflight, CI and
+`npm --prefix web/platform run test` all load this config. No one-off
+`VITEST_MAX_WORKERS` setting is needed. An explicit CLI `--maxWorkers` or
+`VITEST_MAX_WORKERS` overrides the limit; remove previous shell overrides when
+checking the default policy. Test isolation, timeouts, retries and assertions
+retain their previous behavior. This changes test scheduling only.
+
+Local and nightly Trivy filesystem scans explicitly load `trivy-filesystem.yaml`.
+It skips only local `.runtime`/`.cache`, installed `node_modules`, the three web
+apps' build output, coverage, and platform browser-test reports. Keep these
+directories in place; no manual moving or deletion is needed before scanning.
+`scripts/ci/validate-trivy-filesystem-scope.ps1` rejects unsupported exclusions,
+additional config keys and any excluded Git-tracked file. CI regression tests
+exercise that guard. Dependency lockfiles, Dockerfiles and deployment configs
+remain scanned, and HIGH/CRITICAL findings still fail the check. Immutable image
+scans do not load this filesystem config and retain their existing gates.
 
 New commits on `dev-deploy` cancel obsolete CI and Docker Images runs for that
 branch. `main` runs are not cancelled. Signed release publication still emits

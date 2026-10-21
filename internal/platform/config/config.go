@@ -1571,7 +1571,7 @@ func Load() Config {
 		AccountEmailSMTPUsername:            env("ACCOUNT_EMAIL_SMTP_USERNAME", ""),
 		AccountEmailSMTPPassword:            env("ACCOUNT_EMAIL_SMTP_PASSWORD", ""),
 		AccountEmailSMTPFrom:                env("ACCOUNT_EMAIL_SMTP_FROM", ""),
-		AccountEmailSMTPSubject:             env("ACCOUNT_EMAIL_SMTP_SUBJECT", "Код подтверждения НейроХаб"),
+		AccountEmailSMTPSubject:             env("ACCOUNT_EMAIL_SMTP_SUBJECT", ""),
 		AccountEmailSMTPTLSMode:             envConfigToken("ACCOUNT_EMAIL_SMTP_TLS_MODE", "starttls"),
 		AccountEmailSMTPTimeout:             envDuration("ACCOUNT_EMAIL_SMTP_TIMEOUT", 10*time.Second),
 		AccountPhoneDeliveryProvider:        envConfigToken("ACCOUNT_PHONE_DELIVERY_PROVIDER", "disabled"),

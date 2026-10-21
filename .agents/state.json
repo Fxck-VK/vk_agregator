@@ -1,7 +1,7 @@
 {
   "schema_version": 5,
-  "updated_at": "2026-10-21T02:58:23.400881+03:00",
-  "branch": "fastlife_dev",
+  "updated_at": "2026-10-21T21:21:39.4550386Z",
+  "branch": "codex/vk-profile-name",
   "remote_tracking": "origin/dev-deploy",
   "purpose": "Short machine-readable current context and routing for agents. This file is not project history.",
   "read_policy": {
@@ -53,12 +53,13 @@
   },
   "current_context": {
     "active_branch_role": "dev-deploy is the integration/deployment branch; synchronize fastlife_dev after tested merges. Production remains main-only.",
-    "worktree": "Shared web catalog/workspace and typed API/application model capabilities integrated. Read Git for current commit and uncommitted changes.",
+    "worktree": "Single active development checkout: C:/Users/Lenovo/Documents/агрегатор/epifera-domain-cutover. All preserved UI/brand/model-icon and current backend/auth changes are integrated here; other working directories are inactive history.",
     "dev_contour": "DEV uses separate secrets, VPS, tunnel, VK group and payment configuration.",
     "prod_contour": "main deploys through GitHub Actions and immutable GHCR images with mandatory smoke.",
     "loadtest_contour": "Mock providers, payments and delivery only; no production hosts or paid calls."
   },
   "recent_decisions": [
+    "Unified Epifera release: preserve all incoming DEV text/music/media/toolchain fixes together with centralized website/email branding, provider SVG icons, neutral account avatar, brand-derived downloads and responsive login UI in the single active checkout. Publish the tested result to dev-deploy through exact-SHA CI, immutable images and mandatory smoke.",
     "Suno Studio requested tools are DEV-only (2026-10-19): lyrics/sounds/cover/mashup/stems/stems_all/add_vocals/add_instrumental/upload/upload_cover/upload_extend/upsample_tags, owned sources and signed MP3/WAV uploads; 8 authorized Suno V6/no-Max cases have one successful capture each ($0.5116 / 315 credits); lyrics legacy prompt normalization fixed, five upload-dependent live cases await manual input. See docs/runbooks/MODEL_CATALOG.md#suno-studio-tools-2026-10-19.",
     "Whisper-1 is DEV-only with the explicitly approved fixed site tariff of 25 credits per started minute, up to 8 minutes; owned probed MP3/WAV only, provider cost remains unknown, production admission unchanged. See docs/runbooks/MODEL_CATALOG.md#whisper-dev-fixed-minute-pricing-2026-10-19.",
     "Website referrals use canonical account-owned codes, first-touch hashed 30-day browser intents and transactional new-account acceptance. Website counters are real and source=web only; activation/rewards stay disabled pending rules. No synthetic VK users or direct credit grants. Operational details: docs/runbooks/WEB_REFERRALS.md.",
@@ -88,8 +89,7 @@
     "Billing remains ledger-based and payment top-ups require provider-verified webhook/reconciliation.",
     "The standalone NeiroHub web platform uses one independently deployable Next.js application with public SSG/ISR routes, authenticated no-store/noindex routes, secure server-managed web sessions and a channel-neutral versioned /web/v1 Go API.",
     "The shared /web/v1/models catalog feeds all web selectors and generation controls; API and application capabilities remain separate and never enable unwired inputs.",
-    "Registry records are typed by purpose. Stable admission serialization preserves the frozen legacy baseline; descriptions do not establish verified onboarding.",
-    "Current model integration/live DEV handoff is docs/HANDOFF_CURRENT.md (October 7); the September 21 handoff is archived. The verified video/history package is included in fastlife_dev; fetch/merge carries the code. DEV runtime recovery and deployment are separate operations."
+    "Registry records are typed by purpose. Stable admission serialization preserves the frozen legacy baseline; descriptions do not establish verified onboarding."
   ],
   "active_priorities": [
     "Keep DEV and PROD deploy workflows aligned but isolated by secrets, tunnel, VK group and payment settings.",
@@ -133,5 +133,11 @@
       "PII",
       "private URLs"
     ]
+  },
+  "local_development": {
+    "workspace": "C:/Users/Lenovo/Documents/агрегатор/epifera-domain-cutover",
+    "url": "http://localhost:7159",
+    "start": "npm --prefix web/platform run dev:preview",
+    "policy": "Reuse this checkout/server. No alternate local copies, worktrees or preview ports without explicit user request."
   }
 }

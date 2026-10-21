@@ -1,3 +1,5 @@
+import { brandName } from "@/config/brand";
+const brandedChatLabel = (name: string) => name.startsWith(`Выбрана нейросеть ${brandName} Chat.`);
 import { StrictMode } from "react";
 import { act, cleanup, fireEvent, render, screen, within } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
@@ -40,7 +42,7 @@ const queuedJob = {
 const chatModels = {
   default_model_id: "chatgpt",
   items: [
-    { id: "chatgpt", name: "NeiroHub Chat" },
+    { id: "chatgpt", name: `${brandName} Chat` },
     { id: "test-chat", name: "Тестовая модель" },
   ],
 };
@@ -130,7 +132,7 @@ describe("ConversationHistory", () => {
     vi.mocked(webBrowserMutation).mockReturnValueOnce(new Promise(() => {}));
     render(<ConversationHistory history={{ ...initialHistory, messages: [], hasMoreBefore: false }} />);
     await act(async () => {});
-    const modelLabel = /Выбрана нейросеть NeiroHub Chat/;
+    const modelLabel = brandedChatLabel;
     expect(screen.queryByRole("button", { name: modelLabel })).not.toBeInTheDocument();
     await setComposerPrompt("Первое сообщение");
     expect(screen.queryByRole("button", { name: modelLabel })).not.toBeInTheDocument();
@@ -144,7 +146,7 @@ describe("ConversationHistory", () => {
       .mockRejectedValueOnce(new Error("network"))
       .mockReturnValueOnce(new Promise(() => {}));
     render(<ConversationHistory history={initialHistory as never} />);
-    const trigger = await screen.findByRole("button", { name: /Выбрана нейросеть NeiroHub Chat/ });
+    const trigger = await screen.findByRole("button", { name: brandedChatLabel });
     const submit = screen.getByRole("button", { name: ru.conversations.composerSubmit });
     expect(trigger.closest('[data-variant="composer"]')?.nextElementSibling?.contains(submit)).toBe(true);
     const input = await setComposerPrompt("Сохрани черновик");
@@ -178,7 +180,7 @@ describe("ConversationHistory", () => {
     expect(await screen.findByRole("button", { name: /Выбрана нейросеть Тестовая модель/ })).toBeEnabled();
     mockModelCatalog();
     view.rerender(<ConversationHistory history={{ ...initialHistory, conversationId: "another-conversation" } as never} />);
-    expect(await screen.findByRole("button", { name: /Выбрана нейросеть NeiroHub Chat/ })).toBeEnabled();
+    expect(await screen.findByRole("button", { name: brandedChatLabel })).toBeEnabled();
   });
 
   it("renders conversation messages without visible role labels", () => {
@@ -234,7 +236,7 @@ describe("ConversationHistory", () => {
     expect(assistantMessage.queryByRole("button", { name: "Пересоздать сообщение" })).toBeNull();
   });
 
-  it("shows NeiroHub copy feedback and restores the copy action after two seconds", async () => {
+  it(`shows ${brandName} copy feedback and restores the copy action after two seconds`, async () => {
     vi.useFakeTimers();
     const writeText = vi.fn().mockResolvedValue(undefined);
     vi.stubGlobal("navigator", { clipboard: { writeText } });
@@ -266,7 +268,7 @@ describe("ConversationHistory", () => {
     expect(copyButton.querySelector('[data-icon="copy"]')).not.toBeNull();
   });
 
-  it("uses the NeiroHub tooltip contract for every message action", () => {
+  it(`uses the ${brandName} tooltip contract for every message action`, () => {
     render(<ConversationHistory history={initialHistory as never} />);
 
     const messageItems = within(screen.getByRole("list")).getAllByRole("listitem");
@@ -1255,7 +1257,7 @@ it("switches the existing dialogue to an image model, keeps the draft, and freez
  mockModelCatalog({ images: [{id:"nano_banana_2",name:"Nano Banana 2",default_quality:"2K",quality_options:["2K"],price_by_quality:{"2K":60},supports_reference_image:false,max_reference_images:0,max_output_count:4,allowed_aspect_ratios:["16:9","9:16"]}] });
  vi.mocked(webBrowserMutation).mockRejectedValueOnce(new Error("offline")).mockReturnValueOnce(new Promise(()=>{}));
  render(<ConversationHistory history={{...initialHistory,messages:initialHistory.messages.map(message=>({...message,rating:null}))}} />);
- const trigger = await screen.findByRole("button", {name:/Выбрана нейросеть NeiroHub Chat/});
+ const trigger = await screen.findByRole("button", {name:brandedChatLabel});
  const input = screen.getByLabelText(ru.conversations.composerLabel);
  await setComposerPrompt("Журавль на облаке");
  const url = window.location.href;

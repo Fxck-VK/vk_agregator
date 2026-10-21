@@ -4,13 +4,17 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"io"
+	"mime"
 	"net/http"
 	"net/http/httptest"
+	"net/mail"
 	"strings"
 	"testing"
 	"time"
 
 	"vk-ai-aggregator/internal/service/accountlink"
+	"vk-ai-aggregator/web/platform/branding"
 )
 
 func TestDisabledSenderFailsClosed(t *testing.T) {
@@ -91,5 +95,32 @@ func TestBuildEmailMessageSanitizesHeaders(t *testing.T) {
 	}
 	if !strings.Contains(msg, "123456") || !strings.Contains(msg, "2026-07-05T12:30:00Z") {
 		t.Fatalf("message missing code/expiry: %q", msg)
+	}
+}
+
+func TestEmailBrandSubjectAndBody(t *testing.T) {
+	for _, tc := range []struct{ subject, want string }{
+		{"", "Код подтверждения " + branding.Name()},
+		{"Код подтверждения НейроХаб", "Код подтверждения " + branding.Name()},
+		{"NeiroHub verification code", "Код подтверждения " + branding.Name()},
+		{"  Login to {{brand}}  ", "Login to " + branding.Name()},
+		{"Custom subject", "Custom subject"},
+	} {
+		sender, err := newSMTPSender(SMTPConfig{Host: "localhost", From: "noreply@example.test", Subject: tc.subject})
+		if err != nil {
+			t.Fatal(err)
+		}
+		message, err := mail.ReadMessage(strings.NewReader(string(buildEmailMessage(sender.cfg.From, "fixture@example.test", sender.cfg.Subject, "123456", time.Now()))))
+		if err != nil {
+			t.Fatal(err)
+		}
+		subject, err := new(mime.WordDecoder).DecodeHeader(message.Header.Get("Subject"))
+		if err != nil || subject != tc.want {
+			t.Errorf("subject did not use the shared brand/template for %q", tc.subject)
+		}
+		body, err := io.ReadAll(message.Body)
+		if err != nil || !strings.Contains(string(body), branding.Name()+" verification code: 123456") {
+			t.Error("verification body did not use the shared brand")
+		}
 	}
 }

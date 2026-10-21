@@ -9,8 +9,12 @@ describe("restrained brand accents", () => {
   it.each([
     "src/components/public/PublicHeader/PublicHeader.module.css",
     "src/components/public/PublicFooter/PublicFooter.module.css",
-  ])("uses the brand gradient for the compact mark in %s", (path) => {
-    expect(read(path)).toMatch(/\.brandMark\s*\{[^}]*background:\s*var\(--gradient-brand\)/s);
+  ])("sizes the shared logo without painting over its artwork in %s", (path) => {
+    const rule = read(path).match(/\.brandMark\s*\{[^}]*\}/s)?.[0] ?? "";
+    const size = rule.match(/inline-size:\s*([\d.]+rem)/)?.[1];
+    expect(size).toBeDefined();
+    expect(rule).toContain(`block-size: ${size}`);
+    expect(rule).not.toMatch(/background:|color:/);
   });
 
   it("uses gradient text only for the landing hero accent and balance", () => {

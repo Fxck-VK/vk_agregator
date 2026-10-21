@@ -1,3 +1,4 @@
+import { brandName } from "@/config/brand";
 import { act, cleanup, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
@@ -18,7 +19,7 @@ const textGenerationModel = {
   description: "Text model",
   estimate_credits: 0,
   id: "chatgpt",
-  name: "NeiroHub Chat",
+  name: `${brandName} Chat`,
 };
 const parsedCatalog = parseModelCatalog(catalog);
 const referenceModel = {
@@ -52,12 +53,12 @@ describe("ConversationComposer", () => {
     expect(screen.queryByRole("button", { name: ru.conversations.composerMediaUpload })).toBeNull();
   });
 
-  it("uses the exact NeiroHub question placeholder", () => {
+  it(`uses the exact ${brandName} question placeholder`, () => {
     render(<ConversationComposer {...chatScrollProps} onSubmit={vi.fn()} />);
 
     expect(screen.getByLabelText(ru.conversations.composerLabel)).toHaveAttribute(
       "placeholder",
-      "Задайте вопрос NeiroHub",
+      `Задайте вопрос ${brandName}`,
     );
   });
 

@@ -5,4 +5,4 @@
 WEB_API_INTERNAL_ORIGIN=http://127.0.0.1:8080
 # Trusted public origin for absolute canonical, hreflang and sitemap URLs.
 # Required at runtime in production; never derive this from a browser Host header.
-WEB_ORIGIN=http://localhost:7158
+WEB_ORIGIN=http://localhost:7159

@@ -133,7 +133,7 @@ describe("ProfileWorkspace", () => {
 
     expect(screen.getByRole("tabpanel", { name: ru.profile.referralTabLabel })).toBeInTheDocument();
     expect(document.querySelectorAll('[role="tabpanel"]')).toHaveLength(1);
-    expect(screen.getByText(ru.profile.referralLaunchTitle)).toBeInTheDocument();
+    expect(screen.getByRole("heading", { name: ru.profile.referralLaunchTitle })).toBeInTheDocument();
     expect(screen.queryByText(ru.profile.billingPlaceholder)).not.toBeInTheDocument();
 
     fireEvent.keyDown(referralTab, { key: "ArrowLeft" });

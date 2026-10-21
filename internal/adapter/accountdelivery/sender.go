@@ -17,6 +17,7 @@ import (
 	"time"
 
 	"vk-ai-aggregator/internal/service/accountlink"
+	"vk-ai-aggregator/web/platform/branding"
 )
 
 const (
@@ -24,7 +25,7 @@ const (
 	ProviderSMTP     = "smtp"
 	ProviderHTTP     = "http"
 
-	defaultEmailSubject = "Код подтверждения НейроХаб"
+	defaultEmailSubject = "Код подтверждения {{brand}}"
 	defaultTimeout      = 10 * time.Second
 )
 
@@ -136,9 +137,12 @@ func newSMTPSender(cfg SMTPConfig) (*smtpSender, error) {
 	if cfg.Port == 0 {
 		cfg.Port = 587
 	}
-	if cfg.Subject == "" {
-		cfg.Subject = "NeiroHub verification code"
+	switch cfg.Subject {
+	case "", "Код подтверждения НейроХаб", "NeiroHub verification code":
+		// Upgrade previous built-in defaults retained in deployment settings.
+		cfg.Subject = defaultEmailSubject
 	}
+	cfg.Subject = strings.ReplaceAll(cfg.Subject, "{{brand}}", branding.Name())
 	if cfg.TLSMode == "" {
 		cfg.TLSMode = "starttls"
 	}
@@ -301,7 +305,7 @@ func buildEmailMessage(from, to, subject, code string, expiresAt time.Time) []by
 	for key, value := range headers {
 		_, _ = fmt.Fprintf(&buf, "%s: %s\r\n", key, value)
 	}
-	_, _ = fmt.Fprintf(&buf, "\r\nNeiroHub verification code: %s\r\n", code)
+	_, _ = fmt.Fprintf(&buf, "\r\n%s verification code: %s\r\n", branding.Name(), code)
 	_, _ = fmt.Fprintf(&buf, "This code expires at %s.\r\n", expiresAt.UTC().Format(time.RFC3339))
 	_, _ = fmt.Fprint(&buf, "If you did not request this code, ignore this email.\r\n")
 	return buf.Bytes()

@@ -28,4 +28,4 @@
 - Unit tests: 213 файлов, 1456 тестов — успешно.
 - Браузер: 10 сценариев — успешно; desktop/mobile, light/dark, reduced motion, загрузка, ошибка и повтор, просмотр вложений и сетевое уведомление.
 - TypeScript, ESLint, 6 проверок assets и production build — успешно.
-- Локальная страница проверки: http://localhost:7158/ru/app/ui-states.
+- Локальная страница проверки: http://localhost:7159/ru/app/ui-states.

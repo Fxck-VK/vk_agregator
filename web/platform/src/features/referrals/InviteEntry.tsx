@@ -1,5 +1,7 @@
 "use client";
 
+import { BrandText } from "@/components/brand/BrandName/BrandName";
+
 import { useEffect, useState } from "react";
 import { useDictionary } from "@/i18n/LocaleProvider";
 import { useRouter } from "@/i18n/navigation";
@@ -36,7 +38,7 @@ export function InviteEntry({ code }: { code: string }) {
     return () => { active = false; };
   }, [attempt, code]);
   return <section className={styles.form}>
-    <h1>{t.profile.inviteTitle}</h1>
+    <h1><BrandText>{t.profile.inviteTitle}</BrandText></h1>
     <StateNotice kind={state === "loading" ? "loading" : state === "error" ? "error" : "success"}
       action={state === "error" ? { label: t.profile.referralRetry, onClick: () => { setState("loading"); setAttempt(value => value + 1); } } : undefined}>
       {state === "loading" ? t.profile.inviteLoading : state === "ready" ? t.profile.inviteReady : t.profile.inviteFailure}

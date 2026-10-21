@@ -1,5 +1,7 @@
 "use client";
 
+import { BrandText } from "@/components/brand/BrandName/BrandName";
+
 import { StateNotice } from "@/components/ui/AsyncState/AsyncState";
 import { MediaImage } from "@/components/media/MediaImage/MediaImage";
 import { useDictionary } from "@/i18n/LocaleProvider";
@@ -38,7 +40,7 @@ export function ImageGenerationResult({ onCreateAnother, prompt, result }: Reado
     <section aria-labelledby="image-result-title" className={styles.result}>
       <header>
         <h3 id="image-result-title">{t.imageGeneration.resultTitle}</h3>
-        <p>{t.imageGeneration.resultReadyDescription}</p>
+        <p><BrandText>{t.imageGeneration.resultReadyDescription}</BrandText></p>
       </header>
       <div className={styles.artifacts}>
         {result.artifacts.map((artifact) => {

@@ -1,5 +1,7 @@
 "use client";
 
+import { BrandText } from "@/components/brand/BrandName/BrandName";
+
 import { StateNotice, Skeleton } from "@/components/ui/AsyncState/AsyncState";
 import { LoadFeedback } from "@/components/ui/AsyncState/LoadFeedback";
 import { useDictionary } from "@/i18n/LocaleProvider";
@@ -41,7 +43,7 @@ export function ModelsCatalog() {
       <section aria-labelledby="models-catalog-title" className={styles.catalog}>
         <header className={styles.header}>
           <h1 id="models-catalog-title">{t.modelsCatalog.title}</h1>
-          <p>{t.modelsCatalog.description}</p>
+          <p><BrandText>{t.modelsCatalog.description}</BrandText></p>
         </header>
         <LoadFeedback pending={pending} failed={failed && catalog !== null} hasData={catalog !== null} onRetry={retry} />
 

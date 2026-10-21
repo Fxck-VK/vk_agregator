@@ -8,6 +8,7 @@ import (
 	"time"
 	"vk-ai-aggregator/internal/domain"
 	"vk-ai-aggregator/internal/service/accountlink"
+	"vk-ai-aggregator/web/platform/branding"
 )
 
 // SendAccountSecurityNotice never accepts arbitrary subject/body content.
@@ -43,7 +44,7 @@ func buildSecurityNoticeMessage(from, to string, kind domain.AccountSecurityNoti
 		return nil, domain.ErrInvalidIdentity
 	}
 	var buf bytes.Buffer
-	fmt.Fprintf(&buf, "From: %s\r\nTo: %s\r\nSubject: %s\r\nMIME-Version: 1.0\r\nContent-Type: text/plain; charset=UTF-8\r\nContent-Transfer-Encoding: 8bit\r\n\r\n", sanitizeHeader(from), sanitizeHeader(to), mime.QEncoding.Encode("utf-8", "Безопасность аккаунта НейроХаб"))
-	fmt.Fprintf(&buf, "НейроХаб: уведомление о безопасности аккаунта.\r\n%s\r\nВремя события (UTC): %s.\r\nЕсли это были не вы, откройте НейроХаб самостоятельно, восстановите доступ и проверьте настройки безопасности.\r\n", event, at.UTC().Format(time.RFC3339))
+	fmt.Fprintf(&buf, "From: %s\r\nTo: %s\r\nSubject: %s\r\nMIME-Version: 1.0\r\nContent-Type: text/plain; charset=UTF-8\r\nContent-Transfer-Encoding: 8bit\r\n\r\n", sanitizeHeader(from), sanitizeHeader(to), mime.QEncoding.Encode("utf-8", "Безопасность аккаунта "+branding.Name()))
+	fmt.Fprintf(&buf, "%s: уведомление о безопасности аккаунта.\r\n%s\r\nВремя события (UTC): %s.\r\nЕсли это были не вы, откройте %s самостоятельно, восстановите доступ и проверьте настройки безопасности.\r\n", branding.Name(), event, at.UTC().Format(time.RFC3339), branding.Name())
 	return buf.Bytes(), nil
 }

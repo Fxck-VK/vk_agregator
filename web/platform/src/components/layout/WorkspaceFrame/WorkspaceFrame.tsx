@@ -19,7 +19,6 @@ import type { ModelCatalogSnapshot } from "@/features/models/model-catalog-contr
 import { Skeleton, StateNotice } from "@/components/ui/AsyncState/AsyncState";
 import { useDictionary } from "@/i18n/LocaleProvider";
 import { useRouter } from "@/i18n/navigation";
-import { LanguageSwitcher } from "@/i18n/LanguageSwitcher";
 import type { AccountProfile, ConversationItem } from "@/lib/web-api/contracts";
 
 const desktopSidebarCollapsedStorageKey = "neirohub.desktop-sidebar-collapsed";
@@ -134,7 +133,7 @@ export function GuestWorkspaceFrame({ children }: Readonly<{ children: ReactNode
     <WorkspaceDataCacheProvider>
       <WorkspaceModelSelectionProvider>
         <WorkspaceChrome
-          account={<><LanguageSwitcher /><WorkspaceLoginAction placement="sidebar" /></>}
+          account={<WorkspaceLoginAction placement="sidebar" />}
           trailingAction={<WorkspaceLoginAction placement="header" />}
         >
           {children}

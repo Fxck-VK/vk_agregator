@@ -1,3 +1,4 @@
+import { BrandText } from "@/components/brand/BrandName/BrandName";
 import Image from "next/image";
 
 import { assetPaths } from "@/assets/asset-paths";
@@ -21,7 +22,7 @@ export function FAQ({ items, name }: Readonly<FAQProps>) {
       {items.map((item) => (
         <details key={item.question} name={name}>
           <summary>
-            {item.question}
+            <span><BrandText>{item.question}</BrandText></span>
             <Image
               alt=""
               className={styles.arrow}
@@ -30,7 +31,7 @@ export function FAQ({ items, name }: Readonly<FAQProps>) {
               width={18}
             />
           </summary>
-          <p>{item.answer}</p>
+          <p><BrandText>{item.answer}</BrandText></p>
         </details>
       ))}
     </div>

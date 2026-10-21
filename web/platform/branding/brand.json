@@ -1,0 +1,21 @@
+{
+  "name": "Epifera",
+  "wordmarks": {
+    "epifera": {
+      "path": "/assets/brand/wordmarks/epifera.svg",
+      "width": 811,
+      "height": 232
+    }
+  },
+  "logoPath": "/assets/brand/marks/epifera-mark.svg",
+  "icons": {
+    "icon": [
+      { "url": "/assets/brand/favicons/epifera-favicon-32.png", "sizes": "32x32", "type": "image/png" },
+      { "url": "/assets/brand/favicons/epifera-favicon-48.png", "sizes": "48x48", "type": "image/png" }
+    ],
+    "shortcut": "/assets/brand/favicons/epifera-favicon-32.png",
+    "apple": [
+      { "url": "/assets/brand/favicons/epifera-apple-touch-icon-180.png", "sizes": "180x180", "type": "image/png" }
+    ]
+  }
+}

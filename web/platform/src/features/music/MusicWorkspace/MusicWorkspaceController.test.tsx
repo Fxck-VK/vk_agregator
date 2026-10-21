@@ -154,7 +154,8 @@ describe("MusicWorkspaceController", () => {
     });
     render(<MusicWorkspaceController api={api} catalogLoader={() => Promise.resolve(catalog)}
       requestedContinuation={{ modelId: "suno_v6", jobId: oldMusicJob.id, audioIndex: 1, continueAtSec: 45 }} />);
-    await screen.findByRole("heading", { name: "Продлить" });
+    // Source loading is asynchronous; the full suite can exceed the default 1s wait.
+    await screen.findByRole("heading", { name: "Продлить" }, { timeout: 5000 });
     fireEvent.click(screen.getByRole("button", { name: "Использовать 0:45" }));
     expect(api.prepareMusicJob).not.toHaveBeenCalled();
     expect(api.activateMusicJob).not.toHaveBeenCalled();

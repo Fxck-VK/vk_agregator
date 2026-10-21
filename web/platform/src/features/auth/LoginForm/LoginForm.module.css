@@ -41,3 +41,44 @@
 .providers > button { flex: 1 1 calc(50% - var(--space-2)); }
 .external { display: grid; gap: var(--space-3); padding-block-start: var(--space-4); border-block-start: 0.0625rem solid var(--color-border); text-align: center; }
 @media (max-width: 36rem) { .form { padding: var(--space-4); } }
+
+.choiceEntry { display: grid; gap: 1.5rem; inline-size: min(100%, 29.5rem); }
+.choiceCard, .windowForm { border: 1px solid var(--color-border); border-radius: 2rem; background: transparent; padding: clamp(1.5rem, 3vw, 2.5rem); }
+.choiceCard { display: grid; gap: 1.25rem; }
+.choiceCard h1 { margin: 0 0 .5rem; font-size: clamp(1.35rem, 2vw, 1.75rem); font-weight: var(--font-weight-semibold); line-height: 1.3; text-align: center; letter-spacing: -.025em; }
+.choiceProviders { display: grid; gap: .75rem; }
+.choiceProviders:empty { display: none; }
+.choiceCard .providerPill, .choiceCard .emailPill { display: flex; align-items: center; justify-content: center; gap: .75rem; min-block-size: 3.25rem; padding: .85rem 1rem; border-radius: var(--radius-pill); font-size: .95rem; font-weight: var(--font-weight-medium); }
+.choiceCard .providerPill { background: var(--color-surface-raised); }
+.choiceCard .emailPill { background: var(--color-surface-light); color: var(--color-text-on-light); }
+.choiceCard .emailPill:hover:not(:disabled) { background: #e2e5eb; }
+.providerMark { display: grid; place-items: center; inline-size: 1.5rem; block-size: 1.5rem; flex: 0 0 auto; font-size: .8rem; font-weight: var(--font-weight-semibold); }
+.divider { display: flex; align-items: center; gap: 1rem; font-size: .85rem; color: var(--color-text-muted); }
+.divider::before, .divider::after { content: ""; flex: 1; block-size: 1px; background: var(--color-border); }
+.choiceNote, .previewNote { margin: 0; text-align: center; font-size: .75rem; color: var(--color-text-muted); line-height: 1.6; }
+.previewNote { font-size: .7rem; }
+.helpCard { display: flex; align-items: flex-start; gap: 1rem; border: 1px solid var(--color-border); border-radius: 1.5rem; padding: 1.5rem; }
+.helpIcon { display: grid; place-items: center; flex: 0 0 2rem; block-size: 2rem; border: 1px solid var(--color-border); border-radius: 50%; color: var(--color-text-muted); }
+.helpCard h2 { margin: .15rem 0 .6rem; font-size: .95rem; font-weight: var(--font-weight-medium); }
+.helpCard summary { color: var(--color-information); font-size: .85rem; cursor: pointer; }
+.helpCard p { margin-block-end: 0; font-size: .8rem; line-height: 1.6; color: var(--color-text-muted); }
+.windowForm { inline-size: min(100%, 29.5rem); }
+.windowForm .backAction { justify-self: start; padding-inline: 0; font-size: .8rem; color: var(--color-text-muted); text-align: start; }
+.windowForm .fields > button[type="submit"] { min-block-size: 3rem; border-radius: var(--radius-pill); background: var(--color-surface-light); color: var(--color-text-on-light); }
+.choiceEntry button:focus-visible, .windowForm button:focus-visible, .helpCard summary:focus-visible { outline: 2px solid var(--color-focus); outline-offset: 4px; }
+@media (max-width: 36rem) {
+  .choiceCard, .windowForm { padding: 1.5rem 1.25rem; border-radius: 1.5rem; }
+  .helpCard { padding: 1.25rem; }
+}
+@media (max-height: 45rem) {
+  .choiceEntry { gap: 1rem; }
+  .choiceCard, .windowForm { gap: .75rem; padding: 1.25rem; }
+  .choiceCard h1 { margin: 0; font-size: 1.25rem; }
+  .choiceProviders { gap: .5rem; }
+  .choiceCard .providerPill, .choiceCard .emailPill { min-block-size: 2.75rem; padding: .65rem 1rem; }
+  .choiceNote { font-size: .7rem; line-height: 1.5; }
+  .previewNote { font-size: .65rem; line-height: 1.5; }
+  .helpCard { gap: .75rem; padding: 1rem; }
+  .helpCard h2 { margin: .1rem 0 .35rem; font-size: .9rem; }
+  .helpCard summary { font-size: .8rem; }
+}

@@ -26,6 +26,25 @@ test("accepts a kebab-case MP4 video asset", () => {
   );
 });
 
+test("accepts local WOFF2 fonts with their license and source metadata", () => {
+  assert.deepEqual(inspectAssetEntries([
+    { relativePath: "public/assets/fonts/ibm-plex-sans/ibm-plex-sans-semibold.woff2", fontSignature: "wOF2" },
+    { relativePath: "public/assets/fonts/ibm-plex-sans/LICENSE.txt" },
+    { relativePath: "public/assets/fonts/ibm-plex-sans/SOURCE.txt" },
+  ]), []);
+});
+
+test("rejects disguised font files and keeps font metadata scoped to fonts", () => {
+  const errors = inspectAssetEntries([
+    { relativePath: "public/assets/fonts/fake.woff2", fontSignature: "<htm" },
+    { relativePath: "public/assets/images/font.woff2", fontSignature: "wOF2" },
+    { relativePath: "public/assets/images/LICENSE.txt" },
+  ]);
+  assert.equal(errors.length, 3);
+  assert.equal(errors.filter(error => error.includes("valid font signature")).length, 2);
+  assert.ok(errors.some(error => error.includes("unsupported extension .txt")));
+});
+
 test("rejects invalid names, extensions, duplicates and unsafe SVG", () => {
   const errors = inspectAssetEntries([
     { relativePath: "public/assets/images/Icon 1.png" },
@@ -59,22 +78,4 @@ test("uses the approved left-aligned play mark for the animate icon", () => {
   assert.doesNotMatch(icon, /M10 8\.8/);
 });
 
-test("provides square favicon assets at the declared browser sizes", () => {
-  const assets = [
-    ["../public/assets/brand/favicons/neirohub-favicon-32.png", 32],
-    ["../public/assets/brand/favicons/neirohub-favicon-48.png", 48],
-    ["../public/assets/brand/favicons/neirohub-apple-touch-icon-180.png", 180],
-  ];
-
-  for (const [relativePath, expectedSize] of assets) {
-    const png = readFileSync(new URL(relativePath, import.meta.url));
-
-    assert.deepEqual(
-      [...png.subarray(0, 8)],
-      [137, 80, 78, 71, 13, 10, 26, 10],
-      `${relativePath} must be a PNG file`,
-    );
-    assert.equal(png.readUInt32BE(16), expectedSize, `${relativePath} width`);
-    assert.equal(png.readUInt32BE(20), expectedSize, `${relativePath} height`);
-  }
-});
+// Browser-icon dimensions are checked against config/brand.ts in app/layout.test.tsx.

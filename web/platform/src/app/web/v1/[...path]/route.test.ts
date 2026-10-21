@@ -70,7 +70,7 @@ describe("web API route local workspace preview", () => {
   it.each(["development", "production"] as const)("keeps empty music history limited to local development: %s", async (environment) => {
     vi.stubEnv("NODE_ENV", environment);
     vi.stubEnv("NEIROHUB_LOCAL_WORKSPACE_PREVIEW", "1");
-    const request = new Request("http://localhost:7158/web/v1/music-jobs?limit=8");
+    const request = new Request("http://localhost:7159/web/v1/music-jobs?limit=8");
 
     const response = await GET(request);
 
@@ -86,12 +86,12 @@ describe("web API route local workspace preview", () => {
     vi.stubEnv("NODE_ENV", "development");
     vi.stubEnv("NEIROHUB_LOCAL_WORKSPACE_PREVIEW", "1");
     const artifact = createPreviewImage("9:16");
-    const request = new Request(`http://localhost:7158/web/v1/image-artifacts/${artifact.id}`);
+    const request = new Request(`http://localhost:7159/web/v1/image-artifacts/${artifact.id}`);
     const response = await GET(request);
     expect(response.headers.get("Content-Type")).toBe("image/jpeg");
     const metadata = await sharp(Buffer.from(await response.arrayBuffer())).metadata();
     expect(metadata).toMatchObject({ width: artifact.width, height: artifact.height });
-    expect((await GET(new Request("http://localhost:7158/web/v1/image-artifacts/f1000000-ffff-4fff-8000-000000000000"))).status).toBe(404);
+    expect((await GET(new Request("http://localhost:7159/web/v1/image-artifacts/f1000000-ffff-4fff-8000-000000000000"))).status).toBe(404);
     expect(proxyWebApiRequest).not.toHaveBeenCalled();
     vi.stubEnv("NODE_ENV", "production");
     await GET(request);
@@ -100,7 +100,7 @@ describe("web API route local workspace preview", () => {
   it.each(["input-artifacts", "image-jobs", "conversations", "unknown-preview-path"])("never forwards preview writes to %s to a real backend", async path => {
     vi.stubEnv("NODE_ENV", "development");
     vi.stubEnv("NEIROHUB_LOCAL_WORKSPACE_PREVIEW", "1");
-    const response = await POST(new Request(`http://localhost:7158/web/v1/${path}`, { method: "POST" }));
+    const response = await POST(new Request(`http://localhost:7159/web/v1/${path}`, { method: "POST" }));
     expect(response.status).toBe(503);
     expect(response.headers.get("Cache-Control")).toBe("no-store");
     expect(proxyWebApiRequest).not.toHaveBeenCalled();
@@ -108,9 +108,9 @@ describe("web API route local workspace preview", () => {
   it("shows preview packages but never forwards a preview payment", async () => {
     vi.stubEnv("NODE_ENV", "development");
     vi.stubEnv("NEIROHUB_LOCAL_WORKSPACE_PREVIEW", "1");
-    const response = await GET(new Request("http://localhost:7158/web/v1/payment-products"));
+    const response = await GET(new Request("http://localhost:7159/web/v1/payment-products"));
     expect(await response.json()).toMatchObject({ checkout_available: false, items: expect.any(Array) });
-    const create = await POST(new Request("http://localhost:7158/web/v1/payments/intents", { method: "POST" }));
+    const create = await POST(new Request("http://localhost:7159/web/v1/payments/intents", { method: "POST" }));
     expect(create.status).toBe(503);
     expect(proxyWebApiRequest).not.toHaveBeenCalled();
   });
@@ -122,8 +122,8 @@ describe("web API route local workspace preview", () => {
   it("serves the current public chat model catalogue in local preview", async () => {
     vi.stubEnv("NODE_ENV", "development");
     vi.stubEnv("NEIROHUB_LOCAL_WORKSPACE_PREVIEW", "1");
-    const response = await GET(new Request("http://localhost:7158/web/v1/chat-models"));
-    const unified = await GET(new Request("http://localhost:7158/web/v1/models"));
+    const response = await GET(new Request("http://localhost:7159/web/v1/chat-models"));
+    const unified = await GET(new Request("http://localhost:7159/web/v1/models"));
     const catalog = parseModelCatalog(await unified.json());
     expect(parseChatModelList(await response.json())).toEqual(projectChatModelCatalog(catalog));
     expect(catalog.items.find(model => model.id === "chatgpt")?.categories).toContain("text");
@@ -135,10 +135,10 @@ describe("web API route local workspace preview", () => {
     vi.stubEnv("NODE_ENV", "development");
     vi.stubEnv("NEIROHUB_LOCAL_WORKSPACE_PREVIEW", "1");
 
-    const response = await GET(new Request("http://localhost:7158/web/v1/image-models"));
+    const response = await GET(new Request("http://localhost:7159/web/v1/image-models"));
 
     expect(response.status).toBe(200);
-    const unified = await GET(new Request("http://localhost:7158/web/v1/models"));
+    const unified = await GET(new Request("http://localhost:7159/web/v1/models"));
     const catalog = parseModelCatalog(await unified.json());
     await expect(response.json()).resolves.toEqual(projectImageModelCatalog(catalog));
     expect(catalog.items.some(model => model.id === "gpt_image_2")).toBe(true);
@@ -151,7 +151,7 @@ describe("web API route local workspace preview", () => {
     vi.stubEnv("NODE_ENV", "development");
     vi.stubEnv("NEIROHUB_LOCAL_WORKSPACE_PREVIEW", "1");
 
-    const listResponse = await GET(new Request("http://localhost:7158/web/v1/image-jobs?limit=12"));
+    const listResponse = await GET(new Request("http://localhost:7159/web/v1/image-jobs?limit=12"));
 
     expect(listResponse.status).toBe(200);
     expect(listResponse.headers.get("Cache-Control")).toBe("no-store");
@@ -168,7 +168,7 @@ describe("web API route local workspace preview", () => {
 
     for (const job of page.items.filter(({ status }) => status === "succeeded")) {
       const resultResponse = await GET(
-        new Request(`http://localhost:7158/web/v1/image-jobs/${job.id}/result`),
+        new Request(`http://localhost:7159/web/v1/image-jobs/${job.id}/result`),
       );
       expect(resultResponse.status).toBe(200);
       expect(resultResponse.headers.get("Cache-Control")).toBe("no-store");
@@ -176,7 +176,7 @@ describe("web API route local workspace preview", () => {
       expect(result.job_id).toBe(job.id);
 
       const artifactResponse = await GET(
-        new Request(`http://localhost:7158/web/v1/image-artifacts/${result.artifacts[0].id}`),
+        new Request(`http://localhost:7159/web/v1/image-artifacts/${result.artifacts[0].id}`),
       );
       expect(artifactResponse.status).toBe(200);
       expect(artifactResponse.headers.get("Content-Type")).toBe("image/png");
@@ -200,7 +200,7 @@ describe("web API route local workspace preview", () => {
 
     for (const conversationID of conversationIDs) {
       const response = await GET(new Request(
-        `http://localhost:7158/web/v1/conversations/${conversationID}/messages?limit=100`,
+        `http://localhost:7159/web/v1/conversations/${conversationID}/messages?limit=100`,
       ));
 
       expect(response.status).toBe(200);
@@ -216,14 +216,14 @@ describe("web API route local workspace preview", () => {
         expect(imagePath).toBe("/web/v1/image-artifacts/40000000-0000-4000-8000-000000000001");
         expect(answer?.images).toHaveLength(1);
         const attachment = answer!.images![0];
-        const filesResponse = await GET(new Request("http://localhost:7158/web/v1/image-jobs?limit=12"));
+        const filesResponse = await GET(new Request("http://localhost:7159/web/v1/image-jobs?limit=12"));
         const files = parseImageJobList(await filesResponse.json());
         expect(attachment.job).toEqual(files.items.find((job) => job.id === attachment.job.id));
-        const resultResponse = await GET(new Request(`http://localhost:7158/web/v1/image-jobs/${attachment.job.id}/result`));
+        const resultResponse = await GET(new Request(`http://localhost:7159/web/v1/image-jobs/${attachment.job.id}/result`));
         const result = parseImageJobResult(await resultResponse.json());
         expect(result.artifacts).toContainEqual(attachment.artifact);
         expect(imagePath).toBe(`/web/v1/image-artifacts/${attachment.artifact.id}`);
-        const imageResponse = await GET(new Request(`http://localhost:7158${imagePath}`));
+        const imageResponse = await GET(new Request(`http://localhost:7159${imagePath}`));
         expect(imageResponse.status).toBe(200);
         expect(imageResponse.headers.get("Content-Type")).toBe("image/png");
         expect((await imageResponse.arrayBuffer()).byteLength).toBe(attachment.artifact.size_bytes);

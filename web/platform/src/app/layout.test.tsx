@@ -12,6 +12,9 @@ vi.mock("next/font/google", () => ({
 }));
 
 import { headers, cookies } from "next/headers";
+import { readFileSync } from "node:fs";
+import { resolve } from "node:path";
+import { brandIcons } from "@/config/brand";
 import { getDictionary } from "@/i18n/dictionary";
 
 import RootLayout, { generateMetadata } from "./layout";
@@ -53,29 +56,19 @@ describe("RootLayout", () => {
     expect(document.documentElement.classList.contains("font-geist-sans-test")).toBe(true);
   });
 
-  it("uses dedicated square NeiroHub assets for browser and device icons", async () => {
-    expect((await generateMetadata()).icons).toEqual({
-      icon: [
-        {
-          url: "/assets/brand/favicons/neirohub-favicon-32.png",
-          sizes: "32x32",
-          type: "image/png",
-        },
-        {
-          url: "/assets/brand/favicons/neirohub-favicon-48.png",
-          sizes: "48x48",
-          type: "image/png",
-        },
-      ],
-      shortcut: "/assets/brand/favicons/neirohub-favicon-32.png",
-      apple: [
-        {
-          url: "/assets/brand/favicons/neirohub-apple-touch-icon-180.png",
-          sizes: "180x180",
-          type: "image/png",
-        },
-      ],
-    });
+  it("uses configured browser icons whose files match their declared sizes", async () => {
+    expect((await generateMetadata()).icons).toEqual(brandIcons);
+    for (const icon of [...brandIcons.icon, ...brandIcons.apple]) {
+      const file = readFileSync(resolve(process.cwd(), "public", icon.url.slice(1)));
+      expect(file.byteLength).toBeGreaterThan(8);
+      if (icon.type === "image/png") {
+        const [width, height] = icon.sizes.split("x").map(Number);
+        expect(file.subarray(0, 8).toString("hex")).toBe("89504e470d0a1a0a");
+        expect(file.readUInt32BE(16)).toBe(width);
+        expect(file.readUInt32BE(20)).toBe(height);
+      }
+    }
+    expect(brandIcons.icon.map(icon => icon.url)).toContain(brandIcons.shortcut);
   });
 
   it("bootstraps the persisted theme in the head before page content with the request CSP nonce", async () => {

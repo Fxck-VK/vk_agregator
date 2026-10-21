@@ -1,5 +1,7 @@
 "use client";
 
+import { BrandText } from "@/components/brand/BrandName/BrandName";
+
 import { Skeleton, StateNotice } from "@/components/ui/AsyncState/AsyncState";
 import { useMessages } from "@/i18n/LocaleProvider";
 
@@ -82,7 +84,7 @@ export function FeaturedModelShortcuts({ selectedModelId, onSelect, onTextModelL
         type="button"
       >
         <ModelIcon className={styles.icon} src={presentation.artworkSrc} />
-        <span>{model.name}</span>
+        <span><BrandText>{model.name}</BrandText></span>
       </button>
     );
   })}

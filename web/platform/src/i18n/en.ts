@@ -1,3 +1,4 @@
+import { brandName, brandMonogram } from "@/config/brand";
 import { accountAuthText } from "./account-auth";
 
 export const en = {
@@ -11,12 +12,12 @@ export const en = {
     balanceRetry: "Couldn't refresh your balance. Retry",
   },
   document: {
-    title: "NeiroHub — workspace",
+    title: `${brandName} — workspace`,
     description: "One workspace for AI tools.",
   },
   brand: {
-    name: "NeiroHub",
-    monogram: "NH",
+    name: brandName,
+    monogram: brandMonogram,
   },
   notFound: {
     codeLabel: "Error 404 — page not found",
@@ -108,7 +109,7 @@ export const en = {
     noLoginMethods: "No verified sign-in methods found yet.",
     billingTitle: "Purchases and charges",
     billingPlaceholder: "Your purchase and charge history will appear here once billing is connected.",
-    referralLaunchTitle: "Invite friends to NeiroHub",
+    referralLaunchTitle: `Invite friends to ${brandName}`,
     referralLaunchDescription: "Share your personal link. New sign-ups through it will appear in your statistics.",
     referralLoading: "Loading your invitation…",
     referralLoadFailure: "Unable to load your invitation. Please try again.",
@@ -118,7 +119,7 @@ export const en = {
     referralCopied: "Link copied",
     referralCopyFailure: "Unable to copy. Select and copy the link from the field.",
     referralRulesPending: "Activation and reward rules are still being decided. Rewards are disabled for now.",
-    inviteTitle: "You have been invited to NeiroHub",
+    inviteTitle: `You have been invited to ${brandName}`,
     inviteLoading: "Saving your invitation…",
     inviteReady: "Invitation saved. Create a new account to use it.",
     inviteFailure: "Unable to save this invitation. The link may be invalid or the service temporarily unavailable.",
@@ -152,7 +153,7 @@ export const en = {
       },
       {
         question: "Who can I invite?",
-        answer: "A new NeiroHub user. Existing accounts and your own account do not qualify as invited users.",
+        answer: `A new ${brandName} user. Existing accounts and your own account do not qualify as invited users.`,
       },
       {
         question: "What if I open several invitations?",
@@ -196,7 +197,7 @@ export const en = {
     refreshDelayed: "Automatic updates are delayed. You can check the response later.",
     scrollToLatest: "Go to latest message",
     composerLabel: "New message",
-    composerPlaceholder: "Ask NeiroHub a question",
+    composerPlaceholder: `Ask ${brandName} a question`,
     composerSubmit: "Send",
     composerMediaUpload: "Upload media",
     composerMediaMenu: "Add media",
@@ -215,7 +216,7 @@ export const en = {
     mediaLibraryUpload: "Upload file",
     composerDisclaimer: "The cost depends on the selected AI model. AI can make mistakes",
     composerPending: "Sending…",
-    composerAwaitingResponse: "NeiroHub is typing",
+    composerAwaitingResponse: `${brandName} is typing`,
     composerFailure: "Could not send the message. Please try again — your text has been saved.",
     messageNotSent: "Not sent",
     messageRetryLabel: "Try again",
@@ -225,7 +226,7 @@ export const en = {
     likeMessage: "Like",
     dislikeMessage: "Dislike",
     userRole: "You",
-    assistantRole: "NeiroHub",
+    assistantRole: brandName,
   },
   imageGeneration: {
     title: "Image generation",
@@ -276,7 +277,7 @@ export const en = {
     resultTitle: "Finished result",
     resultFailure: "The result is not available yet. Try refreshing the status later.",
     resultImageAlt: "Generated image",
-    resultReadyDescription: "The result is stored in your account and is accessible only through NeiroHub.",
+    resultReadyDescription: `The result is stored in your account and is accessible only through ${brandName}.`,
     downloadResult: "Download",
     copyPrompt: "Copy description",
     promptCopied: "Description copied.",
@@ -316,7 +317,7 @@ export const en = {
   },
   modelsCatalog: {
     title: "AI models",
-    description: "The NeiroHub AI model catalog for creative and professional tasks.",
+    description: `The ${brandName} AI model catalog for creative and professional tasks.`,
     searchLabel: "Search AI models",
     searchPlaceholder: "Search AI models",
     categoryTabsLabel: "AI model categories",
@@ -389,7 +390,7 @@ export const en = {
   files: {
     eyebrow: "Library",
     title: "My files",
-    description: "Your generation results. Images remain available only through secure NeiroHub access.",
+    description: `Your generation results. Images remain available only through secure ${brandName} access.`,
     categoryTabsLabel: "File types",
     categories: {
       all: "All files",

@@ -1,5 +1,7 @@
 import "server-only";
 
+import { brandName } from "@/config/brand";
+
 import type { ToolContent } from "../domain/types";
 
 export const tools = [
@@ -12,8 +14,8 @@ export const tools = [
     updatedAt: "2026-08-15T12:00:00+03:00",
     publishedAt: "2026-08-14T10:00:00+03:00",
     lastReviewedAt: "2026-08-15T11:00:00+03:00",
-    author: "NeiroHub editorial",
-    reviewer: "NeiroHub review",
+    author: `${brandName} editorial`,
+    reviewer: `${brandName} review`,
     taskCategory: "image",
     workspacePath: "/app/image",
     relatedModelIds: ["model-gpt-image-2"],
@@ -25,7 +27,7 @@ export const tools = [
         title: "Генератор изображений",
         shortDescription: "Рабочий инструмент для создания изображения по описанию и выбранным настройкам.",
         seo: {
-          title: "Генератор изображений NeiroHub",
+          title: `Генератор изображений ${brandName}`,
           description: "Создавайте изображения по текстовому описанию, выбирайте модель и контролируйте параметры запуска.",
         },
         inputs: ["Текстовое описание изображения", "Необязательное референсное изображение"],
@@ -44,8 +46,8 @@ export const tools = [
         title: "Image generator",
         shortDescription: "A workspace tool for creating an image from a description and selected settings.",
         seo: {
-          title: "NeiroHub image generator",
-          description: "Create images from text, choose an available model, and control generation settings on NeiroHub.",
+          title: `${brandName} image generator`,
+          description: `Create images from text, choose an available model, and control generation settings on ${brandName}.`,
         },
         inputs: ["Text image description", "Optional reference image"],
         outputs: ["A completed image in the file library"],

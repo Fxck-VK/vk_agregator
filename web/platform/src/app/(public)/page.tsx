@@ -1,3 +1,4 @@
+import { BrandName } from "@/components/brand/BrandName/BrandName";
 import type { Metadata } from "next";
 import { connection } from "next/server";
 
@@ -25,7 +26,7 @@ export default async function HomePage() {
       <PageContainer size="narrow">
         <ContentCard className={styles.content}>
         <LanguageSwitcher />
-        <p className={styles.brand}>{t.brand.name}</p>
+        <p className={styles.brand}><BrandName /></p>
         <SectionHeading description={t.home.description} level={1} title={t.home.title} />
         <PrimaryButton className={styles.primaryAction} href="/app">{t.home.primaryAction}</PrimaryButton>
         <p className={styles.supportingText}>{t.home.supportingText}</p>

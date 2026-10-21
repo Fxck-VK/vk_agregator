@@ -1,5 +1,7 @@
 import "server-only";
 
+import { brandName } from "@/config/brand";
+
 import type { ModelContent } from "../domain/types";
 
 export const models = [
@@ -12,8 +14,8 @@ export const models = [
     updatedAt: "2026-08-15T12:00:00+03:00",
     publishedAt: "2026-08-14T10:00:00+03:00",
     lastReviewedAt: "2026-08-15T11:00:00+03:00",
-    author: "NeiroHub editorial",
-    reviewer: "NeiroHub review",
+    author: `${brandName} editorial`,
+    reviewer: `${brandName} review`,
     category: "image",
     runtimeCatalogKey: "gpt_image_2",
     relatedToolIds: ["tool-image-generator"],
@@ -25,8 +27,8 @@ export const models = [
         title: "GPT Image 2",
         shortDescription: "Модель для создания и редактирования изображений по текстовому запросу.",
         seo: {
-          title: "GPT Image 2 в NeiroHub",
-          description: "Возможности GPT Image 2, примеры задач и понятный процесс создания изображений в NeiroHub.",
+          title: `GPT Image 2 в ${brandName}`,
+          description: `Возможности GPT Image 2, примеры задач и понятный процесс создания изображений в ${brandName}.`,
         },
         capabilities: [
           "Создание нового изображения по текстовому описанию",
@@ -51,8 +53,8 @@ export const models = [
         title: "GPT Image 2",
         shortDescription: "A model for creating and editing images from a text request.",
         seo: {
-          title: "GPT Image 2 on NeiroHub",
-          description: "Explore GPT Image 2 capabilities, suitable tasks, and a clear image creation workflow on NeiroHub.",
+          title: `GPT Image 2 on ${brandName}`,
+          description: `Explore GPT Image 2 capabilities, suitable tasks, and a clear image creation workflow on ${brandName}.`,
         },
         capabilities: [
           "Create a new image from a text description",

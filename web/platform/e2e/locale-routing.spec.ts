@@ -32,16 +32,16 @@ test("public metadata and public shell switch together; sitemap contains only lo
   await expect(page).toHaveURL(/\/en$/);
   await expect(page.locator("html")).toHaveAttribute("lang", "en");
   await expect(page.locator("header a[href='/en/app']")).toHaveText("Open platform");
-  await expect(page.locator("head link[rel=canonical]")).toHaveAttribute("href", "http://localhost:7158/en");
-  await expect(page.locator('head link[hreflang="ru"]')).toHaveAttribute("href", "http://localhost:7158/ru");
-  await expect(page.locator('head link[hreflang="en"]')).toHaveAttribute("href", "http://localhost:7158/en");
+  await expect(page.locator("head link[rel=canonical]")).toHaveAttribute("href", "http://localhost:7159/en");
+  await expect(page.locator('head link[hreflang="ru"]')).toHaveAttribute("href", "http://localhost:7159/ru");
+  await expect(page.locator('head link[hreflang="en"]')).toHaveAttribute("href", "http://localhost:7159/en");
   await page.goBack();
   await expect(page.locator("html")).toHaveAttribute("lang", "ru");
   await expect(page.locator("header a[href='/ru/app']")).toHaveText("Открыть платформу");
   expect(errors).toEqual([]);
   const sitemap = await (await request.get("/sitemap.xml")).text();
   expect(sitemap.match(/<loc>/g)).toHaveLength(2);
-  expect(sitemap).toContain("http://localhost:7158/en");
+  expect(sitemap).toContain("http://localhost:7159/en");
   expect(sitemap).not.toMatch(/\/app|\/login/);
 });
 

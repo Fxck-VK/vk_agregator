@@ -320,6 +320,14 @@ jobs:
         shell: pwsh
         run: ./scripts/ci/test-dev-deploy-preflight.ps1
 
+      - name: Test Trivy filesystem exclusion scope
+        shell: pwsh
+        run: ./scripts/ci/test-trivy-filesystem-scope.ps1
+
+      - name: Test explicit Bash runtime
+        shell: pwsh
+        run: ./scripts/ci/test-bash-runtime.ps1
+
       - name: Test GitHub workflow monitor
         shell: bash
         run: bash scripts/ci/test-wait-for-github-workflow.sh

@@ -22,6 +22,47 @@ const replace = vi.mocked(replaceSignInDocument);
 const profile = { account_id: "10000000-0000-4000-8000-000000000001", identity_refs: [], password_set: true };
 
 describe("LoginForm", () => {
+  it("starts the choice entry with configured providers and opens email sign-in on demand", () => {
+    render(<LoginForm entry="choice" methods={{ registration: true, password: true, recovery: true, email_link: true, phone_link: false, providers: ["vk", "yandex"] }} />);
+    expect(screen.getByRole("heading", { name: "Войдите, чтобы продолжить" })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Войти с Яндекс ID" })).toBeEnabled();
+    expect(screen.getByRole("button", { name: "Войти с VK ID" })).toBeEnabled();
+    expect(screen.queryByLabelText(ru.login.emailLabel)).not.toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: "Вход через почту" }));
+    expect(screen.getByRole("heading", { name: "Вход через почту" })).toHaveFocus();
+    expect(screen.getByLabelText(ru.login.emailLabel)).toBeInTheDocument();
+    expect(screen.getByLabelText(ru.login.passwordLabel)).toBeInTheDocument();
+    fireEvent.change(screen.getByLabelText(ru.login.passwordLabel), { target: { value: "unsubmitted-password" } });
+    fireEvent.click(screen.getByRole("button", { name: "Другие способы входа" }));
+    expect(screen.getByRole("heading", { name: "Войдите, чтобы продолжить" })).toHaveFocus();
+    fireEvent.click(screen.getByRole("button", { name: "Вход через почту" }));
+    expect(screen.getByLabelText(ru.login.passwordLabel)).toHaveValue("");
+    expect(webBrowserFetch).not.toHaveBeenCalled();
+  });
+
+  it("keeps unavailable sign-in methods unavailable in the choice entry", () => {
+    render(<LoginForm entry="choice" methods={{ registration: false, password: false, recovery: false, email_link: false, phone_link: false, providers: ["google"] }} />);
+    expect(screen.queryByRole("button", { name: "Войти с Яндекс ID" })).not.toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: /Google/ })).not.toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Вход через почту" })).toBeDisabled();
+  });
+
+  it("keeps choice-entry OAuth on the verified server start flow", async () => {
+    vi.mocked(webBrowserFetch).mockResolvedValue(Response.json({ authorization_url: "https://untrusted.example.test/" }));
+    render(<LoginForm entry="choice" methods={{ registration: false, password: true, recovery: false, email_link: false, phone_link: false, providers: ["yandex"] }} />);
+    fireEvent.click(screen.getByRole("button", { name: "Войти с Яндекс ID" }));
+    expect(await screen.findByRole("alert")).toHaveTextContent(ru.auth.providerFailure);
+    expect(webBrowserFetch).toHaveBeenCalledWith("/web/v1/auth/oauth/yandex/start", expect.objectContaining({ method: "POST", body: JSON.stringify({ locale: "ru" }) }));
+  });
+
+  it("keeps enabled email registration reachable when password sign-in is disabled", () => {
+    render(<LoginForm entry="choice" methods={{ registration: true, password: false, recovery: false, email_link: false, phone_link: false, providers: [] }} />);
+    fireEvent.click(screen.getByRole("button", { name: "Вход через почту" }));
+    expect(screen.getByRole("button", { name: "Войти" })).toBeDisabled();
+    fireEvent.click(screen.getByRole("button", { name: "Создать аккаунт" }));
+    expect(screen.getByRole("heading", { name: "Создать аккаунт" })).toBeInTheDocument();
+  });
+
   it("offers Yandex only when the backend enables it", () => {
     const methods = { registration: false, password: true, recovery: false, email_link: false, phone_link: false };
     const { rerender } = render(<LoginForm methods={{ ...methods, providers: ["yandex"] }} />);

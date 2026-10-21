@@ -9,6 +9,8 @@ Set-StrictMode -Version Latest
 
 $repoRoot = (Resolve-Path (Join-Path $PSScriptRoot "..\..")).Path
 Import-Module (Join-Path $PSScriptRoot "DevDeployPreflight.psm1") -Force
+Import-Module (Join-Path $PSScriptRoot "TrivyFilesystemScope.psm1") -Force
+Import-Module (Join-Path $PSScriptRoot "BashRuntime.psm1") -Force
 Set-Location $repoRoot
 
 function Invoke-Native {
@@ -78,10 +80,14 @@ if (-not [string]::IsNullOrWhiteSpace($worktreeChanges)) {
     throw "DEV preflight requires a completely clean worktree. Commit, stash, or remove local changes first."
 }
 
+# Validate before the stage cache is consulted.
+Assert-TrivyFilesystemScanScope -RepositoryRoot $repoRoot -ConfigPath (Join-Path $repoRoot "trivy-filesystem.yaml")
+Assert-CIBashEnvironment
+
 $commitSha = Get-GitOutput -Arguments @("rev-parse", "HEAD")
 $gitDirectory = Get-GitOutput -Arguments @("rev-parse", "--absolute-git-dir")
 $npmCommand = if ($IsWindows) { "npm.cmd" } else { "npm" }
-$policyVersion = "v2"
+$policyVersion = "v3"
 $stageNames = @("tests", "audit", "govulncheck", "infrastructure", "trivy")
 
 $runStage = {
@@ -124,11 +130,17 @@ $runStage = {
             if ($LASTEXITCODE -ne 0) { throw "Next.js route discovery tests failed" }
             & pwsh -NoProfile -File scripts/ci/test-dev-deploy-preflight.ps1
             if ($LASTEXITCODE -ne 0) { throw "DEV preflight regression tests failed" }
+            & pwsh -NoProfile -File scripts/ci/test-trivy-filesystem-scope.ps1
+            if ($LASTEXITCODE -ne 0) { throw "Trivy filesystem scope regression tests failed" }
+            & pwsh -NoProfile -File scripts/ci/test-bash-runtime.ps1
+            if ($LASTEXITCODE -ne 0) { throw "Bash runtime regression tests failed" }
             & pwsh -NoProfile -File scripts/ci/test-docs-validation.ps1
             if ($LASTEXITCODE -ne 0) { throw "Documentation regression tests failed" }
             & pwsh -NoProfile -File scripts/ci/validate-docs.ps1
             if ($LASTEXITCODE -ne 0) { throw "Documentation validation failed" }
-            Invoke-Native -Command "bash" -Arguments @("scripts/ci/test-wait-for-github-workflow.sh")
+            $bashResult = Invoke-CIBashScript -RepositoryRoot $repoRoot -ScriptPath "scripts/ci/test-wait-for-github-workflow.sh"
+            $bashResult.Output | Out-Host
+            if ($bashResult.ExitCode -ne 0) { throw "Bash workflow monitor tests failed with exit code $($bashResult.ExitCode)" }
             & pwsh -NoProfile -File scripts/ci/validate-infra.ps1
             if ($LASTEXITCODE -ne 0) { throw "Infrastructure validation failed" }
             & pwsh -NoProfile -File scripts/ci/validate-nightly-quality.ps1
@@ -153,7 +165,7 @@ $runStage = {
                 "--severity", "HIGH,CRITICAL",
                 "--exit-code", "1",
                 "--no-progress",
-                "--skip-dirs", "**/node_modules",
+                "--config", "/src/trivy-filesystem.yaml",
                 "."
             )
         }

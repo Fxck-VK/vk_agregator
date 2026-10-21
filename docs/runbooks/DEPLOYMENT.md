@@ -163,6 +163,92 @@ proxy wiring before the temporary redirect can be removed.
 
 ## Public Routes
 
+### Epifera cutover preparation
+
+The target domain is `epifera.com`, registered at Beget. Active tracked host
+defaults, DEV origin restrictions, reverse-proxy hosts, smoke checks and
+operational examples now use this domain. These repository changes do not
+change live DNS, tunnel routes, provider consoles or deployment secrets.
+
+Target host allocation:
+
+| Host | Purpose |
+| --- | --- |
+| `epifera.com` | Production browser platform and the exact YooKassa webhook route |
+| `vk.epifera.com` | Production VK callback and health |
+| `app.epifera.com` | Production Mini App and signed provider reference reads |
+| `dev-web.epifera.com` | DEV browser platform with its existing outer access gate |
+| `dev-vk.epifera.com` | DEV VK callback and health |
+| `dev-app.epifera.com` | DEV Mini App and signed provider reference reads |
+| `dev.epifera.com` | DEV YooKassa webhook |
+| `notify.epifera.com` | Sender domain, to be verified with the SMTP delivery provider |
+
+Only DEV currently has an active server/connector. The main domain can
+temporarily forward browser pages to the protected DEV website until PROD is
+provisioned separately. Cloudflare has a disabled draft named
+`Temporary Epifera website to protected DEV`: it matches only `epifera.com`
+and `www.epifera.com`, GET/HEAD requests, and `/`, `/ru`, `/en`, `/ru/*`, `/en/*`
+page paths. Its dynamic target is
+`concat("https://dev-web.epifera.com", http.request.uri.path)`, with status 302
+and query-string preservation. API, OAuth callback and payment-webhook paths
+do not match this rule. Enable it only after the new DEV hostname passes smoke;
+disable it when the production website is ready. Do not use a permanent 301
+for this temporary arrangement.
+
+Cloudflare has the four new DEV hostname routes and the three future PROD
+hostname routes, alongside the existing routes pending cutover. The future
+PROD apex route was created, but its CNAME was not created automatically because
+the imported Beget apex A record already exists. Do not publish it as a working
+production website: the PROD connector and production frontend still need to
+be provisioned. While the temporary edge redirect is used, its source DNS record
+must remain proxied. Assigned authoritative nameservers for the new zone are
+`poppy.ns.cloudflare.com` and `zod.ns.cloudflare.com`; confirm public propagation
+and Cloudflare activation before claiming the domain is live.
+
+Required cutover order:
+
+1. Add `epifera.com` to the existing Cloudflare account. Save its specifically
+   assigned nameservers and set those nameservers for this domain in Beget.
+   Confirm Cloudflare zone activation and TLS readiness before publishing.
+2. Add each hostname to its correct existing PROD or DEV tunnel, using the
+   existing `http://127.0.0.1:8088` reverse-proxy origin. Keep the two tunnels
+   and data stores isolated. Do not point any hostname at a developer laptop.
+3. Provision the production browser-platform runtime before publishing the
+   apex website. The current `docker-compose.prod.yml` deploys the bot, Mini
+   App and webhook services; only `docker-compose.dev-web.yml` currently starts
+   the browser platform. The production frontend needs its own deployment
+   wiring with `WEB_API_INTERNAL_ORIGIN=http://api:8080` and
+   `WEB_ORIGIN=https://epifera.com`. Its nginx host must retain the exact
+   `/billing/webhooks/yookassa` provider-webhook route and private-route denies.
+   Never reuse the DEV access-gate overlay for a public production website.
+4. Update the GitHub split env secrets and corresponding server envs together:
+   `WEB_ORIGIN`, `PUBLIC_VK_BASE_URL`, `PUBLIC_APP_BASE_URL`,
+   `PUBLIC_PAYMENT_WEBHOOK_URL`, `PROVIDER_REFERENCE_BASE_URL`, and configured
+   `YOOKASSA_RETURN_URL*` values. DEV uses `https://dev-web.epifera.com` for
+   `WEB_ORIGIN`; PROD uses `https://epifera.com`. Keep credentials and signing
+   keys unchanged unless separately rotated; do not print secret env values.
+5. Update existing OAuth client origins/callbacks, VK community callbacks,
+   Mini App launch URLs and YooKassa webhook settings in the external consoles.
+   Browser OAuth callbacks use
+   `${WEB_ORIGIN}/web/v1/auth/oauth/{provider}/callback`. Only configure
+   providers actually enabled in that environment; Google remains disabled.
+6. Verify `notify.epifera.com` with the configured delivery provider and install
+   its assigned mail DNS records before deploying the new SMTP sender default.
+   Do not invent SPF/DKIM values or send test mail without recipient approval.
+7. Release immutable images through the existing branch-specific workflows.
+   Verify account login, referral URLs, file access, payment-return handling,
+   callback delivery and rejection of private routes on the new domains.
+8. Finish or account for outstanding payments, OAuth transactions and jobs
+   with signed reference URLs on the previous hosts before deleting their
+   routes and DNS records. Old shared links and bookmarks stop working when
+   their hostname is removed. Retire the previous domain from live tunnel/DNS,
+   provider consoles and envs only after the new-domain smoke passes.
+
+Host-only browser cookies do not transfer to another domain: users sign in
+again. Existing accounts, balances, files and referral codes stay in the same
+databases; domain cutover does not require recreating or merging accounts.
+Historical reports and backups remain historical evidence, not active routing.
+
 Expected production routing:
 
 | Public route | Internal target |

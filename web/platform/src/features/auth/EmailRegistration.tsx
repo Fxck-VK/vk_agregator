@@ -1,5 +1,7 @@
 "use client";
 
+import { BrandText } from "@/components/brand/BrandName/BrandName";
+
 import { type FormEvent, useEffect, useRef, useState } from "react";
 import { Button } from "@/components/ui/Button/Button";
 import { LoadingIndicator, StateNotice } from "@/components/ui/AsyncState/AsyncState";
@@ -13,7 +15,7 @@ import styles from "./LoginForm/LoginForm.module.css";
 type Step = "email" | "code" | "password" | "session" | "preview-complete";
 class RegistrationFailure extends Error { constructor(readonly status: number) { super("registration"); } }
 
-export function EmailRegistration({ preview, returnTo, onBack }: Readonly<{ preview: boolean; returnTo?: string; onBack: () => void }>) {
+export function EmailRegistration({ preview, returnTo, onBack, title }: Readonly<{ preview: boolean; returnTo?: string; onBack: () => void; title?: string }>) {
   const t = useDictionary(); const locale = useLocale();
   const [step, setStep] = useState<Step>("email");
   const [email, setEmail] = useState(""); const [code, setCode] = useState("");
@@ -97,7 +99,7 @@ export function EmailRegistration({ preview, returnTo, onBack }: Readonly<{ prev
   function submit(event: FormEvent<HTMLFormElement>) { event.preventDefault(); void perform(); }
 
   return <>
-    <header className={styles.heading}><h1 id="login-title">{t.auth.registrationTitle}</h1><p>{t.auth.registrationDescription}</p></header>
+    <header className={styles.heading}><h1 id="login-title" tabIndex={-1}><BrandText>{title ?? t.auth.registrationTitle}</BrandText></h1><p>{t.auth.registrationDescription}</p></header>
     {preview ? <p className={styles.hint}>{t.auth.preview}</p> : null}
     {step === "preview-complete" ? <><p role="status">{t.auth.registrationPreviewComplete}</p><Button onClick={onBack}>{t.auth.back}</Button></> : <form className={styles.fields} onSubmit={submit}>
       <CredentialField label={t.login.emailLabel} id="signup-email" autoComplete="email" type="email" maxLength={254} required disabled={pending || step !== "email"} value={email} onChange={event => setEmail(event.target.value)} />

@@ -1,4 +1,5 @@
 import { act, cleanup, fireEvent, render, screen, within } from "@testing-library/react";
+import { brandLogoPath } from "@/config/brand";
 import Link from "next/link";
 import { renderToStaticMarkup } from "react-dom/server";
 import type { ReactNode } from "react";
@@ -136,10 +137,7 @@ describe("Sidebar", () => {
 
     const brandLink = screen.getByRole("link", { name: ru.brand.name });
     expect(brandLink).toHaveAttribute("href", "/ru/app");
-    expect(within(brandLink).getByTestId("neirohub-brand-chip")).toHaveAttribute(
-      "src",
-      expect.stringContaining("neirohub-chip.png"),
-    );
+    expect(decodeURIComponent(within(brandLink).getByTestId("neirohub-brand-chip").getAttribute("src") ?? "")).toContain(brandLogoPath);
     expect(within(brandLink).queryByText(ru.brand.monogram)).not.toBeInTheDocument();
     expect(screen.queryByRole("link", { name: ru.navigation.workspace })).not.toBeInTheDocument();
 
@@ -954,10 +952,7 @@ describe("Sidebar", () => {
     expect(expandControl).toHaveAttribute("aria-expanded", "false");
     expect(expandIcon).toHaveAttribute("width", "14");
     expect(expandIcon).toHaveAttribute("height", "8");
-    expect(within(expandControl).getByTestId("neirohub-brand-chip")).toHaveAttribute(
-      "src",
-      expect.stringContaining("neirohub-chip.png"),
-    );
+    expect(decodeURIComponent(within(expandControl).getByTestId("neirohub-brand-chip").getAttribute("src") ?? "")).toContain(brandLogoPath);
     expect(within(expandControl).queryByText(ru.brand.monogram)).not.toBeInTheDocument();
     expect(panel).toHaveAttribute("data-desktop-collapsed", "true");
     expect(panel).not.toHaveAttribute("aria-hidden");

@@ -1,3 +1,4 @@
+import { brandName } from "@/config/brand";
 import { act, cleanup, fireEvent, render, screen, within } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
@@ -75,20 +76,20 @@ describe("WorkspacePrompt", () => {
     })));
     render(<WorkspacePrompt access="guest" variant="hero" />);
 
-    const textarea = screen.getByLabelText("Задайте вопрос NeiroHub");
-    expect(textarea).toHaveAttribute("placeholder", "Спросите NeiroHub или ");
+    const textarea = screen.getByLabelText(`Задайте вопрос ${brandName}`);
+    expect(textarea).toHaveAttribute("placeholder", `Спросите ${brandName} или `);
 
     fireEvent.focus(textarea);
-    expect(textarea).toHaveAttribute("placeholder", "Спросите NeiroHub или ");
+    expect(textarea).toHaveAttribute("placeholder", `Спросите ${brandName} или `);
 
     act(() => vi.advanceTimersByTime(80));
-    expect(textarea).toHaveAttribute("placeholder", "Спросите NeiroHub или с");
+    expect(textarea).toHaveAttribute("placeholder", `Спросите ${brandName} или с`);
 
     fireEvent.change(textarea, { target: { value: "Мой вопрос" } });
     expect(textarea).toHaveAttribute("placeholder", "");
 
     fireEvent.change(textarea, { target: { value: "" } });
-    expect(textarea).toHaveAttribute("placeholder", "Спросите NeiroHub или ");
+    expect(textarea).toHaveAttribute("placeholder", `Спросите ${brandName} или `);
   });
 
   it("shows a static complete hero suggestion when reduced motion is requested", () => {
@@ -100,16 +101,16 @@ describe("WorkspacePrompt", () => {
     })));
     render(<WorkspacePrompt access="guest" variant="hero" />);
 
-    const textarea = screen.getByLabelText("Задайте вопрос NeiroHub");
+    const textarea = screen.getByLabelText(`Задайте вопрос ${brandName}`);
     expect(textarea).toHaveAttribute(
       "placeholder",
-      "Спросите NeiroHub или составьте план проекта",
+      `Спросите ${brandName} или составьте план проекта`,
     );
 
     act(() => vi.advanceTimersByTime(10_000));
     expect(textarea).toHaveAttribute(
       "placeholder",
-      "Спросите NeiroHub или составьте план проекта",
+      `Спросите ${brandName} или составьте план проекта`,
     );
   });
 
@@ -122,8 +123,8 @@ describe("WorkspacePrompt", () => {
     })));
     render(<WorkspacePrompt access="guest" variant="hero" />);
 
-    const textarea = screen.getByLabelText("Задайте вопрос NeiroHub");
-    const prefix = "Спросите NeiroHub или ";
+    const textarea = screen.getByLabelText(`Задайте вопрос ${brandName}`);
+    const prefix = `Спросите ${brandName} или `;
     const firstSuggestion = "составьте план проекта";
 
     for (let index = 0; index < firstSuggestion.length; index += 1) {
@@ -163,7 +164,7 @@ describe("WorkspacePrompt", () => {
   it("routes a guest prompt to login without creating private data", () => {
     render(<WorkspacePrompt access="guest" selectedChatModel={selectedTextModel} variant="hero" />);
 
-    fireEvent.change(screen.getByLabelText("Задайте вопрос NeiroHub"), { target: { value: "Помоги составить план" } });
+    fireEvent.change(screen.getByLabelText(`Задайте вопрос ${brandName}`), { target: { value: "Помоги составить план" } });
     fireEvent.click(screen.getByRole("button", { name: ru.workspace.promptSubmit }));
 
     expect(push).toHaveBeenCalledWith("/ru/login");

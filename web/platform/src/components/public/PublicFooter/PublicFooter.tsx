@@ -1,3 +1,5 @@
+import { BrandName } from "@/components/brand/BrandName/BrandName";
+import { BrandLogo } from "@/components/brand/BrandLogo/BrandLogo";
 import Link from "@/i18n/Link";
 
 import type { PublicDictionary } from "@/i18n/public/dictionary";
@@ -14,9 +16,9 @@ export function PublicFooter({ dictionary }: PublicFooterProps) {
     <footer className={styles.footer}>
       <PageContainer className={styles.inner} size="wide">
         <div className={styles.identity}>
-          <span aria-hidden="true" className={styles.brandMark}>NH</span>
+          <BrandLogo className={styles.brandMark} size={44} />
           <div>
-            <strong>{dictionary.brand.name}</strong>
+            <strong><BrandName /></strong>
             <p>{dictionary.footer.tagline}</p>
           </div>
         </div>

@@ -4,7 +4,11 @@
 
 Тексты и язык интерфейса: [локализация](localization.md). Использовать общий `LocaleProvider`, `useDictionary` / `useMessages`; язык переключает готовый `LanguageSwitcher`. Не добавлять прямые импорты `ru` и надписи вне словарей.
 
+Источник бренда сайта и писем — [branding/brand.json](../branding/brand.json); [config/brand.ts](../src/config/brand.ts) экспортирует его настройки: `brandName`, `brandLogoPath`, `brandIcons` для вкладки и устройств. Основной логотип выводит общий [BrandLogo](../src/components/brand/BrandLogo/BrandLogo.tsx), включая боковую панель, публичную шапку и подвалы; фирменный чат использует тот же путь. Фирменное начертание — общий [BrandName / BrandText](../src/components/brand/BrandName/BrandName.tsx), SVG-надписи зарегистрированы в `branding/brand.json` по ключу из имени бренда. Комплект Epifera (знак, надпись и значки вкладки/устройств) получен из SVG, присланного владельцем. Контуры сохранены, точка над i градиентная; цвет букв наследуется от темы. Если для нового имени SVG нет, используется исходный `--font-sans` / Geist. [Границы настройки](localization.md#общая-система-словарей).
+
 Ссылки: `@/i18n/Link`; переходы и сравнение пути: `@/i18n/navigation`. Они сохраняют язык URL. `LanguageSwitcher` открывает текущую страницу на другом языке, сохраняя состояние. Правила: [языковые адреса](locale-routing.md).
+
+Префикс имён скачиваемых фото и видеопримеров — `brandFilePrefix` из того же `config/brand.ts`; он автоматически вычисляется из `brandName` и отдельно не настраивается.
 
 Найди строку → прочитай указанный раздел → проверь исходник и потребителя → используй или расширь готовое решение. Порядок и обновление записей закреплены в [AGENTS.md](../AGENTS.md#ui-reuse-workflow). Повторно загружать уже прочитанный индекс в одной задаче не нужно, если связанные сведения не изменились.
 
@@ -14,7 +18,7 @@
 | Запрос / задача | Готовое решение | Читать точечно |
 | --- | --- | --- |
 | Имя пользователя в меню аккаунта | `AccountControl` → `AccountMenu`: серверный `display_name`, иначе прежняя подпись почты/провайдера; без запросов к VK | [Аккаунт](ui-catalog.md#browser-account) |
-| Вход, регистрация, восстановление, основная и одна резервная почта, замена и сессии | `LoginForm`, `EmailRegistration`, общий `completeSignIn` с проверкой cookie-сессии и новым документом; `CredentialField`, `AccountSecurity`, `InputSurface`, `Button`, `AsyncState` и серверная доступность способов | [Аккаунт](ui-catalog.md#browser-account) |
+| Вход, регистрация, восстановление, основная и одна резервная почта, замена и сессии | `LoginWindow`/`LoginShowcase` (выбор способа входа и промослайды), `LoginForm`, `EmailRegistration`, общий `completeSignIn` с проверкой cookie-сессии и новым документом; `CredentialField`, `AccountSecurity`, `InputSurface`, `Button`, `AsyncState` и серверная доступность способов | [Аккаунт](ui-catalog.md#browser-account) |
 | Приглашения на сайт и статистика аккаунта | `ProfileReferralProgram`: код в памяти текущей сессии, независимое обновление `/web/v1/referrals/stats`; `InviteEntry`, общий `Button`/`StateNotice`; бонусы пока выключены | [Аккаунт](ui-catalog.md#browser-account), [контракт приглашений](../../../docs/runbooks/WEB_REFERRALS.md) |
 | Фирменная страница 404 с рабочим меню | `NotFoundContent` внутри WorkspaceFrame / GuestWorkspaceFrame; общий Button outline и языковой Link | [404](ui-catalog.md#not-found), [дизайн и проверка](not-found-page-plan.md) |
 | Всплывающее окно у кнопки, открыть под/над | `PopoverPanel` | [Панели](ui-catalog.md#panels), [пример 1](ui-catalog-examples.md#example-1) |
@@ -46,7 +50,7 @@
 | Видеорезультаты в «Моих файлах» | `VideoFiles` → `MasonryGrid` + `MediaVideo`; первая страница и результаты из кеша аккаунта, проверка в фоне | [Сетка и фото](ui-catalog.md#media), [загрузка](preloading.md) |
 | Выбрать готовое фото для сообщения | `ChatFilePicker` → `MasonryGrid` + `FileCard selectionAction`; вкладки — `ModeSwitchPanel` | [Сетка и фото](ui-catalog.md#media) |
 | Фото в диалоге, просмотр только фото этого чата | `ConversationImageGallery` → общие FileCard/FilePreviewDialog | [Сетка и фото](ui-catalog.md#media) |
-| Ожидание нескольких фото по количеству и формату запроса | `ImageGenerationPlaceholders` → `MediaState`; общий `ImageGenerationGrid` для заглушек и готовых фото | [Общие состояния](ui-catalog.md#async-states), [локальный пример](http://localhost:7158/ru/app/ui-states#image-generation) |
+| Ожидание нескольких фото по количеству и формату запроса | `ImageGenerationPlaceholders` → `MediaState`; общий `ImageGenerationGrid` для заглушек и готовых фото | [Общие состояния](ui-catalog.md#async-states), [локальный пример](http://localhost:7159/ru/app/ui-states#image-generation) |
 | Открыть прикреплённое фото из инпута или сообщения без правой панели | `AttachmentPreviewDialog` → `MediaPreviewDialogTemplate` без `infoPanel` | [Сетка и фото](ui-catalog.md#media) |
 | Примеры генераций, карточка и галерея примеров | `InspirationExampleCard` + `InspirationExampleDialog`; только медиа — `InspirationExampleMedia` | [Сетка и фото](ui-catalog.md#media), [пример 6](ui-catalog-examples.md#example-6) |
 | Сначала обложка видео, затем ролик в карточке | `MediaVideo poster loading="lazy"`; `InspirationExampleMedia` берёт posterPath примера | [Состояния медиа](ui-catalog.md#async-states) |
@@ -56,6 +60,7 @@
 | Описание модели в подсказке только у инпута | `ModelSelector descriptionMode="tooltip"`; по умолчанию `inline` | [Модели](ui-catalog.md#models), [пример 8](ui-catalog-examples.md#example-8) |
 | Общая прокрутка / scrollbar | `ScrollArea` | [Прокрутка](ui-catalog.md#overlays), [пример 9](ui-catalog-examples.md#example-9) |
 | Выбор нейросети / карточка модели | `ModelSelector`, его адаптеры; `ModelCard` и `ModelIcon` | [Модели](ui-catalog.md#models), [пример 8](ui-catalog-examples.md#example-8) |
+| Назначить иконку модели по ID | `model-icon-registry.ts` → `getModelPresentation` → существующий `ModelIcon`; назначены все модели текущего каталога, версии одной семьи используют общий знак модели или разработчика | [Модели](ui-catalog.md#models), [источники SVG](../public/assets/images/models/README.md) |
 | Цвет запасной иконки модели, белых кнопок и QR | Общие переменные в `globals.css`; `ModelIcon` окрашивает SVG через CSS-маску | [Токены](ui-catalog.md#tokens), [модели](ui-catalog.md#models) |
 | Единые данные моделей, категорий, возможностей и цен | `GenerationCatalogProvider.initialSource` → общий `loadModelCatalog` → `/web/v1/models`; специализированные загрузчики — проекции, свежий серверный снимок используется без повторного запроса | [Модели](ui-catalog.md#models), [загрузка и кеш](preloading.md), [контракт бэкенда](../../../docs/runbooks/MODEL_CATALOG.md) |
 | Лента подборок моделей, до пяти в категории | `ModelSelector categoryModelIds` → общий `ModeSwitchPanel`; выбор категории поднимает её блок, поиск охватывает все подборки | [Модели](ui-catalog.md#models), [панели](ui-catalog.md#panels) |

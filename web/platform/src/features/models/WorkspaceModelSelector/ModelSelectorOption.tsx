@@ -1,5 +1,7 @@
 "use client";
 
+import { BrandText } from "@/components/brand/BrandName/BrandName";
+
 import { useMessages } from "@/i18n/LocaleProvider";
 import { tokenAmount } from "@/i18n/counts";
 import { RichMessage } from "@/i18n/RichMessage";
@@ -103,7 +105,7 @@ export function ModelSelectorOption({ descriptionMode, isDescriptionActive, isOp
   const description = model.responsePrice ? <RichMessage id="chatModelSelector.valueTokensPerResponseValue" values={{
     value1: <CreditAmount value={model.responsePrice.credits} />,
     value2: model.responsePrice.maxOutputTokens ? msg("chatModelSelector.upToValueResponseTokens", { value1: tokenAmount(msg, model.responsePrice.maxOutputTokens, "outputTokens") }) : "",
-  }} /> : getModelPresentation(model, msg).description;
+  }} /> : <BrandText>{getModelPresentation(model, msg).description}</BrandText>;
 
   return (
     <li

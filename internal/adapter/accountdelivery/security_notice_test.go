@@ -12,6 +12,7 @@ import (
 	"time"
 	"vk-ai-aggregator/internal/domain"
 	"vk-ai-aggregator/internal/service/accountlink"
+	"vk-ai-aggregator/web/platform/branding"
 )
 
 func TestSecurityNoticeDisabledFailsClosed(t *testing.T) {
@@ -146,7 +147,7 @@ func TestSecurityNoticeFixedRussianTemplates(t *testing.T) {
 			t.Fatal(err)
 		}
 		body := strings.SplitN(string(msg), "\r\n\r\n", 2)[1]
-		if !strings.Contains(body, "НейроХаб") || !strings.Contains(body, "2026-10-05") {
+		if !strings.Contains(body, branding.Name()) || !strings.Contains(body, "2026-10-05") {
 			t.Fatal("fixed Russian body missing")
 		}
 		for _, forbidden := range []string{"http", "123456", "token", "example.test"} {

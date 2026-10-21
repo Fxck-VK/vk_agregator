@@ -1,15 +1,18 @@
 import { expect, test, type Page } from "@playwright/test";
+import brand from "../branding/brand.json" with { type: "json" };
 
 test.skip(process.env.NEIROHUB_LOCAL_WORKSPACE_PREVIEW !== "1", "Requires local development preview.");
 
-async function composer(page: Page, locale = "ru", newChat = false) {
+const typingLabel = `${brand.name} печатает`;
+
+async function composer(page: Page, locale = "ru", newChat = false, modelName = "Seedream 5.0 Pro") {
   await page.goto(newChat ? `/${locale}/app/chats` : `/${locale}/app/chat/20000000-0000-4000-8000-000000000004`);
   await expect(page.locator('[data-ui="local-development-tools"]')).toBeVisible();
   if (newChat) await page.getByRole("banner").getByRole("button", { name: /Открыть список$/ }).click();
   else await page.locator('[data-variant="composer"] > button').click();
   const selector = page.getByRole("dialog");
-  await selector.getByRole("searchbox").fill("Seedream 5.0 Pro");
-  await selector.getByRole("button", { name: /Seedream 5.0 Pro/ }).first().click();
+  await selector.getByRole("searchbox").fill(modelName);
+  await selector.getByRole("button", { name: modelName }).first().click();
   await page.locator("textarea").fill("Local upload check");
 }
 async function drop(page: Page, name = "local.png", path = "/assets/images/inspiration/paper-crane-cloud.png") {
@@ -221,24 +224,24 @@ for (const width of [1100, 390]) {
   test(`shows the floating typing control only above the chat bottom at ${width}px`, async ({ page }) => {
     await page.setViewportSize({ width, height: 820 });
     await page.emulateMedia({ reducedMotion: "reduce", colorScheme: "dark" });
-    await composer(page);
+    await composer(page, "ru", false, `${brand.name} Chat`);
     await scenario(page, "Медленно", "Отправка сообщения");
     await page.locator("form").getByRole("button", { name: "Отправить", exact: true }).click();
     const region = page.getByTestId("workspace-scroll-region");
     const button = page.getByRole("button", { name: "К последнему сообщению", exact: true });
-    const typing = page.locator('[data-chat-pending="assistant"]').getByRole("status", { name: "NeiroHub печатает" });
+    const typing = page.locator('[data-chat-pending="assistant"]').getByRole("status", { name: typingLabel });
     await expect(typing).toBeVisible();
     await expect.poll(() => region.evaluate(element => element.scrollHeight - element.scrollTop - element.clientHeight)).toBeLessThanOrEqual(4);
     await expect(button).toHaveCount(0);
 
     await region.evaluate(element => { element.scrollTop -= 250; });
-    await expect(button.getByRole("status", { name: "NeiroHub печатает" })).toBeVisible();
+    await expect(button.getByRole("status", { name: typingLabel })).toBeVisible();
     await button.click();
     await expect(button).toHaveCount(0);
     await expect(typing).toBeVisible();
 
     await region.evaluate(element => { element.scrollTop -= 250; });
-    await expect(button.getByRole("status", { name: "NeiroHub печатает" })).toBeVisible();
+    await expect(button.getByRole("status", { name: typingLabel })).toBeVisible();
     await expect(page.getByText(/Тестовый ответ: сообщение и вложения получены/)).toBeAttached({ timeout: 12_000 });
     await expect(button).toBeVisible();
     await expect(button.getByRole("status")).toHaveCount(0);

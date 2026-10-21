@@ -2,9 +2,9 @@ import { access, readdir, readFile } from "node:fs/promises";
 import { dirname, extname, relative, resolve, sep } from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
 
-const allowedExtensions = new Set([".avif", ".mp4", ".png", ".svg", ".webp"]);
+const allowedExtensions = new Set([".avif", ".mp4", ".png", ".svg", ".webp", ".woff2"]);
 const allowedMetadataNames = new Set([".gitkeep", "README.md"]);
-const kebabCaseAssetName = /^[a-z0-9]+(?:-[a-z0-9]+)*\.(?:avif|mp4|png|svg|webp)$/;
+const kebabCaseAssetName = /^[a-z0-9]+(?:-[a-z0-9]+)*\.(?:avif|mp4|png|svg|webp|woff2)$/;
 const unsafeSvgPatterns = [
   /<script\b/i,
   /<foreignObject\b/i,
@@ -35,7 +35,8 @@ export function inspectAssetEntries(entries) {
     }
 
     const fileName = relativePath.split("/").at(-1) ?? relativePath;
-    if (allowedMetadataNames.has(fileName)) {
+    const isFontDirectory = relativePath.startsWith("public/assets/fonts/");
+    if (allowedMetadataNames.has(fileName) || isFontDirectory && ["LICENSE.txt", "SOURCE.txt"].includes(fileName)) {
       continue;
     }
 
@@ -46,6 +47,9 @@ export function inspectAssetEntries(entries) {
     }
     if (!kebabCaseAssetName.test(fileName)) {
       errors.push(`${relativePath}: asset filename must use lowercase kebab-case`);
+    }
+    if (extension === ".woff2" && (!isFontDirectory || entry.fontSignature !== "wOF2")) {
+      errors.push(`${relativePath}: WOFF2 requires the fonts directory and a valid font signature`);
     }
     if (
       extension === ".svg" &&
@@ -79,6 +83,7 @@ async function collectFiles(root, prefix, include) {
       records.push({
         relativePath: `${prefix}/${relativePath}`,
         content: extension === ".svg" ? await readFile(absolutePath, "utf8") : undefined,
+        fontSignature: extension === ".woff2" ? (await readFile(absolutePath)).subarray(0, 4).toString("latin1") : undefined,
       });
     }
   }

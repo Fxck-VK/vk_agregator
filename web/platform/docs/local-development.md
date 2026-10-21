@@ -8,8 +8,8 @@
 npm --prefix web/platform run dev:preview
 ```
 
-Откройте `http://localhost:7158/ru/app` или `/en/app`. Команда запускает Next dev
-на `localhost:7158` (IPv4 loopback) с серверным `NEIROHUB_LOCAL_WORKSPACE_PREVIEW=1`.
+Откройте `http://localhost:7159/ru/app` или `/en/app`. Команда запускает Next dev
+на `localhost:7159` (IPv4 loopback) с серверным `NEIROHUB_LOCAL_WORKSPACE_PREVIEW=1`.
 Имя хоста совпадает с адресом браузера, чтобы языковой rewrite оставался внутренним;
 `--dns-result-order=ipv4first` исключает зависимость запуска от доступности IPv6.
 Если сервер уже запущен с этим флагом, достаточно обновить страницу. Пуши,

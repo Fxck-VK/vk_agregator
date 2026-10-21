@@ -1,3 +1,5 @@
+import { brandLogoPath } from "@/config/brand";
+
 export const assetPaths = {
   icons: {
     plans: {
@@ -19,6 +21,7 @@ export const assetPaths = {
       promptIdeas: "/assets/icons/features/prompt-ideas-white.svg",
     },
     accountMenu: {
+      avatar: "/assets/images/models/chip-silhouette.svg",
       logout: "/assets/icons/account-menu/logout.svg",
       megaphone: "/assets/icons/account-menu/megaphone.svg",
       profile: "/assets/icons/account-menu/profile.svg",
@@ -79,6 +82,27 @@ export const assetPaths = {
       litePlanBackground: "/assets/images/workspace/lite-plan-background.webp",
     },
     models: {
+      brand: brandLogoPath,
+      openai: "/assets/images/models/openai.svg",
+      bytedance: "/assets/images/models/bytedance.svg",
+      midjourney: "/assets/images/models/midjourney.svg",
+      flux: "/assets/images/models/flux.svg",
+      google: "/assets/images/models/google.svg",
+      qwen: "/assets/images/models/qwen.svg",
+      grok: "/assets/images/models/grok.svg",
+      claude: "/assets/images/models/claude.svg",
+      gemini: "/assets/images/models/gemini.svg",
+      kling: "/assets/images/models/kling.svg",
+      minimax: "/assets/images/models/minimax.svg",
+      runway: "/assets/images/models/runway.svg",
+      happyhorse: "/assets/images/models/happyhorse.svg",
+      skywork: "/assets/images/models/skywork.svg",
+      suno: "/assets/images/models/suno.svg",
+      alibaba: "/assets/images/models/alibaba.svg",
+      pixverse: "/assets/images/models/pixverse.svg",
+      vidu: "/assets/images/models/vidu.svg",
+      deepseek: "/assets/images/models/deepseek.svg",
+      kimi: "/assets/images/models/kimi.svg",
       fallback: {
         darkTheme: "/assets/images/models/chip-silhouette.svg",
         lightTheme: "/assets/images/models/chip-silhouette-dark.svg",

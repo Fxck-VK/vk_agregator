@@ -5,6 +5,8 @@ import { useDictionary } from "@/i18n/LocaleProvider";
 import Link from "@/i18n/Link";
 import { type ReactNode, useEffect, useRef, useState } from "react";
 
+import { assetPaths } from "@/assets/asset-paths";
+import { AssetIcon } from "@/components/icons/AssetIcon";
 import { LogoutIcon } from "@/components/icons/LogoutIcon";
 import { MegaphoneIcon } from "@/components/icons/MegaphoneIcon";
 import { MonitorIcon } from "@/components/icons/MonitorIcon";
@@ -189,7 +191,7 @@ export function AccountMenu({ identityLabel, isLogoutPending, logoutFailure, onL
         type="button"
       >
         <span aria-hidden="true" className={styles.avatar} data-account-avatar="true">
-          NH
+          <AssetIcon className={styles.avatarMark} iconName="account-avatar" source={assetPaths.icons.accountMenu.avatar} />
         </span>
         <span className={styles.identity} data-sidebar-account-identity="true" title={identityLabel}>
           {identityLabel}

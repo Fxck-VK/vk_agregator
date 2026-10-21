@@ -133,11 +133,16 @@ jobs:
         shell: bash
         run: bash scripts/ci/install-trivy.sh
 
+      - name: Validate filesystem exclusions preserve tracked files
+        shell: pwsh
+        run: ./scripts/ci/validate-trivy-filesystem-scope.ps1
+
       - name: Scan repository filesystem and configuration
         shell: bash
         run: |
           set -euo pipefail
           trivy fs \
+            --config trivy-filesystem.yaml \
             --scanners vuln,misconfig \
             --severity HIGH,CRITICAL \
             --exit-code 1 \

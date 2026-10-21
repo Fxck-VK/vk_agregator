@@ -5,7 +5,7 @@ import { localizeHref } from "./routing";
 
 /** Deployment configuration only: never derive canonical hosts from request headers. */
 export function getPublicOrigin(): string {
-  const input = process.env.WEB_ORIGIN || (process.env.NODE_ENV !== "production" ? "http://localhost:7158" : "");
+  const input = process.env.WEB_ORIGIN || (process.env.NODE_ENV !== "production" ? "http://localhost:7159" : "");
   try {
     const url = new URL(input);
     if (!["https:", "http:"].includes(url.protocol) || url.username || url.password || url.pathname !== "/" || url.search || url.hash) throw new Error();

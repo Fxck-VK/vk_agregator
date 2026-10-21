@@ -1,5 +1,9 @@
 "use client";
 
+import { BrandText } from "@/components/brand/BrandName/BrandName";
+import { BrandLogo } from "@/components/brand/BrandLogo/BrandLogo";
+import { brandName } from "@/config/brand";
+
 import { StateNotice } from "@/components/ui/AsyncState/AsyncState";
 import { useMessages, useDictionary } from "@/i18n/LocaleProvider";
 
@@ -17,6 +21,7 @@ import {
   type MediaPreviewDialogRenderClasses,
 } from "@/components/media/MediaPreviewDialogTemplate/MediaPreviewDialogTemplate";
 import { ModelIcon } from "@/features/models/ModelIcon/ModelIcon";
+import { getModelIconPath } from "@/features/models/model-icon-registry";
 
 import { InspirationExampleMedia } from "../InspirationExampleMedia/InspirationExampleMedia";
 import type { InspirationExample } from "../inspiration-examples";
@@ -173,9 +178,13 @@ export function InspirationExampleDialog({
   const renderInfoPanel = (item: InspirationExample) => (
     <>
       <div className={styles.modelTitle}>
-        <ModelIcon className={styles.modelMark} />
+        {item.modelName === brandName ? (
+          <BrandLogo className={styles.modelMark} size={32} />
+        ) : (
+          <ModelIcon className={styles.modelMark} src={getModelIconPath(item.modelId)} />
+        )}
         <div>
-          <strong>{item.modelName}</strong>
+          <strong><BrandText>{item.modelName}</BrandText></strong>
         </div>
       </div>
 

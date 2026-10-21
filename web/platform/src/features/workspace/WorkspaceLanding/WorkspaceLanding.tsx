@@ -1,5 +1,8 @@
 "use client";
 
+import { BrandName, BrandText } from "@/components/brand/BrandName/BrandName";
+import { BrandLogo } from "@/components/brand/BrandLogo/BrandLogo";
+
 import { useMessages, useLocale } from "@/i18n/LocaleProvider";
 import { RichMessage } from "@/i18n/RichMessage";
 
@@ -80,7 +83,7 @@ export function WorkspaceLanding({ access = "authenticated" }: WorkspaceLandingP
         <section aria-labelledby="workspace-how-title" className={`${styles.section} ${styles.contentFrame}`}>
           <div className={styles.sectionHeading}>
             <div>
-              <h2 id="workspace-how-title">{msg("workspaceLanding.howNeirohubWorks")}</h2>
+              <h2 id="workspace-how-title"><BrandText>{msg("workspaceLanding.howNeirohubWorks")}</BrandText></h2>
               <p>{msg("workspaceLanding.fromYourPromptToAFinishedResult")}</p>
             </div>
           </div>
@@ -250,7 +253,7 @@ export function WorkspaceLanding({ access = "authenticated" }: WorkspaceLandingP
                 <span className={styles.qrPlaceholder}>
                   <span className={styles.qrMarker} />
                 </span>
-                <span className={styles.phoneLabel}>NeiroHub</span>
+                <span className={styles.phoneLabel}><BrandName /></span>
               </span>
               <span className={`${styles.communityPreview} ${styles.communityPreviewRight}`}>
                 <Image
@@ -270,8 +273,8 @@ export function WorkspaceLanding({ access = "authenticated" }: WorkspaceLandingP
           <div className={styles.footerTop}>
             <div className={styles.footerBrandGroup}>
               <Link className={styles.footerBrand} href="/app">
-                <span className={styles.brandMark}>NH</span>
-                <strong>NeiroHub</strong>
+                <BrandLogo className={styles.brandMark} size={44} />
+                <strong><BrandName /></strong>
               </Link>
               <div aria-label={msg("workspaceLanding.socialMedia")} className={styles.footerSocials}>
                 <a href="https://vk.me/neirohub_help" rel="noopener noreferrer" target="_blank">VK</a>
@@ -301,7 +304,7 @@ export function WorkspaceLanding({ access = "authenticated" }: WorkspaceLandingP
               <Link href="/app/models">{msg("workspaceLanding.allAiModels")}</Link>
             </div>
             <div className={styles.footerColumn}>
-              <strong>{msg("workspaceLanding.neirohubTools")}</strong>
+              <strong><BrandText>{msg("workspaceLanding.neirohubTools")}</BrandText></strong>
               <Link href="/app/chats">{msg("workspaceLanding.newChat")}</Link>
               <Link href="/app/image">{msg("workspaceLanding.imageGeneration")}</Link>
               <Link href="/app/files">{msg("workspaceLanding.myFiles")}</Link>
@@ -319,7 +322,7 @@ export function WorkspaceLanding({ access = "authenticated" }: WorkspaceLandingP
           </nav>
 
           <div className={styles.footerMeta}>
-            <span>{msg("workspaceLanding.2026NeirohubAllRightsReserved")}</span>
+            <span><BrandText>{msg("workspaceLanding.2026NeirohubAllRightsReserved")}</BrandText></span>
             <span>{msg("workspaceLanding.aiModelsInOneWorkspace")}</span>
           </div>
         </div>

@@ -1,3 +1,4 @@
+import { brandName } from "@/config/brand";
 /* eslint-disable @next/next/no-html-link-for-pages -- Native link fixtures and router mocks are intentional in these tests. */
 import { act, cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
@@ -22,7 +23,7 @@ const push = vi.fn();
 const requestId = "11111111-1111-4111-8111-111111111111";
 const chatModel = {
   id: "neirohub-chat",
-  name: "NeiroHub Chat",
+  name: `${brandName} Chat`,
   description: "Текстовая модель из общего каталога",
   category: "text" as const,
   categories: ["popular", "text", "study-work", "free"],
@@ -67,7 +68,7 @@ afterEach(() => {
 describe("WorkspaceHero model selection", () => {
   it("submits the loaded default text model before an image shortcut is selected", async () => {
     renderHero();
-    await screen.findByRole("button", { name: "Выбрать модель: NeiroHub Chat" });
+    await screen.findByRole("button", { name: `Выбрать модель: ${brandName} Chat` });
     fireEvent.change(screen.getByRole("textbox"), { target: { value: "Помоги с планом" } });
     fireEvent.click(screen.getByRole("button", { name: ru.workspace.promptSubmit }));
 
@@ -102,7 +103,7 @@ describe("WorkspaceHero model selection", () => {
     fireEvent.click(screen.getByRole("radio", { name: "4K" }));
     const input = screen.getByRole("textbox");
     vi.useFakeTimers();
-    fireEvent.click(screen.getByRole("button", { name: "Выбрать модель: NeiroHub Chat" }));
+    fireEvent.click(screen.getByRole("button", { name: `Выбрать модель: ${brandName} Chat` }));
 
     const outgoing = container.querySelector('[data-state="exiting"]');
     expect(outgoing).toHaveAttribute("inert");
@@ -121,14 +122,14 @@ describe("WorkspaceHero model selection", () => {
     const { container } = renderHero();
     await selectModel("Nano Banana Pro");
     vi.useFakeTimers();
-    fireEvent.click(screen.getByRole("button", { name: "Выбрать модель: NeiroHub Chat" }));
+    fireEvent.click(screen.getByRole("button", { name: `Выбрать модель: ${brandName} Chat` }));
     act(() => vi.advanceTimersByTime(100));
     fireEvent.click(screen.getByRole("button", { name: "Выбрать модель: Nano Banana 2" }));
     expect(container.querySelector('[data-state="exiting"]')).toBeNull();
     act(() => vi.advanceTimersByTime(120));
     expect(screen.getByRole("button", { name: "Соотношение сторон: 16:9" })).toBeVisible();
     expect(screen.queryByRole("button", { name: "Разрешение: 1K" })).toBeNull();
-    fireEvent.click(screen.getByRole("button", { name: "Выбрать модель: NeiroHub Chat" }));
+    fireEvent.click(screen.getByRole("button", { name: `Выбрать модель: ${brandName} Chat` }));
     act(() => vi.advanceTimersByTime(219));
     expect(container.querySelector('[data-state="exiting"]')).not.toBeNull();
     act(() => vi.advanceTimersByTime(1));
@@ -139,14 +140,14 @@ describe("WorkspaceHero model selection", () => {
     vi.stubGlobal("matchMedia", vi.fn().mockReturnValue({ matches: true }));
     const { container } = renderHero();
     await selectModel("Nano Banana Pro");
-    await selectModel("NeiroHub Chat");
+    await selectModel(`${brandName} Chat`);
     expect(container.querySelector('[data-state="exiting"]')).toBeNull();
     expect(container.querySelector('[aria-label^="Разрешение:"]')).toBeNull();
   });
 
   it("keeps the same textarea, surface and caret after a rejected file and model changes", async () => {
     const { container } = renderHero();
-    await selectModel("NeiroHub Chat");
+    await selectModel(`${brandName} Chat`);
     const input = screen.getByRole("textbox") as HTMLTextAreaElement;
     const surface = input.closest('[data-ui="input-surface"]');
     const form = input.closest("form");
@@ -158,7 +159,7 @@ describe("WorkspaceHero model selection", () => {
     expect(screen.queryByRole("button", { name: "Убрать brief.txt" })).toBeNull();
     expect(webBrowserMutation).not.toHaveBeenCalled();
 
-    for (const model of ["Nano Banana Pro", "Nano Banana 2", "NeiroHub Chat"]) {
+    for (const model of ["Nano Banana Pro", "Nano Banana 2", `${brandName} Chat`]) {
       await selectModel(model);
       expect(screen.getByRole("textbox")).toBe(input);
       expect(input.closest('[data-ui="input-surface"]')).toBe(surface);
@@ -167,7 +168,7 @@ describe("WorkspaceHero model selection", () => {
       expect(input.selectionEnd).toBe(8);
       expect(screen.queryByRole("button", { name: "Убрать brief.txt" })).toBeNull();
       expect(container.querySelectorAll('[data-ui="input-surface"]')).toHaveLength(1);
-      expect(screen.queryAllByLabelText(/^Стоимость:/)).toHaveLength(model === "NeiroHub Chat" ? 0 : 1);
+      expect(screen.queryAllByLabelText(/^Стоимость:/)).toHaveLength(model === `${brandName} Chat` ? 0 : 1);
     }
   });
 
@@ -175,7 +176,7 @@ describe("WorkspaceHero model selection", () => {
     renderHero();
     fireEvent.change(screen.getByRole("textbox"), { target: { value: "Мой журавль" } });
     await selectModel("Nano Banana Pro");
-    expect(screen.getByRole("textbox", { name: "Задайте вопрос NeiroHub" })).toHaveValue("Мой журавль");
+    expect(screen.getByRole("textbox", { name: `Задайте вопрос ${brandName}` })).toHaveValue("Мой журавль");
     expect(screen.getByRole("button", { name: "Выбрать модель: Nano Banana Pro" })).toHaveAttribute("aria-pressed", "true");
     fireEvent.click(screen.getByRole("button", { name: "Разрешение: 2K" }));
     fireEvent.click(screen.getByRole("radio", { name: "4K" }));
@@ -184,8 +185,8 @@ describe("WorkspaceHero model selection", () => {
     expect(screen.queryByRole("button", { name: "Разрешение: 1K" })).toBeNull();
     expect(screen.queryByRole("button", { name: "Разрешение: 4K" })).toBeNull();
     fireEvent.change(screen.getByRole("textbox"), { target: { value: "Новый черновик" } });
-    await selectModel("NeiroHub Chat");
-    expect(screen.getByRole("textbox", { name: "Задайте вопрос NeiroHub" })).toHaveValue("Новый черновик");
+    await selectModel(`${brandName} Chat`);
+    expect(screen.getByRole("textbox", { name: `Задайте вопрос ${brandName}` })).toHaveValue("Новый черновик");
     expect(screen.queryByRole("button", { name: /^Разрешение:/ })).toBeNull();
     await selectModel("Nano Banana Pro");
     expect(screen.getByRole("textbox")).toHaveValue("Новый черновик");
@@ -216,7 +217,7 @@ describe("WorkspaceHero model selection", () => {
       created_at: "2026-09-12T00:00:00Z", updated_at: "2026-09-12T00:00:00Z",
     }, balance: 100, can_afford: true }, { status: 201 }));
     expect(await screen.findByRole("heading", { name: ru.imageGeneration.confirmationTitle })).toBeVisible();
-    expect(screen.getByRole("button", { name: "Выбрать модель: NeiroHub Chat" })).toBeDisabled();
+    expect(screen.getByRole("button", { name: `Выбрать модель: ${brandName} Chat` })).toBeDisabled();
     expect(push).not.toHaveBeenCalled();
   });
 
@@ -247,7 +248,7 @@ describe("WorkspaceHero model selection", () => {
   it("still opens a conversation when the text mode is submitted", async () => {
     renderHero();
     await selectModel("Nano Banana 2");
-    await selectModel("NeiroHub Chat");
+    await selectModel(`${brandName} Chat`);
     fireEvent.change(screen.getByRole("textbox"), { target: { value: "Помоги с текстом" } });
     fireEvent.click(screen.getByRole("button", { name: ru.workspace.promptSubmit }));
     expect(push).toHaveBeenCalledExactlyOnceWith(`/ru/app/chat/${requestId}?pending=1`);

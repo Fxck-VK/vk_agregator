@@ -1,5 +1,7 @@
 "use client";
 
+import { BrandText } from "@/components/brand/BrandName/BrandName";
+
 import { StateNotice } from "@/components/ui/AsyncState/AsyncState";
 import { RichMessage } from "@/i18n/RichMessage";
 
@@ -279,9 +281,9 @@ export function WorkspacePrompt({ access = "authenticated", variant = "workspace
           uploadFile: t.conversations.composerMediaUploadFile,
         }}
         note={selectedModel && selectedModel.category !== "text"
-          ? cost === undefined ? undefined : <>{selectedModel.name} · <CreditAmount prefix={`${t.imageGeneration.priceLabel}:`} value={cost} /></>
+          ? cost === undefined ? undefined : <><BrandText>{selectedModel.name}</BrandText> · <CreditAmount prefix={`${t.imageGeneration.priceLabel}:`} value={cost} /></>
           : selectedChatModel
-          ? <>{selectedChatModel.name}{selectedChatModel.estimate_credits !== undefined ? <RichMessage id="workspacePrompt.valueTokensPerResponse" values={{ value1: <CreditAmount value={selectedChatModel.estimate_credits} /> }} /> : null}</>
+          ? <><BrandText>{selectedChatModel.name}</BrandText>{selectedChatModel.estimate_credits !== undefined ? <RichMessage id="workspacePrompt.valueTokensPerResponse" values={{ value1: <CreditAmount value={selectedChatModel.estimate_credits} /> }} /> : null}</>
           : isNewChat || isHero ? undefined : t.workspace.promptSupport}
         onChange={changePrompt}
         onSend={submit}

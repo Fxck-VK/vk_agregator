@@ -1,3 +1,4 @@
+import { brandName } from "@/config/brand";
 import type { ReactNode } from "react";
 
 import { cleanup, fireEvent, render, screen } from "@testing-library/react";
@@ -107,7 +108,7 @@ describe("ModelCard", () => {
     const card = screen.getByRole("button", { name: /Nano \/ Banana/ });
     expect(card).toHaveAttribute("aria-pressed", "true");
     expect(card).toHaveTextContent(
-      "Nano / Banana доступна для выбора в NeiroHub.",
+      `Nano / Banana доступна для выбора в ${brandName}.`,
     );
     expect(screen.queryByTestId("credit-star-icon")).not.toBeInTheDocument();
     expect(card).toHaveClass(selectableStyles.control);

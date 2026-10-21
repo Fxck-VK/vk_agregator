@@ -6,6 +6,8 @@ vi.mock("next/headers", () => ({
 }));
 vi.mock("@/lib/auth/methods.server", () => ({ loadAuthMethods: () => ({ registration: false, password: true, recovery: false, email_link: false, phone_link: false, providers: [] }) }));
 vi.mock("@/features/session/local-workspace-preview", () => ({ isLocalWorkspacePreviewEnabled: () => false }));
+vi.mock("@/i18n/navigation", () => ({ useRouter: () => ({ replace: vi.fn() }) }));
+vi.mock("@/i18n/LanguageSwitcher", () => ({ LanguageSwitcher: () => <div /> }));
 
 vi.mock("@/features/auth/LoginForm/LoginForm", () => ({
   LoginForm: vi.fn(() => <div data-testid="login-form">form</div>),
@@ -18,6 +20,13 @@ import { metadata } from "./layout";
 import LoginPage from "./page";
 
 describe("LoginPage", () => {
+  it("renders the two-column login window and requests the choice entry", async () => {
+    const markup = renderToStaticMarkup(await LoginPage());
+    expect(markup).toContain('data-testid="login-window"');
+    expect(markup).toContain('data-testid="login-showcase"');
+    expect(LoginForm).toHaveBeenCalledWith(expect.objectContaining({ entry: "choice" }), undefined);
+  });
+
   beforeEach(() => {
     vi.mocked(cookies).mockResolvedValue({ get: vi.fn() } as never);
   });

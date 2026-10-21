@@ -23,6 +23,7 @@ import {
   projectImageModelCatalog,
 } from "@/features/models/model-catalog-contract";
 import { ru } from "@/i18n/ru";
+import { brandLogoPath } from "@/config/brand";
 import type { ChatModel, ImageModel, ImageModelList } from "@/lib/web-api/contracts";
 import { makeModelCatalogFixture } from "@/test/model-catalog";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
@@ -241,7 +242,12 @@ describe("WorkspaceModelSelector", () => {
     expect(unselectedOption).toHaveAttribute("aria-pressed", "false");
     expect(unselectedOption.querySelector('[data-icon="check"]')).toBeNull();
     expect(selectedOption).not.toHaveTextContent("●");
-    expect(categoryOptions().getAllByTestId("model-icon-fallback")).toHaveLength(5);
+    // The fixture's three hyphenated image IDs are unregistered; real text IDs have artwork.
+    expect(categoryOptions().getAllByTestId("model-icon-fallback")).toHaveLength(3);
+    expect(categoryOptions().getAllByTestId("model-icon").map(icon => icon.getAttribute("src"))).toEqual([
+      expect.stringContaining(brandLogoPath),
+      expect.stringContaining("/assets/images/models/openai.svg"),
+    ]);
     const catalogueLink = screen.getByRole("link", { name: ru.modelSelector.openCatalogue });
     expect(catalogueLink).toHaveAttribute("href", "/ru/app/models");
   });

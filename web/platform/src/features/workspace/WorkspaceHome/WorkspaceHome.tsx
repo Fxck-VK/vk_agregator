@@ -1,5 +1,7 @@
 "use client";
 
+import { BrandText } from "@/components/brand/BrandName/BrandName";
+
 import { useDictionary } from "@/i18n/LocaleProvider";
 
 import type { Dictionary } from "@/i18n/dictionary";
@@ -54,7 +56,7 @@ export function WorkspaceHome({ access = "authenticated", section = "home", chat
   return (
     <section aria-labelledby="workspace-title" className={styles.content}>
       <h1 id="workspace-title">{content.title}</h1>
-      <p className={styles.description}>{content.description}</p>
+      <p className={styles.description}><BrandText>{content.description}</BrandText></p>
     </section>
   );
 }

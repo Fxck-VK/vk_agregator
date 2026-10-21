@@ -2,6 +2,8 @@ import { act, cleanup, fireEvent, render, screen, waitFor, within } from "@testi
 import { afterEach, describe, expect, it, vi } from "vitest";
 
 import { ru } from "@/i18n/ru";
+import { brandFilePrefix } from "@/config/brand";
+import { getModelIconPath } from "@/features/models/model-icon-registry";
 
 import { inspirationExamples } from "../inspiration-examples";
 import { InspirationGallery } from "./InspirationGallery";
@@ -21,12 +23,13 @@ describe("InspirationGallery", () => {
     expect(container.querySelectorAll("video")).toHaveLength(2);
   });
 
-  it("uses the shared fallback artwork for a model without a logo", () => {
+  it("uses the registered artwork when an example identifies a specific model", () => {
     render(<InspirationGallery />);
 
     const card = screen.getByRole("button", { name: ru.inspiration.openExample });
 
-    expect(within(card).getByTestId("model-icon-fallback")).toBeInTheDocument();
+    expect(within(card).getByTestId("model-icon")).toHaveAttribute("src", expect.stringContaining(getModelIconPath("gpt_image_2")!));
+    expect(within(card).queryByTestId("model-icon-fallback")).not.toBeInTheDocument();
     expect(card).not.toHaveTextContent("✦");
   });
 
@@ -93,7 +96,7 @@ describe("InspirationGallery", () => {
     );
 
     expect(within(dialog).getByText(ru.inspiration.modelName)).toBeInTheDocument();
-    expect(within(dialog).getByTestId("model-icon-fallback")).toBeInTheDocument();
+    expect(within(dialog).getByTestId("model-icon")).toHaveAttribute("src", expect.stringContaining(getModelIconPath("gpt_image_2")!));
     expect(within(dialog).queryByText("1K")).not.toBeInTheDocument();
 
     fireEvent.click(thumbnails[imageExampleIndex]);
@@ -408,7 +411,7 @@ describe("InspirationGallery", () => {
 
     const download = screen.getByRole("link", { name: ru.inspiration.download });
     expect(download).toHaveAttribute("href", "/assets/images/inspiration/paper-crane-cloud.png");
-    expect(download).toHaveAttribute("download", "neirohub-paper-crane-cloud.png");
+    expect(download).toHaveAttribute("download", `${brandFilePrefix}-paper-crane-cloud.png`);
 
     const recreate = screen.getByRole("link", { name: ru.inspiration.recreate });
     const recreateUrl = new URL(recreate.getAttribute("href")!, "https://neirohub.test");

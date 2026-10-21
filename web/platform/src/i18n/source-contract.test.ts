@@ -8,7 +8,7 @@ function files(directory: string): string[] {
     ? files(`${directory}/${entry.name}`) : [`${directory}/${entry.name}`]);
 }
 const root = resolve(process.cwd(), "src").replaceAll("\\", "/");
-const exempt = /\/(?:i18n|test|content\/data)\/|\.test\.|\.preview\.|(?:local-)?workspace-preview\.ts$|-test-fixtures\.ts$/;
+const exempt = /\/(?:i18n|test|content\/data)\/|\/config\/brand\.ts$|\.test\.|\.preview\.|(?:local-)?workspace-preview\.ts$|-test-fixtures\.ts$/;
 const uiAttributes = new Set(["aria-label", "alt", "title", "placeholder", "label", "description"]);
 // Product/provider names and format abbreviations are language independent.
 const invariantCopy = /^(?:NeiroHub|NH|ID|Nano Banana 2|Nano Banana Pro|Seedream 4\.5|VK|Google|GitHub|Telegram|ChatGPT|AI|GPT Image 2|Lite|Start\+|Pro|Ultima|Elite|Enterprise|PNG|JPEG|WebP|MP4|SVG|PDF|HD|FPS|Email|[0-9\s.,:+/%×−–—-]+)$/;

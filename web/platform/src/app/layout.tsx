@@ -2,6 +2,7 @@ import type { Metadata } from "next";
 import { Geist } from "next/font/google";
 import { headers } from "next/headers";
 import type { ReactNode } from "react";
+import { brandIcons } from "@/config/brand";
 
 import { ThemeBootstrapScript } from "@/features/theme/ThemeBootstrapScript";
 import { RouteLocaleProvider } from "@/i18n/RouteLocaleProvider";
@@ -17,28 +18,7 @@ const geistSans = Geist({
 });
 
 const baseMetadata: Metadata = {
-  icons: {
-    icon: [
-      {
-        url: "/assets/brand/favicons/neirohub-favicon-32.png",
-        sizes: "32x32",
-        type: "image/png",
-      },
-      {
-        url: "/assets/brand/favicons/neirohub-favicon-48.png",
-        sizes: "48x48",
-        type: "image/png",
-      },
-    ],
-    shortcut: "/assets/brand/favicons/neirohub-favicon-32.png",
-    apple: [
-      {
-        url: "/assets/brand/favicons/neirohub-apple-touch-icon-180.png",
-        sizes: "180x180",
-        type: "image/png",
-      },
-    ],
-  },
+  icons: brandIcons,
 };
 
 export async function generateMetadata(): Promise<Metadata> {

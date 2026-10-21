@@ -1,0 +1,5 @@
+IBM Plex Sans SemiBold, unmodified upstream WOFF2 (Latin and Cyrillic).
+Source: https://github.com/IBM/plex/blob/master/packages/plex-sans/fonts/complete/woff2/IBMPlexSans-SemiBold.woff2
+Downloaded: 2026-10-17
+License: SIL Open Font License 1.1; see LICENSE.txt in this directory.
+Served by this application only; no external font requests at runtime.

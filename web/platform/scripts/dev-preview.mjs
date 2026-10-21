@@ -5,7 +5,7 @@ const child = spawn(process.execPath, [
   // Keep the rewrite origin as localhost while binding its IPv4 loopback address.
   "--dns-result-order=ipv4first",
   fileURLToPath(new URL("../node_modules/next/dist/bin/next", import.meta.url)),
-  "dev", "--hostname", "localhost", "--port", "7158", ...process.argv.slice(2),
+  "dev", "--hostname", "localhost", "--port", "7159", ...process.argv.slice(2),
 ], {
   cwd: fileURLToPath(new URL("..", import.meta.url)),
   env: { ...process.env, NEIROHUB_LOCAL_WORKSPACE_PREVIEW: "1" },

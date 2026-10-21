@@ -1,5 +1,8 @@
 "use client";
 
+import { BrandName } from "@/components/brand/BrandName/BrandName";
+import { BrandLogo } from "@/components/brand/BrandLogo/BrandLogo";
+
 import { useDictionary } from "@/i18n/LocaleProvider";
 
 
@@ -35,18 +38,12 @@ const desktopViewportQuery = "(min-width: 48rem)";
 const reducedMotionQuery = "(prefers-reduced-motion: reduce)";
 const desktopSidebarContentFadeDurationMs = 100;
 const desktopSidebarMotionDurationMs = 400;
-const brandChipPath = "/assets/brand/marks/neirohub-chip.png";
 
 function BrandChip() {
   return (
-    <Image
-      alt=""
-      aria-hidden="true"
+    <BrandLogo
       className={styles.brandChip}
-      data-testid="neirohub-brand-chip"
-      height={40}
-      src={brandChipPath}
-      width={40}
+      testId="neirohub-brand-chip"
     />
   );
 }
@@ -414,7 +411,7 @@ export function Sidebar({ account, conversations, isDesktopCollapsed = false, on
               ref={firstLinkRef}
             >
               <BrandChip />
-              <span>{t.brand.name}</span>
+              <span><BrandName /></span>
             </Link>
           )}
           {(isNarrowViewport || (!desktopRailIsCollapsed && onDesktopToggle)) ? (

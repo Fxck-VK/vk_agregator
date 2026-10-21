@@ -1,3 +1,5 @@
+import { BrandName } from "@/components/brand/BrandName/BrandName";
+import { BrandLogo } from "@/components/brand/BrandLogo/BrandLogo";
 import Link from "@/i18n/Link";
 
 import { ScrollArea } from "@/components/ui/ScrollArea/ScrollArea";
@@ -23,8 +25,8 @@ export function PublicHeader({ dictionary, navigationItems = [] }: PublicHeaderP
     <header className={styles.header}>
       <PageContainer className={styles.inner} size="wide">
         <Link className={styles.brand} href="/">
-          <span aria-hidden="true" className={styles.brandMark}>NH</span>
-          <span>{dictionary.brand.name}</span>
+          <BrandLogo className={styles.brandMark} size={32} />
+          <span><BrandName /></span>
         </Link>
 
         {navigationItems.length > 0 ? (

@@ -1,3 +1,4 @@
+import { brandName, brandMonogram } from "@/config/brand";
 import { accountAuthText } from "./account-auth";
 
 export const ru = {
@@ -11,12 +12,12 @@ export const ru = {
     balanceRetry: "Не удалось обновить баланс. Повторить",
   },
   document: {
-    title: "NeiroHub — рабочее пространство",
+    title: `${brandName} — рабочее пространство`,
     description: "Единая рабочая среда для нейросетевых инструментов.",
   },
   brand: {
-    name: "NeiroHub",
-    monogram: "NH",
+    name: brandName,
+    monogram: brandMonogram,
   },
   notFound: {
     codeLabel: "Ошибка 404 — страница не найдена",
@@ -108,7 +109,7 @@ export const ru = {
     noLoginMethods: "Подтверждённые способы входа пока не найдены.",
     billingTitle: "Покупки и списания",
     billingPlaceholder: "История покупок и списаний появится здесь после подключения биллинга.",
-    referralLaunchTitle: "Приглашайте друзей в NeiroHub",
+    referralLaunchTitle: `Приглашайте друзей в ${brandName}`,
     referralLaunchDescription: "Поделитесь личной ссылкой. Новые регистрации по ней появятся в вашей статистике.",
     referralLoading: "Загружаем приглашение…",
     referralLoadFailure: "Не удалось загрузить приглашение. Попробуйте ещё раз.",
@@ -118,7 +119,7 @@ export const ru = {
     referralCopied: "Ссылка скопирована",
     referralCopyFailure: "Не удалось скопировать. Выделите и скопируйте ссылку из поля.",
     referralRulesPending: "Условия активации и бонусов ещё не определены. Начисления пока выключены.",
-    inviteTitle: "Вас пригласили в NeiroHub",
+    inviteTitle: `Вас пригласили в ${brandName}`,
     inviteLoading: "Сохраняем приглашение…",
     inviteReady: "Приглашение сохранено. Создайте новый аккаунт, чтобы оно было учтено.",
     inviteFailure: "Не удалось сохранить приглашение. Ссылка может быть недействительна или сервис временно недоступен.",
@@ -152,7 +153,7 @@ export const ru = {
       },
       {
         question: "Кого можно пригласить?",
-        answer: "Нового пользователя NeiroHub. Существующий аккаунт и собственный аккаунт не учитываются как приглашённые.",
+        answer: `Нового пользователя ${brandName}. Существующий аккаунт и собственный аккаунт не учитываются как приглашённые.`,
       },
       {
         question: "Что будет, если открыть несколько приглашений?",
@@ -196,7 +197,7 @@ export const ru = {
     refreshDelayed: "Автоматическое обновление задерживается. Ответ можно проверить позже.",
     scrollToLatest: "К последнему сообщению",
     composerLabel: "Новое сообщение",
-    composerPlaceholder: "Задайте вопрос NeiroHub",
+    composerPlaceholder: `Задайте вопрос ${brandName}`,
     composerSubmit: "Отправить",
     composerMediaUpload: "Загрузить медиа",
     composerMediaMenu: "Добавить медиа",
@@ -215,7 +216,7 @@ export const ru = {
     mediaLibraryUpload: "Загрузить файл",
     composerDisclaimer: "Стоимость зависит от выбранной нейросети. Нейросеть может ошибаться",
     composerPending: "Отправляем…",
-    composerAwaitingResponse: "NeiroHub печатает",
+    composerAwaitingResponse: `${brandName} печатает`,
     composerFailure: "Не удалось отправить сообщение. Попробуйте ещё раз — текст сохранён.",
     messageNotSent: "Не отправлено",
     messageRetryLabel: "Повторить",
@@ -225,7 +226,7 @@ export const ru = {
     likeMessage: "Лайк",
     dislikeMessage: "Дизлайк",
     userRole: "Вы",
-    assistantRole: "NeiroHub",
+    assistantRole: brandName,
   },
   imageGeneration: {
     title: "Генерация изображения",
@@ -276,7 +277,7 @@ export const ru = {
     resultTitle: "Готовый результат",
     resultFailure: "Результат пока недоступен. Попробуйте обновить статус позже.",
     resultImageAlt: "Сгенерированное изображение",
-    resultReadyDescription: "Результат хранится в вашем аккаунте и доступен только через NeiroHub.",
+    resultReadyDescription: `Результат хранится в вашем аккаунте и доступен только через ${brandName}.`,
     downloadResult: "Скачать",
     copyPrompt: "Скопировать описание",
     promptCopied: "Описание скопировано.",
@@ -316,7 +317,7 @@ export const ru = {
   },
   modelsCatalog: {
     title: "Нейросети",
-    description: "Каталог нейросетей NeiroHub для творческих и рабочих задач.",
+    description: `Каталог нейросетей ${brandName} для творческих и рабочих задач.`,
     searchLabel: "Поиск нейросети",
     searchPlaceholder: "Поиск нейросети",
     categoryTabsLabel: "Категории нейросетей",
@@ -389,7 +390,7 @@ export const ru = {
   files: {
     eyebrow: "Библиотека",
     title: "Мои файлы",
-    description: "Ваши результаты генераций. Изображения остаются доступны только через защищённый доступ NeiroHub.",
+    description: `Ваши результаты генераций. Изображения остаются доступны только через защищённый доступ ${brandName}.`,
     categoryTabsLabel: "Типы файлов",
     categories: {
       all: "Все файлы",

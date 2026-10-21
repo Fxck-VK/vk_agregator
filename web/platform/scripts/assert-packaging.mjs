@@ -24,8 +24,8 @@ const packageJson = JSON.parse(await readFile(packageJsonPath, "utf8"));
 
 assert.equal(
   packageJson.scripts.dev,
-  "next dev --port 7158",
-  "local platform development must use port 7158",
+  "next dev --port 7159",
+  "local platform development must use port 7159",
 );
 
 assert.doesNotMatch(

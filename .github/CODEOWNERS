@@ -4,3 +4,8 @@
 .github/CODEOWNERS @makar0ww @sohighimigt-cpu
 scripts/deploy/** @makar0ww @sohighimigt-cpu
 scripts/ci/install-*.sh @makar0ww @sohighimigt-cpu
+trivy-filesystem.yaml @makar0ww @sohighimigt-cpu
+scripts/ci/*trivy-filesystem*.ps1 @makar0ww @sohighimigt-cpu
+scripts/ci/TrivyFilesystemScope.psm1 @makar0ww @sohighimigt-cpu
+scripts/ci/BashRuntime.psm1 @makar0ww @sohighimigt-cpu
+scripts/ci/test-bash-runtime.ps1 @makar0ww @sohighimigt-cpu

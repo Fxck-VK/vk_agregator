@@ -27,6 +27,17 @@ function finishTransition(element: Element, propertyName = "opacity") {
 }
 
 describe("AccountMenu motion", () => {
+  it("uses the white smiling chip as the default account avatar instead of brand initials", () => {
+    render(<AccountMenu identityLabel="preview@neirohub.local" isLogoutPending={false} onLogout={vi.fn()} />);
+    const trigger = screen.getByRole("button", { name: "Открыть меню аккаунта" });
+    const avatar = trigger.querySelector('[data-account-avatar="true"]')!;
+    expect(avatar).not.toHaveTextContent("NH");
+    const artwork = avatar.querySelector('[data-icon="account-avatar"]');
+    expect(artwork).not.toBeNull();
+    expect(artwork?.getAttribute("style")).toContain('/assets/images/models/chip-silhouette.svg');
+    expect(trigger).toHaveTextContent("preview@neirohub.local");
+  });
+
   it.each(["escape", "trigger", "outside"])("retains an inert panel until the %s close transition finishes", (method) => {
     const { trigger, menu } = openMenu();
     expect(menu).toHaveAttribute("data-motion-state", "open");

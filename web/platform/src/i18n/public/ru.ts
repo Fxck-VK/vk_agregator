@@ -1,8 +1,9 @@
+import { brandName } from "@/config/brand";
 import type { PublicDictionary } from "./dictionary";
 
 export const publicDictionaryRu = {
   brand: {
-    name: "NeiroHub",
+    name: brandName,
   },
   navigation: {
     home: "Главная",

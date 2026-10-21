@@ -31,12 +31,15 @@
   inline-size: 2.5rem;
   block-size: 2.5rem;
   place-items: center;
+  border: 0.0625rem solid var(--color-border);
   border-radius: var(--radius-sm);
-  background: var(--color-accent);
-  color: var(--color-text);
-  font-size: 0.75rem;
-  font-weight: 800;
-  letter-spacing: 0.04em;
+  background: transparent;
+  color: #fff;
+}
+
+.avatarMark {
+  inline-size: 70%;
+  block-size: 70%;
 }
 
 .identity {

@@ -39,7 +39,9 @@ describe("primary interface typography", () => {
       }
 
       const matches = Array.from(
-        stylesheet(relative(process.cwd(), path)).matchAll(/font-weight:\s*(500|600|650|700|750)\s*;/g),
+        // Font-file descriptors require literal weights; interface rules use tokens.
+        stylesheet(relative(process.cwd(), path)).replace(/@font-face\s*\{[^}]*\}/g, "")
+          .matchAll(/font-weight:\s*(500|600|650|700|750)\s*;/g),
       );
 
       return matches.map((match) => `${relative(process.cwd(), path)}: ${match[0]}`);

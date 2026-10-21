@@ -1,5 +1,7 @@
 "use client";
 
+import { BrandText } from "@/components/brand/BrandName/BrandName";
+
 import { useMessages, useDictionary } from "@/i18n/LocaleProvider";
 
 import Link from "@/i18n/Link";
@@ -80,9 +82,9 @@ export function ModelCard(props: Readonly<ModelCardProps>) {
       >
         <ModelIcon className={styles.selectorIcon} src={presentation.artworkSrc} />
         <span className={styles.selectorCopy}>
-          <span className={styles.selectorTitle}>{model.name}</span>
+          <span className={styles.selectorTitle}><BrandText>{model.name}</BrandText></span>
           <span className={styles.selectorDescription} hidden={props.descriptionMode === "tooltip"} id={props.descriptionId}>
-            {props.descriptionContent ?? presentation.description}
+            {props.descriptionContent ?? <BrandText>{presentation.description}</BrandText>}
           </span>
         </span>
       </button>
@@ -103,8 +105,8 @@ export function ModelCard(props: Readonly<ModelCardProps>) {
         {minimumPrice !== null ? <CreditAmount className={styles.price} value={minimumPrice} /> : null}
       </div>
       <div className={styles.copy}>
-        <h3>{model.name}</h3>
-        <p>{presentation.description}</p>
+        <h3><BrandText>{model.name}</BrandText></h3>
+        <p><BrandText>{presentation.description}</BrandText></p>
       </div>
     </article>
   );

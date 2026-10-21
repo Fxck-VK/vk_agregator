@@ -1,3 +1,4 @@
+import { brandFilePrefix, brandName } from "@/config/brand";
 import { getTranslator, type Translator } from "@/i18n/messages";
 
 import { assetPaths } from "@/assets/asset-paths";
@@ -31,10 +32,10 @@ function uploadedExample(example: UploadedExample, msg: Translator = getTranslat
   return {
     ...example,
     modelId: example.mediaType === "video" ? "video-example" : "image-example",
-    modelName: "NeiroHub",
+    modelName: brandName,
     quality: example.mediaType === "video" ? msg("inspirationExamples.video") : msg("inspirationExamples.image"),
     prompt: msg("inspirationExamples.noPromptIsProvidedForThisExample"),
-    downloadName: `neirohub-${example.id}.${example.mediaType === "video" ? "mp4" : "png"}`,
+    downloadName: `${brandFilePrefix}-${example.id}.${example.mediaType === "video" ? "mp4" : "png"}`,
     openLabel: msg("inspirationExamples.openTheValueExample", { value1: example.title }),
     canRecreate: false,
   };
@@ -56,7 +57,7 @@ export function getInspirationExamples(locale: Locale = "ru"): readonly Inspirat
       mediaHeight: 1536,
       title: t.inspiration.exampleTitle,
       prompt: t.inspiration.prompt,
-      downloadName: "neirohub-paper-crane-cloud.png",
+      downloadName: `${brandFilePrefix}-paper-crane-cloud.png`,
       openLabel: t.inspiration.openExample,
       canRecreate: true,
     },

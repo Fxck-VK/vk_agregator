@@ -55,7 +55,7 @@
 `WEB_ORIGIN` — доверенный server-only публичный origin без пути, query и credentials.
 В production обязателен при обращении к публичным metadata/robots/sitemap.
 Текущий DEV overlay передаёт существующий `WEB_ORIGIN` контейнеру platform.
-В локальной разработке без настройки используется `http://localhost:7158`.
+В локальной разработке без настройки используется `http://localhost:7159`.
 Canonical никогда не строится из клиентских Host/Forwarded заголовков.
 
 `seo.ts` формирует self-canonical каждой версии и взаимные `hreflang`; `x-default`

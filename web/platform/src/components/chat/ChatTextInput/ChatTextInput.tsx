@@ -1,6 +1,8 @@
 "use client";
 
 import { useMessages } from "@/i18n/LocaleProvider";
+import { brandPlaceholderClassName } from "@/components/brand/BrandName/BrandName";
+import { brandName } from "@/config/brand";
 
 import {
   useCallback,
@@ -166,7 +168,7 @@ export function ChatTextInput({
         ref={rootRef}
         trackPlacement="inset"
         viewportAs="textarea"
-        viewportClassName={`${styles.input} ${styles[appearance]} ${styles[size]}`}
+        viewportClassName={`${styles.input} ${styles[appearance]} ${styles[size]} ${placeholder.includes(brandName) ? brandPlaceholderClassName : ""}`}
         viewportProps={{
           dir: "auto",
           disabled,

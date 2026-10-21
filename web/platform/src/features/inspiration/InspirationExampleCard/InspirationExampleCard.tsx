@@ -1,11 +1,16 @@
 "use client";
 
+import { BrandText } from "@/components/brand/BrandName/BrandName";
+import { BrandLogo } from "@/components/brand/BrandLogo/BrandLogo";
+import { brandName } from "@/config/brand";
+
 import { useDictionary } from "@/i18n/LocaleProvider";
 
 
 import { useRef, useState } from "react";
 
 import { ModelIcon } from "@/features/models/ModelIcon/ModelIcon";
+import { getModelIconPath } from "@/features/models/model-icon-registry";
 
 import { InspirationExampleMedia } from "../InspirationExampleMedia/InspirationExampleMedia";
 import type { InspirationExample } from "../inspiration-examples";
@@ -75,8 +80,12 @@ export function InspirationExampleCard({
         <span className={styles.cardShade} />
         <span className={styles.cardAction}>{t.inspiration.details}</span>
         <span className={styles.cardMeta}>
-          <ModelIcon className={styles.modelMark} />
-          <span>{example.modelName}</span>
+          {example.modelName === brandName ? (
+            <BrandLogo className={styles.modelMark} size={32} />
+          ) : (
+            <ModelIcon className={styles.modelMark} src={getModelIconPath(example.modelId)} />
+          )}
+          <span><BrandText>{example.modelName}</BrandText></span>
         </span>
       </button>
 

@@ -7,9 +7,8 @@ $repoRoot = (Resolve-Path (Join-Path $PSScriptRoot "../..")).Path
 $tempParent = [IO.Path]::GetFullPath([IO.Path]::GetTempPath())
 $tempRoot = Join-Path $tempParent ("migration-safety-" + [guid]::NewGuid().ToString("N"))
 $pwsh = Join-Path $PSHOME $(if ($IsWindows) { "pwsh.exe" } else { "pwsh" })
-$bash = if ($IsWindows -and (Test-Path 'C:/Program Files/Git/bin/bash.exe')) {
-    'C:/Program Files/Git/bin/bash.exe'
-} else { (Get-Command bash -ErrorAction Stop).Source }
+Import-Module (Join-Path $PSScriptRoot "BashRuntime.psm1") -Force
+Assert-CIBashEnvironment -RequiredCommands @("bash", "grep", "sha256sum", "tr")
 $utf8 = [Text.UTF8Encoding]::new($false)
 
 try {
@@ -17,6 +16,8 @@ try {
     New-Item -ItemType Directory -Path $migrations -Force | Out-Null
     $envFile = Join-Path $tempRoot "test.env"
     [IO.File]::WriteAllText($envFile, "APP_ENV=development`n", $utf8)
+    $bashEnvFile = ConvertTo-CIBashPath -Path $envFile
+    $bashMigrations = ConvertTo-CIBashPath -Path $migrations
     $reviewedName = "000052_text_model_pricing.up.sql"
     $reviewedSql = [IO.File]::ReadAllText((Join-Path $repoRoot "migrations/$reviewedName")).Replace("`r`n", "`n")
     $yandexName = "000058_yandex_identity.up.sql"
@@ -44,11 +45,14 @@ try {
         foreach ($runner in @("PowerShell", "Bash")) {
             if ($runner -eq "PowerShell") {
                 $output = & $pwsh -NoProfile -File (Join-Path $repoRoot "scripts/deploy/check-migrations-safe.ps1") -EnvFile $envFile -MigrationsDir $migrations 2>&1
+                $exitCode = $LASTEXITCODE
             } else {
-                $output = & $bash -l (Join-Path $repoRoot "scripts/deploy/check-migrations-safe.sh").Replace('\', '/') --env-file $envFile.Replace('\', '/') --migrations-dir $migrations.Replace('\', '/') 2>&1
+                $bashResult = Invoke-CIBashScript -RepositoryRoot $repoRoot -ScriptPath "scripts/deploy/check-migrations-safe.sh" -ScriptArguments @("--env-file", $bashEnvFile, "--migrations-dir", $bashMigrations)
+                $output = $bashResult.Output
+                $exitCode = $bashResult.ExitCode
             }
-            if ($LASTEXITCODE -ne $case.Exit) {
-                throw "$runner / $($case.Name): expected exit $($case.Exit), got $LASTEXITCODE`n$($output -join "`n")"
+            if ($exitCode -ne $case.Exit) {
+                throw "$runner / $($case.Name): expected exit $($case.Exit), got $exitCode`n$($output -join "`n")"
             }
             $expectedMessage = if ($case.Exit -eq 0) { 'Migration safety check OK' } else { 'Destructive migration patterns detected' }
             if (($output -join "`n") -notmatch $expectedMessage) {

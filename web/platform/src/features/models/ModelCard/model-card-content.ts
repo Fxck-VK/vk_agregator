@@ -1,5 +1,6 @@
 import { getTranslator, type Translator } from "@/i18n/messages";
 import { localizedText, translateCatalogText, type LocalizedText } from "@/i18n/catalog";
+import { getModelIconPath } from "../model-icon-registry";
 
 export type ModelPresentation = {
   artworkSrc?: string;
@@ -23,7 +24,7 @@ export function modelWorkspaceHref(model: { id: string; category?: unknown }): s
 
 export function getModelPresentation(model: ModelPresentationSource, msg: Translator = getTranslator("ru")): ModelPresentation {
   return {
-    artworkSrc: model.artworkSrc,
+    artworkSrc: getModelIconPath(model.id) ?? model.artworkSrc,
     description: localizedText(model.description_translations, msg.locale,
       model.description ? translateCatalogText(model.description, msg) : msg("modelCardContent.valueIsAvailableInNeirohub", { value1: model.name })),
     href: modelWorkspaceHref(model),

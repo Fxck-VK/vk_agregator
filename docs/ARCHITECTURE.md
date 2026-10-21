@@ -11,6 +11,12 @@
 ---
 
 # Current implementation addendum: app surfaces and backend core
+Public brand metadata lives in `web/platform/branding/brand.json`. The website
+imports it through `src/config/brand.ts`; the dependency-free Go package in the
+same directory embeds it for verification and security-notice emails. Rebuild
+both images after a rename. API images copy the shared package at build time;
+email delivery does not read website files at runtime.
+
 Website image cards request `image-artifacts/:id?preview=1`. The web-session
 adapter authorizes the parent account, ready artifact, web job and moderated
 completed result before every thumbnail read. `imagepreview` reuses the private

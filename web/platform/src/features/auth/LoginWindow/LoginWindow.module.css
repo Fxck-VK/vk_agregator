@@ -1,0 +1,48 @@
+.window {
+  position: relative;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+  inline-size: 100%;
+  block-size: 100%;
+  min-block-size: 0;
+  padding: .75rem;
+  background: #101114;
+  color: var(--color-text-on-dark);
+}
+.account {
+  display: grid;
+  min-inline-size: 0;
+  min-block-size: 0;
+  padding: clamp(1rem, 4dvh, 3rem) clamp(1.25rem, 4vw, 5rem);
+}
+.formArea {
+  display: grid;
+  min-inline-size: 0;
+  min-block-size: 0;
+  align-content: safe center;
+  justify-items: center;
+  overflow-y: auto;
+  scrollbar-width: thin;
+  padding: .25rem;
+}
+.window .close {
+  position: absolute;
+  z-index: 4;
+  inset-block-start: max(1.25rem, env(safe-area-inset-top));
+  inset-inline-end: max(1.25rem, env(safe-area-inset-right));
+  border: 0;
+  background: rgb(16 17 20 / 45%);
+  color: var(--color-text-on-dark);
+}
+@media (max-width: 70rem) { .account { padding-inline: 1.25rem; } }
+@media (max-width: 60rem) {
+  .window { grid-template-columns: minmax(0, 1fr); padding: 0; }
+  .account {
+    padding: max(3.75rem, env(safe-area-inset-top)) max(1.25rem, env(safe-area-inset-right)) max(1.25rem, env(safe-area-inset-bottom)) max(1.25rem, env(safe-area-inset-left));
+  }
+  .window .close { background: transparent; }
+}
+@media (max-width: 60rem) and (max-height: 45rem) {
+  .account { padding-block: max(3.25rem, env(safe-area-inset-top)) max(.75rem, env(safe-area-inset-bottom)); }
+  .window .close { inset-block-start: max(.5rem, env(safe-area-inset-top)); inset-inline-end: .75rem; }
+}

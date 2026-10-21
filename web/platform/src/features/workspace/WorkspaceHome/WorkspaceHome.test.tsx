@@ -1,3 +1,4 @@
+import { brandName } from "@/config/brand";
 import { renderToStaticMarkup } from "react-dom/server";
 import { fireEvent, render, screen, within } from "@testing-library/react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
@@ -20,7 +21,7 @@ import { WorkspaceHome } from "./WorkspaceHome";
 
 const chatModel = {
   id: "neirohub-chat",
-  name: "NeiroHub Chat",
+  name: `${brandName} Chat`,
   description: "Текстовая модель из общего каталога",
   category: "text" as const,
   categories: ["popular", "text", "study-work", "free"],
@@ -43,14 +44,14 @@ describe("WorkspaceHome", () => {
     vi.mocked(loadGenerationModelCatalog).mockResolvedValue(generationCatalog());
   });
 
-  it("omits the standalone NeiroHub eyebrow from generic section headings", () => {
+  it(`omits the standalone ${brandName} eyebrow from generic section headings`, () => {
     const markup = renderToStaticMarkup(<WorkspaceHome section="models" />);
 
     expect(markup).toContain(ru.workspace.sections.models.title);
     expect(markup).not.toMatch(/<p[^>]*>NeiroHub<\/p>/);
   });
 
-  it("renders the complete NeiroHub overview only on the workspace home route", () => {
+  it(`renders the complete ${brandName} overview only on the workspace home route`, () => {
     const markup = renderToStaticMarkup(
       <WorkspaceConversationListProvider accountId="workspace-home-test-account" initialConversations={[]}>
         <WorkspaceHome />
@@ -64,7 +65,7 @@ describe("WorkspaceHome", () => {
     expect(markup).toContain("Популярные нейросети");
     expect(markup).not.toContain("Один аккаунт — разные сценарии");
     expect(markup).not.toContain("Нейросети для разных задач");
-    expect(markup).toContain("Как работает NeiroHub");
+    expect(text).toContain(`Как работает ${brandName}`);
     expect(markup).not.toContain("Видео скоро появится");
     expect(markup).not.toContain("Сформулируйте задачу");
     expect(markup).toContain("<video");
@@ -73,7 +74,7 @@ describe("WorkspaceHome", () => {
     expect(markup).toContain('poster="/assets/images/workspace/neirohub-how-it-works-poster.png"');
     expect(markup).toContain('src="/assets/videos/workspace/neirohub-how-it-works.mp4"');
     expect(markup).toContain('type="video/mp4"');
-    expect(markup).toContain('aria-label="Воспроизвести: Как работает NeiroHub"');
+    expect(markup).toContain(`aria-label="Воспроизвести: Как работает ${brandName}"`);
     expect(markup).toContain("Откройте новые возможности");
     expect(markup).toContain("Lite");
     expect(markup).toContain("400");
@@ -92,8 +93,8 @@ describe("WorkspaceHome", () => {
     expect(markup).toContain("Частые вопросы");
     expect(markup.match(/<details/g)).toHaveLength(5);
     for (const question of [
-      "Что такое NeiroHub?",
-      "Что такое собственные нейросети NeiroHub?",
+      `Что такое ${brandName}?`,
+      `Что такое собственные нейросети ${brandName}?`,
       "Что такое токены и подписка?",
       "Как купить подписку?",
       "Есть ли бесплатный доступ?",
@@ -114,7 +115,7 @@ describe("WorkspaceHome", () => {
     expect(markup).toContain(">Telegram</span>");
     expect(markup).toContain('href="https://vk.me/neirohub_help"');
     expect(markup).toContain(">ВКонтакте</a>");
-    expect(markup).not.toContain("Сообщество NeiroHub");
+    expect(markup).not.toContain(`Сообщество ${brandName}`);
     expect(markup).not.toContain("Перейти во вдохновение");
     expect(markup).not.toContain("Открыть мои файлы");
     expect(markup).toContain('href="/ru/app/image"');
@@ -302,7 +303,7 @@ describe("WorkspaceHome", () => {
       "Seedream 4.5",
     ]);
     expect(shortcuts[0]).not.toHaveAttribute("href");
-    expect(within(shortcutsNavigation).getByRole("button", { name: "Выбрать модель: NeiroHub Chat" })).toHaveAttribute("aria-pressed", "true");
+    expect(within(shortcutsNavigation).getByRole("button", { name: `Выбрать модель: ${brandName} Chat` })).toHaveAttribute("aria-pressed", "true");
     expect(shortcutsNavigation).not.toHaveTextContent("Генератор изображений");
     expect(shortcutsNavigation).not.toHaveTextContent("Каталог нейросетей");
     expect(shortcutsNavigation).not.toHaveTextContent("Вдохновение");

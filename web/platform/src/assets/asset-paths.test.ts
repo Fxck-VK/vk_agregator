@@ -5,6 +5,7 @@ import { assetPaths } from "./asset-paths";
 describe("assetPaths", () => {
   it("exposes stable account-menu icon URLs", () => {
     expect(assetPaths.icons.accountMenu).toEqual({
+      avatar: "/assets/images/models/chip-silhouette.svg",
       logout: "/assets/icons/account-menu/logout.svg",
       megaphone: "/assets/icons/account-menu/megaphone.svg",
       profile: "/assets/icons/account-menu/profile.svg",

@@ -1,0 +1,16 @@
+# Filesystem scans only. Release image scans must not use these exclusions.
+scan:
+  skip-dirs:
+    - .runtime
+    - .cache
+    - node_modules
+    - "**/node_modules"
+    - web/platform/.next
+    - web/miniapp/dist
+    - web/admin/dist
+    - coverage
+    - web/platform/coverage
+    - web/miniapp/coverage
+    - web/admin/coverage
+    - web/platform/playwright-report
+    - web/platform/test-results

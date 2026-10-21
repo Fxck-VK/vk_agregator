@@ -27,6 +27,12 @@ $nextRouteTestPath = Join-Path $repoRoot "scripts\ci\test-next-route-discovery.p
 $preflightModulePath = Join-Path $repoRoot "scripts\ci\DevDeployPreflight.psm1"
 $preflightScriptPath = Join-Path $repoRoot "scripts\ci\dev-deploy-preflight.ps1"
 $preflightTestPath = Join-Path $repoRoot "scripts\ci\test-dev-deploy-preflight.ps1"
+$trivyFilesystemConfigPath = Join-Path $repoRoot "trivy-filesystem.yaml"
+$trivyScopeModulePath = Join-Path $repoRoot "scripts\ci\TrivyFilesystemScope.psm1"
+$trivyScopeValidatorPath = Join-Path $repoRoot "scripts\ci\validate-trivy-filesystem-scope.ps1"
+$trivyScopeTestPath = Join-Path $repoRoot "scripts\ci\test-trivy-filesystem-scope.ps1"
+$bashRuntimeModulePath = Join-Path $repoRoot "scripts\ci\BashRuntime.psm1"
+$bashRuntimeTestPath = Join-Path $repoRoot "scripts\ci\test-bash-runtime.ps1"
 
 $expectedDockerfiles = @(
     "Dockerfile.api",
@@ -92,10 +98,13 @@ foreach ($path in @($nightlyPath, $ciPath, $dockerImagesPath)) {
     }
 }
 
-foreach ($path in @($deployProdPath, $deployDevPath, $deployProdScriptPath, $deployDevScriptPath, $rollbackProdScriptPath, $composePullRetryPath, $dependabotPath, $codeownersPath, $releaseVerifierTestPath, $cosignInstallerPath, $trivyInstallerPath, $npmLockValidatorPath, $workflowWaiterPath, $workflowWaiterTestPath, $nextRouteModulePath, $nextRouteTestPath, $preflightModulePath, $preflightScriptPath, $preflightTestPath)) {
+foreach ($path in @($deployProdPath, $deployDevPath, $deployProdScriptPath, $deployDevScriptPath, $rollbackProdScriptPath, $composePullRetryPath, $dependabotPath, $codeownersPath, $releaseVerifierTestPath, $cosignInstallerPath, $trivyInstallerPath, $npmLockValidatorPath, $workflowWaiterPath, $workflowWaiterTestPath, $nextRouteModulePath, $nextRouteTestPath, $preflightModulePath, $preflightScriptPath, $preflightTestPath, $trivyFilesystemConfigPath, $trivyScopeModulePath, $trivyScopeValidatorPath, $trivyScopeTestPath)) {
     if (-not (Test-Path -LiteralPath $path -PathType Leaf)) {
         throw "required supply-chain policy file is missing: $path"
     }
+}
+foreach ($path in @($bashRuntimeModulePath, $bashRuntimeTestPath)) {
+    if (-not (Test-Path -LiteralPath $path -PathType Leaf)) { throw "required Bash runtime policy file is missing: $path" }
 }
 
 $nightly = Get-Content -LiteralPath $nightlyPath -Raw
@@ -226,12 +235,25 @@ Assert-Contains $workflowWaiter 'delay_seconds=$((delay_seconds * 2))' 'GitHub w
 Assert-Contains $ci 'bash scripts/ci/test-wait-for-github-workflow.sh' 'GitHub workflow monitor regression test'
 Assert-Contains $ci './scripts/ci/test-next-route-discovery.ps1' 'Next.js route discovery regression test'
 Assert-Contains $ci './scripts/ci/test-dev-deploy-preflight.ps1' 'DEV preflight regression test'
+Assert-Contains $ci './scripts/ci/test-trivy-filesystem-scope.ps1' 'Trivy filesystem scope regression test'
+Assert-Contains $ci './scripts/ci/test-bash-runtime.ps1' 'Explicit Bash runtime regression test'
+Assert-Contains $nightly './scripts/ci/validate-trivy-filesystem-scope.ps1' 'Nightly filesystem scope guard'
+Assert-Contains $nightly '--config trivy-filesystem.yaml' 'Nightly explicit filesystem config'
 Assert-Contains (Get-Content -LiteralPath $preflightScriptPath -Raw) '"status", "--porcelain", "--untracked-files=all"' 'DEV preflight clean commit check'
 Assert-Contains (Get-Content -LiteralPath $preflightScriptPath -Raw) 'scripts/ci/test-wait-for-github-workflow.sh' 'DEV preflight workflow monitor regression test'
 Assert-Contains (Get-Content -LiteralPath $preflightScriptPath -Raw) 'Install-NpmDependenciesIfNeeded -PackagePath $packagePath' 'DEV preflight lockfile-scoped npm bootstrap'
 Assert-Contains (Get-Content -LiteralPath $preflightScriptPath -Raw) '"--prefix", $PackagePath, "ci"' 'DEV preflight reproducible npm install'
 Assert-Contains (Get-Content -LiteralPath $preflightModulePath -Raw) '$CommitSha-$stage.ok' 'DEV preflight exact-commit stage cache'
-Assert-Contains (Get-Content -LiteralPath $preflightScriptPath -Raw) '"--skip-dirs", "**/node_modules"' 'DEV preflight efficient lockfile-first Trivy scan'
+$preflightScript = Get-Content -LiteralPath $preflightScriptPath -Raw
+Assert-Contains $preflightScript '"--config", "/src/trivy-filesystem.yaml"' 'DEV preflight explicit filesystem config'
+Assert-Contains $preflightScript 'Assert-TrivyFilesystemScanScope -RepositoryRoot $repoRoot' 'DEV preflight filesystem scope guard'
+Assert-Contains $preflightScript 'scripts/ci/test-trivy-filesystem-scope.ps1' 'DEV preflight scope regression test'
+Assert-Contains $preflightScript 'Assert-CIBashEnvironment' 'DEV preflight early Bash prerequisite check'
+Assert-Contains $preflightScript 'Invoke-CIBashScript -RepositoryRoot $repoRoot' 'DEV preflight explicit Bash runtime'
+Assert-NotMatch $preflightScript 'Invoke-Native -Command "bash"' 'DEV preflight PATH-selected Bash'
+& $trivyScopeValidatorPath
+if ($LASTEXITCODE -ne 0) { throw 'Trivy filesystem exclusion scope validation failed' }
+Assert-NotMatch $dockerImages 'trivy-filesystem\.yaml' 'Release image scan filesystem exclusions'
 Assert-Contains $validateInfra 'Resolve-NextAppRoutePage -AppRoot $platformAppRoot -Route "/"' 'Semantic platform root route validation'
 Assert-NotMatch $validateInfra 'web\\platform\\src\\app\\\(public\)\\page\.tsx' 'Physical platform root route validation'
 

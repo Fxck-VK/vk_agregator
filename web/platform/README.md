@@ -1,9 +1,15 @@
-# NeiroHub Web Platform
+# Epifera Web Platform
 
-Standalone TypeScript, React and Next.js application for the NeiroHub browser
+Standalone TypeScript, React and Next.js application for the Epifera browser
 platform. It is an independently buildable frontend over the shared Go backend;
 it does not replace the backend's identity, billing, jobs, artifacts, or
 provider boundaries.
+
+## Active workspace
+
+Use only `C:/Users/Lenovo/Documents/агрегатор/epifera-domain-cutover` for local development.
+The shared preview URL is `http://localhost:7159`. Reuse its existing server;
+do not start another checkout or change ports for routine work.
 
 ## Local commands
 
@@ -23,7 +29,7 @@ docker build -f Dockerfile.platform -t neirohub-platform:local .
 ## Local platform setup
 
 For UI work without a backend, run `npm --prefix web/platform run dev:preview`
-from the repository root and open `http://localhost:7158/ru/app`. The local-only
+from the repository root and open `http://localhost:7159/ru/app`. The local-only
 "Локальная проверка" panel controls upload success, errors, slow progress and
 quote errors, message sending and delayed test replies. Attached photos remain
 visible in local message history until the tab reloads. See [local UI scenarios](docs/local-development.md) for a complete
@@ -38,14 +44,14 @@ server-only platform setting and must never use a `NEXT_PUBLIC_` name.
 `config.example` documents the safe local value; copy it only into an ignored
 local environment file when needed.
 
-UI pages use language prefixes: `http://localhost:7158/ru/app` and
-`http://localhost:7158/en/app`. The URL determines language; old unprefixed page
+UI pages use language prefixes: `http://localhost:7159/ru/app` and
+`http://localhost:7159/en/app`. The URL determines language; old unprefixed page
 links redirect using the saved preference. See [locale routing](docs/locale-routing.md)
 and [the dictionary guide](docs/localization.md).
 
 Set the server-only `WEB_ORIGIN` to this frontend's public HTTP(S) origin.
 Production runtime requires it for canonical URLs, language alternates,
-`sitemap.xml` and `robots.txt`; development defaults to `http://localhost:7158`.
+`sitemap.xml` and `robots.txt`; development defaults to `http://localhost:7159`.
 The remote DEV overlay passes its existing `WEB_ORIGIN` to the platform as well
 as the API. Request Host headers are never used to generate public SEO URLs.
 

@@ -1,3 +1,4 @@
+import { brandName } from "@/config/brand";
 vi.mock("server-only", () => ({}));
 vi.mock("next/navigation", () => ({ useRouter: vi.fn() }));
 vi.mock("next/headers", () => ({ headers: vi.fn(async () => new Headers()), cookies: vi.fn(async () => ({ get: () => undefined })) }));
@@ -23,7 +24,7 @@ describe("HomePage", () => {
     const markup = renderToStaticMarkup(await HomePage());
 
     expect(connection).toHaveBeenCalledOnce();
-    expect(markup).toContain("NeiroHub");
+    expect(markup).toContain(`${brandName}`);
     expect(markup).toContain('href="/ru/app"');
     expect(markup).toContain("data-size=\"narrow\"");
   });

@@ -1,5 +1,7 @@
 "use client";
 
+import { BrandText } from "@/components/brand/BrandName/BrandName";
+
 import { useEffect, useState, useSyncExternalStore } from "react";
 import { z } from "zod";
 import { useDictionary, useLocale } from "@/i18n/LocaleProvider";
@@ -77,7 +79,7 @@ function AccountReferralProgram({ accountId, preview = false }: ProfileReferralP
   return (
     <div className={styles.program}>
       <section aria-labelledby="profile-referral-launch-title" className={styles.launchCard}>
-        <h2 id="profile-referral-launch-title">{t.profile.referralLaunchTitle}</h2>
+        <h2 id="profile-referral-launch-title"><BrandText>{t.profile.referralLaunchTitle}</BrandText></h2>
         <p>{t.profile.referralLaunchDescription}</p>
         {preview ? <StateNotice>{t.profile.referralStatisticsUnavailable}</StateNotice> : code ? <div className={styles.invitation}>
             <label htmlFor="profile-referral-url">{t.profile.referralLinkLabel}</label>
