@@ -43,6 +43,7 @@ import { startGenerationPolling } from "@/lib/generation-polling";
 import type { GenerationOptions } from "@/features/models/generation-options";
 
 import { readPendingMediaJob, savePendingMediaJob, clearPendingMediaJob, pendingImagePreview } from "../pending-media-job";
+import { readPendingTextJob, savePendingTextJob, clearPendingTextJob } from "../pending-text-job";
 import styles from "./ConversationHistory.module.css";
 
 type ConversationHistoryProps = {
@@ -106,11 +107,13 @@ function ConversationHistoryReady({
   const replaceConversation = workspaceConversationList?.replaceConversation;
   const updateConversationTitle = workspaceConversationList?.updateConversationTitle;
   const [savedMediaJob] = useState(() => readPendingMediaJob(history.conversationId));
+  const [savedTextJob] = useState(() => readPendingTextJob(history.conversationId));
   const resumeMedia = savedMediaJob !== null && !history.messages.some(message => message.role === "assistant" && message.seq > savedMediaJob.baselineSeq);
-  const initialRefreshBaselineSeq = resumeMedia ? savedMediaJob.baselineSeq : history.messages.at(-1)?.seq ?? 0;
-  const shouldStartInitialRefresh = !loading && !failed && (resumeMedia || initialRefresh && !history.messages.some((message) => message.role === "assistant"));
+  const resumeText = savedTextJob !== null && !history.messages.some(message => message.role === "assistant" && message.seq > savedTextJob.baselineSeq);
+  const initialRefreshBaselineSeq = resumeMedia ? savedMediaJob.baselineSeq : resumeText ? savedTextJob.baselineSeq : history.messages.at(-1)?.seq ?? 0;
+  const shouldStartInitialRefresh = !loading && !failed && (resumeMedia || resumeText || initialRefresh && !history.messages.some((message) => message.role === "assistant"));
   const initialRefreshRequest = shouldStartInitialRefresh
-    ? { id: 1, baselineSeq: initialRefreshBaselineSeq, ...(resumeMedia ? {jobID:savedMediaJob.jobID,media:true,image:savedMediaJob.image} : {}) }
+    ? { id: 1, baselineSeq: initialRefreshBaselineSeq, ...(resumeMedia ? {jobID:savedMediaJob.jobID,media:true,image:savedMediaJob.image} : resumeText ? { jobID: savedTextJob.jobID } : {}) }
     : null;
   const [messages, setMessages] = useState(history.messages);
   const [previousHistory, setPreviousHistory] = useState(history);
@@ -136,6 +139,7 @@ function ConversationHistoryReady({
     setActiveRefreshID(initialRefreshRequest.id);
   }
   const [refreshDelayed, setRefreshDelayed] = useState(false);
+  const [generationFailed, setGenerationFailed] = useState(false);
   const [pendingTurn, setPendingTurn] = useState<PendingTurn | null>(null);
   const [forceScrollRequest, setForceScrollRequest] = useState(0);
   const [workspaceScrollRegion, setWorkspaceScrollRegion] = useState<HTMLElement | null>(null);
@@ -143,6 +147,10 @@ function ConversationHistoryReady({
   const [titleSyncFallback, setTitleSyncFallback] = useState(() => readPendingConversationTitleSync(history.conversationId));
   const refreshSequenceRef = useRef(initialRefreshRequest?.id ?? 0);
   const composerDraftRequestSequenceRef = useRef(0);
+
+  useEffect(() => {
+    if (savedTextJob && !resumeText && !loading && !failed) clearPendingTextJob(history.conversationId);
+  }, [failed, history.conversationId, loading, resumeText, savedTextJob]);
 
   useEffect(() => {
     if (!loading && !failed) cache?.setConversationHistory({
@@ -218,6 +226,7 @@ function ConversationHistoryReady({
     if (turn.idempotencyKey === null) return false;
 
     setRefreshDelayed(false);
+    setGenerationFailed(false);
     setPendingTurn({ ...turn, status: "sending" });
     setActiveRefreshID(turn.id);
     setForceScrollRequest((currentRequest) => currentRequest + 1);
@@ -242,8 +251,14 @@ function ConversationHistoryReady({
       setPendingTurn((currentTurn) => currentTurn?.id === turn.id
         ? { ...currentTurn, status: "accepted" }
         : currentTurn);
-      if (turn.generationOptions) savePendingMediaJob(history.conversationId, job.job_id, turn.baselineSeq, turn.generationOptions);
-      setPollRequest({ id: turn.id, baselineSeq: turn.baselineSeq, jobID: turn.generationOptions ? job.job_id : undefined, media: turn.generationOptions !== undefined, image: turn.image });
+      if (turn.generationOptions) {
+        clearPendingTextJob(history.conversationId);
+        savePendingMediaJob(history.conversationId, job.job_id, turn.baselineSeq, turn.generationOptions);
+      } else {
+        clearPendingMediaJob(history.conversationId);
+        savePendingTextJob(history.conversationId, job.job_id, turn.baselineSeq);
+      }
+      setPollRequest({ id: turn.id, baselineSeq: turn.baselineSeq, jobID: job.job_id, media: turn.generationOptions !== undefined, image: turn.image });
       return true;
     } catch {
       setActiveRefreshID((currentID) => currentID === turn.id ? null : currentID);
@@ -338,28 +353,33 @@ function ConversationHistoryReady({
     const deadlineMs = pollRequest.media ? 900_000 : conversationRefreshDeadlineMs;
     let afterSeq = pollRequest.baselineSeq;
     const clearActiveRefresh = () => setActiveRefreshID((currentID) => currentID === pollRequest.id ? null : currentID);
+    const checkTerminalJob = async (signal: AbortSignal) => {
+      if (!pollRequest.jobID) return false;
+      const response = await webBrowserFetch(`/web/v1/conversations/${history.conversationId}/jobs/${pollRequest.jobID}`, { signal });
+      if (signal.aborted || response.status !== 200) return false;
+      const job = parseWebChatJob(await response.json());
+      if (signal.aborted) return false;
+      if (job.job_id !== pollRequest.jobID) throw new Error("Unable to refresh job status.");
+      if (!["failed_terminal", "cancelled", "expired", "refunded", "rejected", "awaiting_payment"].includes(job.status)) return false;
+      clearPendingMediaJob(history.conversationId);
+      clearPendingTextJob(history.conversationId);
+      setGenerationFailed(true);
+      setRefreshDelayed(false);
+      clearActiveRefresh();
+      return true;
+    };
     const polling = startGenerationPolling({
       delayMs: conversationRefreshIntervalMs, maxAttempts, timeoutMs: deadlineMs,
-      onExhausted: clearActiveRefresh,
+      onExhausted: () => {
+        setRefreshDelayed(true);
+        clearActiveRefresh();
+      },
       poll: async (signal) => {
       const requestCursor = afterSeq;
       let assistantObserved = false;
       try {
-        if (pollRequest.jobID) {
-          const statusResponse = await webBrowserFetch(`/web/v1/conversations/${history.conversationId}/jobs/${pollRequest.jobID}`, { signal });
-          if (signal.aborted) return false;
-          if (statusResponse.status === 200) {
-            const job = parseWebChatJob(await statusResponse.json());
-            if (signal.aborted) return false;
-            if (["failed_terminal","cancelled","expired","refunded","rejected","awaiting_payment"].includes(job.status)) {
-              clearPendingMediaJob(history.conversationId);
-              setRefreshDelayed(true);
-              setPendingTurn(null);
-              clearActiveRefresh();
-              return false;
-            }
-          }
-        }
+        if (pollRequest.media && await checkTerminalJob(signal)) return false;
+        if (signal.aborted) return false;
         const response = await webBrowserFetch(
           `/web/v1/conversations/${history.conversationId}/messages?after_seq=${requestCursor}&limit=${conversationHistoryPageLimit}` as `/web/v1/${string}`,
           { signal },
@@ -397,9 +417,11 @@ function ConversationHistoryReady({
         }
         if (assistantObserved) {
           clearPendingMediaJob(history.conversationId);
+          clearPendingTextJob(history.conversationId);
           setRefreshDelayed(false);
           clearActiveRefresh();
         }
+        if (!assistantObserved && !pollRequest.media && await checkTerminalJob(signal)) return false;
       } catch {
         if (!signal.aborted && navigator.onLine !== false) {
           setRefreshDelayed(true);
@@ -412,6 +434,7 @@ function ConversationHistoryReady({
 
   const pendingTurnIsActive = pendingTurn?.id === activeRefreshID && pendingTurn.status !== "failed";
   const isAwaitingResponse = pendingTurnIsActive || (pendingTurn === null && activeRefreshID !== null);
+  const composerLocked = activeRefreshID !== null || pendingTurn?.status === "sending" || pendingTurn?.status === "failed";
   const hasVisibleMessages = messages.length > 0 || pendingTurn !== null || activeRefreshID !== null;
   const contentVersion = `${messages.at(-1)?.id ?? ""}:${pendingTurn?.id ?? ""}:${pendingTurn?.status ?? ""}:${activeRefreshID ?? ""}`;
 
@@ -428,6 +451,7 @@ function ConversationHistoryReady({
       ) : null}
       <div className={styles.history}>
         {notice}
+        {generationFailed ? <StateNotice inline kind="error">{t.imageGeneration.statusAttention}</StateNotice> : null}
         {refreshDelayed ? (
           <StateNotice inline kind="loading">
             {t.conversations.refreshDelayed}
@@ -497,13 +521,13 @@ function ConversationHistoryReady({
         generationModel={modelSelection.catalog?.items.find((model) => model.id === modelSelection.selectedModelId)}
         contentVersion={contentVersion}
         submitDisabled={loading || failed || modelSelection.status !== "ready"}
-        disabled={pendingTurn !== null || activeRefreshID !== null}
+        disabled={composerLocked}
         forceScrollRequest={forceScrollRequest}
         initialDraft={composerDraftRequest?.text}
         isAwaitingResponse={isAwaitingResponse}
         modelSelector={hasVisibleMessages ? (
           <ConversationModelSelector
-            disabled={pendingTurn !== null || activeRefreshID !== null}
+            disabled={composerLocked}
             selection={modelSelection}
           />
         ) : undefined}

@@ -1,6 +1,7 @@
 package config
 
 import (
+	"slices"
 	"testing"
 	"vk-ai-aggregator/internal/service/providermodels"
 )
@@ -27,14 +28,14 @@ func TestKIETextRequiresExplicitVerificationAndCredentials(t *testing.T) {
 
 func TestAPIMartCandidateDEVReadinessDoesNotForgeFableVerification(t *testing.T) {
 	cfg := Config{Env: "development", FeatureDEVModelSmokeEnabled: true, APIMartProviderEnabled: true, APIMartAPIKey: "fixture", APIMartBaseURL: "https://api.apimart.ai/v1"}
-	if err := cfg.validateAPIMartText(); err != nil || len(cfg.APIMartTextModels()) != 34 {
+	if err := cfg.validateAPIMartText(); err != nil || len(cfg.APIMartTextModels()) != 29 {
 		t.Fatalf("DEV text unavailable: %v", err)
 	}
 	if !cfg.TextModelEnabled("gpt_5") || cfg.TextModelEnabled("unknown") {
 		t.Fatal("wrong text model gate")
 	}
 	cfg.FeatureTextClaudeFable51Enabled = true
-	if cfg.validateAPIMartText() == nil || len(cfg.APIMartTextModels()) != 34 {
+	if cfg.validateAPIMartText() == nil || len(cfg.APIMartTextModels()) != 29 {
 		t.Fatal("manual smoke bypassed Fable verification")
 	}
 	cfg.FeatureTextClaudeFable51Enabled = false
@@ -42,6 +43,27 @@ func TestAPIMartCandidateDEVReadinessDoesNotForgeFableVerification(t *testing.T)
 		cfg.APIMartBaseURL = base
 		if cfg.validateAPIMartText() == nil {
 			t.Fatal("unsafe text base accepted")
+		}
+	}
+}
+
+func TestAPIMartDEVTextExcludesUnavailableExactVersions(t *testing.T) {
+	cfg := Config{Env: "development", FeatureDEVModelSmokeEnabled: true, APIMartProviderEnabled: true, APIMartAPIKey: "fixture", APIMartBaseURL: "https://api.apimart.ai/v1"}
+	unavailable := map[string]bool{
+		"gpt_5_chat_latest":  true,
+		"deepseek_v3_2":      true,
+		"deepseek_v3_2_exp":  true,
+		"deepseek_r1_250528": true,
+		"deepseek_v3_0324":   true,
+	}
+	models := cfg.APIMartTextModels()
+	if len(models) != 29 {
+		t.Errorf("worker DEV text routes=%d, want 29", len(models))
+	}
+	for _, candidate := range providermodels.TextCandidates() {
+		want := !unavailable[candidate.PublicID]
+		if cfg.TextModelEnabled(candidate.PublicID) != want || slices.Contains(models, candidate.ModelCode) != want {
+			t.Errorf("%s API/worker availability mismatch, want %t", candidate.PublicID, want)
 		}
 	}
 }

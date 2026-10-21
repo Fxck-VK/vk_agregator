@@ -54,6 +54,9 @@ func buildDEVSmokeRegistry() Registry {
 	r.devSmoke = true
 	r.smokeFingerprints = map[string]string{}
 	for _, c := range TextCandidates() {
+		if !TextCandidateAvailable(c.PublicID) {
+			continue
+		}
 		q, err := pricingcatalog.TextCandidateQuote(c.PublicID)
 		if err != nil {
 			continue

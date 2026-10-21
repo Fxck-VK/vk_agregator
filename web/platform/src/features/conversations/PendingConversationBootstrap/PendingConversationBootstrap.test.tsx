@@ -2,7 +2,7 @@ import { cleanup, fireEvent, render, screen } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 vi.mock("next/navigation", () => ({ usePathname: vi.fn(), useRouter: vi.fn() }));
-vi.mock("@/lib/web-api/browser", () => ({ webBrowserMutation: vi.fn() }));
+vi.mock("@/lib/web-api/browser", () => ({ webBrowserMutation: vi.fn(), webBrowserFetch: vi.fn() }));
 
 import { usePathname, useRouter } from "next/navigation";
 
@@ -10,7 +10,12 @@ import { savePendingConversationBootstrap } from "@/features/conversations/pendi
 import { SidebarConversations } from "@/features/conversations/SidebarConversations/SidebarConversations";
 import { WorkspaceConversationListProvider } from "@/features/conversations/WorkspaceConversationList/WorkspaceConversationList";
 import { ru } from "@/i18n/ru";
-import { webBrowserMutation } from "@/lib/web-api/browser";
+import { webBrowserFetch, webBrowserMutation } from "@/lib/web-api/browser";
+import { ConversationHistory } from "@/features/conversations/ConversationHistory/ConversationHistory";
+import { GenerationCatalogProvider } from "@/features/models/GenerationCatalogProvider";
+import { projectGenerationModelCatalog } from "@/features/models/generation-model-catalog";
+import { parseModelCatalog } from "@/features/models/model-catalog-contract";
+import { makeModelCatalogFixture } from "@/test/model-catalog";
 
 import { PendingConversationBootstrap } from "./PendingConversationBootstrap";
 
@@ -110,6 +115,31 @@ describe("PendingConversationBootstrap", () => {
       headers: { "Content-Type": "application/json", "X-Idempotency-Key": messageIdempotencyId },
       body: JSON.stringify({ prompt: "Первый вопрос" }),
     });
+  });
+
+  it("restores the accepted first text job and shows its terminal failure without an assistant reply", async () => {
+    vi.mocked(webBrowserMutation)
+      .mockResolvedValueOnce(Response.json({ ...conversation, title: "Chat" }, { status: 201 }))
+      .mockResolvedValueOnce(Response.json(job, { status: 201 }));
+    const pending = renderPending();
+    await vi.waitFor(() => expect(replace).toHaveBeenCalledWith(`/ru/app/chat/${serverConversationId}?refresh=1`));
+    const storageKey = `neirohub:conversation-pending-text:${serverConversationId}`;
+    expect(JSON.parse(window.sessionStorage.getItem(storageKey)!)).toEqual({
+      jobID: job.job_id, baselineSeq: 0, startedAt: expect.any(Number),
+    });
+    pending.unmount();
+    vi.mocked(webBrowserFetch).mockImplementation(async path => path.includes("/jobs/")
+      ? Response.json({ ...job, status: "failed_terminal" })
+      : Response.json({ items: [] }));
+    const catalog = projectGenerationModelCatalog(parseModelCatalog(makeModelCatalogFixture({ text: [{ id: "chatgpt", name: "NeiroHub Chat" }] })));
+    render(<GenerationCatalogProvider initial={catalog}>
+      <ConversationHistory initialRefresh history={{ kind: "ready", conversationId: serverConversationId, messages: [], hasMoreBefore: false }} />
+    </GenerationCatalogProvider>);
+
+    expect(await screen.findByRole("alert")).toHaveTextContent(ru.imageGeneration.statusAttention);
+    expect(webBrowserFetch).toHaveBeenCalledWith(`/web/v1/conversations/${serverConversationId}/jobs/${job.job_id}`, expect.anything());
+    expect(window.sessionStorage.getItem(storageKey)).toBeNull();
+    expect(webBrowserMutation).toHaveBeenCalledTimes(2);
   });
 
   it("keeps the chosen model and idempotency key on first-message retries and subsequent turns", async () => {

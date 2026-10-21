@@ -4,6 +4,7 @@ import { StateNotice } from "@/components/ui/AsyncState/AsyncState";
 import { useDictionary } from "@/i18n/LocaleProvider";
 
 import { pendingImagePreview, savePendingMediaJob } from "../pending-media-job";
+import { savePendingTextJob } from "../pending-text-job";
 
 import { useCallback, useEffect, useRef, useState } from "react";
 import { useRouter } from "@/i18n/navigation";
@@ -88,7 +89,11 @@ export function PendingConversationBootstrap({ conversationKey }: PendingConvers
         throw new Error("Unsafe first message response.");
       }
 
-      if (currentIntent.generationOptions && Object.keys(currentIntent.generationOptions).length > 0) savePendingMediaJob(conversationID, job.job_id, 0, currentIntent.generationOptions);
+      if (currentIntent.generationOptions && Object.keys(currentIntent.generationOptions).length > 0) {
+        savePendingMediaJob(conversationID, job.job_id, 0, currentIntent.generationOptions);
+      } else {
+        savePendingTextJob(conversationID, job.job_id, 0);
+      }
       savePendingConversationPrompt(conversationID, currentIntent.prompt);
       if (currentIntent.modelId) {
         try {

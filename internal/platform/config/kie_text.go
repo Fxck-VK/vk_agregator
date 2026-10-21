@@ -71,10 +71,7 @@ func (c Config) TextModelEnabled(publicID string) bool {
 	case providermodels.PublicTextGemini36Flash:
 		return c.FeatureTextGemini36FlashEnabled
 	}
-	if _, ok := providermodels.TextCandidateByID(publicID); ok {
-		return c.Env == "development" && c.FeatureDEVModelSmokeEnabled
-	}
-	return false
+	return c.Env == "development" && c.FeatureDEVModelSmokeEnabled && providermodels.TextCandidateAvailable(publicID)
 }
 
 func (c Config) APIMartTextModels() []string {
@@ -87,6 +84,9 @@ func (c Config) APIMartTextModels() []string {
 	}
 	if c.Env == "development" && c.FeatureDEVModelSmokeEnabled {
 		for _, model := range providermodels.TextCandidates() {
+			if !providermodels.TextCandidateAvailable(model.PublicID) {
+				continue
+			}
 			out = append(out, model.ModelCode)
 		}
 	}

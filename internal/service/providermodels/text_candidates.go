@@ -65,6 +65,21 @@ func TextCandidateByID(id string) (TextCandidate, bool) {
 	return TextCandidate{}, false
 }
 
+// TextCandidateAvailable controls DEV rollout without changing known versions
+// or draft admission contracts. Authenticated provider failures checked on
+// 2026-10-21 keep these exact unavailable/denied routes closed until reverified.
+func TextCandidateAvailable(id string) bool {
+	if _, known := TextCandidateByID(id); !known {
+		return false
+	}
+	switch id {
+	case "gpt_5_chat_latest", "deepseek_v3_2", "deepseek_v3_2_exp", "deepseek_r1_250528", "deepseek_v3_0324":
+		return false
+	default:
+		return true
+	}
+}
+
 func (c TextCandidate) Alias() TextAlias {
 	return TextAlias{PublicID: c.PublicID, DisplayName: c.Name, Provider: domain.ProviderAPIMart, ProviderModelID: c.ModelCode,
 		FeatureFlag: FeatureDEVModelSmoke, Readiness: apimartReadiness(),

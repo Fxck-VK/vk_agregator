@@ -31,11 +31,27 @@ func TestTextCandidateCatalogToSubmission(t *testing.T) {
 		t.Fatal(err)
 	}
 	list := WorkspaceCatalog(WorkspaceConfig{TextModels: runtime.TextModels, Pricing: prices, IncludePendingText: true})
-	if len(list.Items) != 35 || len(cfg.APIMartTextModels()) != 34 {
+	if len(list.Items) != 35 || len(cfg.APIMartTextModels()) != 29 {
 		t.Fatal("missing or duplicated text candidates")
+	}
+	unavailable := map[string]bool{
+		"gpt_5_chat_latest":  true,
+		"deepseek_v3_2":      true,
+		"deepseek_v3_2_exp":  true,
+		"deepseek_r1_250528": true,
+		"deepseek_v3_0324":   true,
 	}
 	for _, c := range providermodels.TextCandidates() {
 		m := pendingByID(t, list, c.PublicID)
+		if unavailable[c.PublicID] {
+			if m.Verification != "pending-verification" || m.Operations[0].Enabled || slices.Contains(cfg.APIMartTextModels(), c.ModelCode) {
+				t.Fatalf("unavailable exact version advertised as runnable: %s", c.PublicID)
+			}
+			if _, _, err := textgeneration.Resolve(c.PublicID, "Synthetic", runtime.TextModels, prices); err == nil {
+				t.Fatalf("unavailable exact version accepted for submission: %s", c.PublicID)
+			}
+			continue
+		}
 		if m.Kind != "text" || !slices.Contains(m.Categories, "text") || m.Verification != "dev-smoke" || !m.Operations[0].Enabled {
 			t.Fatalf("incorrect DEV catalog: %s", c.PublicID)
 		}

@@ -375,6 +375,39 @@ pending. Candidate input restrictions and server quotes remain authoritative.
 Speech without bounded billing remains disabled. Scope and rollback:
 [DEV runbook](../../docs/runbooks/DEV.md#manual-model-smoke-on-dev).
 
+### Text availability checked 2026-10-21
+
+An authorized DEV website smoke sent one bounded text request to each of the
+35 visible text products. Thirty returned the expected short answer. The UI
+balance changed from 4,285 to 3,780 credits, matching the 505-credit sum of the
+successful products' displayed tariffs. This is a connectivity check, not full
+model admission or a claim of general answer quality.
+
+The authenticated APIMart usage log recorded failures before token usage for
+these exact routes:
+
+| Public ID | Native ID | Observed upstream result |
+| --- | --- | --- |
+| `gpt_5_chat_latest` | `gpt-5-chat-latest` | Model not found |
+| `deepseek_v3_2` | `deepseek-v3.2` | Model not found |
+| `deepseek_v3_2_exp` | `deepseek-v3.2-exp` | Model not found |
+| `deepseek_r1_250528` | `deepseek-r1-250528` | HTTP 404, invalid model |
+| `deepseek_v3_0324` | `deepseek-v3-0324` | Access denied |
+
+These five definitions remain known draft candidates, but are excluded from
+the DEV runtime registry, public enabled choices and worker text allowlist.
+Direct selection must fail before creating a paid job. No alternate model or
+provider is substituted. Re-enabling requires confirming access to the exact
+native ID and repeating authorized live checks; documentation or a price entry
+alone does not establish availability.
+
+Official references read on 2026-10-21:
+[Chat Completions](https://docs.apimart.ai/ru/api-reference/texts/general/chat-completions-nostream)
+and [model metadata](https://docs.apimart.ai/ru/api-reference/texts/models/list).
+The latter documents that model visibility depends on the API key's model
+restrictions and assigned group. No account, credential, prompt or raw provider
+response is retained in this record.
+
 ## Image candidates checked 2026-09-30
 
 Five additional APIMart image candidates use the same DEV manual smoke gate:

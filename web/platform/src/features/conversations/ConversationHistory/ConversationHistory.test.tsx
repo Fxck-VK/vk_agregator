@@ -1002,21 +1002,23 @@ describe("ConversationHistory", () => {
   it("preserves the pending response and waiting budget offline, then checks immediately online", async () => {
     vi.useFakeTimers();
     vi.mocked(webBrowserMutation).mockResolvedValueOnce(Response.json(queuedJob, { status: 201 }));
-    vi.mocked(webBrowserFetch).mockResolvedValue(Response.json({ items: [] }));
+    vi.mocked(webBrowserFetch).mockImplementation(async path => path.includes("/jobs/")
+      ? Response.json(queuedJob)
+      : Response.json({ items: [] }));
     const { unmount } = render(<ConversationHistory history={initialHistory as never} />);
     await setComposerPrompt("Продолжить");
     await act(async () => {
       fireEvent.click(screen.getByRole("button", { name: ru.conversations.composerSubmit }));
       await vi.advanceTimersByTimeAsync(0);
     });
-    expect(webBrowserFetch).toHaveBeenCalledTimes(1);
+    expect(webBrowserFetch).toHaveBeenCalledTimes(2);
     try {
       await act(async () => {
         Object.defineProperty(navigator, "onLine", { configurable: true, value: false });
         window.dispatchEvent(new Event("offline"));
         await vi.advanceTimersByTimeAsync(900000);
       });
-      expect(webBrowserFetch).toHaveBeenCalledTimes(1);
+      expect(webBrowserFetch).toHaveBeenCalledTimes(2);
       expect(screen.getByRole("status", { name: ru.conversations.composerAwaitingResponse })).toBeVisible();
       expect(screen.queryByText(ru.conversations.refreshDelayed)).toBeNull();
       vi.mocked(webBrowserFetch).mockResolvedValueOnce(Response.json({ items: [{
@@ -1028,7 +1030,7 @@ describe("ConversationHistory", () => {
         window.dispatchEvent(new Event("online"));
         window.dispatchEvent(new Event("online"));
       });
-      expect(webBrowserFetch).toHaveBeenCalledTimes(2);
+      expect(webBrowserFetch).toHaveBeenCalledTimes(3);
       expect(screen.getByText("Ответ после восстановления сети")).toBeVisible();
       expect(webBrowserMutation).toHaveBeenCalledTimes(1);
     } finally {
@@ -1037,10 +1039,125 @@ describe("ConversationHistory", () => {
     }
   });
 
+  it.each(["failed_terminal", "cancelled", "expired", "refunded", "rejected", "awaiting_payment"])("shows the owned text job's %s status and releases the composer without resubmitting", async (status) => {
+    vi.useFakeTimers();
+    window.sessionStorage.setItem(`neirohub:conversation-model:${conversationId}`, "test-chat");
+    vi.mocked(webBrowserMutation).mockResolvedValueOnce(Response.json(queuedJob, { status: 201 }));
+    vi.mocked(webBrowserFetch).mockImplementation(async path => path.includes("/jobs/")
+      ? Response.json({ ...queuedJob, status })
+      : Response.json({ items: [] }));
+    const view = render(<ConversationHistory history={initialHistory as never} />);
+
+    await setComposerPrompt("status check");
+    await act(async () => {
+      fireEvent.click(screen.getByRole("button", { name: ru.conversations.composerSubmit }));
+      await vi.advanceTimersByTimeAsync(0);
+    });
+
+    expect(webBrowserFetch).toHaveBeenCalledWith(`/web/v1/conversations/${conversationId}/jobs/${queuedJob.job_id}`, expect.anything());
+    expect(screen.getByRole("alert")).toHaveTextContent(ru.imageGeneration.statusAttention);
+    expect(screen.getByText("status check")).toBeVisible();
+    expect(screen.queryByRole("status", { name: ru.conversations.composerAwaitingResponse })).toBeNull();
+    expect(screen.getByLabelText(ru.conversations.composerLabel)).toBeEnabled();
+    expect(screen.getByRole("button", { name: /Выбрана нейросеть Тестовая модель/ })).toBeEnabled();
+    await act(async () => { await vi.advanceTimersByTimeAsync(62_000); });
+    expect(webBrowserMutation).toHaveBeenCalledTimes(1);
+
+    view.unmount();
+    render(<ConversationHistory history={initialHistory as never} />);
+    await act(async () => {});
+    expect(screen.getByRole("button", { name: /Выбрана нейросеть Тестовая модель/ })).toBeEnabled();
+  });
+
+  it("resumes an accepted text job after reload even when an earlier assistant reply exists", async () => {
+    const key = `neirohub:conversation-pending-text:${conversationId}`;
+    window.sessionStorage.setItem(key, JSON.stringify({ jobID: queuedJob.job_id, baselineSeq: 103, startedAt: Date.now() }));
+    vi.mocked(webBrowserFetch).mockImplementation(async path => path.includes("/jobs/")
+      ? Response.json({ ...queuedJob, status: "failed_terminal" })
+      : Response.json({ items: [] }));
+    render(<ConversationHistory history={initialHistory as never} />);
+
+    expect(await screen.findByRole("alert")).toHaveTextContent(ru.imageGeneration.statusAttention);
+    expect(webBrowserFetch).toHaveBeenCalledWith(`/web/v1/conversations/${conversationId}/jobs/${queuedJob.job_id}`, expect.anything());
+    expect(window.sessionStorage.getItem(key)).toBeNull();
+    expect(webBrowserMutation).not.toHaveBeenCalled();
+  });
+
+  it("keeps accepted text metadata after a polling timeout and resumes it on the next visit", async () => {
+    vi.useFakeTimers();
+    const key = `neirohub:conversation-pending-text:${conversationId}`;
+    const saved = JSON.stringify({ jobID: queuedJob.job_id, baselineSeq: 103, startedAt: Date.now() });
+    window.sessionStorage.setItem(key, saved);
+    vi.mocked(webBrowserFetch).mockImplementation(async path => path.includes("/jobs/")
+      ? Response.json(queuedJob)
+      : Response.json({ items: [] }));
+    const view = render(<ConversationHistory history={initialHistory as never} />);
+    await act(async () => { await vi.advanceTimersByTimeAsync(0); });
+    await act(async () => { await vi.advanceTimersByTimeAsync(32_000); });
+    expect(screen.getByText(ru.conversations.refreshDelayed)).toBeVisible();
+    expect(window.sessionStorage.getItem(key)).toBe(saved);
+    view.unmount();
+
+    vi.mocked(webBrowserFetch).mockImplementation(async path => path.includes("/jobs/")
+      ? Response.json({ ...queuedJob, status: "failed_terminal" })
+      : Response.json({ items: [] }));
+    render(<ConversationHistory history={initialHistory as never} />);
+    await act(async () => { await vi.advanceTimersByTimeAsync(0); });
+    expect(screen.getByRole("alert")).toHaveTextContent(ru.imageGeneration.statusAttention);
+    expect(window.sessionStorage.getItem(key)).toBeNull();
+    expect(webBrowserMutation).not.toHaveBeenCalled();
+  });
+
+  it("removes completed text metadata when the ready history already contains its assistant reply", async () => {
+    const key = `neirohub:conversation-pending-text:${conversationId}`;
+    window.sessionStorage.setItem(key, JSON.stringify({ jobID: queuedJob.job_id, baselineSeq: 102, startedAt: Date.now() }));
+    render(<ConversationHistory history={initialHistory as never} />);
+    await act(async () => {});
+    expect(window.sessionStorage.getItem(key)).toBeNull();
+    expect(webBrowserFetch).not.toHaveBeenCalled();
+  });
+
+  it("stores only safe text job metadata after an accepted follow-up turn", async () => {
+    vi.mocked(webBrowserMutation).mockResolvedValueOnce(Response.json(queuedJob, { status: 201 }));
+    vi.mocked(webBrowserFetch).mockReturnValueOnce(new Promise(() => {}));
+    render(<ConversationHistory history={initialHistory as never} />);
+    await setComposerPrompt("follow-up check");
+    await act(async () => { fireEvent.click(screen.getByRole("button", { name: ru.conversations.composerSubmit })); });
+    expect(JSON.parse(window.sessionStorage.getItem(`neirohub:conversation-pending-text:${conversationId}`)!)).toEqual({
+      jobID: queuedJob.job_id, baselineSeq: 103, startedAt: expect.any(Number),
+    });
+  });
+
+  it("shows a delayed-response notice and releases the composer when text polling expires", async () => {
+    vi.useFakeTimers();
+    vi.mocked(webBrowserMutation).mockResolvedValueOnce(Response.json(queuedJob, { status: 201 }));
+    vi.mocked(webBrowserFetch).mockImplementation(async path => path.includes("/jobs/")
+      ? Response.json(queuedJob)
+      : Response.json({ items: [] }));
+    render(<ConversationHistory history={{ ...initialHistory, messages: [], hasMoreBefore: false }} />);
+
+    await setComposerPrompt("timeout check");
+    await act(async () => {
+      fireEvent.click(screen.getByRole("button", { name: ru.conversations.composerSubmit }));
+      await vi.advanceTimersByTimeAsync(0);
+    });
+    await act(async () => { await vi.advanceTimersByTimeAsync(32_000); });
+
+    expect(screen.getByText(ru.conversations.refreshDelayed)).toBeVisible();
+    expect(screen.getByText("timeout check")).toBeVisible();
+    expect(screen.queryByText(ru.conversations.historyEmpty)).toBeNull();
+    expect(screen.queryByRole("status", { name: ru.conversations.composerAwaitingResponse })).toBeNull();
+    expect(screen.getByLabelText(ru.conversations.composerLabel)).toBeEnabled();
+    expect(window.sessionStorage.getItem(`neirohub:conversation-pending-text:${conversationId}`)).not.toBeNull();
+    expect(webBrowserMutation).toHaveBeenCalledTimes(1);
+  });
+
   it("stops polling at fifteen attempts and never fetches after the thirty-second deadline", async () => {
     vi.useFakeTimers();
     vi.mocked(webBrowserMutation).mockResolvedValueOnce(Response.json(queuedJob, { status: 201 }));
-    vi.mocked(webBrowserFetch).mockResolvedValue(Response.json({ items: [] }));
+    vi.mocked(webBrowserFetch).mockImplementation(async path => path.includes("/jobs/")
+      ? Response.json(queuedJob)
+      : Response.json({ items: [] }));
     render(<ConversationHistory history={initialHistory as never} />);
 
     await setComposerPrompt("Продолжить");
@@ -1048,19 +1165,19 @@ describe("ConversationHistory", () => {
       fireEvent.click(screen.getByRole("button", { name: ru.conversations.composerSubmit }));
       await vi.advanceTimersByTimeAsync(0);
     });
-    expect(webBrowserFetch).toHaveBeenCalledTimes(1);
+    expect(webBrowserFetch).toHaveBeenCalledTimes(2);
 
     for (let attempt = 1; attempt < 15; attempt += 1) {
       await act(async () => {
         await vi.advanceTimersByTimeAsync(2_000);
       });
     }
-    expect(webBrowserFetch).toHaveBeenCalledTimes(15);
+    expect(webBrowserFetch).toHaveBeenCalledTimes(30);
 
     await act(async () => {
       await vi.advanceTimersByTimeAsync(62_000);
     });
-    expect(webBrowserFetch).toHaveBeenCalledTimes(15);
+    expect(webBrowserFetch).toHaveBeenCalledTimes(30);
   });
 });
 
