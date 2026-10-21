@@ -82,6 +82,54 @@ function audioResult(job: MusicJob, title: string): MusicJobResult {
 const loadedCatalog = () => Promise.resolve(enabledCatalog);
 
 describe("MusicWorkspaceController", () => {
+  it("stops checking a job that is no longer accessible", async () => {
+    const api = apiStub({
+      loadMusicJobs: vi.fn().mockResolvedValue({ has_more: false, items: [{ ...newMusicJob, status: "queued" }], next_cursor: null }),
+      loadMusicJob: vi.fn().mockRejectedValue(new MusicApiError("not found", 404)),
+    });
+    render(<MusicWorkspaceController api={api} catalogLoader={loadedCatalog} pollIntervalMs={20} />);
+    expect(await screen.findByRole("alert")).toHaveTextContent("Не удалось получить статус музыкальной задачи.");
+    expect(api.loadMusicJob).toHaveBeenCalledOnce();
+    expect(api.activateMusicJob).not.toHaveBeenCalled();
+  });
+
+  it("keeps the running job visible after a status read fails and retries only reads", async () => {
+    const queued: MusicJob = { ...newMusicJob, action: "upload_extend", status: "queued" };
+    const api = apiStub({
+      loadMusicJobs: vi.fn().mockResolvedValue({ has_more: false, items: [queued], next_cursor: null }),
+      loadMusicJob: vi.fn().mockRejectedValueOnce(new TypeError("temporary network error")).mockImplementation(() => new Promise(() => {})),
+    });
+    render(<MusicWorkspaceController api={api} catalogLoader={loadedCatalog} pollIntervalMs={20} />);
+    await screen.findByText(/Не удалось обновить статус/);
+    expect(screen.getByText("Продлить загрузку · Suno V6")).toBeVisible();
+    await waitFor(() => expect(api.loadMusicJob).toHaveBeenCalledTimes(2));
+    expect(api.activateMusicJob).not.toHaveBeenCalled();
+    expect(api.prepareMusicJob).not.toHaveBeenCalled();
+  });
+
+  it("identifies a restored running action and unlocks a new run after it finishes", async () => {
+    let finish!: (job: MusicJob) => void;
+    const queued: MusicJob = { ...newMusicJob, action: "upload_extend", status: "queued" };
+    const api = apiStub({
+      loadMusicJobs: vi.fn().mockResolvedValueOnce({ has_more: false, items: [queued], next_cursor: null }).mockResolvedValue({ has_more: false, items: [], next_cursor: null }),
+      loadMusicJob: vi.fn(() => new Promise<MusicJob>(resolve => { finish = resolve; })),
+      loadMusicJobResult: vi.fn().mockResolvedValue(audioResult(newMusicJob, "Finished continuation")),
+    });
+    render(<MusicWorkspaceController api={api} catalogLoader={loadedCatalog} />);
+    await screen.findByText("Продлить загрузку · Suno V6");
+    expect(screen.getByText(/Задача в очереди/)).toBeVisible();
+    fireEvent.change(screen.getByRole("textbox", { name: "Описание трека" }), { target: { value: "Next track idea" } });
+    expect(screen.getByRole("textbox", { name: "Описание трека" })).toBeEnabled();
+    expect(screen.getByRole("button", { name: "Создать песню" })).toBeDisabled();
+    await waitFor(() => expect(api.loadMusicJob).toHaveBeenCalledOnce());
+    await act(async () => finish({ ...queued, status: "succeeded" }));
+    await screen.findByRole("heading", { name: "Finished continuation" });
+    expect(screen.queryByText("Продлить загрузку · Suno V6")).not.toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Создать песню" })).toBeEnabled();
+    expect(api.activateMusicJob).not.toHaveBeenCalled();
+    expect(api.prepareMusicJob).not.toHaveBeenCalled();
+  });
+
   it("keeps the inspected upload duration precise when choosing continuation time", async () => {
     const catalog: MusicModelCatalog = { ...enabledCatalog, models: enabledCatalog.models.map(model => ({ ...model, operations: [...model.operations,
       { enabled: true, id: "upload_extend", supportsUploads: true, requirement: { minTracks: 0, maxTracks: 0, minUploads: 1, maxUploads: 1 } },
@@ -107,6 +155,7 @@ describe("MusicWorkspaceController", () => {
     render(<MusicWorkspaceController api={api} catalogLoader={() => Promise.resolve(catalog)}
       requestedContinuation={{ modelId: "suno_v6", jobId: oldMusicJob.id, audioIndex: 1, continueAtSec: 45 }} />);
     await screen.findByRole("heading", { name: "Продлить" });
+    fireEvent.click(screen.getByRole("button", { name: "Использовать 0:45" }));
     expect(api.prepareMusicJob).not.toHaveBeenCalled();
     expect(api.activateMusicJob).not.toHaveBeenCalled();
     fireEvent.change(screen.getByRole("textbox", { name: "Как продолжить трек" }), { target: { value: "Continue with soft piano" } });
@@ -136,6 +185,7 @@ describe("MusicWorkspaceController", () => {
     fireEvent.click(screen.getByRole("button", { name: "Действия: Source song" }));
     fireEvent.click(screen.getByRole("menuitem", { name: "Продолжить трек" }));
     const input = screen.getByRole("textbox", { name: "Как продолжить трек" });
+    fireEvent.click(screen.getByRole("button", { name: "Использовать 0:45" }));
     fireEvent.change(input, { target: { value: "synthetic continuation" } });
     fireEvent.click(screen.getByRole("button", { name: "Продолжить трек" }));
     expect(await screen.findByRole("alert")).toHaveTextContent("Сервер долго не отвечает. Повторите попытку; списания не было.");

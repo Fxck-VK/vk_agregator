@@ -58,6 +58,60 @@ const generateOperation: MusicWorkspaceOperation = {
 };
 
 describe("Suno tool prerequisites", () => {
+  it("shows preparation errors beside the active tool controls", () => {
+    render(<StatefulWorkspace activeOperationId="extend" tracks={[tracks[0]]} initialSelectedTrackIds={[tracks[0].id]}
+      operations={[{ id: "extend", enabled: true }]} state={{ errorMessage: "Quote failed" }} />);
+    expect(screen.getByRole("alert").closest("section")).toBe(screen.getByRole("heading", { name: "Продлить" }).closest("section"));
+    expect(screen.getByRole("textbox", { name: "Как продолжить трек" })).toHaveAttribute("maxLength", "3000");
+  });
+
+  it("requires an explicit continuation point before preparing a track", () => {
+    const confirm = vi.fn();
+    render(<StatefulWorkspace activeOperationId="extend" tracks={[tracks[0]]} initialSelectedTrackIds={[tracks[0].id]}
+      operations={[{ id: "extend", enabled: true, requirement: { minTracks: 1, maxTracks: 1 } }]} onRequestConfirmation={confirm} />);
+    expect(screen.getByRole("button", { name: "Продолжить трек" })).toBeDisabled();
+    expect(screen.getByText("Выберите точку продолжения на шкале или введите секунды.")).toBeVisible();
+    fireEvent.change(screen.getByRole("slider", { name: "Момент продолжения" }), { target: { value: "20" } });
+    fireEvent.click(screen.getByRole("button", { name: "Продолжить трек" }));
+    expect(confirm).toHaveBeenCalledWith(expect.objectContaining({ parameters: expect.objectContaining({ seekSec: 20 }) }));
+  });
+
+  it("separates continuation ideas from literal lyrics and keeps each draft", () => {
+    render(<StatefulWorkspace activeOperationId="extend" tracks={[tracks[0]]} initialSelectedTrackIds={[tracks[0].id]}
+      operations={[{ id: "extend", enabled: true, requirement: { minTracks: 1, maxTracks: 1 } }]} />);
+    const mode = screen.getByRole("combobox", { name: "Режим продолжения" });
+    fireEvent.change(screen.getByRole("textbox", { name: "Как продолжить трек" }), { target: { value: "A dramatic rap verse" } });
+    fireEvent.change(mode, { target: { value: "lyrics" } });
+    const lyrics = screen.getByRole("textbox", { name: "Текст продолжения" });
+    expect(lyrics).toHaveAttribute("maxLength", "3000");
+    expect(lyrics).toHaveValue("");
+    fireEvent.change(lyrics, { target: { value: "New verse" } });
+    fireEvent.change(mode, { target: { value: "description" } });
+    expect(screen.getByRole("textbox", { name: "Как продолжить трек" })).toHaveValue("A dramatic rap verse");
+    fireEvent.change(mode, { target: { value: "lyrics" } });
+    expect(screen.getByRole("textbox", { name: "Текст продолжения" })).toHaveValue("New verse");
+  });
+
+  it("labels direct MP3 continuation as lyrics and offers preparation for ideas", () => {
+    render(<StatefulWorkspace activeOperationId="upload_extend" operations={[
+      { id: "upload_extend", enabled: true, supportsUploads: true }, { id: "upload", enabled: true, supportsUploads: true },
+    ]} />);
+    expect(screen.getByRole("textbox", { name: "Текст продолжения" })).toBeVisible();
+    expect(screen.queryByRole("textbox", { name: "Промпт операции" })).not.toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: "Подготовить запись для продолжения по идее" }));
+    expect(screen.getByRole("heading", { name: "Загрузить" })).toBeVisible();
+  });
+
+  it("names the running action near the form and permits editing while it runs", () => {
+    render(<StatefulWorkspace activeOperationId="extend" tracks={[tracks[0]]} initialSelectedTrackIds={[tracks[0].id]}
+      operations={[{ id: "extend", enabled: true, requirement: { minTracks: 1, maxTracks: 1 } }]}
+      state={{ polling: true, activity: { operationId: "upload_extend", modelId: "suno_v6", stage: "generating" } }} />);
+    expect(screen.queryByText("Дождитесь завершения текущего действия")).not.toBeInTheDocument();
+    expect(screen.getAllByText(/Продлить загрузку · Suno V6/).length).toBeGreaterThan(0);
+    expect(screen.getByRole("textbox", { name: "Как продолжить трек" })).toBeEnabled();
+    expect(screen.getByRole("button", { name: "Продолжить трек" })).toBeDisabled();
+  });
+
   it("lets an uploaded continuation time be cleared, typed and selected on a timeline", () => {
     const confirm = vi.fn();
     render(<StatefulWorkspace activeOperationId="upload_extend" initialMode="upload"
@@ -190,6 +244,8 @@ describe("MusicWorkspace", () => {
     fireEvent.click(screen.getByRole("button", { name: "Действия: First" }));
     fireEvent.click(screen.getByRole("menuitem", { name: "Продолжить трек" }));
     expect(screen.getByRole("spinbutton", { name: "Старт, сек." })).toHaveValue(45);
+    expect(screen.getByRole("button", { name: "Продолжить трек" })).toBeDisabled();
+    fireEvent.click(screen.getByRole("button", { name: "Использовать 0:45" }));
     expect(screen.getByRole("button", { name: "Продолжить трек" })).toBeEnabled();
   });
 

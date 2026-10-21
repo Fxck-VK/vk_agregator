@@ -1,9 +1,10 @@
 "use client";
 
 
-import { useId, useRef, useState, type ChangeEvent } from "react";
+import { useId, useRef, useState, useSyncExternalStore, type ChangeEvent } from "react";
 
 import { Button } from "@/components/ui/Button/Button";
+import { StateNotice } from "@/components/ui/AsyncState/AsyncState";
 import { CreditAmount } from "@/components/ui/CreditAmount/CreditAmount";
 import { InputControlChip } from "@/components/ui/InputControlChip/InputControlChip";
 import { InputSurface } from "@/components/ui/InputSurface/InputSurface";
@@ -94,9 +95,11 @@ export type MusicActionParameterDraft = {
   negativeTags?: string;
   personaJobId?: string | null;
   prompt?: string;
+  lyrics?: string;
   rangeEndSec?: number;
   rangeStartSec?: number;
   seekSec?: number;
+  seekConfirmed?: boolean;
   secondaryTrackId?: string;
   soundType?: string;
   speed?: number;
@@ -237,6 +240,11 @@ export type MusicWorkspaceConfirmation = {
 };
 
 export type MusicWorkspaceState = {
+  activity?: {
+    operationId?: MusicOperationID;
+    modelId?: string;
+    stage: "uploading" | "quoting" | "activating" | "queued" | "generating" | "finishing" | "checking";
+  } | null;
   confirmation?: MusicWorkspaceConfirmation | null;
   errorMessage?: string | null;
   historyHasMore?: boolean;
@@ -479,7 +487,7 @@ function getDisabledReason(
   if (blockedReason) return blockedReason;
   if (operation === undefined) return msg("music.disabled.noOperation");
   if (!operation.enabled) return operation.statusReason ?? msg("music.disabled.operationOff");
-  if (busy) return msg("music.disabled.busy");
+  if (busy) return msg("music.activity.blocked");
 
   const requirement = getRequirement(operation);
   const selectedTrackCount = operationConsumesSelectedTracks(operation) ? selectedTrackIds.length : 0;
@@ -504,9 +512,11 @@ function getDisabledReason(
     const name = parameters.name?.trim() || draft.title.trim();
     if (name.length === 0) return msg("music.disabled.nameRequired");
   }
-  if (operation.id === "upload_extend") {
-    const seek = draft.actionParameters?.upload_extend?.seekSec ?? 1;
-    if (seek < 1 || seek >= (ownedUploads[0]?.durationSec ?? 0)) return msg("music.tools.invalidSeek");
+  if (operation.id === "upload_extend" || operation.id === "extend") {
+    const parameters = draft.actionParameters?.[operation.id];
+    if (!parameters?.seekConfirmed) return msg("music.continue.choosePoint");
+    if (operation.id === "extend" && parameters.customMode && !parameters.lyrics?.trim()) return msg("music.disabled.ownLyricsRequired");
+    if (operation.id === "upload_extend" && ((parameters.seekSec ?? 0) < 1 || (parameters.seekSec ?? 0) >= (ownedUploads[0]?.durationSec ?? 0))) return msg("music.tools.invalidSeek");
   }
   if (operation.id === "generate") {
     if (mode === "own_lyrics" && draft.lyrics.trim().length === 0) return msg("music.disabled.ownLyricsRequired");
@@ -575,6 +585,8 @@ function buildActionRequest({
       seekSec: 1,
       ...draft.actionParameters?.[operationId],
     } : operationId === "extend" ? {
+      customMode: false,
+      maxMode: false,
       seekSec: Math.max(1, Math.floor(selectedTracks[0]?.durationSec ?? 2) - 1),
       ...draft.actionParameters?.[operationId],
     } : draft.actionParameters?.[operationId] ?? {},
@@ -652,9 +664,10 @@ export function MusicWorkspace({
   const activeOperation = activeOperationId === null ? undefined : operationById.get(activeOperationId);
   const toolOpen = activeOperationId !== null;
   const generateOperation = operationById.get("generate");
-  const busy = state?.preparing === true || state?.polling === true;
+  const busy = state?.preparing === true || state?.activity?.stage === "activating";
+  const submissionBusy = busy || state?.polling === true;
   const modelDisabledReason = getModelDisabledReason(selectedModel, state, msg);
-  const generateDisabledReason = getDisabledReason(generateOperation, [], draft, busy, msg, modelDisabledReason, mode);
+  const generateDisabledReason = getDisabledReason(generateOperation, [], draft, submissionBusy, msg, modelDisabledReason, mode);
   const canGenerate = generateDisabledReason === null;
 
   const requestConfirmation = (operationId: MusicOperationID) => {
@@ -664,7 +677,7 @@ export function MusicWorkspace({
       operation,
       requestTrackIds,
       draft,
-      busy,
+      submissionBusy,
       msg,
       modelDisabledReason,
       operationId === "generate" ? mode : "description",
@@ -705,6 +718,7 @@ export function MusicWorkspace({
   };
 
   const toggleSelectedTrack = (trackId: string) => {
+    if (activeOperationId === "extend") updateActionDraft("extend", { seekConfirmed: false });
     const next = selectedTrackIds.includes(trackId)
       ? selectedTrackIds.filter((id) => id !== trackId)
       : [...selectedTrackIds, trackId];
@@ -739,7 +753,7 @@ export function MusicWorkspace({
     if (!draft.actionParameters?.[operationId]) updateActionDraft(operationId, {
       maxMode: false,
       outputFormat: "mp3",
-      ...(creativeTools.has(operationId) ? { customMode: false } : {}),
+      ...(creativeTools.has(operationId) || operationId === "extend" ? { customMode: false } : {}),
       ...(operationId === "upsample_tags" ? { prompt: draft.style } : {}),
     });
     focusTool(operationId);
@@ -750,7 +764,7 @@ export function MusicWorkspace({
     onSelectedTrackIdsChange([track.id]);
     onModeChange("description");
     updateDraft({ maxMode: false, actionParameters: {
-      ...draft.actionParameters, extend: { seekSec: continueAtSec, maxMode: false, outputFormat: "mp3" },
+      ...draft.actionParameters, extend: { seekSec: continueAtSec, seekConfirmed: false, customMode: false, maxMode: false, outputFormat: "mp3" },
     } });
     focusTool("extend");
   };
@@ -804,6 +818,7 @@ export function MusicWorkspace({
           <MusicToolIcon kind="folder" />{msg("music.studio.myTracks")}
         </Link>
       </div>
+      <WorkspaceActivity activity={state?.activity} models={models} />
       <div className={styles.creation}>
         <div className={styles.sectionTitle}>
           <h2>{msg("music.studio.newTrack")}</h2>
@@ -940,6 +955,7 @@ export function MusicWorkspace({
             ) : null}
           </div>
         </form>
+        {!toolOpen ? <WorkspaceStatus state={state} /> : null}
         <div className={styles.toolGrid}>
           {generateOperation ? <>
             <MusicToolCard
@@ -988,15 +1004,18 @@ export function MusicWorkspace({
           <ActionParameterForm
             busy={busy}
             preparing={state?.preparing === true}
-            disabledReason={getDisabledReason(activeOperation, activeTrackIds, draft, busy, msg, modelDisabledReason)}
+            disabledReason={getDisabledReason(activeOperation, activeTrackIds, draft, submissionBusy, msg, modelDisabledReason)}
             draft={draft.actionParameters?.[activeOperationId] ?? {}}
             uploadDuration={getOwnedUploads(draft)[0]?.durationSec}
+            onPrepareForIdea={activeOperationId === "upload_extend" && operationById.get("upload")?.enabled ? () => openTool("upload") : undefined}
             onChange={(patch) => updateActionDraft(activeOperationId, patch)}
             onRun={() => requestConfirmation(activeOperationId)}
             operation={activeOperation}
             selectedTrackIds={activeTrackIds}
             tracks={sourceTracks}
           />
+          {state?.activity ? <WorkspaceActivity activity={state.activity} models={models} /> : null}
+          <WorkspaceStatus state={state} />
         </> : null}
       </section>
 
@@ -1004,7 +1023,6 @@ export function MusicWorkspace({
       {state?.historyHasMore && !toolOpen ? <Button disabled={busy || state.historyLoading || !onLoadMoreHistory} onClick={onLoadMoreHistory} type="button" variant="outline">
         {msg(state.historyLoading ? "music.track.loadingMore" : "music.track.loadMore")}
       </Button> : null}
-      <WorkspaceStatus state={state} />
       <ConfirmationDialog
         confirmation={state?.confirmation ?? null}
         onCancel={onCancelConfirmation}
@@ -1509,6 +1527,7 @@ function ActionParameterForm({
   selectedTrackIds,
   tracks,
   uploadDuration,
+  onPrepareForIdea,
 }: Readonly<{
   busy: boolean;
   preparing: boolean;
@@ -1520,6 +1539,7 @@ function ActionParameterForm({
   selectedTrackIds: readonly string[];
   tracks: readonly MusicTrack[];
   uploadDuration?: number;
+  onPrepareForIdea?: () => void;
 }>) {
   const msg = useMessages();
   const label = operationLabel(operation, operation.id, msg);
@@ -1537,6 +1557,24 @@ function ActionParameterForm({
         </ul>
       ) : null}
       <div className={styles.actionFields}>
+        {operation.id === "extend" ? <label className={styles.field}>
+          <span>{msg("music.continue.mode")}</span>
+          <InputSurface className={styles.inputSurface}>
+            <select disabled={busy} value={draft.customMode ? "lyrics" : "description"}
+              onChange={event => onChange({ customMode: event.target.value === "lyrics", maxMode: false })}>
+              <option value="description">{msg("music.continue.byIdea")}</option>
+              <option value="lyrics">{msg("music.continue.byLyrics")}</option>
+            </select>
+          </InputSurface>
+        </label> : null}
+        {operation.id === "extend" && draft.customMode ? <label className={styles.field}>
+          <span>{msg("music.tools.style")}</span><InputSurface className={styles.inputSurface}><input disabled={busy} maxLength={1000} onChange={event => onChange({ style: event.target.value })} value={draft.style ?? ""} /></InputSurface>
+        </label> : null}
+        {operation.id === "upload_extend" ? <div className={styles.creatorNote}>
+          <p>{msg("music.continue.uploadLyricsHelp")}</p>
+          {onPrepareForIdea ? <><p>{msg("music.continue.uploadIdeaHelp")}</p><Button disabled={busy} onClick={onPrepareForIdea} type="button" variant="outline">{msg("music.continue.prepareForIdea")}</Button></> : null}
+        </div> : null}
+        {operation.id === "upload" ? <p className={styles.muted}>{msg("music.continue.importHelp")}</p> : null}
         {creativeTools.has(operation.id) ? <>
           <label className={styles.field}><span>{msg("music.tools.mode")}</span><InputSurface className={styles.inputSurface}>
             <select disabled={busy} onChange={event => onChange({ customMode: event.target.value === "lyrics", maxMode: false })} value={draft.customMode ? "lyrics" : "description"}>
@@ -1547,7 +1585,7 @@ function ActionParameterForm({
           {operation.id === "mashup" || operation.id === "upload_cover" ? <label className={styles.checkboxRow}><input checked={draft.instrumental ?? false} disabled={busy} onChange={event => onChange({ instrumental: event.target.checked })} type="checkbox" />{msg("music.shared.instrumental")}</label> : null}
         </> : null}
         {operation.supportsAudioFormat ? <OutputFormatSelector disabled={busy} onChange={outputFormat => onChange({ outputFormat })} value={draft.outputFormat ?? "mp3"} /> : null}
-        {operation.supportsMaxMode ? <label className={styles.checkboxRow}><input checked={draft.maxMode ?? false} disabled={busy || (creativeTools.has(operation.id) && !draft.customMode)} onChange={event => onChange({ maxMode: event.target.checked })} type="checkbox" />{msg("music.tools.max")}</label> : null}
+        {operation.supportsMaxMode ? <label className={styles.checkboxRow}><input checked={draft.maxMode ?? false} disabled={busy || ((creativeTools.has(operation.id) || operation.id === "extend") && !draft.customMode)} onChange={event => onChange({ maxMode: event.target.checked })} type="checkbox" />{msg("music.tools.max")}</label> : null}
         {selectedTracks.length > 0 ? (
           <p className={styles.muted}>
             {msg("music.operation.source", { value: selectedTracks.map((track) => msg("music.operation.sourceTrack", { index: track.originalIndex + 1 })).join(", ") })}
@@ -1643,8 +1681,9 @@ function ActionParameterForm({
         {operation.id === "extend" || operation.id === "upload_extend" ? (
           <ContinuationTimeField
             disabled={busy}
+            confirmed={draft.seekConfirmed === true}
             duration={operation.id === "upload_extend" ? uploadDuration : selectedTracks[0]?.durationSec}
-            onChange={(seekSec) => onChange({ seekSec })}
+            onChange={(seekSec) => onChange({ seekSec, seekConfirmed: true })}
             value={draft.seekSec ?? (operation.id === "upload_extend" ? 1 : Math.max(1, Math.floor(selectedTracks[0]?.durationSec ?? 2) - 1))}
           />
         ) : isSeekAction(operation.id) ? (
@@ -1706,17 +1745,18 @@ function ActionParameterForm({
 
         {promptOperations.has(operation.id) ? (
           <label className={styles.field}>
-            <span>{msg(draft.customMode ? "music.mode.ownLyrics" : operation.id === "extend" ? "music.parameters.continuation" : "music.parameters.prompt")}</span>
+            <span>{msg(operation.id === "upload_extend" || (operation.id === "extend" && draft.customMode) ? "music.continue.lyrics" : draft.customMode ? "music.mode.ownLyrics" : operation.id === "extend" ? "music.parameters.continuation" : "music.parameters.prompt")}</span>
             <InputSurface className={styles.textareaSurfaceSmall}>
               <textarea
-                aria-label={msg(operation.id === "extend" ? "music.parameters.continuation" : "music.parameters.promptAria")}
+                aria-label={msg(operation.id === "upload_extend" || (operation.id === "extend" && draft.customMode) ? "music.continue.lyrics" : operation.id === "extend" ? "music.parameters.continuation" : "music.parameters.promptAria")}
                 disabled={busy}
-                maxLength={draft.customMode ? 5000 : 3000}
-                onChange={(event) => onChange({ prompt: event.target.value })}
-                placeholder={msg(operation.id === "extend" ? "music.parameters.continuationPlaceholder" : "music.parameters.promptPlaceholder")}
-                value={draft.prompt ?? ""}
+                maxLength={operation.id === "extend" || operation.id === "upload_extend" ? 3000 : draft.customMode ? 5000 : 3000}
+                onChange={(event) => onChange(operation.id === "extend" && draft.customMode ? { lyrics: event.target.value } : { prompt: event.target.value })}
+                placeholder={msg(operation.id === "upload_extend" || (operation.id === "extend" && draft.customMode) ? "music.continue.lyricsPlaceholder" : operation.id === "extend" ? "music.parameters.continuationPlaceholder" : "music.parameters.promptPlaceholder")}
+                value={(operation.id === "extend" && draft.customMode ? draft.lyrics : draft.prompt) ?? ""}
               />
             </InputSurface>
+            {operation.id === "extend" ? <span className={styles.muted}>{msg(draft.customMode ? "music.continue.lyricsHelp" : "music.continue.ideaHelp")}</span> : null}
           </label>
         ) : null}
 
@@ -1834,7 +1874,7 @@ function ActionParameterForm({
             <p className={styles.muted}>{msg("music.operation.noControls")}</p>
           ) : null}
       </div>
-      {disabledReason && !preparing ? <p className={styles.warning} role="status">{disabledReason}</p> : null}
+      {disabledReason && !preparing ? <p className={styles.muted} role="status">{disabledReason}</p> : null}
       <Button aria-busy={preparing || undefined} disabled={disabled} onClick={onRun} type="button">
         {preparing ? msg("music.operation.preparing") : runLabel}
       </Button>
@@ -1842,8 +1882,9 @@ function ActionParameterForm({
   );
 }
 
-function ContinuationTimeField({ disabled, duration, onChange, value }: Readonly<{
+function ContinuationTimeField({ disabled, confirmed, duration, onChange, value }: Readonly<{
   disabled: boolean;
+  confirmed: boolean;
   duration?: number;
   onChange: (value: number) => void;
   value: number;
@@ -1851,23 +1892,28 @@ function ContinuationTimeField({ disabled, duration, onChange, value }: Readonly
   const msg = useMessages();
   const [editing, setEditing] = useState(false);
   const [text, setText] = useState("");
+  const edited = useRef(false);
   const max = Math.max(1, (Math.ceil((duration ?? 1) * 10) - 1) / 10);
   const unavailable = disabled || duration === undefined || duration <= 1;
   const commit = () => {
     const next = text.trim() === "" ? value : Number(text);
-    onChange(clamp(Number.isFinite(next) ? next : value, 1, max));
+    if (edited.current && text.trim() !== "" && Number.isFinite(next)) onChange(clamp(next, 1, max));
+    edited.current = false;
     setEditing(false);
   };
   const clock = (seconds: number) => `${Math.floor(seconds / 60)}:${String(Math.floor(seconds % 60)).padStart(2, "0")}`;
   return <div className={styles.actionFields}>
+    <strong>{msg("music.continue.pointHeading")}</strong>
+    <p className={styles.muted}>{msg("music.continue.pointHelp")}</p>
     <label className={styles.field}>
       <span>{msg("music.parameters.seek")}</span>
       <InputSurface className={styles.inputSurface}>
         <input disabled={unavailable} min={1} max={max} step={0.1} type="number"
           value={editing ? text : value}
-          onFocus={() => { setText(String(value)); setEditing(true); }}
+          onFocus={() => { setText(String(value)); setEditing(true); edited.current = false; }}
           onChange={(event) => {
             const raw = event.target.value;
+            edited.current = true;
             setText(raw);
             setEditing(true);
             const next = Number(raw);
@@ -1880,6 +1926,7 @@ function ContinuationTimeField({ disabled, duration, onChange, value }: Readonly
     <RangeSlider aria-label={msg("music.parameters.continuationPoint")} disabled={unavailable}
       min={1} max={max} step={0.1} value={clamp(value, 1, max)} onValueChange={onChange} />
     <output className={styles.muted}>{clock(value)} / {clock(duration ?? 0)}</output>
+    {confirmed ? <p className={styles.muted}>{msg("music.continue.pointChosen", { time: clock(value) })}</p> : <Button disabled={unavailable} onClick={() => onChange(clamp(value, 1, max))} type="button" variant="outline">{msg("music.continue.usePoint", { time: clock(value) })}</Button>}
   </div>;
 }
 
@@ -1991,14 +2038,34 @@ function formatBpm(value: number | null | undefined) {
   return value === null || value === undefined ? "—" : Math.round(value).toString();
 }
 
+function subscribeToConnection(change: () => void) {
+  window.addEventListener("online", change);
+  window.addEventListener("offline", change);
+  return () => { window.removeEventListener("online", change); window.removeEventListener("offline", change); };
+}
+const connectionSnapshot = () => navigator.onLine !== false;
+const serverConnectionSnapshot = () => true;
+
+function WorkspaceActivity({ activity, models }: Readonly<{ activity?: MusicWorkspaceState["activity"]; models: readonly MusicWorkspaceModel[] }>) {
+  const msg = useMessages();
+  const online = useSyncExternalStore(subscribeToConnection, connectionSnapshot, serverConnectionSnapshot);
+  if (!activity) return null;
+  const model = models.find(candidate => candidate.id === activity.modelId)?.name;
+  const action = activity.operationId ? msg(operationLabelKeys[activity.operationId]) : msg("music.upload.heading");
+  return <StateNotice kind="loading" className={styles.activity}>
+    <strong>{action}{model ? ` · ${model}` : ""}</strong>
+    <p>{msg(!online ? "music.activity.offline" : `music.activity.${activity.stage}`)}</p>
+  </StateNotice>;
+}
+
 function WorkspaceStatus({ state }: Readonly<{ state?: MusicWorkspaceState }>) {
   const msg = useMessages();
   if (!state?.preparing && !state?.polling && !state?.errorMessage) return null;
 
   return (
     <div className={styles.statusLine}>
-      {state.preparing ? <p role="status">{msg("music.status.preparing")}</p> : null}
-      {state.polling ? <p role="status">{msg("music.status.polling")}</p> : null}
+      {state.preparing && !state.activity ? <p role="status">{msg("music.status.preparing")}</p> : null}
+      {state.polling && !state.activity ? <p role="status">{msg("music.status.polling")}</p> : null}
       {state.errorMessage ? <p role="alert">{state.errorMessage}</p> : null}
     </div>
   );
@@ -2028,6 +2095,7 @@ function ConfirmationDialog({
           {confirmation.title ?? operationLabel(undefined, confirmation.request.operationId, msg)}
         </h2>
         <p>{confirmation.message ?? msg("music.confirm.defaultMessage")}</p>
+        {confirmation.request.operationId === "extend" || confirmation.request.operationId === "upload_extend" ? <p>{msg("music.continue.confirmPoint", { seconds: confirmation.request.parameters.seekSec ?? 1 })} · {msg(confirmation.request.operationId === "upload_extend" || confirmation.request.parameters.customMode ? "music.continue.byLyrics" : "music.continue.byIdea")}</p> : null}
         <CreditAmount prefix={msg("music.price.cost")} value={confirmation.quote.credits} />
         <div className={styles.confirmationActions}>
           <Button onClick={onCancel} type="button">

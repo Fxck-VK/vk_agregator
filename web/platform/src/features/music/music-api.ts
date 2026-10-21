@@ -233,10 +233,12 @@ export function buildMusicPrepareBody(
     ? nonEmpty(request.draft.customModelJobId ?? undefined)
     : undefined;
   const custom = customFlagForRequest(request, personaJobId, customModelJobId);
-  const generateCustom = request.operationId !== "generate" || custom === true;
+  const generateCustom = request.operationId === "extend" ? custom !== false : request.operationId !== "generate" || custom === true;
   const useOwnLyricsPrompt = parameters.customMode === undefined && request.mode === "own_lyrics"
     && lyricPromptActions.has(request.operationId);
-  const prompt = useOwnLyricsPrompt ? ownLyrics : descriptionPrompt;
+  const continuationLyrics = request.operationId === "extend" && parameters.customMode === true;
+  const continuationIdea = request.operationId === "extend" && custom === false;
+  const prompt = continuationLyrics ? nonEmpty(parameters.lyrics) : continuationIdea ? undefined : useOwnLyricsPrompt ? ownLyrics : descriptionPrompt;
   const durationSec = request.operationId === "fade_in" || request.operationId === "fade_out"
     ? clampInteger(parameters.fadeSeconds ?? 5, 1, 60)
     : ["generate", "extend", "cover", "upload_cover", "upload_extend"].includes(request.operationId) && (request.operationId === "upload_extend" || custom !== false) && request.draft.targetDurationMode === "custom"
@@ -247,7 +249,7 @@ export function buildMusicPrepareBody(
     action: request.operationId,
     audio_format: operation?.supportsAudioFormat === true ? exportFormat : undefined,
     audio_weight: generateCustom ? unitInterval(request.draft.promptWeight) : undefined,
-    auto_lyrics: useOwnLyricsPrompt && ["generate", "inspo", "upload_cover", "upload_extend", "extend", "mashup", "sample"].includes(request.operationId) ? false : undefined,
+    auto_lyrics: continuationLyrics || request.operationId === "upload_extend" || (useOwnLyricsPrompt && ["generate", "inspo", "upload_cover", "extend", "mashup", "sample"].includes(request.operationId)) ? false : undefined,
     bpm: positiveInteger(request.operationId === "sounds" ? parameters.bpm ?? 120 : parameters.bpm),
     continue_at_sec: nonNegative(parameters.seekSec),
     custom,
@@ -256,7 +258,7 @@ export function buildMusicPrepareBody(
     end_sec: nonNegative(parameters.rangeEndSec),
     format: request.operationId === "export" ? exportFormat : undefined,
     formats: request.operationId === "export" ? [exportFormat] : undefined,
-    gpt_description: gptDescriptionActions.has(request.operationId) ? operationDescription : undefined,
+    gpt_description: gptDescriptionActions.has(request.operationId) && !continuationLyrics ? operationDescription : undefined,
     infill_lyrics: nonEmpty(parameters.infillLyrics),
     instrumental: instrumentalActions.has(request.operationId) ? parameters.instrumental ?? request.draft.instrumental : undefined,
     key: request.operationId === "sounds" ? nonEmpty(parameters.musicalKey) : undefined,

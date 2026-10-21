@@ -570,6 +570,18 @@ action, instead of making the link inert before Chrome handles its download.
 Browser verification is recorded separately; source authorization and
 byte-serving are unchanged.
 
+Continuation UI clarification (2026-10-21): the existing APIMart
+[extend contract](https://docs.apimart.ai/ru/api-reference/audios/suno/extend)
+uses literal `prompt` lyrics by default; only explicit `custom=false` uses
+`gpt_description` as an idea. The existing
+[upload-extend contract](https://docs.apimart.ai/en/api-reference/audios/suno/upload-extend)
+always uses custom mode and does not accept `gpt_description`. Both pages were
+read on 2026-10-21. The web form now separates these meanings, sends explicit
+`auto_lyrics=false` for literal continuation, and requires a chosen time before
+preparing a quote. Uploaded recordings can follow the existing separately
+confirmed upload then owned-track extend path for ideas. No new provider route,
+capability admission, tariff, paid-test result or automatic activation is implied.
+
 The five upload-dependent cases (upload, upload_cover, upload_extend,
 add_vocals, add_instrumental) are still **not_run** while manual file selection
 is pending. This partial smoke does not verify Wild/Mini transforms, WAV/MP3

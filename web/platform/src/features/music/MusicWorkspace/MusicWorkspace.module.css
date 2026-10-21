@@ -570,6 +570,10 @@
   margin: 0;
 }
 
+.activity p {
+  margin: var(--space-1) 0 0;
+}
+
 .resultList,
 .compactTracks,
 .lyricsList,

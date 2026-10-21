@@ -143,7 +143,11 @@ export function MusicWorkspaceController({
   const [confirmationState, setConfirmationState] = useState<ControllerConfirmation | null>(null);
   const [preparing, setPreparing] = useState(false);
   const [uploading, setUploading] = useState(false);
-  const [pollingJobId, setPollingJobId] = useState<string | null>(null);
+  const [preparingRequest, setPreparingRequest] = useState<MusicWorkspaceActionRequest | null>(null);
+  const [activatingJob, setActivatingJob] = useState<MusicJob | null>(null);
+  const [pollingJob, setPollingJob] = useState<MusicJob | null>(null);
+  const [pollingFailed, setPollingFailed] = useState(false);
+  const pollingJobId = pollingJob?.id ?? null;
   const [historyCursor, setHistoryCursor] = useState<string | null>(null);
   const [historyHasMore, setHistoryHasMore] = useState(false);
   const [historyLoading, setHistoryLoading] = useState(false);
@@ -212,7 +216,7 @@ export function MusicWorkspaceController({
         setPreparedJob(null);
         setSelectedModelId(source.modelId);
         setMode("description");
-        setDraft(current => ({ ...current, maxMode: false, actionParameters: { ...current.actionParameters, extend: { seekSec } } }));
+        setDraft(current => ({ ...current, maxMode: false, actionParameters: { ...current.actionParameters, extend: { seekSec, seekConfirmed: false, customMode: false, maxMode: false } } }));
         setActiveOperationId("extend");
         handledContinuation.current = key;
       } catch {
@@ -240,7 +244,7 @@ export function MusicWorkspaceController({
       setHistoryCursor(history.next_cursor);
       setHistoryHasMore(history.has_more);
       const inProgressJob = history.items.find((job) => isPollableStatus(job.status));
-      setPollingJobId((current) => current ?? inProgressJob?.id ?? null);
+      setPollingJob((current) => current ?? inProgressJob ?? null);
       const resultJobs = history.items.filter((job) => canLoadResult(job.status));
       const resultLoads = await Promise.allSettled(resultJobs.map(job => reads.result(job)));
       if (signal.aborted) return;
@@ -279,34 +283,38 @@ export function MusicWorkspaceController({
     const reads = activeReads.current;
     if (!reads) return undefined;
     const polling = startGenerationPolling({ delayMs: pollIntervalMs, initialDelayMs: 0, poll: async (pollSignal) => {
-      const signal = AbortSignal.any([reads.controller.signal, pollSignal]);
+      const signal = AbortSignal.any([reads.controller.signal, pollSignal, AbortSignal.timeout(20_000)]);
       try {
         const job = await api.loadMusicJob(pollingJobId, signal);
-        if (signal.aborted) return false;
+        signal.throwIfAborted();
+        setPollingFailed(false);
+        setPollingJob(job);
         if (canLoadResult(job.status)) {
           const result = await reads.result(job, signal);
-          if (signal.aborted) return false;
+          signal.throwIfAborted();
           setTracks((current) => uniqueTracks([...musicTracksFromResult(result, resultCache.getJob(result.job_id)), ...current]));
           setResults((current) => {
             const summary = musicSummaryFromResult(result, resultCache.getJob(result.job_id));
             return summary ? uniqueResults([summary, ...current]) : current;
           });
-          setPollingJobId(null);
+          setPollingJob(null);
           await refreshTracks();
           return false;
         }
         if (isTerminalFailure(job.status)) {
           setErrorMessage({ key: "music.error.noResult" });
-          setPollingJobId(null);
+          setPollingJob(null);
           return false;
         }
         return true;
-      } catch {
-        if (!signal.aborted && navigator.onLine !== false) {
+      } catch (error) {
+        if (!reads.controller.signal.aborted && !pollSignal.aborted && error instanceof MusicApiError && [401, 403, 404, 410].includes(error.status)) {
           setErrorMessage({ key: "music.error.poll" });
-          setPollingJobId(null);
+          setPollingJob(null);
+          return false;
         }
-        return navigator.onLine === false;
+        if (!reads.controller.signal.aborted && !pollSignal.aborted && navigator.onLine !== false) setPollingFailed(true);
+        return true;
       }
     } });
     return polling.stop;
@@ -338,6 +346,7 @@ export function MusicWorkspaceController({
     setConfirmationState(null);
     setErrorMessage(null);
     setPreparing(true);
+    setPreparingRequest(request);
     try {
       const preparation = await api.prepareMusicJob(intent.body, intent.prepareKey);
       if (preparation.job.model_id !== request.modelId || preparation.job.action !== request.operationId) {
@@ -359,6 +368,7 @@ export function MusicWorkspaceController({
       setErrorMessage(errorMessageForPrepare(error));
     } finally {
       setPreparing(false);
+      setPreparingRequest(null);
     }
   }, [api, operations, prepareIntent, tracks, uuidFactory]);
 
@@ -374,7 +384,8 @@ export function MusicWorkspaceController({
 
     setConfirmationState(null);
     setErrorMessage(null);
-    setPollingJobId(preparedJob.job.id);
+    setActivatingJob(preparedJob.job);
+    setPollingFailed(false);
     try {
       const activation = await api.activateMusicJob(preparedJob.job.id, preparedJob.activationKey);
       if (signal.aborted) return;
@@ -386,18 +397,22 @@ export function MusicWorkspaceController({
           const summary = musicSummaryFromResult(result, resultCache.getJob(result.job_id));
           return summary ? uniqueResults([summary, ...current]) : current;
         });
-        setPollingJobId(null);
+        setPollingJob(null);
       } else if (isTerminalFailure(activation.job.status)) {
         setErrorMessage({ key: "music.error.noResult" });
-        setPollingJobId(null);
+        setPollingJob(null);
+      } else {
+        setPollingJob(activation.job);
       }
       setPreparedJob(null);
       void refreshTracks();
     } catch (error) {
       if (signal.aborted) return;
-      setPollingJobId(null);
+      setPollingJob(null);
       setConfirmationState((current) => current ?? { kind: "retry", preparedJob });
       setErrorMessage(errorMessageForActivation(error));
+    } finally {
+      setActivatingJob(null);
     }
   }, [api, operations, preparedJob, refreshTracks, tracks, resultCache]);
 
@@ -432,6 +447,7 @@ export function MusicWorkspaceController({
           ...current,
           ownedUpload: nextUploads[0] ?? null,
           ownedUploads: nextUploads,
+          actionParameters: { ...current.actionParameters, upload_extend: { ...current.actionParameters?.upload_extend, seekConfirmed: false } },
         };
       });
       setMode("upload");
@@ -443,6 +459,11 @@ export function MusicWorkspaceController({
   }, [api]);
 
   const state: MusicWorkspaceState = {
+    activity: uploading ? { stage: "uploading" }
+      : preparingRequest ? { stage: "quoting", operationId: preparingRequest.operationId, modelId: preparingRequest.modelId }
+      : activatingJob ? { stage: "activating", operationId: activatingJob.action, modelId: activatingJob.model_id }
+      : pollingJob ? { stage: pollingFailed ? "checking" : ["provider_succeeded", "postprocessing", "result_ready", "delivering", "succeeded"].includes(pollingJob.status) ? "finishing" : ["received", "validated", "credits_reserved", "queued", "prepared"].includes(pollingJob.status) ? "queued" : "generating", operationId: pollingJob.action, modelId: pollingJob.model_id }
+      : null,
     confirmation,
     errorMessage: renderMessage(msg, errorMessage),
     modelsMessage,
@@ -450,7 +471,7 @@ export function MusicWorkspaceController({
     historyHasMore,
     historyLoading,
     polling: pollingJobId !== null,
-    preparing: preparing || uploading,
+    preparing: preparing || uploading || activatingJob !== null,
   };
 
   return (

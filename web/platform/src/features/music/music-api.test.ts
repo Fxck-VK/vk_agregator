@@ -51,6 +51,16 @@ const tracks: readonly MusicTrack[] = [
 ];
 
 describe("music API helpers", () => {
+  it("keeps literal continuation lyrics separate from an idea and the hidden song draft", () => {
+    const body = buildMusicPrepareBody({ ...request, operationId: "extend", parameters: { customMode: true, prompt: "A dramatic rap verse", lyrics: "Only these words", seekSec: 20 } }, tracks, { enabled: true, id: "extend" });
+    expect(body.music).toMatchObject({ custom: true, prompt: "Only these words", auto_lyrics: false, continue_at_sec: 20 });
+    expect(body.music.gpt_description).toBeUndefined();
+  });
+  it("sends an idea only as inspiration for continuation", () => {
+    const body = buildMusicPrepareBody({ ...request, operationId: "extend", parameters: { customMode: false, prompt: "A dramatic rap verse", lyrics: "Unused words", seekSec: 20, maxMode: false } }, tracks, { enabled: true, id: "extend" });
+    expect(body.music).toMatchObject({ custom: false, gpt_description: "A dramatic rap verse" });
+    expect(body.music.prompt).toBeUndefined();
+  });
   it("uses the continuation tool's own Max choice and excludes custom-only duration in inspiration cover", () => {
     const continuation = buildMusicPrepareBody({ ...request, operationId: "extend", parameters: { seekSec: 30, maxMode: true }, draft: { ...request.draft, maxMode: false } }, tracks, { enabled: true, id: "extend", supportsMaxMode: true });
     expect(continuation.music.custom).toBeUndefined();
