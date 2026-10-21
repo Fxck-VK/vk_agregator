@@ -176,7 +176,12 @@ if [[ "${skip_local_health}" != "true" ]]; then
   fi
   docker exec -i vk-ai-aggregator-dev-platform-1 node --input-type=module - <<'NODE'
 const response = await fetch('http://127.0.0.1:3000/ru/login', { signal: AbortSignal.timeout(20000) });
-if (!response.ok || !/<button\b[^>]*>\s*VK\s*<\/button>/.test(await response.text())) {
+const buttons = (await response.text()).matchAll(/<button\b([^>]*)>([\s\S]*?)<\/button>/g);
+const hasVKButton = [...buttons].some(([, attributes, content]) =>
+  !/(?:^|\s)disabled(?:\s|=|$)/.test(attributes) &&
+  /\bVK\b/.test(content.replace(/<svg\b[\s\S]*?<\/svg>/g, '').replace(/<[^>]*>/g, ' '))
+);
+if (!response.ok || !hasVKButton) {
   console.error('[FAIL] DEV login page does not render the VK button');
   process.exit(1);
 }
