@@ -31,10 +31,10 @@ activation excludes website relations. Google login/linking is disabled by
 default with adapters/bindings retained; disabled providers cannot justify
 removing the last usable login. See [website invitations](runbooks/WEB_REFERRALS.md).
 
-Browser VK ID login/link may initialize account-owned `display_name` from the
-already authenticated provider response. Accountauth persists it only after
-identity resolution/linking; the repository locks the account, rechecks the
-verified VK binding and never replaces an existing name. Accountservice exposes
+Browser VK ID and Yandex login/link may initialize account-owned `display_name`
+from the already authenticated provider response. Accountauth persists it only
+after identity resolution/linking; the repository locks the account, rechecks the
+owned verified VK/Yandex binding and never replaces an existing name. Accountservice exposes
 this optional bounded text in the authenticated profile. The sidebar reuses it
 without extra VK calls; login-method labels and ownership stay unchanged. See
 [account identity contract](ACCOUNT_IDENTITY_CONTRACT.md#account-boundary).

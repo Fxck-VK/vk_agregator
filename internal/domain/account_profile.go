@@ -12,7 +12,7 @@ import (
 const MaxAccountDisplayNameRunes = 160
 
 // AccountProfileRepository stores presentation data on the canonical account.
-// The initializer accepts only an owned, verified VK binding and never replaces
+// The initializer accepts only an owned, verified VK/Yandex binding and never replaces
 // an existing name (including a name set by the account owner).
 type AccountProfileRepository interface {
 	GetAccountDisplayName(context.Context, uuid.UUID) (string, error)

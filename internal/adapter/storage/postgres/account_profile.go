@@ -43,7 +43,7 @@ func (r *AccountIdentityRepository) SetAccountDisplayNameIfEmpty(ctx context.Con
 		return mapError(err)
 	}
 	var verified bool
-	if err := tx.QueryRow(ctx, "SELECT EXISTS(SELECT 1 FROM account_identities WHERE id=$2 AND account_id=$1 AND provider='vk' AND verified_at IS NOT NULL)", accountID, identityID).Scan(&verified); err != nil {
+	if err := tx.QueryRow(ctx, "SELECT EXISTS(SELECT 1 FROM account_identities WHERE id=$2 AND account_id=$1 AND provider IN ('vk','yandex') AND verified_at IS NOT NULL)", accountID, identityID).Scan(&verified); err != nil {
 		return mapError(err)
 	}
 	if !verified {

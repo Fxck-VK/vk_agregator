@@ -45,15 +45,15 @@ func TestYandexBrowserRoutesIssueCookiesAndBindLinkToCurrentAccount(t *testing.T
 	ctx := context.Background()
 	h, _, sessions := newTestHandler(t)
 	repo := memory.NewAccountIdentityRepo()
-	auth := accountauth.New(identityresolver.New(memory.NewUserRepo(), repo, nil))
+	auth := accountauth.New(identityresolver.New(memory.NewUserRepo(), repo, nil), accountauth.WithProfileRepository(repo))
 	h.deps.OAuthLogins = auth
-	h.deps.Account = accountservice.New(repo, auth)
+	h.deps.Account = accountservice.New(repo, auth, accountservice.WithProfileRepository(repo))
 	calls := 0
 	h.deps.BrowserOAuth = accountoauth.NewBrowser(accountoauth.BrowserConfig{WebOrigin: "https://app.example.test", YandexClientID: "client", YandexClientSecret: "synthetic-secret"}, &yandexBrowserStore{data: map[string]accountoauth.BrowserTransaction{}}, accountoauth.NewRegistry(), &http.Client{Transport: yandexHTTPTransport(func(r *http.Request) (*http.Response, error) {
 		calls++
 		body := `{"access_token":"synthetic-access"}`
 		if r.URL.Host == "login.yandex.ru" {
-			body = `{"id":"Stable-Subject","client_id":"client"}`
+			body = `{"id":"Stable-Subject","client_id":"client","first_name":"Тестовый","last_name":"Пользователь"}`
 		}
 		return &http.Response{StatusCode: 200, Body: io.NopCloser(strings.NewReader(body)), Header: make(http.Header)}, nil
 	})})
@@ -120,6 +120,16 @@ func TestYandexBrowserRoutesIssueCookiesAndBindLinkToCurrentAccount(t *testing.T
 	principal, err := sessions.AuthenticateAccessToken(ctx, cookies[accessCookieName].Value)
 	if err != nil || principal.AccountID == uuid.Nil {
 		t.Fatal("issued session invalid")
+	}
+	meRequest := httptest.NewRequest("GET", "/web/v1/me", nil)
+	meRequest.AddCookie(cookies[accessCookieName])
+	meResponse := httptest.NewRecorder()
+	h.Routes().ServeHTTP(meResponse, meRequest)
+	var me struct {
+		DisplayName string `json:"display_name"`
+	}
+	if err := json.Unmarshal(meResponse.Body.Bytes(), &me); err != nil || meResponse.Code != 200 || me.DisplayName != "Тестовый Пользователь" {
+		t.Fatal("authenticated profile did not expose the Yandex name", err)
 	}
 	if repeat := callback(q, binding, nil); repeat.Header().Get("Location") != "/ru/login?oauth=failed" || calls != 2 {
 		t.Fatal("callback replay accepted")

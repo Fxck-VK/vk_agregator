@@ -162,16 +162,18 @@ Product surfaces must not read `account_identities` directly and must not build
 identity DTOs from raw repository rows.
 
 The authenticated profile may also return optional `display_name` (up to 160
-Unicode code points). Browser VK ID login/link initializes it from `first_name`
-and `last_name` in the authenticated server-side `user_info` response. Missing or
-oversized names do not prevent login. Formatting/control characters are
-normalized; the name is plain text, never identity proof or trusted HTML.
-The initializer locks the canonical account, rechecks its verified VK binding
-and fills only an empty name. Existing account names are never overwritten.
+Unicode code points). Browser VK ID and Yandex login/link initialize it from
+`first_name` and `last_name` in the authenticated server-side profile response.
+Yandex may fall back to normalized `real_name` when no usable name parts exist;
+provider login/nickname fields are not account names. Missing or oversized names
+do not prevent login. Formatting/control characters are normalized; the name is
+plain text, never identity proof or trusted HTML.
+The initializer locks the canonical account, rechecks its owned verified VK or
+Yandex binding and fills only an empty name. Existing account names are never overwritten.
 An ownership conflict or unverified/removed binding cannot populate a profile.
 This metadata is not logged and is not included in identity labels or public
 responses. `/web/v1/me` remains authenticated and `no-store`; reading it never
-calls VK. Existing accounts acquire the name on their next VK login or link,
+calls a provider. Existing accounts acquire the name on their next VK/Yandex login or link,
 without background provider calls or changes to balances/history/ownership.
 Migration `000057_account_display_name` must precede the new API rollout.
 This change does not add a manual profile editor.

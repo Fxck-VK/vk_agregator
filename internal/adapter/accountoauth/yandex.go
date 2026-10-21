@@ -36,9 +36,12 @@ func (b *Browser) yandexProfile(ctx context.Context, clientID, token string) (do
 		return empty, ErrInvalidAssertion
 	}
 	var info struct {
-		ID       string `json:"id"`
-		ClientID string `json:"client_id"`
-		Error    string `json:"error"`
+		ID        string `json:"id"`
+		ClientID  string `json:"client_id"`
+		Error     string `json:"error"`
+		FirstName string `json:"first_name"`
+		LastName  string `json:"last_name"`
+		RealName  string `json:"real_name"`
 	}
 	if err := json.NewDecoder(io.LimitReader(response.Body, 64<<10)).Decode(&info); err != nil || info.Error != "" || info.ClientID != clientID {
 		return empty, ErrInvalidAssertion
@@ -47,5 +50,9 @@ func (b *Browser) yandexProfile(ctx context.Context, clientID, token string) (do
 	if err != nil || normalized != info.ID {
 		return empty, ErrInvalidAssertion
 	}
-	return domain.VerifiedAccountLogin{Method: domain.AccountLoginYandex, ExternalID: info.ID, Verified: true}, nil
+	name := domain.NormalizeAccountDisplayName(info.FirstName + " " + info.LastName)
+	if name == "" {
+		name = domain.NormalizeAccountDisplayName(info.RealName)
+	}
+	return domain.VerifiedAccountLogin{Method: domain.AccountLoginYandex, ExternalID: info.ID, Verified: true, DisplayName: name}, nil
 }

@@ -30,7 +30,8 @@ func (r *AccountIdentityRepo) SetAccountDisplayNameIfEmpty(_ context.Context, ac
 	r.mu.Lock()
 	defer r.mu.Unlock()
 	identity, ok := r.byID[identityID]
-	if !ok || identity.AccountID != accountID || identity.Provider != domain.IdentityProviderVK || identity.VerifiedAt.IsZero() {
+	if !ok || identity.AccountID != accountID ||
+		(identity.Provider != domain.IdentityProviderVK && identity.Provider != domain.IdentityProviderYandex) || identity.VerifiedAt.IsZero() {
 		return domain.ErrUnverifiedLogin
 	}
 	if r.displayNames[accountID] == "" {

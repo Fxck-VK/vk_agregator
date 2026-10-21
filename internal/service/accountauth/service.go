@@ -63,12 +63,21 @@ func WithProfileRepository(repo domain.AccountProfileRepository) Option {
 	return func(s *Service) { s.profiles = repo }
 }
 
-func (s *Service) initializeVKProfileName(ctx context.Context, identity *domain.AccountIdentity, login domain.VerifiedAccountLogin) error {
+func (s *Service) initializeProviderProfileName(ctx context.Context, identity *domain.AccountIdentity, login domain.VerifiedAccountLogin) error {
 	name := domain.NormalizeAccountDisplayName(login.DisplayName)
-	if s.profiles == nil || normalizeLoginMethod(login.Method) != domain.AccountLoginVKID || name == "" {
+	if s.profiles == nil || name == "" {
 		return nil
 	}
-	if !login.Verified || identity == nil || identity.Provider != domain.IdentityProviderVK || identity.VerifiedAt.IsZero() {
+	var provider domain.IdentityProvider
+	switch normalizeLoginMethod(login.Method) {
+	case domain.AccountLoginVKID:
+		provider = domain.IdentityProviderVK
+	case domain.AccountLoginYandex:
+		provider = domain.IdentityProviderYandex
+	default:
+		return nil
+	}
+	if !login.Verified || identity == nil || identity.Provider != provider || identity.VerifiedAt.IsZero() {
 		return domain.ErrUnverifiedLogin
 	}
 	return s.profiles.SetAccountDisplayNameIfEmpty(ctx, identity.AccountID, identity.ID, name)
@@ -117,7 +126,7 @@ func (s *Service) ResolveOrCreate(ctx context.Context, login domain.VerifiedAcco
 	if resolution.AccountID == uuid.Nil {
 		return domain.IdentityResolution{}, errors.New("accountauth: resolver returned empty account id")
 	}
-	if err := s.initializeVKProfileName(ctx, resolution.Identity, login); err != nil {
+	if err := s.initializeProviderProfileName(ctx, resolution.Identity, login); err != nil {
 		return domain.IdentityResolution{}, err
 	}
 	return resolution, nil
@@ -153,7 +162,7 @@ func (s *Service) LinkVerifiedIdentity(ctx context.Context, actorAccountID, acco
 	if err != nil {
 		return nil, err
 	}
-	if err := s.initializeVKProfileName(ctx, identity, login); err != nil {
+	if err := s.initializeProviderProfileName(ctx, identity, login); err != nil {
 		return nil, err
 	}
 	return identity, nil

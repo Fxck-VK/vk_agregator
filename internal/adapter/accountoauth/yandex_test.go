@@ -4,6 +4,7 @@ import (
 	"context"
 	"crypto/sha256"
 	"encoding/base64"
+	"encoding/json"
 	"errors"
 	"io"
 	"net/http"
@@ -128,6 +129,36 @@ func TestYandexBrowserRejectsInvalidProfileAndToken(t *testing.T) {
 			_, login, err := b.Complete(context.Background(), "yandex", "browser", url.Values{"state": {start.State}, "code": {"synthetic-code"}})
 			if !errors.Is(err, ErrInvalidAssertion) || login.Verified {
 				t.Fatal("untrusted Yandex response accepted")
+			}
+		})
+	}
+}
+
+func TestYandexProfileDisplayName(t *testing.T) {
+	for _, tc := range []struct {
+		name, first, last, real, want string
+	}{
+		{"full name", "Тестовый", "Пользователь", "Ignored Name", "Тестовый Пользователь"},
+		{"normalize", "  Тестовый\t", "\u200b Пользователь ", "", "Тестовый Пользователь"},
+		{"first only", "Тестовый", "", "", "Тестовый"},
+		{"real name fallback", "", "", " Тестовый  Пользователь ", "Тестовый Пользователь"},
+		{"absent", "", "", "", ""},
+		{"oversized", strings.Repeat("Я", 161), "", "", ""},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			body, err := json.Marshal(map[string]string{
+				"id": "Stable-Subject", "client_id": "client", "first_name": tc.first,
+				"last_name": tc.last, "real_name": tc.real, "login": "ignored-login", "display_name": "Ignored Nickname",
+			})
+			if err != nil {
+				t.Fatal(err)
+			}
+			b := yandexTestBrowser(browserRoundTrip(func(r *http.Request) (*http.Response, error) {
+				return &http.Response{StatusCode: 200, Body: io.NopCloser(strings.NewReader(string(body))), Header: make(http.Header)}, nil
+			}))
+			login, err := b.yandexProfile(context.Background(), "client", "synthetic-access")
+			if err != nil || !login.Verified || login.ExternalID != "Stable-Subject" || login.DisplayName != tc.want {
+				t.Fatal("verified profile name not extracted correctly", err)
 			}
 		})
 	}
