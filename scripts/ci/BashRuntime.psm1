@@ -9,7 +9,7 @@ function Get-CIBashExecutable {
         }
         return $wslExecutable
     }
-    $bashCommand = Get-Command bash -CommandType Application -ErrorAction SilentlyContinue
+    $bashCommand = Get-Command bash -CommandType Application -ErrorAction SilentlyContinue | Select-Object -First 1
     if ($null -eq $bashCommand) { throw "Bash is required for CI checks on this platform." }
     return $bashCommand.Source
 }

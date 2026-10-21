@@ -13,6 +13,12 @@ function Assert-Equal($Expected, $Actual, [string]$Description) {
     if ($Expected -cne $Actual) { throw "$Description expected=[$Expected] actual=[$Actual]" }
 }
 
+$resolvedExecutable = & (Get-Module BashRuntime) { Get-CIBashExecutable }
+Assert-Equal 1 @($resolvedExecutable).Count "exactly one Bash runtime is selected"
+if (-not [IO.Path]::IsPathRooted($resolvedExecutable) -or -not (Test-Path -LiteralPath $resolvedExecutable -PathType Leaf)) {
+    throw "The selected Bash runtime must be one existing absolute executable path."
+}
+
 $tempParent = [IO.Path]::GetFullPath([IO.Path]::GetTempPath()).TrimEnd([IO.Path]::DirectorySeparatorChar) + [IO.Path]::DirectorySeparatorChar
 $tempRoot = Join-Path $tempParent ("bash-runtime-" + [guid]::NewGuid().ToString("N"))
 $savedRuntimePath = $env:PATH
@@ -82,3 +88,5 @@ exit "$2"
 }
 
 Write-Host "CI Bash runtime tests passed."
+# Expected native failures above must not become the GitHub pwsh wrapper's exit.
+exit 0

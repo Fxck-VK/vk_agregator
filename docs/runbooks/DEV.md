@@ -414,6 +414,8 @@ Windows Bash checks use the absolute system `wsl.exe` through
 Prepare the default WSL Linux distribution with Bash, `curl` and `jq`; a missing
 runtime or command fails with an explicit prerequisite error. No automatic
 fallback to Git Bash or changes to the default WSL distribution are made.
+Linux command discovery selects the first Bash executable in PATH even when
+the same binary is exposed under both `/usr/bin/bash` and `/bin/bash`.
 Both the workflow-monitor and migration-safety checks use this runtime, with
 `wslpath` conversion for Windows fixture paths. Linux/CI uses native Bash.
 Arguments are passed individually, and nonzero script exits are preserved.
