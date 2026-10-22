@@ -451,6 +451,15 @@ branch. `main` runs are not cancelled. Signed release publication still emits
 all eight exact-SHA images; per-service BuildKit cache scopes make unchanged
 builds cheap without relabelling old provenance.
 
+Mail-only pushes skip Docker Images but still start CI. If such a push cancels
+an older image run's CI, its monitor verifies that the remote `dev-deploy` head
+has advanced and requests cancellation of that image run itself. Only the image
+quality-gate job has Actions write permission for this purpose. A cancelled CI
+for the current head, failed CI, missing CI, API errors and timeouts still block
+publication. Cancellation never counts as successful CI; if GitHub does not
+stop the runner within 30 seconds, the gate fails closed. `main`, PR builds and
+default monitor callers retain their existing behavior.
+
 ## DEV Safety Rules
 
 - Do not use production VK community tokens in DEV.

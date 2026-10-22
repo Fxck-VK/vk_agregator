@@ -57,7 +57,9 @@ jobs:
     needs: validate_source
     timeout-minutes: 15
     permissions:
-      actions: read
+      # Only this gate may cancel its own superseded DEV run. Publication
+      # still requires this job to succeed for the exact commit SHA.
+      actions: write
       contents: read
     steps:
       - name: Checkout monitor script
@@ -71,6 +73,10 @@ jobs:
           GH_TOKEN: ${{ github.token }}
         run: |
           set -euo pipefail
+          monitor_options=()
+          if [[ "${GITHUB_EVENT_NAME}" == push && "${GITHUB_REF}" == refs/heads/dev-deploy ]]; then
+            monitor_options+=(--cancel-superseded-dev-run)
+          fi
           bash scripts/ci/wait-for-github-workflow.sh \
             --repository "${GITHUB_REPOSITORY}" \
             --workflow ci.yml \
@@ -78,7 +84,8 @@ jobs:
             --event push \
             --max-attempts 60 \
             --initial-delay-seconds 5 \
-            --max-delay-seconds 30
+            --max-delay-seconds 30 \
+            "${monitor_options[@]}"
 
   pull-request-build:
     name: Build ${{ matrix.service }}

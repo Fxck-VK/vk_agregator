@@ -46,6 +46,7 @@ Read only the document that matches the current task:
 | Production deploy, domains, Cloudflare, VPS runtime | `docs/runbooks/DEPLOYMENT.md` |
 | Support mailbox, editable Roundcube theme, UI publication, SMTP/IMAP and certificates | [Support mail](../docs/runbooks/SUPPORT_MAIL.md); [design](superpowers/specs/2026-10-22-mail-ui-delivery-design.md); [plan](superpowers/plans/2026-10-22-mail-ui-delivery.md) |
 | Local DEV contour and DEV GitHub deploy | `docs/runbooks/DEV.md` |
+| Cancel obsolete DEV image runs after mail-only pushes | [Implementation and verification](superpowers/plans/2026-10-22-cancel-superseded-dev-images.md) |
 | Remembered DEV gateway access, session expiry and rotation | [Operations](../docs/runbooks/DEV.md#remembered-browser-dev-access); [implementation plan](superpowers/plans/2026-09-29-dev-access-session.md) |
 | Workspace chat availability, account session recovery and private list cache | [Loading contract](../web/platform/docs/preloading.md); [implementation plan](superpowers/plans/2026-09-29-workspace-read-recovery.md) |
 | DEV deploy fast feedback, preflight serialization, workflow polling and build caches | approved design: `docs/superpowers/specs/2026-08-18-dev-deploy-fast-feedback-design.md`; implementation plan: `docs/superpowers/plans/2026-08-18-dev-deploy-fast-feedback.md` |
