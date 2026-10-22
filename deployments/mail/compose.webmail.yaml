@@ -1,0 +1,7 @@
+services:
+  webmail:
+    environment:
+      ROUNDCUBEMAIL_SKIN: epifera
+    volumes:
+      - ./ui-current/skin:/var/www/html/skins/epifera:ro
+      - ./ui-current/config:/var/roundcube/config:ro

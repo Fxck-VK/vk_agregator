@@ -53,3 +53,13 @@ reports/loadtest/
 # OS
 .DS_Store
 Thumbs.db
+# Mail runtime belongs only on the VPS, never in the source tree.
+scripts/mail/__pycache__/
+deployments/mail/webmail.env
+deployments/mail/config/
+deployments/mail/data/
+deployments/mail/acme/
+deployments/mail/ops/
+deployments/mail/ui-current
+deployments/mail/ui-releases/
+deployments/mail/incoming/

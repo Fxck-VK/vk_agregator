@@ -44,6 +44,7 @@ Read only the document that matches the current task:
 | Study24 model research, provider documentation and shared integration work | [Model catalog](../docs/superpowers/plans/2026-09-08-study24-apimart/README.md); [shared foundation](../docs/superpowers/plans/2026-09-08-study24-apimart/00-common-foundation.md); [DEV configuration](../docs/runbooks/DEV.md); [read-only preflight](../docs/runbooks/APIMART_PREFLIGHT.md) |
 | Account-first backend core independence, VK adapter separation, neutral sessions and delivery | docs/superpowers/specs/2026-07-30-account-first-backend-core-design.md; implementation plan: docs/superpowers/plans/2026-07-30-channel-neutral-result-delivery.md |
 | Production deploy, domains, Cloudflare, VPS runtime | `docs/runbooks/DEPLOYMENT.md` |
+| Support mailbox, editable Roundcube theme, UI publication, SMTP/IMAP and certificates | [Support mail](../docs/runbooks/SUPPORT_MAIL.md); [design](superpowers/specs/2026-10-22-mail-ui-delivery-design.md); [plan](superpowers/plans/2026-10-22-mail-ui-delivery.md) |
 | Local DEV contour and DEV GitHub deploy | `docs/runbooks/DEV.md` |
 | Remembered DEV gateway access, session expiry and rotation | [Operations](../docs/runbooks/DEV.md#remembered-browser-dev-access); [implementation plan](superpowers/plans/2026-09-29-dev-access-session.md) |
 | Workspace chat availability, account session recovery and private list cache | [Loading contract](../web/platform/docs/preloading.md); [implementation plan](superpowers/plans/2026-09-29-workspace-read-recovery.md) |

@@ -1,0 +1,94 @@
+name: Deploy Mail UI
+
+on:
+  push:
+    branches: [dev-deploy]
+    paths:
+      - 'deployments/mail/**'
+      - 'scripts/mail/**'
+      - 'scripts/deploy/deploy-mail-ui.sh'
+      - '.github/workflows/deploy-mail-ui.yml'
+      - 'web/platform/branding/brand.json'
+      - 'web/platform/public/assets/brand/**'
+  pull_request:
+    branches: [dev-deploy]
+    paths:
+      - 'deployments/mail/**'
+      - 'scripts/mail/**'
+      - 'scripts/deploy/deploy-mail-ui.sh'
+      - '.github/workflows/deploy-mail-ui.yml'
+      - 'web/platform/branding/brand.json'
+      - 'web/platform/public/assets/brand/**'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: mail-ui-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4.3.1
+        with:
+          persist-credentials: false
+      - name: Test packaging, safe deployment and rollback
+        run: python3 -m unittest discover -s scripts/mail -p 'test_*.py'
+      - name: Check shell syntax
+        run: bash -n scripts/deploy/deploy-mail-ui.sh deployments/mail/renew-certificates.sh
+      - name: Build public UI package
+        run: python3 scripts/mail/package_ui.py --revision "$GITHUB_SHA" --output "$RUNNER_TEMP/mail-ui.tar.gz"
+
+  deploy:
+    needs: validate
+    if: github.ref == 'refs/heads/dev-deploy' && github.event_name != 'pull_request'
+    runs-on: ubuntu-latest
+    environment: development
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4.3.1
+        with:
+          persist-credentials: false
+      - name: Refuse an outdated source revision
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          python3 - <<'PY'
+          import json,os,urllib.request
+          request=urllib.request.Request('https://api.github.com/repos/'+os.environ['GITHUB_REPOSITORY']+'/git/ref/heads/dev-deploy',headers={'Authorization':'Bearer '+os.environ['GH_TOKEN'],'Accept':'application/vnd.github+json'})
+          with urllib.request.urlopen(request,timeout=20) as response: head=json.load(response)['object']['sha']
+          if head!=os.environ['GITHUB_SHA']:raise SystemExit('Refusing to deploy an outdated mail UI revision')
+          PY
+      - name: Package and deploy only the mail client
+        shell: bash
+        env:
+          DEV_DEPLOY_HOST: ${{ secrets.DEV_DEPLOY_HOST }}
+          DEV_DEPLOY_USER: ${{ secrets.DEV_DEPLOY_USER }}
+          DEV_DEPLOY_SSH_KEY: ${{ secrets.DEV_DEPLOY_SSH_KEY }}
+          DEV_DEPLOY_SSH_KNOWN_HOSTS: ${{ secrets.DEV_DEPLOY_SSH_KNOWN_HOSTS }}
+        run: |
+          set -euo pipefail
+          for name in DEV_DEPLOY_HOST DEV_DEPLOY_USER DEV_DEPLOY_SSH_KEY DEV_DEPLOY_SSH_KNOWN_HOSTS; do
+            [[ -n "${!name:-}" ]] || { echo "Missing $name" >&2; exit 1; }
+          done
+          [[ "$DEV_DEPLOY_HOST" =~ ^[a-zA-Z0-9][a-zA-Z0-9.-]*$ ]]
+          [[ "$DEV_DEPLOY_USER" =~ ^[a-zA-Z_][a-zA-Z0-9_-]*$ ]]
+          install -d -m 700 "$HOME/.ssh"
+          printf '%s\n' "$DEV_DEPLOY_SSH_KEY" > "$HOME/.ssh/mail_key"
+          printf '%s\n' "$DEV_DEPLOY_SSH_KNOWN_HOSTS" > "$HOME/.ssh/mail_known_hosts"
+          chmod 600 "$HOME/.ssh/mail_key" "$HOME/.ssh/mail_known_hosts"
+          ssh-keygen -l -f "$HOME/.ssh/mail_known_hosts" >/dev/null
+          ssh-keygen -F "$DEV_DEPLOY_HOST" -f "$HOME/.ssh/mail_known_hosts" >/dev/null
+          archive="$RUNNER_TEMP/mail-ui.tar.gz"
+          python3 scripts/mail/package_ui.py --revision "$GITHUB_SHA" --output "$archive"
+          digest="$(sha256sum "$archive" | awk '{print $1}')"
+          ssh_opts=(-i "$HOME/.ssh/mail_key" -o BatchMode=yes -o StrictHostKeyChecking=yes -o UserKnownHostsFile="$HOME/.ssh/mail_known_hosts" -o GlobalKnownHostsFile=/dev/null -o ConnectTimeout=15 -o ServerAliveInterval=15 -o ServerAliveCountMax=3)
+          target="$DEV_DEPLOY_USER@$DEV_DEPLOY_HOST"
+          ssh "${ssh_opts[@]}" "$target" 'install -d -m 700 "$HOME/epifera-mail/incoming"'
+          scp "${ssh_opts[@]}" "$archive" "$target:epifera-mail/incoming/$GITHUB_SHA.tar.gz"
+          scp "${ssh_opts[@]}" scripts/deploy/deploy-mail-ui.sh "$target:epifera-mail/ops/deploy-mail-ui-$GITHUB_SHA.sh"
+          ssh "${ssh_opts[@]}" "$target" "bash epifera-mail/ops/deploy-mail-ui-$GITHUB_SHA.sh $GITHUB_SHA $digest"

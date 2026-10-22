@@ -1,6 +1,6 @@
 {
   "schema_version": 5,
-  "updated_at": "2026-10-21T21:21:39.4550386Z",
+  "updated_at": "2026-10-22T01:55:25.848687+00:00",
   "branch": "codex/vk-profile-name",
   "remote_tracking": "origin/dev-deploy",
   "purpose": "Short machine-readable current context and routing for agents. This file is not project history.",
@@ -41,7 +41,8 @@
       "docs/VK_BOT_AGENT_GUIDE.md",
       "docs/MODEL_CAPABILITIES.md",
       "docs/runbooks/MODEL_CATALOG.md",
-      "docs/runbooks/MODEL_ONBOARDING.md"
+      "docs/runbooks/MODEL_ONBOARDING.md",
+      "docs/runbooks/SUPPORT_MAIL.md"
     ],
     "do_not_read_by_default": [
       ".agents/logs/**",
@@ -59,6 +60,7 @@
     "loadtest_contour": "Mock providers, payments and delivery only; no production hosts or paid calls."
   },
   "recent_decisions": [
+    "Human support mail is a separate epifera-mail Compose project on the existing VPS. The editable Roundcube skin is deployments/mail/skins/epifera, with canonical brand assets packaged by scripts/mail/package_ui.py. Deploy Mail UI validates exact revisions and rolls only webmail forward with rollback, using existing DEV SSH secrets. Mailbox data/keys stay outside Git, and transactional website email remains on Resend notify.epifera.com. Operations and delivery gates: docs/runbooks/SUPPORT_MAIL.md.",
     "Unified Epifera release: preserve all incoming DEV text/music/media/toolchain fixes together with centralized website/email branding, provider SVG icons, neutral account avatar, brand-derived downloads and responsive login UI in the single active checkout. Publish the tested result to dev-deploy through exact-SHA CI, immutable images and mandatory smoke.",
     "Suno Studio requested tools are DEV-only (2026-10-19): lyrics/sounds/cover/mashup/stems/stems_all/add_vocals/add_instrumental/upload/upload_cover/upload_extend/upsample_tags, owned sources and signed MP3/WAV uploads; 8 authorized Suno V6/no-Max cases have one successful capture each ($0.5116 / 315 credits); lyrics legacy prompt normalization fixed, five upload-dependent live cases await manual input. See docs/runbooks/MODEL_CATALOG.md#suno-studio-tools-2026-10-19.",
     "Whisper-1 is DEV-only with the explicitly approved fixed site tariff of 25 credits per started minute, up to 8 minutes; owned probed MP3/WAV only, provider cost remains unknown, production admission unchanged. See docs/runbooks/MODEL_CATALOG.md#whisper-dev-fixed-minute-pricing-2026-10-19.",

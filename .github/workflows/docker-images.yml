@@ -17,6 +17,14 @@ on:
       - integration-web-backend
       - integration_web_backend
       - dev-deploy
+    paths-ignore:
+      - 'deployments/mail/**'
+      - 'scripts/mail/**'
+      - 'scripts/deploy/deploy-mail-ui.sh'
+      - '.github/workflows/deploy-mail-ui.yml'
+      - 'docs/runbooks/SUPPORT_MAIL.md'
+      - 'docs/superpowers/specs/2026-10-22-mail-ui-delivery-design.md'
+      - 'docs/superpowers/plans/2026-10-22-mail-ui-delivery.md'
   workflow_dispatch:
 
 permissions:

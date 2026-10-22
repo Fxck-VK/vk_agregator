@@ -1,0 +1,115 @@
+name: epifera-mail
+
+x-logging: &mail-logging
+  driver: local
+  options:
+    max-size: 5m
+    max-file: '3'
+
+services:
+  mailserver:
+    image: ghcr.io/docker-mailserver/docker-mailserver:16.0.1@sha256:d0fe7668defe157aad57ea31b1707ad1e2fb57d7a91bdf17cbdf876549946c86
+    hostname: mail.epifera.com
+    restart: unless-stopped
+    stop_grace_period: 1m
+    mem_limit: 640m
+    pids_limit: 256
+    logging: *mail-logging
+    environment:
+      TZ: Europe/Moscow
+      SSL_TYPE: letsencrypt
+      POSTMASTER_ADDRESS: support@epifera.com
+      ENABLE_IMAP: '1'
+      ENABLE_POP3: '0'
+      ENABLE_CLAMAV: '0'
+      ENABLE_RSPAMD: '1'
+      ENABLE_RSPAMD_VALKEY: '1'
+      ENABLE_OPENDKIM: '0'
+      ENABLE_OPENDMARC: '0'
+      ENABLE_POLICYD_SPF: '0'
+      ENABLE_AMAVIS: '0'
+      ENABLE_SPAMASSASSIN: '0'
+      ENABLE_POSTGREY: '0'
+      ENABLE_FAIL2BAN: '0'
+      ENABLE_UPDATE_CHECK: '0'
+      ENABLE_QUOTAS: '1'
+      PERMIT_DOCKER: none
+      SPOOF_PROTECTION: '1'
+      POSTFIX_MESSAGE_SIZE_LIMIT: '26214400'
+      POSTFIX_MAILBOX_SIZE_LIMIT: '536870912'
+      LOG_LEVEL: warn
+    ports:
+      - '25:25'
+      - '465:465'
+      - '993:993'
+    volumes:
+      - ./data/mail:/var/mail
+      - ./data/state:/var/mail-state
+      - ./data/logs:/var/log/mail
+      - ./config/dms:/tmp/docker-mailserver
+      - ./acme/certs:/etc/letsencrypt:ro
+    networks:
+      mail:
+        aliases:
+          - mail.epifera.com
+
+  webmail:
+    image: roundcube/roundcubemail:1.7.5-apache@sha256:734d9162c5225f4dcd744948ef915373afae6cece69bc1768b544615123ddc05
+    restart: unless-stopped
+    mem_limit: 192m
+    pids_limit: 96
+    logging: *mail-logging
+    env_file: webmail.env
+    environment:
+      ROUNDCUBEMAIL_DEFAULT_HOST: ssl://mail.epifera.com
+      ROUNDCUBEMAIL_DEFAULT_PORT: '993'
+      ROUNDCUBEMAIL_SMTP_SERVER: ssl://mail.epifera.com
+      ROUNDCUBEMAIL_SMTP_PORT: '465'
+      ROUNDCUBEMAIL_USERNAME_DOMAIN: epifera.com
+      ROUNDCUBEMAIL_DB_TYPE: sqlite
+      ROUNDCUBEMAIL_UPLOAD_MAX_FILESIZE: 20M
+      ROUNDCUBEMAIL_PLUGINS: archive,zipdownload
+      ROUNDCUBEMAIL_SKIN: elastic
+    volumes:
+      - ./data/roundcube:/var/roundcube/db
+      - ./config/roundcube:/var/roundcube/config:ro
+      - ./config/php-mail.ini:/usr/local/etc/php/conf.d/epifera-mail.ini:ro
+    networks:
+      - mail
+
+  web:
+    image: nginx:1.31.3-alpine@sha256:4a73073bd557c65b759505da037898b61f1be6cbcc3c2c3aeac22d2a470c1752
+    restart: unless-stopped
+    mem_limit: 48m
+    pids_limit: 32
+    logging: *mail-logging
+    depends_on:
+      - webmail
+    ports:
+      - '80:80'
+      - '443:443'
+    volumes:
+      - ./config/nginx:/etc/nginx/conf.d:ro
+      - ./acme/webroot:/var/www/acme:ro
+      - ./acme/certs:/etc/letsencrypt:ro
+    networks:
+      - mail
+
+  certbot:
+    image: certbot/certbot:v5.8.0@sha256:f70ad0adbb7e117f0fe42a63c553f28ea451edabc0148757b6efcd9735acaa20
+    profiles: [maintenance]
+    mem_limit: 192m
+    pids_limit: 64
+    logging: *mail-logging
+    volumes:
+      - ./acme/certs:/etc/letsencrypt
+      - ./acme/webroot:/var/www/acme
+      - ./acme/logs:/var/log/letsencrypt
+    networks:
+      - mail
+
+networks:
+  mail:
+    ipam:
+      config:
+        - subnet: 172.29.42.0/24

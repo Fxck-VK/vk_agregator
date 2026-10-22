@@ -5,3 +5,6 @@ go.sum text eol=lf
 *.sh text eol=lf
 *.sql text eol=lf
 *.sha256 text eol=lf
+deployments/mail/** text=auto eol=lf
+scripts/mail/*.py text eol=lf
+.github/workflows/deploy-mail-ui.yml text eol=lf

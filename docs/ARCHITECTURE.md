@@ -3361,3 +3361,17 @@ Worker-signed audio reference paths use the inspected MP3/WAV/AAC extension.
 The extension is covered by HMAC; GET, HEAD and ranges retain ownership, Job
 binding, active-status and expiry checks. Existing MP4 video paths stay valid.
 DEV domain assembly also migrates the provider-reference public origin.
+
+
+## Human support mail (2026-10-22)
+
+The human support mailbox support@epifera.com runs in a separate epifera-mail
+Compose project on the current VPS. Docker Mailserver owns SMTP, IMAP and mail
+data; Roundcube is its HTTPS client. Mailbox credentials and DKIM private keys
+stay outside Git and website runtime configuration. Transactional website mail
+continues through the existing Resend adapter on notify.epifera.com. Operations,
+client settings and remaining delivery gates: docs/runbooks/SUPPORT_MAIL.md.
+The editable skin extends Elastic. A separate Deploy Mail UI workflow packages
+canonical brand assets and deploys a versioned Compose overlay, recreating only
+webmail with HTTPS/asset verification and rollback. Mail-only edits do not build
+the application images; mail data and the website release remain independent.

@@ -1,0 +1,9 @@
+{
+  "name": "Epifera",
+  "author": "Epifera",
+  "license": "GPL-3.0-or-later",
+  "extends": "elastic",
+  "links": {
+    "icon": {"type": "image/png", "href": "skins/epifera/images/favicon.png?v=__EPIFERA_UI_REVISION__"}
+  }
+}

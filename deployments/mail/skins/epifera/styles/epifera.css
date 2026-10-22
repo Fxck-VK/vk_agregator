@@ -1,0 +1,42 @@
+/* Edit this file for mail-client styling. Elastic supplies the working UI.
+   Brand logo/name/favicon come from web/platform/branding/brand.json at build. */
+:root {
+  --epifera-accent: #a78bfa;
+  --epifera-accent-hover: #c4b5fd;
+  --epifera-focus: rgb(167 139 250 / 35%);
+}
+
+#layout-menu #logo {
+  max-width: 44px;
+  max-height: 44px;
+  object-fit: contain;
+}
+
+#login-form #logo {
+  max-width: 88px;
+  max-height: 88px;
+  object-fit: contain;
+}
+
+html.dark-mode .btn-primary {
+  background-color: var(--epifera-accent);
+  border-color: var(--epifera-accent);
+  color: #14111e;
+}
+
+html.dark-mode .btn-primary:hover {
+  background-color: var(--epifera-accent-hover);
+  border-color: var(--epifera-accent-hover);
+}
+
+html.dark-mode #taskmenu a.selected,
+html.dark-mode #taskmenu a:hover,
+html.dark-mode .listing li.selected > a,
+html.dark-mode .listing tr.selected td {
+  color: var(--epifera-accent-hover);
+}
+
+.form-control:focus {
+  border-color: var(--epifera-accent);
+  box-shadow: 0 0 0 0.2rem var(--epifera-focus);
+}
