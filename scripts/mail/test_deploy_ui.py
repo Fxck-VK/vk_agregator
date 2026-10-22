@@ -119,6 +119,16 @@ else:print('skins/epifera/styles/epifera.css?v='+release['revision'])
         self.assertIn('restored',result.stderr)
         self.assertEqual(self.sentinel.read_text(),'preserved mail data')
 
+    def test_relative_ssh_script_path_installs_manual_rollback_helper(self):
+        script=self.home/'bin/deploy-mail-ui.sh'
+        script.write_bytes(DEPLOY.read_bytes())
+        revision='e'*40
+        result=subprocess.run(['bash','bin/deploy-mail-ui.sh',revision,self.release(revision)],cwd=self.home,env=self.env,capture_output=True,text=True)
+        self.assertEqual(result.returncode,0,result.stdout+result.stderr)
+        installed=self.runtime/'ops/deploy-mail-ui.sh'
+        self.assertTrue(installed.is_file(),'Successful deployment must retain the rollback script')
+        self.assertEqual(installed.read_bytes(),DEPLOY.read_bytes())
+
 
 if __name__ == '__main__':
     unittest.main()

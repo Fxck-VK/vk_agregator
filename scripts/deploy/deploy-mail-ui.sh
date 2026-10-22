@@ -2,6 +2,7 @@
 # Install a public UI artifact into the existing mail project; never provision mail.
 set -Eeuo pipefail
 umask 077
+deploy_source="$(readlink -f "${BASH_SOURCE[0]}")"
 
 revision="${1:-}"
 digest="${2:-}"
@@ -144,7 +145,7 @@ trap - ERR
 if [[ -n "$previous" && "$previous" != "$mail_root/ui-releases/$revision" ]]; then
   printf '%s\n' "${previous##*/}" >ops/previous-ui-revision
 fi
-if [[ -f "${BASH_SOURCE[0]}" && "$(readlink -f "${BASH_SOURCE[0]}")" != "$mail_root/ops/deploy-mail-ui.sh" ]]; then
-  install -m 700 "${BASH_SOURCE[0]}" ops/deploy-mail-ui.sh
+if [[ -f "$deploy_source" && "$deploy_source" != "$mail_root/ops/deploy-mail-ui.sh" ]]; then
+  install -m 700 "$deploy_source" ops/deploy-mail-ui.sh
 fi
 printf 'Mail UI deployed and verified: %s\n' "$revision"
