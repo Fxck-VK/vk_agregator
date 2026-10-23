@@ -1,4 +1,4 @@
-import { notFound } from "next/navigation";
+import { notFound } from "@/i18n/server";
 import { PageContainer } from "@/components/public/PageContainer/PageContainer";
 import Link from "@/i18n/Link";
 import { getRequestDictionary, getRequestLocale } from "@/i18n/server";

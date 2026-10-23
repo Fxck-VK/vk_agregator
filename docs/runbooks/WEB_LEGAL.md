@@ -100,7 +100,7 @@ forwards writes to a real backend.
    withdrawal or deleting existing evidence.
 
 The generated-file lifetime is governed separately by
-[`DATA_RETENTION_POLICY.md`](../DATA_RETENTION_POLICY.md#generated-file-lifetime-two-calendar-months).
+[generated-file retention](../../docs/DATA_RETENTION_POLICY.md#generated-file-lifetime-two-calendar-months).
 This integration does not change backups, processor contracts or data locations.
 
 ## Focused verification
