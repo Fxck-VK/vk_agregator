@@ -1,4 +1,5 @@
 import type { ModelSelectorCategoryId } from "../WorkspaceModelSelector/model-selector-sections";
+import { searchModels } from "../model-search";
 
 export type ModelCatalogModel = {
   category?: string;
@@ -23,15 +24,7 @@ export function matchesModelCatalogCategory(model: Pick<ModelCatalogModel, "cate
 }
 
 export function filterCatalogModels<T extends ModelCatalogModel>(models: readonly T[], filters: ModelCatalogFilters): T[] {
-  const query = filters.query.trim().toLowerCase();
-
-  return models.filter((model) => {
-    const matchesQuery =
-      query === "" || model.name.toLowerCase().includes(query) || model.id.toLowerCase().includes(query);
-    const matchesCategory = matchesModelCatalogCategory(model, filters.category);
-
-    return matchesQuery && matchesCategory;
-  });
+  return searchModels(models.filter(model => matchesModelCatalogCategory(model, filters.category)), filters.query);
 }
 
 export function filterAndSortCatalogModels<T extends ModelCatalogModel>(

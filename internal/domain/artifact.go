@@ -60,7 +60,8 @@ const (
 	ArtifactStatusReady ArtifactStatus = "ready"
 	// ArtifactStatusFailed means ingestion or scanning failed.
 	ArtifactStatusFailed ArtifactStatus = "failed"
-	// ArtifactStatusDeleted means the bytes were purged.
+	// ArtifactStatusDeleted revokes access; expired storage coordinates remain
+	// until maintenance confirms their physical purge.
 	ArtifactStatusDeleted ArtifactStatus = "deleted"
 )
 

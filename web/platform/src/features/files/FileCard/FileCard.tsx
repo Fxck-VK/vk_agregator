@@ -11,6 +11,8 @@ import type { Dictionary } from "@/i18n/dictionary";
 import type { ImageJob, ImageJobResult } from "@/lib/web-api/contracts";
 
 import styles from "./FileCard.module.css";
+import { ArtifactDeleteButton } from "../ArtifactDeleteButton";
+import { useArtifactDeletion } from "../artifact-deletion";
 
 export type FileResultState = "idle" | "loading" | "error";
 
@@ -40,6 +42,7 @@ type FileCardProps = {
 export function FileCard({ isRetrying, job, onOpenPreview, onRequestResult, onRetryJob, result, resultState, selectionAction, showDeleteControl = true }: Readonly<FileCardProps>) {
   const msg = useMessages();
   const t = useDictionary();
+  const deletion = useArtifactDeletion();
   const cardRef = useRef<HTMLElement | null>(null);
   const canPreview = job.status === "succeeded";
 
@@ -66,17 +69,20 @@ export function FileCard({ isRetrying, job, onOpenPreview, onRequestResult, onRe
   }, [canPreview, job, onRequestResult, result, resultState]);
 
   if (result !== null) {
+    const artifacts = result.artifacts.filter(artifact => !deletion.isDeleted(artifact.id, artifact.deleted));
+    if (artifacts.length === 0) return null;
     return (
       <article
         aria-busy={isRetrying || undefined}
         className={`${styles.card} ${styles.mediaCard}`}
         ref={cardRef}
       >
-        {result.artifacts.map((artifact) => {
+        {artifacts.map((artifact) => {
           const artifactPath = `/web/v1/image-artifacts/${artifact.id}`;
 
           return (
             <div className={styles.mediaItem} key={artifact.id}>
+              {showDeleteControl && !selectionAction ? <ArtifactDeleteButton artifactID={artifact.id} className={styles.deleteControl} /> : null}
               <MediaImage
                 alt={t.files.generatedImageAlt}
                 className={styles.media}
@@ -123,19 +129,6 @@ export function FileCard({ isRetrying, job, onOpenPreview, onRequestResult, onRe
             </div>
           );
         })}
-        {showDeleteControl && !selectionAction ? (
-          <button
-            aria-label={t.files.deleteUnavailable}
-            className={styles.deleteControl}
-            disabled
-            title={t.files.deleteUnavailable}
-            type="button"
-          >
-            <svg aria-hidden="true" className={styles.actionIcon} fill="none" focusable="false" viewBox="0 0 24 24">
-              <path d="M4 7h16M9 7V4h6v3m3 0-1 14H7L6 7m4 4v6m4-6v6" stroke="currentColor" strokeLinecap="round" strokeLinejoin="round" strokeWidth="1.8" />
-            </svg>
-          </button>
-        ) : null}
         <div className={styles.accessibleMetadata} data-testid="file-card-accessible-metadata">
           <p>{statusLabel(job.status, t)}</p>
           <h2>{job.prompt}</h2>

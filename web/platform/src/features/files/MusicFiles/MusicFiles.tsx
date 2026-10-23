@@ -11,6 +11,7 @@ import { createMusicResultCache, createMusicResultReader } from "@/features/musi
 import { useOptionalWorkspaceDataCache } from "@/features/workspace/WorkspaceDataCache/WorkspaceDataCache";
 import { useDictionary, useMessages } from "@/i18n/LocaleProvider";
 import styles from "./MusicFiles.module.css";
+import { artifactIDFromPath, useArtifactDeletion } from "../artifact-deletion";
 
 type Entry = { job: MusicJob; result: MusicJobResult };
 type MusicFilesAPI = Pick<typeof musicApi, "loadMusicJobs" | "loadMusicJobResult">;
@@ -29,6 +30,7 @@ export function MusicFiles({ visible, showEmpty = true, onHasFilesChange, api = 
   catalogLoader?: () => Promise<MusicModelCatalog>;
 }>) {
   const t = useDictionary();
+  const { deletedIDs } = useArtifactDeletion();
   const msg = useMessages();
   const workspace = useOptionalWorkspaceDataCache();
   const [cache] = useState(() => workspace?.musicResults ?? createMusicResultCache());
@@ -90,11 +92,11 @@ export function MusicFiles({ visible, showEmpty = true, onHasFilesChange, api = 
     return () => { active = false; };
   }, [catalogLoader, visible]);
   useEffect(() => {
-    if (hasLoaded) onHasFilesChange?.(entries.some(entry => entry.result.tracks.length > 0));
-  }, [entries, hasLoaded, onHasFilesChange]);
+    if (hasLoaded) onHasFilesChange?.(entries.some(entry => musicTracksFromResult(entry.result, entry.job).some(track => !deletedIDs.includes(artifactIDFromPath(track.artifactPlaybackUrl) ?? ""))));
+  }, [entries, hasLoaded, onHasFilesChange, deletedIDs]);
 
   if (!visible) return null;
-  const tracks = entries.flatMap(entry => musicTracksFromResult(entry.result, entry.job));
+  const tracks = entries.flatMap(entry => musicTracksFromResult(entry.result, entry.job)).filter(track => !deletedIDs.includes(artifactIDFromPath(track.artifactPlaybackUrl) ?? ""));
 
   return <section aria-label={msg("music.files.heading")} aria-busy={loading || undefined} className={styles.root}>
     <h2>{msg("music.files.heading")}</h2>
@@ -103,7 +105,7 @@ export function MusicFiles({ visible, showEmpty = true, onHasFilesChange, api = 
       {tracks.map(track => {
         const model = catalog?.models.find(model => model.id === track.modelId);
         const canContinue = (track.durationSec ?? 0) > 1 && model?.enabled && model.operations.some(op => op.id === "extend" && op.enabled);
-        return <MusicTrackCard key={track.id} track={track} continueHref={canContinue ? musicContinuationHref(track) : undefined} />;
+        return <MusicTrackCard key={track.id} track={track} continueHref={canContinue ? musicContinuationHref(track) : undefined} showDeleteControl />;
       })}
     </div>
     {failed ? <StateNotice kind="error" action={{ label: t.files.retry, disabled: loading, onClick: () => void loadPage(retryCursor) }}>{msg("music.files.error")}</StateNotice> : null}

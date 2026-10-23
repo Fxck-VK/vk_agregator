@@ -55,6 +55,11 @@ describe("filterCatalogModels", () => {
     expect(filterCatalogModels(models, { category: "images", query: "model-id" })).toEqual([]);
     expect(filterCatalogModels(models, { category: "text", query: "model-id" })).toEqual([models[1]]);
   });
+
+  it("uses smart name matching while retaining the explicit catalog category filter", () => {
+    expect(filterCatalogModels(models, { category: "images", query: "нана банана" })).toEqual([models[0]]);
+    expect(filterCatalogModels(models, { category: "text", query: "нана банана" })).toEqual([]);
+  });
 });
 
 describe("filterAndSortCatalogModels", () => {

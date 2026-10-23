@@ -37,6 +37,15 @@ function popularOptions(dialog = screen.getByRole("dialog")) {
 describe("ModelSelector", () => {
   afterEach(cleanup);
 
+  it.each(["ru", "en"] as const)("accepts Russian search with a localized results heading (%s)", locale => {
+    const model: ModelSelectorModel = { id: "nano_banana_pro", name: "Nano Banana Pro", category: "images", categories: ["images"] };
+    render(<LocaleProvider locale={locale}><ModelSelector models={[model]} selectedModelId={model.id} onSelect={vi.fn()} /></LocaleProvider>);
+    fireEvent.click(screen.getByRole("button"));
+    fireEvent.change(screen.getByRole("searchbox"), { target: { value: "нана банана про" } });
+    expect(screen.getByRole("heading", { name: locale === "ru" ? "Результаты поиска" : "Search results" })).toBeInTheDocument();
+    expect(within(screen.getByRole("dialog")).getByRole("button", { name: /^Nano Banana Pro/ })).toBeInTheDocument();
+  });
+
   it.each(["ru", "en"] as const)("renders fallback prices with the shared star in inline and tooltip descriptions (%s)", locale => {
     const model = chatModelForSelector({ id: "priced-model", name: "Priced model", categories: ["text"], estimate_credits: 20, max_output_tokens: 2048 });
     const props = { models: [model], onSelect: vi.fn(), selectedModelId: model.id };
@@ -224,7 +233,7 @@ describe("ModelSelector", () => {
     fireEvent.change(screen.getByRole("searchbox", { name: ru.modelSelector.searchLabel }), {
       target: { value: "Veo" },
     });
-    fireEvent.click(popularOptions(dialog).getByRole("button", { name: /Google Veo 3.1/ }));
+    fireEvent.click(within(dialog).getByRole("button", { name: /Google Veo 3.1/ }));
 
     expect(onSelect).toHaveBeenCalledExactlyOnceWith(taskModels[1]);
     expect(trigger).toHaveAttribute("aria-expanded", "false");

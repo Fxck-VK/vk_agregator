@@ -9,6 +9,8 @@ import { useMessages } from "@/i18n/LocaleProvider";
 import type { MusicTrack } from "../MusicWorkspace";
 import { musicArtifactLabel, normalizeMusicArtifactURL } from "../music-api";
 import styles from "./MusicTrackCard.module.css";
+import { ArtifactDeleteButton } from "@/features/files/ArtifactDeleteButton";
+import { artifactIDFromPath, useArtifactDeletion } from "@/features/files/artifact-deletion";
 
 let playingAudio: HTMLAudioElement | null = null;
 
@@ -17,7 +19,7 @@ export function musicTime(seconds: number) {
   return `${Math.floor(value / 60)}:${String(value % 60).padStart(2, "0")}`;
 }
 
-export function MusicTrackCard({ track, onContinue, continueHref, selected, onSelect, selectLabel, selectionDisabled }: Readonly<{
+export function MusicTrackCard({ track, onContinue, continueHref, selected, onSelect, selectLabel, selectionDisabled, showDeleteControl = false }: Readonly<{
   track: MusicTrack;
   onContinue?: (continueAtSec: number) => void;
   continueHref?: string;
@@ -25,8 +27,10 @@ export function MusicTrackCard({ track, onContinue, continueHref, selected, onSe
   onSelect?: () => void;
   selectLabel?: string;
   selectionDisabled?: boolean;
+  showDeleteControl?: boolean;
 }>) {
   const msg = useMessages();
+  const deletion = useArtifactDeletion();
   const audioRef = useRef<HTMLAudioElement>(null);
   const menuRef = useRef<HTMLButtonElement>(null);
   const menuID = useId();
@@ -38,11 +42,14 @@ export function MusicTrackCard({ track, onContinue, continueHref, selected, onSe
   const [mediaDuration, setMediaDuration] = useState(0);
   const [failed, setFailed] = useState(false);
   const title = track.title || msg(track.sourceAction === "upload" ? "music.tools.imported" : "music.track.titleFallback");
-  const source = normalizeMusicArtifactURL(track.artifactPlaybackUrl);
-  const cover = normalizeMusicArtifactURL(track.coverImageUrl);
+  const sourceID = artifactIDFromPath(track.artifactPlaybackUrl);
+  const sourceDeleted = sourceID ? deletion.isDeleted(sourceID) : false;
+  const source = sourceDeleted ? undefined : normalizeMusicArtifactURL(track.artifactPlaybackUrl);
+  const coverID = artifactIDFromPath(track.coverImageUrl);
+  const cover = coverID && deletion.isDeleted(coverID) ? undefined : normalizeMusicArtifactURL(track.coverImageUrl);
   const duration = mediaDuration || track.durationSec || 0;
   const continueAt = Math.max(1, Math.min(Math.floor(positionChosen ? position : duration - 1), Math.floor(duration) - 1));
-  const downloads = (track.downloads ?? []).filter(a => normalizeMusicArtifactURL(a.url));
+  const downloads = (track.downloads ?? []).filter(a => normalizeMusicArtifactURL(a.url) && !deletion.isDeleted(artifactIDFromPath(a.url) ?? ""));
 
   useEffect(() => {
     const audio = audioRef.current;
@@ -60,6 +67,7 @@ export function MusicTrackCard({ track, onContinue, continueHref, selected, onSe
     void audio.play().catch(() => { setPlaying(false); setFailed(true); });
   };
 
+  if (sourceDeleted) return null;
   return (
     <article className={styles.card} data-selected={selected || undefined}>
       {source ? <audio hidden preload="none" ref={audioRef} src={source}
@@ -94,6 +102,7 @@ export function MusicTrackCard({ track, onContinue, continueHref, selected, onSe
         {failed ? <p className={styles.error} role="status">{msg("music.card.playbackError")}</p> : null}
       </div>
       <div className={styles.actions}>
+        {showDeleteControl && sourceID ? <ArtifactDeleteButton artifactID={sourceID} className={styles.select} relatedArtifactIDs={downloads.flatMap(item => { const id = artifactIDFromPath(item.url); return id ? [id] : []; })} /> : null}
         {onSelect ? <button aria-label={selectLabel} aria-pressed={selected} className={styles.select} disabled={selectionDisabled} onClick={onSelect} type="button">{selected ? "✓" : "+"}</button> : null}
         <button aria-controls={menuID} aria-expanded={menuOpen} aria-haspopup="menu" aria-label={msg("music.card.actions", { title })}
           className={styles.menuButton} onClick={() => setMenuOpen(!menuOpen)} ref={menuRef} type="button">⋯</button>

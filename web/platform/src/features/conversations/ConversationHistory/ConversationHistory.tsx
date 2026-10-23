@@ -247,6 +247,7 @@ function ConversationHistoryReady({
       if (!isSafeWebChatAcceptedResponse(response.status, job)) {
         throw new Error("Unable to complete the request.");
       }
+      workspaceConversationList?.pinConversationModel(history.conversationId, turn.modelId ?? "chatgpt");
 
       setPendingTurn((currentTurn) => currentTurn?.id === turn.id
         ? { ...currentTurn, status: "accepted" }

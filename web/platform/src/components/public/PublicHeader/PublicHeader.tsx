@@ -7,7 +7,6 @@ import type { PublicDictionary } from "@/i18n/public/dictionary";
 
 import { PageContainer } from "../PageContainer/PageContainer";
 import { PrimaryButton } from "../PrimaryButton/PrimaryButton";
-import { PublicThemeSwitcher } from "../PublicThemeSwitcher/PublicThemeSwitcher";
 import styles from "./PublicHeader.module.css";
 
 export type PublicNavigationItem = {
@@ -44,14 +43,6 @@ export function PublicHeader({ dictionary, navigationItems = [] }: PublicHeaderP
         ) : <span className={styles.spacer} />}
 
         <div className={styles.actions}>
-          <PublicThemeSwitcher
-            labels={{
-              dark: dictionary.theme.dark,
-              group: dictionary.theme.label,
-              light: dictionary.theme.light,
-              system: dictionary.theme.system,
-            }}
-          />
           <PrimaryButton href="/app">{dictionary.navigation.openWorkspace}</PrimaryButton>
         </div>
       </PageContainer>

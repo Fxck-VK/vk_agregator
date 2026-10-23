@@ -1,0 +1,4295 @@
+{
+  "title": "Шаблоны и данные SEO структуры Epifera",
+  "version": 1,
+  "snapshotDate": "2026-10-23",
+  "status": "proposed-design",
+  "implementationChanged": false,
+  "description": "Проектные записи для наполнения. Не импортируются приложением и не дают разрешение на индексирование или запуск модели.",
+  "localeContract": {
+    "supported": [
+      "ru",
+      "en"
+    ],
+    "default": "ru",
+    "paths": "/{locale}/...",
+    "xDefault": "ru",
+    "reviewAndPublishedRequireBothLocales": true
+  },
+  "sourceRegistry": "../magnific-seo-registry/pages.json.gz",
+  "routeNamespace": {
+    "sharedAiSlugOwners": [
+      "Tool",
+      "ModelFamily",
+      "Task",
+      "Audience"
+    ],
+    "reservedAiSlugs": [
+      "docs"
+    ],
+    "uniqueAcrossAllOwners": true,
+    "mediaTypes": [
+      "photos",
+      "vectors",
+      "videos",
+      "icons",
+      "psd",
+      "fonts",
+      "3d-models",
+      "mockups",
+      "templates",
+      "audio",
+      "stickers"
+    ],
+    "note": "Все конкретные и фиксированные пути проверяются общим реестром; mediaType допускается только из списка."
+  },
+  "commonEditorialFields": [
+    {
+      "name": "id",
+      "type": "stable-id",
+      "requiredForPublication": true,
+      "description": "Неизменяемый ID; отношения не используют slug.",
+      "source": "editorial",
+      "storageScope": "entity"
+    },
+    {
+      "name": "kind",
+      "type": "entity-type",
+      "requiredForPublication": true,
+      "description": "Тип записи.",
+      "source": "editorial",
+      "storageScope": "entity"
+    },
+    {
+      "name": "status",
+      "type": "draft|review|published|archived",
+      "requiredForPublication": true,
+      "description": "Редакционное состояние.",
+      "source": "editorial",
+      "storageScope": "entity"
+    },
+    {
+      "name": "indexing",
+      "type": "index|noindex",
+      "requiredForPublication": true,
+      "description": "Индексировать можно только опубликованную готовую страницу.",
+      "source": "editorial",
+      "storageScope": "entity"
+    },
+    {
+      "name": "translations",
+      "type": "map<ru|en,LocalizedContent>",
+      "requiredForPublication": true,
+      "description": "В review и published обе локали обязательны по текущему контракту.",
+      "source": "editorial",
+      "storageScope": "entity"
+    },
+    {
+      "name": "createdAt",
+      "type": "iso-datetime",
+      "requiredForPublication": true,
+      "description": "Фактическая дата создания записи.",
+      "source": "editorial",
+      "storageScope": "entity"
+    },
+    {
+      "name": "updatedAt",
+      "type": "iso-datetime",
+      "requiredForPublication": true,
+      "description": "Дата содержательного изменения.",
+      "source": "editorial",
+      "storageScope": "entity"
+    },
+    {
+      "name": "publishedAt",
+      "type": "iso-datetime",
+      "requiredForPublication": true,
+      "description": "Дата публикации; отсутствует до публикации.",
+      "source": "editorial",
+      "storageScope": "entity"
+    },
+    {
+      "name": "lastReviewedAt",
+      "type": "iso-datetime",
+      "requiredForPublication": true,
+      "description": "Дата последней проверки содержания.",
+      "source": "editorial",
+      "storageScope": "entity"
+    },
+    {
+      "name": "authorId",
+      "type": "ref<Author>",
+      "requiredForPublication": true,
+      "description": "Автор или ответственная редакционная роль.",
+      "source": "editorial",
+      "storageScope": "entity"
+    },
+    {
+      "name": "reviewerId",
+      "type": "ref<Author>",
+      "requiredForPublication": true,
+      "description": "Проверяющий факты и полноту.",
+      "source": "editorial",
+      "storageScope": "entity"
+    },
+    {
+      "name": "evidenceRefs",
+      "type": "ref<ClaimEvidence>[]",
+      "requiredForPublication": true,
+      "description": "Источники проверяемых утверждений; пусто только при отсутствии таких утверждений.",
+      "source": "editorial",
+      "storageScope": "entity"
+    }
+  ],
+  "localizedFields": [
+    {
+      "name": "slug",
+      "type": "lowercase-ascii-slug",
+      "requiredForPublication": true,
+      "description": "Slug; фиксированный корневой путь задаётся реестром Page.",
+      "source": "editorial",
+      "storageScope": "entity"
+    },
+    {
+      "name": "legacySlugs",
+      "type": "string[]",
+      "requiredForPublication": true,
+      "description": "Старые адреса без пересечения с текущими.",
+      "source": "editorial",
+      "storageScope": "entity"
+    },
+    {
+      "name": "title",
+      "type": "text",
+      "requiredForPublication": true,
+      "description": "Видимый основной заголовок.",
+      "source": "editorial",
+      "storageScope": "entity"
+    },
+    {
+      "name": "shortDescription",
+      "type": "text",
+      "requiredForPublication": true,
+      "description": "Краткое описание назначения.",
+      "source": "editorial",
+      "storageScope": "entity"
+    },
+    {
+      "name": "seo.title",
+      "type": "text",
+      "requiredForPublication": true,
+      "description": "Название для поиска без неподтверждённых обещаний.",
+      "source": "editorial",
+      "storageScope": "entity"
+    },
+    {
+      "name": "seo.description",
+      "type": "text",
+      "requiredForPublication": true,
+      "description": "Содержательное описание страницы.",
+      "source": "editorial",
+      "storageScope": "entity"
+    },
+    {
+      "name": "body",
+      "type": "safe-structured-block[]",
+      "requiredForPublication": false,
+      "description": "Текстовые и медиаблоки; не произвольный HTML.",
+      "source": "editorial",
+      "storageScope": "translations[locale]"
+    }
+  ],
+  "entities": [
+    {
+      "id": "Page",
+      "description": "Локализованное публичное представление сущности.",
+      "inheritsEditorialFields": true,
+      "fields": [
+        {
+          "name": "templateId",
+          "type": "ref<Template>",
+          "requiredForPublication": true,
+          "description": "Какой шаблон выводит страницу.",
+          "source": "editorial",
+          "storageScope": "entity"
+        },
+        {
+          "name": "entityId",
+          "type": "ref<Entity>",
+          "requiredForPublication": true,
+          "description": "Содержание страницы.",
+          "source": "editorial",
+          "storageScope": "entity"
+        },
+        {
+          "name": "parentId",
+          "type": "ref<Page>|null",
+          "requiredForPublication": true,
+          "description": "Один основной родитель; null у главной.",
+          "source": "editorial",
+          "storageScope": "entity"
+        },
+        {
+          "name": "localizedPaths",
+          "type": "map<ru|en,same-origin-path>",
+          "requiredForPublication": true,
+          "description": "Уникальные пути только существующих локалей.",
+          "source": "editorial",
+          "storageScope": "entity"
+        },
+        {
+          "name": "searchIntent",
+          "type": "text",
+          "requiredForPublication": true,
+          "description": "Какой запрос пользователя закрывает страница.",
+          "source": "editorial",
+          "storageScope": "entity"
+        },
+        {
+          "name": "distinctValue",
+          "type": "text",
+          "requiredForPublication": true,
+          "description": "Отличие от соседних страниц того же языка.",
+          "source": "editorial",
+          "storageScope": "entity"
+        },
+        {
+          "name": "routeState",
+          "type": "planned|implemented|verified",
+          "requiredForPublication": true,
+          "description": "Готовность маршрута отдельно от редакционного статуса.",
+          "source": "editorial",
+          "storageScope": "entity"
+        },
+        {
+          "name": "deploymentVerification",
+          "type": "object|null",
+          "requiredForPublication": false,
+          "description": "origin, commit и verifiedAt; null до фактической проверки выкладки.",
+          "source": "release",
+          "storageScope": "entity"
+        },
+        {
+          "name": "relatedEntityIds",
+          "type": "typed-reference[]",
+          "requiredForPublication": true,
+          "description": "Проверяемые типизированные отношения.",
+          "source": "editorial",
+          "storageScope": "entity"
+        }
+      ]
+    },
+    {
+      "id": "Landing",
+      "description": "Главная или обзор одного раздела.",
+      "inheritsEditorialFields": true,
+      "fields": [
+        {
+          "name": "valueProposition",
+          "type": "localized-text",
+          "requiredForPublication": true,
+          "description": "Что предлагает именно этот раздел.",
+          "source": "editorial",
+          "storageScope": "translations[locale]"
+        },
+        {
+          "name": "featuredEntityIds",
+          "type": "typed-reference[]",
+          "requiredForPublication": true,
+          "description": "Отобранные существующие дочерние записи.",
+          "source": "editorial",
+          "storageScope": "entity"
+        },
+        {
+          "name": "navigationGroups",
+          "type": "object[]",
+          "requiredForPublication": true,
+          "description": "Группы ссылок с назначением каждой группы.",
+          "source": "editorial",
+          "storageScope": "entity"
+        },
+        {
+          "name": "heroMediaId",
+          "type": "ref<PublicMedia>",
+          "requiredForPublication": false,
+          "description": "Разрешённый визуальный пример.",
+          "source": "rights-cleared-media",
+          "storageScope": "entity"
+        }
+      ]
+    },
+    {
+      "id": "Tool",
+      "description": "Доступный сценарий продукта или честный информационный обзор инструмента.",
+      "inheritsEditorialFields": true,
+      "fields": [
+        {
+          "name": "operationRefs",
+          "type": "operation-ref[]",
+          "requiredForPublication": true,
+          "description": "Точные операции; их существование проверяется сервером.",
+          "source": "runtime-catalog",
+          "storageScope": "entity"
+        },
+        {
+          "name": "workspacePath",
+          "type": "safe-app-path",
+          "requiredForPublication": true,
+          "description": "Проверенный путь существующего интерфейса.",
+          "source": "runtime-route",
+          "storageScope": "entity"
+        },
+        {
+          "name": "inputDescriptions",
+          "type": "localized-text[]",
+          "requiredForPublication": true,
+          "description": "Объяснение входов; ограничения берутся из серверных фактов.",
+          "source": "editorial",
+          "storageScope": "translations[locale]"
+        },
+        {
+          "name": "outputDescriptions",
+          "type": "localized-text[]",
+          "requiredForPublication": true,
+          "description": "Ожидаемый результат.",
+          "source": "editorial",
+          "storageScope": "translations[locale]"
+        },
+        {
+          "name": "workflowSteps",
+          "type": "localized-text[]",
+          "requiredForPublication": true,
+          "description": "Реальная последовательность действий.",
+          "source": "editorial",
+          "storageScope": "translations[locale]"
+        },
+        {
+          "name": "limitations",
+          "type": "localized-text[]",
+          "requiredForPublication": true,
+          "description": "Проверенные границы сценария.",
+          "source": "editorial",
+          "storageScope": "translations[locale]"
+        },
+        {
+          "name": "modelVersionIds",
+          "type": "ref<ModelVersion>[]",
+          "requiredForPublication": true,
+          "description": "Подходящие версии; доступность проверяется независимо.",
+          "source": "editorial",
+          "storageScope": "entity"
+        },
+        {
+          "name": "taskIds",
+          "type": "ref<Task>[]",
+          "requiredForPublication": true,
+          "description": "Сценарии инструмента.",
+          "source": "editorial",
+          "storageScope": "entity"
+        },
+        {
+          "name": "exampleIds",
+          "type": "ref<PublicExample>[]",
+          "requiredForPublication": true,
+          "description": "Разрешённые демонстрации.",
+          "source": "editorial",
+          "storageScope": "entity"
+        },
+        {
+          "name": "launchActionId",
+          "type": "ref<LaunchAction>",
+          "requiredForPublication": false,
+          "description": "Действие запуска; обязательно только при активном CTA.",
+          "source": "runtime-route",
+          "storageScope": "entity",
+          "condition": "active-create-cta"
+        }
+      ]
+    },
+    {
+      "id": "ModelFamily",
+      "description": "Группа версий одной модели.",
+      "inheritsEditorialFields": true,
+      "fields": [
+        {
+          "name": "developerName",
+          "type": "text",
+          "requiredForPublication": true,
+          "description": "Название разработчика из проверенного источника.",
+          "source": "editorial",
+          "storageScope": "entity"
+        },
+        {
+          "name": "versionIds",
+          "type": "ref<ModelVersion>[]",
+          "requiredForPublication": true,
+          "description": "Известные версии, не все обязательно включены в Epifera.",
+          "source": "editorial",
+          "storageScope": "entity"
+        },
+        {
+          "name": "selectionCriteria",
+          "type": "localized-text[]",
+          "requiredForPublication": true,
+          "description": "Как выбрать версию.",
+          "source": "editorial",
+          "storageScope": "translations[locale]"
+        },
+        {
+          "name": "comparisonDimensions",
+          "type": "string[]",
+          "requiredForPublication": true,
+          "description": "Одинаковые критерии, применимые к версиям.",
+          "source": "editorial",
+          "storageScope": "entity"
+        },
+        {
+          "name": "toolIds",
+          "type": "ref<Tool>[]",
+          "requiredForPublication": true,
+          "description": "Инструменты, в которых семейство используется.",
+          "source": "editorial",
+          "storageScope": "entity"
+        }
+      ]
+    },
+    {
+      "id": "ModelVersion",
+      "description": "Конкретная версия; редакционное содержание не даёт runtime-допуск.",
+      "inheritsEditorialFields": true,
+      "fields": [
+        {
+          "name": "familyId",
+          "type": "ref<ModelFamily>",
+          "requiredForPublication": true,
+          "description": "Родительское семейство.",
+          "source": "editorial",
+          "storageScope": "entity"
+        },
+        {
+          "name": "versionLabel",
+          "type": "text",
+          "requiredForPublication": true,
+          "description": "Точная версия без смешивания разных поставщиков.",
+          "source": "editorial",
+          "storageScope": "entity"
+        },
+        {
+          "name": "runtimeCatalogKey",
+          "type": "string|null",
+          "requiredForPublication": true,
+          "description": "Точный ключ или null для информационного обзора.",
+          "source": "runtime-catalog",
+          "storageScope": "entity"
+        },
+        {
+          "name": "capabilityEvidenceRefs",
+          "type": "ref<ClaimEvidence>[]",
+          "requiredForPublication": true,
+          "description": "Утверждения с различением provider/implemented/admitted.",
+          "source": "editorial",
+          "storageScope": "entity"
+        },
+        {
+          "name": "limitations",
+          "type": "localized-text[]",
+          "requiredForPublication": true,
+          "description": "Ограничения именно этой версии.",
+          "source": "editorial",
+          "storageScope": "translations[locale]"
+        },
+        {
+          "name": "changes",
+          "type": "localized-text[]",
+          "requiredForPublication": true,
+          "description": "Проверенные отличия от предыдущих версий.",
+          "source": "editorial",
+          "storageScope": "translations[locale]"
+        },
+        {
+          "name": "exampleIds",
+          "type": "ref<PublicExample>[]",
+          "requiredForPublication": true,
+          "description": "Результаты с подтверждённой версией.",
+          "source": "editorial",
+          "storageScope": "entity"
+        },
+        {
+          "name": "toolIds",
+          "type": "ref<Tool>[]",
+          "requiredForPublication": true,
+          "description": "Подходящие инструменты.",
+          "source": "editorial",
+          "storageScope": "entity"
+        },
+        {
+          "name": "launchActionId",
+          "type": "ref<LaunchAction>",
+          "requiredForPublication": false,
+          "description": "Переход к доступному запуску.",
+          "source": "runtime-route",
+          "storageScope": "entity",
+          "condition": "active-create-cta"
+        }
+      ]
+    },
+    {
+      "id": "Task",
+      "description": "Самостоятельный запрос к результату, не синоним другой задачи.",
+      "inheritsEditorialFields": true,
+      "fields": [
+        {
+          "name": "goal",
+          "type": "localized-text",
+          "requiredForPublication": true,
+          "description": "Что хочет получить пользователь.",
+          "source": "editorial",
+          "storageScope": "translations[locale]"
+        },
+        {
+          "name": "deliverables",
+          "type": "localized-text[]",
+          "requiredForPublication": true,
+          "description": "Конкретные результаты.",
+          "source": "editorial",
+          "storageScope": "translations[locale]"
+        },
+        {
+          "name": "inputFields",
+          "type": "field-definition[]",
+          "requiredForPublication": true,
+          "description": "Идея, назначение и другие поля; backend проверяет допустимые параметры.",
+          "source": "editorial",
+          "storageScope": "entity"
+        },
+        {
+          "name": "deliveryMode",
+          "type": "instruction|configured-workspace",
+          "requiredForPublication": true,
+          "description": "Ручная инструкция либо проверенная настройка workspace.",
+          "source": "editorial",
+          "storageScope": "entity"
+        },
+        {
+          "name": "toolId",
+          "type": "ref<Tool>",
+          "requiredForPublication": true,
+          "description": "Основной инструмент.",
+          "source": "editorial",
+          "storageScope": "entity"
+        },
+        {
+          "name": "modelVersionIds",
+          "type": "ref<ModelVersion>[]",
+          "requiredForPublication": true,
+          "description": "Подходящие версии.",
+          "source": "editorial",
+          "storageScope": "entity"
+        },
+        {
+          "name": "steps",
+          "type": "localized-text[]",
+          "requiredForPublication": true,
+          "description": "Порядок выполнения.",
+          "source": "editorial",
+          "storageScope": "translations[locale]"
+        },
+        {
+          "name": "acceptanceCriteria",
+          "type": "localized-text[]",
+          "requiredForPublication": true,
+          "description": "Как оценить полученный результат.",
+          "source": "editorial",
+          "storageScope": "translations[locale]"
+        },
+        {
+          "name": "exampleIds",
+          "type": "ref<PublicExample>[]",
+          "requiredForPublication": true,
+          "description": "Отличимые примеры этой задачи.",
+          "source": "editorial",
+          "storageScope": "entity"
+        },
+        {
+          "name": "launchActionId",
+          "type": "ref<LaunchAction>",
+          "requiredForPublication": false,
+          "description": "Проверенный переход с настройками.",
+          "source": "runtime-route",
+          "storageScope": "entity",
+          "condition": "deliveryMode=configured-workspace"
+        }
+      ]
+    },
+    {
+      "id": "Audience",
+      "description": "Профессия или отрасль с собственным процессом работы.",
+      "inheritsEditorialFields": true,
+      "fields": [
+        {
+          "name": "audienceType",
+          "type": "profession|industry",
+          "requiredForPublication": true,
+          "description": "Вид аудитории.",
+          "source": "editorial",
+          "storageScope": "entity"
+        },
+        {
+          "name": "jobsToBeDone",
+          "type": "localized-text[]",
+          "requiredForPublication": true,
+          "description": "Реальные задачи аудитории.",
+          "source": "editorial",
+          "storageScope": "translations[locale]"
+        },
+        {
+          "name": "taskIds",
+          "type": "ref<Task>[]",
+          "requiredForPublication": true,
+          "description": "Выбранные сценарии.",
+          "source": "editorial",
+          "storageScope": "entity"
+        },
+        {
+          "name": "workflowIds",
+          "type": "ref<Workflow>[]",
+          "requiredForPublication": true,
+          "description": "Последовательности работы.",
+          "source": "editorial",
+          "storageScope": "entity"
+        },
+        {
+          "name": "exampleIds",
+          "type": "ref<PublicExample>[]",
+          "requiredForPublication": true,
+          "description": "Примеры, соответствующие профессии.",
+          "source": "editorial",
+          "storageScope": "entity"
+        },
+        {
+          "name": "constraints",
+          "type": "localized-text[]",
+          "requiredForPublication": true,
+          "description": "Требования и ограничения отрасли.",
+          "source": "editorial",
+          "storageScope": "translations[locale]"
+        }
+      ]
+    },
+    {
+      "id": "Comparison",
+      "description": "Сравнение по явной методике.",
+      "inheritsEditorialFields": true,
+      "fields": [
+        {
+          "name": "subjectIds",
+          "type": "typed-reference[]",
+          "requiredForPublication": true,
+          "description": "Не меньше двух участников.",
+          "source": "editorial",
+          "storageScope": "entity"
+        },
+        {
+          "name": "criteria",
+          "type": "criterion[]",
+          "requiredForPublication": true,
+          "description": "Определение каждого критерия.",
+          "source": "editorial",
+          "storageScope": "entity"
+        },
+        {
+          "name": "method",
+          "type": "controlled-test|documentary",
+          "requiredForPublication": true,
+          "description": "Собственный тест или сравнение документации.",
+          "source": "editorial",
+          "storageScope": "entity"
+        },
+        {
+          "name": "conditions",
+          "type": "object",
+          "requiredForPublication": true,
+          "description": "Бриф, настройки, даты, версии; если теста нет, это явно указано.",
+          "source": "editorial",
+          "storageScope": "entity"
+        },
+        {
+          "name": "findings",
+          "type": "finding[]",
+          "requiredForPublication": true,
+          "description": "Результат каждого сравниваемого критерия со ссылкой на свидетельство.",
+          "source": "editorial",
+          "storageScope": "entity"
+        },
+        {
+          "name": "limitations",
+          "type": "localized-text[]",
+          "requiredForPublication": true,
+          "description": "Границы применимости вывода.",
+          "source": "editorial",
+          "storageScope": "translations[locale]"
+        },
+        {
+          "name": "exampleIds",
+          "type": "ref<PublicExample>[]",
+          "requiredForPublication": false,
+          "description": "Для controlled-test — результаты проверенных запусков.",
+          "source": "rights-cleared-media",
+          "storageScope": "entity",
+          "condition": "method=controlled-test"
+        }
+      ]
+    },
+    {
+      "id": "Editorial",
+      "description": "Статья, урок или помощь; один базовый тип с вариантами.",
+      "inheritsEditorialFields": true,
+      "fields": [
+        {
+          "name": "variant",
+          "type": "article|lesson|documentation",
+          "requiredForPublication": true,
+          "description": "Назначение материала.",
+          "source": "editorial",
+          "storageScope": "entity"
+        },
+        {
+          "name": "category",
+          "type": "string",
+          "requiredForPublication": true,
+          "description": "Руководство, новость, сравнение, обновление или раздел помощи.",
+          "source": "editorial",
+          "storageScope": "entity"
+        },
+        {
+          "name": "body",
+          "type": "safe-structured-block[]",
+          "requiredForPublication": true,
+          "description": "Самостоятельный текст, таблицы, изображения и ссылки.",
+          "source": "editorial",
+          "storageScope": "translations[locale]"
+        },
+        {
+          "name": "relatedEntityIds",
+          "type": "typed-reference[]",
+          "requiredForPublication": true,
+          "description": "Практическое продолжение материала.",
+          "source": "editorial",
+          "storageScope": "entity"
+        },
+        {
+          "name": "learningGoal",
+          "type": "localized-text",
+          "requiredForPublication": false,
+          "description": "Ожидаемый навык.",
+          "source": "editorial",
+          "storageScope": "translations[locale]",
+          "condition": "variant=lesson"
+        },
+        {
+          "name": "exercise",
+          "type": "object",
+          "requiredForPublication": false,
+          "description": "Задание и критерий результата.",
+          "source": "editorial",
+          "storageScope": "entity",
+          "condition": "variant=lesson"
+        },
+        {
+          "name": "learningFormat",
+          "type": "course|lesson",
+          "requiredForPublication": false,
+          "description": "Программа курса или отдельный урок.",
+          "source": "editorial",
+          "storageScope": "entity",
+          "condition": "variant=lesson"
+        },
+        {
+          "name": "prerequisites",
+          "type": "localized-text[]",
+          "requiredForPublication": false,
+          "description": "Что требуется знать и подготовить.",
+          "source": "editorial",
+          "storageScope": "translations[locale]",
+          "condition": "variant=lesson"
+        },
+        {
+          "name": "lessonIds",
+          "type": "ref<Editorial>[]",
+          "requiredForPublication": false,
+          "description": "Упорядоченная программа курса.",
+          "source": "editorial",
+          "storageScope": "entity",
+          "condition": "learningFormat=course"
+        },
+        {
+          "name": "courseId",
+          "type": "ref<Editorial>",
+          "requiredForPublication": false,
+          "description": "Курс, в который входит урок.",
+          "source": "editorial",
+          "storageScope": "entity",
+          "condition": "learningFormat=lesson"
+        },
+        {
+          "name": "appliesTo",
+          "type": "version-ref[]",
+          "requiredForPublication": false,
+          "description": "Версия функции/интерфейса.",
+          "source": "product-verification",
+          "storageScope": "entity",
+          "condition": "variant=documentation"
+        },
+        {
+          "name": "troubleshooting",
+          "type": "object[]",
+          "requiredForPublication": false,
+          "description": "Проблема, проверка и решение.",
+          "source": "product-verification",
+          "storageScope": "entity",
+          "condition": "variant=documentation"
+        }
+      ]
+    },
+    {
+      "id": "Workflow",
+      "description": "Инструкция из нескольких шагов; исполняемый граф требует отдельного продукта.",
+      "inheritsEditorialFields": true,
+      "fields": [
+        {
+          "name": "executionMode",
+          "type": "instruction|executable",
+          "requiredForPublication": true,
+          "description": "Не имитировать отсутствующий движок workflow.",
+          "source": "editorial",
+          "storageScope": "entity"
+        },
+        {
+          "name": "inputDefinitions",
+          "type": "field-definition[]",
+          "requiredForPublication": true,
+          "description": "Что подготовить.",
+          "source": "editorial",
+          "storageScope": "entity"
+        },
+        {
+          "name": "steps",
+          "type": "workflow-step[]",
+          "requiredForPublication": true,
+          "description": "Стабильные ID шагов, зависимости, инструмент и результат.",
+          "source": "editorial",
+          "storageScope": "entity"
+        },
+        {
+          "name": "outputDescriptions",
+          "type": "localized-text[]",
+          "requiredForPublication": true,
+          "description": "Итог последовательности.",
+          "source": "editorial",
+          "storageScope": "translations[locale]"
+        },
+        {
+          "name": "exampleIds",
+          "type": "ref<PublicExample>[]",
+          "requiredForPublication": true,
+          "description": "Пример результата процесса.",
+          "source": "editorial",
+          "storageScope": "entity"
+        },
+        {
+          "name": "executionContractRef",
+          "type": "string",
+          "requiredForPublication": false,
+          "description": "Подтверждённый серверный договор выполнения.",
+          "source": "backend",
+          "storageScope": "entity",
+          "condition": "executionMode=executable"
+        }
+      ]
+    },
+    {
+      "id": "Collection",
+      "description": "Редакторская подборка публичных примеров или промптов.",
+      "inheritsEditorialFields": true,
+      "fields": [
+        {
+          "name": "memberType",
+          "type": "PublicExample|StockItem|Workflow",
+          "requiredForPublication": true,
+          "description": "Однородный вид содержимого подборки.",
+          "source": "editorial",
+          "storageScope": "entity"
+        },
+        {
+          "name": "selectionRule",
+          "type": "object",
+          "requiredForPublication": true,
+          "description": "Обоснованное правило подбора или ручной список.",
+          "source": "editorial",
+          "storageScope": "entity"
+        },
+        {
+          "name": "orderedMemberIds",
+          "type": "stable-id[]",
+          "requiredForPublication": true,
+          "description": "Опубликованные элементы в устойчивом порядке.",
+          "source": "editorial",
+          "storageScope": "entity"
+        },
+        {
+          "name": "taxonIds",
+          "type": "ref<Taxon>[]",
+          "requiredForPublication": true,
+          "description": "Темы подборки.",
+          "source": "editorial",
+          "storageScope": "entity"
+        },
+        {
+          "name": "curatorNote",
+          "type": "localized-text",
+          "requiredForPublication": true,
+          "description": "Чем полезен именно этот выбор.",
+          "source": "editorial",
+          "storageScope": "translations[locale]"
+        }
+      ]
+    },
+    {
+      "id": "PublicExample",
+      "description": "Отдельно разрешённый публичный пример; не приватный Artifact.",
+      "inheritsEditorialFields": true,
+      "fields": [
+        {
+          "name": "publicMediaIds",
+          "type": "ref<PublicMedia>[]",
+          "requiredForPublication": true,
+          "description": "Разрешённые публичные копии.",
+          "source": "editorial",
+          "storageScope": "entity"
+        },
+        {
+          "name": "modelVersionId",
+          "type": "ref<ModelVersion>|null",
+          "requiredForPublication": true,
+          "description": "Версия, если результат заявлен как созданный этой моделью.",
+          "source": "editorial",
+          "storageScope": "entity"
+        },
+        {
+          "name": "origin",
+          "type": "epifera-generation|licensed-demonstration",
+          "requiredForPublication": true,
+          "description": "Не приписывать Epifera чужую генерацию.",
+          "source": "editorial",
+          "storageScope": "entity"
+        },
+        {
+          "name": "provenance",
+          "type": "object",
+          "requiredForPublication": true,
+          "description": "Разрешённые факты о создании, без внутренних Job и account IDs.",
+          "source": "editorial",
+          "storageScope": "entity"
+        },
+        {
+          "name": "consentRef",
+          "type": "rights-reference",
+          "requiredForPublication": true,
+          "description": "Разрешение автора и право на публичное использование.",
+          "source": "rights",
+          "storageScope": "entity"
+        },
+        {
+          "name": "moderationState",
+          "type": "approved|pending|rejected",
+          "requiredForPublication": true,
+          "description": "Публикация только approved.",
+          "source": "moderation",
+          "storageScope": "entity"
+        },
+        {
+          "name": "taskIds",
+          "type": "ref<Task>[]",
+          "requiredForPublication": true,
+          "description": "Что демонстрирует пример.",
+          "source": "editorial",
+          "storageScope": "entity"
+        },
+        {
+          "name": "taxonIds",
+          "type": "ref<Taxon>[]",
+          "requiredForPublication": true,
+          "description": "Темы, стиль, формат результата.",
+          "source": "editorial",
+          "storageScope": "entity"
+        },
+        {
+          "name": "publicPrompt",
+          "type": "localized-text",
+          "requiredForPublication": false,
+          "description": "Только явно разрешённая часть промпта.",
+          "source": "consented-author-content",
+          "storageScope": "translations[locale]",
+          "condition": "promptPublicationAllowed=true"
+        },
+        {
+          "name": "promptPublicationAllowed",
+          "type": "boolean",
+          "requiredForPublication": true,
+          "description": "Отдельное право на показ промпта.",
+          "source": "rights",
+          "storageScope": "entity"
+        },
+        {
+          "name": "reproductionNotes",
+          "type": "localized-text[]",
+          "requiredForPublication": true,
+          "description": "Воспроизводимые шаги; без гарантии идентичного результата.",
+          "source": "editorial",
+          "storageScope": "translations[locale]"
+        }
+      ]
+    },
+    {
+      "id": "StockCategory",
+      "description": "Самостоятельная тема каталога с настоящей выдачей.",
+      "inheritsEditorialFields": true,
+      "fields": [
+        {
+          "name": "mediaType",
+          "type": "media-type",
+          "requiredForPublication": true,
+          "description": "Фото, вектор, видео, аудио, PSD и другие типы.",
+          "source": "editorial",
+          "storageScope": "entity"
+        },
+        {
+          "name": "taxonId",
+          "type": "ref<Taxon>",
+          "requiredForPublication": true,
+          "description": "Каноническая тема.",
+          "source": "editorial",
+          "storageScope": "entity"
+        },
+        {
+          "name": "selectionQuery",
+          "type": "bounded-public-query",
+          "requiredForPublication": true,
+          "description": "Ограниченный запрос только к опубликованным материалам.",
+          "source": "editorial",
+          "storageScope": "entity"
+        },
+        {
+          "name": "sortPolicy",
+          "type": "stable-sort",
+          "requiredForPublication": true,
+          "description": "Устойчивый порядок для пагинации.",
+          "source": "editorial",
+          "storageScope": "entity"
+        },
+        {
+          "name": "filterDefinitions",
+          "type": "filter-definition[]",
+          "requiredForPublication": true,
+          "description": "Фильтры интерфейса не образуют URL страницы автоматически.",
+          "source": "editorial",
+          "storageScope": "entity"
+        },
+        {
+          "name": "relatedCategoryIds",
+          "type": "ref<StockCategory>[]",
+          "requiredForPublication": true,
+          "description": "Соседние полезные темы.",
+          "source": "editorial",
+          "storageScope": "entity"
+        }
+      ]
+    },
+    {
+      "id": "StockItem",
+      "description": "Собственный или лицензированный распространяемый материал.",
+      "inheritsEditorialFields": true,
+      "fields": [
+        {
+          "name": "mediaType",
+          "type": "image|video|audio|vector|psd|template|mockup|3d|font|sticker",
+          "requiredForPublication": true,
+          "description": "Вариант отображения.",
+          "source": "editorial",
+          "storageScope": "entity"
+        },
+        {
+          "name": "publicMediaIds",
+          "type": "ref<PublicMedia>[]",
+          "requiredForPublication": true,
+          "description": "Превью и разрешённый материал.",
+          "source": "editorial",
+          "storageScope": "entity"
+        },
+        {
+          "name": "creatorId",
+          "type": "ref<Author>",
+          "requiredForPublication": true,
+          "description": "Автор или правообладатель.",
+          "source": "editorial",
+          "storageScope": "entity"
+        },
+        {
+          "name": "licenseRef",
+          "type": "rights-reference",
+          "requiredForPublication": true,
+          "description": "Лицензия и её версия.",
+          "source": "rights",
+          "storageScope": "entity"
+        },
+        {
+          "name": "rights",
+          "type": "object",
+          "requiredForPublication": true,
+          "description": "display, download, redistributeOriginal, commercialUse и ограничения.",
+          "source": "rights",
+          "storageScope": "entity"
+        },
+        {
+          "name": "fileDescriptor",
+          "type": "media-specific-object",
+          "requiredForPublication": true,
+          "description": "Обязательные технические параметры согласно mediaVariants.",
+          "source": "editorial",
+          "storageScope": "entity"
+        },
+        {
+          "name": "downloadPolicy",
+          "type": "object",
+          "requiredForPublication": true,
+          "description": "Кому, в каких форматах и на каких условиях можно скачать.",
+          "source": "product-and-rights",
+          "storageScope": "entity"
+        },
+        {
+          "name": "taxonIds",
+          "type": "ref<Taxon>[]",
+          "requiredForPublication": true,
+          "description": "Темы без создания дублей карточки.",
+          "source": "editorial",
+          "storageScope": "entity"
+        },
+        {
+          "name": "categoryIds",
+          "type": "ref<StockCategory>[]",
+          "requiredForPublication": true,
+          "description": "Категории, в которые входит материал.",
+          "source": "editorial",
+          "storageScope": "entity"
+        }
+      ]
+    },
+    {
+      "id": "Integration",
+      "description": "Реальная интеграция, приложение, бот или публичный API.",
+      "inheritsEditorialFields": true,
+      "fields": [
+        {
+          "name": "integrationType",
+          "type": "bot|plugin|api|mcp|mobile|desktop",
+          "requiredForPublication": true,
+          "description": "Тип подключения.",
+          "source": "editorial",
+          "storageScope": "entity"
+        },
+        {
+          "name": "platform",
+          "type": "text",
+          "requiredForPublication": true,
+          "description": "VK, Figma и другая подтверждённая платформа.",
+          "source": "editorial",
+          "storageScope": "entity"
+        },
+        {
+          "name": "supportedVersion",
+          "type": "text",
+          "requiredForPublication": true,
+          "description": "Совместимость и версия.",
+          "source": "editorial",
+          "storageScope": "entity"
+        },
+        {
+          "name": "setupSteps",
+          "type": "localized-text[]",
+          "requiredForPublication": true,
+          "description": "Проверенные шаги подключения.",
+          "source": "editorial",
+          "storageScope": "translations[locale]"
+        },
+        {
+          "name": "accessConditions",
+          "type": "localized-text",
+          "requiredForPublication": true,
+          "description": "Кто может подключиться и на каких условиях.",
+          "source": "editorial",
+          "storageScope": "translations[locale]"
+        },
+        {
+          "name": "verifiedDestination",
+          "type": "validated-url",
+          "requiredForPublication": true,
+          "description": "Официальный адрес подключения; без ключей.",
+          "source": "integration-verification",
+          "storageScope": "entity"
+        },
+        {
+          "name": "verificationRef",
+          "type": "ref<ClaimEvidence>",
+          "requiredForPublication": true,
+          "description": "Проверка реального сценария.",
+          "source": "integration-verification",
+          "storageScope": "entity"
+        },
+        {
+          "name": "limitations",
+          "type": "localized-text[]",
+          "requiredForPublication": true,
+          "description": "Доступные и недоступные операции.",
+          "source": "editorial",
+          "storageScope": "translations[locale]"
+        }
+      ]
+    },
+    {
+      "id": "Offer",
+      "description": "Тариф или предложение для команды.",
+      "inheritsEditorialFields": true,
+      "fields": [
+        {
+          "name": "offerType",
+          "type": "pricing|business",
+          "requiredForPublication": true,
+          "description": "Тарифная сетка либо предложение команде.",
+          "source": "editorial",
+          "storageScope": "entity"
+        },
+        {
+          "name": "planRefs",
+          "type": "server-plan-ref[]",
+          "requiredForPublication": true,
+          "description": "Подтверждённые планы; пусто у честного обращения без продажи плана.",
+          "source": "product-offers",
+          "storageScope": "entity"
+        },
+        {
+          "name": "billingUnits",
+          "type": "localized-text",
+          "requiredForPublication": true,
+          "description": "Кредиты, период и другие реально действующие единицы.",
+          "source": "product-offers",
+          "storageScope": "translations[locale]"
+        },
+        {
+          "name": "termsRef",
+          "type": "ref<LegalDocument>",
+          "requiredForPublication": true,
+          "description": "Условия предложения.",
+          "source": "editorial",
+          "storageScope": "entity"
+        },
+        {
+          "name": "priceSourceRef",
+          "type": "verified-source-ref|null",
+          "requiredForPublication": true,
+          "description": "Публичная безопасная проекция, а не копия тарифов в редакционном тексте.",
+          "source": "product-offers",
+          "storageScope": "entity"
+        },
+        {
+          "name": "teamCapabilities",
+          "type": "ref<ClaimEvidence>[]",
+          "requiredForPublication": false,
+          "description": "Только подтверждённые командные функции.",
+          "source": "product-verification",
+          "storageScope": "entity",
+          "condition": "offerType=business"
+        },
+        {
+          "name": "contactAction",
+          "type": "verified-action",
+          "requiredForPublication": false,
+          "description": "Работающий способ обращения.",
+          "source": "organization",
+          "storageScope": "entity",
+          "condition": "offerType=business"
+        }
+      ]
+    },
+    {
+      "id": "CaseStudy",
+      "description": "Проверенный собственный или согласованный клиентский кейс.",
+      "inheritsEditorialFields": true,
+      "fields": [
+        {
+          "name": "clientLabel",
+          "type": "text",
+          "requiredForPublication": true,
+          "description": "Разрешённое название клиента.",
+          "source": "editorial",
+          "storageScope": "entity"
+        },
+        {
+          "name": "consentRef",
+          "type": "rights-reference",
+          "requiredForPublication": true,
+          "description": "Согласие на публикацию кейса.",
+          "source": "rights",
+          "storageScope": "entity"
+        },
+        {
+          "name": "challenge",
+          "type": "localized-text",
+          "requiredForPublication": true,
+          "description": "Исходная задача.",
+          "source": "editorial",
+          "storageScope": "translations[locale]"
+        },
+        {
+          "name": "process",
+          "type": "localized-text[]",
+          "requiredForPublication": true,
+          "description": "Реальная последовательность.",
+          "source": "editorial",
+          "storageScope": "translations[locale]"
+        },
+        {
+          "name": "outcomes",
+          "type": "evidenced-outcome[]",
+          "requiredForPublication": true,
+          "description": "Качественные результаты и подтверждённые числа.",
+          "source": "editorial",
+          "storageScope": "entity"
+        },
+        {
+          "name": "exampleIds",
+          "type": "ref<PublicExample>[]",
+          "requiredForPublication": true,
+          "description": "Согласованные результаты.",
+          "source": "editorial",
+          "storageScope": "entity"
+        },
+        {
+          "name": "relatedEntityIds",
+          "type": "typed-reference[]",
+          "requiredForPublication": true,
+          "description": "Использованные инструменты и задачи.",
+          "source": "editorial",
+          "storageScope": "entity"
+        }
+      ]
+    },
+    {
+      "id": "OrganizationPage",
+      "description": "Подтверждённые сведения о компании и контактах.",
+      "inheritsEditorialFields": true,
+      "fields": [
+        {
+          "name": "pagePurpose",
+          "type": "about|contact|partners|careers|press|other",
+          "requiredForPublication": true,
+          "description": "Конкретная функция страницы.",
+          "source": "editorial",
+          "storageScope": "entity"
+        },
+        {
+          "name": "body",
+          "type": "safe-structured-block[]",
+          "requiredForPublication": true,
+          "description": "Собственные сведения без чужих отзывов и счётчиков.",
+          "source": "editorial",
+          "storageScope": "translations[locale]"
+        },
+        {
+          "name": "verifiedContacts",
+          "type": "contact[]",
+          "requiredForPublication": true,
+          "description": "Разрешённые работающие контакты.",
+          "source": "organization",
+          "storageScope": "entity"
+        },
+        {
+          "name": "actions",
+          "type": "verified-action[]",
+          "requiredForPublication": true,
+          "description": "Проверенные действия страницы.",
+          "source": "organization",
+          "storageScope": "entity"
+        }
+      ]
+    },
+    {
+      "id": "Event",
+      "description": "Событие или специальный публичный проект.",
+      "inheritsEditorialFields": true,
+      "fields": [
+        {
+          "name": "eventState",
+          "type": "scheduled|completed|cancelled|postponed",
+          "requiredForPublication": true,
+          "description": "Текущее состояние.",
+          "source": "editorial",
+          "storageScope": "entity"
+        },
+        {
+          "name": "startsAt",
+          "type": "iso-datetime",
+          "requiredForPublication": true,
+          "description": "Фактическая дата и часовой пояс.",
+          "source": "editorial",
+          "storageScope": "entity"
+        },
+        {
+          "name": "organizerId",
+          "type": "ref<Author>",
+          "requiredForPublication": true,
+          "description": "Подтверждённый организатор.",
+          "source": "editorial",
+          "storageScope": "entity"
+        },
+        {
+          "name": "location",
+          "type": "object",
+          "requiredForPublication": true,
+          "description": "Место или онлайн формат без приватных ссылок.",
+          "source": "editorial",
+          "storageScope": "entity"
+        },
+        {
+          "name": "agenda",
+          "type": "localized-text[]",
+          "requiredForPublication": true,
+          "description": "Программа.",
+          "source": "editorial",
+          "storageScope": "translations[locale]"
+        },
+        {
+          "name": "participationTerms",
+          "type": "localized-text",
+          "requiredForPublication": true,
+          "description": "Условия участия.",
+          "source": "editorial",
+          "storageScope": "translations[locale]"
+        },
+        {
+          "name": "action",
+          "type": "verified-action|null",
+          "requiredForPublication": true,
+          "description": "Рабочая регистрация либо материалы прошедшего события.",
+          "source": "editorial",
+          "storageScope": "entity"
+        }
+      ]
+    },
+    {
+      "id": "LegalDocument",
+      "description": "Утверждённый правовой текст.",
+      "inheritsEditorialFields": true,
+      "fields": [
+        {
+          "name": "documentType",
+          "type": "privacy|terms|cookies|licenses|other",
+          "requiredForPublication": true,
+          "description": "Назначение документа.",
+          "source": "editorial",
+          "storageScope": "entity"
+        },
+        {
+          "name": "legalEntity",
+          "type": "verified-organization",
+          "requiredForPublication": true,
+          "description": "Подтверждённый субъект.",
+          "source": "legal-owner",
+          "storageScope": "entity"
+        },
+        {
+          "name": "version",
+          "type": "text",
+          "requiredForPublication": true,
+          "description": "Версия утверждённого текста.",
+          "source": "legal-owner",
+          "storageScope": "entity"
+        },
+        {
+          "name": "effectiveAt",
+          "type": "iso-datetime",
+          "requiredForPublication": true,
+          "description": "Дата вступления в силу.",
+          "source": "legal-owner",
+          "storageScope": "entity"
+        },
+        {
+          "name": "approvedBody",
+          "type": "safe-structured-block[]",
+          "requiredForPublication": true,
+          "description": "Утверждённый текст; не копия чужих документов.",
+          "source": "legal-owner",
+          "storageScope": "translations[locale]"
+        },
+        {
+          "name": "approvalRef",
+          "type": "approval-reference",
+          "requiredForPublication": true,
+          "description": "Основание утверждения.",
+          "source": "legal-owner",
+          "storageScope": "entity"
+        },
+        {
+          "name": "contact",
+          "type": "verified-contact",
+          "requiredForPublication": true,
+          "description": "Контакт для вопросов.",
+          "source": "legal-owner",
+          "storageScope": "entity"
+        }
+      ]
+    },
+    {
+      "id": "Author",
+      "description": "Публичный автор, редакция или организатор.",
+      "inheritsEditorialFields": true,
+      "fields": [
+        {
+          "name": "displayName",
+          "type": "text",
+          "requiredForPublication": true,
+          "description": "Разрешённое имя или название редакции.",
+          "source": "editorial",
+          "storageScope": "entity"
+        },
+        {
+          "name": "role",
+          "type": "localized-text",
+          "requiredForPublication": true,
+          "description": "Подтверждённая роль.",
+          "source": "editorial",
+          "storageScope": "translations[locale]"
+        },
+        {
+          "name": "bio",
+          "type": "localized-text",
+          "requiredForPublication": true,
+          "description": "Согласованная биография.",
+          "source": "editorial",
+          "storageScope": "translations[locale]"
+        },
+        {
+          "name": "publicationConsentRef",
+          "type": "rights-reference",
+          "requiredForPublication": true,
+          "description": "Право публиковать эти сведения.",
+          "source": "rights",
+          "storageScope": "entity"
+        },
+        {
+          "name": "publishedEntityIds",
+          "type": "typed-reference[]",
+          "requiredForPublication": true,
+          "description": "Собственные опубликованные материалы.",
+          "source": "editorial",
+          "storageScope": "entity"
+        }
+      ]
+    },
+    {
+      "id": "Taxon",
+      "description": "Редакторский словарь тем, задач, стилей и синонимов.",
+      "inheritsEditorialFields": false,
+      "fields": [
+        {
+          "name": "id",
+          "type": "stable-id",
+          "requiredForPublication": true,
+          "description": "ID темы.",
+          "source": "editorial",
+          "storageScope": "entity"
+        },
+        {
+          "name": "taxonType",
+          "type": "topic|style|task|audience|format|media",
+          "requiredForPublication": true,
+          "description": "Тип таксономии.",
+          "source": "editorial",
+          "storageScope": "entity"
+        },
+        {
+          "name": "labels",
+          "type": "map<ru|en,text>",
+          "requiredForPublication": true,
+          "description": "Название темы.",
+          "source": "editorial",
+          "storageScope": "entity"
+        },
+        {
+          "name": "synonyms",
+          "type": "map<ru|en,text[]>",
+          "requiredForPublication": true,
+          "description": "Синонимы для поиска и объединения запросов.",
+          "source": "editorial",
+          "storageScope": "entity"
+        },
+        {
+          "name": "parentTaxonId",
+          "type": "ref<Taxon>|null",
+          "requiredForPublication": true,
+          "description": "Иерархия без циклов.",
+          "source": "editorial",
+          "storageScope": "entity"
+        },
+        {
+          "name": "landingPageId",
+          "type": "ref<Page>|null",
+          "requiredForPublication": true,
+          "description": "Назначается вручную после проверки полезности.",
+          "source": "editorial",
+          "storageScope": "entity"
+        }
+      ]
+    },
+    {
+      "id": "ClaimEvidence",
+      "description": "Проверяемое утверждение и границы его применимости.",
+      "inheritsEditorialFields": false,
+      "fields": [
+        {
+          "name": "id",
+          "type": "stable-id",
+          "requiredForPublication": true,
+          "description": "ID свидетельства.",
+          "source": "editorial",
+          "storageScope": "entity"
+        },
+        {
+          "name": "claim",
+          "type": "text",
+          "requiredForPublication": true,
+          "description": "Одно конкретное утверждение.",
+          "source": "editorial",
+          "storageScope": "entity"
+        },
+        {
+          "name": "scope",
+          "type": "provider|epifera-implemented|epifera-admitted|editorial",
+          "requiredForPublication": true,
+          "description": "Что именно доказано.",
+          "source": "editorial",
+          "storageScope": "entity"
+        },
+        {
+          "name": "source",
+          "type": "validated-public-url|sanitized-repo-ref",
+          "requiredForPublication": true,
+          "description": "Публичная документация или безопасное собственное свидетельство.",
+          "source": "editorial",
+          "storageScope": "entity"
+        },
+        {
+          "name": "checkedAt",
+          "type": "iso-datetime",
+          "requiredForPublication": true,
+          "description": "Фактическая проверка.",
+          "source": "editorial",
+          "storageScope": "entity"
+        },
+        {
+          "name": "contour",
+          "type": "dev|prod|not-applicable",
+          "requiredForPublication": true,
+          "description": "Контур, к которому относится вывод.",
+          "source": "editorial",
+          "storageScope": "entity"
+        },
+        {
+          "name": "status",
+          "type": "verified|unknown|outdated|rejected",
+          "requiredForPublication": true,
+          "description": "Неизвестное нельзя превратить в поддержку.",
+          "source": "editorial",
+          "storageScope": "entity"
+        },
+        {
+          "name": "reviewOwner",
+          "type": "role-reference",
+          "requiredForPublication": true,
+          "description": "Ответственный за повторную проверку.",
+          "source": "editorial",
+          "storageScope": "entity"
+        }
+      ]
+    },
+    {
+      "id": "PublicMedia",
+      "description": "Отдельная публичная медиа-проекция.",
+      "inheritsEditorialFields": false,
+      "fields": [
+        {
+          "name": "id",
+          "type": "stable-id",
+          "requiredForPublication": true,
+          "description": "ID медиа.",
+          "source": "editorial",
+          "storageScope": "entity"
+        },
+        {
+          "name": "publicUrl",
+          "type": "approved-public-url",
+          "requiredForPublication": true,
+          "description": "Стабильный публичный адрес, не приватный signed URL.",
+          "source": "editorial",
+          "storageScope": "entity"
+        },
+        {
+          "name": "mediaType",
+          "type": "image|video|audio|document|font|3d",
+          "requiredForPublication": true,
+          "description": "Формат отображения.",
+          "source": "editorial",
+          "storageScope": "entity"
+        },
+        {
+          "name": "mime",
+          "type": "mime-type",
+          "requiredForPublication": true,
+          "description": "Проверенный MIME.",
+          "source": "editorial",
+          "storageScope": "entity"
+        },
+        {
+          "name": "descriptor",
+          "type": "media-specific-object",
+          "requiredForPublication": true,
+          "description": "Размеры, длительность или совместимость.",
+          "source": "editorial",
+          "storageScope": "entity"
+        },
+        {
+          "name": "altOrDescription",
+          "type": "localized-text",
+          "requiredForPublication": true,
+          "description": "Описание содержимого.",
+          "source": "editorial",
+          "storageScope": "translations[locale]"
+        },
+        {
+          "name": "rightsRef",
+          "type": "rights-reference",
+          "requiredForPublication": true,
+          "description": "Право публичного показа.",
+          "source": "rights",
+          "storageScope": "entity"
+        },
+        {
+          "name": "publicationState",
+          "type": "approved|pending|revoked",
+          "requiredForPublication": true,
+          "description": "Только approved доступно публично.",
+          "source": "rights-and-moderation",
+          "storageScope": "entity"
+        }
+      ]
+    },
+    {
+      "id": "LaunchAction",
+      "description": "Безопасный переход к существующему действию приложения.",
+      "inheritsEditorialFields": false,
+      "fields": [
+        {
+          "name": "id",
+          "type": "stable-id",
+          "requiredForPublication": true,
+          "description": "ID действия.",
+          "source": "editorial",
+          "storageScope": "entity"
+        },
+        {
+          "name": "toolId",
+          "type": "ref<Tool>",
+          "requiredForPublication": true,
+          "description": "Инструмент.",
+          "source": "editorial",
+          "storageScope": "entity"
+        },
+        {
+          "name": "mode",
+          "type": "navigate|prefill",
+          "requiredForPublication": true,
+          "description": "Переход либо отдельно реализованное заполнение; не оплаченная активация.",
+          "source": "editorial",
+          "storageScope": "entity"
+        },
+        {
+          "name": "workspacePath",
+          "type": "safe-app-path",
+          "requiredForPublication": true,
+          "description": "Существующий same-origin путь.",
+          "source": "runtime-route",
+          "storageScope": "entity"
+        },
+        {
+          "name": "allowedParameters",
+          "type": "bounded-allowlist",
+          "requiredForPublication": true,
+          "description": "Только разрешённые модель/качество/категория; текущий auth return allowlist сохраняется.",
+          "source": "runtime-route",
+          "storageScope": "entity"
+        },
+        {
+          "name": "verificationRef",
+          "type": "ref<ClaimEvidence>",
+          "requiredForPublication": true,
+          "description": "Проверка локали, входа и доступности конкретного сценария.",
+          "source": "product-verification",
+          "storageScope": "entity"
+        },
+        {
+          "name": "startsPaidWork",
+          "type": "literal-false",
+          "requiredForPublication": true,
+          "description": "Переход и предпросмотр не запускают платную работу.",
+          "source": "editorial",
+          "storageScope": "entity"
+        }
+      ]
+    }
+  ],
+  "templates": [
+    {
+      "id": "T01",
+      "name": "Главная",
+      "entityType": "Landing",
+      "pathPatterns": [
+        "/{locale}"
+      ],
+      "blocks": [
+        "hero",
+        "directions",
+        "examples",
+        "models",
+        "value",
+        "faq",
+        "footer"
+      ],
+      "requiredEntityFields": [
+        "valueProposition",
+        "featuredEntityIds",
+        "navigationGroups"
+      ],
+      "publicationGates": [
+        "G01",
+        "G02",
+        "G03",
+        "G04",
+        "G05",
+        "G06",
+        "G07",
+        "G08"
+      ],
+      "suggestedPhase": 1,
+      "magnificRegistryGroups": [
+        "Главная"
+      ],
+      "commonPageData": "Page + LocalizedContent",
+      "implementationState": "proposed"
+    },
+    {
+      "id": "T02",
+      "name": "Обзор раздела",
+      "entityType": "Landing",
+      "pathPatterns": [
+        "/{locale}/ai",
+        "/{locale}/models",
+        "/{locale}/blog",
+        "/{locale}/academy",
+        "/{locale}/stock",
+        "/{locale}/integrations",
+        "/{locale}/ai/docs",
+        "/{locale}/inspiration",
+        "/{locale}/workflows"
+      ],
+      "blocks": [
+        "intro",
+        "categories",
+        "featured-items",
+        "browse-links"
+      ],
+      "requiredEntityFields": [
+        "valueProposition",
+        "featuredEntityIds",
+        "navigationGroups"
+      ],
+      "publicationGates": [
+        "G01",
+        "G02",
+        "G03",
+        "G04",
+        "G05",
+        "G06",
+        "G07",
+        "G08"
+      ],
+      "suggestedPhase": 1,
+      "magnificRegistryGroups": [
+        "Инструменты",
+        "Модели",
+        "Блог",
+        "Обучение",
+        "Справка",
+        "Справка авторам",
+        "Экосистема",
+        "Стоковый каталог"
+      ],
+      "commonPageData": "Page + LocalizedContent",
+      "implementationState": "proposed"
+    },
+    {
+      "id": "T03",
+      "name": "Инструмент",
+      "entityType": "Tool",
+      "pathPatterns": [
+        "/{locale}/ai/{toolSlug}"
+      ],
+      "blocks": [
+        "breadcrumbs",
+        "hero-action",
+        "examples",
+        "models",
+        "steps",
+        "tasks",
+        "limitations",
+        "faq",
+        "related"
+      ],
+      "requiredEntityFields": [
+        "operationRefs",
+        "workspacePath",
+        "inputDescriptions",
+        "outputDescriptions",
+        "workflowSteps",
+        "limitations",
+        "exampleIds"
+      ],
+      "publicationGates": [
+        "G01",
+        "G02",
+        "G03",
+        "G04",
+        "G05",
+        "G06",
+        "G07",
+        "G08",
+        "PRODUCT"
+      ],
+      "suggestedPhase": 1,
+      "magnificRegistryGroups": [
+        "Инструменты"
+      ],
+      "commonPageData": "Page + LocalizedContent",
+      "implementationState": "proposed"
+    },
+    {
+      "id": "T04",
+      "name": "Семейство моделей",
+      "entityType": "ModelFamily",
+      "pathPatterns": [
+        "/{locale}/ai/{familySlug}"
+      ],
+      "blocks": [
+        "intro",
+        "versions",
+        "comparison",
+        "selection-guide",
+        "examples",
+        "related"
+      ],
+      "requiredEntityFields": [
+        "developerName",
+        "versionIds",
+        "selectionCriteria",
+        "comparisonDimensions",
+        "toolIds"
+      ],
+      "publicationGates": [
+        "G01",
+        "G02",
+        "G03",
+        "G04",
+        "G05",
+        "G06",
+        "G07",
+        "G08",
+        "PRODUCT"
+      ],
+      "suggestedPhase": 2,
+      "magnificRegistryGroups": [
+        "Модели"
+      ],
+      "commonPageData": "Page + LocalizedContent",
+      "implementationState": "proposed"
+    },
+    {
+      "id": "T05",
+      "name": "Версия модели",
+      "entityType": "ModelVersion",
+      "pathPatterns": [
+        "/{locale}/ai/{familySlug}/{versionSlug}"
+      ],
+      "blocks": [
+        "intro",
+        "examples",
+        "specs",
+        "changes",
+        "limitations",
+        "tasks",
+        "faq",
+        "siblings"
+      ],
+      "requiredEntityFields": [
+        "familyId",
+        "versionLabel",
+        "runtimeCatalogKey",
+        "capabilityEvidenceRefs",
+        "limitations",
+        "changes",
+        "exampleIds",
+        "toolIds"
+      ],
+      "publicationGates": [
+        "G01",
+        "G02",
+        "G03",
+        "G04",
+        "G05",
+        "G06",
+        "G07",
+        "G08",
+        "PRODUCT"
+      ],
+      "suggestedPhase": 1,
+      "magnificRegistryGroups": [
+        "Модели"
+      ],
+      "commonPageData": "Page + LocalizedContent",
+      "implementationState": "proposed"
+    },
+    {
+      "id": "T06",
+      "name": "Конкретная задача",
+      "entityType": "Task",
+      "pathPatterns": [
+        "/{locale}/ai/{taskSlug}"
+      ],
+      "blocks": [
+        "goal",
+        "examples",
+        "inputs",
+        "steps",
+        "model-choice",
+        "acceptance",
+        "limitations",
+        "related"
+      ],
+      "requiredEntityFields": [
+        "goal",
+        "deliverables",
+        "inputFields",
+        "deliveryMode",
+        "toolId",
+        "steps",
+        "acceptanceCriteria",
+        "exampleIds"
+      ],
+      "publicationGates": [
+        "G01",
+        "G02",
+        "G03",
+        "G04",
+        "G05",
+        "G06",
+        "G07",
+        "G08",
+        "PRODUCT"
+      ],
+      "suggestedPhase": 2,
+      "magnificRegistryGroups": [
+        "Задачи"
+      ],
+      "commonPageData": "Page + LocalizedContent",
+      "implementationState": "proposed"
+    },
+    {
+      "id": "T07",
+      "name": "Профессия или отрасль",
+      "entityType": "Audience",
+      "pathPatterns": [
+        "/{locale}/ai/{audienceSlug}"
+      ],
+      "blocks": [
+        "audience-goal",
+        "tasks",
+        "workflows",
+        "examples",
+        "constraints",
+        "related"
+      ],
+      "requiredEntityFields": [
+        "audienceType",
+        "jobsToBeDone",
+        "taskIds",
+        "workflowIds",
+        "exampleIds",
+        "constraints"
+      ],
+      "publicationGates": [
+        "G01",
+        "G02",
+        "G03",
+        "G04",
+        "G05",
+        "G06",
+        "G07",
+        "G08"
+      ],
+      "suggestedPhase": 3,
+      "magnificRegistryGroups": [
+        "Профессии и отрасли"
+      ],
+      "commonPageData": "Page + LocalizedContent",
+      "implementationState": "proposed"
+    },
+    {
+      "id": "T08",
+      "name": "Сравнение",
+      "entityType": "Comparison",
+      "pathPatterns": [
+        "/{locale}/compare/{comparisonSlug}"
+      ],
+      "blocks": [
+        "question",
+        "subjects",
+        "method",
+        "comparison-table",
+        "examples",
+        "findings",
+        "limitations",
+        "related"
+      ],
+      "requiredEntityFields": [
+        "subjectIds",
+        "criteria",
+        "method",
+        "conditions",
+        "findings",
+        "limitations"
+      ],
+      "publicationGates": [
+        "G01",
+        "G02",
+        "G03",
+        "G04",
+        "G05",
+        "G06",
+        "G07",
+        "G08",
+        "METHOD"
+      ],
+      "suggestedPhase": 3,
+      "magnificRegistryGroups": [
+        "Блог",
+        "Модели"
+      ],
+      "commonPageData": "Page + LocalizedContent",
+      "implementationState": "proposed"
+    },
+    {
+      "id": "T09",
+      "name": "Статья",
+      "entityType": "Editorial",
+      "pathPatterns": [
+        "/{locale}/blog/{articleSlug}"
+      ],
+      "blocks": [
+        "title",
+        "author-dates",
+        "toc",
+        "body",
+        "sources",
+        "related-action"
+      ],
+      "requiredEntityFields": [
+        "variant",
+        "category",
+        "body",
+        "relatedEntityIds"
+      ],
+      "publicationGates": [
+        "G01",
+        "G02",
+        "G03",
+        "G04",
+        "G05",
+        "G06",
+        "G07",
+        "G08"
+      ],
+      "suggestedPhase": 1,
+      "magnificRegistryGroups": [
+        "Блог"
+      ],
+      "commonPageData": "Page + LocalizedContent",
+      "implementationState": "proposed"
+    },
+    {
+      "id": "T10",
+      "name": "Курс или урок",
+      "entityType": "Editorial",
+      "pathPatterns": [
+        "/{locale}/academy/courses/{courseSlug}",
+        "/{locale}/academy/courses/{courseSlug}/{lessonSlug}"
+      ],
+      "blocks": [
+        "goal",
+        "prerequisites",
+        "curriculum-or-body",
+        "exercise",
+        "result",
+        "next-lesson"
+      ],
+      "requiredEntityFields": [
+        "variant",
+        "category",
+        "body",
+        "learningGoal",
+        "exercise",
+        "learningFormat",
+        "prerequisites",
+        "relatedEntityIds"
+      ],
+      "publicationGates": [
+        "G01",
+        "G02",
+        "G03",
+        "G04",
+        "G05",
+        "G06",
+        "G07",
+        "G08",
+        "LEARNING"
+      ],
+      "suggestedPhase": 3,
+      "magnificRegistryGroups": [
+        "Обучение"
+      ],
+      "commonPageData": "Page + LocalizedContent",
+      "implementationState": "proposed"
+    },
+    {
+      "id": "T11",
+      "name": "Документация и помощь",
+      "entityType": "Editorial",
+      "pathPatterns": [
+        "/{locale}/ai/docs/{docSlug}",
+        "/{locale}/contributors/docs/{docSlug}"
+      ],
+      "blocks": [
+        "task",
+        "steps",
+        "limits",
+        "troubleshooting",
+        "applies-to",
+        "related"
+      ],
+      "requiredEntityFields": [
+        "variant",
+        "category",
+        "body",
+        "appliesTo",
+        "troubleshooting",
+        "relatedEntityIds"
+      ],
+      "publicationGates": [
+        "G01",
+        "G02",
+        "G03",
+        "G04",
+        "G05",
+        "G06",
+        "G07",
+        "G08",
+        "DOCUMENTATION"
+      ],
+      "suggestedPhase": 1,
+      "magnificRegistryGroups": [
+        "Справка",
+        "Справка авторам"
+      ],
+      "commonPageData": "Page + LocalizedContent",
+      "implementationState": "proposed"
+    },
+    {
+      "id": "T12",
+      "name": "Последовательность действий",
+      "entityType": "Workflow",
+      "pathPatterns": [
+        "/{locale}/workflows/{workflowSlug}"
+      ],
+      "blocks": [
+        "result",
+        "inputs",
+        "step-graph-or-guide",
+        "examples",
+        "limits",
+        "continue"
+      ],
+      "requiredEntityFields": [
+        "executionMode",
+        "inputDefinitions",
+        "steps",
+        "outputDescriptions",
+        "exampleIds"
+      ],
+      "publicationGates": [
+        "G01",
+        "G02",
+        "G03",
+        "G04",
+        "G05",
+        "G06",
+        "G07",
+        "G08",
+        "WORKFLOW",
+        "PRODUCT"
+      ],
+      "suggestedPhase": 3,
+      "magnificRegistryGroups": [
+        "Задачи",
+        "Экосистема"
+      ],
+      "commonPageData": "Page + LocalizedContent",
+      "implementationState": "proposed"
+    },
+    {
+      "id": "T13",
+      "name": "Подборка примеров или промптов",
+      "entityType": "Collection",
+      "pathPatterns": [
+        "/{locale}/inspiration/{collectionSlug}",
+        "/{locale}/prompts/{collectionSlug}"
+      ],
+      "blocks": [
+        "selection-intro",
+        "examples",
+        "context",
+        "related-tasks"
+      ],
+      "requiredEntityFields": [
+        "memberType",
+        "selectionRule",
+        "orderedMemberIds",
+        "taxonIds",
+        "curatorNote"
+      ],
+      "publicationGates": [
+        "G01",
+        "G02",
+        "G03",
+        "G04",
+        "G05",
+        "G06",
+        "G07",
+        "G08",
+        "CONSENT"
+      ],
+      "suggestedPhase": 4,
+      "magnificRegistryGroups": [
+        "Стоковый каталог",
+        "Проекты и события"
+      ],
+      "commonPageData": "Page + LocalizedContent",
+      "implementationState": "proposed"
+    },
+    {
+      "id": "T14",
+      "name": "Публичный пример",
+      "entityType": "PublicExample",
+      "pathPatterns": [
+        "/{locale}/inspiration/examples/{exampleSlug}"
+      ],
+      "blocks": [
+        "result",
+        "provenance",
+        "permitted-prompt",
+        "parameters",
+        "reproduction",
+        "related"
+      ],
+      "requiredEntityFields": [
+        "publicMediaIds",
+        "modelVersionId",
+        "origin",
+        "provenance",
+        "consentRef",
+        "moderationState",
+        "taskIds",
+        "taxonIds",
+        "promptPublicationAllowed",
+        "reproductionNotes"
+      ],
+      "publicationGates": [
+        "G01",
+        "G02",
+        "G03",
+        "G04",
+        "G05",
+        "G06",
+        "G07",
+        "G08",
+        "CONSENT"
+      ],
+      "suggestedPhase": 4,
+      "magnificRegistryGroups": [
+        "Стоковые материалы"
+      ],
+      "commonPageData": "Page + LocalizedContent",
+      "implementationState": "proposed"
+    },
+    {
+      "id": "T15",
+      "name": "Категория материалов",
+      "entityType": "StockCategory",
+      "pathPatterns": [
+        "/{locale}/{mediaType}/{topicSlug}"
+      ],
+      "blocks": [
+        "topic",
+        "related-topics",
+        "filters",
+        "results",
+        "pagination",
+        "related-tools"
+      ],
+      "requiredEntityFields": [
+        "mediaType",
+        "taxonId",
+        "selectionQuery",
+        "sortPolicy",
+        "filterDefinitions",
+        "relatedCategoryIds"
+      ],
+      "publicationGates": [
+        "G01",
+        "G02",
+        "G03",
+        "G04",
+        "G05",
+        "G06",
+        "G07",
+        "G08",
+        "LIBRARY"
+      ],
+      "suggestedPhase": 5,
+      "magnificRegistryGroups": [
+        "Стоковый каталог"
+      ],
+      "commonPageData": "Page + LocalizedContent",
+      "implementationState": "proposed"
+    },
+    {
+      "id": "T16",
+      "name": "Карточка материала",
+      "entityType": "StockItem",
+      "pathPatterns": [
+        "/{locale}/stock/items/{assetSlug}/{publicId}"
+      ],
+      "blocks": [
+        "preview",
+        "creator",
+        "descriptor",
+        "license",
+        "download",
+        "similar",
+        "topics",
+        "related-tools"
+      ],
+      "requiredEntityFields": [
+        "mediaType",
+        "publicMediaIds",
+        "creatorId",
+        "licenseRef",
+        "rights",
+        "fileDescriptor",
+        "downloadPolicy",
+        "taxonIds",
+        "categoryIds"
+      ],
+      "publicationGates": [
+        "G01",
+        "G02",
+        "G03",
+        "G04",
+        "G05",
+        "G06",
+        "G07",
+        "G08",
+        "LIBRARY"
+      ],
+      "suggestedPhase": 5,
+      "magnificRegistryGroups": [
+        "Стоковые материалы"
+      ],
+      "commonPageData": "Page + LocalizedContent",
+      "implementationState": "proposed"
+    },
+    {
+      "id": "T17",
+      "name": "Интеграция или приложение",
+      "entityType": "Integration",
+      "pathPatterns": [
+        "/{locale}/integrations/{integrationSlug}",
+        "/{locale}/plugins/{platformSlug}",
+        "/{locale}/mcp",
+        "/{locale}/mobile",
+        "/{locale}/desktop"
+      ],
+      "blocks": [
+        "purpose",
+        "examples",
+        "access",
+        "setup",
+        "compatibility",
+        "limits",
+        "docs"
+      ],
+      "requiredEntityFields": [
+        "integrationType",
+        "platform",
+        "supportedVersion",
+        "setupSteps",
+        "accessConditions",
+        "verifiedDestination",
+        "verificationRef",
+        "limitations"
+      ],
+      "publicationGates": [
+        "G01",
+        "G02",
+        "G03",
+        "G04",
+        "G05",
+        "G06",
+        "G07",
+        "G08",
+        "INTEGRATION"
+      ],
+      "suggestedPhase": 5,
+      "magnificRegistryGroups": [
+        "Экосистема"
+      ],
+      "commonPageData": "Page + LocalizedContent",
+      "implementationState": "proposed"
+    },
+    {
+      "id": "T18",
+      "name": "Тарифы",
+      "entityType": "Offer",
+      "pathPatterns": [
+        "/{locale}/pricing"
+      ],
+      "blocks": [
+        "plans",
+        "units",
+        "comparison",
+        "terms",
+        "faq"
+      ],
+      "requiredEntityFields": [
+        "offerType",
+        "planRefs",
+        "billingUnits",
+        "termsRef",
+        "priceSourceRef"
+      ],
+      "publicationGates": [
+        "G01",
+        "G02",
+        "G03",
+        "G04",
+        "G05",
+        "G06",
+        "G07",
+        "G08",
+        "OFFER"
+      ],
+      "suggestedPhase": 1,
+      "magnificRegistryGroups": [
+        "Коммерческие"
+      ],
+      "commonPageData": "Page + LocalizedContent",
+      "implementationState": "proposed"
+    },
+    {
+      "id": "T19",
+      "name": "Команды и бизнес",
+      "entityType": "Offer",
+      "pathPatterns": [
+        "/{locale}/business",
+        "/{locale}/enterprise"
+      ],
+      "blocks": [
+        "team-goal",
+        "verified-capabilities",
+        "process",
+        "examples",
+        "terms",
+        "contact"
+      ],
+      "requiredEntityFields": [
+        "offerType",
+        "planRefs",
+        "billingUnits",
+        "termsRef",
+        "priceSourceRef",
+        "teamCapabilities",
+        "contactAction"
+      ],
+      "publicationGates": [
+        "G01",
+        "G02",
+        "G03",
+        "G04",
+        "G05",
+        "G06",
+        "G07",
+        "G08",
+        "OFFER",
+        "BUSINESS"
+      ],
+      "suggestedPhase": 5,
+      "magnificRegistryGroups": [
+        "Коммерческие"
+      ],
+      "commonPageData": "Page + LocalizedContent",
+      "implementationState": "proposed"
+    },
+    {
+      "id": "T20",
+      "name": "История клиента",
+      "entityType": "CaseStudy",
+      "pathPatterns": [
+        "/{locale}/customers/{caseSlug}"
+      ],
+      "blocks": [
+        "challenge",
+        "client",
+        "process",
+        "results",
+        "evidence",
+        "tools"
+      ],
+      "requiredEntityFields": [
+        "clientLabel",
+        "consentRef",
+        "challenge",
+        "process",
+        "outcomes",
+        "exampleIds",
+        "relatedEntityIds"
+      ],
+      "publicationGates": [
+        "G01",
+        "G02",
+        "G03",
+        "G04",
+        "G05",
+        "G06",
+        "G07",
+        "G08",
+        "CASE"
+      ],
+      "suggestedPhase": 3,
+      "magnificRegistryGroups": [
+        "Компания",
+        "Проекты и события"
+      ],
+      "commonPageData": "Page + LocalizedContent",
+      "implementationState": "proposed"
+    },
+    {
+      "id": "T21",
+      "name": "Компания и контакты",
+      "entityType": "OrganizationPage",
+      "pathPatterns": [
+        "/{locale}/company/{pageSlug}",
+        "/{locale}/contact",
+        "/{locale}/partners",
+        "/{locale}/careers",
+        "/{locale}/press"
+      ],
+      "blocks": [
+        "purpose",
+        "body",
+        "verified-facts",
+        "contacts",
+        "action"
+      ],
+      "requiredEntityFields": [
+        "pagePurpose",
+        "body",
+        "verifiedContacts",
+        "actions"
+      ],
+      "publicationGates": [
+        "G01",
+        "G02",
+        "G03",
+        "G04",
+        "G05",
+        "G06",
+        "G07",
+        "G08",
+        "ORGANIZATION"
+      ],
+      "suggestedPhase": 1,
+      "magnificRegistryGroups": [
+        "Компания"
+      ],
+      "commonPageData": "Page + LocalizedContent",
+      "implementationState": "proposed"
+    },
+    {
+      "id": "T22",
+      "name": "Событие или специальный проект",
+      "entityType": "Event",
+      "pathPatterns": [
+        "/{locale}/events/{eventSlug}",
+        "/{locale}/projects/{projectSlug}"
+      ],
+      "blocks": [
+        "event-status",
+        "date-location",
+        "organizer",
+        "agenda",
+        "terms",
+        "action-or-recording"
+      ],
+      "requiredEntityFields": [
+        "eventState",
+        "startsAt",
+        "organizerId",
+        "location",
+        "agenda",
+        "participationTerms",
+        "action"
+      ],
+      "publicationGates": [
+        "G01",
+        "G02",
+        "G03",
+        "G04",
+        "G05",
+        "G06",
+        "G07",
+        "G08",
+        "EVENT"
+      ],
+      "suggestedPhase": 5,
+      "magnificRegistryGroups": [
+        "Проекты и события"
+      ],
+      "commonPageData": "Page + LocalizedContent",
+      "implementationState": "proposed"
+    },
+    {
+      "id": "T23",
+      "name": "Правовой документ",
+      "entityType": "LegalDocument",
+      "pathPatterns": [
+        "/{locale}/legal/{documentSlug}"
+      ],
+      "blocks": [
+        "title",
+        "version-effective-date",
+        "legal-entity",
+        "body",
+        "contacts",
+        "related-documents"
+      ],
+      "requiredEntityFields": [
+        "documentType",
+        "legalEntity",
+        "version",
+        "effectiveAt",
+        "approvedBody",
+        "approvalRef",
+        "contact"
+      ],
+      "publicationGates": [
+        "G01",
+        "G02",
+        "G03",
+        "G04",
+        "G05",
+        "G06",
+        "G07",
+        "G08",
+        "LEGAL"
+      ],
+      "suggestedPhase": 1,
+      "magnificRegistryGroups": [
+        "Правовые"
+      ],
+      "commonPageData": "Page + LocalizedContent",
+      "implementationState": "proposed"
+    },
+    {
+      "id": "T24",
+      "name": "Автор",
+      "entityType": "Author",
+      "pathPatterns": [
+        "/{locale}/authors/{authorSlug}"
+      ],
+      "blocks": [
+        "name",
+        "role",
+        "bio",
+        "published-materials"
+      ],
+      "requiredEntityFields": [
+        "displayName",
+        "role",
+        "bio",
+        "publicationConsentRef",
+        "publishedEntityIds"
+      ],
+      "publicationGates": [
+        "G01",
+        "G02",
+        "G03",
+        "G04",
+        "G05",
+        "G06",
+        "G07",
+        "G08",
+        "AUTHOR"
+      ],
+      "suggestedPhase": 3,
+      "magnificRegistryGroups": [
+        "Блог",
+        "Компания"
+      ],
+      "commonPageData": "Page + LocalizedContent",
+      "implementationState": "proposed"
+    }
+  ],
+  "storageContract": {
+    "localizedFields": "Поля со storageScope=translations[locale] находятся внутри перевода; вложенные формы имеют собственные локализованные подписи.",
+    "pageProjection": "Page — производная проекция редакционной сущности и реестра маршрутов. Редакционные status/title/author не копируются во второй независимо редактируемый источник.",
+    "conditionalFields": "requiredForPublication=true обязателен для применимого варианта. condition делает поле обязательным при выполнении условия даже при requiredForPublication=false.",
+    "valueTypes": "Логические типы для проектирования; это не исполняемая JSON Schema и не текущие TypeScript типы приложения.",
+    "runtimeFacts": "Доступность, цена и динамические ограничения не являются полями редакционного хранилища; они присоединяются из безопасной серверной проекции."
+  },
+  "publicationGates": {
+    "G01": "Редакционная готовность, реальные author/reviewer, ru и en по текущему договору.",
+    "G02": "Маршрут реализован, публичный SSR проверен, origin доверен.",
+    "G03": "Свой canonical, живые ссылки, уникальный путь, корректные языковые связи.",
+    "G04": "Отличимая польза страницы; синонимы и дубли рассмотрены.",
+    "G05": "Есть опубликованный родитель или страница является корневой.",
+    "G06": "Публичные медиа имеют права и модерацию; приватных данных нет.",
+    "G07": "Проверяемые обещания соответствуют источникам и контуру.",
+    "G08": "В sitemap только реальная published/index страница; черновики защищены.",
+    "PRODUCT": "Активный create CTA разрешён только для проверенной доступной операции; иначе честный обзор.",
+    "METHOD": "Участники, методика, условия, дата и источники результатов.",
+    "LEARNING": "Цель, упражнение и критерии результата доступны.",
+    "DOCUMENTATION": "Проверено на заявленной версии Epifera.",
+    "WORKFLOW": "Executable требует реального движка; иначе инструкция с ручными шагами.",
+    "CONSENT": "Отдельные разрешения на результат, промпт и происхождение.",
+    "LIBRARY": "Реальный собственный или лицензированный каталог, download rights, правила выдачи.",
+    "INTEGRATION": "Реальное подключение и проверенный сценарий; внутренний API не равен публичному.",
+    "OFFER": "Предложение и цена из подтверждённого источника; условия действуют.",
+    "BUSINESS": "Командные функции доказаны либо страница явно предлагает только обращение.",
+    "CASE": "Согласие клиента и доказательства результатов.",
+    "ORGANIZATION": "Собственные подтверждённые сведения и контакты.",
+    "EVENT": "Подтверждённое событие, программа, дата и актуальный статус.",
+    "LEGAL": "Текст, субъект, версия и дата утверждены владельцем условий.",
+    "AUTHOR": "Публичная роль/биография разрешена; есть собственные опубликованные материалы."
+  },
+  "pilotPages": [
+    {
+      "id": "home",
+      "templateId": "T01",
+      "exampleEnPath": "/en",
+      "workingTitleRu": "Главная",
+      "phase": 1,
+      "planningState": "candidate",
+      "publicRouteImplemented": true,
+      "sourceEvidence": [
+        "MarketingHome",
+        "src/i18n/seo.ts"
+      ],
+      "missingData": [
+        "Проверить собственные демонстрации и утверждения перед SEO выпуском"
+      ],
+      "existingWorkspacePath": null,
+      "existingContentId": null,
+      "indexEligible": false,
+      "readiness": "not-assessed-for-release"
+    },
+    {
+      "id": "hub-ai",
+      "templateId": "T02",
+      "exampleEnPath": "/en/ai",
+      "workingTitleRu": "Все инструменты",
+      "phase": 1,
+      "planningState": "candidate",
+      "publicRouteImplemented": false,
+      "sourceEvidence": [
+        "src/content",
+        "route-boundaries"
+      ],
+      "missingData": [
+        "Отобранные дочерние записи",
+        "Собственное описание раздела",
+        "Реализация публичного маршрута"
+      ],
+      "existingWorkspacePath": null,
+      "existingContentId": null,
+      "indexEligible": false,
+      "readiness": "not-assessed-for-release"
+    },
+    {
+      "id": "hub-models",
+      "templateId": "T02",
+      "exampleEnPath": "/en/models",
+      "workingTitleRu": "Все модели",
+      "phase": 1,
+      "planningState": "candidate",
+      "publicRouteImplemented": false,
+      "sourceEvidence": [
+        "src/content",
+        "route-boundaries"
+      ],
+      "missingData": [
+        "Отобранные дочерние записи",
+        "Собственное описание раздела",
+        "Реализация публичного маршрута"
+      ],
+      "existingWorkspacePath": null,
+      "existingContentId": null,
+      "indexEligible": false,
+      "readiness": "not-assessed-for-release"
+    },
+    {
+      "id": "hub-blog",
+      "templateId": "T02",
+      "exampleEnPath": "/en/blog",
+      "workingTitleRu": "Блог",
+      "phase": 1,
+      "planningState": "candidate",
+      "publicRouteImplemented": false,
+      "sourceEvidence": [
+        "src/content",
+        "route-boundaries"
+      ],
+      "missingData": [
+        "Отобранные дочерние записи",
+        "Собственное описание раздела",
+        "Реализация публичного маршрута"
+      ],
+      "existingWorkspacePath": null,
+      "existingContentId": null,
+      "indexEligible": false,
+      "readiness": "not-assessed-for-release"
+    },
+    {
+      "id": "hub-docs",
+      "templateId": "T02",
+      "exampleEnPath": "/en/ai/docs",
+      "workingTitleRu": "Помощь",
+      "phase": 1,
+      "planningState": "candidate",
+      "publicRouteImplemented": false,
+      "sourceEvidence": [
+        "src/content",
+        "route-boundaries"
+      ],
+      "missingData": [
+        "Отобранные дочерние записи",
+        "Собственное описание раздела",
+        "Реализация публичного маршрута"
+      ],
+      "existingWorkspacePath": null,
+      "existingContentId": null,
+      "indexEligible": false,
+      "readiness": "not-assessed-for-release"
+    },
+    {
+      "id": "tool-image",
+      "templateId": "T03",
+      "exampleEnPath": "/en/ai/image-generator",
+      "workingTitleRu": "Генератор изображений",
+      "phase": 2,
+      "planningState": "candidate",
+      "publicRouteImplemented": false,
+      "sourceEvidence": [
+        "existing-workspace-route",
+        "runtime-operation-review-required"
+      ],
+      "missingData": [
+        "Проверенная операция и контур",
+        "Разрешённые примеры",
+        "Двухъязычный текст",
+        "Публичный шаблон"
+      ],
+      "existingWorkspacePath": "/app/image",
+      "existingContentId": "tool-image-generator",
+      "indexEligible": false,
+      "readiness": "not-assessed-for-release"
+    },
+    {
+      "id": "tool-text",
+      "templateId": "T03",
+      "exampleEnPath": "/en/ai/text-generator",
+      "workingTitleRu": "Текстовый помощник",
+      "phase": 2,
+      "planningState": "candidate",
+      "publicRouteImplemented": false,
+      "sourceEvidence": [
+        "existing-workspace-route",
+        "runtime-operation-review-required"
+      ],
+      "missingData": [
+        "Проверенная операция и контур",
+        "Разрешённые примеры",
+        "Двухъязычный текст",
+        "Публичный шаблон"
+      ],
+      "existingWorkspacePath": "/app",
+      "existingContentId": null,
+      "indexEligible": false,
+      "readiness": "not-assessed-for-release"
+    },
+    {
+      "id": "tool-video",
+      "templateId": "T03",
+      "exampleEnPath": "/en/ai/video-generator",
+      "workingTitleRu": "Генерация видео",
+      "phase": 2,
+      "planningState": "candidate",
+      "publicRouteImplemented": false,
+      "sourceEvidence": [
+        "existing-workspace-route",
+        "runtime-operation-review-required"
+      ],
+      "missingData": [
+        "Проверенная операция и контур",
+        "Разрешённые примеры",
+        "Двухъязычный текст",
+        "Публичный шаблон"
+      ],
+      "existingWorkspacePath": "/app",
+      "existingContentId": null,
+      "indexEligible": false,
+      "readiness": "not-assessed-for-release"
+    },
+    {
+      "id": "tool-music",
+      "templateId": "T03",
+      "exampleEnPath": "/en/ai/music-generator",
+      "workingTitleRu": "Генерация музыки",
+      "phase": 2,
+      "planningState": "candidate",
+      "publicRouteImplemented": false,
+      "sourceEvidence": [
+        "existing-workspace-route",
+        "runtime-operation-review-required"
+      ],
+      "missingData": [
+        "Проверенная операция и контур",
+        "Разрешённые примеры",
+        "Двухъязычный текст",
+        "Публичный шаблон"
+      ],
+      "existingWorkspacePath": "/app/music",
+      "existingContentId": null,
+      "indexEligible": false,
+      "readiness": "not-assessed-for-release"
+    },
+    {
+      "id": "tool-voice",
+      "templateId": "T03",
+      "exampleEnPath": "/en/ai/voice-generator",
+      "workingTitleRu": "Озвучка текста",
+      "phase": 2,
+      "planningState": "candidate",
+      "publicRouteImplemented": false,
+      "sourceEvidence": [
+        "existing-workspace-route",
+        "runtime-operation-review-required"
+      ],
+      "missingData": [
+        "Проверенная операция и контур",
+        "Разрешённые примеры",
+        "Двухъязычный текст",
+        "Публичный шаблон"
+      ],
+      "existingWorkspacePath": "/app/speech",
+      "existingContentId": null,
+      "indexEligible": false,
+      "readiness": "not-assessed-for-release"
+    },
+    {
+      "id": "tool-transcription",
+      "templateId": "T03",
+      "exampleEnPath": "/en/ai/audio-to-text",
+      "workingTitleRu": "Распознавание записи",
+      "phase": 2,
+      "planningState": "candidate",
+      "publicRouteImplemented": false,
+      "sourceEvidence": [
+        "existing-workspace-route",
+        "runtime-operation-review-required"
+      ],
+      "missingData": [
+        "Проверенная операция и контур",
+        "Разрешённые примеры",
+        "Двухъязычный текст",
+        "Публичный шаблон"
+      ],
+      "existingWorkspacePath": "/app/speech",
+      "existingContentId": null,
+      "indexEligible": false,
+      "readiness": "not-assessed-for-release"
+    },
+    {
+      "id": "tool-photo-editor",
+      "templateId": "T03",
+      "exampleEnPath": "/en/ai/photo-editor",
+      "workingTitleRu": "Редактирование фото",
+      "phase": 2,
+      "planningState": "candidate",
+      "publicRouteImplemented": false,
+      "sourceEvidence": [
+        "existing-workspace-route",
+        "runtime-operation-review-required"
+      ],
+      "missingData": [
+        "Проверенная операция и контур",
+        "Разрешённые примеры",
+        "Двухъязычный текст",
+        "Публичный шаблон"
+      ],
+      "existingWorkspacePath": "/app/image",
+      "existingContentId": null,
+      "indexEligible": false,
+      "readiness": "not-assessed-for-release"
+    },
+    {
+      "id": "family-gpt-image",
+      "templateId": "T04",
+      "exampleEnPath": "/en/ai/gpt-image",
+      "workingTitleRu": "GPT Image",
+      "phase": 2,
+      "planningState": "candidate",
+      "publicRouteImplemented": false,
+      "sourceEvidence": [
+        "model-catalog-review-required"
+      ],
+      "missingData": [
+        "Сопоставление версий и ключей",
+        "Источники и ограничения",
+        "Примеры и переводы"
+      ],
+      "existingWorkspacePath": null,
+      "existingContentId": null,
+      "indexEligible": false,
+      "readiness": "not-assessed-for-release"
+    },
+    {
+      "id": "family-kling",
+      "templateId": "T04",
+      "exampleEnPath": "/en/ai/kling",
+      "workingTitleRu": "Kling",
+      "phase": 2,
+      "planningState": "candidate",
+      "publicRouteImplemented": false,
+      "sourceEvidence": [
+        "model-catalog-review-required"
+      ],
+      "missingData": [
+        "Сопоставление версий и ключей",
+        "Источники и ограничения",
+        "Примеры и переводы"
+      ],
+      "existingWorkspacePath": null,
+      "existingContentId": null,
+      "indexEligible": false,
+      "readiness": "not-assessed-for-release"
+    },
+    {
+      "id": "family-suno",
+      "templateId": "T04",
+      "exampleEnPath": "/en/ai/suno",
+      "workingTitleRu": "Suno",
+      "phase": 2,
+      "planningState": "candidate",
+      "publicRouteImplemented": false,
+      "sourceEvidence": [
+        "model-catalog-review-required"
+      ],
+      "missingData": [
+        "Сопоставление версий и ключей",
+        "Источники и ограничения",
+        "Примеры и переводы"
+      ],
+      "existingWorkspacePath": null,
+      "existingContentId": null,
+      "indexEligible": false,
+      "readiness": "not-assessed-for-release"
+    },
+    {
+      "id": "version-gpt-image-2",
+      "templateId": "T05",
+      "exampleEnPath": "/en/ai/gpt-image/gpt-image-2",
+      "workingTitleRu": "GPT Image 2",
+      "phase": 2,
+      "planningState": "candidate",
+      "publicRouteImplemented": false,
+      "sourceEvidence": [
+        "src/content/data/models.ts"
+      ],
+      "missingData": [
+        "Точный ключ и доступность в целевом контуре",
+        "Пример этой версии с правами",
+        "Актуальные ограничения"
+      ],
+      "existingWorkspacePath": null,
+      "existingContentId": "model-gpt-image-2",
+      "indexEligible": false,
+      "readiness": "not-assessed-for-release"
+    },
+    {
+      "id": "version-kling-3-0",
+      "templateId": "T05",
+      "exampleEnPath": "/en/ai/kling/kling-3-0",
+      "workingTitleRu": "Kling 3.0",
+      "phase": 2,
+      "planningState": "candidate",
+      "publicRouteImplemented": false,
+      "sourceEvidence": [
+        "model-catalog-review-required"
+      ],
+      "missingData": [
+        "Точный ключ и доступность в целевом контуре",
+        "Пример этой версии с правами",
+        "Актуальные ограничения"
+      ],
+      "existingWorkspacePath": null,
+      "existingContentId": null,
+      "indexEligible": false,
+      "readiness": "not-assessed-for-release"
+    },
+    {
+      "id": "version-suno-v6",
+      "templateId": "T05",
+      "exampleEnPath": "/en/ai/suno/suno-v6",
+      "workingTitleRu": "Suno V6",
+      "phase": 2,
+      "planningState": "candidate",
+      "publicRouteImplemented": false,
+      "sourceEvidence": [
+        "model-catalog-review-required"
+      ],
+      "missingData": [
+        "Точный ключ и доступность в целевом контуре",
+        "Пример этой версии с правами",
+        "Актуальные ограничения"
+      ],
+      "existingWorkspacePath": null,
+      "existingContentId": null,
+      "indexEligible": false,
+      "readiness": "not-assessed-for-release"
+    },
+    {
+      "id": "task-avatar",
+      "templateId": "T06",
+      "exampleEnPath": "/en/ai/ai-avatar-generator",
+      "workingTitleRu": "Создать аватар",
+      "phase": 3,
+      "planningState": "candidate",
+      "publicRouteImplemented": false,
+      "sourceEvidence": [
+        "candidate-use-case"
+      ],
+      "missingData": [
+        "Проверка сценария без новых неподтверждённых функций",
+        "Три отличимых примера",
+        "Шаги и критерии результата"
+      ],
+      "existingWorkspacePath": "/app/image",
+      "existingContentId": null,
+      "indexEligible": false,
+      "readiness": "not-assessed-for-release"
+    },
+    {
+      "id": "task-cover",
+      "templateId": "T06",
+      "exampleEnPath": "/en/ai/cover-generator",
+      "workingTitleRu": "Создать обложку",
+      "phase": 3,
+      "planningState": "candidate",
+      "publicRouteImplemented": false,
+      "sourceEvidence": [
+        "candidate-use-case"
+      ],
+      "missingData": [
+        "Проверка сценария без новых неподтверждённых функций",
+        "Три отличимых примера",
+        "Шаги и критерии результата"
+      ],
+      "existingWorkspacePath": "/app/image",
+      "existingContentId": null,
+      "indexEligible": false,
+      "readiness": "not-assessed-for-release"
+    },
+    {
+      "id": "task-product",
+      "templateId": "T06",
+      "exampleEnPath": "/en/ai/product-photo",
+      "workingTitleRu": "Фото для карточки товара",
+      "phase": 3,
+      "planningState": "candidate",
+      "publicRouteImplemented": false,
+      "sourceEvidence": [
+        "candidate-use-case"
+      ],
+      "missingData": [
+        "Проверка сценария без новых неподтверждённых функций",
+        "Три отличимых примера",
+        "Шаги и критерии результата"
+      ],
+      "existingWorkspacePath": "/app/image",
+      "existingContentId": null,
+      "indexEligible": false,
+      "readiness": "not-assessed-for-release"
+    },
+    {
+      "id": "task-presentation",
+      "templateId": "T06",
+      "exampleEnPath": "/en/ai/presentation-illustrations",
+      "workingTitleRu": "Иллюстрации для презентации",
+      "phase": 3,
+      "planningState": "candidate",
+      "publicRouteImplemented": false,
+      "sourceEvidence": [
+        "candidate-use-case"
+      ],
+      "missingData": [
+        "Проверка сценария без новых неподтверждённых функций",
+        "Три отличимых примера",
+        "Шаги и критерии результата"
+      ],
+      "existingWorkspacePath": "/app/image",
+      "existingContentId": null,
+      "indexEligible": false,
+      "readiness": "not-assessed-for-release"
+    },
+    {
+      "id": "task-social-text",
+      "templateId": "T06",
+      "exampleEnPath": "/en/ai/social-media-post",
+      "workingTitleRu": "Текст для публикации",
+      "phase": 3,
+      "planningState": "candidate",
+      "publicRouteImplemented": false,
+      "sourceEvidence": [
+        "candidate-use-case"
+      ],
+      "missingData": [
+        "Проверка сценария без новых неподтверждённых функций",
+        "Три отличимых примера",
+        "Шаги и критерии результата"
+      ],
+      "existingWorkspacePath": "/app",
+      "existingContentId": null,
+      "indexEligible": false,
+      "readiness": "not-assessed-for-release"
+    },
+    {
+      "id": "task-music",
+      "templateId": "T06",
+      "exampleEnPath": "/en/ai/background-music",
+      "workingTitleRu": "Фоновая музыка",
+      "phase": 3,
+      "planningState": "candidate",
+      "publicRouteImplemented": false,
+      "sourceEvidence": [
+        "candidate-use-case"
+      ],
+      "missingData": [
+        "Проверка сценария без новых неподтверждённых функций",
+        "Три отличимых примера",
+        "Шаги и критерии результата"
+      ],
+      "existingWorkspacePath": "/app/music",
+      "existingContentId": null,
+      "indexEligible": false,
+      "readiness": "not-assessed-for-release"
+    },
+    {
+      "id": "task-narration",
+      "templateId": "T06",
+      "exampleEnPath": "/en/ai/video-narration",
+      "workingTitleRu": "Озвучка ролика",
+      "phase": 3,
+      "planningState": "candidate",
+      "publicRouteImplemented": false,
+      "sourceEvidence": [
+        "candidate-use-case"
+      ],
+      "missingData": [
+        "Проверка сценария без новых неподтверждённых функций",
+        "Три отличимых примера",
+        "Шаги и критерии результата"
+      ],
+      "existingWorkspacePath": "/app/speech",
+      "existingContentId": null,
+      "indexEligible": false,
+      "readiness": "not-assessed-for-release"
+    },
+    {
+      "id": "audience-marketing",
+      "templateId": "T07",
+      "exampleEnPath": "/en/ai/marketing",
+      "workingTitleRu": "Маркетологи",
+      "phase": 3,
+      "planningState": "candidate",
+      "publicRouteImplemented": false,
+      "sourceEvidence": [
+        "magnific-audience-pattern"
+      ],
+      "missingData": [
+        "Свои сценарии профессии",
+        "Примеры",
+        "Отличие от общего списка инструментов"
+      ],
+      "existingWorkspacePath": null,
+      "existingContentId": null,
+      "indexEligible": false,
+      "readiness": "not-assessed-for-release"
+    },
+    {
+      "id": "audience-designers",
+      "templateId": "T07",
+      "exampleEnPath": "/en/ai/designers",
+      "workingTitleRu": "Дизайнеры",
+      "phase": 3,
+      "planningState": "candidate",
+      "publicRouteImplemented": false,
+      "sourceEvidence": [
+        "magnific-audience-pattern"
+      ],
+      "missingData": [
+        "Свои сценарии профессии",
+        "Примеры",
+        "Отличие от общего списка инструментов"
+      ],
+      "existingWorkspacePath": null,
+      "existingContentId": null,
+      "indexEligible": false,
+      "readiness": "not-assessed-for-release"
+    },
+    {
+      "id": "audience-content-creators",
+      "templateId": "T07",
+      "exampleEnPath": "/en/ai/content-creators",
+      "workingTitleRu": "Авторы контента",
+      "phase": 3,
+      "planningState": "candidate",
+      "publicRouteImplemented": false,
+      "sourceEvidence": [
+        "magnific-audience-pattern"
+      ],
+      "missingData": [
+        "Свои сценарии профессии",
+        "Примеры",
+        "Отличие от общего списка инструментов"
+      ],
+      "existingWorkspacePath": null,
+      "existingContentId": null,
+      "indexEligible": false,
+      "readiness": "not-assessed-for-release"
+    },
+    {
+      "id": "compare-image",
+      "templateId": "T08",
+      "exampleEnPath": "/en/compare/image-models",
+      "workingTitleRu": "Сравнение моделей изображений",
+      "phase": 3,
+      "planningState": "candidate",
+      "publicRouteImplemented": false,
+      "sourceEvidence": [
+        "comparison-design"
+      ],
+      "missingData": [
+        "Подтверждённые участники",
+        "Методика",
+        "Сопоставимые результаты или документальная таблица"
+      ],
+      "existingWorkspacePath": null,
+      "existingContentId": null,
+      "indexEligible": false,
+      "readiness": "not-assessed-for-release"
+    },
+    {
+      "id": "compare-video",
+      "templateId": "T08",
+      "exampleEnPath": "/en/compare/video-models",
+      "workingTitleRu": "Сравнение моделей видео",
+      "phase": 3,
+      "planningState": "candidate",
+      "publicRouteImplemented": false,
+      "sourceEvidence": [
+        "comparison-design"
+      ],
+      "missingData": [
+        "Подтверждённые участники",
+        "Методика",
+        "Условия, примеры и дата проверки"
+      ],
+      "existingWorkspacePath": null,
+      "existingContentId": null,
+      "indexEligible": false,
+      "readiness": "not-assessed-for-release"
+    },
+    {
+      "id": "article-prompts",
+      "templateId": "T09",
+      "exampleEnPath": "/en/blog/image-prompt-basics",
+      "workingTitleRu": "Основы промптов для изображений",
+      "phase": 1,
+      "planningState": "candidate",
+      "publicRouteImplemented": false,
+      "sourceEvidence": [
+        "src/content/data/articles.ts"
+      ],
+      "missingData": [
+        "Расширить и проверить пример содержания",
+        "Свои иллюстрации",
+        "Публичный маршрут"
+      ],
+      "existingWorkspacePath": null,
+      "existingContentId": "article-image-prompt-basics",
+      "indexEligible": false,
+      "readiness": "not-assessed-for-release"
+    },
+    {
+      "id": "article-selection",
+      "templateId": "T09",
+      "exampleEnPath": "/en/blog/how-to-choose-an-image-model",
+      "workingTitleRu": "Как выбрать модель изображений",
+      "phase": 3,
+      "planningState": "candidate",
+      "publicRouteImplemented": false,
+      "sourceEvidence": [
+        "editorial-candidate"
+      ],
+      "missingData": [
+        "Проверенные критерии выбора",
+        "Примеры",
+        "Автор и источники"
+      ],
+      "existingWorkspacePath": null,
+      "existingContentId": null,
+      "indexEligible": false,
+      "readiness": "not-assessed-for-release"
+    },
+    {
+      "id": "lesson-prompts",
+      "templateId": "T10",
+      "exampleEnPath": "/en/academy/courses/image-prompts",
+      "workingTitleRu": "Практика промптов",
+      "phase": 3,
+      "planningState": "candidate",
+      "publicRouteImplemented": false,
+      "sourceEvidence": [
+        "learning-candidate"
+      ],
+      "missingData": [
+        "Программа",
+        "Уроки и упражнение",
+        "Ожидаемый результат"
+      ],
+      "existingWorkspacePath": null,
+      "existingContentId": null,
+      "indexEligible": false,
+      "readiness": "not-assessed-for-release"
+    },
+    {
+      "id": "doc-image-generation",
+      "templateId": "T11",
+      "exampleEnPath": "/en/ai/docs/image-generation",
+      "workingTitleRu": "Создание изображения",
+      "phase": 1,
+      "planningState": "candidate",
+      "publicRouteImplemented": false,
+      "sourceEvidence": [
+        "existing-product-flow-review-required"
+      ],
+      "missingData": [
+        "Проверка на текущем интерфейсе",
+        "Ошибки и решения",
+        "Переводы"
+      ],
+      "existingWorkspacePath": null,
+      "existingContentId": null,
+      "indexEligible": false,
+      "readiness": "not-assessed-for-release"
+    },
+    {
+      "id": "doc-music-generation",
+      "templateId": "T11",
+      "exampleEnPath": "/en/ai/docs/music-generation",
+      "workingTitleRu": "Создание музыки",
+      "phase": 1,
+      "planningState": "candidate",
+      "publicRouteImplemented": false,
+      "sourceEvidence": [
+        "existing-product-flow-review-required"
+      ],
+      "missingData": [
+        "Проверка на текущем интерфейсе",
+        "Ошибки и решения",
+        "Переводы"
+      ],
+      "existingWorkspacePath": null,
+      "existingContentId": null,
+      "indexEligible": false,
+      "readiness": "not-assessed-for-release"
+    },
+    {
+      "id": "doc-speech",
+      "templateId": "T11",
+      "exampleEnPath": "/en/ai/docs/speech",
+      "workingTitleRu": "Озвучка и распознавание",
+      "phase": 1,
+      "planningState": "candidate",
+      "publicRouteImplemented": false,
+      "sourceEvidence": [
+        "existing-product-flow-review-required"
+      ],
+      "missingData": [
+        "Проверка на текущем интерфейсе",
+        "Ошибки и решения",
+        "Переводы"
+      ],
+      "existingWorkspacePath": null,
+      "existingContentId": null,
+      "indexEligible": false,
+      "readiness": "not-assessed-for-release"
+    },
+    {
+      "id": "doc-credits",
+      "templateId": "T11",
+      "exampleEnPath": "/en/ai/docs/credits",
+      "workingTitleRu": "Стоимость и кредиты",
+      "phase": 1,
+      "planningState": "candidate",
+      "publicRouteImplemented": false,
+      "sourceEvidence": [
+        "existing-product-flow-review-required"
+      ],
+      "missingData": [
+        "Проверка на текущем интерфейсе",
+        "Ошибки и решения",
+        "Переводы"
+      ],
+      "existingWorkspacePath": null,
+      "existingContentId": null,
+      "indexEligible": false,
+      "readiness": "not-assessed-for-release"
+    },
+    {
+      "id": "workflow-product",
+      "templateId": "T12",
+      "exampleEnPath": "/en/workflows/product-photo",
+      "workingTitleRu": "Подготовка фото товара",
+      "phase": 3,
+      "planningState": "candidate",
+      "publicRouteImplemented": false,
+      "sourceEvidence": [
+        "instruction-workflow-candidate"
+      ],
+      "missingData": [
+        "Пошаговая проверка",
+        "Публичные примеры",
+        "Ручной режим до отдельного исполняемого движка"
+      ],
+      "existingWorkspacePath": null,
+      "existingContentId": null,
+      "indexEligible": false,
+      "readiness": "not-assessed-for-release"
+    },
+    {
+      "id": "collection-products",
+      "templateId": "T13",
+      "exampleEnPath": "/en/inspiration/product-photography",
+      "workingTitleRu": "Примеры фото товаров",
+      "phase": 4,
+      "planningState": "candidate",
+      "publicRouteImplemented": false,
+      "sourceEvidence": [
+        "public-library-required"
+      ],
+      "missingData": [
+        "Публичные примеры и права",
+        "Правило отбора",
+        "Подписи и связи"
+      ],
+      "existingWorkspacePath": null,
+      "existingContentId": null,
+      "indexEligible": false,
+      "readiness": "not-assessed-for-release"
+    },
+    {
+      "id": "collection-prompts",
+      "templateId": "T13",
+      "exampleEnPath": "/en/prompts/image-composition",
+      "workingTitleRu": "Промпты для композиции",
+      "phase": 4,
+      "planningState": "candidate",
+      "publicRouteImplemented": false,
+      "sourceEvidence": [
+        "public-library-required"
+      ],
+      "missingData": [
+        "Разрешённые промпты",
+        "Результаты",
+        "Пояснения применения"
+      ],
+      "existingWorkspacePath": null,
+      "existingContentId": null,
+      "indexEligible": false,
+      "readiness": "not-assessed-for-release"
+    },
+    {
+      "id": "example-cosmetics",
+      "templateId": "T14",
+      "exampleEnPath": "/en/inspiration/examples/studio-cosmetics",
+      "workingTitleRu": "Пример студийного изображения",
+      "phase": 4,
+      "planningState": "candidate",
+      "publicRouteImplemented": false,
+      "sourceEvidence": [
+        "illustrative-record-not-real-output"
+      ],
+      "missingData": [
+        "Сам результат ещё не подготовлен",
+        "Согласие и модерация",
+        "Происхождение и параметры"
+      ],
+      "existingWorkspacePath": null,
+      "existingContentId": null,
+      "indexEligible": false,
+      "readiness": "not-assessed-for-release"
+    },
+    {
+      "id": "stock-root",
+      "templateId": "T02",
+      "exampleEnPath": "/en/stock",
+      "workingTitleRu": "Каталог материалов",
+      "phase": 5,
+      "planningState": "candidate",
+      "publicRouteImplemented": false,
+      "sourceEvidence": [
+        "requires-own-library"
+      ],
+      "missingData": [
+        "Каталог",
+        "Права",
+        "Скачивание",
+        "Редакционное описание"
+      ],
+      "existingWorkspacePath": null,
+      "existingContentId": null,
+      "indexEligible": false,
+      "readiness": "not-assessed-for-release"
+    },
+    {
+      "id": "stock-aesthetic",
+      "templateId": "T15",
+      "exampleEnPath": "/en/photos/aesthetic",
+      "workingTitleRu": "Эстетичные изображения",
+      "phase": 5,
+      "planningState": "candidate",
+      "publicRouteImplemented": false,
+      "sourceEvidence": [
+        "magnific-structural-reference-only"
+      ],
+      "missingData": [
+        "Собственные или лицензированные материалы",
+        "Выдача",
+        "Метаданные и права"
+      ],
+      "existingWorkspacePath": null,
+      "existingContentId": null,
+      "indexEligible": false,
+      "readiness": "not-assessed-for-release"
+    },
+    {
+      "id": "stock-background",
+      "templateId": "T15",
+      "exampleEnPath": "/en/photos/background",
+      "workingTitleRu": "Фоны",
+      "phase": 5,
+      "planningState": "candidate",
+      "publicRouteImplemented": false,
+      "sourceEvidence": [
+        "magnific-structural-reference-only"
+      ],
+      "missingData": [
+        "Собственные или лицензированные материалы",
+        "Отличимая подборка",
+        "Пагинация"
+      ],
+      "existingWorkspacePath": null,
+      "existingContentId": null,
+      "indexEligible": false,
+      "readiness": "not-assessed-for-release"
+    },
+    {
+      "id": "stock-item",
+      "templateId": "T16",
+      "exampleEnPath": "/en/stock/items/beige-flowers/ef-0001",
+      "workingTitleRu": "Пример карточки материала",
+      "phase": 5,
+      "planningState": "candidate",
+      "publicRouteImplemented": false,
+      "sourceEvidence": [
+        "illustrative-record-no-existing-asset"
+      ],
+      "missingData": [
+        "Файл ещё не подготовлен",
+        "Лицензия на распространение",
+        "Превью и авторство"
+      ],
+      "existingWorkspacePath": null,
+      "existingContentId": null,
+      "indexEligible": false,
+      "readiness": "not-assessed-for-release"
+    },
+    {
+      "id": "integration-vk",
+      "templateId": "T17",
+      "exampleEnPath": "/en/integrations/vk",
+      "workingTitleRu": "VK бот",
+      "phase": 5,
+      "planningState": "candidate",
+      "publicRouteImplemented": false,
+      "sourceEvidence": [
+        "vk-adapter-exists-product-review-required"
+      ],
+      "missingData": [
+        "Проверить существование продукта и сценария",
+        "Инструкция",
+        "Условия доступа",
+        "Рабочая ссылка"
+      ],
+      "existingWorkspacePath": null,
+      "existingContentId": null,
+      "indexEligible": false,
+      "readiness": "not-assessed-for-release"
+    },
+    {
+      "id": "integration-api",
+      "templateId": "T17",
+      "exampleEnPath": "/en/integrations/public-api",
+      "workingTitleRu": "Публичный API",
+      "phase": 5,
+      "planningState": "candidate",
+      "publicRouteImplemented": false,
+      "sourceEvidence": [
+        "future-product-only"
+      ],
+      "missingData": [
+        "Проверить существование продукта и сценария",
+        "Инструкция",
+        "Условия доступа",
+        "Рабочая ссылка"
+      ],
+      "existingWorkspacePath": null,
+      "existingContentId": null,
+      "indexEligible": false,
+      "readiness": "not-assessed-for-release"
+    },
+    {
+      "id": "integration-mcp",
+      "templateId": "T17",
+      "exampleEnPath": "/en/mcp",
+      "workingTitleRu": "MCP подключение",
+      "phase": 5,
+      "planningState": "candidate",
+      "publicRouteImplemented": false,
+      "sourceEvidence": [
+        "future-product-only"
+      ],
+      "missingData": [
+        "Проверить существование продукта и сценария",
+        "Инструкция",
+        "Условия доступа",
+        "Рабочая ссылка"
+      ],
+      "existingWorkspacePath": null,
+      "existingContentId": null,
+      "indexEligible": false,
+      "readiness": "not-assessed-for-release"
+    },
+    {
+      "id": "integration-plugin",
+      "templateId": "T17",
+      "exampleEnPath": "/en/plugins/figma",
+      "workingTitleRu": "Плагин Figma",
+      "phase": 5,
+      "planningState": "candidate",
+      "publicRouteImplemented": false,
+      "sourceEvidence": [
+        "future-product-only"
+      ],
+      "missingData": [
+        "Проверить существование продукта и сценария",
+        "Инструкция",
+        "Условия доступа",
+        "Рабочая ссылка"
+      ],
+      "existingWorkspacePath": null,
+      "existingContentId": null,
+      "indexEligible": false,
+      "readiness": "not-assessed-for-release"
+    },
+    {
+      "id": "integration-mobile",
+      "templateId": "T17",
+      "exampleEnPath": "/en/mobile",
+      "workingTitleRu": "Мобильное приложение",
+      "phase": 5,
+      "planningState": "candidate",
+      "publicRouteImplemented": false,
+      "sourceEvidence": [
+        "future-product-only"
+      ],
+      "missingData": [
+        "Проверить существование продукта и сценария",
+        "Инструкция",
+        "Условия доступа",
+        "Рабочая ссылка"
+      ],
+      "existingWorkspacePath": null,
+      "existingContentId": null,
+      "indexEligible": false,
+      "readiness": "not-assessed-for-release"
+    },
+    {
+      "id": "pricing",
+      "templateId": "T18",
+      "exampleEnPath": "/en/pricing",
+      "workingTitleRu": "Тарифы",
+      "phase": 1,
+      "planningState": "candidate",
+      "publicRouteImplemented": false,
+      "sourceEvidence": [
+        "backend-price-ownership"
+      ],
+      "missingData": [
+        "Утверждённые предложения",
+        "Безопасный источник цен",
+        "Условия"
+      ],
+      "existingWorkspacePath": null,
+      "existingContentId": null,
+      "indexEligible": false,
+      "readiness": "not-assessed-for-release"
+    },
+    {
+      "id": "business",
+      "templateId": "T19",
+      "exampleEnPath": "/en/business",
+      "workingTitleRu": "Решения для команды",
+      "phase": 5,
+      "planningState": "candidate",
+      "publicRouteImplemented": false,
+      "sourceEvidence": [
+        "future-business-offer"
+      ],
+      "missingData": [
+        "Проверенные командные функции либо честная форма обращения",
+        "Условия",
+        "Рабочий контакт"
+      ],
+      "existingWorkspacePath": null,
+      "existingContentId": null,
+      "indexEligible": false,
+      "readiness": "not-assessed-for-release"
+    },
+    {
+      "id": "case-product",
+      "templateId": "T20",
+      "exampleEnPath": "/en/customers/product-campaign",
+      "workingTitleRu": "Кейс подготовки материалов",
+      "phase": 3,
+      "planningState": "candidate",
+      "publicRouteImplemented": false,
+      "sourceEvidence": [
+        "illustrative-case-not-real-client"
+      ],
+      "missingData": [
+        "Реальный согласованный кейс",
+        "Результаты и доказательства",
+        "Публичные примеры"
+      ],
+      "existingWorkspacePath": null,
+      "existingContentId": null,
+      "indexEligible": false,
+      "readiness": "not-assessed-for-release"
+    },
+    {
+      "id": "company",
+      "templateId": "T21",
+      "exampleEnPath": "/en/company/about-us",
+      "workingTitleRu": "Об Epifera",
+      "phase": 1,
+      "planningState": "candidate",
+      "publicRouteImplemented": false,
+      "sourceEvidence": [
+        "organization-owner-input"
+      ],
+      "missingData": [
+        "Собственные сведения",
+        "Подтверждённые факты",
+        "Переводы"
+      ],
+      "existingWorkspacePath": null,
+      "existingContentId": null,
+      "indexEligible": false,
+      "readiness": "not-assessed-for-release"
+    },
+    {
+      "id": "contact",
+      "templateId": "T21",
+      "exampleEnPath": "/en/contact",
+      "workingTitleRu": "Связаться с Epifera",
+      "phase": 1,
+      "planningState": "candidate",
+      "publicRouteImplemented": false,
+      "sourceEvidence": [
+        "support@epifera.com"
+      ],
+      "missingData": [
+        "Подтверждённые каналы и назначение обращений",
+        "Рабочие действия"
+      ],
+      "existingWorkspacePath": null,
+      "existingContentId": null,
+      "indexEligible": false,
+      "readiness": "not-assessed-for-release"
+    },
+    {
+      "id": "event",
+      "templateId": "T22",
+      "exampleEnPath": "/en/events/creative-workshop",
+      "workingTitleRu": "Пример страницы события",
+      "phase": 5,
+      "planningState": "candidate",
+      "publicRouteImplemented": false,
+      "sourceEvidence": [
+        "illustrative-event-not-scheduled"
+      ],
+      "missingData": [
+        "Событие ещё не назначено",
+        "Организатор",
+        "Программа и условия"
+      ],
+      "existingWorkspacePath": null,
+      "existingContentId": null,
+      "indexEligible": false,
+      "readiness": "not-assessed-for-release"
+    },
+    {
+      "id": "legal-privacy",
+      "templateId": "T23",
+      "exampleEnPath": "/en/legal/privacy",
+      "workingTitleRu": "Политика конфиденциальности",
+      "phase": 1,
+      "planningState": "candidate",
+      "publicRouteImplemented": false,
+      "sourceEvidence": [
+        "legal-owner-input-required"
+      ],
+      "missingData": [
+        "Юридический субъект",
+        "Утверждённый текст",
+        "Версия и дата действия"
+      ],
+      "existingWorkspacePath": null,
+      "existingContentId": null,
+      "indexEligible": false,
+      "readiness": "not-assessed-for-release"
+    },
+    {
+      "id": "legal-terms",
+      "templateId": "T23",
+      "exampleEnPath": "/en/legal/terms",
+      "workingTitleRu": "Условия использования",
+      "phase": 1,
+      "planningState": "candidate",
+      "publicRouteImplemented": false,
+      "sourceEvidence": [
+        "legal-owner-input-required"
+      ],
+      "missingData": [
+        "Юридический субъект",
+        "Утверждённый текст",
+        "Версия и дата действия"
+      ],
+      "existingWorkspacePath": null,
+      "existingContentId": null,
+      "indexEligible": false,
+      "readiness": "not-assessed-for-release"
+    },
+    {
+      "id": "legal-licenses",
+      "templateId": "T23",
+      "exampleEnPath": "/en/legal/licenses",
+      "workingTitleRu": "Права на материалы",
+      "phase": 1,
+      "planningState": "candidate",
+      "publicRouteImplemented": false,
+      "sourceEvidence": [
+        "legal-owner-input-required"
+      ],
+      "missingData": [
+        "Юридический субъект",
+        "Утверждённый текст",
+        "Версия и дата действия"
+      ],
+      "existingWorkspacePath": null,
+      "existingContentId": null,
+      "indexEligible": false,
+      "readiness": "not-assessed-for-release"
+    },
+    {
+      "id": "author-editorial",
+      "templateId": "T24",
+      "exampleEnPath": "/en/authors/epifera-editorial",
+      "workingTitleRu": "Редакция Epifera",
+      "phase": 3,
+      "planningState": "candidate",
+      "publicRouteImplemented": false,
+      "sourceEvidence": [
+        "organization-owner-input"
+      ],
+      "missingData": [
+        "Подтверждённая роль",
+        "Разрешённая биография",
+        "Собственные опубликованные материалы"
+      ],
+      "existingWorkspacePath": null,
+      "existingContentId": null,
+      "indexEligible": false,
+      "readiness": "not-assessed-for-release"
+    }
+  ],
+  "mediaVariants": {
+    "image": [
+      "width",
+      "height",
+      "format",
+      "aiOrigin",
+      "alt"
+    ],
+    "video": [
+      "durationSec",
+      "resolution",
+      "format",
+      "poster",
+      "audioPresence"
+    ],
+    "audio": [
+      "durationSec",
+      "format",
+      "preview",
+      "genreOrMood",
+      "recordingRights",
+      "compositionRights"
+    ],
+    "vector": [
+      "format",
+      "compatibility",
+      "dimensions",
+      "archiveContents"
+    ],
+    "psd": [
+      "format",
+      "compatibility",
+      "layers",
+      "dimensions",
+      "archiveContents"
+    ],
+    "template": [
+      "format",
+      "compatibility",
+      "dimensions",
+      "archiveContents",
+      "instructions"
+    ],
+    "mockup": [
+      "format",
+      "compatibility",
+      "dimensions",
+      "archiveContents",
+      "instructions"
+    ],
+    "3d": [
+      "format",
+      "geometryDescriptor",
+      "textureDescriptor",
+      "compatibility",
+      "bytes"
+    ],
+    "font": [
+      "family",
+      "styles",
+      "supportedLanguages",
+      "redistributionLicense",
+      "usageLicense",
+      "specimen"
+    ],
+    "sticker": [
+      "format",
+      "dimensions",
+      "transparencyOrAnimation",
+      "setId"
+    ]
+  },
+  "editorialPilotMinimums": {
+    "toolExamples": 2,
+    "modelVersionExamples": 1,
+    "taskExamples": 3,
+    "collectionItems": 8,
+    "stockCategoryItems": 12,
+    "scope": "Предложенные внутренние критерии пилота, не требования Google. Недостаточно одного числа; исключение требует редакционного обоснования."
+  },
+  "validationRules": [
+    "Уникальные ID, локализованные текущие пути и legacy-пути; проверка всех типов ссылок.",
+    "Нет циклов основных родителей; у индексируемой страницы есть опубликованная входящая ссылка.",
+    "Статус сущности и Page должны разрешать публикацию; routeState=verified для включения в выпуск.",
+    "Примерная запись status=published из src/content не устанавливает существование публичного маршрута.",
+    "Нельзя переносить capability/price/availability из Magnific или редакционного текста в runtime.",
+    "Неизвестный runtime-факт не становится поддержкой; активный CTA требует проверки операции и контура.",
+    "Index только после общих и специфических условий; sitemap только для готовых канонических URL.",
+    "Приватные Job/Artifact/диалоги не публикуются автоматически; отдельные разрешённые публичные копии.",
+    "Никаких приватных URL, account IDs, токенов и скрытых промптов в публичных данных.",
+    "Сборка, посещение, предпросмотр и переход не создают платный Job.",
+    "Все значения pilotPages являются кандидатами; indexEligible=false не меняет действующий sitemap главной."
+  ]
+}

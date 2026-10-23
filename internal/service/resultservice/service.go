@@ -26,6 +26,7 @@ type HistoryItem struct {
 // It deliberately contains no object-storage coordinate or directly readable
 // URL.
 type ArtifactMetadata struct {
+	Deleted    bool             `json:"deleted,omitempty"`
 	ID         uuid.UUID        `json:"id"`
 	MediaType  domain.MediaType `json:"media_type"`
 	MIMEType   string           `json:"mime_type"`
@@ -92,7 +93,7 @@ func (s *Service) ListHistory(ctx context.Context, accountID uuid.UUID, limit, o
 // GetResult returns completed output metadata only when the exact account owns
 // the job and every linked output is ready, supported, and safely moderated.
 func (s *Service) GetResult(ctx context.Context, accountID, jobID uuid.UUID) (Result, error) {
-	job, outputs, err := s.requireCompletionOutputs(ctx, accountID, jobID, domain.JobStatusSucceeded)
+	job, outputs, err := s.requireCompletionOutputs(ctx, accountID, jobID, true, domain.JobStatusSucceeded)
 	if err != nil {
 		return Result{}, err
 	}
@@ -116,6 +117,10 @@ func (s *Service) GetResult(ctx context.Context, accountID, jobID uuid.UUID) (Re
 			Height:     artifact.Height,
 			DurationMS: artifact.DurationMS,
 		}
+		if artifact.Status == domain.ArtifactStatusDeleted {
+			result.Artifacts[i].Deleted = true
+			result.Artifacts[i].SizeBytes = 0
+		}
 	}
 	return result, nil
 }
@@ -128,6 +133,7 @@ func (s *Service) RequireCompletionReady(ctx context.Context, accountID, jobID u
 		ctx,
 		accountID,
 		jobID,
+		false,
 		domain.JobStatusResultReady,
 		domain.JobStatusDelivering,
 	)
@@ -137,6 +143,7 @@ func (s *Service) RequireCompletionReady(ctx context.Context, accountID, jobID u
 func (s *Service) requireCompletionOutputs(
 	ctx context.Context,
 	accountID, jobID uuid.UUID,
+	allowDeleted bool,
 	requiredStatuses ...domain.JobStatus,
 ) (*domain.Job, []*domain.Artifact, error) {
 	if accountID == uuid.Nil || jobID == uuid.Nil {
@@ -181,7 +188,7 @@ func (s *Service) requireCompletionOutputs(
 			artifact.JobID == nil ||
 			*artifact.JobID != job.ID ||
 			artifact.Kind != domain.ArtifactKindOutput ||
-			artifact.Status != domain.ArtifactStatusReady ||
+			(artifact.Status != domain.ArtifactStatusReady && !(allowDeleted && artifact.Status == domain.ArtifactStatusDeleted)) ||
 			!artifact.MediaType.Valid() {
 			return nil, nil, domain.ErrNotFound
 		}

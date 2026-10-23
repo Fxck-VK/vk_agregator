@@ -35,6 +35,7 @@ export type AccountBalance = z.infer<typeof accountBalanceSchema>;
 
 export const conversationItemSchema = z
   .object({
+    first_model_id: z.string().trim().min(1).max(128).optional(),
     id: z.string().uuid(),
     title: z.string(),
     created_at: z.string().datetime({ offset: true }),
@@ -192,12 +193,14 @@ export const imageJobListSchema = z
 
 export const imageArtifactMetadataSchema = z
   .object({
+    deleted: z.boolean().optional(),
     id: z.string().uuid(),
     mime_type: z.string().trim().min(1),
-    size_bytes: z.number().int().positive(),
+    size_bytes: z.number().int().nonnegative(),
     width: z.number().int().nonnegative(),
     height: z.number().int().nonnegative(),
   })
+  .refine(artifact => artifact.deleted || artifact.size_bytes > 0, "Available files require positive size")
   .strict();
 
 export const imageJobResultSchema = z
@@ -224,6 +227,7 @@ export const conversationImageSchema = z.object({
 }).strict();
 
 export const conversationVideoSchema = z.object({
+ deleted:z.boolean().optional(),
  id:z.string().uuid(), mime_type:z.string().startsWith("video/"), width:z.number().int().nonnegative(), height:z.number().int().nonnegative(),
 }).strict();
 

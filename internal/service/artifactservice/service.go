@@ -226,6 +226,25 @@ func (s *Service) FindReusableInputReferenceForAccount(ctx context.Context, acco
 // The variant row is idempotent by (artifact_id, variant_type): retrying the
 // same worker step returns the existing row instead of creating duplicates.
 func (s *Service) SaveVariantWithMetadata(ctx context.Context, artifact *domain.Artifact, variantType domain.VariantType, mimeType string, data []byte, metadata domain.ArtifactMediaMetadata) (*domain.ArtifactVariant, error) {
+	if artifact != nil {
+		if guard, ok := s.repo.(interface {
+			WithArtifactWrite(context.Context, uuid.UUID, func(domain.ArtifactRepository) error) error
+		}); ok {
+			var variant *domain.ArtifactVariant
+			err := guard.WithArtifactWrite(ctx, artifact.ID, func(repo domain.ArtifactRepository) error {
+				copy := *s
+				copy.repo = repo
+				var err error
+				variant, err = copy.saveVariantWithMetadata(ctx, artifact, variantType, mimeType, data, metadata)
+				return err
+			})
+			return variant, err
+		}
+	}
+	return s.saveVariantWithMetadata(ctx, artifact, variantType, mimeType, data, metadata)
+}
+
+func (s *Service) saveVariantWithMetadata(ctx context.Context, artifact *domain.Artifact, variantType domain.VariantType, mimeType string, data []byte, metadata domain.ArtifactMediaMetadata) (*domain.ArtifactVariant, error) {
 	if artifact == nil || artifact.ID == uuid.Nil {
 		return nil, fmt.Errorf("artifactservice: variant parent missing")
 	}

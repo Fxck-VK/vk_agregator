@@ -15,8 +15,6 @@ import (
 	"strings"
 	"syscall"
 	"time"
-	"vk-ai-aggregator/internal/service/legalacceptance"
-	legalcatalog "vk-ai-aggregator/web/platform/legal"
 
 	"github.com/redis/go-redis/v9"
 
@@ -45,10 +43,12 @@ import (
 	"vk-ai-aggregator/internal/service/accountlink"
 	"vk-ai-aggregator/internal/service/accountnotices"
 	"vk-ai-aggregator/internal/service/accountregistration"
+	"vk-ai-aggregator/internal/service/artifactdeletion"
 	"vk-ai-aggregator/internal/service/artifactservice"
 	"vk-ai-aggregator/internal/service/imagegeneration"
 	"vk-ai-aggregator/internal/service/imagepreview"
 	"vk-ai-aggregator/internal/service/joborchestrator"
+	"vk-ai-aggregator/internal/service/legalacceptance"
 	"vk-ai-aggregator/internal/service/maintenance"
 	"vk-ai-aggregator/internal/service/mediaprobe"
 	"vk-ai-aggregator/internal/service/preparedjobexpiry"
@@ -59,6 +59,7 @@ import (
 	"vk-ai-aggregator/internal/service/resultservice"
 	"vk-ai-aggregator/internal/service/videorouter"
 	"vk-ai-aggregator/internal/service/webreferralservice"
+	legalcatalog "vk-ai-aggregator/web/platform/legal"
 )
 
 type postgresReadyPool interface {
@@ -354,6 +355,10 @@ func main() {
 	musicInputProber := mediaprobe.NewFFProbe(mediaprobe.Config{FFProbePath: cfg.FFProbePath, Timeout: cfg.MediaProbeTimeout})
 	webArtifactRedirectPolicy := newWebImageArtifactRedirectPolicy(cfg, logger)
 	webResults := resultservice.New(core.Jobs, core.Artifacts, core.Moderation)
+	var webArtifactDeletion websession.ArtifactDeletionService
+	if objects, ok := webArtifactURLSigner.(artifactdeletion.ObjectStore); ok {
+		webArtifactDeletion = artifactdeletion.New(postgres.NewArtifactRepository(pool), postgres.NewMaintenanceRepository(pool), objects)
+	}
 	webImagePrepareLimiter := ratelimit.NewRedisFixedWindowLimiter(
 		rdb,
 		"web_image_prepare",
@@ -434,6 +439,8 @@ func main() {
 		ImageJobExpiry:         webImagePreparedExpiry,
 		ImageResults:           webResults,
 		ImageArtifacts:         core.Artifacts,
+		ArtifactDeletion:       webArtifactDeletion,
+		ArtifactDeleteLimiter:  ratelimit.NewRedisFixedWindowLimiter(rdb, "web_artifact_delete", 30, time.Minute),
 		ImageArtifactURLSigner: webArtifactURLSigner,
 		ImageThumbnails:        imageThumbnails,
 		MusicInputArtifacts:    musicInputs,

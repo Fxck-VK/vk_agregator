@@ -1,0 +1,746 @@
+[
+  {
+    "source": "https://www.magnific.com/3d-model-sitemap-1.xml",
+    "kind": "urlset",
+    "declared": 20000,
+    "collected": 1996,
+    "status": "Английские адреса собраны полностью",
+    "note": "Общее число включает другие языки. Собрано — только английские адреса"
+  },
+  {
+    "source": "https://www.magnific.com/3d-model-sitemap-2.xml",
+    "kind": "urlset",
+    "declared": 16097,
+    "collected": 0,
+    "status": "Английские адреса собраны полностью",
+    "note": "Общее число включает другие языки. Собрано — только английские адреса"
+  },
+  {
+    "source": "https://www.magnific.com/3d-model-sitemap.xml",
+    "kind": "sitemapindex",
+    "declared": 2,
+    "collected": 2,
+    "status": "Индекс прочитан",
+    "note": "Все дочерние адреса сохранены"
+  },
+  {
+    "source": "https://www.magnific.com/3d-models-sitemap.xml",
+    "kind": "urlset",
+    "declared": 13223,
+    "collected": 2000,
+    "status": "Английские адреса собраны полностью",
+    "note": "Общее число включает другие языки. Собрано — только английские адреса"
+  },
+  {
+    "source": "https://www.magnific.com/academy-sitemap.xml",
+    "kind": "urlset",
+    "declared": 816,
+    "collected": 34,
+    "status": "Английские адреса собраны полностью",
+    "note": "Общее число включает другие языки. Собрано — только английские адреса"
+  },
+  {
+    "source": "https://www.magnific.com/ai-sitemap.xml",
+    "kind": "urlset",
+    "declared": 1851,
+    "collected": 90,
+    "status": "Английские адреса собраны полностью",
+    "note": "Общее число включает другие языки. Собрано — только английские адреса"
+  },
+  {
+    "source": "https://www.magnific.com/audio-sitemap.xml",
+    "kind": "urlset",
+    "declared": 1968,
+    "collected": 1968,
+    "status": "Английские адреса собраны полностью",
+    "note": "Общее число включает другие языки. Собрано — только английские адреса"
+  },
+  {
+    "source": "https://www.magnific.com/blog-sitemap.xml",
+    "kind": "unavailable-sitemap",
+    "declared": null,
+    "collected": null,
+    "status": "Недоступен",
+    "note": "HTTP 403 при обычном запросе. Браузерная загрузка завершилась ошибкой. Полнота блога по sitemap не подтверждена."
+  },
+  {
+    "source": "https://www.magnific.com/company-sitemap.xml",
+    "kind": "urlset",
+    "declared": 1892,
+    "collected": 87,
+    "status": "Английские адреса собраны полностью",
+    "note": "Общее число включает другие языки. Собрано — только английские адреса"
+  },
+  {
+    "source": "https://www.magnific.com/docs-sitemap.xml",
+    "kind": "urlset",
+    "declared": 258,
+    "collected": 258,
+    "status": "Английские адреса собраны полностью",
+    "note": "Общее число включает другие языки. Собрано — только английские адреса"
+  },
+  {
+    "source": "https://www.magnific.com/font-sitemap-1.xml",
+    "kind": "urlset",
+    "declared": 20000,
+    "collected": 2000,
+    "status": "Английские адреса собраны полностью",
+    "note": "Общее число включает другие языки. Собрано — только английские адреса"
+  },
+  {
+    "source": "https://www.magnific.com/font-sitemap-2.xml",
+    "kind": "urlset",
+    "declared": 5887,
+    "collected": 0,
+    "status": "Английские адреса собраны полностью",
+    "note": "Общее число включает другие языки. Собрано — только английские адреса"
+  },
+  {
+    "source": "https://www.magnific.com/font-sitemap.xml",
+    "kind": "sitemapindex",
+    "declared": 2,
+    "collected": 2,
+    "status": "Индекс прочитан",
+    "note": "Все дочерние адреса сохранены"
+  },
+  {
+    "source": "https://www.magnific.com/fonts-sitemap.xml",
+    "kind": "urlset",
+    "declared": 5316,
+    "collected": 2000,
+    "status": "Английские адреса собраны полностью",
+    "note": "Общее число включает другие языки. Собрано — только английские адреса"
+  },
+  {
+    "source": "https://www.magnific.com/free-photo-sitemap-1.xml",
+    "kind": "urlset",
+    "declared": 20000,
+    "collected": 2000,
+    "status": "Английские адреса собраны полностью",
+    "note": "Общее число включает другие языки. Собрано — только английские адреса"
+  },
+  {
+    "source": "https://www.magnific.com/free-photo-sitemap-2.xml",
+    "kind": "urlset",
+    "declared": 20000,
+    "collected": 0,
+    "status": "Английские адреса собраны полностью",
+    "note": "Общее число включает другие языки. Собрано — только английские адреса"
+  },
+  {
+    "source": "https://www.magnific.com/free-photo-sitemap-3.xml",
+    "kind": "urlset",
+    "declared": 6000,
+    "collected": 0,
+    "status": "Английские адреса собраны полностью",
+    "note": "Общее число включает другие языки. Собрано — только английские адреса"
+  },
+  {
+    "source": "https://www.magnific.com/free-photo-sitemap.xml",
+    "kind": "sitemapindex",
+    "declared": 3,
+    "collected": 3,
+    "status": "Индекс прочитан",
+    "note": "Все дочерние адреса сохранены"
+  },
+  {
+    "source": "https://www.magnific.com/free-photos-vectors-sitemap-1.xml",
+    "kind": "urlset",
+    "declared": 19975,
+    "collected": 0,
+    "status": "Английские адреса собраны полностью",
+    "note": "Общее число включает другие языки. Собрано — только английские адреса"
+  },
+  {
+    "source": "https://www.magnific.com/free-photos-vectors-sitemap-2.xml",
+    "kind": "urlset",
+    "declared": 19972,
+    "collected": 3995,
+    "status": "Английские адреса собраны полностью",
+    "note": "Общее число включает другие языки. Собрано — только английские адреса"
+  },
+  {
+    "source": "https://www.magnific.com/free-photos-vectors-sitemap-3.xml",
+    "kind": "urlset",
+    "declared": 19993,
+    "collected": 0,
+    "status": "Английские адреса собраны полностью",
+    "note": "Общее число включает другие языки. Собрано — только английские адреса"
+  },
+  {
+    "source": "https://www.magnific.com/free-photos-vectors-sitemap-4.xml",
+    "kind": "urlset",
+    "declared": 4999,
+    "collected": 0,
+    "status": "Английские адреса собраны полностью",
+    "note": "Общее число включает другие языки. Собрано — только английские адреса"
+  },
+  {
+    "source": "https://www.magnific.com/free-photos-vectors-sitemap-5.xml",
+    "kind": "urlset",
+    "declared": 4992,
+    "collected": 0,
+    "status": "Английские адреса собраны полностью",
+    "note": "Общее число включает другие языки. Собрано — только английские адреса"
+  },
+  {
+    "source": "https://www.magnific.com/free-photos-vectors-sitemap-6.xml",
+    "kind": "urlset",
+    "declared": 5000,
+    "collected": 0,
+    "status": "Английские адреса собраны полностью",
+    "note": "Общее число включает другие языки. Собрано — только английские адреса"
+  },
+  {
+    "source": "https://www.magnific.com/free-photos-vectors-sitemap-7.xml",
+    "kind": "urlset",
+    "declared": 1761,
+    "collected": 0,
+    "status": "Английские адреса собраны полностью",
+    "note": "Общее число включает другие языки. Собрано — только английские адреса"
+  },
+  {
+    "source": "https://www.magnific.com/free-photos-vectors-sitemap.xml",
+    "kind": "sitemapindex",
+    "declared": 7,
+    "collected": 7,
+    "status": "Индекс прочитан",
+    "note": "Все дочерние адреса сохранены"
+  },
+  {
+    "source": "https://www.magnific.com/free-psd-sitemap-1.xml",
+    "kind": "urlset",
+    "declared": 20000,
+    "collected": 2000,
+    "status": "Английские адреса собраны полностью",
+    "note": "Общее число включает другие языки. Собрано — только английские адреса"
+  },
+  {
+    "source": "https://www.magnific.com/free-psd-sitemap-2.xml",
+    "kind": "urlset",
+    "declared": 20000,
+    "collected": 0,
+    "status": "Английские адреса собраны полностью",
+    "note": "Общее число включает другие языки. Собрано — только английские адреса"
+  },
+  {
+    "source": "https://www.magnific.com/free-psd-sitemap-3.xml",
+    "kind": "urlset",
+    "declared": 6000,
+    "collected": 0,
+    "status": "Английские адреса собраны полностью",
+    "note": "Общее число включает другие языки. Собрано — только английские адреса"
+  },
+  {
+    "source": "https://www.magnific.com/free-psd-sitemap.xml",
+    "kind": "sitemapindex",
+    "declared": 3,
+    "collected": 3,
+    "status": "Индекс прочитан",
+    "note": "Все дочерние адреса сохранены"
+  },
+  {
+    "source": "https://www.magnific.com/free-vector-sitemap-1.xml",
+    "kind": "urlset",
+    "declared": 20000,
+    "collected": 2000,
+    "status": "Английские адреса собраны полностью",
+    "note": "Общее число включает другие языки. Собрано — только английские адреса"
+  },
+  {
+    "source": "https://www.magnific.com/free-vector-sitemap-2.xml",
+    "kind": "urlset",
+    "declared": 20000,
+    "collected": 0,
+    "status": "Английские адреса собраны полностью",
+    "note": "Общее число включает другие языки. Собрано — только английские адреса"
+  },
+  {
+    "source": "https://www.magnific.com/free-vector-sitemap-3.xml",
+    "kind": "urlset",
+    "declared": 6000,
+    "collected": 0,
+    "status": "Английские адреса собраны полностью",
+    "note": "Общее число включает другие языки. Собрано — только английские адреса"
+  },
+  {
+    "source": "https://www.magnific.com/free-vector-sitemap.xml",
+    "kind": "sitemapindex",
+    "declared": 3,
+    "collected": 3,
+    "status": "Индекс прочитан",
+    "note": "Все дочерние адреса сохранены"
+  },
+  {
+    "source": "https://www.magnific.com/free-video-sitemap-1.xml",
+    "kind": "urlset",
+    "declared": 19989,
+    "collected": 2000,
+    "status": "Английские адреса собраны полностью",
+    "note": "Общее число включает другие языки. Собрано — только английские адреса"
+  },
+  {
+    "source": "https://www.magnific.com/free-video-sitemap-2.xml",
+    "kind": "urlset",
+    "declared": 18589,
+    "collected": 0,
+    "status": "Английские адреса собраны полностью",
+    "note": "Общее число включает другие языки. Собрано — только английские адреса"
+  },
+  {
+    "source": "https://www.magnific.com/free-video-sitemap.xml",
+    "kind": "sitemapindex",
+    "declared": 2,
+    "collected": 2,
+    "status": "Индекс прочитан",
+    "note": "Все дочерние адреса сохранены"
+  },
+  {
+    "source": "https://www.magnific.com/icon-sitemap-1.xml",
+    "kind": "urlset",
+    "declared": 20000,
+    "collected": 2000,
+    "status": "Английские адреса собраны полностью",
+    "note": "Общее число включает другие языки. Собрано — только английские адреса"
+  },
+  {
+    "source": "https://www.magnific.com/icon-sitemap-2.xml",
+    "kind": "urlset",
+    "declared": 20000,
+    "collected": 0,
+    "status": "Английские адреса собраны полностью",
+    "note": "Общее число включает другие языки. Собрано — только английские адреса"
+  },
+  {
+    "source": "https://www.magnific.com/icon-sitemap-3.xml",
+    "kind": "urlset",
+    "declared": 6000,
+    "collected": 0,
+    "status": "Английские адреса собраны полностью",
+    "note": "Общее число включает другие языки. Собрано — только английские адреса"
+  },
+  {
+    "source": "https://www.magnific.com/icon-sitemap.xml",
+    "kind": "sitemapindex",
+    "declared": 3,
+    "collected": 3,
+    "status": "Индекс прочитан",
+    "note": "Все дочерние адреса сохранены"
+  },
+  {
+    "source": "https://www.magnific.com/icons-sitemap-1.xml",
+    "kind": "urlset",
+    "declared": 20000,
+    "collected": 0,
+    "status": "Английские адреса собраны полностью",
+    "note": "Общее число включает другие языки. Собрано — только английские адреса"
+  },
+  {
+    "source": "https://www.magnific.com/icons-sitemap-2.xml",
+    "kind": "urlset",
+    "declared": 20000,
+    "collected": 3999,
+    "status": "Английские адреса собраны полностью",
+    "note": "Общее число включает другие языки. Собрано — только английские адреса"
+  },
+  {
+    "source": "https://www.magnific.com/icons-sitemap-3.xml",
+    "kind": "urlset",
+    "declared": 19999,
+    "collected": 0,
+    "status": "Английские адреса собраны полностью",
+    "note": "Общее число включает другие языки. Собрано — только английские адреса"
+  },
+  {
+    "source": "https://www.magnific.com/icons-sitemap-4.xml",
+    "kind": "urlset",
+    "declared": 15998,
+    "collected": 0,
+    "status": "Английские адреса собраны полностью",
+    "note": "Общее число включает другие языки. Собрано — только английские адреса"
+  },
+  {
+    "source": "https://www.magnific.com/icons-sitemap.xml",
+    "kind": "sitemapindex",
+    "declared": 4,
+    "collected": 4,
+    "status": "Индекс прочитан",
+    "note": "Все дочерние адреса сохранены"
+  },
+  {
+    "source": "https://www.magnific.com/mockups-sitemap.xml",
+    "kind": "urlset",
+    "declared": 126,
+    "collected": 32,
+    "status": "Английские адреса собраны полностью",
+    "note": "Общее число включает другие языки. Собрано — только английские адреса"
+  },
+  {
+    "source": "https://www.magnific.com/photos-sitemap-1.xml",
+    "kind": "urlset",
+    "declared": 19993,
+    "collected": 0,
+    "status": "Английские адреса собраны полностью",
+    "note": "Общее число включает другие языки. Собрано — только английские адреса"
+  },
+  {
+    "source": "https://www.magnific.com/photos-sitemap-2.xml",
+    "kind": "urlset",
+    "declared": 19988,
+    "collected": 0,
+    "status": "Английские адреса собраны полностью",
+    "note": "Общее число включает другие языки. Собрано — только английские адреса"
+  },
+  {
+    "source": "https://www.magnific.com/photos-sitemap-3.xml",
+    "kind": "urlset",
+    "declared": 19998,
+    "collected": 0,
+    "status": "Английские адреса собраны полностью",
+    "note": "Общее число включает другие языки. Собрано — только английские адреса"
+  },
+  {
+    "source": "https://www.magnific.com/photos-sitemap-4.xml",
+    "kind": "urlset",
+    "declared": 19988,
+    "collected": 3203,
+    "status": "Английские адреса собраны полностью",
+    "note": "Общее число включает другие языки. Собрано — только английские адреса"
+  },
+  {
+    "source": "https://www.magnific.com/photos-sitemap-5.xml",
+    "kind": "urlset",
+    "declared": 11573,
+    "collected": 0,
+    "status": "Английские адреса собраны полностью",
+    "note": "Общее число включает другие языки. Собрано — только английские адреса"
+  },
+  {
+    "source": "https://www.magnific.com/photos-sitemap.xml",
+    "kind": "sitemapindex",
+    "declared": 5,
+    "collected": 5,
+    "status": "Индекс прочитан",
+    "note": "Все дочерние адреса сохранены"
+  },
+  {
+    "source": "https://www.magnific.com/premium-photo-sitemap-1.xml",
+    "kind": "urlset",
+    "declared": 20000,
+    "collected": 0,
+    "status": "Английские адреса собраны полностью",
+    "note": "Общее число включает другие языки. Собрано — только английские адреса"
+  },
+  {
+    "source": "https://www.magnific.com/premium-photo-sitemap-2.xml",
+    "kind": "urlset",
+    "declared": 20000,
+    "collected": 2000,
+    "status": "Английские адреса собраны полностью",
+    "note": "Общее число включает другие языки. Собрано — только английские адреса"
+  },
+  {
+    "source": "https://www.magnific.com/premium-photo-sitemap-3.xml",
+    "kind": "urlset",
+    "declared": 6000,
+    "collected": 0,
+    "status": "Английские адреса собраны полностью",
+    "note": "Общее число включает другие языки. Собрано — только английские адреса"
+  },
+  {
+    "source": "https://www.magnific.com/premium-photo-sitemap.xml",
+    "kind": "sitemapindex",
+    "declared": 3,
+    "collected": 3,
+    "status": "Индекс прочитан",
+    "note": "Все дочерние адреса сохранены"
+  },
+  {
+    "source": "https://www.magnific.com/premium-psd-sitemap-1.xml",
+    "kind": "urlset",
+    "declared": 20000,
+    "collected": 0,
+    "status": "Английские адреса собраны полностью",
+    "note": "Общее число включает другие языки. Собрано — только английские адреса"
+  },
+  {
+    "source": "https://www.magnific.com/premium-psd-sitemap-2.xml",
+    "kind": "urlset",
+    "declared": 19999,
+    "collected": 2000,
+    "status": "Английские адреса собраны полностью",
+    "note": "Общее число включает другие языки. Собрано — только английские адреса"
+  },
+  {
+    "source": "https://www.magnific.com/premium-psd-sitemap-3.xml",
+    "kind": "urlset",
+    "declared": 5999,
+    "collected": 0,
+    "status": "Английские адреса собраны полностью",
+    "note": "Общее число включает другие языки. Собрано — только английские адреса"
+  },
+  {
+    "source": "https://www.magnific.com/premium-psd-sitemap.xml",
+    "kind": "sitemapindex",
+    "declared": 3,
+    "collected": 3,
+    "status": "Индекс прочитан",
+    "note": "Все дочерние адреса сохранены"
+  },
+  {
+    "source": "https://www.magnific.com/premium-vector-sitemap-1.xml",
+    "kind": "urlset",
+    "declared": 20000,
+    "collected": 0,
+    "status": "Английские адреса собраны полностью",
+    "note": "Общее число включает другие языки. Собрано — только английские адреса"
+  },
+  {
+    "source": "https://www.magnific.com/premium-vector-sitemap-2.xml",
+    "kind": "urlset",
+    "declared": 20000,
+    "collected": 2000,
+    "status": "Английские адреса собраны полностью",
+    "note": "Общее число включает другие языки. Собрано — только английские адреса"
+  },
+  {
+    "source": "https://www.magnific.com/premium-vector-sitemap-3.xml",
+    "kind": "urlset",
+    "declared": 6000,
+    "collected": 0,
+    "status": "Английские адреса собраны полностью",
+    "note": "Общее число включает другие языки. Собрано — только английские адреса"
+  },
+  {
+    "source": "https://www.magnific.com/premium-vector-sitemap.xml",
+    "kind": "sitemapindex",
+    "declared": 3,
+    "collected": 3,
+    "status": "Индекс прочитан",
+    "note": "Все дочерние адреса сохранены"
+  },
+  {
+    "source": "https://www.magnific.com/premium-video-sitemap-1.xml",
+    "kind": "urlset",
+    "declared": 19998,
+    "collected": 0,
+    "status": "Английские адреса собраны полностью",
+    "note": "Общее число включает другие языки. Собрано — только английские адреса"
+  },
+  {
+    "source": "https://www.magnific.com/premium-video-sitemap-2.xml",
+    "kind": "urlset",
+    "declared": 20000,
+    "collected": 2000,
+    "status": "Английские адреса собраны полностью",
+    "note": "Общее число включает другие языки. Собрано — только английские адреса"
+  },
+  {
+    "source": "https://www.magnific.com/premium-video-sitemap-3.xml",
+    "kind": "urlset",
+    "declared": 5598,
+    "collected": 0,
+    "status": "Английские адреса собраны полностью",
+    "note": "Общее число включает другие языки. Собрано — только английские адреса"
+  },
+  {
+    "source": "https://www.magnific.com/premium-video-sitemap.xml",
+    "kind": "sitemapindex",
+    "declared": 3,
+    "collected": 3,
+    "status": "Индекс прочитан",
+    "note": "Все дочерние адреса сохранены"
+  },
+  {
+    "source": "https://www.magnific.com/psd-sitemap-1.xml",
+    "kind": "urlset",
+    "declared": 19992,
+    "collected": 0,
+    "status": "Английские адреса собраны полностью",
+    "note": "Общее число включает другие языки. Собрано — только английские адреса"
+  },
+  {
+    "source": "https://www.magnific.com/psd-sitemap-2.xml",
+    "kind": "urlset",
+    "declared": 19998,
+    "collected": 0,
+    "status": "Английские адреса собраны полностью",
+    "note": "Общее число включает другие языки. Собрано — только английские адреса"
+  },
+  {
+    "source": "https://www.magnific.com/psd-sitemap-3.xml",
+    "kind": "urlset",
+    "declared": 19994,
+    "collected": 3964,
+    "status": "Английские адреса собраны полностью",
+    "note": "Общее число включает другие языки. Собрано — только английские адреса"
+  },
+  {
+    "source": "https://www.magnific.com/psd-sitemap-4.xml",
+    "kind": "urlset",
+    "declared": 19997,
+    "collected": 0,
+    "status": "Английские адреса собраны полностью",
+    "note": "Общее число включает другие языки. Собрано — только английские адреса"
+  },
+  {
+    "source": "https://www.magnific.com/psd-sitemap-5.xml",
+    "kind": "urlset",
+    "declared": 1886,
+    "collected": 0,
+    "status": "Английские адреса собраны полностью",
+    "note": "Общее число включает другие языки. Собрано — только английские адреса"
+  },
+  {
+    "source": "https://www.magnific.com/psd-sitemap.xml",
+    "kind": "sitemapindex",
+    "declared": 5,
+    "collected": 5,
+    "status": "Индекс прочитан",
+    "note": "Все дочерние адреса сохранены"
+  },
+  {
+    "source": "https://www.magnific.com/sticker-sitemap-1.xml",
+    "kind": "urlset",
+    "declared": 20000,
+    "collected": 0,
+    "status": "Английские адреса собраны полностью",
+    "note": "Общее число включает другие языки. Собрано — только английские адреса"
+  },
+  {
+    "source": "https://www.magnific.com/sticker-sitemap-2.xml",
+    "kind": "urlset",
+    "declared": 20000,
+    "collected": 2000,
+    "status": "Английские адреса собраны полностью",
+    "note": "Общее число включает другие языки. Собрано — только английские адреса"
+  },
+  {
+    "source": "https://www.magnific.com/sticker-sitemap-3.xml",
+    "kind": "urlset",
+    "declared": 1972,
+    "collected": 0,
+    "status": "Английские адреса собраны полностью",
+    "note": "Общее число включает другие языки. Собрано — только английские адреса"
+  },
+  {
+    "source": "https://www.magnific.com/sticker-sitemap.xml",
+    "kind": "sitemapindex",
+    "declared": 3,
+    "collected": 3,
+    "status": "Индекс прочитан",
+    "note": "Все дочерние адреса сохранены"
+  },
+  {
+    "source": "https://www.magnific.com/templates-sitemap.xml",
+    "kind": "urlset",
+    "declared": 3064,
+    "collected": 925,
+    "status": "Английские адреса собраны полностью",
+    "note": "Общее число включает другие языки. Собрано — только английские адреса"
+  },
+  {
+    "source": "https://www.magnific.com/vectors-sitemap-1.xml",
+    "kind": "urlset",
+    "declared": 19998,
+    "collected": 0,
+    "status": "Английские адреса собраны полностью",
+    "note": "Общее число включает другие языки. Собрано — только английские адреса"
+  },
+  {
+    "source": "https://www.magnific.com/vectors-sitemap-2.xml",
+    "kind": "urlset",
+    "declared": 19996,
+    "collected": 0,
+    "status": "Английские адреса собраны полностью",
+    "note": "Общее число включает другие языки. Собрано — только английские адреса"
+  },
+  {
+    "source": "https://www.magnific.com/vectors-sitemap-3.xml",
+    "kind": "urlset",
+    "declared": 19998,
+    "collected": 0,
+    "status": "Английские адреса собраны полностью",
+    "note": "Общее число включает другие языки. Собрано — только английские адреса"
+  },
+  {
+    "source": "https://www.magnific.com/vectors-sitemap-4.xml",
+    "kind": "urlset",
+    "declared": 19993,
+    "collected": 1995,
+    "status": "Английские адреса собраны полностью",
+    "note": "Общее число включает другие языки. Собрано — только английские адреса"
+  },
+  {
+    "source": "https://www.magnific.com/vectors-sitemap-5.xml",
+    "kind": "urlset",
+    "declared": 9997,
+    "collected": 1997,
+    "status": "Английские адреса собраны полностью",
+    "note": "Общее число включает другие языки. Собрано — только английские адреса"
+  },
+  {
+    "source": "https://www.magnific.com/vectors-sitemap.xml",
+    "kind": "sitemapindex",
+    "declared": 5,
+    "collected": 5,
+    "status": "Индекс прочитан",
+    "note": "Все дочерние адреса сохранены"
+  },
+  {
+    "source": "https://www.magnific.com/videos-sitemap-1.xml",
+    "kind": "urlset",
+    "declared": 19996,
+    "collected": 0,
+    "status": "Английские адреса собраны полностью",
+    "note": "Общее число включает другие языки. Собрано — только английские адреса"
+  },
+  {
+    "source": "https://www.magnific.com/videos-sitemap-2.xml",
+    "kind": "urlset",
+    "declared": 19998,
+    "collected": 0,
+    "status": "Английские адреса собраны полностью",
+    "note": "Общее число включает другие языки. Собрано — только английские адреса"
+  },
+  {
+    "source": "https://www.magnific.com/videos-sitemap-3.xml",
+    "kind": "urlset",
+    "declared": 19994,
+    "collected": 0,
+    "status": "Английские адреса собраны полностью",
+    "note": "Общее число включает другие языки. Собрано — только английские адреса"
+  },
+  {
+    "source": "https://www.magnific.com/videos-sitemap-4.xml",
+    "kind": "urlset",
+    "declared": 12719,
+    "collected": 3999,
+    "status": "Английские адреса собраны полностью",
+    "note": "Общее число включает другие языки. Собрано — только английские адреса"
+  },
+  {
+    "source": "https://www.magnific.com/videos-sitemap.xml",
+    "kind": "sitemapindex",
+    "declared": 4,
+    "collected": 4,
+    "status": "Индекс прочитан",
+    "note": "Все дочерние адреса сохранены"
+  },
+  {
+    "source": "https://www.magnific.com/blog/",
+    "kind": "html-blog-archive",
+    "declared": 29,
+    "collected": 29,
+    "status": "Вся найденная пагинация прочитана",
+    "note": "Статей в общем архиве: 348"
+  },
+  {
+    "source": "https://www.magnific.com/blog/",
+    "kind": "html-blog-categories",
+    "declared": 38,
+    "collected": 38,
+    "status": "Вся найденная пагинация прочитана",
+    "note": "Все обнаруженные страницы пяти категорий. Отдельный sitemap блога недоступен"
+  }
+]

@@ -226,6 +226,10 @@ func conversationManagementIntegrationPool(t *testing.T, ctx context.Context) *p
 			conversation_id UUID NOT NULL REFERENCES conversations (id) ON DELETE CASCADE,
 			text TEXT NOT NULL DEFAULT ''
 		);
+		CREATE TABLE jobs (
+			id UUID PRIMARY KEY, account_id UUID, source TEXT, status TEXT,
+			params JSONB, created_at TIMESTAMPTZ
+		);
 		CREATE TABLE conversation_summaries (
 			id UUID PRIMARY KEY,
 			conversation_id UUID NOT NULL REFERENCES conversations (id) ON DELETE CASCADE,

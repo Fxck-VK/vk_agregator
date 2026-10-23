@@ -19,6 +19,17 @@ function simulator(scenario: () => "success" | "error" | "slow" = () => "success
 afterEach(() => vi.useRealTimers());
 
 describe("local conversation simulation", () => {
+  it("pins the first accepted model and ignores subsequent model switches and rejected sends", async () => {
+    let scenario: "success" | "error" = "error";
+    const local = simulator(() => scenario);
+    expect(local.handle(messagePath, request)!.status).toBe(503);
+    expect(await local.handle(`/web/v1/conversations/${conversationID}`)!.json()).not.toHaveProperty("first_model_id");
+    scenario = "success";
+    expect(local.handle(messagePath, request)!.status).toBe(201);
+    local.handle(messagePath, { ...request, headers: { "X-Idempotency-Key": "message-2" }, body: JSON.stringify({ prompt: "Next", model_id: "gpt_5" }) });
+    expect(await local.handle(`/web/v1/conversations/${conversationID}`)!.json()).toMatchObject({ first_model_id: "sample" });
+    expect(await local.handle("/web/v1/conversations")!.json()).toMatchObject({ items: [{ first_model_id: "sample" }] });
+  });
   it("rejects unavailable image options without adding a turn", async () => {
     const local = createConversationSimulator({ seed: { ...seed, imageModels: [{ id: "sample", name: "Sample", quality_options: ["2K"],
       default_quality: "2K", supports_reference_image: false, max_reference_images: 0, max_output_count: 4, allowed_aspect_ratios: ["1:1"] }] },

@@ -50,6 +50,7 @@ type safeVideoJobResult struct {
 }
 
 type safeVideoArtifactMetadata struct {
+	Deleted    bool      `json:"deleted,omitempty"`
 	ID         uuid.UUID `json:"id"`
 	MIMEType   string    `json:"mime_type"`
 	SizeBytes  int64     `json:"size_bytes"`
@@ -234,13 +235,14 @@ func newSafeVideoJobResult(result resultservice.Result, expectedJobID uuid.UUID)
 		if artifact.ID == uuid.Nil ||
 			artifact.MediaType != domain.MediaTypeVideo ||
 			!strings.HasPrefix(artifact.MIMEType, "video/") ||
-			artifact.SizeBytes < 1 ||
+			(!artifact.Deleted && artifact.SizeBytes < 1) ||
 			artifact.Width < 1 ||
 			artifact.Height < 1 ||
 			artifact.DurationMS < 1 {
 			return safeVideoJobResult{}, false
 		}
 		artifacts = append(artifacts, safeVideoArtifactMetadata{
+			Deleted:    artifact.Deleted,
 			ID:         artifact.ID,
 			MIMEType:   artifact.MIMEType,
 			SizeBytes:  artifact.SizeBytes,

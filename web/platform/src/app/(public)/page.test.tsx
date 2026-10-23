@@ -26,6 +26,7 @@ describe("HomePage", () => {
     expect(connection).toHaveBeenCalledOnce();
     expect(markup).toContain(`${brandName}`);
     expect(markup).toContain('href="/ru/app"');
-    expect(markup).toContain("data-size=\"narrow\"");
+    expect(markup).toContain('id="home-heading"');
+    expect(markup).toContain('id="public-main"');
   });
 });

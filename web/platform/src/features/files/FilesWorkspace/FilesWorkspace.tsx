@@ -35,6 +35,7 @@ import {
   retryExpiredImageJob,
 } from "./files-data";
 import styles from "./FilesWorkspace.module.css";
+import { useArtifactDeletion } from "../artifact-deletion";
 
 function appendDistinctImageJobs(currentJobs: ImageJob[], additionalJobs: ImageJob[]): ImageJob[] {
   const knownIDs = new Set(currentJobs.map((job) => job.id));
@@ -226,6 +227,7 @@ type FilesWorkspaceProps = {
 };
 
 export function FilesWorkspace({ initialCategory = "all" }: Readonly<FilesWorkspaceProps>) {
+  const { deletedIDs } = useArtifactDeletion();
   const t = useDictionary();
   const cache = useWorkspaceDataCache();
   const [cachedFirstPage] = useState(() => cache.getImageFilesFirstPage());
@@ -564,7 +566,7 @@ export function FilesWorkspace({ initialCategory = "all" }: Readonly<FilesWorksp
     for (const job of readyJobs) {
       const result = resultsByJobID[job.id];
       if (result !== undefined) {
-        items.push(...result.artifacts.map((artifact): FilePreviewItem => ({ artifact, job })));
+        items.push(...result.artifacts.filter(artifact => !artifact.deleted && !deletedIDs.includes(artifact.id)).map((artifact): FilePreviewItem => ({ artifact, job })));
         continue;
       }
 
@@ -574,12 +576,12 @@ export function FilesWorkspace({ initialCategory = "all" }: Readonly<FilesWorksp
       });
     }
     return items;
-  }, [readyJobs, resultsByJobID, resultStatesByJobID]);
+  }, [readyJobs, resultsByJobID, resultStatesByJobID, deletedIDs]);
   const selectedPreviewIndex = selectedPreviewArtifactID === null
     ? -1
     : previewItems.findIndex((item) => "artifact" in item && item.artifact.id === selectedPreviewArtifactID);
   const hasImageCategory = isImageCategory(fileCategory);
-  const hasImageJobs = readyJobs.length > 0;
+  const hasImageJobs = readyJobs.some(job => !resultsByJobID[job.id] || resultsByJobID[job.id].artifacts.some(artifact => !artifact.deleted && !deletedIDs.includes(artifact.id)));
 
   return (
     <WorkspacePageFrame>

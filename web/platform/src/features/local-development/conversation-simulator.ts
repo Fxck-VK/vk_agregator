@@ -114,6 +114,7 @@ export function createConversationSimulator({ seed, scenario, hasArtifact, reply
     }
     history.push(message); messages.set(conversationID, history);
     jobs.set(job.id, job); submitted.set(keyScope, { body: init.body, job });
+    conversation.first_model_id ??= payload.model_id ?? "chatgpt";
     conversation.updated_at = now(); if (!conversation.title) conversation.title = payload.prompt.slice(0, 80);
     return json(jobResponse(job), 201);
   }

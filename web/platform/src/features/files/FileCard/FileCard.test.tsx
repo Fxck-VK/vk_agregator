@@ -92,10 +92,9 @@ describe("FileCard", () => {
     expect(download.querySelector("svg")).toBeNull();
 
     const deleteControl = within(card).getByRole("button", {
-      name: "Удаление файлов пока недоступно",
+      name: "Удалить файл",
     });
-    expect(deleteControl).toBeDisabled();
-    expect(deleteControl).toHaveAttribute("title", "Удаление файлов пока недоступно");
+    expect(deleteControl).toBeEnabled();
 
     const metadata = screen.getByTestId("file-card-accessible-metadata");
     expect(metadata).toHaveTextContent(ru.files.statusReady);

@@ -1,5 +1,3 @@
-import { getLegalCatalog } from "@/features/legal/catalog.server";
-import { LegalConsentGate } from "@/features/legal/LegalConsentGate";
 import type { Metadata } from "next";
 import { Suspense, type ReactNode } from "react";
 
@@ -12,6 +10,8 @@ import { loadWorkspaceSession } from "@/features/session/session-data";
 import { isLocalWorkspacePreviewEnabled, localWorkspacePreviewConversations, localWorkspacePreviewConversationMessages, localWorkspacePreviewImageModels } from "@/features/session/local-workspace-preview";
 import { WorkspaceHome } from "@/features/workspace/WorkspaceHome/WorkspaceHome";
 import { getRequestDictionary } from "@/i18n/server";
+import { getLegalCatalog } from "@/features/legal/catalog.server";
+import { LegalConsentGate } from "@/features/legal/LegalConsentGate";
 
 import styles from "./layout.module.css";
 
@@ -38,7 +38,8 @@ export async function WorkspaceSessionContent({ children }: Readonly<{ children:
   let developmentTools: ReactNode = null;
   if (process.env.NODE_ENV === "development" && isLocalWorkspacePreviewEnabled()) {
     const { LocalDevelopmentTools } = await import("@/features/local-development/LocalDevelopmentTools");
-    developmentTools = <LocalDevelopmentTools seed={{ conversations: localWorkspacePreviewConversations, messages: localWorkspacePreviewConversationMessages, imageModels: localWorkspacePreviewImageModels.items }} />;
+    const { previewWithTombstones } = await import("@/features/local-development/preview-artifact-deletion.server");
+    developmentTools = <LocalDevelopmentTools seed={{ conversations: localWorkspacePreviewConversations, messages: await previewWithTombstones(localWorkspacePreviewConversationMessages), imageModels: localWorkspacePreviewImageModels.items }} />;
   }
 
   if (session.kind === "unauthenticated") {

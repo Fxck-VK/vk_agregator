@@ -50,20 +50,19 @@
   block-size: 2rem;
   place-items: center;
   border-radius: var(--radius-sm);
-  background: var(--color-accent);
-  color: #fff;
+  overflow: hidden;
 }
 
-.railIcon svg {
-  inline-size: 1.15rem;
-  block-size: 1.15rem;
-  fill: currentColor;
+.railIcon .modelIcon {
+  inline-size: 100%;
+  block-size: 100%;
+  border-radius: inherit;
+  object-fit: contain;
 }
 
 .link:focus-visible,
 .actions button:focus-visible,
-.inlineRenameInput:focus-visible,
-.deleteDialog button:focus-visible {
+.inlineRenameInput:focus-visible {
   outline: 0.125rem solid var(--color-focus);
   outline-offset: 0.125rem;
 }
@@ -179,73 +178,6 @@
 .error { margin: 0; font-size: 0.8125rem; }
 .error { color: var(--color-text-muted); }
 
-.deleteDialog {
-  inline-size: min(35rem, 100%);
-  padding: clamp(var(--space-5), 4vw, var(--space-7));
-  border: 0.0625rem solid var(--color-border);
-  border-radius: var(--radius-xl);
-  background: var(--color-surface-raised);
-  box-shadow: var(--shadow-overlay);
-}
-
-.deleteDialog h2 {
-  margin: 0 0 var(--space-5);
-  font-size: 1.35rem;
-  line-height: 1.2;
-}
-
-.deleteDialog p {
-  margin: 0;
-  line-height: 1.5;
-}
-
-.deleteDialog .dialogDescription {
-  margin-block-start: var(--space-2);
-  color: var(--color-text-muted);
-}
-
-.dialogError {
-  margin-block-start: var(--space-3) !important;
-  color: var(--color-danger);
-  font-size: 0.875rem;
-}
-
-.dialogActions {
-  display: flex;
-  flex-wrap: wrap;
-  justify-content: flex-end;
-  gap: var(--space-3);
-  margin-block-start: var(--space-6);
-}
-
-.dialogActions button {
-  min-block-size: 2.75rem;
-  padding: 0.65rem 1.1rem;
-  border: 0.0625rem solid var(--color-border);
-  border-radius: var(--radius-pill);
-  font: inherit;
-  font-weight: var(--font-weight-semibold);
-  cursor: pointer;
-}
-
-.dialogCancel {
-  color: var(--color-text);
-  background: transparent;
-}
-
-.dialogCancel:hover {
-  background: var(--color-surface);
-}
-
-.dialogDelete {
-  border-color: transparent !important;
-  color: #fff;
-  background: #f02849;
-}
-
-.dialogDelete:hover { background: #d91f3f; }
-
-.dialogActions button:disabled,
 .floatingPanel button:disabled {
   cursor: default;
   opacity: var(--opacity-disabled);
@@ -265,8 +197,4 @@
   .row:hover .actionToggle,
   .row[data-panel-open="true"] .actionToggle,
   .actions:focus-within .actionToggle { opacity: 1; }
-}
-
-@media (width < 30rem) {
-  .dialogActions button { flex: 1 1 8rem; text-align: center; }
 }

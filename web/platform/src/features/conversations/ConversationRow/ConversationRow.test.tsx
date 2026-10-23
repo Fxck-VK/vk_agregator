@@ -66,6 +66,20 @@ function renderContextRow() {
 }
 
 describe("ConversationRow", () => {
+  it("uses the shared fallback for unknown origin models without loading arbitrary URLs", () => {
+    renderRow(false, { ...conversation, first_model_id: "https://example.invalid/icon.svg" });
+    expect(screen.getByTestId("model-icon-fallback")).toBeInTheDocument();
+    expect(screen.queryByTestId("model-icon")).not.toBeInTheDocument();
+  });
+  it("renders the pinned model artwork, independently of the current model selection", () => {
+    sessionStorage.setItem(`neirohub:conversation-model:${conversation.id}`, "gpt_5");
+    const view = renderRow(false, { ...conversation, first_model_id: "claude_sonnet_4_6" });
+    expect(screen.getByTestId("model-icon")).toHaveAttribute("src", expect.stringContaining("/assets/images/models/claude.svg"));
+    view.rerender(<ConversationRow conversation={{ ...conversation, first_model_id: "claude_sonnet_4_6", title: "Renamed" }} isActive />);
+    expect(screen.getByTestId("model-icon")).toHaveAttribute("src", expect.stringContaining("/assets/images/models/claude.svg"));
+    sessionStorage.removeItem(`neirohub:conversation-model:${conversation.id}`);
+  });
+
   beforeEach(() => {
     vi.mocked(useRouter).mockReturnValue({ refresh, replace } as never);
     vi.mocked(usePathname).mockReturnValue("/app/chat/d7c979f5-24e5-4f88-924b-a592d6e5a906");
@@ -409,7 +423,7 @@ describe("ConversationRow", () => {
     expect(screen.queryByText("backend detail")).not.toBeInTheDocument();
   });
 
-  it("returns focus to the archive confirmation after a failed archive mutation", async () => {
+  it("returns focus to cancel after a failed archive mutation", async () => {
     vi.mocked(webBrowserMutation).mockResolvedValue(new Response(null, { status: 500 }));
     renderRow();
 
@@ -421,7 +435,7 @@ describe("ConversationRow", () => {
     fireEvent.click(archiveConfirm);
 
     await screen.findByRole("alert");
-    await vi.waitFor(() => expect(screen.getByRole("button", { name: ru.conversations.archiveConfirmLabel })).toHaveFocus());
+    await vi.waitFor(() => expect(screen.getByRole("button", { name: ru.conversations.cancelLabel })).toHaveFocus());
   });
 
   it("describes archive confirmation to its confirm control", () => {
@@ -648,7 +662,7 @@ describe("ConversationRow", () => {
     fireEvent.click(actions);
     fireEvent.click(screen.getByRole("button", { name: ru.conversations.archiveLabel }));
     const archiveConfirm = screen.getByRole("button", { name: ru.conversations.archiveConfirmLabel });
-    expect(archiveConfirm).toHaveFocus();
+    expect(screen.getByRole("button", { name: ru.conversations.cancelLabel })).toHaveFocus();
 
     fireEvent.click(screen.getByRole("button", { name: ru.conversations.cancelLabel }));
     fireEvent.animationEnd(archiveConfirm.closest('[data-state="closing"]')!, { animationName: "modalBackdropOut" });

@@ -251,6 +251,7 @@ type safeConversationImage struct {
 	Artifact safeImageArtifactMetadata `json:"artifact"`
 }
 type safeConversationVideo struct {
+	Deleted  bool      `json:"deleted,omitempty"`
 	ID       uuid.UUID `json:"id"`
 	MIMEType string    `json:"mime_type"`
 	Width    int       `json:"width"`
@@ -288,7 +289,7 @@ func (h *Handler) attachConversationMedia(ctx context.Context, owner, conversati
 			if artifact.ID == uuid.Nil || artifact.MediaType != domain.MediaTypeVideo || !strings.HasPrefix(artifact.MIMEType, "video/") {
 				return false
 			}
-			message.Videos = append(message.Videos, safeConversationVideo{ID: artifact.ID, MIMEType: artifact.MIMEType, Width: artifact.Width, Height: artifact.Height})
+			message.Videos = append(message.Videos, safeConversationVideo{ID: artifact.ID, MIMEType: artifact.MIMEType, Width: artifact.Width, Height: artifact.Height, Deleted: artifact.Deleted})
 		}
 	}
 	return true
@@ -321,7 +322,7 @@ func safeArtifactResultContains(result resultservice.Result, jobID, artifactID u
 		return false
 	}
 	for _, artifact := range result.Artifacts {
-		if artifact.ID == artifactID && artifact.MediaType == domain.MediaTypeVideo && artifact.SizeBytes > 0 && strings.HasPrefix(artifact.MIMEType, "video/") {
+		if artifact.ID == artifactID && !artifact.Deleted && artifact.MediaType == domain.MediaTypeVideo && artifact.SizeBytes > 0 && strings.HasPrefix(artifact.MIMEType, "video/") {
 			return true
 		}
 	}

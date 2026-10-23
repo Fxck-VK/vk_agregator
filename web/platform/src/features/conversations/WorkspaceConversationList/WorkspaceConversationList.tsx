@@ -20,6 +20,7 @@ type WorkspaceConversationList = {
   hasData: boolean;
   removeConversation: (conversationID: string) => void;
   conversations: WorkspaceConversationItem[];
+  pinConversationModel: (conversationID: string, modelID: string) => void;
   discardPendingConversation: (conversationID: string) => void;
   resolvePendingConversation: (pendingConversationID: string, conversation: ConversationItem) => void;
   replaceConversation: (conversation: ConversationItem) => void;
@@ -114,6 +115,12 @@ function AccountConversationListProvider({ accountId, children, initialConversat
     setConversationListState(state => ({ ...state, conversations: state.conversations.filter(item => item.id !== conversationID) }));
   }, []);
 
+  // Immediate feedback after an accepted send; subsequent server reads remain authoritative.
+  const pinConversationModel = useCallback((conversationID: string, modelID: string) => {
+    setConversationListState(state => ({ ...state, conversations: state.conversations.map(item =>
+      item.id === conversationID && !item.first_model_id ? { ...item, first_model_id: modelID } : item) }));
+  }, []);
+
   const upsertConversation = useCallback((conversation: WorkspaceConversationItem) => {
     setConversationListState((previousState) => ({
       ...previousState,
@@ -158,6 +165,7 @@ function AccountConversationListProvider({ accountId, children, initialConversat
           previousConversation.title === conversation.title
           && previousConversation.created_at === conversation.created_at
           && previousConversation.updated_at === conversation.updated_at
+          && previousConversation.first_model_id === conversation.first_model_id
         ) {
           return previousConversation;
         }
@@ -192,8 +200,8 @@ function AccountConversationListProvider({ accountId, children, initialConversat
   }, []);
 
   const value = useMemo(
-    () => ({ conversations, hasData: resource.data !== null, pending: resource.pending, failed: resource.failed, retry: resource.retry, revalidate, removeConversation, discardPendingConversation, replaceConversation, resolvePendingConversation, updateConversationTitle, upsertConversation }),
-    [conversations, resource.data, resource.pending, resource.failed, resource.retry, revalidate, removeConversation, discardPendingConversation, replaceConversation, resolvePendingConversation, updateConversationTitle, upsertConversation],
+    () => ({ conversations, pinConversationModel, hasData: resource.data !== null, pending: resource.pending, failed: resource.failed, retry: resource.retry, revalidate, removeConversation, discardPendingConversation, replaceConversation, resolvePendingConversation, updateConversationTitle, upsertConversation }),
+    [conversations, pinConversationModel, resource.data, resource.pending, resource.failed, resource.retry, revalidate, removeConversation, discardPendingConversation, replaceConversation, resolvePendingConversation, updateConversationTitle, upsertConversation],
   );
 
   return (

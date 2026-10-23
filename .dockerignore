@@ -2,6 +2,9 @@
 .github
 .agents/logs
 docs/archive
+.cache
+references
+outputs
 
 .env
 .env.*

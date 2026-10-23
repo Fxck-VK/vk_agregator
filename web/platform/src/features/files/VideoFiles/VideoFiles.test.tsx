@@ -211,21 +211,18 @@ describe("VideoFiles", () => {
     expect(webBrowserFetch).toHaveBeenCalledTimes(2);
   });
 
-  it("loads additional pages and refreshes from the first page", async () => {
+  it("loads additional pages without replacing already loaded videos", async () => {
     let firstPageRequests = 0;
     vi.mocked(webBrowserFetch).mockImplementation((path) => {
       if (path === "/web/v1/video-jobs?limit=12") {
         firstPageRequests += 1;
-        return Promise.resolve(firstPageRequests === 1 ? listResponse([firstJob], "next-page") : listResponse([thirdJob], null));
+        return Promise.resolve(listResponse([firstJob], "next-page"));
       }
       if (path === "/web/v1/video-jobs?limit=12&cursor=next-page") {
         return Promise.resolve(listResponse([secondJob], null));
       }
       if (path === `/web/v1/video-jobs/${secondJob.id}/result`) {
         return Promise.resolve(resultResponse(secondJob.id, "d066a4a0-647e-407b-b9c4-2c5b03a4b0da"));
-      }
-      if (path === `/web/v1/video-jobs/${thirdJob.id}/result`) {
-        return Promise.resolve(resultResponse(thirdJob.id, "a422a2d7-9b1a-4c55-a3dc-c4b8f4499d00"));
       }
       if (path === `/web/v1/video-jobs/${firstJob.id}/result`) {
         return Promise.resolve(resultResponse(firstJob.id));
@@ -239,10 +236,9 @@ describe("VideoFiles", () => {
     expect(await screen.findByText(secondJob.prompt)).toBeInTheDocument();
     expect(webBrowserFetch).toHaveBeenCalledWith("/web/v1/video-jobs?limit=12&cursor=next-page", expect.objectContaining({ signal: expect.any(AbortSignal) }));
 
-    fireEvent.click(screen.getByRole("button", { name: ru.imageHistory.refresh }));
-    await screen.findByText(thirdJob.prompt);
-    expect(screen.queryByText(firstJob.prompt)).not.toBeInTheDocument();
-    expect(firstPageRequests).toBe(2);
+    expect(screen.getByText(firstJob.prompt)).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: ru.files.loadMore })).not.toBeInTheDocument();
+    expect(firstPageRequests).toBe(1);
   });
 
   it("retries list and result failures while honoring hidden empty state", async () => {

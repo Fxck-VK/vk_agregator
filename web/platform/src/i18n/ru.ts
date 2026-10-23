@@ -1,8 +1,12 @@
-import { legalText } from "./legal";
 import { brandName, brandMonogram } from "@/config/brand";
 import { accountAuthText } from "./account-auth";
+import { marketingRu } from "./marketing-ru";
+import { imageLandingText } from "./image-landing";
+import { legalText } from "./legal";
 
 export const ru = {
+  imageLanding: imageLandingText.ru,
+  marketing: marketingRu,
   auth: accountAuthText.ru,
   legal: legalText.ru,
   preloading: {
@@ -354,6 +358,7 @@ export const ru = {
     dialogLabel: "Выбор нейросети",
     searchLabel: "Поиск нейросети",
     searchPlaceholder: "Поиск нейросети",
+    searchResults: "Результаты поиска",
     categories: {
       popular: "Популярные",
       images: "Изображения",
@@ -438,6 +443,15 @@ export const ru = {
     noReadyArtifact: "Файл появится после завершения задачи.",
     download: "Скачать",
     deleteUnavailable: "Удаление файлов пока недоступно",
+    deleteLabel: "Удалить файл",
+    deleteTitle: "Удалить файл?",
+    deleteDescription: "Файл будет удалён из «Моих файлов» и диалога, где он был создан, вместе с оригиналом и превью в хранилище. Восстановить его не получится.",
+    deleteCancel: "Отмена",
+    deleteConfirm: "Удалить",
+    deletePending: "Удаляем…",
+    deleteFailure: "Не удалось удалить файл. Попробуйте ещё раз.",
+    deleteInUse: "Файл используется незавершённым заданием. Дождитесь его завершения и повторите удаление.",
+    deleted: "Файл удалён",
     previewDialogLabel: "Просмотр файла",
     closePreview: "Закрыть предпросмотр",
     previewFilesLabel: "Файлы для просмотра",

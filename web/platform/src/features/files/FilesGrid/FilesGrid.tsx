@@ -4,6 +4,7 @@ import type { ImageJob, ImageJobResult } from "@/lib/web-api/contracts";
 import { MasonryGrid } from "@/components/ui/MasonryGrid/MasonryGrid";
 
 import { FileCard, type FileResultState } from "../FileCard/FileCard";
+import { useArtifactDeletion } from "../artifact-deletion";
 
 type FilesGridProps = {
   jobs: ImageJob[];
@@ -20,9 +21,11 @@ type FilesGridProps = {
 };
 
 export function FilesGrid({ jobs, onOpenPreview, onRequestResult, onRetryJob, resultsByJobID, resultStatesByJobID, retryingJobIDs }: Readonly<FilesGridProps>) {
+  const deletion = useArtifactDeletion();
+  const visibleJobs = jobs.filter(job => !resultsByJobID[job.id] || resultsByJobID[job.id].artifacts.some(artifact => !deletion.isDeleted(artifact.id, artifact.deleted)));
   return (
     <MasonryGrid>
-      {jobs.map((job) => (
+      {visibleJobs.map((job) => (
         <li key={job.id}>
           <FileCard
             isRetrying={retryingJobIDs.has(job.id)}

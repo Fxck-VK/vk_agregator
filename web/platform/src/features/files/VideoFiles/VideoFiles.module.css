@@ -3,7 +3,6 @@
   gap: var(--space-5);
 }
 
-.actions,
 .footer {
   display: flex;
   flex-wrap: wrap;

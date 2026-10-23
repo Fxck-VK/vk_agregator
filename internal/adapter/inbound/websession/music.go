@@ -390,21 +390,24 @@ func (h *Handler) getMusicJobResult(w http.ResponseWriter, r *http.Request) {
 	}
 	allowed := map[uuid.UUID]bool{}
 	for _, a := range result.Artifacts {
-		allowed[a.ID] = true
+		allowed[a.ID] = !a.Deleted
 	}
 	tracks := []safeMusicTrack{}
 	artifacts := []safeMusicArtifact{}
 	for _, a := range p.Result.Artifacts {
 		if !allowed[a.ID] {
-			writeError(w, 404, "music result not found")
-			return
+			if _, exists := allowed[a.ID]; !exists {
+				writeError(w, 404, "music result not found")
+				return
+			}
+			continue
 		}
 		artifacts = append(artifacts, safeMusicArtifact{ID: a.ID, Kind: a.Kind, Format: a.Format, URL: "/web/v1/music-artifacts/" + a.ID.String()})
 	}
 	for _, t := range p.Result.Music.Tracks {
 		track := safeMusicTrack{JobID: job.ID, AudioIndex: t.OriginalAudioIndex, Title: t.Title, DurationSec: t.DurationSec}
 		for _, a := range p.Result.Artifacts {
-			if a.AudioIndex != t.OriginalAudioIndex {
+			if a.AudioIndex != t.OriginalAudioIndex || !allowed[a.ID] {
 				continue
 			}
 			url := "/web/v1/music-artifacts/" + a.ID.String()
@@ -417,7 +420,9 @@ func (h *Handler) getMusicJobResult(w http.ResponseWriter, r *http.Request) {
 				track.VideoURL = url
 			}
 		}
-		tracks = append(tracks, track)
+		if track.AudioURL != "" {
+			tracks = append(tracks, track)
+		}
 	}
 	var persona, customModel, voice *safeMusicAsset
 	if p.Result.Music.Persona != nil && p.Result.Music.Persona.ID != "" {
@@ -488,7 +493,7 @@ func (h *Handler) serveGeneratedArtifact(w http.ResponseWriter, r *http.Request,
 	}
 	allowed := false
 	for _, output := range result.Artifacts {
-		if output.ID == id {
+		if output.ID == id && !output.Deleted {
 			allowed = true
 		}
 	}

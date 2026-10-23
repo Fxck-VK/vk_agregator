@@ -34,7 +34,7 @@ type BootstrapStatus = "active" | "failed" | "missing";
 export function PendingConversationBootstrap({ conversationKey }: PendingConversationBootstrapProps) {
   const t = useDictionary();
   const router = useRouter();
-  const { resolvePendingConversation, upsertConversation } = useWorkspaceConversationList();
+  const { pinConversationModel, resolvePendingConversation, upsertConversation } = useWorkspaceConversationList();
   const [intent] = useState<PendingConversationBootstrapIntent | null>(() => readPendingConversationBootstrap(conversationKey));
   const [status, setStatus] = useState<BootstrapStatus>(intent === null ? "missing" : "active");
   const [attempt, setAttempt] = useState(0);
@@ -88,6 +88,7 @@ export function PendingConversationBootstrap({ conversationKey }: PendingConvers
       if (!isSafeWebChatAcceptedResponse(messageResponse.status, job)) {
         throw new Error("Unsafe first message response.");
       }
+      pinConversationModel(conversationID, currentIntent.modelId ?? "chatgpt");
 
       if (currentIntent.generationOptions && Object.keys(currentIntent.generationOptions).length > 0) {
         savePendingMediaJob(conversationID, job.job_id, 0, currentIntent.generationOptions);
@@ -107,7 +108,7 @@ export function PendingConversationBootstrap({ conversationKey }: PendingConvers
     } catch {
       setStatus("failed");
     }
-  }, [conversationKey, resolvePendingConversation, router]);
+  }, [conversationKey, pinConversationModel, resolvePendingConversation, router]);
 
   useEffect(() => {
     if (intent === null) {

@@ -444,6 +444,8 @@ func (s *Service) cleanupMedia(ctx context.Context, now time.Time) (int64, int64
 		return 0, 0, nil
 	}
 	policy := s.mediaCleanupPolicy(now)
+	// Explicit user deletions must be retried even when age-based retention is disabled.
+	policy.ExpiredCutoff = now
 	if !policy.Enabled() {
 		return 0, 0, nil
 	}

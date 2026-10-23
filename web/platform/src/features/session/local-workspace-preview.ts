@@ -39,24 +39,28 @@ export const localWorkspacePreviewConversations: ConversationItem[] = [
   {
     id: "20000000-0000-4000-8000-000000000004",
     title: "Журавль на облаке",
+    first_model_id: "nano_banana_2",
     created_at: "2026-09-11T21:00:00Z",
     updated_at: "2026-09-11T21:01:00Z",
   },
   {
     id: "20000000-0000-4000-8000-000000000001",
     title: "Подготовить макет",
+    first_model_id: "chatgpt",
     created_at: "2026-01-01T00:00:00Z",
     updated_at: "2026-01-01T00:05:00Z",
   },
   {
     id: "20000000-0000-4000-8000-000000000002",
     title: "Идеи для проекта",
+    first_model_id: "chatgpt",
     created_at: "2026-01-02T00:00:00Z",
     updated_at: "2026-01-02T00:05:00Z",
   },
   {
     id: "20000000-0000-4000-8000-000000000003",
     title: "Тексты для сайта",
+    first_model_id: "chatgpt",
     created_at: "2026-01-03T00:00:00Z",
     updated_at: "2026-01-03T00:05:00Z",
   },

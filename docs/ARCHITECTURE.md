@@ -11,6 +11,25 @@
 ---
 
 # Current implementation addendum: app surfaces and backend core
+Generated output images/videos/audio/documents and their variants have a persisted
+two-calendar-month UTC deadline from the original creation time (migration 000061).
+Database guards preserve earlier user deletion and prevent later previews from
+extending retention. Existing maintenance consumes expires_at and physically purges
+the blobs; text conversations, inputs and financial/job metadata stay separate.
+See [generated file retention](DATA_RETENTION_POLICY.md#generated-file-lifetime-two-calendar-months).
+
+Website file deletion uses authenticated, Origin/CSRF-protected
+`DELETE /web/v1/artifacts/{id}`. An exact account-owned succeeded web output is
+locked, checked for unfinished consumers, marked `deleted` and expired together
+with its variants. Access is revoked before blob removal; job/message/ledger
+metadata remains. A bounded immediate purge and existing expired-media maintenance
+share idempotent object deletion and metadata cleanup. Maintenance retries explicit
+expirations even when age-based retention is disabled. Public result reads expose
+deleted outputs as safe tombstones without hiding other outputs; capture readiness
+still requires every output ready and moderated. Parent row locks serialize job
+input admission and complete variant writes against deletion. See
+[user file deletion](DATA_RETENTION_POLICY.md#explicit-user-file-deletion).
+
 Public brand metadata lives in `web/platform/branding/brand.json`. The website
 imports it through `src/config/brand.ts`; the dependency-free Go package in the
 same directory embeds it for verification and security-notice emails. Rebuild
@@ -3375,6 +3394,7 @@ The editable skin extends Elastic. A separate Deploy Mail UI workflow packages
 canonical brand assets and deploys a versioned Compose overlay, recreating only
 webmail with HTTPS/asset verification and rollback. Mail-only edits do not build
 the application images; mail data and the website release remain independent.
+
 
 ### Website legal documents and consent (2026-10-23)
 

@@ -5,6 +5,28 @@ VK community, YooKassa/test settings and Cloudflare tunnel.
 
 ## Manual model smoke on DEV
 
+Generated-file retention is a separate database policy: see
+[two calendar months](../../docs/DATA_RETENTION_POLICY.md#generated-file-lifetime-two-calendar-months).
+Migration `000061_generated_output_retention` assigns UTC creation-based deadlines
+to all non-text output files and their variants; the existing maintenance worker
+consumes them hourly. Do not replace this with free/paid defaults or bucket-wide
+expiry. Text chats and uploaded inputs retain separate policies.
+
+For a narrowly authorized database-policy rollout on an older immutable app image,
+stage the exact checked migration in a read-only migrations directory and run the
+existing migrator image with `MIGRATIONS_DIR` pointed there. Hold the normal DEV
+deploy lock (`/tmp/vk-ai-aggregator-dev.deploy.lock`), verify the migration SHA-256,
+retain private schema/deadline rollback metadata on the VPS, and record the version
+and canonical LF checksum through the migrator transaction. This applies only the
+staged policy and does not publish unrelated checkout changes. The regular future
+deployment validates and skips the same recorded migration; do not edit it after
+application. Migrations 000059/000060 remain independently pending if absent from
+the deployed release. Never run an old image's generic `down` to undo this policy;
+its migration directory does not contain this scoped release.
+When running the one-off Compose command inside `ssh ... bash -s`, redirect that
+command's stdin from `/dev/null`; otherwise Compose can consume the remaining
+remote script and skip its verification/bookkeeping commands.
+
 At the user's request, `FEATURE_DEV_MODEL_SMOKE_ENABLED=true` exposes priced
 APIMart candidates for manual smoke on the DEV site. The DEV env renderer enables
 it when APIMart has credentials; explicit `false` disables it. Application defaults
@@ -290,10 +312,22 @@ Linux. Any SQL change requires a fresh review and database regression test befor
 updating the digest. Unreviewed destructive operations remain blocked; do not
 enable `MIGRATION_ALLOW_DESTRUCTIVE` to work around a digest mismatch.
 
-Pushing `dev-deploy` first triggers the `Docker Images` workflow. After all
-GHCR images for the pushed SHA are built successfully, GitHub Actions triggers
-`Deploy DEV` through `workflow_run`. `Deploy DEV` can also be started manually
-with `workflow_dispatch`.
+Pushing `dev-deploy` starts `CI` and `Release Images` (`docker-images.yml`).
+After successful exact-SHA CI and all eight scanned, signed and attested images,
+the image workflow calls `deploy-dev.yml` as a local reusable workflow. Both
+files come from the same commit, including every runtime env hook. The renamed
+image workflow prevents the older default-branch `Docker Images` listener from
+launching an additional DEV rollout. `main` remains the production source.
+
+`Deploy DEV` can also be started manually from `dev-deploy` with
+`workflow_dispatch`; it requires successful CI and verifies all eight signed
+images for that exact current commit before SSH. Optional `source_sha` must match
+the workflow commit. It does not require the parent workflow's overall success:
+that result now includes rollout, and a failed rollout must remain recoverable
+without rebuilding already verified images.
+Superseded sources are skipped before SSH. Rollouts take a job-level shared lock
+without cancelling an active migration; manual validation does not hold that
+lock while waiting for the image workflow to finish.
 
 Required GitHub repository secrets:
 
@@ -323,13 +357,9 @@ it with `scripts/deploy/prepare-dev-env.sh`, validates it with
 `scripts/deploy/check-dev-env.sh`, uploads it to the DEV VPS, deploys, then runs
 DEV smoke.
 
-The DEV workflow resolves the web origin from the checked-out
-`deployments/nginx/dev-web.conf`, including when its `workflow_run` definition
-comes from the default branch. Its readiness requests read the deployed
+The DEV workflow resolves the web origin from the same commit's
+`deployments/nginx/dev-web.conf`. Its readiness requests read the deployed
 `WEB_ORIGIN`; they must not retain a literal domain from another release.
-Ship this compatible workflow definition to the default branch before the
-domain cutover: older source revisions without `--dev-public-domain` retain
-their existing assembly behavior, while the cutover revision opts in.
 
 `assemble-env-parts.sh --target dev --dev-public-domain epifera.com` rewrites
 only existing DEV public channel origins, the signed provider-reference origin
@@ -378,8 +408,21 @@ separate operator check when changing env structure.
 
 ### Commit-scoped preflight before push
 
-After committing a `dev-deploy` change and before pushing it, run the complete
-serialized validation entry point from the repository root:
+Before staging a release, capture all current changes against the current DEV
+baseline. The inventory contains only paths, Git blob IDs and include/defer
+decisions, never file contents. Keep it in ignored `.cache`:
+
+```powershell
+node scripts/ci/release-manifest.mjs --capture .cache/dev-release-manifest.json --base origin/dev-deploy
+```
+
+Review this inventory against the agreed release scope. Every entry defaults to
+`include`; an intentional `defer` requires a written `reason`. Never defer an
+agreed user change silently. An existing inventory cannot be overwritten. Review
+and retain it, or choose a new ignored path for a genuinely new release.
+
+After committing and before pushing, run the complete serialized validation
+entry point from the repository root:
 
 ```powershell
 pwsh -NoProfile -File scripts/ci/dev-deploy-preflight.ps1
@@ -393,8 +436,12 @@ All Go build images use the same pinned Go release and immutable digest.
 See the [Go release history](https://go.dev/doc/devel/release#go1.26.10).
 
 It runs source tests, npm audits, `govulncheck`, documentation/infrastructure
-policy and the pinned Trivy filesystem scan in that order. Policy v3 includes
-the same documentation regression and routing checks as CI before push and
+policy and the pinned Trivy filesystem scan in that order. Policy v4 first checks
+the committed tree against the inventory, before any cached result. Missing,
+modified or unexpected committed files block publication. `-ManifestPath` selects
+another reviewed inventory. Frontend production builds and static model-registry
+checks run locally too, alongside the existing documentation and routing checks.
+It includes the same documentation regression and routing checks as CI before push and
 validates the filesystem exclusions before consulting cached results.
 It also checks the Bash runtime prerequisites before any long stage starts.
 Only one full preflight may run in
@@ -422,6 +469,11 @@ Arguments are passed individually, and nonzero script exits are preserved.
 `scripts/ci/test-bash-runtime.ps1` checks these boundaries without changing the
 machine-wide PATH, installing software or altering shell profiles.
 
+`validate-infra.ps1` also runs `node --test scripts/ci/test-dev-login-smoke.mjs`.
+Eight local HTML fixtures exercise the actual checker embedded in `smoke-dev.sh`:
+SVG/localized labels pass, while missing/disabled controls and unhealthy pages
+fail. Infrastructure CI explicitly selects Node.js 22, matching the frontends.
+
 Frontend dependencies are installed with `npm ci` only when a package lockfile
 changes or that package's local executable set is missing. The successful
 lockfile hash is cached under private Git metadata; dependency installation
@@ -446,12 +498,14 @@ exercise that guard. Dependency lockfiles, Dockerfiles and deployment configs
 remain scanned, and HIGH/CRITICAL findings still fail the check. Immutable image
 scans do not load this filesystem config and retain their existing gates.
 
-New commits on `dev-deploy` cancel obsolete CI and Docker Images runs for that
-branch. `main` runs are not cancelled. Signed release publication still emits
+New commits on `dev-deploy` cancel obsolete CI for that branch. Image workflows
+queue the newest pending release without interrupting a child deployment's
+migrations. A source guard skips old releases before the mutating job. `main`
+runs are not cancelled. Signed release publication still emits
 all eight exact-SHA images; per-service BuildKit cache scopes make unchanged
 builds cheap without relabelling old provenance.
 
-Mail-only pushes skip Docker Images but still start CI. If such a push cancels
+Mail-only pushes skip Release Images but still start CI. If such a push cancels
 an older image run's CI, its monitor verifies that the remote `dev-deploy` head
 has advanced and requests cancellation of that image run itself. Only the image
 quality-gate job has Actions write permission for this purpose. A cancelled CI
@@ -459,6 +513,18 @@ for the current head, failed CI, missing CI, API errors and timeouts still block
 publication. Cancellation never counts as successful CI; if GitHub does not
 stop the runner within 30 seconds, the gate fails closed. `main`, PR builds and
 default monitor callers retain their existing behavior.
+
+### Bounded CI dependency setup
+
+Web Platform stays on Ubuntu 24.04. Nginx setup and Chromium/system dependency
+installation use `scripts/ci/retry-network.sh`: at most two attempts, 90 seconds
+per attempt, a five-second delay and a ten-second kill grace. Their CI steps
+have a four-minute outer limit. npm fetches have a 30-second request timeout;
+package installation has a five-minute step limit. Chromium comes from the
+locked local Playwright package (`npx --no-install`). Browser installation and
+the actual browser tests are separate steps, so an installation retry cannot
+rerun tests or hide their failure. Audits, source tests, migrations and deploy
+commands are never wrapped in this retry helper.
 
 ## DEV Safety Rules
 

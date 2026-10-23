@@ -117,7 +117,7 @@ describe.skipIf(!binary)("real DEV Nginx gateway", () => {
     expect(navigate.headers.get("location")).toBe("/__dev/login?returnTo=%2Fen%2Fapp%3Fmodel%3Dtest");
     const challenge = await request("/__dev/login");
     expect(challenge.status).toBe(401);
-    expect(challenge.headers.get("www-authenticate")).toContain("NeiroHub development");
+    expect(challenge.headers.get("www-authenticate")).toContain("Epifera development");
     expect((await request("/__dev/login", { authorization: "Basic " + Buffer.from("dev-user:wrong").toString("base64") })).status).toBe(401);
     const login = await request("/__dev/login?returnTo=%2Fen%2Fapp", { authorization: basic });
     expect(login.status).toBe(303);

@@ -95,7 +95,7 @@
   border-radius: var(--radius-sm);
   background: var(--media-action-background, rgb(8 8 12 / 0.56));
   color: var(--overlay-action-text, #fff);
-  cursor: not-allowed;
+  cursor: pointer;
   transform: translateY(-0.25rem);
   transition: opacity 160ms ease, transform 160ms ease, background-color 160ms ease;
 }

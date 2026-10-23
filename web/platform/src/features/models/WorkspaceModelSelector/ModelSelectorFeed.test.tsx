@@ -126,17 +126,41 @@ it("does not infer category membership when server categories are absent", () =>
   expect(screen.getByRole("status")).toHaveTextContent("Подходящих нейросетей не найдено.");
 });
 
-it("searches all curated sections, keeps category controls and never pulls uncurated models into results", () => {
-  const dialog = openSelector();
+it("searches the full supplied catalog regardless of category or curated limits, then restores the feed", () => {
+  const onSelect = vi.fn();
+  const dialog = openSelector({ onSelect });
   fireEvent.click(within(screen.getByRole("toolbar")).getByRole("button", { name: "Изображения" }));
   fireEvent.change(screen.getByRole("searchbox"), { target: { value: "chat" } });
-  expect(within(dialog).getAllByRole("heading").map((heading) => heading.textContent)).toEqual(["Текст", "Бесплатные", "Учёба и работа"]);
+  expect(within(dialog).getAllByRole("heading").map((heading) => heading.textContent)).toEqual(["Результаты поиска"]);
+  expect(within(dialog).getAllByRole("listitem")).toHaveLength(1);
+  expect(within(dialog).getByRole("button", { name: /Chat/ })).toBeInTheDocument();
   expect(within(screen.getByRole("toolbar")).getAllByRole("button")).toHaveLength(6);
   fireEvent.change(screen.getByRole("searchbox"), { target: { value: "image-6" } });
-  expect(screen.getByRole("status")).toHaveTextContent("Подходящих нейросетей не найдено.");
-  expect(within(dialog).queryAllByRole("listitem")).toHaveLength(0);
+  expect(within(dialog).getAllByRole("listitem")).toHaveLength(1);
+  expect(within(dialog).getByRole("button", { name: /Image 6/ })).toBeInTheDocument();
+  fireEvent.click(within(screen.getByRole("toolbar")).getByRole("button", { name: "Текст" }));
+  expect(within(dialog).getByRole("button", { name: /Image 6/ })).toBeInTheDocument();
   fireEvent.change(screen.getByRole("searchbox"), { target: { value: "" } });
-  expect(within(dialog).getAllByRole("heading")[0]).toHaveTextContent("Изображения");
+  expect(within(dialog).getAllByRole("heading")[0]).toHaveTextContent("Текст");
+  expect(within(dialog).queryByRole("button", { name: /Image 6/ })).not.toBeInTheDocument();
+  fireEvent.change(screen.getByRole("searchbox"), { target: { value: "image-6" } });
+  fireEvent.click(within(dialog).getByRole("button", { name: /Image 6/ }));
+  expect(onSelect).toHaveBeenCalledExactlyOnceWith(models[6]);
+});
+
+it.each(["нана банана про", "банана про", "тфтщ ифтфтф зкщ"])("finds Nano Banana Pro outside curated sections using %s", query => {
+  const banana: ModelSelectorModel = { id: "nano_banana_pro", name: "Nano Banana Pro", category: "images", categories: ["images"] };
+  const dialog = openSelector({ models: [...models, banana], categoryModelIds: { images: ["image-0"] } });
+  expect(within(dialog).queryByRole("button", { name: "Nano Banana Pro" })).not.toBeInTheDocument();
+  fireEvent.change(screen.getByRole("searchbox"), { target: { value: query } });
+  expect(within(dialog).getAllByRole("listitem")).toHaveLength(1);
+  expect(within(dialog).getByRole("button", { name: /^Nano Banana Pro/ })).toBeInTheDocument();
+});
+
+it("does not cap or duplicate full-catalog search results", () => {
+  const dialog = openSelector();
+  fireEvent.change(screen.getByRole("searchbox"), { target: { value: "image" } });
+  expect(within(dialog).getAllByRole("listitem")).toHaveLength(7);
 });
 
 it("keeps a failed category visible alongside working sections but hides deliberately empty selections", () => {

@@ -17,6 +17,8 @@ import { getWebApiInternalOrigin } from "../../../../lib/web-api/internal-origin
 import { proxyWebApiRequest } from "../../../../lib/web-api/proxy";
 import { previewAuthMethods } from "@/lib/auth/methods";
 import { localWorkspacePreviewProfile } from "@/features/session/local-workspace-preview";
+import { markPreviewArtifactDeleted, previewDeletedArtifactIDs, previewWithTombstones } from "@/features/local-development/preview-artifact-deletion.server";
+import { decodePreviewImageID } from "@/features/local-development/preview-image";
 
 export const runtime = "nodejs";
 
@@ -44,6 +46,16 @@ async function handle(request: Request): Promise<Response> {
 async function handleSource(request: Request): Promise<Response> {
   const requestURL = new URL(request.url);
   const rawPath = `${requestURL.pathname}${requestURL.search}`;
+  if (isLocalWorkspacePreviewEnabled() && request.method === "DELETE") {
+    const match = requestURL.pathname.match(/^\/web\/v1\/artifacts\/([a-f0-9-]{36})$/i);
+    if (match) {
+      if (request.headers.get("Origin") !== requestURL.origin) return previewJsonError(403);
+      const id = match[1];
+      if (!localWorkspacePreviewImageArtifactPaths[id] && !decodePreviewImageID(id)) return previewJsonError(404);
+      await markPreviewArtifactDeleted(id);
+      return new Response(null, { status: 202, headers: { "Cache-Control": "no-store" } });
+    }
+  }
   if (isLocalWorkspacePreviewEnabled() && !["GET", "HEAD", "OPTIONS"].includes(request.method)) {
     return Response.json({ error: "Local preview does not forward writes to a backend" }, { status: 503, headers: { "Cache-Control": "no-store" } });
   }
@@ -86,6 +98,7 @@ async function handleSource(request: Request): Promise<Response> {
     }
 
     const artifactMatch = requestURL.pathname.match(/^\/web\/v1\/image-artifacts\/([^/]+)$/);
+    if (artifactMatch && (await previewDeletedArtifactIDs()).includes(artifactMatch[1])) return previewJsonError(404);
     if (artifactMatch?.[1].startsWith("f1000000-")) {
       const { previewImageResponse } = await import("@/features/local-development/preview-image.server");
       return await previewImageResponse(artifactMatch[1]) ?? Response.json({ error: "Invalid preview image" }, { status: 404 });
@@ -107,8 +120,9 @@ async function handleSource(request: Request): Promise<Response> {
   return proxyWebApiRequest(request, rawPath, getWebApiInternalOrigin());
 }
 
-function previewJson(payload: unknown): Response {
-  return Response.json(payload, {
+function previewJsonError(status: number) { return Response.json({ error: "Preview file unavailable" }, { status, headers: { "Cache-Control": "no-store" } }); }
+async function previewJson(payload: unknown): Promise<Response> {
+  return Response.json(await previewWithTombstones(payload), {
     headers: { "Cache-Control": "no-store" },
   });
 }

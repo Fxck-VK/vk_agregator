@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useLayoutEffect, useState } from "react";
 
 import { act, cleanup, fireEvent, render, screen } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
@@ -40,6 +40,28 @@ describe("ImageJobTracker", () => {
     cleanup();
     Object.defineProperty(navigator, "onLine", { configurable: true, value: true });
     vi.useRealTimers();
+  });
+
+  it("handles a manual refresh as soon as the status control is committed", async () => {
+    const onError = vi.fn();
+    vi.mocked(webBrowserFetch)
+      .mockResolvedValueOnce(Response.json({ job: { ...queuedJob, status: "succeeded" } }))
+      .mockResolvedValueOnce(Response.json({ job_id: queuedJob.id, status: "succeeded", artifacts: [] }));
+
+    function ImmediateRefresh() {
+      useLayoutEffect(() => {
+        screen.getByRole("button", { name: ru.imageGeneration.statusRefresh }).click();
+      }, []);
+      return <ImageJobTracker job={queuedJob} onError={onError} onJobUpdate={vi.fn()} onResult={vi.fn()} />;
+    }
+
+    render(<ImmediateRefresh />);
+    await act(async () => { await vi.advanceTimersByTimeAsync(0); });
+
+    expect(webBrowserFetch).toHaveBeenCalledTimes(2);
+    expect(onError).toHaveBeenCalledWith("result");
+    expect(screen.getByRole("alert")).toHaveTextContent(ru.imageGeneration.resultFailure);
+    expect(screen.getByRole("button", { name: ru.imageGeneration.statusRefresh })).toBeEnabled();
   });
 
   it("keeps a pending job offline and retrieves its result immediately after reconnect", async () => {

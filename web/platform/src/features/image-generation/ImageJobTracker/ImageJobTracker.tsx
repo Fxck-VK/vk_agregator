@@ -4,7 +4,7 @@ import { StateNotice, LoadingIndicator } from "@/components/ui/AsyncState/AsyncS
 import { useDictionary } from "@/i18n/LocaleProvider";
 
 
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useLayoutEffect, useRef, useState } from "react";
 
 import { Button } from "@/components/ui/Button/Button";
 import type { Dictionary } from "@/i18n/dictionary";
@@ -84,7 +84,8 @@ export function ImageJobTracker({ job, onError, onJobUpdate, onResult }: Readonl
     return updatedJob;
   }, [job.id, onError, onJobUpdate, onResult]);
 
-  useEffect(() => {
+  // The visible refresh control must be connected before the first paint.
+  useLayoutEffect(() => {
     const polling = startGenerationPolling({
       delayMs: nextImageJobPollDelay,
       initialDelayMs: jobIsTerminal ? undefined : nextImageJobPollDelay(0),

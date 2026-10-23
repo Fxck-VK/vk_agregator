@@ -14,6 +14,7 @@ import type { ConversationImage, ConversationMessage } from "@/lib/web-api/contr
 
 import { collectConversationImages, loadEarlierConversationImages } from "./conversation-images";
 import styles from "./ConversationImageGallery.module.css";
+import { useArtifactDeletion } from "@/features/files/artifact-deletion";
 
 type GalleryContext = {
   openPreview: (image: ConversationImage, trigger: HTMLButtonElement) => void;
@@ -37,7 +38,8 @@ export function ConversationImageGallery({ children, conversationID, hasMoreBefo
   const [previewTrigger, setPreviewTrigger] = useState<HTMLButtonElement | null>(null);
   const requestRef = useRef<AbortController | null>(null);
   const hasLoadedEarlierRef = useRef(false);
-  const items = useMemo(() => collectConversationImages([...earlierMessages, ...messages]), [earlierMessages, messages]);
+  const { deletedIDs } = useArtifactDeletion();
+  const items = useMemo(() => collectConversationImages([...earlierMessages, ...messages]).filter(image => !image.artifact.deleted && !deletedIDs.includes(image.artifact.id)), [earlierMessages, messages, deletedIDs]);
   const selectedIndex = items.findIndex((item) => item.artifact.id === selectedArtifactID);
 
   useEffect(() => () => requestRef.current?.abort(), []);
@@ -91,17 +93,20 @@ export function ConversationAssistantMessage({ message }: Readonly<{ message: Co
   const t = useDictionary();
   const gallery = useContext(GalleryContext);
   const images = collectConversationImages([message]);
+  const deletion = useArtifactDeletion();
+  const visibleImages = images.filter(image => !deletion.isDeleted(image.artifact.id, image.artifact.deleted));
 
   return (
     <>
       <AssistantMessageContent markdown={message.text} omitImageArtifactIDs={images.map((image) => image.artifact.id)} />
-      {message.videos?.map(video => <MediaVideo
+      {message.videos?.map(video => deletion.isDeleted(video.id, video.deleted) ? <StateNotice inline key={video.id}>{t.files.deleted}</StateNotice> : <MediaVideo
         aria-label={msg("conversationImageGallery.generatedVideo")} className={styles.video} controls playsInline preload="metadata"
         key={video.id} src={`/web/v1/video-artifacts/${video.id}`}
       />)}
-      {images.length > 0 && gallery ? (
-        <ImageGenerationGrid count={images.length} aspectRatio={`${images[0].artifact.width || 1}:${images[0].artifact.height || 1}`}>
-          {images.map((image) => (
+      {images.filter(image => deletion.isDeleted(image.artifact.id, image.artifact.deleted)).map(image => <StateNotice inline key={image.artifact.id}>{t.files.deleted}</StateNotice>)}
+      {visibleImages.length > 0 && gallery ? (
+        <ImageGenerationGrid count={visibleImages.length} aspectRatio={`${visibleImages[0].artifact.width || 1}:${visibleImages[0].artifact.height || 1}`}>
+          {visibleImages.map((image) => (
             <div className={styles.image} key={image.artifact.id}>
               <FileCard
                 isRetrying={false}

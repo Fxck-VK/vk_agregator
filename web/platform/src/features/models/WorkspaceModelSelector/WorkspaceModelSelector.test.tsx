@@ -307,7 +307,7 @@ describe("WorkspaceModelSelector", () => {
 
     const dialog = screen.getByRole("dialog", { name: ru.modelSelector.dialogLabel });
     expect(within(dialog).queryByRole("button", { name: /Nano Banana 2/ })).toBeNull();
-    const option = categoryOptions("Изображения").getByRole("button", { name: /GPT Image 2/ });
+    const option = within(dialog).getByRole("button", { name: /GPT Image 2/ });
     expect(option).not.toHaveTextContent("✦");
     fireEvent.click(option);
 

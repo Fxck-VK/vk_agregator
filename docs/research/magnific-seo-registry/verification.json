@@ -1,0 +1,14 @@
+{
+  "unique_urls": 51366,
+  "csv_rows": 51366,
+  "unique_ids": 51366,
+  "observed_edges": 21392,
+  "complete_leaf_sitemaps": 72,
+  "missing_parent_records": [],
+  "dataset_sha256": "d4521cc545a86927287d0e7f1ef255bdc866f0883e5e949c6322a647de1d86d7",
+  "checks": "passed",
+  "xlsx_structure_rows": 971,
+  "xlsx_catalog_groups": 51,
+  "xlsx_filters_and_frozen_headers": "verified in saved XLSX",
+  "xlsx_zip_integrity": "passed"
+}

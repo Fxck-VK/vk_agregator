@@ -88,6 +88,9 @@ export function createLocalSimulator(getScenarios: () => LocalScenarios, options
     if (init.signal?.aborted) return Promise.reject(new DOMException("Aborted", "AbortError"));
     const url = new URL(path, "http://local-preview.invalid");
     const method = (init.method ?? "GET").toUpperCase();
+    // Only the server-gated preview route may persist fixture tombstones.
+    // Other writes still fail closed here and never reach a real backend.
+    if (method === "DELETE" && /^\/web\/v1\/artifacts\/[a-f0-9-]{36}$/i.test(url.pathname)) return undefined;
     if (url.pathname === "/web/v1/input-artifacts" && method === "POST") return upload(init, scenarios.upload);
     if (url.pathname === "/web/v1/image-reference-quote" && method === "GET") {
       const count = Number(url.searchParams.get("output_count") ?? 1);

@@ -10,6 +10,8 @@ import { usePathname, useRouter } from "@/i18n/navigation";
 import { type JSX, useCallback, useEffect, useLayoutEffect, useRef, useState } from "react";
 
 import { MoreIcon } from "@/components/icons/MoreIcon";
+import { ModelIcon } from "@/features/models/ModelIcon/ModelIcon";
+import { getModelIconPath } from "@/features/models/model-icon-registry";
 import selectableStyles from "@/components/ui/selectable-control.module.css";
 import {
   type WorkspaceConversationItem,
@@ -40,12 +42,10 @@ type ConversationRowProps = {
 
 type RowPanel = "actions" | "rename" | "archive" | null;
 
-function ConversationRailIcon() {
+function ConversationRailIcon({ modelID }: { modelID?: string }) {
   return (
     <span aria-hidden="true" className={styles.railIcon} data-sidebar-conversation-icon="true">
-      <svg viewBox="0 0 24 24">
-        <path d="m12 4 1.6 4.4L18 10l-4.4 1.6L12 16l-1.6-4.4L6 10l4.4-1.6L12 4Z" />
-      </svg>
+      <ModelIcon className={styles.modelIcon} src={modelID ? getModelIconPath(modelID) : undefined} />
     </span>
   );
 }
@@ -78,7 +78,7 @@ export function ConversationRow({
   const [hasError, setHasError] = useState(false);
   const [panelSession, setPanelSession] = useState(sidebarSession);
   const actionToggleRef = useRef<HTMLButtonElement>(null);
-  const archiveConfirmRef = useRef<HTMLButtonElement>(null);
+  const archiveCancelRef = useRef<HTMLButtonElement>(null);
   const inlineRenameFormRef = useRef<HTMLFormElement>(null);
   const isPendingRef = useRef(false);
   const panelIsVisibleRef = useRef(false);
@@ -167,7 +167,7 @@ export function ConversationRow({
       renameInputRef.current?.focus();
       renameInputRef.current?.select();
     }
-    if (panel === "archive") archiveConfirmRef.current?.focus();
+    if (panel === "archive") archiveCancelRef.current?.focus();
     if (panel === null && restoreActionFocusRef.current) {
       restoreActionFocusRef.current = false;
       actionToggleRef.current?.focus();
@@ -179,7 +179,7 @@ export function ConversationRow({
 
     shouldFocusRestoredPanelRef.current = false;
     if (panel === "rename") renameInputRef.current?.focus();
-    if (panel === "archive") archiveConfirmRef.current?.focus();
+    if (panel === "archive") archiveCancelRef.current?.focus();
   }, [panel, panelIsVisible]);
 
   // Sidebar Escape can run after layout work but before passive effects.
@@ -244,7 +244,7 @@ export function ConversationRow({
     if (!mountedRef.current || focusTarget.requestGeneration !== requestGenerationRef.current) return;
     if (isCurrentSidebarSession(focusTarget.sidebarSession) && isCurrentPanelOwner(focusTarget.sidebarSession)) {
       if (focusTarget.kind === "rename") renameInputRef.current?.focus();
-      else if (focusTarget.kind === "archive") archiveConfirmRef.current?.focus();
+      else if (focusTarget.kind === "archive") archiveCancelRef.current?.focus();
       else actionToggleRef.current?.focus();
     }
     if (focusTarget.kind === "success") {
@@ -422,7 +422,7 @@ export function ConversationRow({
           data-sidebar-conversation-link="true"
           data-sidebar-tooltip={title}
         >
-          <ConversationRailIcon />
+          <ConversationRailIcon modelID={conversation.first_model_id} />
           <span data-sidebar-conversation-title="true">{title}</span>
         </span>
       ) : (
@@ -435,7 +435,7 @@ export function ConversationRow({
           id={`sidebar-conversation-${conversation.id}`}
           prefetch={false}
         >
-          <ConversationRailIcon />
+          <ConversationRailIcon modelID={conversation.first_model_id} />
           <span data-sidebar-conversation-title="true">{title}</span>
         </Link>
       )}
@@ -499,7 +499,7 @@ export function ConversationRow({
       ) : null}
       {panelIsVisible && panel === "archive" ? (
         <ConversationDeleteDialog
-          confirmRef={archiveConfirmRef}
+          cancelRef={archiveCancelRef}
           conversationTitle={title}
           errorMessage={hasError ? t.conversations.archiveFailure : undefined}
           isPending={isPending}

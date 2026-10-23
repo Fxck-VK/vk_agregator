@@ -1,0 +1,37 @@
+[
+  {
+    "url": "https://docs.magnific.com/modelcontextprotocol",
+    "from_url": "https://www.magnific.com/ai/ai-tattoo-generator",
+    "label": "Read the full setup docs"
+  },
+  {
+    "url": "https://docs.magnific.com",
+    "from_url": "https://www.magnific.com/api",
+    "label": "Documentation"
+  },
+  {
+    "url": "https://docs.magnific.com/api-reference/image-to-video",
+    "from_url": "https://www.magnific.com/api",
+    "label": "Video generation APIGenerate high-quality videos from text prompts using fast, scalable AI models."
+  },
+  {
+    "url": "https://docs.magnific.com/api-reference/remove-background",
+    "from_url": "https://www.magnific.com/api",
+    "label": "Image editing APIAutomate editing at scale. Remove backgrounds, apply filters, and more."
+  },
+  {
+    "url": "https://trust.magnific.com",
+    "from_url": "https://www.magnific.com/business",
+    "label": "See our Trust Center"
+  },
+  {
+    "url": "https://jobs.magnific.com",
+    "from_url": "https://www.magnific.com/photos",
+    "label": "Careers"
+  },
+  {
+    "url": "https://contributor.magnific.com",
+    "from_url": "https://www.magnific.com/photos",
+    "label": "Sell content"
+  }
+]

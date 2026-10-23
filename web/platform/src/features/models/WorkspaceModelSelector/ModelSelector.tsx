@@ -32,6 +32,7 @@ import type { ChatModel } from "@/lib/web-api/contracts";
 import { getModelPresentation } from "../ModelCard/model-card-content";
 import type { ModelCardModel } from "../ModelCard/ModelCard";
 import { ModelIcon } from "../ModelIcon/ModelIcon";
+import { searchModels } from "../model-search";
 import { ModelSelectorOption } from "./ModelSelectorOption";
 import {
   getModelSelectorSections,
@@ -141,18 +142,18 @@ export function ModelSelector({
   const activeCategory = sections.some((section) => section.id === category) ? category : sections[0]?.id ?? "popular";
   const panelId = `${dialogId}-models`;
   const visibleSections = useMemo(() => {
-    const normalizedQuery = query.trim().toLowerCase();
-    const orderedSections = [
+    if (query.trim()) {
+      const results = searchModels(models, query);
+      return [
+        ...(results.length ? [{ id: "search-results", label: t.modelSelector.searchResults, models: results, error: undefined }] : []),
+        ...sections.filter(section => section.error).map(section => ({ ...section, models: [] })),
+      ];
+    }
+    return [
       ...sections.filter((section) => section.id === activeCategory),
       ...sections.filter((section) => section.id !== activeCategory),
     ];
-    return orderedSections.map((section) => ({
-      ...section,
-      models: section.models.filter((model) =>
-        `${model.name} ${model.id}`.toLowerCase().includes(normalizedQuery),
-      ),
-    })).filter((section) => section.models.length > 0 || section.error);
-  }, [activeCategory, query, sections]);
+  }, [activeCategory, models, query, sections, t.modelSelector.searchResults]);
 
   const requestClose = useCallback((restoreTriggerFocus = false) => {
     setPopoverState((currentState) => (

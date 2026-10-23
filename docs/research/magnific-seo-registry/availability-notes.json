@@ -1,0 +1,20 @@
+[
+  {
+    "url": "https://www.magnific.com/audio/music",
+    "date": "2026-10-23",
+    "result": "site-error-rendered",
+    "note": "Вместо содержимого каталога открылась страница ошибки самого сайта. HTTP-статус не установлен."
+  },
+  {
+    "url": "https://www.magnific.com/api/image-generation",
+    "date": "2026-10-23",
+    "result": "connection-closed",
+    "note": "Браузер сообщил ERR_CONNECTION_CLOSED. Адрес из sitemap сохранён, содержимое не подтверждено."
+  },
+  {
+    "url": "https://www.magnific.com/plugins/final-cut-pro",
+    "date": "2026-10-23",
+    "result": "connection-closed",
+    "note": "Браузерная загрузка не завершилась. Адрес сохранён по sitemap и публичным ссылкам."
+  }
+]

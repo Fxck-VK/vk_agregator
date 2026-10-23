@@ -107,7 +107,7 @@ Source order: system/developer instructions > current task > root `AGENTS.md` > 
 
 ## Deployment Invariants
 
-- `main` is deployed through GitHub Actions only: `Docker Images` must build immutable `sha-<commit>` images before `deploy-prod` rolls the VPS forward.
+- `main` is deployed through GitHub Actions only: `docker-images.yml` must build immutable `sha-<commit>` images before `deploy-prod` rolls the VPS forward.
 - Production deploy pulls images from GHCR and runs `scripts/deploy/deploy-prod.*`; building on the VPS is an explicit fallback, not the default path.
 - Post-deploy smoke is mandatory. If deploy or smoke fails, rollback may switch stateless runtime containers to the previous image tag, but schema rollback is never automatic.
 - Deployment secrets live in GitHub Repository Secrets and the VPS `.env` only. Do not commit `PROD_ENV_FILE`, GHCR tokens, Cloudflare tunnel tokens, SSH keys or Telegram notification credentials.
@@ -161,6 +161,14 @@ After edits: list changed files, explain what/why, security/architecture impact,
 Prefer focused checks. Backend: `gofmt`, `go test`, `go vet`, configured linters. Frontend: package scripts for lint/typecheck/test/build. Infra: `docker compose config`.
 
 Do not commit or push unless explicitly requested. If requested, run relevant checks first and commit one logical step to `fastlife_dev` with a short rollback-friendly message.
+
+Before staging an authorized DEV release, capture its full agreed scope with
+`node scripts/ci/release-manifest.mjs --capture .cache/dev-release-manifest.json --base origin/dev-deploy`.
+Review every include/defer decision; deferrals need a written reason and must not
+silently omit a requested change. Before pushing, run
+`scripts/ci/dev-deploy-preflight.ps1` against that inventory and the exact commit.
+Do not describe local and DEV as synchronized unless the deployed inventory was
+verified. See `docs/runbooks/DEV.md` for the complete procedure.
 
 ## Stop Conditions
 

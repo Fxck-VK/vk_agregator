@@ -55,11 +55,16 @@ branch on these bounded values instead of table-name string matching.
 | Conversation summaries | `conversation_summaries` | 90-180 days | Keep only compact context needed for product UX; allow user reset/delete in later privacy work. |
 | VK inbound payloads | `inbound_events.payload` for VK callback events | Metadata-only on new writes; legacy raw rows redacted after 30 days | Preserve idempotency/support columns, but do not keep raw callback body, message text, button payloads, attachments or URLs. |
 | Provider raw payloads | raw provider request/response/debug payloads | Avoid storage; if enabled, 1-7 days redacted | Never expose to users. Never log secrets, private URLs, prompt bodies or raw PII. |
-| Artifact binaries | generated photos/videos/files, provider originals, VK-ready variants, reference uploads | By product tier and artifact type | Free/temp/failed artifacts can expire earlier; paid/user-visible artifacts live longer. Metadata and objects must expire consistently. |
+| Generated file binaries | output images/videos/audio/documents and their renditions | Two calendar months from original creation (UTC), across standard/free/paid tiers | Migration 000061 persists the deadline in expires_at. Earlier explicit deletion wins. Original and preview share a deadline; text conversation artifacts and uploaded inputs are excluded. |
+| Other artifact binaries | uploaded references, intermediates, temporary/failed media | By artifact type and lifecycle | Separate policies remain in force. Do not apply the generated-file promise to input files or chat text. |
 | Analytics aggregates | daily/monthly DAU, jobs by model, payments, funnel, provider errors | Long-term | Store aggregate, bounded-label, non-PII records. Do not use raw prompts/provider payloads as analytics source of truth. |
 | Temporary runtime state | Redis rate limits, cooldowns, locks, queues, menu/dialog state | Minutes to days | Use TTLs. Redis is not the durable source of truth. |
 
 ## Suggested Config Defaults
+
+These generic class defaults do not define the generated-file product deadline.
+Generated non-text outputs and their variants use the explicit two-calendar-month
+policy described below, including rows whose tier is `standard`.
 
 These names are the runtime policy knobs used by worker maintenance. They stay
 configurable so operators can lengthen/shorten windows without schema changes.
@@ -281,6 +286,39 @@ for money.
 
 ## Artifact Lifecycle Runtime
 
+### Explicit user file deletion
+
+`DELETE /web/v1/artifacts/{artifactID}` requires a browser session, same Origin,
+CSRF proof and exact `owner_account_id`; foreign/missing IDs return 404. The
+producing job must be a succeeded `source=web` job that owns the output ID. Active
+input/continuation consumers return 409. Repeat deletion returns 202 safely.
+
+The transaction revokes access with `status=deleted`, clears the optional public
+URL and expires the original plus all recorded variants. `deleted_at` and cleared
+storage coordinates confirm the later physical purge. The request attempts object
+removal for up to three seconds; cancellation, store failure or a DB cleanup-mark
+failure leaves durable expiration candidates for maintenance. Explicit expirations
+are processed even if all age-based retention windows are disabled. Storage stays
+private; existing same-origin reads reject deleted artifacts immediately. Bytes
+already downloaded and previously issued signed URLs cannot be recalled; legacy
+signed URLs remain bounded by their original TTL if storage deletion is delayed.
+
+Migration `000060_artifact_deletion_guards` adds only guards: no content is deleted
+by applying it. Job admission locks referenced artifacts, including source jobs in
+music params. Variant writes lock the parent across storage upload and row insertion;
+late variants and stale updates cannot resurrect a tombstone. Original and variant
+objects are private per-artifact keys; unrelated generated results are preserved.
+
+Result metadata keeps deleted IDs as `deleted=true, size_bytes=0`; no readable URL
+is provided. The files UI hides those entries and the original chat shows a deleted
+file notice. Remaining outputs, prompts, message sequence, job idempotency, moderation
+records and financial history remain. Completion/capture readiness does not accept
+tombstones. Backups and provider-side retention have their own lifecycle.
+
+The local website's preview mode persists only fixture tombstone IDs in ignored
+`web/platform/.cache/local-preview-deleted-artifacts.json`. It never removes public
+source assets or forwards preview mutations to a live backend.
+
 Postgres artifact metadata is the source of truth for cleanup decisions.
 S3/MinIO contains only the binary object bytes. The maintenance worker must
 expire metadata first and delete object storage only in a later, retry-safe
@@ -327,6 +365,34 @@ guessing from object storage. Generic artifact cleanup must not touch ledger,
 payment, balance, job status or owner metadata.
 
 ## Operator Control
+
+### Generated file lifetime: two calendar months
+
+The user-approved product policy is enforced by migration
+`000061_generated_output_retention`: output artifacts with media type `image`,
+`video`, `audio` or `document` get `expires_at = created_at + interval '2 months'`
+calculated in UTC. This is a calendar-month deadline (including month-end/leap
+year clamping), not a rolling 60-day approximation. Existing earlier expirations
+are preserved; metadata updates, views and later preview generation cannot extend
+it. Existing original/variant rows are backfilled; newly inserted variants inherit
+the parent's deadline. Shortening the parent's expiry cascades to existing variants.
+
+The existing maintenance worker consumes these explicit expirations and deletes
+the original/rendition blobs before recording deleted tombstones. Cleanup runs in
+batches on its configured interval (currently hourly on DEV); this is not a promise
+of physical removal at the exact second. Storage failures retry on later passes.
+Chat text, uploaded inputs, prompts, job/payment/ledger metadata and existing backup
+lifecycles are not changed. An earlier user deletion remains supported.
+
+On the inspected DEV database, output files use the `standard` tier. Legacy
+free=7/paid=365-day defaults alone did not cover these rows; explicit expiry makes
+the generated-file rule independent of tier classification. Keep the maintenance
+worker enabled. Do not use bucket-wide object expiry: that could also delete
+uploaded inputs while leaving application metadata inconsistent.
+
+The down migration removes future assignment triggers only and retains existing
+deadlines. It cannot restore physically purged bytes. Retention changes and any
+restoration from backups require a separate reviewed operation.
 
 Retention and analytics must be observable without exposing user content or
 provider data. The admin API exposes protected read-only endpoints for that

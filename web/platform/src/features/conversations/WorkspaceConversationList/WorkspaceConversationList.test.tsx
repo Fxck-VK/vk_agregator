@@ -35,6 +35,32 @@ function ConversationListProbe({ conversation = createdConversation }: { convers
 }
 
 describe("WorkspaceConversationListProvider", () => {
+  it("pins only the first accepted model and retains it when the title changes", () => {
+    function Probe() {
+      const { conversations, pinConversationModel, updateConversationTitle } = useWorkspaceConversationList();
+      return <>
+        <button onClick={() => pinConversationModel(createdConversation.id, "gpt_5")}>First</button>
+        <button onClick={() => pinConversationModel(createdConversation.id, "claude_sonnet_4_6")}>Switch</button>
+        <button onClick={() => updateConversationTitle(createdConversation.id, "Renamed")}>Rename</button>
+        <output>{conversations[0]?.first_model_id}:{conversations[0]?.title}</output>
+      </>;
+    }
+    render(<WorkspaceConversationListProvider accountId="account-a" initialConversations={[createdConversation]}><Probe /></WorkspaceConversationListProvider>);
+    fireEvent.click(screen.getByRole("button", { name: "First" }));
+    fireEvent.click(screen.getByRole("button", { name: "Switch" }));
+    fireEvent.click(screen.getByRole("button", { name: "Rename" }));
+    expect(screen.getByRole("status")).toHaveTextContent("gpt_5:Renamed");
+  });
+
+  it("accepts origin metadata even when timestamps and title have not changed", () => {
+    function Probe() {
+      const { conversations, replaceConversation } = useWorkspaceConversationList();
+      return <><button onClick={() => replaceConversation({ ...createdConversation, first_model_id: "gpt_5" })}>Refresh</button><output>{conversations[0]?.first_model_id}</output></>;
+    }
+    render(<WorkspaceConversationListProvider accountId="account-a" initialConversations={[createdConversation]}><Probe /></WorkspaceConversationListProvider>);
+    fireEvent.click(screen.getByRole("button", { name: "Refresh" }));
+    expect(screen.getByRole("status")).toHaveTextContent("gpt_5");
+  });
   afterEach(() => { cleanup(); clearConversationCache(); vi.unstubAllGlobals(); });
 
   it("restores a previously loaded list after remount and keeps it through a failed refresh", async () => {

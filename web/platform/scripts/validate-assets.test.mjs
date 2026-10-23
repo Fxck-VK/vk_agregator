@@ -26,6 +26,12 @@ test("accepts a kebab-case MP4 video asset", () => {
   );
 });
 
+test("accepts a local editorial WebM clip", () => {
+  assert.deepEqual(inspectAssetEntries([
+    { relativePath: "public/assets/videos/marketing/creative-suite-image.webm" },
+  ]), []);
+});
+
 test("accepts local WOFF2 fonts with their license and source metadata", () => {
   assert.deepEqual(inspectAssetEntries([
     { relativePath: "public/assets/fonts/ibm-plex-sans/ibm-plex-sans-semibold.woff2", fontSignature: "wOF2" },

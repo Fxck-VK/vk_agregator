@@ -237,6 +237,9 @@ func (h *Handler) getSpeechJobResult(w http.ResponseWriter, r *http.Request) {
 	}
 	artifacts := []safeMusicArtifact{}
 	for _, a := range result.Artifacts {
+		if a.Deleted {
+			continue
+		}
 		artifacts = append(artifacts, safeMusicArtifact{ID: a.ID, Kind: string(a.MediaType), URL: "/web/v1/speech-artifacts/" + a.ID.String()})
 	}
 	writeJSON(w, 200, struct {

@@ -8,6 +8,12 @@ dist/
 coverage.out
 vendor/
 
+# Local downloaded reference bundles and generated inspection/preview exports.
+# Product source, bundled website media and research registries remain tracked.
+/references/*
+!/references/README.md
+/outputs/
+
 # Node / Frontend
 node_modules/
 npm-debug.log*

@@ -15,7 +15,7 @@ describe("ModalBackdrop contract", () => {
     "src/components/media/MediaPreviewDialogTemplate/MediaPreviewDialogTemplate.tsx",
     "src/features/image-generation/ImageTemplatePicker/ImageTemplatePicker.tsx",
     "src/components/chat/ChatFilePicker/ChatFilePicker.tsx",
-    "src/features/conversations/ConversationRow/ConversationDeleteDialog.tsx",
+    "src/components/ui/ConfirmDialog/ConfirmDialog.tsx",
   ];
 
   it.each(modalConsumers)("uses the shared backdrop in %s", (consumerPath) => {

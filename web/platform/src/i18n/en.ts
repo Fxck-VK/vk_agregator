@@ -1,8 +1,12 @@
-import { legalText } from "./legal";
 import { brandName, brandMonogram } from "@/config/brand";
 import { accountAuthText } from "./account-auth";
+import { marketingEn } from "./marketing-en";
+import { imageLandingText } from "./image-landing";
+import { legalText } from "./legal";
 
 export const en = {
+  imageLanding: imageLandingText.en,
+  marketing: marketingEn,
   auth: accountAuthText.en,
   legal: legalText.en,
   preloading: {
@@ -354,6 +358,7 @@ export const en = {
     dialogLabel: "Choose an AI model",
     searchLabel: "Search AI models",
     searchPlaceholder: "Search AI models",
+    searchResults: "Search results",
     categories: {
       popular: "Popular",
       images: "Images",
@@ -438,6 +443,15 @@ export const en = {
     noReadyArtifact: "The file will appear when the task is complete.",
     download: "Download",
     deleteUnavailable: "File deletion is not available yet",
+    deleteLabel: "Delete file",
+    deleteTitle: "Delete file?",
+    deleteDescription: "The file will be removed from My Files and its original conversation, including the original and previews in storage. This cannot be undone.",
+    deleteCancel: "Cancel",
+    deleteConfirm: "Delete",
+    deletePending: "Deleting…",
+    deleteFailure: "Unable to delete the file. Please try again.",
+    deleteInUse: "An unfinished job is using this file. Wait for it to finish and try again.",
+    deleted: "File deleted",
     previewDialogLabel: "File preview",
     closePreview: "Close preview",
     previewFilesLabel: "Files to preview",

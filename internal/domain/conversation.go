@@ -45,6 +45,9 @@ const (
 // model context. It is not sent to providers directly; workers render a bounded
 // prompt from its messages and summary.
 type Conversation struct {
+	// FirstModelID is derived from the earliest accepted, account-owned Web job.
+	// It is independent of the model selected for subsequent turns.
+	FirstModelID     string                  `json:"first_model_id,omitempty"`
 	ID               uuid.UUID               `json:"id"`
 	UserID           uuid.UUID               `json:"user_id"`
 	AccountID        uuid.UUID               `json:"account_id,omitempty"`

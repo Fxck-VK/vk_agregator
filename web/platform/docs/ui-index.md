@@ -2,6 +2,11 @@
 
 Статус: активный. Входная точка для задач по интерфейсу `web/platform`.
 
+Юридические ссылки, страницы документов, принятие условий и отдельная рассылка:
+[`features/legal`](../src/features/legal/LegalConsentGate.tsx),
+[контракт компонентов](ui-catalog.md#legal-documents),
+[runtime и публикация](../../../docs/runbooks/WEB_LEGAL.md).
+
 Тексты и язык интерфейса: [локализация](localization.md). Использовать общий `LocaleProvider`, `useDictionary` / `useMessages`; язык переключает готовый `LanguageSwitcher`. Не добавлять прямые импорты `ru` и надписи вне словарей.
 
 Источник бренда сайта и писем — [branding/brand.json](../branding/brand.json); [config/brand.ts](../src/config/brand.ts) экспортирует его настройки: `brandName`, `brandLogoPath`, `brandIcons` для вкладки и устройств. Основной логотип выводит общий [BrandLogo](../src/components/brand/BrandLogo/BrandLogo.tsx), включая боковую панель, публичную шапку и подвалы; фирменный чат использует тот же путь. Фирменное начертание — общий [BrandName / BrandText](../src/components/brand/BrandName/BrandName.tsx), SVG-надписи зарегистрированы в `branding/brand.json` по ключу из имени бренда. Комплект Epifera (знак, надпись и значки вкладки/устройств) получен из SVG, присланного владельцем. Контуры сохранены, точка над i градиентная; цвет букв наследуется от темы. Если для нового имени SVG нет, используется исходный `--font-sans` / Geist. [Границы настройки](localization.md#общая-система-словарей).
@@ -18,6 +23,9 @@
 | Запрос / задача | Готовое решение | Читать точечно |
 | --- | --- | --- |
 | Имя пользователя в меню аккаунта | `AccountControl` → `AccountMenu`: серверный `display_name`, иначе прежняя подпись почты/провайдера; без запросов к VK | [Аккаунт](ui-catalog.md#browser-account) |
+| Смена светлой, тёмной и системной темы | Только `AccountMenu` в личном кабинете через `ModeSwitchPanel`; в публичных шапках и других местах переключателя нет | [Ограничения](ui-catalog.md#limits) |
+| Публичная главная по референсу Magnific | `MarketingHome` + `MarketingHeader`: первый экран, вкладки, карточки, FAQ; `/ru` и `/en` | [Публичная главная](ui-catalog.md#marketing-home) |
+| Демонстрация публичной страницы генератора изображений | `ImageToolLanding` в `/ru/ai/image-generator` и `/en/ai/image-generator`: иллюстрации, модели, инструкция и FAQ; noindex, переход в существующий генератор | [Пример страницы инструмента](ui-catalog.md#image-tool-preview) |
 | Вход, регистрация, восстановление, основная и одна резервная почта, замена и сессии | `LoginWindow`/`LoginShowcase` (выбор способа входа и промослайды), `LoginForm`, `EmailRegistration`, общий `completeSignIn` с проверкой cookie-сессии и новым документом; `CredentialField`, `AccountSecurity`, `InputSurface`, `Button`, `AsyncState` и серверная доступность способов | [Аккаунт](ui-catalog.md#browser-account) |
 | Приглашения на сайт и статистика аккаунта | `ProfileReferralProgram`: код в памяти текущей сессии, независимое обновление `/web/v1/referrals/stats`; `InviteEntry`, общий `Button`/`StateNotice`; бонусы пока выключены | [Аккаунт](ui-catalog.md#browser-account), [контракт приглашений](../../../docs/runbooks/WEB_REFERRALS.md) |
 | Фирменная страница 404 с рабочим меню | `NotFoundContent` внутри WorkspaceFrame / GuestWorkspaceFrame; общий Button outline и языковой Link | [404](ui-catalog.md#not-found), [дизайн и проверка](not-found-page-plan.md) |
@@ -27,6 +35,7 @@
 | «1-й вариант», подсветить текст/иконку при наведении, ссылка-действие | `itemVariant="action"` + `control`; вне панели — `actionItems` + `control` | [Состояния](ui-catalog.md#states), [пример 1](ui-catalog-examples.md#example-1) |
 | «2-й вариант», выбранная кнопка белая с рамкой | `PopoverOption`, `itemVariant="selection"` | [Состояния](ui-catalog.md#states), [пример 2](ui-catalog-examples.md#example-2) |
 | «Удалить чат»: серый обычно, красный при наведении | Общий action-стиль + локальное исключение `ConversationRow` | [Состояния](ui-catalog.md#states), [пример 1](ui-catalog-examples.md#example-1) |
+| Подтверждение удаления чата или файла | Общий `ConfirmDialog`: одна поверхность и красная кнопка, отмена первой в фокусе, pending/error и возврат фокуса; сценарий владеет текстами и запросом | [Подтверждение действия](ui-catalog.md#confirm-dialog) |
 | Тумблер, режимы, тема, только иконки | `ModeSwitchPanel`; `fullWidth` для всей доступной ширины, `iconOnly` для иконок | [Панели](ui-catalog.md#panels), [пример 3](ui-catalog-examples.md#example-3) |
 | Раскрывающиеся вопросы и ответы | Общий `FAQ`, `items`; `name` для одного открытого ответа | [FAQ](ui-catalog.md#faq) |
 | Кнопка или счётчик внутри поля | `InputControlChip` button/div | [Ввод](ui-catalog.md#input), [радиус и размеры](ui-catalog.md#tokens) |
@@ -47,6 +56,7 @@
 | Ползунок, толщина кисти | `RangeSlider` | [Ввод](ui-catalog.md#input), [пример 4](ui-catalog-examples.md#example-4) |
 | Привычная сетка фото, сохранить пропорции | `MasonryGrid`, непосредственные дети `li`; CSS-колонки | [Сетка и фото](ui-catalog.md#media), [пример 6](ui-catalog-examples.md#example-6) |
 | Карточка/просмотр результата в «Моих файлах» | `FileCard` + `FilePreviewDialog`; готовая сетка — `FilesGrid`; приватные превью сохраняются в бэкенде, просмотр использует оригинал | [Сетка и фото](ui-catalog.md#media), [пример 7](ui-catalog-examples.md#example-7), [хранение превью](preloading.md) |
+| Удаление созданного файла из библиотеки и диалога | `ArtifactDeleteButton` + `useArtifactDeletion` и account-scoped `WorkspaceDataCache`: подтверждение, DELETE, скрытие файла/превью и отметка в диалоге; байты очищает backend | [Сетка и фото](ui-catalog.md#media), [контракт удаления](../../../docs/DATA_RETENTION_POLICY.md#explicit-user-file-deletion) |
 | Видеорезультаты в «Моих файлах» | `VideoFiles` → `MasonryGrid` + `MediaVideo`; первая страница и результаты из кеша аккаунта, проверка в фоне | [Сетка и фото](ui-catalog.md#media), [загрузка](preloading.md) |
 | Выбрать готовое фото для сообщения | `ChatFilePicker` → `MasonryGrid` + `FileCard selectionAction`; вкладки — `ModeSwitchPanel` | [Сетка и фото](ui-catalog.md#media) |
 | Фото в диалоге, просмотр только фото этого чата | `ConversationImageGallery` → общие FileCard/FilePreviewDialog | [Сетка и фото](ui-catalog.md#media) |
@@ -61,9 +71,10 @@
 | Общая прокрутка / scrollbar | `ScrollArea` | [Прокрутка](ui-catalog.md#overlays), [пример 9](ui-catalog-examples.md#example-9) |
 | Выбор нейросети / карточка модели | `ModelSelector`, его адаптеры; `ModelCard` и `ModelIcon` | [Модели](ui-catalog.md#models), [пример 8](ui-catalog-examples.md#example-8) |
 | Назначить иконку модели по ID | `model-icon-registry.ts` → `getModelPresentation` → существующий `ModelIcon`; назначены все модели текущего каталога, версии одной семьи используют общий знак модели или разработчика | [Модели](ui-catalog.md#models), [источники SVG](../public/assets/images/models/README.md) |
+| Закрепить значок чата за первой нейросетью | `ConversationRow` → `ModelIcon` по серверному `first_model_id`; смена модели внутри чата значок не меняет | [Иконки](ui-catalog.md#icons-motion) |
 | Цвет запасной иконки модели, белых кнопок и QR | Общие переменные в `globals.css`; `ModelIcon` окрашивает SVG через CSS-маску | [Токены](ui-catalog.md#tokens), [модели](ui-catalog.md#models) |
 | Единые данные моделей, категорий, возможностей и цен | `GenerationCatalogProvider.initialSource` → общий `loadModelCatalog` → `/web/v1/models`; специализированные загрузчики — проекции, свежий серверный снимок используется без повторного запроса | [Модели](ui-catalog.md#models), [загрузка и кеш](preloading.md), [контракт бэкенда](../../../docs/runbooks/MODEL_CATALOG.md) |
-| Лента подборок моделей, до пяти в категории | `ModelSelector categoryModelIds` → общий `ModeSwitchPanel`; выбор категории поднимает её блок, поиск охватывает все подборки | [Модели](ui-catalog.md#models), [панели](ui-catalog.md#panels) |
+| Лента подборок моделей и умный поиск | `ModelSelector categoryModelIds` → общий `ModeSwitchPanel`; без запроса до пяти в категории, поиск по всему переданному доступному каталогу без повторов: русский ввод, опечатки, неполное название и раскладка | [Модели](ui-catalog.md#models), [панели](ui-catalog.md#panels) |
 | Модель слева от отправки в начатом диалоге | `ConversationModelSelector` → `ModelSelector variant="composer"`; общий generation-model-catalog и useGenerationControls | [Модели](ui-catalog.md#models) |
 | Быстрые кнопки моделей под полем на главной, переключить без перехода | `WorkspaceHero` + `FeaturedModelShortcuts`; один WorkspacePrompt → ChatComposer, сменные ImageGenerationControls | [Модели](ui-catalog.md#models), [ввод](ui-catalog.md#input) |
 | Ширина страницы / публичные блоки | `WorkspacePageFrame`; публичная часть — `PageContainer` и свои компоненты | [Оболочки](ui-catalog.md#models) |
@@ -78,8 +89,6 @@
 | Показать прикреплённые фото в сообщении | `ConversationInputImages`: чтение через API, ожидание и повтор | [Вложения](ui-catalog.md#chat-attachments) |
 | Готового решения нет / похожие реализации расходятся | Сначала проверить ограничения и поискать в коде | [Ограничения](ui-catalog.md#limits) |
 
-Важные границы: `itemVariant` действует на потомков с `control`; 0,5 rem не является радиусом всех компонентов; удаление в `FileCard` пока disabled, а кнопки анимации/улучшения/удаления фона пока не запускают операции. Полные сигнатуры и исключения открывай только по нужной строке.
+Важные границы: `itemVariant` действует на потомков с `control`; 0,5 rem не является радиусом всех компонентов; кнопки анимации/улучшения/удаления фона пока не запускают операции. Удаление файла — отдельное рабочее действие с подтверждением. Полные сигнатуры и исключения открывай только по нужной строке.
 
 Поддержка: индекс хранит маршрут к решению, каталог — его контракт и ограничения, примеры — способ подключения. При изменении решения обновляй эти места по необходимости в той же правке; не превращай индекс в копию каталога или журнал работ. Архивный черновик и JSON не являются обычной точкой входа.
-
-Legal document pages, login/payment notices and account choices: [components](ui-catalog.md#legal-documents), [runtime](../../../docs/runbooks/WEB_LEGAL.md).

@@ -24,13 +24,15 @@ export const videoJobSchema = z
 
 export const videoArtifactMetadataSchema = z
   .object({
+    deleted: z.boolean().optional(),
     id: z.string().uuid(),
     mime_type: z.string().trim().startsWith("video/"),
-    size_bytes: z.number().int().positive(),
+    size_bytes: z.number().int().nonnegative(),
     width: z.number().int().nonnegative(),
     height: z.number().int().nonnegative(),
     duration_ms: z.number().int().nonnegative(),
   })
+  .refine(artifact => artifact.deleted || artifact.size_bytes > 0, "Available files require positive size")
   .strict();
 
 export const videoJobResultSchema = z

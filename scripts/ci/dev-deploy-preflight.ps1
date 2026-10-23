@@ -1,6 +1,7 @@
 [CmdletBinding()]
 param(
     [ValidateRange(0, 3600)][int]$LockTimeoutSeconds = 300,
+    [string]$ManifestPath = ".cache/dev-release-manifest.json",
     [switch]$Force
 )
 
@@ -75,6 +76,10 @@ if ($branch -ne "dev-deploy" -and $upstream -ne "origin/dev-deploy") {
     throw "DEV preflight is restricted to dev-deploy or a branch tracking origin/dev-deploy; branch=$branch upstream=$upstream"
 }
 
+$commitSha = Get-GitOutput -Arguments @("rev-parse", "HEAD")
+# Verify the agreed inventory even when the exact-commit test cache is warm.
+Invoke-Native -Command "node" -Arguments @("scripts/ci/release-manifest.mjs", "--check", $ManifestPath, "--commit", $commitSha)
+
 $worktreeChanges = Get-GitOutput -Arguments @("status", "--porcelain", "--untracked-files=all")
 if (-not [string]::IsNullOrWhiteSpace($worktreeChanges)) {
     throw "DEV preflight requires a completely clean worktree. Commit, stash, or remove local changes first."
@@ -84,10 +89,9 @@ if (-not [string]::IsNullOrWhiteSpace($worktreeChanges)) {
 Assert-TrivyFilesystemScanScope -RepositoryRoot $repoRoot -ConfigPath (Join-Path $repoRoot "trivy-filesystem.yaml")
 Assert-CIBashEnvironment
 
-$commitSha = Get-GitOutput -Arguments @("rev-parse", "HEAD")
 $gitDirectory = Get-GitOutput -Arguments @("rev-parse", "--absolute-git-dir")
 $npmCommand = if ($IsWindows) { "npm.cmd" } else { "npm" }
-$policyVersion = "v3"
+$policyVersion = "v4"
 $stageNames = @("tests", "audit", "govulncheck", "infrastructure", "trivy")
 
 $runStage = {
@@ -98,11 +102,14 @@ $runStage = {
             Invoke-Native -Command "git" -Arguments @("diff", "--check", "$commitSha^", $commitSha)
             Invoke-Native -Command "go" -Arguments @("test", "./...")
             Invoke-Native -Command "go" -Arguments @("vet", "./...")
+            Invoke-Native -Command "go" -Arguments @("run", "./scripts/models/check")
+            Invoke-Native -Command "go" -Arguments @("run", "./scripts/models/preview", "-check")
             foreach ($packagePath in @("web/miniapp", "web/admin", "web/platform")) {
                 Install-NpmDependenciesIfNeeded -PackagePath $packagePath
                 Invoke-Native -Command $npmCommand -Arguments @("--prefix", $packagePath, "run", "lint")
                 Invoke-Native -Command $npmCommand -Arguments @("--prefix", $packagePath, "run", "typecheck")
                 Invoke-Native -Command $npmCommand -Arguments @("--prefix", $packagePath, "run", "test")
+                Invoke-Native -Command $npmCommand -Arguments @("--prefix", $packagePath, "run", "build")
             }
             Invoke-Native -Command $npmCommand -Arguments @("--prefix", "web/platform", "run", "test:packaging")
         }
@@ -138,6 +145,12 @@ $runStage = {
             if ($LASTEXITCODE -ne 0) { throw "Documentation regression tests failed" }
             & pwsh -NoProfile -File scripts/ci/validate-docs.ps1
             if ($LASTEXITCODE -ne 0) { throw "Documentation validation failed" }
+            Invoke-Native -Command "node" -Arguments @("--test", "scripts/ci/release-manifest.test.mjs")
+            foreach ($scriptPath in @("scripts/ci/test-retry-network.sh", "scripts/ci/test-validate-dev-release.sh")) {
+                $scriptResult = Invoke-CIBashScript -RepositoryRoot $repoRoot -ScriptPath $scriptPath
+                $scriptResult.Output | Out-Host
+                if ($scriptResult.ExitCode -ne 0) { throw "Release reliability regression failed: $scriptPath" }
+            }
             $bashResult = Invoke-CIBashScript -RepositoryRoot $repoRoot -ScriptPath "scripts/ci/test-wait-for-github-workflow.sh"
             $bashResult.Output | Out-Host
             if ($bashResult.ExitCode -ne 0) { throw "Bash workflow monitor tests failed with exit code $($bashResult.ExitCode)" }

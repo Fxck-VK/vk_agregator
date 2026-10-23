@@ -12,6 +12,8 @@ import { useDictionary, useMessages } from "@/i18n/LocaleProvider";
 import type { Dictionary } from "@/i18n/dictionary";
 
 import fileCardStyles from "../FileCard/FileCard.module.css";
+import { ArtifactDeleteButton } from "../ArtifactDeleteButton";
+import { useArtifactDeletion } from "../artifact-deletion";
 import styles from "./VideoFiles.module.css";
 import {
   createVideoFilePreviewQueue,
@@ -32,6 +34,7 @@ type VideoFilesProps = {
 };
 
 export function VideoFiles({ showEmpty = true, visible, onHasFilesChange }: Readonly<VideoFilesProps>) {
+  const { deletedIDs } = useArtifactDeletion();
   const t = useDictionary();
   const cache = useOptionalWorkspaceDataCache();
   const [cachedFirstPage] = useState(() => cache?.getVideoFilesFirstPage());
@@ -155,24 +158,19 @@ export function VideoFiles({ showEmpty = true, visible, onHasFilesChange }: Read
   }, []);
 
   useEffect(() => {
-    if (hasLoaded) onHasFilesChange?.(jobs.length > 0);
-  }, [hasLoaded, jobs.length, onHasFilesChange]);
+    if (hasLoaded) onHasFilesChange?.(jobs.some(job => !results[job.id] || results[job.id].artifacts.some(artifact => !artifact.deleted && !deletedIDs.includes(artifact.id))));
+  }, [hasLoaded, jobs, results, deletedIDs, onHasFilesChange]);
 
   if (!visible) {
     return null;
   }
 
   const initialLoading = pageState === "loading" && !hasLoaded;
-  const empty = hasLoaded && jobs.length === 0;
+  const visibleJobs = jobs.filter(job => !results[job.id] || results[job.id].artifacts.some(artifact => !artifact.deleted && !deletedIDs.includes(artifact.id)));
+  const empty = hasLoaded && visibleJobs.length === 0;
 
   return (
     <section aria-busy={pageState === "loading" || loadMoreState === "loading" || undefined} aria-label={t.files.categories.video} className={styles.root}>
-      <div className={styles.actions}>
-        <Button disabled={pageState === "loading"} onClick={() => void loadFirstPage()} variant="outline">
-          {t.imageHistory.refresh}
-        </Button>
-      </div>
-
       {initialLoading ? <SkeletonGrid count={6} label={t.files.loading} /> : null}
       {pageState === "error" ? (
         <StateNotice action={{ label: t.files.retry, onClick: () => void loadFirstPage() }} kind="error">
@@ -185,9 +183,9 @@ export function VideoFiles({ showEmpty = true, visible, onHasFilesChange }: Read
         </StateNotice>
       ) : null}
 
-      {jobs.length > 0 ? (
+      {visibleJobs.length > 0 ? (
         <MasonryGrid>
-          {jobs.map((job) => (
+          {visibleJobs.map((job) => (
             <li key={job.id}>
               <VideoFileCard
                 job={job}
@@ -223,16 +221,20 @@ function VideoFileCard({ job, onRequestResult, result, resultState }: Readonly<{
   resultState: ResultState;
 }>) {
   const t = useDictionary();
+  const deletion = useArtifactDeletion();
   const canPreview = job.status === "succeeded";
 
   if (result !== null) {
+    const artifacts = result.artifacts.filter(artifact => !deletion.isDeleted(artifact.id, artifact.deleted));
+    if (!artifacts.length) return null;
     return (
       <article aria-label={job.prompt} className={`${fileCardStyles.card} ${fileCardStyles.mediaCard}`}>
-        {result.artifacts.map((artifact) => {
+        {artifacts.map((artifact) => {
           const artifactPath = videoArtifactPath(artifact.id);
 
           return (
             <div className={fileCardStyles.mediaItem} key={artifact.id}>
+              <ArtifactDeleteButton artifactID={artifact.id} className={fileCardStyles.deleteControl} />
               <MediaVideo
                 aria-label={`${t.files.categories.video}: ${job.prompt}`}
                 className={fileCardStyles.media}

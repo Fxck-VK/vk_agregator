@@ -210,6 +210,10 @@ jobs:
     name: Web Platform
     # Playwright 1.60 Chromium is not available on the new Ubuntu 26.04 runner.
     runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    env:
+      npm_config_fetch_retries: "2"
+      npm_config_fetch_timeout: "30000"
     steps:
       - name: Checkout
         uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4.3.1
@@ -225,6 +229,7 @@ jobs:
         run: node scripts/ci/validate-npm-lockfiles.mjs web/platform/package-lock.json
 
       - name: Install dependencies
+        timeout-minutes: 5
         run: npm --prefix web/platform ci
 
       - name: Lint
@@ -237,22 +242,30 @@ jobs:
         run: npm --prefix web/platform run test
 
       - name: Verify DEV access gateway with Nginx
+        timeout-minutes: 4
         shell: bash
         run: |
           set -euo pipefail
-          sudo apt-get update
-          sudo apt-get install -y --no-install-recommends nginx
+          bash scripts/ci/retry-network.sh --timeout-seconds 90 -- bash -c \
+            'sudo apt-get -o Acquire::Retries=2 -o Acquire::http::Timeout=20 update && sudo env DEBIAN_FRONTEND=noninteractive apt-get -o Acquire::Retries=2 -o Acquire::http::Timeout=20 install -y --no-install-recommends nginx'
           cd web/platform
           NGINX_BINARY=/usr/sbin/nginx npx vitest run src/lib/dev-access/gateway.integration.test.ts
 
       - name: Verify packaging contract
         run: npm --prefix web/platform run test:packaging
 
-      - name: Verify session recovery across browser tabs
+      - name: Install Chromium and system dependencies
+        timeout-minutes: 4
         working-directory: web/platform
-        run: |
-          npx playwright install --with-deps chromium
-          npm run test:session-browser
+        shell: bash
+        env:
+          PLAYWRIGHT_DOWNLOAD_CONNECTION_TIMEOUT: "30000"
+        run: bash ../../scripts/ci/retry-network.sh --timeout-seconds 90 -- npx --no-install playwright install --with-deps chromium
+
+      - name: Verify session recovery across browser tabs
+        timeout-minutes: 3
+        working-directory: web/platform
+        run: npm run test:session-browser
 
       - name: Audit runtime dependencies
         shell: bash
@@ -305,6 +318,11 @@ jobs:
       - name: Checkout
         uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4.3.1
 
+      - name: Set up Node.js
+        uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
+        with:
+          node-version: "22"
+
       - name: Test documentation validation
         shell: pwsh
         run: ./scripts/ci/test-docs-validation.ps1
@@ -320,6 +338,15 @@ jobs:
       - name: Test DEV preflight orchestration
         shell: pwsh
         run: ./scripts/ci/test-dev-deploy-preflight.ps1
+
+      - name: Test release inventory
+        run: node --test scripts/ci/release-manifest.test.mjs
+
+      - name: Test bounded dependency downloads and DEV source selection
+        shell: bash
+        run: |
+          bash scripts/ci/test-retry-network.sh
+          bash scripts/ci/test-validate-dev-release.sh
 
       - name: Test Trivy filesystem exclusion scope
         shell: pwsh

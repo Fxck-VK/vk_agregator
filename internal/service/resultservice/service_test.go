@@ -186,7 +186,7 @@ func TestGetResultReturnsOnlySafeMetadataForEveryAllowedArtifact(t *testing.T) {
 		"ID", "Operation", "Modality", "Status", "CreatedAt", "UpdatedAt", "Artifacts",
 	})
 	assertExactFields(t, ArtifactMetadata{}, []string{
-		"ID", "MediaType", "MIMEType", "SizeBytes", "Width", "Height", "DurationMS",
+		"Deleted", "ID", "MediaType", "MIMEType", "SizeBytes", "Width", "Height", "DurationMS",
 	})
 
 	payload, err := json.Marshal(got)

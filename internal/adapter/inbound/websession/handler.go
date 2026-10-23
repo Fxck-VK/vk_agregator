@@ -319,6 +319,8 @@ type WebChatMessageLimiter interface {
 // Deps are services shared with other account adapters.
 type Deps struct {
 	Legal                      LegalConsentService
+	ArtifactDeletion           ArtifactDeletionService
+	ArtifactDeleteLimiter      WebChatMessageLimiter
 	Referrals                  WebReferrals
 	ReferralVisitLimiter       WebChatMessageLimiter
 	ReferralVisitClientLimiter WebChatMessageLimiter
@@ -371,6 +373,7 @@ func (h *Handler) Routes() http.Handler {
 	mux.HandleFunc("GET /web/v1/account/legal", h.requirePrincipal(h.legalStatus))
 	mux.HandleFunc("POST /web/v1/account/legal/accept", h.requireUnsafePrincipal(h.legalChoice))
 	mux.HandleFunc("POST /web/v1/account/legal/marketing", h.requireUnsafePrincipal(h.legalChoice))
+	mux.HandleFunc("DELETE /web/v1/artifacts/{artifactID}", h.requireUnsafePrincipal(h.deleteArtifact))
 	mux.HandleFunc("GET /web/v1/referrals", h.requirePrincipal(h.referralSummary))
 	mux.HandleFunc("GET /web/v1/referrals/stats", h.requirePrincipal(h.referralStatistics))
 	mux.HandleFunc("POST /web/v1/referrals/visit", h.referralVisit)
@@ -1956,10 +1959,11 @@ type safeConversationList struct {
 }
 
 type safeConversation struct {
-	ID        uuid.UUID `json:"id"`
-	Title     string    `json:"title"`
-	CreatedAt time.Time `json:"created_at"`
-	UpdatedAt time.Time `json:"updated_at"`
+	FirstModelID string    `json:"first_model_id,omitempty"`
+	ID           uuid.UUID `json:"id"`
+	Title        string    `json:"title"`
+	CreatedAt    time.Time `json:"created_at"`
+	UpdatedAt    time.Time `json:"updated_at"`
 }
 
 type safeConversationMessageList struct {
@@ -2054,6 +2058,7 @@ type safeImageJobResult struct {
 }
 
 type safeImageArtifactMetadata struct {
+	Deleted   bool      `json:"deleted,omitempty"`
 	ID        uuid.UUID `json:"id"`
 	MIMEType  string    `json:"mime_type"`
 	SizeBytes int64     `json:"size_bytes"`
@@ -2077,10 +2082,11 @@ type safeImageJob struct {
 
 func newSafeConversation(conversation domain.Conversation) safeConversation {
 	return safeConversation{
-		ID:        conversation.ID,
-		Title:     conversation.Title,
-		CreatedAt: conversation.CreatedAt,
-		UpdatedAt: conversation.UpdatedAt,
+		FirstModelID: conversation.FirstModelID,
+		ID:           conversation.ID,
+		Title:        conversation.Title,
+		CreatedAt:    conversation.CreatedAt,
+		UpdatedAt:    conversation.UpdatedAt,
 	}
 }
 
@@ -2224,10 +2230,11 @@ func newSafeImageJobResult(result resultservice.Result, expectedJobID uuid.UUID)
 	}
 	artifacts := make([]safeImageArtifactMetadata, 0, len(result.Artifacts))
 	for _, artifact := range result.Artifacts {
-		if artifact.ID == uuid.Nil || artifact.MediaType != domain.MediaTypeImage || strings.TrimSpace(artifact.MIMEType) == "" || artifact.SizeBytes < 1 {
+		if artifact.ID == uuid.Nil || artifact.MediaType != domain.MediaTypeImage || strings.TrimSpace(artifact.MIMEType) == "" || (!artifact.Deleted && artifact.SizeBytes < 1) {
 			return safeImageJobResult{}, false
 		}
 		artifacts = append(artifacts, safeImageArtifactMetadata{
+			Deleted:   artifact.Deleted,
 			ID:        artifact.ID,
 			MIMEType:  artifact.MIMEType,
 			SizeBytes: artifact.SizeBytes,
@@ -2243,7 +2250,7 @@ func safeResultContainsArtifact(result safeImageJobResult, artifactID uuid.UUID)
 		return false
 	}
 	for _, artifact := range result.Artifacts {
-		if artifact.ID == artifactID {
+		if artifact.ID == artifactID && !artifact.Deleted {
 			return true
 		}
 	}

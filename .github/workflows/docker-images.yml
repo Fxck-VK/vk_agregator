@@ -1,4 +1,4 @@
-name: Docker Images
+name: Release Images
 
 on:
   pull_request:
@@ -32,7 +32,9 @@ permissions:
 
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
-  cancel-in-progress: ${{ github.ref == 'refs/heads/dev-deploy' }}
+  # A child DEV rollout may already be migrating. Queue the newest push rather
+  # than cancelling that operation; the source guard skips superseded releases.
+  cancel-in-progress: false
 
 jobs:
   validate_source:
@@ -287,3 +289,17 @@ jobs:
             echo "Provenance assertion failed: expected nonempty SLSA v0.2 or v1 builder metadata." >&2
             exit 1
           fi
+
+  deploy-dev:
+    name: Deploy tested DEV release
+    if: github.event_name == 'push' && github.ref == 'refs/heads/dev-deploy'
+    needs: [quality-gate, publish]
+    permissions:
+      contents: read
+      packages: read
+      actions: read
+    # Local reusable workflows use the caller's exact commit, including env hooks.
+    uses: ./.github/workflows/deploy-dev.yml
+    with:
+      source_sha: ${{ github.sha }}
+    secrets: inherit

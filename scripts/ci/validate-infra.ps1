@@ -280,7 +280,7 @@ function Assert-ReverseProxyConfig {
         "server platform:3000;",
         "keepalive 16;",
         "server_name dev-web.epifera.com;",
-        'auth_basic "NeiroHub development";',
+        'auth_basic "Epifera development";',
         "auth_basic_user_file /tmp/dev-web.htpasswd;",
         "location = /__dev/login",
         "include /tmp/dev-web-issuer.conf;",
@@ -678,6 +678,11 @@ function Assert-DevDeploySmokeScript {
 
     if ($content -match "DEV_WEB_BASIC_AUTH_HTPASSWD|Authorization|Get-Credential|--user|-u[[:space:]]") {
         throw "DEV deploy smoke script must not read or send DEV web gateway credentials"
+    }
+
+    & node (Join-Path $repoRoot "scripts/ci/test-dev-login-smoke.mjs")
+    if ($LASTEXITCODE -ne 0) {
+        throw "DEV login smoke regression tests failed"
     }
 
     Write-Host "DEV deploy smoke script OK"
@@ -1278,7 +1283,7 @@ function Assert-DockerImageWorkflow {
 
     $content = Get-Content -LiteralPath $path -Raw
     $requiredSnippets = @(
-        "name: Docker Images",
+        "name: Release Images",
         "packages: write",
         "ghcr.io/",
         "docker/setup-buildx-action",

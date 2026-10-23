@@ -23,7 +23,13 @@ func NewConversationRepository(db Querier) *ConversationRepository {
 
 var _ domain.ConversationRepository = (*ConversationRepository)(nil)
 
-const conversationColumns = `id, user_id, account_id, source, vk_peer_id, external_thread_id, status, title, title_origin, created_at, updated_at`
+const conversationColumns = `id, user_id, account_id, source, vk_peer_id, external_thread_id, status, title, title_origin, created_at, updated_at,
+	COALESCE((SELECT job.params->>'model_id' FROM jobs AS job
+		WHERE conversations.source = 'web' AND job.account_id = conversations.account_id
+		  AND job.source = 'web' AND job.params->>'conversation_source' = 'web'
+		  AND job.params->>'conversation_id' = conversations.id::text
+		  AND job.status NOT IN ('prepared', 'validated', 'awaiting_payment')
+		ORDER BY job.created_at ASC, job.id ASC LIMIT 1), '') AS first_model_id`
 const conversationMessageColumns = `id, conversation_id, job_id, seq, role, text, COALESCE(rating, '') AS rating, token_count, created_at`
 const conversationSummaryColumns = `id, conversation_id, text, token_count, summarized_until_seq, created_at, updated_at`
 
@@ -423,7 +429,7 @@ func (r *ConversationRepository) UpsertSummary(ctx context.Context, s *domain.Co
 
 func scanConversation(row rowScanner, c *domain.Conversation) error {
 	var userID, accountID *uuid.UUID
-	if err := row.Scan(&c.ID, &userID, &accountID, &c.Source, &c.VKPeerID, &c.ExternalThreadID, &c.Status, &c.Title, &c.TitleOrigin, &c.CreatedAt, &c.UpdatedAt); err != nil {
+	if err := row.Scan(&c.ID, &userID, &accountID, &c.Source, &c.VKPeerID, &c.ExternalThreadID, &c.Status, &c.Title, &c.TitleOrigin, &c.CreatedAt, &c.UpdatedAt, &c.FirstModelID); err != nil {
 		return err
 	}
 	if userID != nil {

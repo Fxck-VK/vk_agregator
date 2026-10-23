@@ -76,6 +76,9 @@ func mapError(err error) error {
 		return domain.ErrNotFound
 	}
 	var pgErr *pgconn.PgError
+	if errors.As(err, &pgErr) && pgErr.Code == "23514" && pgErr.ConstraintName == "artifact_input_available" {
+		return domain.ErrConflict
+	}
 	if errors.As(err, &pgErr) && pgErr.Code == pgUniqueViolation {
 		return domain.ErrConflict
 	}

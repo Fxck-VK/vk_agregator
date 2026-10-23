@@ -1,0 +1,25 @@
+# Generated file retention: two calendar months
+
+**Goal:** Apply the user's approved two-month storage policy to generated files and their renditions on the existing DEV server. Preserve chat text, uploaded inputs, jobs and billing metadata. No unrelated application release, commit or push.
+
+**Architecture:** Persist the deadline in existing PostgreSQL `expires_at` metadata, enforced by an additive migration for output image/video/audio/document rows and inherited by their variants. Use two UTC calendar months from the original `created_at`, never preview creation/access/update time. Earlier expirations (manual deletion) win. The existing maintenance worker physically deletes expired storage objects and retains tombstones; standard/free/paid tiers all obey explicit deadlines.
+
+**Why:** Live DEV uses tier `standard`, so the legacy free=7/paid=365-day defaults do not cover these results. Merely changing those env settings would not implement the requested policy. The existing worker already consumes explicit expirations; no new worker image or second scheduler is needed.
+
+- [x] Add real PostgreSQL tests for future writes, month-end boundaries, historical backfill, exact expiry boundary, late previews, manual deletion preservation, unaffected text/inputs, migration replay and existing cleanup candidates.
+- [x] Implement independent migration 000061 and its conservative down migration. Do not require unpublished 000059/000060 to apply this policy to current DEV schema 000058.
+- [x] Run tests against an isolated disposable local PostgreSQL. Review SQL and checksum/migrator compatibility; update retention/runbook/index contracts.
+- [x] Recheck live counts and active consumers, preserve private local-to-VPS configuration rollback metadata, stage only this migration, validate checksum and run the existing migrator with a scoped read-only migrations mount. Never export database credentials or private storage keys.
+- [x] Verify future behavior inside a rolled-back transaction, verify existing deadlines and migration checksum, then run the existing maintenance worker on its current immutable image and confirm successful cleanup/health. Save only sanitized operational evidence locally.
+
+**Scope:** This is a database policy/configuration rollout explicitly requested by the user. No changes to unrelated application code or images. Two older non-text outputs were observed; they will become eligible under the approved policy. All existing text and uploaded input rows remain untouched. Physical cleanup is irreversible; down removes only future enforcement and cannot restore purged bytes. Existing backups retain their separate lifecycle.
+
+## Live evidence (2026-10-23)
+
+- Migration applied by the existing immutable migrate image with canonical LF SHA-256 `bb6ec820c3026eb70c38b421d5c8c5982f38981f3aa6ed826f3444517e9d13c9`, recorded through its normal transaction/checksum tracking. Only 000061 was staged; unrelated pending migrations and application changes were not published.
+- 200 original non-text outputs received deadlines; missing/overlong deadlines=0 and preview mismatches=0. No text/input expiry was changed.
+- Two July images totaling 3,240,962 bytes were already due and had no active producing/consuming jobs. MinIO stat confirmed both existed before cleanup and NoSuchKey afterwards. The existing worker reported `media_objects_deleted=2`; metadata retained deleted tombstones with size=0. 198 active outputs remained, all with valid future deadlines.
+- A live transaction inserted an isolated temporary original and later preview, confirmed Dec 31 -> Feb 28 deadlines, then rolled back without keeping test data. API, job worker and maintenance remained healthy on `sha-181e1352c5f9dd6cdde2c319dd9e4137bab32c8e`.
+- Private schema backup and post-policy expiry/physical-object verification files remain only on the VPS. The attempted pre-policy expiry snapshot was empty because Docker stdin was not forwarded; it is not a usable pre-policy data backup. No restoration of purged bytes is claimed. Scoped Compose emitted an orphan warning because only the migrate service file was loaded; no orphan was removed. Compose stdin also consumed trailing bookkeeping lines; the migration itself committed once and its checksum was verified, then bookkeeping was repaired separately.
+- Local real-SQL coverage includes calendar/leap boundaries, tier fallback precedence, replay/backfill, non-text scope, original/preview cleanup candidates and conservative down behavior; existing ownership/race/retry deletion tests passed. The temporary PostgreSQL is task-owned and removed after final checks.
+- Final combined real-PostgreSQL run: 8 scenarios passed, including manual deletion compatibility with both 000060 guards and 000061 deadline triggers installed. Maintenance, artifactdeletion and migrate package tests passed with default vet; git diff --check passed. No application binary rebuild was needed because only the existing expiry-metadata contract changed.

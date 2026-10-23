@@ -294,7 +294,7 @@ func TestCleanupDeletesOnlyConfiguredMediaCandidates(t *testing.T) {
 	}
 }
 
-func TestCleanupSkipsMediaWhenRetentionDisabled(t *testing.T) {
+func TestCleanupChecksExplicitExpirationsWhenAgeBasedRetentionDisabled(t *testing.T) {
 	store := &fakeStore{}
 	objects := &fakeMediaObjectStore{}
 	svc := New(store, nil, Config{}, WithMediaObjectStore(objects))
@@ -303,8 +303,8 @@ func TestCleanupSkipsMediaWhenRetentionDisabled(t *testing.T) {
 		t.Fatalf("Cleanup() error = %v", err)
 	}
 
-	if len(store.mediaPolicies) != 0 {
-		t.Fatalf("MediaCleanupCandidates calls = %d, want 0", len(store.mediaPolicies))
+	if len(store.mediaPolicies) != 1 || store.mediaPolicies[0].ExpiredCutoff.IsZero() || !store.mediaPolicies[0].PaidArtifactCutoff.IsZero() {
+		t.Fatalf("explicit expiration queue was not checked independently of age retention")
 	}
 	if len(objects.deleted) != 0 {
 		t.Fatalf("deleted objects = %d, want 0", len(objects.deleted))

@@ -36,9 +36,10 @@ precedence over API's base `APP_ENV_FILE`. The DEV workflow reads encrypted repo
 secrets `DEV_LEGAL_OPERATOR_NAME`, `DEV_LEGAL_OPERATOR_INN` and
 `DEV_LEGAL_DOCUMENTS_PUBLISHED` through `prepare-dev-legal.sh`. It stages and
 atomically replaces that file with mode 600. The overlay survives ordinary
-deployments from the older default-branch workflow, which does not know these
-new secrets yet. After changing legal secrets, dispatch Deploy DEV explicitly
-from `dev-deploy` until its workflow is promoted to the default branch.
+deployments. Automatic image publication and manual Deploy DEV now share the
+same-commit reusable workflow, so automatic publication includes these secrets.
+After changing legal secrets without a code push, dispatch Deploy DEV explicitly
+from `dev-deploy` to apply them using the existing successful exact-SHA images.
 Missing/invalid requisites block requested activation. Local `.env.local` is Git/Docker ignored.
 No private `.cache` input is imported by application code or Dockerfiles.
 

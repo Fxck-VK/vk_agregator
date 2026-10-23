@@ -31,7 +31,7 @@ export function readConversationCache(accountId: string): ConversationItem[] | n
 export function writeConversationCache(accountId: string, items: ConversationItem[]) {
   if (accountId !== activeAccount) return;
   // Explicit projection: no prompt bodies, credentials, attachments or pending drafts.
-  const metadata = items.slice(0, 20).map(({ id, title, created_at, updated_at }) => ({ id, title: title.slice(0, 240), created_at, updated_at }));
+  const metadata = items.slice(0, 20).map(({ id, title, created_at, updated_at, first_model_id }) => ({ id, title: title.slice(0, 240), created_at, updated_at, ...(first_model_id ? { first_model_id } : {}) }));
   if (!conversationListSchema.safeParse({ items: metadata }).success) return;
   try { localStorage.setItem(key, JSON.stringify({ accountId, savedAt: Date.now(), items: metadata })); } catch { /* Quota/disabled storage must not prevent reading chats. */ }
 }

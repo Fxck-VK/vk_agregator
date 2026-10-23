@@ -2,6 +2,11 @@ import { afterEach, expect, it, vi } from "vitest";
 import { activateConversationCache, clearConversationCache, readConversationCache, writeConversationCache } from "./conversation-list-cache";
 const item = { id: "f9712bca-8d98-448d-b595-2a80bc9c2b1a", title: "Saved chat", created_at: "2026-09-28T09:00:00Z", updated_at: "2026-09-28T09:00:00Z" };
 afterEach(() => { clearConversationCache(); localStorage.clear(); vi.useRealTimers(); vi.restoreAllMocks(); });
+it("preserves the first model across a metadata cache round trip", () => {
+  const pinned = { ...item, first_model_id: "gpt_5" };
+  activateConversationCache("account-a"); writeConversationCache("account-a", [pinned]);
+  expect(readConversationCache("account-a")).toEqual([pinned]);
+});
 it("restores only validated metadata for the active account", () => {
   activateConversationCache("account-a"); writeConversationCache("account-a", [item]);
   expect(readConversationCache("account-a")).toEqual([item]);

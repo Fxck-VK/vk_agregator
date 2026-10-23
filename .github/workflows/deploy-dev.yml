@@ -1,72 +1,78 @@
 name: Deploy DEV
 
 on:
-  workflow_run:
-    workflows:
-      - Docker Images
-    types:
-      - completed
-    branches:
-      - dev-deploy
+  workflow_call:
+    inputs:
+      source_sha:
+        type: string
+        required: true
   workflow_dispatch:
+    inputs:
+      source_sha:
+        description: Optional exact current DEV SHA (defaults to this workflow commit)
+        type: string
+        required: false
 
 permissions:
   contents: read
   packages: read
-
-concurrency:
-  group: dev-deploy
-  cancel-in-progress: true
+  actions: read
 
 jobs:
   validate_source:
     name: Validate DEV source
     runs-on: ubuntu-latest
+    timeout-minutes: 20
+    outputs:
+      current: ${{ steps.source.outputs.current }}
+      sha: ${{ steps.source.outputs.sha }}
     steps:
-      - name: Enforce dev-deploy-only rollout
+      - name: Checkout source validation
+        uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4.3.1
+        with:
+          ref: ${{ github.sha }}
+          persist-credentials: false
+
+      - name: Enforce exact current DEV source
+        id: source
         shell: bash
         env:
-          WORKFLOW_RUN_CONCLUSION: ${{ github.event.workflow_run.conclusion }}
-          WORKFLOW_RUN_EVENT: ${{ github.event.workflow_run.event }}
-          WORKFLOW_RUN_HEAD_BRANCH: ${{ github.event.workflow_run.head_branch }}
+          DEV_RELEASE_SHA: ${{ inputs.source_sha }}
+          GH_TOKEN: ${{ github.token }}
+        run: bash scripts/ci/validate-dev-release.sh
+
+      - name: Require exact-SHA CI for manual DEV rollout
+        if: steps.source.outputs.current == 'true' && github.event_name == 'workflow_dispatch'
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
         run: |
           set -euo pipefail
-
-          case "${GITHUB_EVENT_NAME}" in
-            workflow_dispatch)
-              if [[ "${GITHUB_REF}" != "refs/heads/dev-deploy" ]]; then
-                echo "Manual DEV deploy must be dispatched from refs/heads/dev-deploy." >&2
-                exit 1
-              fi
-              ;;
-            workflow_run)
-              if [[ "${WORKFLOW_RUN_CONCLUSION}" != "success" || "${WORKFLOW_RUN_EVENT}" != "push" || "${WORKFLOW_RUN_HEAD_BRANCH}" != "dev-deploy" ]]; then
-                echo "DEV deploy requires a successful Docker Images push from dev-deploy." >&2
-                exit 1
-              fi
-              ;;
-            *)
-              echo "Unsupported DEV deploy event: ${GITHUB_EVENT_NAME}" >&2
-              exit 1
-              ;;
-          esac
+          bash scripts/ci/wait-for-github-workflow.sh \
+            --repository "${GITHUB_REPOSITORY}" --workflow ci.yml \
+            --sha "${GITHUB_SHA}" --event push \
+            --max-attempts 20 --initial-delay-seconds 5 --max-delay-seconds 15
+          # All eight signed images are verified before SSH below. Do not wait
+          # for the parent image workflow's overall result: it now also includes
+          # deployment, and a failed rollout must remain manually recoverable.
 
   deploy:
     name: Deploy DEV VPS
     runs-on: ubuntu-latest
     environment: development
     needs: validate_source
-    if: >
-      (github.event_name == 'workflow_dispatch' && github.ref == 'refs/heads/dev-deploy') ||
-      (github.event.workflow_run.conclusion == 'success' &&
-       github.event.workflow_run.event == 'push' &&
-       github.event.workflow_run.head_branch == 'dev-deploy')
+    if: needs.validate_source.outputs.current == 'true'
+    # Only the mutating job takes the lock. A manual validation waiting for
+    # parent images must not lock out that parent's reusable deployment.
+    concurrency:
+      group: dev-deploy
+      cancel-in-progress: false
 
     steps:
       - name: Checkout
         uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4.3.1
         with:
-          ref: ${{ github.event.workflow_run.head_sha || github.sha }}
+          ref: ${{ needs.validate_source.outputs.sha }}
           persist-credentials: false
 
       - name: Set up Docker Buildx
@@ -80,11 +86,11 @@ jobs:
         id: release
         shell: bash
         env:
-          WORKFLOW_RUN_SHA: ${{ github.event.workflow_run.head_sha }}
+          DEV_RELEASE_SHA: ${{ needs.validate_source.outputs.sha }}
         run: |
           set -euo pipefail
 
-          deploy_sha="${WORKFLOW_RUN_SHA:-$(git rev-parse HEAD)}"
+          deploy_sha="${DEV_RELEASE_SHA}"
           deploy_image_tag="sha-${deploy_sha}"
 
           if [[ ! "${deploy_sha}" =~ ^[0-9a-f]{40}$ ]]; then
@@ -310,6 +316,10 @@ jobs:
           fi
 
           git fetch --prune origin dev-deploy
+          if [[ "$(git rev-parse origin/dev-deploy)" != "${deploy_sha}" ]]; then
+            echo "DEV branch advanced before checkout; refusing a superseded rollout." >&2
+            exit 1
+          fi
           if ! git cat-file -e "${deploy_sha}^{commit}"; then
             echo "Selected DEV deploy commit is unavailable on the VPS." >&2
             exit 1

@@ -1,7 +1,10 @@
 # Final legal edit and DEV publication plan
 
-Status: in progress. The user explicitly requested final proofreading and website
-publication after selecting Russian hosting as the launch architecture.
+Status: completed on DEV. Release `e25fe92cef9edb5ccc632d5f4cd1cf2a68539913`
+passed CI, all eight image builds and Deploy DEV run `39942788422`. Runtime checks
+confirmed the active edition, approved requisites, migration checksums and legal
+API protection. Remote `dev-deploy` and `fastlife_dev` are synchronized. Production
+`main` was not changed.
 
 **Goal:** publish the reviewed legal revision and its existing consent integration
 on the website's DEV contour, preserving unrelated local development.
@@ -15,13 +18,13 @@ guards against reuse/resurrection of deleted artifacts. Neither deletes files or
 publishes its unfinished UI. No main deployment, pricing activation, recurring charge, provider call,
 server relocation or assertion that a planned relocation has already happened.
 
-- [ ] Proofread all five texts, remove internal notes/inactive proposed tariff
+- [x] Proofread all five texts, remove internal notes/inactive proposed tariff
       annex, record effective date and preserve actual payment/refund behavior.
-- [ ] Verify source checksum/parity and explicit publication rendering; prepare
+- [x] Verify source checksum/parity and explicit publication rendering; prepare
       fail-closed DEV runtime configuration without putting requisites in Git.
-- [ ] Prepare a scoped release from the current DEV head, preserving all unrelated
+- [x] Prepare a scoped release from the current DEV head, preserving all unrelated
       working files; verify locally and through exact-commit CI/build.
-- [ ] Publish to DEV with immutable images and normal migrations; verify document
+- [x] Publish to DEV with immutable images and normal migrations; verify document
       responses, revision/flag parity, legal API protection and server health.
 
 Acceptance has already been authorized in this conversation as a product design;
