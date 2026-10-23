@@ -170,15 +170,28 @@ finally {
 }
 
 $idempotencyCanaryRoot = Join-Path ([IO.Path]::GetTempPath()) ("vk-aggregator-idempotency-canary-" + [guid]::NewGuid().ToString("N"))
-$idempotencyCanaryPath = Join-Path $idempotencyCanaryRoot "web\platform\src\features\workspace\WorkspacePrompt\WorkspacePrompt.test.tsx"
+$idempotencyCanaryRelativePaths = @(
+    "web\platform\src\features\workspace\WorkspacePrompt\WorkspacePrompt.test.tsx",
+    "web\platform\src\features\conversations\NewConversationButton\NewConversationButton.test.tsx",
+    "web\platform\src\lib\web-api\proxy.test.ts",
+    "web\platform\src\features\conversations\pending-conversation-bootstrap.test.ts",
+    "web\platform\src\features\conversations\PendingConversationBootstrap\PendingConversationBootstrap.test.tsx"
+)
+$idempotencyCanaryPaths = @(
+    $idempotencyCanaryRelativePaths | ForEach-Object { Join-Path $idempotencyCanaryRoot $_ }
+)
 $idempotencyCanaryReport = Join-Path $idempotencyCanaryRoot "idempotency-canary-report.json"
-New-Item -ItemType Directory -Path (Split-Path -Parent $idempotencyCanaryPath) -Force | Out-Null
+foreach ($idempotencyCanaryPath in $idempotencyCanaryPaths) {
+    New-Item -ItemType Directory -Path (Split-Path -Parent $idempotencyCanaryPath) -Force | Out-Null
+}
 
 try {
     $idempotencyUuid = "9f4a6c2e" + "-7b81-4d35-a9c6-" + "2e8f1b7d5a30"
-    Set-Content -LiteralPath $idempotencyCanaryPath `
-        -Value ('const headers = { "X-Idempotency-Key": "' + $idempotencyUuid + '" };') `
-        -Encoding ascii
+    foreach ($idempotencyCanaryPath in $idempotencyCanaryPaths) {
+        Set-Content -LiteralPath $idempotencyCanaryPath `
+            -Value ('const headers = { "X-Idempotency-Key": "' + $idempotencyUuid + '" };') `
+            -Encoding ascii
+    }
 
     $idempotencyResult = Invoke-Quiet -Executable $GitleaksPath -WorkingDirectory $idempotencyCanaryRoot -Arguments @(
         "dir",
@@ -193,7 +206,7 @@ try {
     }
 
     $genericApiCanary = "9f4a6c2e" + "7b814d35" + "a9c62e8f" + "1b7d5a30"
-    Set-Content -LiteralPath $idempotencyCanaryPath `
+    Set-Content -LiteralPath $idempotencyCanaryPaths[-1] `
         -Value ('const apiKey = "' + $genericApiCanary + '";') `
         -Encoding ascii
 
