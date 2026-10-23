@@ -30,12 +30,16 @@ arguments, source, logs or browser storage:
 - `LEGAL_OPERATOR_INN`: approved 12-digit identifier.
 - `LEGAL_DOCUMENTS_PUBLISHED`: defaults to `false`.
 
-Configure identical values in API and platform environments. DEV's platform
-Compose service forwards these from the release environment. API reads its
-existing protected `APP_ENV_FILE`. The DEV workflow reads encrypted repository
+Configure identical values in API and platform environments. Both DEV Compose
+services read the same optional protected `.env.dev-legal` overlay, which takes
+precedence over API's base `APP_ENV_FILE`. The DEV workflow reads encrypted repository
 secrets `DEV_LEGAL_OPERATOR_NAME`, `DEV_LEGAL_OPERATOR_INN` and
-`DEV_LEGAL_DOCUMENTS_PUBLISHED` through `prepare-dev-legal.sh`. Missing/invalid
-requisites block requested activation. Local `.env.local` is Git/Docker ignored.
+`DEV_LEGAL_DOCUMENTS_PUBLISHED` through `prepare-dev-legal.sh`. It stages and
+atomically replaces that file with mode 600. The overlay survives ordinary
+deployments from the older default-branch workflow, which does not know these
+new secrets yet. After changing legal secrets, dispatch Deploy DEV explicitly
+from `dev-deploy` until its workflow is promoted to the default branch.
+Missing/invalid requisites block requested activation. Local `.env.local` is Git/Docker ignored.
 No private `.cache` input is imported by application code or Dockerfiles.
 
 Missing/invalid operator configuration keeps publication off even when requested.

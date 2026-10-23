@@ -1,10 +1,11 @@
 #!/usr/bin/env bash
 set -euo pipefail
-input=""; output=""
+input=""; output=""; settings_output=""
 while [[ $# -gt 0 ]]; do
   case "$1" in
     --input) input="${2:-}"; shift 2 ;;
     --output) output="${2:-}"; shift 2 ;;
+    --settings-output) settings_output="${2:-}"; shift 2 ;;
     *) echo 'Unsupported DEV legal configuration argument' >&2; exit 2 ;;
   esac
 done
@@ -12,9 +13,12 @@ if [[ ! -f "${input}" || -z "${output}" || "${input}" == "${output}" ]]; then
   echo 'DEV legal configuration needs separate input and output files' >&2; exit 2
 fi
 umask 077
-python3 - "${input}" "${output}" <<'PY'
+python3 - "${input}" "${output}" "${settings_output}" <<'PY'
 from pathlib import Path
 import os, re, sys
+
+if sys.argv[3] and Path(sys.argv[3]).resolve() in (Path(sys.argv[1]).resolve(),Path(sys.argv[2]).resolve()):
+    raise SystemExit('DEV legal settings need a separate output file')
 
 flag=os.environ.get('DEV_LEGAL_DOCUMENTS_PUBLISHED','false').strip() or 'false'
 name=os.environ.get('DEV_LEGAL_OPERATOR_NAME','').strip()
@@ -29,9 +33,14 @@ if name and not valid_name or inn and not valid_inn:
     raise SystemExit('Invalid DEV legal operator configuration')
 keys={'LEGAL_DOCUMENTS_PUBLISHED','LEGAL_OPERATOR_NAME','LEGAL_OPERATOR_INN'}
 lines=[line for line in Path(sys.argv[1]).read_text(encoding='utf-8').splitlines() if line.split('=',1)[0] not in keys]
-lines.extend(['LEGAL_DOCUMENTS_PUBLISHED='+flag,'LEGAL_OPERATOR_NAME='+name,'LEGAL_OPERATOR_INN='+inn])
+settings=['LEGAL_DOCUMENTS_PUBLISHED='+flag,'LEGAL_OPERATOR_NAME='+name,'LEGAL_OPERATOR_INN='+inn]
+lines.extend(settings)
 target=Path(sys.argv[2])
 target.write_text('\n'.join(lines)+'\n',encoding='utf-8')
 target.chmod(0o600)
+if sys.argv[3]:
+    separate=Path(sys.argv[3])
+    separate.write_text('\n'.join(settings)+'\n',encoding='utf-8')
+    separate.chmod(0o600)
 print('DEV legal publication '+('enabled' if flag=='true' else 'disabled'))
 PY

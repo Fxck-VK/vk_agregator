@@ -7,6 +7,8 @@ services:
         required: false
       - path: .env.dev-yandex
         required: false
+      - path: .env.dev-legal
+        required: false
 
   platform:
     image: ${APP_IMAGE_REGISTRY}/platform:${IMAGE_TAG}
@@ -25,11 +27,11 @@ services:
     pids_limit: 128
     cpus: "0.50"
     mem_limit: 512m
+    env_file:
+      - path: .env.dev-legal
+        required: false
     environment:
       WEB_API_INTERNAL_ORIGIN: http://api:8080
-      LEGAL_DOCUMENTS_PUBLISHED: ${LEGAL_DOCUMENTS_PUBLISHED:-false}
-      LEGAL_OPERATOR_NAME: ${LEGAL_OPERATOR_NAME:-}
-      LEGAL_OPERATOR_INN: ${LEGAL_OPERATOR_INN:-}
       WEB_ORIGIN: ${WEB_ORIGIN:?WEB_ORIGIN is required for localized canonical URLs}
       DEV_WEB_BASIC_AUTH_HTPASSWD: ${DEV_WEB_BASIC_AUTH_HTPASSWD:?DEV_WEB_BASIC_AUTH_HTPASSWD is required for DEV access sessions}
     healthcheck:
