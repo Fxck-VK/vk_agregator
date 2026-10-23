@@ -8,8 +8,11 @@ on the website's DEV contour, preserving unrelated local development.
 
 **Scope:** four core documents plus optional marketing consent, effective date,
 runtime requisites, migration 000062, reproducible DEV configuration and smoke.
-Only legal changes and the already-applied retention migration 000061 enter the
-release. No main deployment, pricing activation, recurring charge, provider call,
+The schema release includes prepared additive migrations 000059-000060 to keep
+the existing migration sequence complete, the already-applied retention policy
+000061 and legal evidence 000062. The first adds a lookup index; the second adds
+guards against reuse/resurrection of deleted artifacts. Neither deletes files or
+publishes its unfinished UI. No main deployment, pricing activation, recurring charge, provider call,
 server relocation or assertion that a planned relocation has already happened.
 
 - [ ] Proofread all five texts, remove internal notes/inactive proposed tariff

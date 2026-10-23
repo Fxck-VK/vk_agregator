@@ -1,0 +1,1 @@
+DROP INDEX IF EXISTS jobs_web_conversation_first_model_idx;
