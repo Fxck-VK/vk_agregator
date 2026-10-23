@@ -3375,3 +3375,16 @@ The editable skin extends Elastic. A separate Deploy Mail UI workflow packages
 canonical brand assets and deploys a versioned Compose overlay, recreating only
 webmail with HTTPS/asset verification and rollback. Mail-only edits do not build
 the application images; mail data and the website release remain independent.
+
+### Website legal documents and consent (2026-10-23)
+
+Public legal templates are shared by the Go API and a server-only web renderer.
+Runtime-only operator fields, publication state and reviewed text bind immutable
+revision snapshots. Cookie-owned, CSRF-protected writes append account legal
+events under the same account lock as identity changes. Optional marketing binds
+the exact verified primary-email version, never enrolling a replacement address.
+Withdrawal and account security remain accessible across revision changes or
+publication pauses. Published terms gate new website generation/upload/checkout
+at the API boundary; preview/drafts create no synthetic consent. No marketing
+sender, recurring billing, provider calls or storage relocation are introduced.
+Runtime/release contract: docs/runbooks/WEB_LEGAL.md.

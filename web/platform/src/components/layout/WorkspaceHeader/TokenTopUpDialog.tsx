@@ -17,6 +17,7 @@ import { ScrollArea } from "@/components/ui/ScrollArea/ScrollArea";
 import { CreditAmount, getCreditAmountLabel } from "@/components/ui/CreditAmount/CreditAmount";
 import selectableStyles from "@/components/ui/selectable-control.module.css";
 import { PaymentStatus } from "@/features/payments/PaymentStatus";
+import { LegalPaymentNotice } from "@/features/legal/LegalLinks";
 import { checkoutNavigation } from "@/features/payments/checkout-navigation";
 import { clearPaymentAttempt, createPayment, formatPaymentPrice, loadPaymentProducts, paymentAttemptKey, PaymentRequestError, readPendingPayment, savePendingPayment, type PaymentCatalog, type PaymentRequest } from "@/features/payments/payments";
 import styles from "./TokenTopUpDialog.module.css";
@@ -135,6 +136,7 @@ export function TokenTopUpDialog({ onClose }: Readonly<TokenTopUpDialogProps>) {
                 {catalog?.items.length === 0 ? <StateNotice inline kind="empty">{msg("tokenTopUpDialog.noTokenPacksAreCurrentlyAvailable")}</StateNotice> : null}
                 {catalog && !catalog.checkout_available ? <StateNotice inline kind="empty">{msg("tokenTopUpDialog.testPaymentsAreNotAvailableYet")}</StateNotice> : null}
                 {selectedPackage ? <>
+                  <LegalPaymentNotice />
                   <button className={styles.purchaseButton} disabled={busy || !catalog?.checkout_available} type="submit">
                     {busy ? msg("tokenTopUpDialog.openingYookassa") : msg("tokenTopUpDialog.buyForValue", { value1: formatPaymentPrice(selectedPackage.amount, msg.locale) })}
                   </button>

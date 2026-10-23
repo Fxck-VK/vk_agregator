@@ -27,6 +27,9 @@ services:
     mem_limit: 512m
     environment:
       WEB_API_INTERNAL_ORIGIN: http://api:8080
+      LEGAL_DOCUMENTS_PUBLISHED: ${LEGAL_DOCUMENTS_PUBLISHED:-false}
+      LEGAL_OPERATOR_NAME: ${LEGAL_OPERATOR_NAME:-}
+      LEGAL_OPERATOR_INN: ${LEGAL_OPERATOR_INN:-}
       WEB_ORIGIN: ${WEB_ORIGIN:?WEB_ORIGIN is required for localized canonical URLs}
       DEV_WEB_BASIC_AUTH_HTPASSWD: ${DEV_WEB_BASIC_AUTH_HTPASSWD:?DEV_WEB_BASIC_AUTH_HTPASSWD is required for DEV access sessions}
     healthcheck:

@@ -158,3 +158,9 @@ tables in this index and point readers to the replacement document.
 
 Deprecated files must not be used as default context. Read them only when the
 user explicitly asks for history, regression archaeology, or an old decision.
+
+## Website legal documents
+
+- [Runtime, consent and publication](runbooks/WEB_LEGAL.md).
+- [Implementation](superpowers/plans/2026-10-23-web-legal-documents.md).
+- [Final review and DEV release](superpowers/plans/2026-10-23-legal-publication.md).

@@ -1,6 +1,6 @@
 {
   "schema_version": 5,
-  "updated_at": "2026-10-22T01:55:25.848687+00:00",
+  "updated_at": "2026-10-23T09:36:33.693515+00:00",
   "branch": "codex/vk-profile-name",
   "remote_tracking": "origin/dev-deploy",
   "purpose": "Short machine-readable current context and routing for agents. This file is not project history.",
@@ -42,7 +42,8 @@
       "docs/MODEL_CAPABILITIES.md",
       "docs/runbooks/MODEL_CATALOG.md",
       "docs/runbooks/MODEL_ONBOARDING.md",
-      "docs/runbooks/SUPPORT_MAIL.md"
+      "docs/runbooks/SUPPORT_MAIL.md",
+      "docs/runbooks/WEB_LEGAL.md"
     ],
     "do_not_read_by_default": [
       ".agents/logs/**",
@@ -60,6 +61,7 @@
     "loadtest_contour": "Mock providers, payments and delivery only; no production hosts or paid calls."
   },
   "recent_decisions": [
+    "Website legal edition 2026-10-23.4: reviewed public texts, exact account-owned acceptance, optional verified-email marketing and independent withdrawal. Runtime requisites remain outside Git; DEV activation uses dedicated encrypted secrets. Russian storage is a launch condition, not a claim of completed relocation. Subscriptions remain inactive. See docs/runbooks/WEB_LEGAL.md.",
     "Human support mail is a separate epifera-mail Compose project on the existing VPS. The editable Roundcube skin is deployments/mail/skins/epifera, with canonical brand assets packaged by scripts/mail/package_ui.py. Deploy Mail UI validates exact revisions and rolls only webmail forward with rollback, using existing DEV SSH secrets. Mailbox data/keys stay outside Git, and transactional website email remains on Resend notify.epifera.com. Operations and delivery gates: docs/runbooks/SUPPORT_MAIL.md.",
     "Unified Epifera release: preserve all incoming DEV text/music/media/toolchain fixes together with centralized website/email branding, provider SVG icons, neutral account avatar, brand-derived downloads and responsive login UI in the single active checkout. Publish the tested result to dev-deploy through exact-SHA CI, immutable images and mandatory smoke.",
     "Suno Studio requested tools are DEV-only (2026-10-19): lyrics/sounds/cover/mashup/stems/stems_all/add_vocals/add_instrumental/upload/upload_cover/upload_extend/upsample_tags, owned sources and signed MP3/WAV uploads; 8 authorized Suno V6/no-Max cases have one successful capture each ($0.5116 / 315 credits); lyrics legacy prompt normalization fixed, five upload-dependent live cases await manual input. See docs/runbooks/MODEL_CATALOG.md#suno-studio-tools-2026-10-19.",

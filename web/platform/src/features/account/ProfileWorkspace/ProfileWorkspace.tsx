@@ -12,6 +12,8 @@ import { getAccountDisplayIdentity } from "@/features/account/account-display";
 import { defaultAuthMethods, type AuthMethods } from "@/lib/auth/methods";
 import { useWorkspaceAccountSnapshot } from "@/features/account/WorkspaceAccount/WorkspaceAccount";
 import { useDictionary } from "@/i18n/LocaleProvider";
+import { LegalConsentGate } from "@/features/legal/LegalConsentGate";
+import type { LegalMetadata } from "@/features/legal/model";
 
 import styles from "./ProfileWorkspace.module.css";
 
@@ -20,7 +22,7 @@ const referralTabId = "profile-referral-tab";
 const profilePanelId = "profile-content-panel";
 type ProfileTab = "overview" | "referral" | "security";
 
-export function ProfileWorkspace({ methods = defaultAuthMethods, preview = false, oauthStatus }: { methods?: AuthMethods; preview?: boolean; oauthStatus?: string }) {
+export function ProfileWorkspace({ methods = defaultAuthMethods, preview = false, oauthStatus, legalMetadata }: { methods?: AuthMethods; preview?: boolean; oauthStatus?: string; legalMetadata?:LegalMetadata }) {
   const t = useDictionary();
   const { balance, profile } = useWorkspaceAccountSnapshot();
   const primaryIdentity = getAccountDisplayIdentity(profile.identity_refs, t);
@@ -68,6 +70,7 @@ export function ProfileWorkspace({ methods = defaultAuthMethods, preview = false
             </section>
 
             <ProfileLoginMethods identityRefs={profile.identity_refs} />
+            {legalMetadata?<LegalConsentGate mode="preferences" metadata={legalMetadata} accountId={profile.account_id} preview={preview}/>:null}
 
             <section aria-labelledby="profile-billing-title" className={styles.section}>
               <h2 id="profile-billing-title">{t.profile.billingTitle}</h2>

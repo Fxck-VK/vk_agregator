@@ -1,8 +1,10 @@
+import { legalText } from "./legal";
 import { brandName, brandMonogram } from "@/config/brand";
 import { accountAuthText } from "./account-auth";
 
 export const ru = {
   auth: accountAuthText.ru,
+  legal: legalText.ru,
   preloading: {
     offline: "Нет подключения к интернету. Данные на экране сохранены.",
     refreshFailed: "Не удалось обновить данные. Показана последняя загруженная версия.",

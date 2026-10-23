@@ -1,6 +1,7 @@
 "use client";
 
 import { BrandText } from "@/components/brand/BrandName/BrandName";
+import { LegalNotice } from "@/features/legal/LegalLinks";
 
 import { type FormEvent, useEffect, useRef, useState } from "react";
 import { Button } from "@/components/ui/Button/Button";
@@ -110,5 +111,6 @@ export function EmailRegistration({ preview, returnTo, onBack, title }: Readonly
       <div className={styles.actions}><button type="button" className={styles.textAction} disabled={pending} onClick={onBack}>{t.auth.back}</button>{step !== "email" && step !== "session" ? <button type="button" className={styles.textAction} disabled={pending} onClick={restart}>{step === "password" ? t.auth.registrationRestart : t.auth.changeEmail}</button> : null}</div>
       {step === "code" ? <button type="button" className={styles.textAction} disabled={pending || resendSeconds > 0} onClick={() => void perform(true)}>{t.auth.resend}{resendSeconds ? ` (${resendSeconds})` : ""}</button> : null}
     </form>}
+    <LegalNotice />
   </>;
 }

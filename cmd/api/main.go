@@ -15,6 +15,8 @@ import (
 	"strings"
 	"syscall"
 	"time"
+	"vk-ai-aggregator/internal/service/legalacceptance"
+	legalcatalog "vk-ai-aggregator/web/platform/legal"
 
 	"github.com/redis/go-redis/v9"
 
@@ -382,6 +384,7 @@ func main() {
 			os.Exit(1)
 		}
 	}
+	legalDocuments := legalcatalog.New(cfg.LegalOperatorName, cfg.LegalOperatorINN, cfg.LegalDocumentsPublished)
 	web := websession.NewHandler(websession.Config{
 		EmailDeliveryEnabled:        strings.EqualFold(cfg.AccountEmailDeliveryProvider, "smtp"),
 		PhoneDeliveryEnabled:        strings.EqualFold(cfg.AccountPhoneDeliveryProvider, "http"),
@@ -392,6 +395,11 @@ func main() {
 		ImageModels:                 webImageModelsFromRuntimeCatalog(runtimeCatalog.ImageModels()),
 		ImageArtifactRedirectPolicy: webArtifactRedirectPolicy,
 	}, websession.Deps{
+		Legal: legalacceptance.New(postgres.NewLegalConsentRepository(pool), legalacceptance.Metadata{
+			Published: legalDocuments.Published, Version: legalDocuments.Version, Checksum: legalDocuments.Checksum,
+			MarketingVersion: legalDocuments.MarketingVersion, MarketingChecksum: legalDocuments.MarketingChecksum,
+			Snapshot: legalDocuments.Snapshot,
+		}),
 		Referrals:                  webreferralservice.New(postgres.NewWebReferralRepository(pool)),
 		ReferralVisitLimiter:       ratelimit.NewRedisFixedWindowLimiter(rdb, "web_referral_visit", 1000, time.Minute),
 		ReferralVisitClientLimiter: ratelimit.NewRedisFixedWindowLimiter(rdb, "web_referral_browser", 20, time.Minute),

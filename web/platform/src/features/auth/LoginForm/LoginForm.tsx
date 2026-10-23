@@ -1,6 +1,7 @@
 "use client";
 
 import { BrandText } from "@/components/brand/BrandName/BrandName";
+import { LegalNotice } from "@/features/legal/LegalLinks";
 
 import { type FormEvent, useEffect, useRef, useState } from "react";
 import { StateNotice, LoadingIndicator } from "@/components/ui/AsyncState/AsyncState";
@@ -126,7 +127,7 @@ export function LoginForm({ returnTo, methods = defaultAuthMethods, preview = fa
       {providers.length ? <div className={styles.divider}><span>{t.auth.choiceOr}</span></div> : null}
       <Button className={styles.emailPill} disabled={pending || !(methods.password || methods.registration || methods.recovery)} onClick={() => { move("login"); setEmailEntry(true); }}>{t.auth.emailEntry}</Button>
       {error ? <StateNotice inline kind="error">{error}</StateNotice> : null}
-      <p className={styles.choiceNote}>{t.auth.choiceNote}</p>
+      <LegalNotice />
       {preview ? <p className={styles.previewNote}>{t.auth.preview}</p> : null}
     </section>
     <aside className={styles.helpCard}>
@@ -154,5 +155,6 @@ export function LoginForm({ returnTo, methods = defaultAuthMethods, preview = fa
     {entry === "email" && step === "login" && providers.length ? <div className={styles.external}><p>{t.auth.or}</p><div className={styles.providers}>{providers.map(provider => <Button key={provider} variant="outline" disabled={pending || preview} onClick={() => oauth(provider)}>{provider === "yandex" ? msg("profileLoginMethods.yandex") : providerNames[provider]}</Button>)}</div>{preview ? <small>{t.auth.configuredOnly}</small> : null}</div> : null}
     {step === "login" && !methods.recovery ? <small className={styles.hint}>{t.auth.recoveryUnavailable}</small> : null}
     {step === "login" && methods.registration ? <Button variant="outline" disabled={pending} onClick={() => { move("login"); setRegistering(true); }}>{t.auth.createAccount}</Button> : null}
+    <LegalNotice />
   </section>;
 }

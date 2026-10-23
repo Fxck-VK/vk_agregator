@@ -318,6 +318,7 @@ type WebChatMessageLimiter interface {
 
 // Deps are services shared with other account adapters.
 type Deps struct {
+	Legal                      LegalConsentService
 	Referrals                  WebReferrals
 	ReferralVisitLimiter       WebChatMessageLimiter
 	ReferralVisitClientLimiter WebChatMessageLimiter
@@ -367,6 +368,9 @@ func NewHandler(cfg Config, deps Deps) *Handler {
 // Routes returns the versioned browser API router.
 func (h *Handler) Routes() http.Handler {
 	mux := http.NewServeMux()
+	mux.HandleFunc("GET /web/v1/account/legal", h.requirePrincipal(h.legalStatus))
+	mux.HandleFunc("POST /web/v1/account/legal/accept", h.requireUnsafePrincipal(h.legalChoice))
+	mux.HandleFunc("POST /web/v1/account/legal/marketing", h.requireUnsafePrincipal(h.legalChoice))
 	mux.HandleFunc("GET /web/v1/referrals", h.requirePrincipal(h.referralSummary))
 	mux.HandleFunc("GET /web/v1/referrals/stats", h.requirePrincipal(h.referralStatistics))
 	mux.HandleFunc("POST /web/v1/referrals/visit", h.referralVisit)
@@ -571,7 +575,7 @@ func (h *Handler) requireUnsafePrincipal(next http.HandlerFunc) http.HandlerFunc
 		if !h.requireUnsafeRequest(w, r) {
 			return
 		}
-		h.requirePrincipal(next)(w, r)
+		h.requirePrincipal(h.requireCurrentLegal(next))(w, r)
 	}
 }
 

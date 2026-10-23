@@ -1,3 +1,5 @@
+import { getLegalCatalog } from "@/features/legal/catalog.server";
+import { LegalConsentGate } from "@/features/legal/LegalConsentGate";
 import type { Metadata } from "next";
 import { Suspense, type ReactNode } from "react";
 
@@ -74,7 +76,7 @@ export async function WorkspaceSessionContent({ children }: Readonly<{ children:
         conversations={session.conversations}
         profile={session.profile}
       >
-        {children}
+        <LegalConsentGate metadata={getLegalCatalog().metadata} accountId={session.profile.account_id} preview={isLocalWorkspacePreviewEnabled()}>{children}</LegalConsentGate>
       </WorkspaceFrame>
       {developmentTools}
     </WorkspaceLogoutBoundary>

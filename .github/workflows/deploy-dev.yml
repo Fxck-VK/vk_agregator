@@ -341,6 +341,9 @@ jobs:
           DEV_ACCOUNT_WEB_OAUTH_GOOGLE_CLIENT_SECRET: ${{ secrets.DEV_ACCOUNT_WEB_OAUTH_GOOGLE_CLIENT_SECRET }}
           DEV_ACCOUNT_OAUTH_YANDEX_CLIENT_ID: ${{ secrets.DEV_ACCOUNT_OAUTH_YANDEX_CLIENT_ID }}
           DEV_ACCOUNT_WEB_OAUTH_YANDEX_CLIENT_SECRET: ${{ secrets.DEV_ACCOUNT_WEB_OAUTH_YANDEX_CLIENT_SECRET }}
+          DEV_LEGAL_DOCUMENTS_PUBLISHED: ${{ secrets.DEV_LEGAL_DOCUMENTS_PUBLISHED }}
+          DEV_LEGAL_OPERATOR_NAME: ${{ secrets.DEV_LEGAL_OPERATOR_NAME }}
+          DEV_LEGAL_OPERATOR_INN: ${{ secrets.DEV_LEGAL_OPERATOR_INN }}
         run: |
           set -euo pipefail
           ssh_opts=(-i "${HOME}/.ssh/deploy_key" -o StrictHostKeyChecking=yes -o UserKnownHostsFile="${HOME}/.ssh/known_hosts" -o GlobalKnownHostsFile=/dev/null)
@@ -352,10 +355,11 @@ jobs:
           google_settings="$(mktemp)"
           yandex_env="$(mktemp)"
           yandex_settings="$(mktemp)"
+          legal_env="$(mktemp)"
           rendered_env="$(mktemp)"
           raw_auth_env="$(mktemp)"
           rendered_auth_env="$(mktemp)"
-          trap 'rm -f "${raw_env}" "${email_env}" "${email_settings}" "${google_env}" "${google_settings}" "${yandex_env}" "${yandex_settings}" "${rendered_env}" "${raw_auth_env}" "${rendered_auth_env}"' EXIT
+          trap 'rm -f "${raw_env}" "${email_env}" "${email_settings}" "${google_env}" "${google_settings}" "${yandex_env}" "${yandex_settings}" "${legal_env}" "${rendered_env}" "${raw_auth_env}" "${rendered_auth_env}"' EXIT
 
           dev_web_host="$(awk '$1 == "server_name" { sub(/\r$/, "", $2); sub(/;$/, "", $2); print $2 }' deployments/nginx/dev-web.conf)"
           if [[ ! "${dev_web_host}" =~ ^dev-web\.[a-z0-9]+([.-][a-z0-9]+)*\.[a-z]{2,}$ ]]; then
@@ -387,8 +391,12 @@ jobs:
             --output "${yandex_env}" \
             --settings-output "${yandex_settings}"
 
-          bash scripts/deploy/prepare-dev-env.sh \
+          bash scripts/deploy/prepare-dev-legal.sh \
             --input "${yandex_env}" \
+            --output "${legal_env}"
+
+          bash scripts/deploy/prepare-dev-env.sh \
+            --input "${legal_env}" \
             --output "${rendered_env}" \
             --image-tag "${DEPLOY_IMAGE_TAG}" \
             --ghcr-username "${GHCR_USERNAME}" \

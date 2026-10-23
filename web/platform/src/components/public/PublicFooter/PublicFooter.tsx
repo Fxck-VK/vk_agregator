@@ -1,6 +1,7 @@
 import { BrandName } from "@/components/brand/BrandName/BrandName";
 import { BrandLogo } from "@/components/brand/BrandLogo/BrandLogo";
 import Link from "@/i18n/Link";
+import { LegalLinks } from "@/features/legal/LegalLinks";
 
 import type { PublicDictionary } from "@/i18n/public/dictionary";
 
@@ -26,6 +27,7 @@ export function PublicFooter({ dictionary }: PublicFooterProps) {
           <Link href="/">{dictionary.navigation.home}</Link>
           <Link href="/app">{dictionary.footer.workspace}</Link>
         </nav>
+        <LegalLinks />
       </PageContainer>
     </footer>
   );

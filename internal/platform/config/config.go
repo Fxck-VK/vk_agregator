@@ -78,6 +78,10 @@ type Config struct {
 	HTTPAddr string
 	// WebOrigin is the exact trusted browser origin for /web/v1 unsafe requests.
 	WebOrigin string
+	// Public legal requisites are runtime-only. Publication is an explicit rollout.
+	LegalDocumentsPublished bool
+	LegalOperatorName       string
+	LegalOperatorINN        string
 	// WebImagePreparedJobLimit and WebImagePreparedJobTTL bound the number and
 	// lifetime of unconfirmed browser image jobs per account. cmd/api supplies
 	// fail-closed defaults when a zero-value Config is constructed in tests.
@@ -1235,6 +1239,9 @@ func Load() Config {
 		S3Mode:                               envMode("S3_MODE", dataServicesMode),
 		HTTPAddr:                             env("HTTP_ADDR", ":8080"),
 		WebOrigin:                            env("WEB_ORIGIN", ""),
+		LegalDocumentsPublished:              envBool("LEGAL_DOCUMENTS_PUBLISHED", false),
+		LegalOperatorName:                    env("LEGAL_OPERATOR_NAME", ""),
+		LegalOperatorINN:                     env("LEGAL_OPERATOR_INN", ""),
 		WebImagePreparedJobLimit:             envInt("WEB_IMAGE_PREPARED_JOB_LIMIT", 3),
 		WebImagePreparedJobTTL:               envDuration("WEB_IMAGE_PREPARED_JOB_TTL", 15*time.Minute),
 		WebImagePreparedJobReconcileInterval: envDuration("WEB_IMAGE_PREPARED_JOB_RECONCILE_INTERVAL", time.Minute),

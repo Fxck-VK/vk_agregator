@@ -177,6 +177,8 @@ func TestMigrationFilesDelegateTransactionsToRunner(t *testing.T) {
 		"000045_outbox_claim_lease.down.sql",
 		"000046_web_account_conversations.up.sql",
 		"000046_web_account_conversations.down.sql",
+		"000062_account_legal_consents.up.sql",
+		"000062_account_legal_consents.down.sql",
 	} {
 		t.Run(name, func(t *testing.T) {
 			raw, err := os.ReadFile(filepath.Join("..", "..", "migrations", name))
