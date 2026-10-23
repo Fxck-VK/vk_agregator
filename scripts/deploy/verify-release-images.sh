@@ -40,9 +40,18 @@ fi
 [[ "${repository}" =~ ^[A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+$ ]] || { echo "Invalid source repository." >&2; exit 1; }
 [[ "${workflow_ref}" =~ ^refs/heads/(main|dev-deploy)$ ]] || { echo "Unsupported signed workflow ref." >&2; exit 1; }
 
-for command_name in docker cosign jq sha256sum; do
+for command_name in docker cosign jq sha256sum git sed; do
   command -v "${command_name}" >/dev/null 2>&1 || { echo "Required verifier is unavailable: ${command_name}" >&2; exit 1; }
 done
+
+# The certificate embeds the workflow's display name as well as its file/ref.
+# Resolve the name from the exact source object so renames do not break rollout
+# or rollback, and never accept a different name just because it is allowlisted.
+workflow_name="$(git show "${revision}:.github/workflows/docker-images.yml" | sed -n 's/^name: //p')"
+case "${workflow_name}" in
+  "Docker Images"|"Release Images") ;;
+  *) echo "Unsupported image workflow name at the expected source revision." >&2; exit 1 ;;
+esac
 
 services=(api worker provider-webhook provider-balance-bot miniapp platform migrate backup)
 certificate_identity="https://github.com/${repository}/.github/workflows/docker-images.yml@${workflow_ref}"
@@ -66,7 +75,7 @@ for service in "${services[@]}"; do
   signature_json="$(cosign verify \
     --certificate-identity "${certificate_identity}" \
     --certificate-oidc-issuer "${oidc_issuer}" \
-    --certificate-github-workflow-name "Docker Images" \
+    --certificate-github-workflow-name "${workflow_name}" \
     --certificate-github-workflow-ref "${workflow_ref}" \
     --certificate-github-workflow-repository "${repository}" \
     --certificate-github-workflow-sha "${revision}" \

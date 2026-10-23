@@ -50,7 +50,7 @@ expected_identity="https://github.com/${MOCK_REPOSITORY}/.github/workflows/docke
 expected=(
   "--certificate-identity=${expected_identity}"
   "--certificate-oidc-issuer=https://token.actions.githubusercontent.com"
-  "--certificate-github-workflow-name=Docker Images"
+  "--certificate-github-workflow-name=${MOCK_WORKFLOW_NAME}"
   "--certificate-github-workflow-ref=${MOCK_WORKFLOW_REF}"
   "--certificate-github-workflow-repository=${MOCK_REPOSITORY}"
   "--certificate-github-workflow-sha=${MOCK_REVISION}"
@@ -73,8 +73,28 @@ MOCK_COSIGN
 
 chmod 0755 "${mock_bin}/docker" "${mock_bin}/cosign"
 
+fixture_repo="${tmp_dir}/source"
+git init -q "${fixture_repo}"
+git -C "${fixture_repo}" config user.name "Verifier fixture"
+git -C "${fixture_repo}" config user.email "fixture@example.invalid"
+mkdir -p "${fixture_repo}/.github/workflows"
+printf 'name: Docker Images\n' >"${fixture_repo}/.github/workflows/docker-images.yml"
+git -C "${fixture_repo}" add .
+git -C "${fixture_repo}" commit -qm legacy
+legacy_revision="$(git -C "${fixture_repo}" rev-parse HEAD)"
+printf 'name: Release Images\n' >"${fixture_repo}/.github/workflows/docker-images.yml"
+git -C "${fixture_repo}" commit -qam renamed
+current_revision="$(git -C "${fixture_repo}" rev-parse HEAD)"
+printf 'name: Untrusted Images\n' >"${fixture_repo}/.github/workflows/docker-images.yml"
+git -C "${fixture_repo}" commit -qam unsupported
+unsupported_revision="$(git -C "${fixture_repo}" rev-parse HEAD)"
+# Deliberately leave HEAD on a different workflow name. Verification must read
+# the requested immutable revision, including a legacy rollback, not HEAD.
+cd "${fixture_repo}"
+
 export MOCK_REPOSITORY="example/project"
-export MOCK_REVISION="0123456789abcdef0123456789abcdef01234567"
+export MOCK_REVISION="${legacy_revision}"
+export MOCK_WORKFLOW_NAME="Docker Images"
 export MOCK_WORKFLOW_REF="refs/heads/main"
 export MOCK_MANIFEST='{"schemaVersion":2,"mediaType":"application/vnd.oci.image.index.v1+json","manifests":[]}'
 
@@ -101,6 +121,29 @@ success_output="$(run_verifier)"
 verified_count="$(grep -c '^Verified signed release image:' <<<"${success_output}")"
 [[ "${verified_count}" == "8" ]] || { echo "Expected eight verified release images; got ${verified_count}." >&2; exit 1; }
 echo "PASS positive: eight exact signed image digests"
+
+export MOCK_REVISION="${current_revision}"
+export MOCK_WORKFLOW_REF="refs/heads/dev-deploy"
+export MOCK_WORKFLOW_NAME="Release Images"
+renamed_output="$(run_verifier)"
+[[ "$(grep -c '^Verified signed release image:' <<<"${renamed_output}")" == "8" ]]
+echo "PASS positive: renamed workflow verified from its exact source revision"
+
+expect_failure "wrong signed workflow name" env MOCK_WORKFLOW_NAME="Docker Images" PATH="${mock_bin}:${PATH}" \
+  bash "${verifier}" \
+    --image-registry "ghcr.io/example/project" \
+    --image-tag "sha-${MOCK_REVISION}" \
+    --repository "${MOCK_REPOSITORY}" \
+    --revision "${MOCK_REVISION}" \
+    --workflow-ref "${MOCK_WORKFLOW_REF}"
+
+expect_failure "unsupported source workflow name" env MOCK_REVISION="${unsupported_revision}" MOCK_WORKFLOW_NAME="Untrusted Images" PATH="${mock_bin}:${PATH}" \
+  bash "${verifier}" \
+    --image-registry "ghcr.io/example/project" \
+    --image-tag "sha-${unsupported_revision}" \
+    --repository "${MOCK_REPOSITORY}" \
+    --revision "${unsupported_revision}" \
+    --workflow-ref "${MOCK_WORKFLOW_REF}"
 
 v1_success_output="$(MOCK_PROVENANCE_SCHEMA=v1 run_verifier)"
 v1_verified_count="$(grep -c '^Verified signed release image:' <<<"${v1_success_output}")"

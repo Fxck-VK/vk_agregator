@@ -319,6 +319,12 @@ files come from the same commit, including every runtime env hook. The renamed
 image workflow prevents the older default-branch `Docker Images` listener from
 launching an additional DEV rollout. `main` remains the production source.
 
+Image verification resolves the exact workflow display name from the requested
+Git revision and checks it in the Cosign certificate alongside file, ref,
+repository and SHA. Deployment checkouts include history so rollback can verify
+both legacy `Docker Images` and current `Release Images` without accepting a
+different name for the same revision.
+
 `Deploy DEV` can also be started manually from `dev-deploy` with
 `workflow_dispatch`; it requires successful CI and verifies all eight signed
 images for that exact current commit before SSH. Optional `source_sha` must match
