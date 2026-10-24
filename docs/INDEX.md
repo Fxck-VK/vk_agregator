@@ -35,6 +35,7 @@ Read only the document that matches the current task:
 | Task scope | Active document |
 | --- | --- |
 | Mandatory agent release rules, shared local/CI contracts and measured safe retries | [Release contract plan](superpowers/plans/2026-10-24-release-contract.md); [DEV operations](../docs/runbooks/DEV.md) |
+| Automatic early source checks before release inventory and complete validation | [Implementation plan](superpowers/plans/2026-10-24-release-source-fast-check.md); [DEV preparation](../docs/runbooks/DEV.md#commit-scoped-preflight-before-push) |
 | VK Mini App removal, private env migration, historical data and seven-image releases | [Retirement runbook](../docs/runbooks/VK_MINIAPP_RETIREMENT.md) |
 | One combined DEV rollout of all agreed local product changes | [Unified release and verification](superpowers/plans/2026-10-23-unified-dev-release.md); [local reference library](../references/README.md) |
 | Bounded CI downloads, same-commit DEV rollout and complete release inventory | [Reliability plan](superpowers/plans/2026-10-23-dev-release-reliability.md); [DEV operations](../docs/runbooks/DEV.md) |

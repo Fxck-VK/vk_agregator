@@ -138,6 +138,28 @@ try {
         -StageNames $stages -RunStage { param($stage) }
     Assert-Equal "tests" ($retryForced.StagesRun -join ",") "failed forced refresh discards stale success"
 
+    $earlySha = "e" * 40
+    $earlyStages = @("source-fast", "audit", "tests")
+    $earlyExecuted = [System.Collections.Generic.List[string]]::new()
+    Assert-ThrowsLike {
+        Invoke-DevDeployPreflight -GitDirectory $tempRoot -CommitSha $earlySha -PolicyVersion v6 `
+            -StageNames $earlyStages -RunStage {
+                param($stage)
+                $earlyExecuted.Add($stage) | Out-Null
+                throw "early source fixture failed"
+            }
+    } "*early source fixture failed*" "early source error propagation"
+    Assert-Equal "source-fast" ($earlyExecuted -join ",") "early failure blocks expensive stages"
+    $earlyPassed = Invoke-DevDeployPreflight -GitDirectory $tempRoot -CommitSha $earlySha -PolicyVersion v6 `
+        -StageNames $earlyStages -RunStage { param($stage) }
+    Assert-Equal ($earlyStages -join ",") ($earlyPassed.StagesRun -join ",") "failed source stage cannot be cached"
+    $earlyCached = Invoke-DevDeployPreflight -GitDirectory $tempRoot -CommitSha $earlySha -PolicyVersion v6 `
+        -StageNames $earlyStages -RunStage { throw "unchanged commit must reuse successful stages" }
+    Assert-Equal $true $earlyCached.Cached "same commit reuses source-fast and other successful stages"
+    $newSource = Invoke-DevDeployPreflight -GitDirectory $tempRoot -CommitSha ("f" * 40) -PolicyVersion v6 `
+        -StageNames $earlyStages -RunStage { param($stage) }
+    Assert-Equal ($earlyStages -join ",") ($newSource.StagesRun -join ",") "a different commit never inherits source checks"
+
     $lockPath = Join-Path $tempRoot "dev-deploy-preflight.lock"
     $heldLock = [System.IO.File]::Open($lockPath, [System.IO.FileMode]::OpenOrCreate, [System.IO.FileAccess]::ReadWrite, [System.IO.FileShare]::None)
     try {

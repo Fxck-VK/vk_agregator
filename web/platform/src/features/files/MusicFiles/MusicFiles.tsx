@@ -97,6 +97,7 @@ export function MusicFiles({ visible, showEmpty = true, onHasFilesChange, api = 
 
   if (!visible) return null;
   const tracks = entries.flatMap(entry => musicTracksFromResult(entry.result, entry.job)).filter(track => !deletedIDs.includes(artifactIDFromPath(track.artifactPlaybackUrl) ?? ""));
+  if (!showEmpty && hasLoaded && tracks.length === 0 && !loading && !failed && nextCursor === null) return null;
 
   return <section aria-label={msg("music.files.heading")} aria-busy={loading || undefined} className={styles.root}>
     <h2>{msg("music.files.heading")}</h2>

@@ -57,3 +57,15 @@ test('security and infrastructure admission precede expensive source tests', () 
     assert(stages.indexOf(`"${early}"`) < stages.indexOf('"tests"'), `${early} must fail before lengthy source tests`);
   }
 });
+
+test('early source checks are the mandatory first full preflight stage', () => {
+  rejects('scripts/ci/dev-deploy-preflight.ps1', '@("source-fast", "release-contract"', '@("release-contract"', /source.fast|early source/i);
+});
+
+test('preparation cannot capture an inventory before early source checks', () => {
+  rejects('scripts/ci/dev-deploy-preflight.ps1', '& pwsh -NoProfile -File scripts/ci/release-source-check.ps1 -BaseRef $BaseRef', 'Write-Host "source check removed"', /preparation|early source/i);
+});
+
+test('CI keeps the early source selector regressions', () => {
+  rejects('.github/workflows/ci.yml', ' scripts/ci/release-source-check.test.mjs', '', /early source/i);
+});

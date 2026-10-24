@@ -168,12 +168,14 @@ the successful verified rollout. Never change `main` as part of a DEV release.
 
 This is required for every agent publishing this project, including small fixes.
 
-1. Read `docs/runbooks/DEV.md`, inspect the target head and capture the complete
-   agreed source inventory before staging. Include every agreed product change;
+1. Read `docs/runbooks/DEV.md`, inspect the target head and run the existing
+   preflight with `-Prepare` before staging. It must pass automatically selected
+   early source checks before capturing the complete agreed inventory. Include every agreed product change;
    record explicit reasons for any deferral. Preserve secrets/local reference
    exports outside Git. Do not invent a different release path for this task.
 2. Use `scripts/ci/validate-release-contract.ps1` through the existing preflight.
-   Local and CI must run the same deployment/env/signature regressions. Check
+   The full preflight must start with its mandatory `source-fast` stage. Local
+   and CI must run the same deployment/env/signature regressions. Check
    image inventories, exact-source certificate identity, exact-SHA quality gates,
    rollback history, serialized rollout and mandatory smoke together.
 3. Check tools, WSL/Bash and Docker engine before expensive stages. Run dependency
@@ -200,8 +202,11 @@ Known release failures need regression coverage and sanitized reusable error
 memory. Detailed commands belong in the existing DEV runbook; this contract is
 the mandatory agent entrypoint, not an optional historical plan.
 
-Before staging an authorized DEV release, capture its full agreed scope with
-`node scripts/ci/release-manifest.mjs --capture .cache/dev-release-manifest.json --base origin/dev-deploy`.
+Before staging an authorized DEV release, check and capture its full agreed scope with
+`pwsh -NoProfile -File scripts/ci/dev-deploy-preflight.ps1 -Prepare -ManifestPath .cache/dev-release-manifest.json -BaseRef origin/dev-deploy`.
+Do not choose a reduced test list manually or use raw inventory capture to skip
+the preparation gate. Source changes after preparation require another preparation
+run and a new reviewed inventory; full validation still belongs to the final clean commit.
 Review every include/defer decision; deferrals need a written reason and must not
 silently omit a requested change. Before pushing, run
 `scripts/ci/dev-deploy-preflight.ps1` against that inventory and the exact commit.

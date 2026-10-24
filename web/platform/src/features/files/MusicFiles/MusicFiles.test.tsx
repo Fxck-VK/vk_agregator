@@ -10,6 +10,49 @@ const result = (job: MusicJob, title: string): MusicJobResult => ({ job_id: job.
 const catalogLoader = vi.fn(async () => ({ defaultModelId: "suno_v6" as const, models: [] }));
 
 describe("MusicFiles", () => {
+  it("hides empty music in all files and shows the empty state in the music tab", async () => {
+    const api = { loadMusicJobs: vi.fn().mockResolvedValue({ items: [], next_cursor: null }), loadMusicJobResult: vi.fn() };
+    const onHasFilesChange = vi.fn();
+    const view = render(<MusicFiles visible showEmpty={false} onHasFilesChange={onHasFilesChange} api={api} catalogLoader={catalogLoader} />);
+
+    await waitFor(() => expect(onHasFilesChange).toHaveBeenCalledWith(false));
+    expect(screen.queryByRole("region", { name: "Музыка" })).not.toBeInTheDocument();
+
+    view.rerender(<MusicFiles visible showEmpty onHasFilesChange={onHasFilesChange} api={api} catalogLoader={catalogLoader} />);
+    expect(screen.getByRole("heading", { name: "Музыка" })).toBeVisible();
+    expect(screen.getByText("Здесь появятся ваши готовые треки.")).toBeVisible();
+    expect(api.loadMusicJobs).toHaveBeenCalledOnce();
+  });
+
+  it("keeps loading and retry visible in all files until empty history is confirmed", async () => {
+    let rejectRequest: (reason: Error) => void = () => {};
+    const api = {
+      loadMusicJobs: vi.fn().mockImplementationOnce(() => new Promise((_, reject) => { rejectRequest = reject; }))
+        .mockResolvedValueOnce({ items: [], next_cursor: null }),
+      loadMusicJobResult: vi.fn(),
+    };
+    render(<MusicFiles visible showEmpty={false} api={api} catalogLoader={catalogLoader} />);
+    expect(screen.getByRole("region", { name: "Музыка" })).toHaveAttribute("aria-busy", "true");
+
+    rejectRequest(new Error("offline"));
+    await screen.findByText("Не удалось загрузить часть треков. Попробуйте ещё раз.");
+    fireEvent.click(screen.getByRole("button", { name: "Повторить" }));
+    await waitFor(() => expect(screen.queryByRole("region", { name: "Музыка" })).not.toBeInTheDocument());
+    expect(api.loadMusicJobs).toHaveBeenCalledTimes(2);
+  });
+
+  it("keeps pagination available when an empty music page has more results", async () => {
+    const api = {
+      loadMusicJobs: vi.fn().mockResolvedValueOnce({ items: [], next_cursor: "next" })
+        .mockResolvedValueOnce({ items: [oldJob], next_cursor: null }),
+      loadMusicJobResult: vi.fn(async () => result(oldJob, "First song")),
+    };
+    render(<MusicFiles visible showEmpty={false} api={api} catalogLoader={catalogLoader} />);
+    fireEvent.click(await screen.findByRole("button", { name: "Показать ещё" }));
+    expect(await screen.findByRole("heading", { name: "First song" })).toBeVisible();
+    expect(screen.getByRole("heading", { name: "Музыка" })).toBeVisible();
+  });
+
   it("reuses the account music cache, carries the chosen continuation time and clears on account change", async () => {
     function Seed() {
       const cache = useWorkspaceDataCache();

@@ -1,6 +1,6 @@
 {
   "schema_version": 5,
-  "updated_at": "2026-10-24T15:17:09.956874Z",
+  "updated_at": "2026-10-24T16:55:12Z",
   "branch": "codex/vk-profile-name",
   "remote_tracking": "origin/dev-deploy",
   "purpose": "Short machine-readable current context and routing for agents. This file is not project history.",
@@ -61,6 +61,7 @@
     "loadtest_contour": "Mock providers, payments and delivery only; no production hosts or paid calls."
   },
   "recent_decisions": [
+    "The user authorized a control release of the early release checks and the MusicFiles empty-block fix to dev-deploy on 2026-10-24. Preparation uses dev-deploy-preflight.ps1 -Prepare before inventory capture; complete validation adds obligatory source-fast first under policy v6. Existing stage caches remain commit/policy/runtime bound, with security expiry unchanged. Follow the exact commit through CI, signed images and verified DEV smoke. Evidence: .cache/release-2026-10-24-source-fast/status.json; authorization alone does not confirm deployment. See docs/superpowers/plans/2026-10-24-release-source-fast-check.md and docs/runbooks/DEV.md.",
     "The user authorized pushing all current agreed changes to dev-deploy on 2026-10-24: English homepage replacement (Russian home blank; both draft/noindex), automatic public sitemap declarations, collapsed chat scrollbar, shared confirmation/profile preferences, and registration-only legal notice including API removal of the separate action gate. No automatic marketing, backfilled legal acceptance, production changes or paid smoke. Publish the reviewed complete inventory through the mandatory exact-SHA preflight and reusable DEV rollout. Current release evidence: .cache/release-2026-10-24-all/status.json; do not infer deployment from this authorization.",
     "The old homepage was removed on both locales at user request. Its English-only replacement is /en with shared Landing components; /ru stays empty. Both homes remain draft/noindex and absent from sitemap. The user subsequently authorized including this rebuild in the complete dev-deploy push on 2026-10-24. No translations or global locale change. See docs/superpowers/plans/2026-10-24-english-home-rebuild.md.",
     "The 2026-10-24 control release is deployed and verified on DEV at a1373600238949a88af2d919ff9ae5becef545d9 (CI 40090994968; Release Images/DEV 40090994981), including Mini App retirement, shared release contracts, input-bound stage caching and targeted dependency fixes. Previous evidence: .cache/release-2026-10-24/status.json. The later current changes require their own verified release. main remains unchanged.",

@@ -310,8 +310,8 @@ jobs:
         shell: pwsh
         run: ./scripts/ci/test-dev-deploy-preflight.ps1
 
-      - name: Test release inventory
-        run: node --test scripts/ci/release-manifest.test.mjs
+      - name: Test release inventory and early source checks
+        run: node --test scripts/ci/release-manifest.test.mjs scripts/ci/release-source-check.test.mjs
 
       - name: Test bounded dependency downloads and DEV source selection
         shell: bash

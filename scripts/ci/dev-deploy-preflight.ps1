@@ -2,6 +2,8 @@
 param(
     [ValidateRange(0, 3600)][int]$LockTimeoutSeconds = 300,
     [string]$ManifestPath = ".cache/dev-release-manifest.json",
+    [switch]$Prepare,
+    [string]$BaseRef = "origin/dev-deploy",
     [switch]$Force
 )
 
@@ -65,6 +67,16 @@ function Install-NpmDependenciesIfNeeded {
     )
 }
 
+if ($Prepare) {
+    if ($Force) { throw "-Force applies only to complete commit-scoped validation" }
+    if (Test-Path -LiteralPath $ManifestPath) { throw "Release inventory already exists; choose a new path" }
+    & pwsh -NoProfile -File scripts/ci/release-source-check.ps1 -BaseRef $BaseRef
+    if ($LASTEXITCODE -ne 0) { throw "Early source checks failed; no release inventory was captured" }
+    Invoke-Native -Command "node" -Arguments @("scripts/ci/release-manifest.mjs", "--capture", $ManifestPath, "--base", $BaseRef)
+    Write-Host "Preparation passed. Review the inventory, commit the final source, then run complete preflight."
+    return
+}
+
 $branch = Get-GitOutput -Arguments @("rev-parse", "--abbrev-ref", "HEAD")
 $upstream = ""
 try {
@@ -79,6 +91,7 @@ if ($branch -ne "dev-deploy" -and $upstream -ne "origin/dev-deploy") {
 $commitSha = Get-GitOutput -Arguments @("rev-parse", "HEAD")
 # Verify the agreed inventory even when the exact-commit test cache is warm.
 Invoke-Native -Command "node" -Arguments @("scripts/ci/release-manifest.mjs", "--check", $ManifestPath, "--commit", $commitSha)
+$sourceBaseRef = (Get-Content -LiteralPath $ManifestPath -Raw | ConvertFrom-Json).base
 
 $worktreeChanges = Get-GitOutput -Arguments @("status", "--porcelain", "--untracked-files=all")
 if (-not [string]::IsNullOrWhiteSpace($worktreeChanges)) {
@@ -98,9 +111,9 @@ if ($LASTEXITCODE -ne 0 -or [string]::IsNullOrWhiteSpace($dockerVersion)) {
 
 $gitDirectory = Get-GitOutput -Arguments @("rev-parse", "--absolute-git-dir")
 $npmCommand = if ($IsWindows) { "npm.cmd" } else { "npm" }
-$policyVersion = "v5"
+$policyVersion = "v6"
 # Fail on source contracts and fresh advisories before lengthy source builds/tests.
-$stageNames = @("release-contract", "audit", "govulncheck", "infrastructure", "trivy", "tests")
+$stageNames = @("source-fast", "release-contract", "audit", "govulncheck", "infrastructure", "trivy", "tests")
 function Get-RuntimeVersion([string]$Command, [string[]]$Arguments) {
     $version = (& $Command @Arguments | Out-String).Trim()
     if ($LASTEXITCODE -ne 0 -or [string]::IsNullOrWhiteSpace($version)) {
@@ -127,6 +140,10 @@ $runStage = {
     param([string]$Stage)
 
     switch ($Stage) {
+        "source-fast" {
+            & pwsh -NoProfile -File scripts/ci/release-source-check.ps1 -BaseRef $sourceBaseRef
+            if ($LASTEXITCODE -ne 0) { throw "Early source checks failed before complete validation" }
+        }
         "release-contract" {
             & pwsh -NoProfile -File scripts/ci/validate-release-contract.ps1
             if ($LASTEXITCODE -ne 0) { throw "Shared release contract failed before source tests" }
@@ -177,7 +194,7 @@ $runStage = {
             if ($LASTEXITCODE -ne 0) { throw "Documentation regression tests failed" }
             & pwsh -NoProfile -File scripts/ci/validate-docs.ps1
             if ($LASTEXITCODE -ne 0) { throw "Documentation validation failed" }
-            Invoke-Native -Command "node" -Arguments @("--test", "scripts/ci/release-manifest.test.mjs")
+            Invoke-Native -Command "node" -Arguments @("--test", "scripts/ci/release-manifest.test.mjs", "scripts/ci/release-source-check.test.mjs")
             foreach ($scriptPath in @("scripts/ci/test-retry-network.sh", "scripts/ci/test-validate-dev-release.sh")) {
                 $scriptResult = Invoke-CIBashScript -RepositoryRoot $repoRoot -ScriptPath $scriptPath
                 $scriptResult.Output | Out-Host

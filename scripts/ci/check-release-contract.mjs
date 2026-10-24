@@ -58,6 +58,13 @@ export function validateReleaseContract(read, dockerfiles) {
   assert(rollout.includes('- name: Run DEV smoke') && rollout.includes('bash scripts/deploy/smoke-dev.sh'), 'Deployment smoke is mandatory');
   assert(rollout.includes('group: dev-deploy') && rollout.includes('cancel-in-progress: false'), 'Mutating DEV rollout must remain serialized');
   assert(read('.github/workflows/ci.yml').includes('./scripts/ci/validate-release-contract.ps1'), 'CI must execute the same release contract as local preflight');
+  const preflight = read('scripts/ci/dev-deploy-preflight.ps1');
+  assert(/^\$stageNames = @\("source-fast",/m.test(preflight), 'Early source-fast checks must be the first full preflight stage');
+  assert(/"source-fast"\s*\{\s*& pwsh -NoProfile -File scripts\/ci\/release-source-check\.ps1/.test(preflight), 'Full preflight must execute early source checks');
+  const preparation = preflight.slice(preflight.indexOf('if ($Prepare) {'), preflight.indexOf('$branch = Get-GitOutput'));
+  const early = preparation.indexOf('& pwsh -NoProfile -File scripts/ci/release-source-check.ps1 -BaseRef $BaseRef');
+  assert(early >= 0 && preparation.indexOf('"--capture"') > early, 'Preparation must execute early source checks before inventory capture');
+  assert(read('.github/workflows/ci.yml').includes(' scripts/ci/release-source-check.test.mjs'), 'CI must execute early source selector regressions');
   return { workflowName, services };
 }
 if (process.argv[1] && import.meta.url === pathToFileURL(resolve(process.argv[1])).href) {

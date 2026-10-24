@@ -414,13 +414,39 @@ separate operator check when changing env structure.
 
 ### Commit-scoped preflight before push
 
-Before staging a release, capture all current changes against the current DEV
-baseline. The inventory contains only paths, Git blob IDs and include/defer
+Before staging a release, run the preparation mode against the current DEV
+baseline. It checks dirty source first and captures the inventory only after
+success. The inventory contains only paths, Git blob IDs and include/defer
 decisions, never file contents. Keep it in ignored `.cache`:
 
 ```powershell
-node scripts/ci/release-manifest.mjs --capture .cache/dev-release-manifest.json --base origin/dev-deploy
+pwsh -NoProfile -File scripts/ci/dev-deploy-preflight.ps1 -Prepare -ManifestPath .cache/dev-release-manifest.json -BaseRef origin/dev-deploy
 ```
+
+`release-source-plan.mjs` automatically includes committed changes since the
+baseline, staged and unstaged edits, deletions and nonignored untracked files.
+No hand-picked test list is accepted by the preparation entrypoint. For each
+affected web app it runs lint and typecheck. The platform always runs shared
+contract tests and the login-page regression, including the typography and
+server-only import failures found in the previous release, then related tests
+for changed source. Asset validation also runs for platform changes. Docs-only
+changes select documentation validation, without frontend suites.
+
+Vitest related tests follow static imports; they do not replace filesystem-read
+contracts or the complete suite. A changed file with no related tests can produce
+zero related matches; mandatory platform guards still execute. Dependency/test
+configuration changes and deleted frontend files fall back to the affected app's
+whole suite. Go edits select formatting, package tests and vet; module/deletion
+changes conservatively select all Go packages. Release tooling/workflow changes
+select the shared source-contract, inventory and preflight orchestration tests.
+Broad shared changes can therefore take longer than an ordinary page edit.
+
+Dependencies must already be installed for affected web apps (`npm --prefix
+web/platform ci` or `npm --prefix web/admin ci` on a fresh checkout). Missing
+executables fail before checks begin; preparation does not install dependencies,
+build images, write a success receipt for full validation, commit or push.
+After correcting an error, rerun preparation. Source changes after a successful
+capture need a new preparation run and a new inventory path.
 
 Review this inventory against the agreed release scope. Every entry defaults to
 `include`; an intentional `defer` requires a written `reason`. Never defer an
@@ -441,9 +467,10 @@ The October 21 security baseline uses Go 1.26.10 and `golang.org/x/net` v0.60.0.
 All Go build images use the same pinned Go release and immutable digest.
 See the [Go release history](https://go.dev/doc/devel/release#go1.26.10).
 
-It runs the shared release contract (the same entrypoint as CI), npm audits,
+It starts with the mandatory `source-fast` gate, using the reviewed inventory's
+baseline. It then runs the shared release contract (the same entrypoint as CI), npm audits,
 `govulncheck`, documentation/infrastructure policy and the pinned Trivy scan
-before the full source tests/builds. Policy v5 first checks
+before the full source tests/builds. Policy v6 first checks
 the committed tree against the inventory, before any cached result. Missing,
 modified or unexpected committed files block publication. `-ManifestPath` selects
 another reviewed inventory. Frontend production builds and static model-registry
@@ -451,7 +478,8 @@ checks run locally too, alongside the existing documentation and routing checks.
 It includes the same documentation regression and routing checks as CI before push and
 validates the filesystem exclusions before consulting cached results.
 It checks Go/Node/npm/PowerShell, Bash/WSL and the Docker engine before any long stage starts.
-Only one full preflight may run in
+Preparation is not reusable full-validation evidence. After committing, the fast
+gate runs against the clean final source too. Only one full preflight may run in
 a worktree at a time. A successful result is cached under private Git metadata
 for the exact commit, policy version, runtime-input fingerprint and completed stage. If a late stage
 fails, retrying the same commit resumes from that stage instead of repeating
@@ -805,8 +833,8 @@ serialized rollout, smoke and all existing env/signature deployment regressions.
 The static validator intentionally recognizes the repository's literal workflow
 structure; unsupported structural changes fail until the contract is updated.
 
-Preflight policy v5 runs this as `release-contract` before source tests. The
-order is contract, npm audit, Go vulnerability scan, infrastructure, Trivy,
+Preflight policy v6 runs the early `source-fast` stage first, then this shared
+`release-contract`. The remaining order is npm audit, Go vulnerability scan, infrastructure, Trivy,
 then the full source tests/builds. A newly published advisory must be detected
 before long tests; update the affected packages instead of suppressing it.
 The cache validates each stage receipt, including the full runtime fingerprint.
