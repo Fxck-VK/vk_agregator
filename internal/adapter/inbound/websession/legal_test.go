@@ -19,6 +19,11 @@ type legalStub struct {
 	input  legalacceptance.AcceptInput
 }
 
+func (s *legalStub) ValidateRegistration(*legalacceptance.RegistrationNotice) error { return nil }
+func (s *legalStub) AcceptRegistration(context.Context, uuid.UUID, string, *legalacceptance.RegistrationNotice) error {
+	return nil
+}
+
 func (s *legalStub) Status(_ context.Context, id uuid.UUID) (legalacceptance.Status, error) {
 	s.actor = id
 	return s.status, nil
@@ -89,7 +94,7 @@ func TestLegalChoicesRequireCookieOriginCSRFAndUseServerAccount(t *testing.T) {
 	}
 }
 
-func TestLegalAcceptanceGuardsGenerationButNotSecurityOrWithdrawal(t *testing.T) {
+func TestLegalAcceptanceNeverAddsASeparateActionBarrier(t *testing.T) {
 	h, _, sessions := newTestHandler(t)
 	svc := &legalStub{status: legalacceptance.Status{Metadata: legalacceptance.Metadata{Published: true}}}
 	h.deps.Legal = svc
@@ -102,9 +107,9 @@ func TestLegalAcceptanceGuardsGenerationButNotSecurityOrWithdrawal(t *testing.T)
 		accepted, published bool
 		want                int
 	}{
-		{"/web/v1/image-jobs/prepare", false, true, 428},
-		{"/web/v1/payments/intents", false, true, 428},
-		{"/web/v1/conversations", false, true, 428},
+		{"/web/v1/image-jobs/prepare", false, true, 204},
+		{"/web/v1/payments/intents", false, true, 204},
+		{"/web/v1/conversations", false, true, 204},
 		{"/web/v1/account/legal/marketing", false, true, 204},
 		{"/web/v1/account/password/set", false, true, 204},
 		{"/web/v1/image-jobs/prepare", true, true, 204},
@@ -120,6 +125,36 @@ func TestLegalAcceptanceGuardsGenerationButNotSecurityOrWithdrawal(t *testing.T)
 		h.requireUnsafePrincipal(func(w http.ResponseWriter, _ *http.Request) { w.WriteHeader(204) })(rec, req)
 		if rec.Code != tc.want {
 			t.Fatalf("%s: got %d want %d", tc.path, rec.Code, tc.want)
+		}
+	}
+}
+
+func TestNewWorkStillRequiresAuthenticationOriginAndCSRF(t *testing.T) {
+	h, _, sessions := newTestHandler(t)
+	tokens, err := sessions.IssueSession(context.Background(), uuid.New(), accountauth.SessionMetadata{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, tc := range []struct {
+		auth, csrf bool
+		origin     string
+		want       int
+	}{
+		{false, true, "https://app.example.test", 401}, {true, false, "https://app.example.test", 403}, {true, true, "https://foreign.example.test", 403},
+	} {
+		r := httptest.NewRequest("POST", "/web/v1/image-jobs/prepare", nil)
+		r.Header.Set("Origin", tc.origin)
+		if tc.auth {
+			r.AddCookie(&http.Cookie{Name: "nh_access", Value: tokens.AccessToken})
+		}
+		if tc.csrf {
+			r.AddCookie(&http.Cookie{Name: "nh_csrf", Value: "proof"})
+			r.Header.Set("X-CSRF-Token", "proof")
+		}
+		rec := httptest.NewRecorder()
+		h.requireUnsafePrincipal(func(http.ResponseWriter, *http.Request) { t.Fatal("unauthorized action reached handler") })(rec, r)
+		if rec.Code != tc.want {
+			t.Fatalf("got %d want %d", rec.Code, tc.want)
 		}
 	}
 }

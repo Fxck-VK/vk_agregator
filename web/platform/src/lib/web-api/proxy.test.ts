@@ -18,13 +18,20 @@ describe("proxyWebApiRequest", () => {
     expect(response.headers.getSetCookie()).toHaveLength(1);
     expect(response.headers.get("Referrer-Policy")).toBe("no-referrer");
   });
-  it.each(["/ru/app", "/en/app/profile?oauth=linked", "/ru/login?oauth=failed"])("permits only a fixed OAuth callback redirect and preserves session cookies: %s", async (location) => {
+  it.each(["/ru/app", "/en/app/profile?oauth=linked", "/ru/login?oauth=failed", "/en/login?oauth=failed&mode=register"])("permits only a fixed OAuth callback redirect and preserves session cookies: %s", async (location) => {
     vi.stubGlobal("fetch", vi.fn(async () => new Response(null, { status: 303, headers: { Location: location, "Set-Cookie": "nh_access=synthetic; HttpOnly; Secure" } })));
     const path = "/web/v1/auth/oauth/google/callback?state=synthetic&code=synthetic";
     const response = await proxyWebApiRequest(new Request(`https://platform.example${path}`), path, internalOrigin);
     expect(response.status).toBe(303);
     expect(response.headers.get("Location")).toBe(location);
     expect(response.headers.getSetCookie()).toHaveLength(1);
+  });
+  it("preserves the non-sensitive registration revision conflict signal", async () => {
+    vi.stubGlobal("fetch", vi.fn(async () => new Response(null, { status: 409, headers: { "X-NeiroHub-Legal-Revision": "changed" } })));
+    const path = "/web/v1/auth/email/register";
+    const response = await proxyWebApiRequest(new Request(`https://platform.example${path}`, { method: "POST", body: "{}" }), path, internalOrigin);
+    expect(response.status).toBe(409);
+    expect(response.headers.get("X-NeiroHub-Legal-Revision")).toBe("changed");
   });
   it.each(["https://evil.example/ru/app", "//evil.example/ru/app", "/ru/app?token=raw", "/ru/login?oauth=failed&next=https://evil.example"])("rejects an arbitrary OAuth redirect: %s", async location => {
     vi.stubGlobal("fetch", vi.fn(async () => new Response(null, { status: 303, headers: { Location: location } })));

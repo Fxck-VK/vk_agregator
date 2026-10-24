@@ -1,6 +1,7 @@
 "use client";
 
 import { BrandText } from "@/components/brand/BrandName/BrandName";
+import type { LegalMetadata } from "@/features/legal/model";
 import { LegalNotice } from "@/features/legal/LegalLinks";
 
 import { type FormEvent, useEffect, useRef, useState } from "react";
@@ -14,9 +15,9 @@ import { CredentialField } from "./CredentialField";
 import styles from "./LoginForm/LoginForm.module.css";
 
 type Step = "email" | "code" | "password" | "session" | "preview-complete";
-class RegistrationFailure extends Error { constructor(readonly status: number) { super("registration"); } }
+class RegistrationFailure extends Error { constructor(readonly status: number, readonly documentsChanged = false) { super("registration"); } }
 
-export function EmailRegistration({ preview, returnTo, onBack, title }: Readonly<{ preview: boolean; returnTo?: string; onBack: () => void; title?: string }>) {
+export function EmailRegistration({ preview, returnTo, onBack, title, legalMetadata }: Readonly<{ preview: boolean; returnTo?: string; onBack: () => void; title?: string; legalMetadata?: LegalMetadata }>) {
   const t = useDictionary(); const locale = useLocale();
   const [step, setStep] = useState<Step>("email");
   const [email, setEmail] = useState(""); const [code, setCode] = useState("");
@@ -35,10 +36,10 @@ export function EmailRegistration({ preview, returnTo, onBack, title }: Readonly
     return () => window.clearTimeout(timer);
   }, [resendSeconds]);
 
-  async function action(path: string, body: Record<string, string>, signal: AbortSignal) {
+  async function action(path: string, body: Record<string, unknown>, signal: AbortSignal) {
     if (preview) return;
     const response = await webBrowserFetch(`/web/v1/auth/email/${path}`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body), signal });
-    if (!response.ok) throw new RegistrationFailure(response.status);
+    if (!response.ok) throw new RegistrationFailure(response.status, response.headers.get("X-NeiroHub-Legal-Revision") === "changed");
     return response;
   }
   async function perform(resend = false) {
@@ -65,7 +66,7 @@ export function EmailRegistration({ preview, returnTo, onBack, title }: Readonly
         if (controller.signal.aborted) return;
         setCode(""); setStep("password");
       } else if (step === "password") {
-        completionResponse = await action("register", { email, password }, controller.signal) ?? null;
+        completionResponse = await action("register", { email, password, ...(legalMetadata?.published ? { registration: { version: legalMetadata.version, checksum: legalMetadata.checksum, locale } } : {}) }, controller.signal) ?? null;
         if (controller.signal.aborted) return;
         if (preview) setStep("preview-complete");
         else { setAccepted(completionResponse); setStep("session"); setPassword(""); setConfirmation(""); }
@@ -82,6 +83,7 @@ export function EmailRegistration({ preview, returnTo, onBack, title }: Readonly
         return;
       }
       const status = failure instanceof RegistrationFailure ? failure.status : 0;
+      if (failure instanceof RegistrationFailure && failure.documentsChanged) { setError(t.legal.changed); return; }
       if (step === "password" && (status === 0 || status >= 500 || status === 429)) {
         // The account may already exist while session issuance failed. Keep the
         // first submitted password for retry; never imply a new one replaces it.
@@ -107,10 +109,11 @@ export function EmailRegistration({ preview, returnTo, onBack, title }: Readonly
       {step === "code" ? <><p className={styles.hint} role="status">{preview ? t.auth.registrationPreviewCode : t.auth.registrationCodeSent}</p><CredentialField label={t.auth.code} id="signup-code" autoComplete="one-time-code" inputMode="numeric" pattern="[0-9]{6}" maxLength={6} required disabled={pending} value={code} onChange={event => setCode(event.target.value)} /></> : null}
       {step === "password" ? <><p className={styles.hint}>{preview ? t.auth.registrationPreviewPassword : t.auth.registrationEmailVerified}</p><CredentialField label={t.login.passwordLabel} hint={t.auth.passwordHint} id="signup-password" autoComplete="new-password" type="password" minLength={8} maxLength={256} required disabled={pending} readOnly={passwordRetry} value={password} onChange={event => setPassword(event.target.value)} /><CredentialField label={t.auth.confirmPassword} id="signup-confirm-password" autoComplete="new-password" type="password" minLength={8} maxLength={256} required disabled={pending} readOnly={passwordRetry} value={confirmation} onChange={event => setConfirmation(event.target.value)} /></> : null}
       {error ? <StateNotice inline kind="error">{error}{diagnosticId ? <small className={styles.diagnostic}>{t.auth.loginDiagnostic} {diagnosticId}</small> : null}</StateNotice> : null}
+      {error === t.legal.changed ? <button type="button" className={styles.textAction} onClick={() => window.location.reload()}>{t.legal.reload}</button> : null}
       <Button type="submit" disabled={pending}>{pending ? <><span aria-hidden="true"><LoadingIndicator label="" /></span>{accepted ? signInStage === "navigation" ? t.auth.loginOpening : t.auth.loginConfirming : t.auth.pending}</> : step === "session" ? t.auth.loginRetry : step === "email" ? t.auth.sendCode : step === "code" ? t.auth.verifyRegistrationEmail : t.auth.createAccount}</Button>
+      <LegalNotice />
       <div className={styles.actions}><button type="button" className={styles.textAction} disabled={pending} onClick={onBack}>{t.auth.back}</button>{step !== "email" && step !== "session" ? <button type="button" className={styles.textAction} disabled={pending} onClick={restart}>{step === "password" ? t.auth.registrationRestart : t.auth.changeEmail}</button> : null}</div>
       {step === "code" ? <button type="button" className={styles.textAction} disabled={pending || resendSeconds > 0} onClick={() => void perform(true)}>{t.auth.resend}{resendSeconds ? ` (${resendSeconds})` : ""}</button> : null}
     </form>}
-    <LegalNotice />
   </>;
 }

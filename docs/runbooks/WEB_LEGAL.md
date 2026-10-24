@@ -21,7 +21,7 @@ Localized entry: `/ru/legal` or `/en/legal`; individual documents are under
 `/legal/{user-agreement,privacy-policy,paid-access,payment-details,marketing-consent}`.
 Russian is the authoritative text; English navigation does not imply a translated
 contract. Pages render escaped text, are dynamic, public and noindex. Links exist
-in login/registration, public/marketing footers, checkout and account profile.
+in registration, public/marketing footers, checkout and account profile.
 
 Operator fields are runtime-only configuration, never frontend public env/build
 arguments, source, logs or browser storage:
@@ -77,10 +77,22 @@ The latest grant/revoke event and matching current revision determine effective
 permission. The digest is a concurrency token, not an authorization credential.
 
 Withdrawal does not require accepting new terms, a current marketing version or
-enabled publication. Profile/security, logout, legal pages, reading/deleting files
-remain accessible. While published, the backend checks current acceptance before
-new website conversations/messages, uploads, generation prepare/activate/retry and
-checkout. The frontend gate cannot substitute for this server check.
+enabled publication. Workspace pages and new actions have no separate legal gate
+or first-action dialog. Cookie authentication, exact Origin/CSRF, ownership,
+billing, moderation and job/idempotency checks remain mandatory.
+
+Registration shows a small linked continuation notice; ordinary login and password
+recovery show none. `/login?mode=register` opens registration directly. Final email
+registration includes the exact displayed version/checksum/locale. The API validates
+it before completing signup and records it against the proof-owned account before
+issuing cookies. Proof-bound idempotency survives transient failures. OAuth signup
+stores the notice in the existing one-use, browser-bound server transaction and
+records it after verified identity resolution, before session issuance. Ordinary
+OAuth login keeps its existing resolve-or-create behavior and does not manufacture
+legal evidence. No historical account is automatically marked accepted. A revision
+change requires reloading the registration page; it never accepts a newer unseen text.
+Advertising is not granted by registration. Its voluntary settings and independent
+withdrawal remain in the account profile. Historical evidence is preserved.
 
 There is no marketing sender in this change. A future sender must recheck current
 recipient, consent version, latest withdrawal and publication before dispatch;
@@ -98,7 +110,7 @@ forwards writes to a real backend.
 3. Release tested code/migration through the existing authorized pipeline. Configure
    identical runtime fields for API/platform, then enable publication deliberately.
 4. Smoke public texts/links, mismatched revision rejection, cookie/CSRF enforcement,
-   authenticated acceptance, optional marketing, independent withdrawal and new
+registration evidence, ungated authenticated actions, optional marketing, independent withdrawal and new
    primary email behavior on a synthetic account. No real payment/provider call.
 5. Preserve accepted snapshots when changing text; do not rewrite historical rows.
    Schema rollback is not automatic. Publication can be paused without blocking
@@ -115,5 +127,5 @@ Backend: `go test ./web/platform/legal ./internal/service/legalacceptance
 PostgreSQL persistence checks use `LEGAL_TEST_DATABASE_URL` and refuse databases
 whose name does not start with `epifera_legal_`. They create/clean a unique schema;
 never point this test at DEV/PROD. UI checks cover links, unchecked marketing,
-revision mismatch, lost-response retry, account switching, profile access and
+registration revision mismatch, retry identity, ordinary login without fake evidence, profile access and
 withdrawal while paused. Run package typecheck, lint, tests, build and packaging.

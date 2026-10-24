@@ -16,20 +16,22 @@ import (
 	"time"
 
 	"vk-ai-aggregator/internal/domain"
+	"vk-ai-aggregator/internal/service/legalacceptance"
 )
 
 const BrowserTransactionTTL = 10 * time.Minute
 
 // BrowserTransaction contains short-lived server-only OAuth material. Never log it.
 type BrowserTransaction struct {
-	Provider    string    `json:"provider"`
-	BindingHash string    `json:"binding_hash"`
-	Verifier    string    `json:"verifier"`
-	Nonce       string    `json:"nonce"`
-	Locale      string    `json:"locale"`
-	Intent      string    `json:"intent"`
-	AccountID   string    `json:"account_id,omitempty"`
-	ExpiresAt   time.Time `json:"expires_at"`
+	Provider     string                              `json:"provider"`
+	BindingHash  string                              `json:"binding_hash"`
+	Verifier     string                              `json:"verifier"`
+	Nonce        string                              `json:"nonce"`
+	Locale       string                              `json:"locale"`
+	Intent       string                              `json:"intent"`
+	AccountID    string                              `json:"account_id,omitempty"`
+	ExpiresAt    time.Time                           `json:"expires_at"`
+	Registration *legalacceptance.RegistrationNotice `json:"registration,omitempty"`
 }
 
 type BrowserStore interface {
@@ -127,12 +129,12 @@ func bindingHash(value string) string {
 }
 func stateKey(value string) string { return "accountoauth:browser:" + bindingHash(value) }
 
-func (b *Browser) Start(ctx context.Context, name, binding, locale, intent, accountID string) (BrowserStart, error) {
+func (b *Browser) Start(ctx context.Context, name, binding, locale, intent, accountID string, registration ...*legalacceptance.RegistrationNotice) (BrowserStart, error) {
 	p, ok := b.provider(name)
 	if !ok {
 		return BrowserStart{}, ErrUnavailable
 	}
-	if binding == "" || (intent != "login" && intent != "link") || (intent == "link" && accountID == "") {
+	if binding == "" || (intent != "login" && intent != "link" && intent != "register") || (intent == "link" && accountID == "") || len(registration) > 1 {
 		return BrowserStart{}, ErrInvalidAssertion
 	}
 	if locale != "en" {
@@ -150,7 +152,10 @@ func (b *Browser) Start(ctx context.Context, name, binding, locale, intent, acco
 	if err != nil {
 		return BrowserStart{}, err
 	}
-	tx := BrowserTransaction{name, bindingHash(binding), verifier, nonce, locale, intent, accountID, time.Now().Add(BrowserTransactionTTL)}
+	tx := BrowserTransaction{Provider: name, BindingHash: bindingHash(binding), Verifier: verifier, Nonce: nonce, Locale: locale, Intent: intent, AccountID: accountID, ExpiresAt: time.Now().Add(BrowserTransactionTTL)}
+	if intent == "register" && len(registration) == 1 {
+		tx.Registration = registration[0]
+	}
 	if err := b.store.Save(ctx, stateKey(state), tx, BrowserTransactionTTL); err != nil {
 		return BrowserStart{}, ErrUnavailable
 	}

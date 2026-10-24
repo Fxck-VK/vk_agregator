@@ -9,6 +9,7 @@ import (
 	"vk-ai-aggregator/internal/domain"
 	"vk-ai-aggregator/internal/service/accountauth"
 	"vk-ai-aggregator/internal/service/accountregistration"
+	"vk-ai-aggregator/internal/service/legalacceptance"
 )
 
 const registrationCookieName = "__Host-nh-signup"
@@ -29,9 +30,10 @@ func (h *Handler) emailRegistration(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	var req struct {
-		Email    string `json:"email"`
-		Code     string `json:"code"`
-		Password string `json:"password"`
+		Email        string                              `json:"email"`
+		Code         string                              `json:"code"`
+		Password     string                              `json:"password"`
+		Registration *legalacceptance.RegistrationNotice `json:"registration,omitempty"`
 	}
 	if !decodeJSON(w, r, &req) {
 		return
@@ -63,7 +65,18 @@ func (h *Handler) emailRegistration(w http.ResponseWriter, r *http.Request) {
 		}
 		w.WriteHeader(204)
 	case "/web/v1/auth/email/register":
+		if h.deps.Legal != nil {
+			if err := h.deps.Legal.ValidateRegistration(req.Registration); err != nil {
+				legalError(w, err)
+				return
+			}
+		}
 		tokens, err := h.deps.EmailRegistration.Complete(r.Context(), binding, req.Email, req.Password, sessionMetadata(r, ""), func(tokens accountauth.SessionTokens) error {
+			if h.deps.Legal != nil {
+				if err := h.deps.Legal.AcceptRegistration(r.Context(), tokens.Session.AccountID, binding, req.Registration); err != nil {
+					return err
+				}
+			}
 			return h.setSessionCookies(w, tokens)
 		})
 		if err != nil {

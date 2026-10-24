@@ -1,5 +1,6 @@
 import { cookies } from "next/headers";
 
+import { getLegalCatalog } from "@/features/legal/catalog.server";
 import { LoginForm } from "@/features/auth/LoginForm/LoginForm";
 import { LoginWindow } from "@/features/auth/LoginWindow/LoginWindow";
 import { safeReturnPath } from "@/lib/auth/return-path";
@@ -16,7 +17,7 @@ export default async function LoginPage({ searchParams }: { searchParams?: Promi
 
   return (
     <main className={styles.page}>
-      <LoginWindow><LoginForm entry="choice" {...(returnTo ? { returnTo } : {})} methods={loginMethods} preview={preview} oauthFailed={(await searchParams)?.oauth === "failed"} /></LoginWindow>
+      <LoginWindow><LoginForm entry="choice" legalMetadata={getLegalCatalog().metadata} initialMode={(await searchParams)?.mode === "register" ? "register" : "login"} {...(returnTo ? { returnTo } : {})} methods={loginMethods} preview={preview} oauthFailed={(await searchParams)?.oauth === "failed"} /></LoginWindow>
     </main>
   );
 }

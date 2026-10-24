@@ -22,6 +22,15 @@ const replace = vi.mocked(replaceSignInDocument);
 const profile = { account_id: "10000000-0000-4000-8000-000000000001", identity_refs: [], password_set: true };
 
 describe("LoginForm", () => {
+  it("binds social registration to the displayed notice through server OAuth start", async () => {
+    vi.mocked(webBrowserFetch).mockResolvedValue(Response.json({ authorization_url: "https://untrusted.example.test/" }));
+    const legalMetadata = { published: true, version: "v1", checksum: "a".repeat(64), marketing_version: "m1", marketing_checksum: "b".repeat(64) };
+    render(<LoginForm entry="choice" initialMode="register" legalMetadata={legalMetadata} methods={{ registration: true, password: true, recovery: true, email_link: true, phone_link: false, providers: ["yandex"] }} />);
+    expect(screen.getByText(/Продолжая, вы соглашаетесь/)).toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: "Войти с Яндекс ID" }));
+    expect(await screen.findByRole("alert")).toHaveTextContent(ru.auth.providerFailure);
+    expect(webBrowserFetch).toHaveBeenCalledWith("/web/v1/auth/oauth/yandex/start", expect.objectContaining({ body: JSON.stringify({ locale: "ru", registration: { version: "v1", checksum: legalMetadata.checksum, locale: "ru" } }) }));
+  });
   it("starts the choice entry with configured providers and opens email sign-in on demand", () => {
     render(<LoginForm entry="choice" methods={{ registration: true, password: true, recovery: true, email_link: true, phone_link: false, providers: ["vk", "yandex"] }} />);
     expect(screen.getByRole("heading", { name: "Войдите, чтобы продолжить" })).toBeInTheDocument();

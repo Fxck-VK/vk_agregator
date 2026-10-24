@@ -1,12 +1,10 @@
 import { brandName, brandMonogram } from "@/config/brand";
 import { accountAuthText } from "./account-auth";
-import { marketingRu } from "./marketing-ru";
 import { imageLandingText } from "./image-landing";
 import { legalText } from "./legal";
 
 export const ru = {
   imageLanding: imageLandingText.ru,
-  marketing: marketingRu,
   auth: accountAuthText.ru,
   legal: legalText.ru,
   preloading: {

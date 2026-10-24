@@ -3379,7 +3379,30 @@ revision snapshots. Cookie-owned, CSRF-protected writes append account legal
 events under the same account lock as identity changes. Optional marketing binds
 the exact verified primary-email version, never enrolling a replacement address.
 Withdrawal and account security remain accessible across revision changes or
-publication pauses. Published terms gate new website generation/upload/checkout
-at the API boundary; preview/drafts create no synthetic consent. No marketing
+publication pauses. The later registration-only notice described below replaces
+the former API legal action gate; preview/drafts create no synthetic consent. No marketing
 sender, recurring billing, provider calls or storage relocation are introduced.
 Runtime/release contract: docs/runbooks/WEB_LEGAL.md.
+
+## Automatic public sitemap (2026-10-24)
+
+Public page publication policies live beside implemented routes. Startup/build
+ discovery generates static imports for sitemap and shared canonical/robots
+ metadata; the standalone runtime does not scan source files or crawl itself.
+Only published, indexable, currently admitted locale paths enter the map.
+Editorial samples without public renderers, private routes and legal runtime
+ requisites remain excluded. See the public publication contract in
+`web/platform/docs/locale-routing.md` and `docs/WEB_PLATFORM_ROUTE_BOUNDARIES.md`.
+## Registration-only legal notice (2026-10-24)
+
+Signup shows a small linked continuation notice. Ordinary login/recovery and
+workspace actions have no separate legal wall, confirmation dialog or API 428
+gate. Email signup validates the displayed exact revision before completion,
+records it against the proof-owned account before issuing cookies, and derives
+retry idempotency from the server proof. OAuth signup keeps the notice in the
+existing one-use browser-bound transaction; callback query values cannot replace
+it. Ordinary OAuth resolve-or-create remains supported without inventing evidence.
+Existing accounts are never automatically marked accepted. Historical snapshots,
+authentication, Origin/CSRF, ownership, billing and job idempotency remain intact.
+Marketing is a separate voluntary profile preference, never granted by signup.
+Runtime and current behavior: docs/runbooks/WEB_LEGAL.md.

@@ -21,6 +21,7 @@
   margin: 0;
   line-height: 1.5;
 }
+.dialog a { text-decoration: underline; text-underline-offset: .18em; }
 
 .dialog .description {
   margin-block-start: var(--space-2);
@@ -58,6 +59,8 @@
 }
 
 .actions .confirm:hover:not(:disabled) { background: #d91f3f; }
+.dialog[data-intent="primary"] .confirm { background: var(--color-accent); color: var(--color-text-on-accent, #fff); }
+.dialog[data-intent="primary"] .confirm:hover:not(:disabled) { filter: brightness(1.08); }
 
 .actions button:focus-visible {
   outline: 0.125rem solid var(--color-focus);

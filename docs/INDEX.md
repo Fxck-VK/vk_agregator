@@ -45,6 +45,7 @@ Read only the document that matches the current task:
 | English Magnific SEO URL inventory, hierarchy, observed links, source coverage and proposed Epifera mappings | [Registry and method](../docs/research/magnific-seo-registry/README.md) |
 | Static and original-JavaScript Magnific reference archives, interaction states and mobile captures | [Archive plan and verification scope](superpowers/plans/2026-10-23-magnific-interactive-references.md) |
 | Proposed Epifera public SEO templates, content fields, relationships and publication prerequisites | [Structure and data](superpowers/specs/2026-10-23-epifera-seo-structure-design.md); [machine catalog and candidate pages](../docs/research/epifera-seo-structure/README.md) |
+| Automatic sitemap from implemented public pages, publication/noindex policy and localized canonical URLs | [Authoring contract](../web/platform/docs/locale-routing.md#публикация-новой-seo-страницы); [implementation and checks](superpowers/plans/2026-10-24-automatic-public-sitemap.md) |
 | Browser login, verified email registration, Resend SMTP, recovery, OAuth, profile bindings and sessions | [Browser account access](../docs/runbooks/BROWSER_ACCOUNT.md) |
 | Cached personal invitation link, session isolation and independent referral statistics | [Implementation plan](superpowers/plans/2026-10-08-referral-link-cache.md); [website invitations](../docs/runbooks/WEB_REFERRALS.md) |
 | Immediate return to chats/files, background list checks and account-owned video metadata | [Implementation plan](superpowers/plans/2026-10-11-workspace-cached-return.md); [workspace loading](../web/platform/docs/preloading.md) |
@@ -63,7 +64,8 @@ Read only the document that matches the current task:
 | Production deploy, domains, Cloudflare, VPS runtime | `docs/runbooks/DEPLOYMENT.md` |
 | Support mailbox, editable Roundcube theme, UI publication, SMTP/IMAP and certificates | [Support mail](../docs/runbooks/SUPPORT_MAIL.md); [design](superpowers/specs/2026-10-22-mail-ui-delivery-design.md); [plan](superpowers/plans/2026-10-22-mail-ui-delivery.md) |
 | Local DEV contour and DEV GitHub deploy | `docs/runbooks/DEV.md` |
-| Public homepage reconstructed from the owner-selected Magnific reference | [Plan and verification](superpowers/plans/2026-10-22-magnific-homepage.md); [UI contract](../web/platform/docs/ui-catalog.md#marketing-home) |
+| English homepage rebuild after retiring the old home on both locales | [Active plan and verification](superpowers/plans/2026-10-24-english-home-rebuild.md); [UI contract](../web/platform/docs/ui-catalog.md#marketing-home). `/en` draft; `/ru` empty; both noindex. |
+| Registration legal notice | [Registration notice plan](superpowers/plans/2026-10-24-registration-legal-notice.md); [legal UI](../web/platform/docs/ui-catalog.md#legal-documents), [runtime](../docs/runbooks/WEB_LEGAL.md). Small notice on registration; no workspace or first-action consent gate. |
 | Cancel obsolete DEV image runs after mail-only pushes | [Implementation and verification](superpowers/plans/2026-10-22-cancel-superseded-dev-images.md) |
 | Remembered DEV gateway access, session expiry and rotation | [Operations](../docs/runbooks/DEV.md#remembered-browser-dev-access); [implementation plan](superpowers/plans/2026-09-29-dev-access-session.md) |
 | Workspace chat availability, account session recovery and private list cache | [Loading contract](../web/platform/docs/preloading.md); [implementation plan](superpowers/plans/2026-09-29-workspace-read-recovery.md) |

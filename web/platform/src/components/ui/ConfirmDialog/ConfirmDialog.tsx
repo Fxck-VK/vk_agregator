@@ -16,6 +16,8 @@ type ConfirmDialogProps = {
   confirmLabel: string;
   pendingLabel: string;
   isPending?: boolean;
+  confirmDisabled?: boolean;
+  intent?: "destructive" | "primary";
   errorMessage?: string;
   onCancel: () => void;
   onConfirm: () => void;
@@ -32,6 +34,8 @@ export function ConfirmDialog({
   confirmLabel,
   pendingLabel,
   isPending = false,
+  confirmDisabled = false,
+  intent = "destructive",
   errorMessage,
   onCancel,
   onConfirm,
@@ -73,9 +77,11 @@ export function ConfirmDialog({
           aria-labelledby={titleID}
           aria-modal="true"
           className={styles.dialog}
+          data-intent={intent}
           onKeyDown={(event) => {
             if (event.key !== "Tab") return;
-            const controls = Array.from(event.currentTarget.querySelectorAll<HTMLButtonElement>("button:not(:disabled)"));
+            const controls = Array.from(event.currentTarget.querySelectorAll<HTMLElement>("*")).filter(control =>
+              control instanceof HTMLButtonElement ? !control.disabled : control instanceof HTMLAnchorElement && control.hasAttribute("href"));
             const first = controls[0];
             const last = controls.at(-1);
             if (!first || !last) {
@@ -101,7 +107,7 @@ export function ConfirmDialog({
             <Button className={styles.cancel} disabled={isPending} onClick={requestClose} ref={cancelButtonRef} variant="outline">
               {cancelLabel}
             </Button>
-            <Button aria-describedby={describedBy} className={styles.confirm} disabled={isPending} onClick={onConfirm}>
+            <Button aria-describedby={describedBy} className={styles.confirm} disabled={isPending || confirmDisabled} onClick={onConfirm}>
               {isPending ? <><span aria-hidden="true"><LoadingIndicator label="" /></span>{pendingLabel}</> : confirmLabel}
             </Button>
           </div>

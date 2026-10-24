@@ -22,6 +22,11 @@ web/platform/src/app/web/v1   -> same-origin BFF proxy; not a page surface
   The URL determines page language; preference cookies cannot override it.
 - The public layout permits indexing; individual future public templates own
   their titles, descriptions, canonicals, and structured data.
+- Implemented public pages own co-located server-only publication declarations.
+  Build/start discovery statically imports these into the sitemap; metadata
+  reads the same status/indexing/locale paths. Draft/noindex/scheduled and
+  unimplemented editorial records never become sitemap entries. See the
+  [publication contract](../web/platform/docs/locale-routing.md#публикация-новой-seo-страницы).
 - The `/app` layout verifies the server session before rendering account data,
   forces dynamic rendering, disables revalidation, and emits
   `noindex, nofollow` as defense in depth.
@@ -38,7 +43,8 @@ web/platform/src/app/web/v1   -> same-origin BFF proxy; not a page surface
 The current external URL contract is:
 
 ```text
-/ru, /en             -> public home; self-canonical and language alternates
+/en                  -> rebuilt English public home; draft/noindex, self-canonical
+/ru                  -> empty home during rebuild; draft/noindex, self-canonical
 /ru/login, /en/login -> authentication page; noindex
 /ru/app, /en/app     -> authenticated workspace; noindex
 /ru/app/*, /en/app/* -> existing private pages; noindex
@@ -47,6 +53,12 @@ The current external URL contract is:
 /robots.txt          -> public crawler rules
 /sitemap.xml         -> published public locale pages only
 ```
+
+The former homepage was retired on both locales. Only the English replacement
+is implemented; no Russian translation is supplied. Home publication remains
+draft/noindex, with no language alternates or home sitemap entries until its
+content is admitted for publication. Other public and application routes keep
+their existing ownership and locale behaviour.
 
 Unknown page URLs, both inside and outside `/app`, use the `[...missing]` 404
 route with the existing workspace navigation and header. Its server layout is

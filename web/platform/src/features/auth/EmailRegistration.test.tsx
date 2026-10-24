@@ -13,6 +13,21 @@ beforeEach(() => { vi.stubGlobal("fetch", vi.fn().mockImplementation(async () =>
 afterEach(() => { cleanup(); vi.clearAllMocks(); vi.unstubAllGlobals(); });
 
 describe("Email registration", () => {
+ it("includes the displayed exact legal revision only with final registration", async () => {
+  vi.mocked(webBrowserFetch).mockResolvedValue(new Response(null, { status: 204 }));
+  const meta = { published: true, version: "v1", checksum: "a".repeat(64), marketing_version: "m1", marketing_checksum: "b".repeat(64) };
+  render(<LoginForm methods={previewAuthMethods} initialMode="register" legalMetadata={meta} />);
+  fireEvent.change(screen.getByLabelText("Электронная почта"), { target: { value: "new@example.test" } });
+  fireEvent.click(screen.getByRole("button", { name: "Отправить код" }));
+  fireEvent.change(await screen.findByLabelText("Код из письма"), { target: { value: "123456" } });
+  fireEvent.click(screen.getByRole("button", { name: "Подтвердить почту" }));
+  fireEvent.change(await screen.findByLabelText("Пароль"), { target: { value: "strong-password" } });
+  fireEvent.change(screen.getByLabelText("Повторите пароль"), { target: { value: "strong-password" } });
+  fireEvent.click(screen.getByRole("button", { name: "Создать аккаунт" }));
+  await vi.waitFor(() => expect(replace).toHaveBeenCalledWith("/ru/app"));
+  expect(webBrowserFetch).toHaveBeenLastCalledWith("/web/v1/auth/email/register", expect.objectContaining({ body: JSON.stringify({ email: "new@example.test", password: "strong-password", registration: { version: meta.version, checksum: meta.checksum, locale: "ru" } }) }));
+  expect(vi.mocked(webBrowserFetch).mock.calls.some(([path]) => path.includes("legal/accept"))).toBe(false);
+ });
  it("retries cookie confirmation after accepted signup without creating the account again", async () => {
   vi.mocked(webBrowserFetch).mockResolvedValue(new Response(null, { status: 204 }));
   vi.stubGlobal("fetch", vi.fn().mockResolvedValueOnce(new Response(null, { status: 401 })).mockResolvedValueOnce(Response.json({ account_id: "10000000-0000-4000-8000-000000000001", identity_refs: [] })));

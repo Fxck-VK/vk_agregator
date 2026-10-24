@@ -12,7 +12,7 @@ import { getAccountDisplayIdentity } from "@/features/account/account-display";
 import { defaultAuthMethods, type AuthMethods } from "@/lib/auth/methods";
 import { useWorkspaceAccountSnapshot } from "@/features/account/WorkspaceAccount/WorkspaceAccount";
 import { useDictionary } from "@/i18n/LocaleProvider";
-import { LegalConsentGate } from "@/features/legal/LegalConsentGate";
+import { LegalConsentPreferences } from "@/features/legal/LegalConsentPreferences";
 import type { LegalMetadata } from "@/features/legal/model";
 
 import styles from "./ProfileWorkspace.module.css";
@@ -70,7 +70,7 @@ export function ProfileWorkspace({ methods = defaultAuthMethods, preview = false
             </section>
 
             <ProfileLoginMethods identityRefs={profile.identity_refs} />
-            {legalMetadata?<LegalConsentGate mode="preferences" metadata={legalMetadata} accountId={profile.account_id} preview={preview}/>:null}
+            {legalMetadata?<LegalConsentPreferences metadata={legalMetadata} accountId={profile.account_id} preview={preview}/>:null}
 
             <section aria-labelledby="profile-billing-title" className={styles.section}>
               <h2 id="profile-billing-title">{t.profile.billingTitle}</h2>

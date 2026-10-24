@@ -1,6 +1,8 @@
 import { renderToStaticMarkup } from "react-dom/server";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
+vi.mock("server-only", () => ({}));
+
 vi.mock("next/headers", () => ({
   cookies: vi.fn(),
 }));
@@ -20,6 +22,13 @@ import { metadata } from "./layout";
 import LoginPage from "./page";
 
 describe("LoginPage", () => {
+  it("passes the signup entry and exact server catalogue metadata to registration", async () => {
+    renderToStaticMarkup(await LoginPage({ searchParams: Promise.resolve({ mode: "register" }) }));
+    expect(LoginForm).toHaveBeenCalledWith(expect.objectContaining({
+      initialMode: "register",
+      legalMetadata: expect.objectContaining({ version: expect.any(String), checksum: expect.stringMatching(/^[a-f0-9]{64}$/) }),
+    }), undefined);
+  });
   it("renders the two-column login window and requests the choice entry", async () => {
     const markup = renderToStaticMarkup(await LoginPage());
     expect(markup).toContain('data-testid="login-window"');

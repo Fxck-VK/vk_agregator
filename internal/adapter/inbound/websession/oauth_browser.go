@@ -11,13 +11,14 @@ import (
 	"vk-ai-aggregator/internal/adapter/accountoauth"
 	"vk-ai-aggregator/internal/domain"
 	"vk-ai-aggregator/internal/service/accountservice"
+	"vk-ai-aggregator/internal/service/legalacceptance"
 )
 
 const oauthBindingCookie = "__Host-nh-oauth"
 
 type BrowserOAuthService interface {
 	Providers() []string
-	Start(context.Context, string, string, string, string, string) (accountoauth.BrowserStart, error)
+	Start(context.Context, string, string, string, string, string, ...*legalacceptance.RegistrationNotice) (accountoauth.BrowserStart, error)
 	Complete(context.Context, string, string, url.Values) (accountoauth.BrowserTransaction, domain.VerifiedAccountLogin, error)
 }
 type BrowserOAuthLogins interface {
@@ -43,10 +44,26 @@ func (h *Handler) beginOAuth(w http.ResponseWriter, r *http.Request, intent, acc
 		return
 	}
 	var req struct {
-		Locale string `json:"locale"`
+		Locale       string                              `json:"locale"`
+		Registration *legalacceptance.RegistrationNotice `json:"registration,omitempty"`
 	}
 	if !decodeJSON(w, r, &req) {
 		return
+	}
+	if req.Registration != nil {
+		if intent == "link" || req.Registration.Locale != req.Locale {
+			writeError(w, 400, "invalid registration notice")
+			return
+		}
+		if h.deps.Legal == nil {
+			writeError(w, 503, "registration unavailable")
+			return
+		}
+		if err := h.deps.Legal.ValidateRegistration(req.Registration); err != nil {
+			legalError(w, err)
+			return
+		}
+		intent = "register"
 	}
 	binding := ""
 	if cookie, err := r.Cookie(oauthBindingCookie); err == nil && len(cookie.Value) == 43 {
@@ -60,7 +77,7 @@ func (h *Handler) beginOAuth(w http.ResponseWriter, r *http.Request, intent, acc
 			return
 		}
 	}
-	start, err := h.deps.BrowserOAuth.Start(r.Context(), r.PathValue("provider"), binding, req.Locale, intent, accountID)
+	start, err := h.deps.BrowserOAuth.Start(r.Context(), r.PathValue("provider"), binding, req.Locale, intent, accountID, req.Registration)
 	if err != nil {
 		writeError(w, 503, "authentication unavailable")
 		return
@@ -80,6 +97,9 @@ func (h *Handler) browserOAuthCallback(w http.ResponseWriter, r *http.Request) {
 		path := "/" + locale + "/login?oauth=failed"
 		if intent == "link" {
 			path = "/" + locale + "/app/profile?oauth=failed"
+		}
+		if intent == "register" {
+			path += "&mode=register"
 		}
 		http.Redirect(w, r, path, 303)
 	}
@@ -126,6 +146,18 @@ func (h *Handler) browserOAuthCallback(w http.ResponseWriter, r *http.Request) {
 	if err != nil || resolution.AccountID == uuid.Nil {
 		failure(tx.Locale, tx.Intent)
 		return
+	}
+	if tx.Intent == "register" {
+		if h.deps.Legal == nil {
+			failure(tx.Locale, tx.Intent)
+			return
+		}
+		// The one-use OAuth state supplies retry identity, never an unsigned
+		// callback query claiming acceptance for an existing login.
+		if err := h.deps.Legal.AcceptRegistration(ctx, resolution.AccountID, r.URL.Query().Get("state"), tx.Registration); err != nil {
+			failure(tx.Locale, tx.Intent)
+			return
+		}
 	}
 	tokens, err := h.deps.Sessions.IssueSession(ctx, resolution.AccountID, sessionMetadata(r, ""))
 	if err != nil {

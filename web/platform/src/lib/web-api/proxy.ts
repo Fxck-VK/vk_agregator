@@ -50,7 +50,7 @@ function proxyRequestHeaders(requestHeaders: Headers): Headers {
 
 function proxyResponseHeaders(upstream: Headers): Headers {
   const headers = new Headers();
-  for (const header of ["Content-Type", "Cache-Control", "Content-Range", "Accept-Ranges", "Content-Disposition", "X-Content-Type-Options", "Retry-After", "X-NeiroHub-Account-ID"]) {
+  for (const header of ["Content-Type", "Cache-Control", "Content-Range", "Accept-Ranges", "Content-Disposition", "X-Content-Type-Options", "Retry-After", "X-NeiroHub-Account-ID", "X-NeiroHub-Legal-Revision"]) {
     const value = upstream.get(header);
     if (value) {
       headers.set(header, value);
@@ -224,7 +224,7 @@ export async function proxyWebApiRequest(
     const oauthLocation = upstream.headers.get("Location");
     if (request.method === "GET" && upstream.status === 303
       && /^\/web\/v1\/auth\/oauth\/(google|apple|vk|yandex|telegram)\/callback$/.test(safePath.split("?", 1)[0])
-      && oauthLocation && /^\/(ru|en)\/(app|app\/profile\?oauth=(linked|failed)|login\?oauth=failed)$/.test(oauthLocation)) {
+      && oauthLocation && /^\/(ru|en)\/(app|app\/profile\?oauth=(linked|failed)|login\?oauth=failed(&mode=register)?)$/.test(oauthLocation)) {
       const headers = proxyResponseHeaders(upstream.headers);
       headers.set("Location", oauthLocation); headers.set("Cache-Control", "no-store"); headers.set("Referrer-Policy", "no-referrer");
       return new Response(null, { status: 303, headers });

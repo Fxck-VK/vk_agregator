@@ -24,24 +24,24 @@ test("URL language wins over cookies on every existing page; service routes and 
   expect(prefetch.headers()["set-cookie"]).toBeUndefined();
 });
 
-test("public metadata and public shell switch together; sitemap contains only localized public pages", async ({ page, request }) => {
+test("the English home replaces the retired layout while the Russian home and sitemap stay empty", async ({ page, request }) => {
   await page.goto("/ru");
   const errors: string[] = [];
   page.on("pageerror", error => errors.push(error.message));
-  await page.getByRole("button", { name: "English", exact: true }).click();
-  await expect(page).toHaveURL(/\/en$/);
+  await expect(page.locator("h1,header,footer")).toHaveCount(0);
+  await expect(page.locator('head meta[name="robots"]')).toHaveAttribute("content", "noindex, nofollow");
+  await page.goto("/en");
   await expect(page.locator("html")).toHaveAttribute("lang", "en");
-  await expect(page.locator("header a[href='/en/app']")).toHaveText("Open platform");
+  await expect(page.getByRole("heading", { level: 1 })).toHaveText("The creative platform to direct your best work");
   await expect(page.locator("head link[rel=canonical]")).toHaveAttribute("href", "http://localhost:7159/en");
-  await expect(page.locator('head link[hreflang="ru"]')).toHaveAttribute("href", "http://localhost:7159/ru");
-  await expect(page.locator('head link[hreflang="en"]')).toHaveAttribute("href", "http://localhost:7159/en");
+  await expect(page.locator('head meta[name="robots"]')).toHaveAttribute("content", "noindex, nofollow");
+  await expect(page.locator('head link[hreflang]')).toHaveCount(0);
   await page.goBack();
   await expect(page.locator("html")).toHaveAttribute("lang", "ru");
-  await expect(page.locator("header a[href='/ru/app']")).toHaveText("Открыть платформу");
+  await expect(page.locator("h1,header,footer")).toHaveCount(0);
   expect(errors).toEqual([]);
   const sitemap = await (await request.get("/sitemap.xml")).text();
-  expect(sitemap.match(/<loc>/g)).toHaveLength(2);
-  expect(sitemap).toContain("http://localhost:7159/en");
+  expect(sitemap).not.toContain("<loc>");
   expect(sitemap).not.toMatch(/\/app|\/login/);
 });
 

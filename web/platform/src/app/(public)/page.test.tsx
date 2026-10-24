@@ -1,32 +1,39 @@
-import { brandName } from "@/config/brand";
-vi.mock("server-only", () => ({}));
-vi.mock("next/navigation", () => ({ useRouter: vi.fn() }));
-vi.mock("next/headers", () => ({ headers: vi.fn(async () => new Headers()), cookies: vi.fn(async () => ({ get: () => undefined })) }));
-import { renderToStaticMarkup } from "react-dom/server";
+import { render, screen } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
+import { getDictionary } from "@/i18n/dictionary";
+import { LocaleProvider } from "@/i18n/LocaleProvider";
 
-vi.mock("next/server", () => ({
-  connection: vi.fn(),
+const request = vi.hoisted(() => ({ locale: "ru" as "ru" | "en" }));
+vi.mock("server-only", () => ({}));
+vi.mock("next/server", () => ({ connection: vi.fn(async () => undefined) }));
+vi.mock("next/navigation", () => ({ useRouter: vi.fn(), usePathname: () => "/", useSearchParams: () => new URLSearchParams() }));
+vi.mock("@/i18n/server", () => ({
+  getRequestLocale: async () => request.locale,
+  getRequestDictionary: async () => getDictionary(request.locale),
 }));
 
-import { connection } from "next/server";
+import HomePage, { generateMetadata } from "./page";
+import { publicSitemap } from "@/i18n/seo";
 
-import HomePage from "./page";
+afterEach(() => { request.locale = "ru"; });
 
-describe("HomePage", () => {
-  afterEach(() => {
-    vi.clearAllMocks();
+describe("homepage retirement boundary", () => {
+  it("keeps the Russian home empty after retiring its former layout", async () => {
+    request.locale = "ru";
+    const { container } = render(await HomePage());
+    expect(screen.queryByRole("heading", { level: 1 })).not.toBeInTheDocument();
+    expect(container.querySelector("header,footer,video,img")).toBeNull();
   });
 
-  it("waits for the request so Next can attach the per-request CSP nonce", async () => {
-    vi.mocked(connection).mockResolvedValue(undefined);
+  it("serves the rebuilt homepage only on the English route", async () => {
+    request.locale = "en";
+    render(<LocaleProvider locale="en">{await HomePage()}</LocaleProvider>);
+    expect(screen.getByRole("heading", { level: 1 })).toHaveTextContent("The creative platform to direct your best work");
+  });
 
-    const markup = renderToStaticMarkup(await HomePage());
-
-    expect(connection).toHaveBeenCalledOnce();
-    expect(markup).toContain(`${brandName}`);
-    expect(markup).toContain('href="/ru/app"');
-    expect(markup).toContain('id="home-heading"');
-    expect(markup).toContain('id="public-main"');
+  it.each(["ru", "en"] as const)("keeps %s rebuilding home outside search", async locale => {
+    request.locale = locale;
+    expect((await generateMetadata()).robots).toEqual({ index: false, follow: false });
+    expect(publicSitemap()).toEqual([]);
   });
 });

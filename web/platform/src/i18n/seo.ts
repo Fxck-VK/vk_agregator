@@ -2,6 +2,9 @@ import "server-only";
 import type { Metadata, MetadataRoute } from "next";
 import { defaultLocale, locales, type Locale } from "./locales";
 import { localizeHref } from "./routing";
+import { publicPageSources } from "@/content/publication/generated";
+import { isIndexablePublication, publishedPublicPages, validatePublication } from "@/content/publication/policy";
+import type { PublicPagePublication, PublicPageSource } from "@/content/publication/types";
 
 /** Deployment configuration only: never derive canonical hosts from request headers. */
 export function getPublicOrigin(): string {
@@ -13,23 +16,41 @@ export function getPublicOrigin(): string {
   } catch { throw new Error("WEB_ORIGIN must be a public HTTP(S) origin without credentials, path, query or fragment."); }
 }
 
-const publicPages = ["/"] as const;
+function publicationLanguages(page: PublicPagePublication, origin: string): Record<string, string> {
+  return Object.fromEntries(locales.flatMap(locale => {
+    const path = page.paths[locale];
+    return path ? [[locale, origin + localizeHref(path, locale)]] : [];
+  }));
+}
 
-export function publicPageMetadata(locale: Locale, path: typeof publicPages[number]): Metadata {
+export function publicPageMetadata(locale: Locale, page: PublicPagePublication, now = Date.now()): Metadata {
+  validatePublication(page);
   const origin = getPublicOrigin();
-  const languages = Object.fromEntries(locales.map(language => [language, origin + localizeHref(path, language)]));
+  const path = page.paths[locale];
+  if (!path) throw new Error("Public page has no translation for the requested locale.");
+  const index = isIndexablePublication(page, now);
+  const languages = publicationLanguages(page, origin);
+  const defaultPath = page.paths[defaultLocale];
   return {
+    robots: { index, follow: index },
     alternates: {
       canonical: origin + localizeHref(path, locale),
-      languages: { ...languages, "x-default": origin + localizeHref(path, defaultLocale) },
+      ...(index ? { languages: { ...languages, ...(defaultPath ? { "x-default": origin + localizeHref(defaultPath, defaultLocale) } : {}) } } : {}),
     },
   };
 }
 
-export function publicSitemap(): MetadataRoute.Sitemap {
+export function buildPublicSitemap(sources: readonly PublicPageSource[], now = Date.now()): MetadataRoute.Sitemap {
   const origin = getPublicOrigin();
-  return publicPages.flatMap(path => locales.map(locale => ({
-    url: origin + localizeHref(path, locale),
-    alternates: { languages: Object.fromEntries(locales.map(language => [language, origin + localizeHref(path, language)])) },
-  })));
+  return publishedPublicPages(sources, now).flatMap(page => {
+    const languages = publicationLanguages(page, origin);
+    return locales.flatMap(locale => {
+      const url = languages[locale];
+      return url ? [{ url, ...(page.updatedAt ? { lastModified: page.updatedAt } : {}), alternates: { languages } }] : [];
+    });
+  });
+}
+
+export function publicSitemap(): MetadataRoute.Sitemap {
+  return buildPublicSitemap(publicPageSources);
 }

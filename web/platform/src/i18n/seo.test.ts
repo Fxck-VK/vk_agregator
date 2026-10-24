@@ -1,12 +1,13 @@
 import { afterEach, expect, it, vi } from "vitest";
 vi.mock("server-only", () => ({}));
 import { getPublicOrigin, publicPageMetadata, publicSitemap } from "./seo";
+import { homePublication } from "@/app/(public)/publication";
 
 afterEach(() => vi.unstubAllEnvs());
 it("uses configured origin, self canonicals and reciprocal language links", () => {
   vi.stubEnv("WEB_ORIGIN", "https://platform.example");
   for (const locale of ["ru", "en"] as const) {
-    expect(publicPageMetadata(locale, "/").alternates).toEqual({
+    expect(publicPageMetadata(locale, { ...homePublication, status: "published", indexing: "index" }).alternates).toEqual({
       canonical: `https://platform.example/${locale}`,
       languages: { ru: "https://platform.example/ru", en: "https://platform.example/en", "x-default": "https://platform.example/ru" },
     });
@@ -14,7 +15,7 @@ it("uses configured origin, self canonicals and reciprocal language links", () =
 });
 it("lists only existing public pages, without private, login or tracking URLs", () => {
   vi.stubEnv("WEB_ORIGIN", "https://platform.example");
-  expect(publicSitemap().map(entry => entry.url)).toEqual(["https://platform.example/ru", "https://platform.example/en"]);
+  expect(publicSitemap()).toEqual([]);
 });
 it("requires a trusted origin in production rather than guessing from Host", () => {
   vi.stubEnv("NODE_ENV", "production");

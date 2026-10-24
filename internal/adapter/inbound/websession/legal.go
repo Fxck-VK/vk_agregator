@@ -4,43 +4,17 @@ import (
 	"context"
 	"errors"
 	"net/http"
-	"strings"
 
 	"github.com/google/uuid"
 	"vk-ai-aggregator/internal/service/legalacceptance"
 )
 
 type LegalConsentService interface {
+	ValidateRegistration(*legalacceptance.RegistrationNotice) error
+	AcceptRegistration(context.Context, uuid.UUID, string, *legalacceptance.RegistrationNotice) error
 	Status(context.Context, uuid.UUID) (legalacceptance.Status, error)
 	Accept(context.Context, uuid.UUID, legalacceptance.AcceptInput) (legalacceptance.Status, error)
 	UpdateMarketing(context.Context, uuid.UUID, legalacceptance.MarketingInput) (legalacceptance.Status, error)
-}
-
-// Consent is checked before new work or checkout, never before security,
-// withdrawal, reading existing results or deleting user content.
-func (h *Handler) requireCurrentLegal(next http.HandlerFunc) http.HandlerFunc {
-	return func(w http.ResponseWriter, r *http.Request) {
-		path := r.URL.Path
-		needsChoice := r.Method == http.MethodPost && (path == "/web/v1/conversations" ||
-			(strings.HasPrefix(path, "/web/v1/conversations/") && strings.HasSuffix(path, "/messages")) ||
-			path == "/web/v1/payments/intents" || path == "/web/v1/input-artifacts" ||
-			path == "/web/v1/music-inputs" || strings.HasPrefix(path, "/web/v1/image-jobs/") ||
-			strings.HasPrefix(path, "/web/v1/video-jobs/") || strings.HasPrefix(path, "/web/v1/music-jobs/") ||
-			strings.HasPrefix(path, "/web/v1/speech-jobs/"))
-		if needsChoice && h.deps.Legal != nil {
-			principal, _ := PrincipalFromContext(r.Context())
-			status, err := h.deps.Legal.Status(r.Context(), principal.AccountID)
-			if err != nil {
-				writeError(w, http.StatusServiceUnavailable, "legal settings unavailable")
-				return
-			}
-			if status.Published && !status.Accepted {
-				writeError(w, http.StatusPreconditionRequired, "current terms must be accepted")
-				return
-			}
-		}
-		next(w, r)
-	}
 }
 
 func (h *Handler) legalStatus(w http.ResponseWriter, r *http.Request) {
@@ -101,6 +75,9 @@ func (h *Handler) legalChoice(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, 200, out)
 }
 func legalError(w http.ResponseWriter, err error) {
+	if errors.Is(err, legalacceptance.ErrVersion) {
+		w.Header().Set("X-NeiroHub-Legal-Revision", "changed")
+	}
 	status := 503
 	switch {
 	case errors.Is(err, legalacceptance.ErrInvalid):

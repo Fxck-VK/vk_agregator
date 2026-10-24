@@ -3,7 +3,7 @@
 Статус: активный. Входная точка для задач по интерфейсу `web/platform`.
 
 Юридические ссылки, страницы документов, принятие условий и отдельная рассылка:
-[`features/legal`](../src/features/legal/LegalConsentGate.tsx),
+[`features/legal`](../src/features/legal/LegalLinks.tsx),
 [контракт компонентов](ui-catalog.md#legal-documents),
 [runtime и публикация](../../../docs/runbooks/WEB_LEGAL.md).
 
@@ -24,7 +24,7 @@
 | --- | --- | --- |
 | Имя пользователя в меню аккаунта | `AccountControl` → `AccountMenu`: серверный `display_name`, иначе прежняя подпись почты/провайдера; без запросов к VK | [Аккаунт](ui-catalog.md#browser-account) |
 | Смена светлой, тёмной и системной темы | Только `AccountMenu` в личном кабинете через `ModeSwitchPanel`; в публичных шапках и других местах переключателя нет | [Ограничения](ui-catalog.md#limits) |
-| Публичная главная по референсу Magnific | `MarketingHome` + `MarketingHeader`: первый экран, вкладки, карточки, FAQ; `/ru` и `/en` | [Публичная главная](ui-catalog.md#marketing-home) |
+| Английская публичная главная по референсу Magnific | `PublicHome` + общие `Landing*`: `/en`, первый экран, вкладки, карточки, FAQ; `/ru` пустая, обе версии draft/noindex | [Публичная главная](ui-catalog.md#marketing-home) |
 | Демонстрация публичной страницы генератора изображений | `ImageToolLanding` в `/ru/ai/image-generator` и `/en/ai/image-generator`: иллюстрации, модели, инструкция и FAQ; noindex, переход в существующий генератор | [Пример страницы инструмента](ui-catalog.md#image-tool-preview) |
 | Вход, регистрация, восстановление, основная и одна резервная почта, замена и сессии | `LoginWindow`/`LoginShowcase` (выбор способа входа и промослайды), `LoginForm`, `EmailRegistration`, общий `completeSignIn` с проверкой cookie-сессии и новым документом; `CredentialField`, `AccountSecurity`, `InputSurface`, `Button`, `AsyncState` и серверная доступность способов | [Аккаунт](ui-catalog.md#browser-account) |
 | Приглашения на сайт и статистика аккаунта | `ProfileReferralProgram`: код в памяти текущей сессии, независимое обновление `/web/v1/referrals/stats`; `InviteEntry`, общий `Button`/`StateNotice`; бонусы пока выключены | [Аккаунт](ui-catalog.md#browser-account), [контракт приглашений](../../../docs/runbooks/WEB_REFERRALS.md) |
@@ -35,7 +35,7 @@
 | «1-й вариант», подсветить текст/иконку при наведении, ссылка-действие | `itemVariant="action"` + `control`; вне панели — `actionItems` + `control` | [Состояния](ui-catalog.md#states), [пример 1](ui-catalog-examples.md#example-1) |
 | «2-й вариант», выбранная кнопка белая с рамкой | `PopoverOption`, `itemVariant="selection"` | [Состояния](ui-catalog.md#states), [пример 2](ui-catalog-examples.md#example-2) |
 | «Удалить чат»: серый обычно, красный при наведении | Общий action-стиль + локальное исключение `ConversationRow` | [Состояния](ui-catalog.md#states), [пример 1](ui-catalog-examples.md#example-1) |
-| Подтверждение удаления чата или файла | Общий `ConfirmDialog`: одна поверхность и красная кнопка, отмена первой в фокусе, pending/error и возврат фокуса; сценарий владеет текстами и запросом | [Подтверждение действия](ui-catalog.md#confirm-dialog) |
+| Подтверждение удаления | Общий `ConfirmDialog`: destructive/primary, отмена первой в фокусе, pending/error и возврат фокуса; сценарий владеет текстами и запросом | [Подтверждение действия](ui-catalog.md#confirm-dialog) |
 | Тумблер, режимы, тема, только иконки | `ModeSwitchPanel`; `fullWidth` для всей доступной ширины, `iconOnly` для иконок | [Панели](ui-catalog.md#panels), [пример 3](ui-catalog-examples.md#example-3) |
 | Раскрывающиеся вопросы и ответы | Общий `FAQ`, `items`; `name` для одного открытого ответа | [FAQ](ui-catalog.md#faq) |
 | Кнопка или счётчик внутри поля | `InputControlChip` button/div | [Ввод](ui-catalog.md#input), [радиус и размеры](ui-catalog.md#tokens) |

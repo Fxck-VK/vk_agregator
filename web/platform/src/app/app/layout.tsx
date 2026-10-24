@@ -10,8 +10,6 @@ import { loadWorkspaceSession } from "@/features/session/session-data";
 import { isLocalWorkspacePreviewEnabled, localWorkspacePreviewConversations, localWorkspacePreviewConversationMessages, localWorkspacePreviewImageModels } from "@/features/session/local-workspace-preview";
 import { WorkspaceHome } from "@/features/workspace/WorkspaceHome/WorkspaceHome";
 import { getRequestDictionary } from "@/i18n/server";
-import { getLegalCatalog } from "@/features/legal/catalog.server";
-import { LegalConsentGate } from "@/features/legal/LegalConsentGate";
 
 import styles from "./layout.module.css";
 
@@ -77,7 +75,7 @@ export async function WorkspaceSessionContent({ children }: Readonly<{ children:
         conversations={session.conversations}
         profile={session.profile}
       >
-        <LegalConsentGate metadata={getLegalCatalog().metadata} accountId={session.profile.account_id} preview={isLocalWorkspacePreviewEnabled()}>{children}</LegalConsentGate>
+        {children}
       </WorkspaceFrame>
       {developmentTools}
     </WorkspaceLogoutBoundary>

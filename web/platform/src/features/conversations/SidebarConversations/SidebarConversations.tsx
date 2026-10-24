@@ -88,6 +88,7 @@ export function SidebarConversations({ conversations }: SidebarConversationsProp
       ) : (
         <ScrollArea
           className={styles.listScrollArea}
+          data-sidebar-conversation-scroll="true"
           viewportAs="ul"
           viewportClassName={styles.list}
           viewportProps={{ "data-sidebar-conversation-list": "true" }}

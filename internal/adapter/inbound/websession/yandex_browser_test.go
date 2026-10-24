@@ -18,6 +18,7 @@ import (
 	"vk-ai-aggregator/internal/service/accountauth"
 	"vk-ai-aggregator/internal/service/accountservice"
 	"vk-ai-aggregator/internal/service/identityresolver"
+	"vk-ai-aggregator/internal/service/legalacceptance"
 )
 
 type yandexBrowserStore struct {
@@ -49,6 +50,9 @@ func TestYandexBrowserRoutesIssueCookiesAndBindLinkToCurrentAccount(t *testing.T
 	h.deps.OAuthLogins = auth
 	h.deps.Account = accountservice.New(repo, auth, accountservice.WithProfileRepository(repo))
 	calls := 0
+	legalRepo := &registrationLegalRepo{}
+	h.deps.Legal = legalacceptance.New(legalRepo, legalacceptance.Metadata{Published: true, Version: "v1", Checksum: strings.Repeat("a", 64)})
+	registrationBody := ""
 	h.deps.BrowserOAuth = accountoauth.NewBrowser(accountoauth.BrowserConfig{WebOrigin: "https://app.example.test", YandexClientID: "client", YandexClientSecret: "synthetic-secret"}, &yandexBrowserStore{data: map[string]accountoauth.BrowserTransaction{}}, accountoauth.NewRegistry(), &http.Client{Transport: yandexHTTPTransport(func(r *http.Request) (*http.Response, error) {
 		calls++
 		body := `{"access_token":"synthetic-access"}`
@@ -63,7 +67,11 @@ func TestYandexBrowserRoutesIssueCookiesAndBindLinkToCurrentAccount(t *testing.T
 		if link {
 			path = "/web/v1/account/oauth/yandex/start"
 		}
-		req := httptest.NewRequest("POST", path, strings.NewReader(`{"locale":"en"}`))
+		body := `{"locale":"en"}`
+		if registrationBody != "" {
+			body = registrationBody
+		}
+		req := httptest.NewRequest("POST", path, strings.NewReader(body))
 		req.Header.Set("Origin", "https://app.example.test")
 		if access != nil {
 			req.AddCookie(access)
@@ -111,6 +119,9 @@ func TestYandexBrowserRoutesIssueCookiesAndBindLinkToCurrentAccount(t *testing.T
 	if rec.Code != 303 || rec.Header().Get("Location") != "/en/app" || calls != 2 {
 		t.Fatal("login callback failed")
 	}
+	if len(legalRepo.records) != 0 {
+		t.Fatal("ordinary login invented legal acceptance")
+	}
 	cookies := cookieMap(rec.Result().Cookies())
 	for _, key := range []string{accessCookieName, refreshCookieName} {
 		if c := cookies[key]; c == nil || !c.HttpOnly || !c.Secure || c.Domain != "" || c.SameSite != http.SameSiteLaxMode {
@@ -149,5 +160,19 @@ func TestYandexBrowserRoutesIssueCookiesAndBindLinkToCurrentAccount(t *testing.T
 	profile, err := h.deps.Account.Profile(ctx, principal.AccountID)
 	if err != nil || len(profile.IdentityRefs) != 1 || profile.IdentityRefs[0].Provider != domain.IdentityProviderYandex {
 		t.Fatal("binding changed account ownership", err)
+	}
+	registrationBody = `{"locale":"en","registration":{"version":"v1","checksum":"` + strings.Repeat("a", 64) + `","locale":"en"}}`
+	q, binding = start(false, nil)
+	// Callback parameters cannot replace the server-stored displayed revision.
+	q.Set("checksum", strings.Repeat("c", 64))
+	if rec := callback(q, binding, nil); rec.Header().Get("Location") != "/en/app" {
+		t.Fatal("social registration failed")
+	}
+	if len(legalRepo.records) != 1 || legalRepo.records[0].AccountID != principal.AccountID || legalRepo.records[0].Metadata.Version != "v1" || legalRepo.records[0].Locale != "en" || legalRepo.records[0].MarketingOptIn {
+		t.Fatal("registration lost bound notice or invented marketing")
+	}
+	callback(q, binding, nil)
+	if len(legalRepo.records) != 1 {
+		t.Fatal("OAuth replay duplicated legal evidence")
 	}
 }

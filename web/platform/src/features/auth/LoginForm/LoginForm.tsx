@@ -2,6 +2,7 @@
 
 import { BrandText } from "@/components/brand/BrandName/BrandName";
 import { LegalNotice } from "@/features/legal/LegalLinks";
+import type { LegalMetadata } from "@/features/legal/model";
 
 import { type FormEvent, useEffect, useRef, useState } from "react";
 import { StateNotice, LoadingIndicator } from "@/components/ui/AsyncState/AsyncState";
@@ -18,12 +19,12 @@ import styles from "./LoginForm.module.css";
 
 type Step = "login" | "email" | "code" | "complete";
 const providerOrder: Record<OAuthProvider, number> = { yandex: 0, vk: 1, apple: 2, telegram: 3, google: 4 };
-export function LoginForm({ returnTo, methods = defaultAuthMethods, preview = false, oauthFailed = false, entry = "email" }: Readonly<{ returnTo?: string; methods?: AuthMethods; preview?: boolean; oauthFailed?: boolean; entry?: "email" | "choice" }>) {
+export function LoginForm({ returnTo, methods = defaultAuthMethods, preview = false, oauthFailed = false, entry = "email", initialMode = "login", legalMetadata }: Readonly<{ returnTo?: string; methods?: AuthMethods; preview?: boolean; oauthFailed?: boolean; entry?: "email" | "choice"; initialMode?: "login" | "register"; legalMetadata?: LegalMetadata }>) {
   const t = useDictionary(); const locale = useLocale();
   const msg = useMessages();
   const providers = visibleOAuthProvidersForUI(methods.providers);
   const [step, setStep] = useState<Step>("login");
-  const [registering, setRegistering] = useState(false);
+  const [registering, setRegistering] = useState(initialMode === "register");
   const [emailEntry, setEmailEntry] = useState(entry === "email");
   const formRoot = useRef<HTMLElement>(null);
   useEffect(() => {
@@ -94,7 +95,7 @@ export function LoginForm({ returnTo, methods = defaultAuthMethods, preview = fa
   const oauth = async (provider: OAuthProvider) => {
     if (pending || preview) return; setError(""); setPending(true);
     try {
-      const response = await webBrowserFetch(`/web/v1/auth/oauth/${provider}/start`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ locale }) });
+      const response = await webBrowserFetch(`/web/v1/auth/oauth/${provider}/start`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ locale, ...(registering && legalMetadata?.published ? { registration: { version: legalMetadata.version, checksum: legalMetadata.checksum, locale } } : {}) }) });
       if (!response.ok) throw new Error("oauth");
       const value: unknown = await response.json();
       const target = safeAuthorizationURL(typeof value === "object" && value !== null && "authorization_url" in value ? value.authorization_url : null, provider);
@@ -105,9 +106,9 @@ export function LoginForm({ returnTo, methods = defaultAuthMethods, preview = fa
   const formClass = entry === "choice" ? `${styles.form} ${styles.windowForm}` : styles.form;
   const backToChoice = () => { move("login"); setEmailEntry(false); };
 
-  if (entry === "choice" && !emailEntry && !registering) return <div className={styles.choiceEntry}>
+  if (entry === "choice" && !emailEntry) return <div className={styles.choiceEntry}>
     <section ref={formRoot} className={styles.choiceCard} aria-labelledby="login-title">
-      <h1 id="login-title" tabIndex={-1}>{t.auth.choiceTitle}</h1>
+      <h1 id="login-title" tabIndex={-1}>{registering ? t.auth.registrationEntry : t.auth.choiceTitle}</h1>
       <div className={styles.choiceProviders}>
         {[...providers].sort((a, b) => providerOrder[a] - providerOrder[b]).map(provider => <Button className={styles.providerPill} key={provider} disabled={pending || preview} onClick={() => oauth(provider)}>
           {provider === "yandex" ? (
@@ -125,9 +126,10 @@ export function LoginForm({ returnTo, methods = defaultAuthMethods, preview = fa
         </Button>)}
       </div>
       {providers.length ? <div className={styles.divider}><span>{t.auth.choiceOr}</span></div> : null}
-      <Button className={styles.emailPill} disabled={pending || !(methods.password || methods.registration || methods.recovery)} onClick={() => { move("login"); setEmailEntry(true); }}>{t.auth.emailEntry}</Button>
+      <Button className={styles.emailPill} disabled={pending || (registering ? !methods.registration : !(methods.password || methods.registration || methods.recovery))} onClick={() => { move("login"); setEmailEntry(true); }}>{registering ? t.auth.registrationEntry : t.auth.emailEntry}</Button>
       {error ? <StateNotice inline kind="error">{error}</StateNotice> : null}
-      <LegalNotice />
+      {registering ? <LegalNotice /> : null}
+      {methods.registration ? <button type="button" className={styles.textAction} disabled={pending} onClick={() => { move("login"); setRegistering(value => !value); }}>{registering ? t.auth.back : t.auth.createAccount}</button> : null}
       {preview ? <p className={styles.previewNote}>{t.auth.preview}</p> : null}
     </section>
     <aside className={styles.helpCard}>
@@ -135,7 +137,7 @@ export function LoginForm({ returnTo, methods = defaultAuthMethods, preview = fa
     </aside>
   </div>;
 
-  if (registering) return <section ref={formRoot} className={formClass} aria-labelledby="login-title">{entry === "email" ? <LanguageSwitcher /> : null}<EmailRegistration preview={preview} returnTo={returnTo} title={entry === "choice" ? t.auth.registrationEntry : undefined} onBack={() => setRegistering(false)} /></section>;
+  if (registering) return <section ref={formRoot} className={formClass} aria-labelledby="login-title">{entry === "email" ? <LanguageSwitcher /> : null}<EmailRegistration legalMetadata={legalMetadata} preview={preview} returnTo={returnTo} title={entry === "choice" ? t.auth.registrationEntry : undefined} onBack={() => setRegistering(false)} /></section>;
 
   return <section ref={formRoot} className={formClass} aria-labelledby="login-title">
     {entry === "email" ? <LanguageSwitcher /> : <button className={`${styles.textAction} ${styles.backAction}`} disabled={pending} type="button" onClick={backToChoice}><span aria-hidden="true">← </span>{t.auth.otherMethods}</button>}
@@ -155,6 +157,5 @@ export function LoginForm({ returnTo, methods = defaultAuthMethods, preview = fa
     {entry === "email" && step === "login" && providers.length ? <div className={styles.external}><p>{t.auth.or}</p><div className={styles.providers}>{providers.map(provider => <Button key={provider} variant="outline" disabled={pending || preview} onClick={() => oauth(provider)}>{provider === "yandex" ? msg("profileLoginMethods.yandex") : providerNames[provider]}</Button>)}</div>{preview ? <small>{t.auth.configuredOnly}</small> : null}</div> : null}
     {step === "login" && !methods.recovery ? <small className={styles.hint}>{t.auth.recoveryUnavailable}</small> : null}
     {step === "login" && methods.registration ? <Button variant="outline" disabled={pending} onClick={() => { move("login"); setRegistering(true); }}>{t.auth.createAccount}</Button> : null}
-    <LegalNotice />
   </section>;
 }

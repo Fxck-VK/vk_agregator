@@ -3,6 +3,7 @@ import { fireEvent, render, screen } from "@testing-library/react";
 import { describe, expect, it, vi } from "vitest";
 
 import { ConfirmDialog } from "./ConfirmDialog";
+import Link from "@/i18n/Link";
 
 function dialogProps() {
   return {
@@ -17,6 +18,16 @@ function dialogProps() {
 }
 
 describe("ConfirmDialog", () => {
+  it("keeps document links in the focus loop for a non-destructive confirmation", () => {
+    const props = dialogProps();
+    render(<ConfirmDialog {...props} intent="primary" description={<Link href="/legal">Read documents</Link>} />);
+    const link = screen.getByRole("link", { name: "Read documents" });
+    const confirm = screen.getByRole("button", { name: props.confirmLabel });
+    confirm.focus();
+    expect(confirm).toHaveFocus();
+    fireEvent.keyDown(confirm, { key: "Tab" }); expect(link).toHaveFocus();
+    fireEvent.keyDown(link, { key: "Tab", shiftKey: true }); expect(confirm).toHaveFocus();
+  });
   it("names and describes the dialog, focuses cancel and contains keyboard navigation", () => {
     const props = dialogProps();
     render(<ConfirmDialog {...props} lead={<>Это удалит <strong>Идеи для проекта</strong>.</>} />);

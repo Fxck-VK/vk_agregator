@@ -578,7 +578,7 @@ func (h *Handler) requireUnsafePrincipal(next http.HandlerFunc) http.HandlerFunc
 		if !h.requireUnsafeRequest(w, r) {
 			return
 		}
-		h.requirePrincipal(h.requireCurrentLegal(next))(w, r)
+		h.requirePrincipal(next)(w, r)
 	}
 }
 
