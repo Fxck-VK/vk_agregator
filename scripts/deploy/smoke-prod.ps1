@@ -1,13 +1,11 @@
 param(
     [string]$EnvFile = "",
     [string]$VkBaseUrl = "",
-    [string]$AppBaseUrl = "",
     [string]$PaymentWebhookUrl = "",
     [string]$ApiHealthUrl = "",
     [string]$WorkerHealthUrl = "",
     [string]$MaintenanceWorkerHealthUrl = "",
     [string]$ProviderWebhookHealthUrl = "",
-    [string]$MiniAppHealthUrl = "",
     [string]$ReverseProxyHealthUrl = "",
     [int]$TimeoutSeconds = 10,
     [switch]$PaymentWebhookOnly,
@@ -157,7 +155,7 @@ function Assert-Blocked {
 function Assert-AuthRequired {
     param([string]$Name, [int]$Status)
     if ($Status -ge 200 -and $Status -lt 300) {
-        throw "$Name is public without Mini App auth, got $Status"
+        throw "$Name is public without authentication, got $Status"
     }
     if ($Status -eq 404 -or $Status -ge 500 -or $Status -eq 0) {
         throw "$Name expected auth/client rejection, got $Status"
@@ -189,9 +187,6 @@ Import-SmokeEnvFile -Path $EnvFile
 if ([string]::IsNullOrWhiteSpace($VkBaseUrl)) {
     $VkBaseUrl = Get-SmokeEnvValue -Name "PUBLIC_VK_BASE_URL" -Default (Get-SmokeEnvValue -Name "VK_BASE_URL" -Default "https://vk.epifera.com")
 }
-if ([string]::IsNullOrWhiteSpace($AppBaseUrl)) {
-    $AppBaseUrl = Get-SmokeEnvValue -Name "PUBLIC_APP_BASE_URL" -Default (Get-SmokeEnvValue -Name "APP_BASE_URL" -Default "https://app.epifera.com")
-}
 if ([string]::IsNullOrWhiteSpace($PaymentWebhookUrl)) {
     $PaymentWebhookUrl = Get-SmokeEnvValue -Name "PUBLIC_PAYMENT_WEBHOOK_URL" -Default (Get-SmokeEnvValue -Name "PAYMENT_WEBHOOK_URL" -Default "https://epifera.com/billing/webhooks/yookassa")
 }
@@ -211,19 +206,14 @@ if ([string]::IsNullOrWhiteSpace($MaintenanceWorkerHealthUrl)) {
 if ([string]::IsNullOrWhiteSpace($ProviderWebhookHealthUrl)) {
     $ProviderWebhookHealthUrl = Get-SmokeUrlFromListenAddr -Address (Get-SmokeEnvValue -Name "PAYMENT_WEBHOOK_ADDR" -Default ":8082") -Path "/readyz"
 }
-if ([string]::IsNullOrWhiteSpace($MiniAppHealthUrl)) {
-    $MiniAppHealthUrl = "http://127.0.0.1:5173/"
-}
 if ([string]::IsNullOrWhiteSpace($ReverseProxyHealthUrl)) {
     $ReverseProxyHealthUrl = "http://127.0.0.1:$(Get-SmokeEnvValue -Name "REVERSE_PROXY_HTTP_PORT" -Default "8088")/proxy-health"
 }
 
 $VkBaseUrl = Normalize-BaseUrl $VkBaseUrl
-$AppBaseUrl = Normalize-BaseUrl $AppBaseUrl
 $PaymentBaseUrl = Normalize-BaseUrl $PaymentBaseUrl
 
 Assert-HttpsUrl -Name "VK base URL" -Url $VkBaseUrl
-Assert-HttpsUrl -Name "Mini App base URL" -Url $AppBaseUrl
 Assert-HttpsUrl -Name "YooKassa webhook URL" -Url $PaymentWebhookUrl
 Assert-HttpsUrl -Name "Payment/admin base URL" -Url $PaymentBaseUrl
 
@@ -232,7 +222,6 @@ if (-not [string]::IsNullOrWhiteSpace($EnvFile)) {
     Write-Host "Env file: $EnvFile"
 }
 Write-Host "VK base: $VkBaseUrl"
-Write-Host "Mini App base: $AppBaseUrl"
 Write-Host "Payment webhook: $PaymentWebhookUrl"
 Write-Host "Payment/admin base: $PaymentBaseUrl"
 
@@ -249,8 +238,6 @@ if (-not $PaymentWebhookOnly -and -not $SkipLocalHealth) {
     $status = Invoke-SmokeRequest -Name "Provider webhook local health" -Method "GET" -Url $ProviderWebhookHealthUrl
     Assert-2xx -Name "Provider webhook local health" -Status $status
 
-    $status = Invoke-SmokeRequest -Name "Mini App local health" -Method "GET" -Url $MiniAppHealthUrl
-    Assert-2xx -Name "Mini App local health" -Status $status
 
     $status = Invoke-SmokeRequest -Name "Reverse proxy local health" -Method "GET" -Url $ReverseProxyHealthUrl
     Assert-2xx -Name "Reverse proxy local health" -Status $status
@@ -263,11 +250,7 @@ if (-not $PaymentWebhookOnly) {
     $status = Invoke-SmokeRequest -Name "VK webhook route" -Method "POST" -Url "$VkBaseUrl/webhooks/vk" -Body "{}"
     Assert-ControlledRouteResponse -Name "VK webhook route" -Status $status
 
-    $status = Invoke-SmokeRequest -Name "Public Mini App open" -Method "GET" -Url "$AppBaseUrl/"
-    Assert-2xx -Name "Public Mini App open" -Status $status
 
-    $status = Invoke-SmokeRequest -Name "Mini App /miniapp/balance" -Method "GET" -Url "$AppBaseUrl/miniapp/balance"
-    Assert-AuthRequired -Name "Mini App /miniapp/balance" -Status $status
 }
 
 $status = Invoke-SmokeRequest -Name "YooKassa webhook route" -Method "POST" -Url $PaymentWebhookUrl -Body "{}"
@@ -293,14 +276,6 @@ $blockedUrls = @(
 
 if (-not $PaymentWebhookOnly) {
     $blockedUrls += @(
-        "$AppBaseUrl/admin/jobs",
-        "$AppBaseUrl/admin/access/operator",
-        "$AppBaseUrl/admin/audit/operator",
-        "$AppBaseUrl/admin/retention/operator/run-cleanup",
-        "$AppBaseUrl/metrics",
-        "$AppBaseUrl/debug/pprof",
-        "$AppBaseUrl/billing/payment-intents",
-        "$AppBaseUrl/billing/webhooks/yookassa"
     )
 }
 
@@ -315,7 +290,6 @@ Write-Host "- VK /start"
 Write-Host "- VK ask NeuroHub"
 Write-Host "- VK photo"
 Write-Host "- VK video"
-Write-Host "- Mini App authenticated /miniapp/balance"
 Write-Host "- YooKassa payment.succeeded real checkout webhook"
 Write-Host "- worker job completion"
 Write-Host "- artifact delivery"

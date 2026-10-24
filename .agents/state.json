@@ -1,6 +1,6 @@
 {
   "schema_version": 5,
-  "updated_at": "2026-10-23T11:49:31.326844+00:00",
+  "updated_at": "2026-10-24T10:59:15.8913710Z",
   "branch": "codex/vk-profile-name",
   "remote_tracking": "origin/dev-deploy",
   "purpose": "Short machine-readable current context and routing for agents. This file is not project history.",
@@ -61,7 +61,9 @@
     "loadtest_contour": "Mock providers, payments and delivery only; no production hosts or paid calls."
   },
   "recent_decisions": [
-    "Unified DEV release explicitly authorized: publish every agreed pending product group together (homepage/SEO example, smart model search, first-model chat icons, account-only theme selection, owned file deletion and shared confirmation, retention integration and reliable CI). Full scope and release gates: docs/superpowers/plans/2026-10-23-unified-dev-release.md. Private .cache and downloaded reference/export bundles stay local; no product source or runtime media is deferred. main remains unchanged. Publication is only confirmed after exact-SHA CI, signed images, rollout and runtime inventory verification.",
+    "The user explicitly authorized the complete 2026-10-24 control release to dev-deploy: all Mini App retirement changes plus mandatory top-level agent release rules, shared pre-push/CI contracts, validated input-aware stage caching, early security admission, targeted vulnerable dependency updates and measured rollout. Main stays unchanged. Plan: docs/superpowers/plans/2026-10-24-release-contract.md. Actual publication evidence belongs in .cache/release-2026-10-24/status.json and exact-SHA GitHub runs; do not infer success from this approval.",
+    "VK Mini App retired locally at user request: application/BFF/launch auth/build/service/ingress removed. Website, browser VK ID and VK bot remain. ACCOUNT_EMAIL_PROOF_SECRET preserves the old email hash key through private env migration; signed provider references use VK API hosts. Immutable SQL and stored legacy channel/source labels remain for existing rows. Seven current images, exact-revision legacy rollback verification. Included in the authorized 2026-10-24 control release; consult its private receipt and exact-SHA GitHub runs for actual publication status. See docs/runbooks/VK_MINIAPP_RETIREMENT.md.",
+    "The preceding unified agreed release is published and verified on DEV at 217f34cf2088cd41e518a17884cc2a61f2fc94e6 (CI 39954359998 and Release Images/DEV 39954360113 passed). It includes homepage/SEO example, smart search, first-model chat icons, account-only theme selection, deletion/confirmation, retention and CI reliability. main remains unchanged. Current Mini App retirement is a later local change, not deployed. See docs/superpowers/plans/2026-10-23-unified-dev-release.md.",
     "Website legal documents and account consent are published and verified on DEV at e25fe92 (edition 2026-10-23.4): shared reviewed texts, runtime-only approved requisites, immutable revision snapshots, cookie/CSRF-owned idempotent choices and verified-primary-email marketing binding. The protected .env.dev-legal overlay preserves publication across rollouts; dispatch Deploy DEV from dev-deploy after secret changes. Withdrawal/profile/security remain accessible. No marketing sender or recurring billing. Remote fastlife_dev is synchronized; main/production unchanged. See docs/runbooks/WEB_LEGAL.md.",
     "DEV generated non-text output files and their variants now expire two UTC calendar months from original creation through migration 000061_generated_output_retention. Explicit deadlines cover standard/free/paid tiers, preserve earlier deletion, and are purged by the existing hourly maintenance worker. Chat text/inputs/jobs/ledger remain separate. A scoped existing-migrator rollout applied only this policy; unrelated local application changes remain unpublished. See docs/DATA_RETENTION_POLICY.md#generated-file-lifetime-two-calendar-months.",
     "Website output deletion is exact-account and CSRF protected: DELETE /web/v1/artifacts/:id tombstones an owned succeeded web output and expires its original/variants before bounded physical purge. Existing maintenance retries failures even with age retention disabled; job-input and variant-write locks prevent resurrection. Results expose deleted markers while capture readiness remains strict. Chat prompts, other outputs and billing history remain. See docs/DATA_RETENTION_POLICY.md#explicit-user-file-deletion.",
@@ -78,7 +80,7 @@
     "RUNBOOK.md is an entrypoint; task details live under docs/runbooks/.",
     "DEV and PROD envs must be compared by variable names without printing values.",
     "Target account model: account_id owns billing, jobs, artifacts, history and referrals; VK/TG/email/phone/OAuth identities are login bindings.",
-    "Account identity schema, VK user backfill migrations and IdentityResolver runtime bridge exist; VK Bot/Mini App receive legacy users with account_id populated.",
+    "Account identity schema, VK user backfill migrations and IdentityResolver runtime bridge exist; VK Bot receives legacy users with account_id populated.",
     "AccountService is the product-facing account boundary above IdentityResolver/accountauth: it returns safe profile/identity DTOs and routes verified link/unlink without exposing raw identity rows.",
     "Account HTTP API is mounted under /account/*: GET /account/me, GET /account/identities and unlink return safe account DTOs; HTTP link remains fail-closed until method-specific verification exists.",
     "VK Bot can link email/phone identities to the current account after use through IdentityResolver with explicit VK-button confirmation; no balance/history transfer is needed.",
@@ -92,9 +94,9 @@
     "Current business tables have additive account ownership columns for dual-read/dual-write: jobs, payment_intents, artifacts, conversations, referrals and billing credit/ledger surfaces. Subscriptions are target-model only until a real table/domain model exists.",
     "DEV is the daily integration/testing contour; PROD secrets must not be copied from DEV.",
     "YooKassa payment values are contour-specific: do not value-sync payments.dev.env and payments.prod.env, and do not force YOOKASSA_SECRET_KEY, YOOKASSA_SHOP_ID or YooKassa return URLs to match across DEV, PROD, .env and dev.env.",
-    "Provider calls remain isolated in workers/adapters; VK bot, Mini App and cmd/api must not call AI providers directly.",
+    "Provider calls remain isolated in workers/adapters; VK bot, website API and cmd/api must not call AI providers directly.",
     "Billing remains ledger-based and payment top-ups require provider-verified webhook/reconciliation.",
-    "The standalone NeiroHub web platform uses one independently deployable Next.js application with public SSG/ISR routes, authenticated no-store/noindex routes, secure server-managed web sessions and a channel-neutral versioned /web/v1 Go API.",
+    "The Epifera web platform uses one independently deployable Next.js application with public SSG/ISR routes, authenticated no-store/noindex routes, secure server-managed web sessions and a channel-neutral versioned /web/v1 Go API.",
     "The shared /web/v1/models catalog feeds all web selectors and generation controls; API and application capabilities remain separate and never enable unwired inputs.",
     "Registry records are typed by purpose. Stable admission serialization preserves the frozen legacy baseline; descriptions do not establish verified onboarding."
   ],
@@ -115,7 +117,7 @@
   ],
   "security_invariants": [
     "No secrets, tokens, auth headers, full launch params, prompt bodies, provider payloads, private artifact URLs or raw PII in git, logs, docs or chat.",
-    "VK handlers, Mini App BFF and cmd/api never call AI providers directly.",
+    "VK handlers, website API and cmd/api never call AI providers directly.",
     "Provider/media work happens through worker/services/adapters.",
     "Billing is append-only ledger based; no direct balance mutation.",
     "Payment redirect/confirmation URL is not proof of payment.",

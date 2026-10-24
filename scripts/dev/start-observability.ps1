@@ -8,16 +8,13 @@ param(
     [switch]$SkipDocker,
     [switch]$SkipMigrate,
     [switch]$SkipBuild,
-    [switch]$SkipMiniApp,
     [switch]$SkipAdmin,
     [switch]$SkipProviderWebhook,
     [switch]$NoRestart,
     [switch]$NoWait,
     [switch]$OpenGrafana,
-    [switch]$OpenMiniApp,
     [switch]$OpenAdmin,
     [switch]$NoTracing,
-    [switch]$NoFrontendTelemetry,
     [switch]$MockProviders,
     [switch]$RealVkDelivery,
     [switch]$ResetDevData,
@@ -26,7 +23,6 @@ param(
     [int]$ApiPort = 8080,
     [int]$WorkerMetricsPort = 9090,
     [int]$ProviderWebhookPort = 8082,
-    [int]$MiniAppPort = 5173,
     [int]$AdminPort = 5175,
     [int]$GrafanaPort = 3000,
     [int]$PrometheusPort = 9091,
@@ -39,7 +35,7 @@ param(
 )
 
 $ErrorActionPreference = "Stop"
-. (Join-Path $PSScriptRoot "_miniapp-common.ps1")
+. (Join-Path $PSScriptRoot "_dev-env.ps1")
 
 function Get-ObservabilityRuntimeDir {
     param([Parameter(Mandatory = $true)][string]$Root)
@@ -395,7 +391,6 @@ function Stop-ObservabilityProcesses {
     Stop-ListenerOnPort -Port $ApiPort
     Stop-ListenerOnPort -Port $WorkerMetricsPort
     Stop-ListenerOnPort -Port $ProviderWebhookPort
-    Stop-ListenerOnPort -Port $MiniAppPort
     Stop-ListenerOnPort -Port $AdminPort
 
     $escapedRoot = [regex]::Escape($Root)
@@ -456,12 +451,10 @@ function Show-ObservabilityStatus {
     Write-Host "API process:       $(Get-ProcessState -RuntimeDir $RuntimeDir -Name "api")"
     Write-Host "Worker process:    $(Get-ProcessState -RuntimeDir $RuntimeDir -Name "worker")"
     Write-Host "Webhook process:   $(Get-ProcessState -RuntimeDir $RuntimeDir -Name "provider-webhook")"
-    Write-Host "Mini App process:  $(Get-ProcessState -RuntimeDir $RuntimeDir -Name "vite")"
     Write-Host "Admin UI process:  $(Get-ProcessState -RuntimeDir $RuntimeDir -Name "admin-vite")"
     Write-Host "API health:        $(Get-HttpState -Url "http://127.0.0.1:$ApiPort/healthz")"
     Write-Host "Worker health:     $(Get-HttpState -Url "http://127.0.0.1:$WorkerMetricsPort/healthz")"
     Write-Host "Webhook ready:     $(Get-HttpState -Url "http://127.0.0.1:$ProviderWebhookPort/readyz")"
-    Write-Host "Mini App:          $(Get-HttpState -Url "http://127.0.0.1:$MiniAppPort/")"
     Write-Host "Admin UI:          $(Get-HttpState -Url "http://127.0.0.1:$AdminPort/")"
     Write-Host "Grafana:           $(Get-HttpState -Url "http://127.0.0.1:$GrafanaPort/api/health")"
     Write-Host "Prometheus:        $(Get-HttpState -Url "http://127.0.0.1:$PrometheusPort/-/ready")"
@@ -533,44 +526,6 @@ function Start-ObservedExecutable {
     return $proc
 }
 
-function Start-ObservedVite {
-    param(
-        [Parameter(Mandatory = $true)][string]$Root,
-        [Parameter(Mandatory = $true)][string]$RuntimeDir,
-        [Parameter(Mandatory = $true)][string]$LaunchParams
-    )
-
-    $miniappDir = Join-Path $Root "web\miniapp"
-    $stdout = Join-Path $RuntimeDir "vite-live.log"
-    $stderr = Join-Path $RuntimeDir "vite-live.err"
-
-    $oldLaunchParams = [Environment]::GetEnvironmentVariable("VITE_DEV_LAUNCH_PARAMS", "Process")
-    $oldTelemetry = [Environment]::GetEnvironmentVariable("VITE_FRONTEND_TELEMETRY_ENABLED", "Process")
-    try {
-        Set-LocalEnv -Name "VITE_DEV_LAUNCH_PARAMS" -Value $LaunchParams
-        Set-LocalEnv -Name "VITE_FRONTEND_TELEMETRY_ENABLED" -Value ($(if ($NoFrontendTelemetry) { "false" } else { "true" }))
-        $proc = Start-Process npm.cmd `
-            -ArgumentList @("run", "dev", "--", "--host", "127.0.0.1", "--port", [string]$MiniAppPort) `
-            -WorkingDirectory $miniappDir `
-            -WindowStyle Hidden `
-            -RedirectStandardOutput $stdout `
-            -RedirectStandardError $stderr `
-            -PassThru
-        Set-Content -Path (Join-Path $RuntimeDir "vite.pid") -Value $proc.Id -Encoding ASCII
-        return $proc
-    } finally {
-        if ($null -eq $oldLaunchParams) {
-            Remove-Item Env:\VITE_DEV_LAUNCH_PARAMS -ErrorAction SilentlyContinue
-        } else {
-            Set-LocalEnv -Name "VITE_DEV_LAUNCH_PARAMS" -Value $oldLaunchParams
-        }
-        if ($null -eq $oldTelemetry) {
-            Remove-Item Env:\VITE_FRONTEND_TELEMETRY_ENABLED -ErrorAction SilentlyContinue
-        } else {
-            Set-LocalEnv -Name "VITE_FRONTEND_TELEMETRY_ENABLED" -Value $oldTelemetry
-        }
-    }
-}
 
 function Start-ObservedAdminVite {
     param(
@@ -612,20 +567,19 @@ function Start-ObservedAdminVite {
 
 function Assert-ObservabilityRequirements {
     param(
-        [switch]$NeedMiniApp,
         [switch]$NeedAdmin
     )
 
     if ($null -eq (Get-Command go -ErrorAction SilentlyContinue | Select-Object -First 1)) {
         throw "go is not installed or not available in PATH."
     }
-    if (($NeedMiniApp -or $NeedAdmin) -and $null -eq (Get-Command npm.cmd -ErrorAction SilentlyContinue | Select-Object -First 1)) {
+    if ($NeedAdmin -and $null -eq (Get-Command npm.cmd -ErrorAction SilentlyContinue | Select-Object -First 1)) {
         throw "npm.cmd is not installed or not available in PATH."
     }
 }
 
 function Configure-ObservabilityEnv {
-    Import-MiniAppDevEnv -Root $root
+    Import-DevEnv -Root $root
 
     Set-LocalEnv -Name "APP_ENV" -Value "development"
     Set-LocalEnv -Name "HTTP_ADDR" -Value ":$ApiPort"
@@ -639,15 +593,6 @@ function Configure-ObservabilityEnv {
     } else {
         Set-LocalEnv -Name "OTEL_TRACES_EXPORTER" -Value "otlp"
         Set-LocalEnv -Name "OTEL_EXPORTER_OTLP_ENDPOINT" -Value "http://127.0.0.1:$OtelGrpcPort"
-    }
-
-    if ($NoFrontendTelemetry) {
-        Set-LocalEnv -Name "FRONTEND_TELEMETRY_ENABLED" -Value "false"
-    } else {
-        Set-LocalEnv -Name "FRONTEND_TELEMETRY_ENABLED" -Value "true"
-        if ([string]::IsNullOrWhiteSpace($env:FRONTEND_TELEMETRY_USER_HASH_SECRET)) {
-            Set-LocalEnv -Name "FRONTEND_TELEMETRY_USER_HASH_SECRET" -Value "local-dev-frontend-telemetry"
-        }
     }
 
     if ($MockProviders) {
@@ -694,7 +639,7 @@ try {
     }
 
     Configure-ObservabilityEnv
-    Assert-ObservabilityRequirements -NeedMiniApp:(-not $SkipMiniApp) -NeedAdmin:(-not $SkipAdmin)
+    Assert-ObservabilityRequirements -NeedAdmin:(-not $SkipAdmin)
 
     if (-not $SkipDocker) {
         Write-Host "Starting Docker dependencies and observability stack..."
@@ -746,12 +691,6 @@ try {
         Wait-Http -Url "http://127.0.0.1:$ProviderWebhookPort/readyz" -TimeoutSeconds $TimeoutSeconds | Out-Null
     }
 
-    if (-not $SkipMiniApp) {
-        Write-Host "Starting Mini App Vite dev server..."
-        $launchParams = New-MiniAppLaunchParams -UserID $VkUserID
-        Start-ObservedVite -Root $root -RuntimeDir $runtime -LaunchParams $launchParams | Out-Null
-        Wait-Http -Url "http://127.0.0.1:$MiniAppPort/" -TimeoutSeconds $TimeoutSeconds | Out-Null
-    }
 
     if (-not $SkipAdmin) {
         Write-Host "Starting Admin UI Vite dev server..."
@@ -769,9 +708,6 @@ try {
     if (-not $SkipProviderWebhook) {
         Write-Host "Webhook ready:     http://127.0.0.1:$ProviderWebhookPort/readyz"
     }
-    if (-not $SkipMiniApp) {
-        Write-Host "Mini App:          http://127.0.0.1:$MiniAppPort"
-    }
     if (-not $SkipAdmin) {
         Write-Host "Admin UI:          http://127.0.0.1:$AdminPort"
     }
@@ -783,9 +719,6 @@ try {
 
     if ($OpenGrafana) {
         Start-Process "http://127.0.0.1:$GrafanaPort"
-    }
-    if ($OpenMiniApp -and -not $SkipMiniApp) {
-        Start-Process "http://127.0.0.1:$MiniAppPort"
     }
     if ($OpenAdmin -and -not $SkipAdmin) {
         Start-Process "http://127.0.0.1:$AdminPort"

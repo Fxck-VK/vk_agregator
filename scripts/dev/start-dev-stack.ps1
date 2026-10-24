@@ -218,7 +218,6 @@ function Assert-DevEnv {
 
     $expectedUrls = @{
         PUBLIC_VK_BASE_URL = "https://dev-vk.epifera.com"
-        PUBLIC_APP_BASE_URL = "https://dev-app.epifera.com"
         PUBLIC_PAYMENT_WEBHOOK_URL = "https://dev.epifera.com/billing/webhooks/yookassa"
     }
     foreach ($entry in $expectedUrls.GetEnumerator()) {
@@ -616,8 +615,8 @@ try {
         Invoke-DockerCompose @args
     }
 
-    $runtimeServices = @("api", "worker", "provider-webhook", "miniapp")
-    Invoke-Step "start API/worker/provider-webhook/miniapp" {
+    $runtimeServices = @("api", "worker", "provider-webhook")
+    Invoke-Step "start API/worker/provider-webhook" {
         $args = @("up", "-d")
         if ($SkipBuild) {
             $args += "--no-build"
@@ -641,7 +640,6 @@ try {
     Wait-Http -Name "API health" -Url "http://127.0.0.1:8080/health" -ExpectedStatuses @(200) -TimeoutSeconds $TimeoutSeconds
     Wait-Http -Name "Worker health" -Url "http://127.0.0.1:9090/healthz" -ExpectedStatuses @(200) -TimeoutSeconds $TimeoutSeconds
     Wait-Http -Name "Provider webhook health" -Url "http://127.0.0.1:8082/health" -ExpectedStatuses @(200) -TimeoutSeconds $TimeoutSeconds
-    Wait-Http -Name "Mini App health" -Url "http://127.0.0.1:5173/" -ExpectedStatuses @(200) -TimeoutSeconds $TimeoutSeconds
     Wait-Http -Name "Reverse proxy health" -Url "http://127.0.0.1:$reverseProxyPort/proxy-health" -ExpectedStatuses @(200) -TimeoutSeconds $TimeoutSeconds
 
     Invoke-Step "DEV reverse proxy smoke" {
@@ -659,7 +657,6 @@ try {
 
         if (-not $SkipPublicSmoke) {
             Wait-Http -Name "DEV public VK health" -Url "https://dev-vk.epifera.com/health" -ExpectedStatuses @(200) -TimeoutSeconds $TimeoutSeconds
-            Wait-Http -Name "DEV public Mini App" -Url "https://dev-app.epifera.com/" -ExpectedStatuses @(200) -TimeoutSeconds $TimeoutSeconds
             Wait-Http -Name "DEV public YooKassa webhook route" -Url "https://dev.epifera.com/billing/webhooks/yookassa" -Method "POST" -Body "{}" -ExpectedStatuses @(400, 401, 403) -TimeoutSeconds $TimeoutSeconds
         }
     }
@@ -672,7 +669,6 @@ try {
     Write-Host "DEV stack is running."
     Write-Host "Reverse proxy:      http://127.0.0.1:$reverseProxyPort"
     Write-Host "DEV VK callback:    https://dev-vk.epifera.com/webhooks/vk"
-    Write-Host "DEV Mini App:       https://dev-app.epifera.com"
     Write-Host "DEV YooKassa hook:  https://dev.epifera.com/billing/webhooks/yookassa"
     Write-Host "Status:             .\scripts\dev\start-dev-stack.ps1 -StatusOnly"
     Write-Host "Stop:               .\scripts\dev\start-dev-stack.ps1 -StopOnly"

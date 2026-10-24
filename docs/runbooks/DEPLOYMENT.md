@@ -1,17 +1,17 @@
 # Deployment Runbook
 
+> VK Mini App was retired on 2026-10-23. The website, browser VK ID and VK bot remain. Old Mini App routes, launch-auth and UI examples below are historical only. Current replacement and migration details: [retirement runbook](../../docs/runbooks/VK_MINIAPP_RETIREMENT.md).
+
 This is the active runbook for production-shaped deployment.
 
 ## Runtime Map
 
 | Runtime | Public | Responsibility |
 | --- | --- | --- |
-| `cmd/api` | Yes | VK Callback API, Mini App BFF, protected admin/operator routes, health |
 | `cmd/worker` | No | AI provider calls, polling, artifacts, moderation, delivery, billing capture/release |
 | `cmd/worker` with `WORKER_MODE=relay` | No | leased transactional outbox relay only; no generation, provider-poll, or delivery engines |
 | `cmd/worker` with `WORKER_MODE=maintenance` | No | retention cleanup, provider payload redaction, analytics aggregates |
 | `cmd/provider-webhook` | Yes, exact route only | YooKassa webhook inbox and provider-verified processing |
-| `web/miniapp/dist` | Yes | Static VK Mini App frontend |
 | Postgres | No | durable source of truth |
 | Redis | No | queues, rate limits, transient state |
 | S3/MinIO | No public bucket | generated artifacts and safe media variants |
@@ -113,7 +113,7 @@ Expected behavior:
 - waits for Postgres/Redis/MinIO health before migrations;
 - runs migrations before runtime services;
 - starts and waits for the new `worker`, then starts `api`,
-  `maintenance-worker`, `provider-webhook`, `miniapp`, `reverse-proxy` and
+  `maintenance-worker`, `provider-webhook`, `reverse-proxy` and
   optionally `cloudflared`;
 - runs health checks and prints a deploy summary.
 
@@ -124,7 +124,7 @@ rollout updated the repository checkout before runtime rollback completed.
 ## Epifera cutover preparation
 
 Only DEV is currently provisioned. The new Cloudflare zone and certificate
-are active. DEV aliases `dev-web`, `dev-vk`, `dev-app` and `dev` on
+are active. DEV aliases `dev-web`, `dev-vk` and `dev` on
 `epifera.com` use the existing DEV tunnel at `http://127.0.0.1:8088`.
 The `vk`, `app` and apex routes for future PROD are prepared, but their tunnel
 has no active connector. The imported apex Beget A record still exists;
@@ -176,10 +176,8 @@ Target host allocation:
 | --- | --- |
 | `epifera.com` | Production browser platform and the exact YooKassa webhook route |
 | `vk.epifera.com` | Production VK callback and health |
-| `app.epifera.com` | Production Mini App and signed provider reference reads |
 | `dev-web.epifera.com` | DEV browser platform with its existing outer access gate |
 | `dev-vk.epifera.com` | DEV VK callback and health |
-| `dev-app.epifera.com` | DEV Mini App and signed provider reference reads |
 | `dev.epifera.com` | DEV YooKassa webhook |
 | `notify.epifera.com` | Sender domain, to be verified with the SMTP delivery provider |
 
@@ -256,8 +254,6 @@ Expected production routing:
 | `https://vk.epifera.com/webhooks/vk` | `cmd/api:8080` |
 | `https://vk.epifera.com/health` | `cmd/api:8080` |
 | `https://epifera.com/billing/webhooks/yookassa` | `cmd/provider-webhook:8082` |
-| `https://app.epifera.com` | Mini App static frontend |
-| `https://app.epifera.com/miniapp/*` | `cmd/api:8080` |
 
 Must stay closed publicly:
 

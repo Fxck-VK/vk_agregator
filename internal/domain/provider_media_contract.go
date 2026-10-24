@@ -19,7 +19,7 @@ const (
 
 // ProviderMediaContract is the product-level allowlist for risky media
 // provider/model combinations. It constrains what the worker may submit before
-// paid provider work starts; VK Bot and Mini App surfaces must not build this
+// paid provider work starts; VK Bot and website surfaces must not build this
 // provider-native policy themselves.
 type ProviderMediaContract struct {
 	Provider ProviderName `json:"provider"`

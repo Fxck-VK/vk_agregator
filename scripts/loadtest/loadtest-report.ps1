@@ -594,8 +594,6 @@ New-Item -ItemType Directory -Force -Path $ReportDir | Out-Null
 $defaultK6Scripts = @(
     "tests/k6/basic-api.js",
     "tests/k6/vk-bot.js",
-    "tests/k6/job-worker.js",
-    "tests/k6/billing-payments.js",
     "tests/k6/admin-actions.js"
 )
 $K6Scripts = Split-SettingList -Explicit $K6Scripts -EnvName "LOADTEST_REPORT_K6_SCRIPTS" -Default $defaultK6Scripts
@@ -1025,7 +1023,7 @@ if ($hasJobMetrics) {
         Add-ScalingDecision -Area "workers" -Decision "review worker throughput with Redis diagnostics" -Reason "Job metrics were collected, but queue diagnostics are missing or inconclusive."
     }
 } else {
-    Add-ScalingDecision -Area "workers" -Decision "run job-worker scenario before sizing" -Reason "No job create/terminal metrics were collected."
+    Add-ScalingDecision -Area "workers" -Decision "implement authenticated worker load scenario before sizing" -Reason "No job create/terminal metrics were collected."
 }
 
 if ($null -ne $redisSnapshot) {

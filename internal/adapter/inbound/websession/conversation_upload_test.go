@@ -195,7 +195,7 @@ func TestConversationReferencesRejectAggregateSizeBeforeObjectRead(t *testing.T)
 	}
 	rec := submitConversationMedia(t, h, sessions, owner, conv.ID, map[string]any{
 		"prompt":                 "Synthetic aggregate references",
-		"model_id":               modelcatalog.MiniAppImageGPTImage2,
+		"model_id":               modelcatalog.PublicImageGPTImage2,
 		"image_quality":          modelcatalog.ImageQuality1K,
 		"aspect_ratio":           "1:1",
 		"reference_artifact_ids": ids,
@@ -211,18 +211,18 @@ func TestConversationReferenceAggregateLimitBoundary(t *testing.T) {
 		atLimit = append(atLimit, &domain.Artifact{SizeBytes: productcatalog.WebReferenceMaxBytes})
 	}
 	atLimit = append(atLimit, &domain.Artifact{SizeBytes: 16 << 20})
-	if !conversationReferencesWithinTotalByteLimit(modelcatalog.MiniAppImageGPTImage2, atLimit) {
+	if !conversationReferencesWithinTotalByteLimit(modelcatalog.PublicImageGPTImage2, atLimit) {
 		t.Fatal("GPT Image 2 references at 256 MiB rejected")
 	}
 	overLimit := append(append([]*domain.Artifact(nil), atLimit...), &domain.Artifact{SizeBytes: 1})
-	if conversationReferencesWithinTotalByteLimit(modelcatalog.MiniAppImageGPTImage2, overLimit) {
+	if conversationReferencesWithinTotalByteLimit(modelcatalog.PublicImageGPTImage2, overLimit) {
 		t.Fatal("GPT Image 2 references over 256 MiB accepted")
 	}
 }
 
 func gptImage2ReferencePublicModel(t *testing.T) imagegeneration.PublicModel {
 	t.Helper()
-	model, ok := modelcatalog.ResolvePublicModel(domain.OperationImageGenerate, modelcatalog.MiniAppImageGPTImage2)
+	model, ok := modelcatalog.ResolvePublicModel(domain.OperationImageGenerate, modelcatalog.PublicImageGPTImage2)
 	if !ok {
 		t.Fatal("GPT Image 2 public model missing")
 	}

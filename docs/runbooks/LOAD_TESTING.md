@@ -36,9 +36,6 @@ Checks:
 - `/health`;
 - `/readyz`;
 - VK webhook mock;
-- Mini App endpoints;
-- mock text/image/video jobs;
-- billing mock;
 - Redis DLQ is empty.
 
 ## RPS Ramp
@@ -50,22 +47,13 @@ Checks:
 Default ramp levels are intended to start conservatively: 10, 25, 50, 100 RPS.
 Increase only after stable results.
 
-## Worker Capacity
+## Worker and billing coverage
 
-```powershell
-.\scripts\loadtest\worker-capacity.ps1 -EnvFile .env.loadtest -UseDockerCompose
-```
-
-Run separate text, image mock, video mock and mixed workloads.
-
-## Billing Load
-
-```powershell
-.\scripts\loadtest\billing-load.ps1 -EnvFile .env.loadtest -UseDockerCompose
-```
-
-Checks payment intent creation, history, mock top-up, refund and replay
-idempotency without YooKassa.
+The former entrypoints used only the retired Mini App API and have been removed.
+Current baseline/ramp runs do not establish worker or billing capacity. Implement
+account-authenticated website scenarios before measuring those paths; never use
+client-supplied user IDs as a replacement for authentication. Existing Go
+worker/billing/idempotency/ownership regressions remain mandatory.
 
 ## Report
 

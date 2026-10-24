@@ -1,5 +1,7 @@
 # Единый каталог моделей
 
+> VK Mini App was retired on 2026-10-23. The website, browser VK ID and VK bot remain. Old Mini App routes, launch-auth and UI examples below are historical only. Current replacement and migration details: [retirement runbook](../../docs/runbooks/VK_MINIAPP_RETIREMENT.md).
+
 ## Music lyrics and downloads checked 2026-10-19
 
 Music preparation accepts bounded 128 KiB JSON in the web proxy and Go handler;

@@ -1,5 +1,7 @@
 # Account Identity Contract
 
+> VK Mini App was retired on 2026-10-23. The website, browser VK ID and VK bot remain. Old Mini App routes, launch-auth and UI examples below are historical only. Current replacement and migration details: [retirement runbook](../docs/runbooks/VK_MINIAPP_RETIREMENT.md).
+
 Status: active target architecture
 Updated: 2026-10-05
 
@@ -198,9 +200,10 @@ DELETE /account/identities/{id}
 POST /account/identities/{id}/unlink
 ```
 
-Authentication currently uses the same trusted VK launch identity bridge as the
-Mini App: verified launch params in production, and `X-VK-User-ID` only when
-the app secret is empty for local/dev tests.
+Authentication for `/account/*` requires a server-issued account access token
+in `Authorization: Bearer ...`, validated by the existing account session
+service. Launch parameters and `X-VK-User-ID` never establish an identity.
+The website continues to use its existing private cookie/CSRF BFF bridge.
 
 Response rules:
 

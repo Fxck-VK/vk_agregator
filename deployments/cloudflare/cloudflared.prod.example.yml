@@ -10,9 +10,6 @@ ingress:
   # VK bot/API surface: /webhooks/vk and /health are opened by nginx.
   - hostname: vk.epifera.com
     service: http://127.0.0.1:8088
-  # Mini App surface: / is static frontend, /miniapp/* is API BFF.
-  - hostname: app.epifera.com
-    service: http://127.0.0.1:8088
   # Canonical YooKassa webhook surface:
   # https://epifera.com/billing/webhooks/yookassa
   - hostname: epifera.com

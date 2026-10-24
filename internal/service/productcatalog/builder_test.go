@@ -38,9 +38,9 @@ func TestFromConfigBuildsPublicCatalogFromServerReadiness(t *testing.T) {
 		t.Fatalf("missing runtime catalogs: %+v", runtimeCatalog)
 	}
 	for _, id := range []string{
-		modelcatalog.MiniAppImageNanoBanana2,
-		modelcatalog.MiniAppImageNanoBananaPro,
-		modelcatalog.MiniAppImageGPTImage2,
+		modelcatalog.PublicImageNanoBanana2,
+		modelcatalog.PublicImageNanoBananaPro,
+		modelcatalog.PublicImageGPTImage2,
 	} {
 		if findImage(runtimeCatalog.ImageModels(), id) == nil {
 			t.Fatalf("public image %q missing from runtime catalog: %+v", id, runtimeCatalog.ImageModels())
@@ -135,7 +135,7 @@ func TestFromConfigMockImageFailsClosedWithoutPricingTariff(t *testing.T) {
 	if err != nil {
 		t.Fatalf("build runtime catalog: %v", err)
 	}
-	if image := findImage(runtimeCatalog.ImageModels(), modelcatalog.MiniAppImageMock); image != nil {
+	if image := findImage(runtimeCatalog.ImageModels(), modelcatalog.PublicImageMock); image != nil {
 		t.Fatalf("unpriced mock image leaked into public catalog: %+v", runtimeCatalog.ImageModels())
 	}
 
@@ -149,7 +149,7 @@ func TestFromConfigMockImageFailsClosedWithoutPricingTariff(t *testing.T) {
 	if err != nil {
 		t.Fatalf("build runtime catalog: %v", err)
 	}
-	if image := findImage(runtimeCatalog.ImageModels(), modelcatalog.MiniAppImageMock); image != nil {
+	if image := findImage(runtimeCatalog.ImageModels(), modelcatalog.PublicImageMock); image != nil {
 		t.Fatalf("mock image leaked outside loadtest catalog: %+v", runtimeCatalog.ImageModels())
 	}
 }
@@ -165,7 +165,7 @@ func TestFromConfigSeedream45VisibleWhenReadyEnabledAndPriced(t *testing.T) {
 	if err != nil {
 		t.Fatalf("build runtime catalog: %v", err)
 	}
-	image := findImage(runtimeCatalog.ImageModels(), modelcatalog.MiniAppImageSeedream45)
+	image := findImage(runtimeCatalog.ImageModels(), modelcatalog.PublicImageSeedream45)
 	if image == nil {
 		t.Fatalf("Seedream 4.5 missing from ready priced public catalog: %+v", runtimeCatalog.ImageModels())
 	}
@@ -186,7 +186,7 @@ func TestFromConfigNanoBananaProUsesAPIMartReadiness(t *testing.T) {
 	if err != nil {
 		t.Fatalf("build runtime catalog: %v", err)
 	}
-	image := findImage(runtimeCatalog.ImageModels(), modelcatalog.MiniAppImageNanoBananaPro)
+	image := findImage(runtimeCatalog.ImageModels(), modelcatalog.PublicImageNanoBananaPro)
 	if image == nil {
 		t.Fatalf("Nano Banana Pro missing from APIMart-ready public catalog: %+v", runtimeCatalog.ImageModels())
 	}
@@ -203,7 +203,7 @@ func TestFromConfigNanoBananaProUsesAPIMartReadiness(t *testing.T) {
 	if err != nil {
 		t.Fatalf("build runtime catalog with PoYo only: %v", err)
 	}
-	if image := findImage(runtimeCatalog.ImageModels(), modelcatalog.MiniAppImageNanoBananaPro); image != nil {
+	if image := findImage(runtimeCatalog.ImageModels(), modelcatalog.PublicImageNanoBananaPro); image != nil {
 		t.Fatalf("Nano Banana Pro must not be visible from PoYo readiness only: %+v", image)
 	}
 }
@@ -217,8 +217,8 @@ func TestFromConfigDeepInfraImagesFailClosedWithoutPricingTariffs(t *testing.T) 
 	if err != nil {
 		t.Fatalf("build runtime catalog: %v", err)
 	}
-	if findImage(runtimeCatalog.ImageModels(), modelcatalog.MiniAppImageSeedream45) != nil ||
-		findImage(runtimeCatalog.ImageModels(), modelcatalog.MiniAppImageSDXLTurbo) != nil {
+	if findImage(runtimeCatalog.ImageModels(), modelcatalog.PublicImageSeedream45) != nil ||
+		findImage(runtimeCatalog.ImageModels(), modelcatalog.PublicImageSDXLTurbo) != nil {
 		t.Fatalf("unpriced DeepInfra images must fail closed even when provider-ready: %+v", runtimeCatalog.ImageModels())
 	}
 	assertNoPrivateProviderFields(t, runtimeCatalog.Catalog.Items())

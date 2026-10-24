@@ -1,7 +1,6 @@
 [CmdletBinding()]
 param(
     [string]$VkBaseUrl = "https://dev-vk.epifera.com",
-    [string]$AppBaseUrl = "https://dev-app.epifera.com",
     [string]$DevBaseUrl = "https://dev.epifera.com",
     [string]$DevWebBaseUrl = "https://dev-web.epifera.com",
     [int]$TimeoutSeconds = 10
@@ -85,11 +84,9 @@ function Assert-DevWebRootUrl {
 }
 
 $VkBaseUrl = $VkBaseUrl.TrimEnd("/")
-$AppBaseUrl = $AppBaseUrl.TrimEnd("/")
 $DevBaseUrl = $DevBaseUrl.TrimEnd("/")
 
 Assert-DevUrl -Name "VK DEV base URL" -Url $VkBaseUrl -ExpectedHost "dev-vk.epifera.com"
-Assert-DevUrl -Name "Mini App DEV base URL" -Url $AppBaseUrl -ExpectedHost "dev-app.epifera.com"
 Assert-DevUrl -Name "Shared DEV base URL" -Url $DevBaseUrl -ExpectedHost "dev.epifera.com"
 Assert-DevWebRootUrl -Url $DevWebBaseUrl
 
@@ -104,17 +101,6 @@ Invoke-HttpCheck `
     -Name "DEV VK callback route" `
     -Url "$VkBaseUrl/webhooks/vk" `
     -ExpectedStatuses @(400, 401, 403, 405) `
-    -ForbiddenStatuses @(404, 500, 502, 503, 504)
-
-Invoke-HttpCheck `
-    -Name "DEV Mini App frontend" `
-    -Url "$AppBaseUrl/" `
-    -ExpectedStatuses @(200)
-
-Invoke-HttpCheck `
-    -Name "DEV Mini App BFF balance" `
-    -Url "$AppBaseUrl/miniapp/balance" `
-    -ExpectedStatuses @(400, 401, 403) `
     -ForbiddenStatuses @(404, 500, 502, 503, 504)
 
 Invoke-HttpCheck `
@@ -133,10 +119,8 @@ Invoke-HttpCheck `
 
 $blockedPublicRoutes = @(
     [pscustomobject]@{ Name = "DEV VK admin blocked"; Url = "$VkBaseUrl/admin/jobs" },
-    [pscustomobject]@{ Name = "DEV App admin blocked"; Url = "$AppBaseUrl/admin/jobs" },
     [pscustomobject]@{ Name = "DEV shared admin blocked"; Url = "$DevBaseUrl/admin/jobs" },
     [pscustomobject]@{ Name = "DEV VK metrics blocked"; Url = "$VkBaseUrl/metrics" },
-    [pscustomobject]@{ Name = "DEV App metrics blocked"; Url = "$AppBaseUrl/metrics" },
     [pscustomobject]@{ Name = "DEV shared metrics blocked"; Url = "$DevBaseUrl/metrics" }
 )
 

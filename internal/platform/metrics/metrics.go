@@ -656,7 +656,7 @@ var (
 		Help: "Frontend-observed API failures by surface, route and status.",
 	}, []string{"surface", "route", "status"})
 
-	// FrontendLaunchFailures counts safe Mini App launch failures.
+	// FrontendLaunchFailures preserves historical client launch failure series.
 	FrontendLaunchFailures = prometheus.NewCounterVec(prometheus.CounterOpts{
 		Name: "vkagg_frontend_launch_failures_total",
 		Help: "Frontend launch failures by surface and reason.",

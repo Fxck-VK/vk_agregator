@@ -36,17 +36,17 @@
     },
     {
       "id": "frontend_api_latency_p95",
-      "title": "Mini App client-observed API latency p95",
+      "title": "frontend client-observed API latency p95",
       "promql": "histogram_quantile(0.95, sum(rate(vkagg_product_frontend_api_duration_seconds_bucket[24h])) by (le, route, status))"
     },
     {
       "id": "frontend_ui_latency_p95",
-      "title": "Mini App client-observed UI milestone latency p95",
+      "title": "frontend client-observed UI milestone latency p95",
       "promql": "histogram_quantile(0.95, sum(rate(vkagg_product_frontend_ui_duration_seconds_bucket[24h])) by (le, step, result))"
     },
     {
       "id": "frontend_launch_failures",
-      "title": "Mini App launch failures by safe reason",
+      "title": "frontend launch failures by safe reason",
       "promql": "sum by (surface, reason) (increase(vkagg_frontend_launch_failures_total[24h]))"
     },
     {

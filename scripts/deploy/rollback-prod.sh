@@ -212,7 +212,7 @@ else
   backup_status="skipped by operator"
 fi
 
-rollback_services=(api worker maintenance-worker provider-webhook miniapp reverse-proxy)
+rollback_services=(api worker maintenance-worker provider-webhook reverse-proxy)
 if [[ "${provider_balance_bot_enabled}" == "true" ]]; then
   rollback_services+=(provider-balance-bot)
 else
@@ -234,7 +234,6 @@ if [[ "${no_health_check}" != "true" ]]; then
   wait_http provider-webhook "http://127.0.0.1:8082/readyz"
   wait_http worker "http://127.0.0.1:9090/readyz"
   wait_http maintenance-worker "http://127.0.0.1:9091/readyz"
-  wait_http miniapp "http://127.0.0.1:5173/"
   health_status="passed"
 fi
 

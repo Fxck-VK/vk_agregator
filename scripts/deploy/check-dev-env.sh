@@ -150,12 +150,10 @@ if [[ "${app_env_lc}" != "development" ]]; then
 fi
 
 require_dev_url PUBLIC_VK_BASE_URL "https://dev-vk.epifera.com"
-require_dev_url PUBLIC_APP_BASE_URL "https://dev-app.epifera.com"
 require_dev_url PUBLIC_PAYMENT_WEBHOOK_URL "https://dev.epifera.com"
 require_exact WEB_ORIGIN "https://dev-web.epifera.com"
 
 reject_exact_value PUBLIC_VK_BASE_URL "https://vk.epifera.com"
-reject_exact_value PUBLIC_APP_BASE_URL "https://app.epifera.com"
 reject_exact_value PUBLIC_PAYMENT_WEBHOOK_URL "https://epifera.com"
 
 vk_group_id="$(get_env_value VK_GROUP_ID)"

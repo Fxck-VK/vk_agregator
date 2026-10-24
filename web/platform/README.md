@@ -117,11 +117,10 @@ expose it through a `NEXT_PUBLIC_` variable. See the
 
 ```text
 web/
-  miniapp/   VK Mini App
   admin/     Operator application
   platform/  Standalone web application
 ```
 
 The platform must not access Postgres, Redis, S3, AI providers, payment
-providers, or `/miniapp/*` directly. It uses the shared Account Layer and the
+providers directly. It uses the shared Account Layer and the
 channel-neutral `/web/v1` API as those server contracts become available.

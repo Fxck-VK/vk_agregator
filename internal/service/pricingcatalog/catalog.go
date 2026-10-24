@@ -1,6 +1,6 @@
 // Package pricingcatalog defines backend-owned generation pricing contracts.
 //
-// The package is intentionally independent from Mini App/VK bot handlers and
+// The package is intentionally independent from website/VK bot handlers and
 // provider adapters. Frontends select public product dimensions only; provider
 // floors, multipliers and calculated credits stay backend-owned.
 package pricingcatalog
@@ -256,7 +256,7 @@ func (p ProductPrice) InternalCredits() (int64, error) {
 }
 
 // DisplayEstimateCredits returns a backend-provided catalog hint. It may differ
-// from the exact cost estimate used by /miniapp/estimate and reservation paths.
+// from the exact cost estimate used by backend estimates and reservation paths.
 func (p ProductPrice) DisplayEstimateCredits() (int64, error) {
 	p = p.Normalize()
 	exact, err := p.InternalCredits()
@@ -459,7 +459,7 @@ func (c *Catalog) Prices() []ProductPrice {
 }
 
 // CostEstimateCredits returns the exact backend-owned charge for a public
-// product key. This is the value future /miniapp/estimate and reservation paths
+// product key. This is the value future backend estimates and reservation paths
 // should use.
 func (c *Catalog) CostEstimateCredits(key ProductKey) (int64, error) {
 	price, err := c.Lookup(key)

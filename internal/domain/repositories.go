@@ -191,7 +191,7 @@ type AccountLinkAuditRepository interface {
 }
 
 // IdentityResolver is the public account resolution boundary for user-facing
-// surfaces. VK Bot, Mini App and future surfaces should go through this layer
+// surfaces. VK Bot, website and future surfaces should go through this layer
 // instead of resolving users directly from channel-specific identifiers.
 type IdentityResolver interface {
 	Resolve(ctx context.Context, provider IdentityProvider, externalID string) (uuid.UUID, error)
@@ -624,7 +624,7 @@ type PaymentRepository interface {
 }
 
 // ReferralRepository persists single-user referral codes and referral
-// relations. It is shared by VK bot and future VK Mini App referral flows.
+// relations. It is shared by verified VK bot referral flows.
 type ReferralRepository interface {
 	// GetCodeByUserID fetches the stable referral code for one user.
 	GetCodeByUserID(ctx context.Context, userID uuid.UUID) (*ReferralCode, error)

@@ -142,12 +142,10 @@ case "${app_env_lc}" in
 esac
 
 require_dev_url PUBLIC_VK_BASE_URL "https://dev-vk.epifera.com"
-require_dev_url PUBLIC_APP_BASE_URL "https://dev-app.epifera.com"
 require_dev_url PUBLIC_PAYMENT_WEBHOOK_URL "https://dev.epifera.com"
 
 for forbidden in \
   "PUBLIC_VK_BASE_URL=https://vk.epifera.com" \
-  "PUBLIC_APP_BASE_URL=https://app.epifera.com" \
   "PUBLIC_PAYMENT_WEBHOOK_URL=https://epifera.com"
 do
   if grep -Fq "${forbidden}" "${input_file}"; then
@@ -157,8 +155,7 @@ do
 done
 
 script_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-# Public web application ID selected for this DEV deployment, not VK_APP_ID
-# (which belongs to the independent Mini App). Existing audiences are retained.
+# Public browser VK ID application; existing audiences are retained.
 vkid_browser_client_id="$(tr -d '\r\n' < "${script_dir}/../../deployments/dev-web-vkid-client-id.txt")"
 if [[ ! "${vkid_browser_client_id}" =~ ^[1-9][0-9]{0,19}$ ]]; then
   echo 'Invalid public DEV VK ID web application configuration' >&2
@@ -548,6 +545,6 @@ sed \
   printf 'GHCR_TOKEN=%s\n' "${ghcr_token}"
 } >> "${tmp_output}"
 
-install -m 600 "${tmp_output}" "${output_file}"
+bash "${script_dir}/retire-miniapp-env.sh" "${tmp_output}" "${output_file}"
 
 echo "DEV env prepared: providers=${provider_chain} provider_balance_bot=${provider_balance_bot_enabled} telegram_token=${telegram_bot_configured} admin_chat=${telegram_admin_configured} provider_key=${provider_balance_key_configured} apimart=${apimart_provider_enabled} poyo=${poyo_provider_enabled} runway=${runway_provider_enabled} deepinfra=${deepinfra_balance_provider_enabled} image_menu=${image_menu_enabled} video_menu=${video_router_enabled} media_pipeline=${video_probe_required}"

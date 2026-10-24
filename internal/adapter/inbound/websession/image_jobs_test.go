@@ -47,7 +47,7 @@ func TestWebImageJobPrepareUsesServerResolvedPriceAndReturnsSafeDTO(t *testing.T
 	accountID := uuid.New()
 	req := safeImageMutationRequest(t, sessions, accountID, http.MethodPost, "/web/v1/image-jobs/prepare", map[string]string{
 		"prompt":        "night city after rain",
-		"model_id":      modelcatalog.MiniAppImageNanoBanana2,
+		"model_id":      modelcatalog.PublicImageNanoBanana2,
 		"image_quality": modelcatalog.ImageQuality2K,
 		"aspect_ratio":  "4:5",
 	})
@@ -67,7 +67,7 @@ func TestWebImageJobPrepareUsesServerResolvedPriceAndReturnsSafeDTO(t *testing.T
 	if jobs.prepareInput.CostEstimateCredits != 60 || jobs.prepareInput.PricingSnapshot.InternalCredits != 60 {
 		t.Fatalf("server price = %d / %+v, want 60", jobs.prepareInput.CostEstimateCredits, jobs.prepareInput.PricingSnapshot)
 	}
-	assertPreparedImageJobParams(t, jobs.prepareInput.Params, "night city after rain", modelcatalog.MiniAppImageNanoBanana2, modelcatalog.ImageQuality2K, "4:5")
+	assertPreparedImageJobParams(t, jobs.prepareInput.Params, "night city after rain", modelcatalog.PublicImageNanoBanana2, modelcatalog.ImageQuality2K, "4:5")
 	assertSafeWebImagePreparation(t, rec.Body.Bytes(), jobs.prepared.ID, domain.JobStatusPrepared, 60, 104)
 	if bytes.Contains(bytes.ToLower(rec.Body.Bytes()), []byte("provider")) || bytes.Contains(bytes.ToLower(rec.Body.Bytes()), []byte("model_code")) {
 		t.Fatalf("public response leaked private routing: %s", rec.Body.String())
@@ -76,7 +76,7 @@ func TestWebImageJobPrepareUsesServerResolvedPriceAndReturnsSafeDTO(t *testing.T
 
 func TestWebImageJobPrepareScalesPriceAndPersistsOutputCount(t *testing.T) {
 	h, jobs, sessions := newImageJobTestHandler(t)
-	seedream, ok := modelcatalog.ResolvePublicModel(domain.OperationImageGenerate, modelcatalog.MiniAppImageSeedream45)
+	seedream, ok := modelcatalog.ResolvePublicModel(domain.OperationImageGenerate, modelcatalog.PublicImageSeedream45)
 	if !ok {
 		t.Fatal("Seedream 4.5 public model missing")
 	}
@@ -84,7 +84,7 @@ func TestWebImageJobPrepareScalesPriceAndPersistsOutputCount(t *testing.T) {
 	accountID := uuid.New()
 	req := safeImageMutationRequest(t, sessions, accountID, http.MethodPost, "/web/v1/image-jobs/prepare", map[string]any{
 		"prompt":        "two matching portraits",
-		"model_id":      modelcatalog.MiniAppImageSeedream45,
+		"model_id":      modelcatalog.PublicImageSeedream45,
 		"image_quality": modelcatalog.ImageQuality2K,
 		"aspect_ratio":  "1:1",
 		"output_count":  2,
@@ -106,8 +106,8 @@ func TestWebImageJobPrepareScalesPriceAndPersistsOutputCount(t *testing.T) {
 	if params.OutputCount != 2 {
 		t.Fatalf("output count = %d, want 2", params.OutputCount)
 	}
-	if params.ModelID != modelcatalog.MiniAppImageSeedream45 || params.Provider != domain.ProviderPoYo || params.ModelCode != seedream.ModelCode {
-		t.Fatalf("private Seedream route = %s/%s/%s, want %s/%s/%s", params.ModelID, params.Provider, params.ModelCode, modelcatalog.MiniAppImageSeedream45, domain.ProviderPoYo, seedream.ModelCode)
+	if params.ModelID != modelcatalog.PublicImageSeedream45 || params.Provider != domain.ProviderPoYo || params.ModelCode != seedream.ModelCode {
+		t.Fatalf("private Seedream route = %s/%s/%s, want %s/%s/%s", params.ModelID, params.Provider, params.ModelCode, modelcatalog.PublicImageSeedream45, domain.ProviderPoYo, seedream.ModelCode)
 	}
 	assertSafeWebImagePreparation(t, rec.Body.Bytes(), jobs.prepared.ID, domain.JobStatusPrepared, 60, 104)
 }
@@ -119,7 +119,7 @@ func TestWebImageJobPrepareRejectsAccountScopedRateLimitBeforeDurablePrepare(t *
 	h.deps.ImageJobPrepareLimiter = limiter
 	req := safeImageMutationRequest(t, sessions, accountID, http.MethodPost, "/web/v1/image-jobs/prepare", map[string]string{
 		"prompt":        "night city after rain",
-		"model_id":      modelcatalog.MiniAppImageNanoBanana2,
+		"model_id":      modelcatalog.PublicImageNanoBanana2,
 		"image_quality": modelcatalog.ImageQuality2K,
 	})
 	rec := httptest.NewRecorder()
@@ -146,7 +146,7 @@ func TestWebImageJobPrepareFailsClosedWhenSharedRateLimiterIsUnavailable(t *test
 	h.deps.ImageJobPrepareLimiter = &imagePrepareLimiterStub{allowed: true, err: errors.New("redis unavailable")}
 	req := safeImageMutationRequest(t, sessions, accountID, http.MethodPost, "/web/v1/image-jobs/prepare", map[string]string{
 		"prompt":        "night city after rain",
-		"model_id":      modelcatalog.MiniAppImageNanoBanana2,
+		"model_id":      modelcatalog.PublicImageNanoBanana2,
 		"image_quality": modelcatalog.ImageQuality2K,
 	})
 	rec := httptest.NewRecorder()
@@ -167,7 +167,7 @@ func TestWebImageJobPrepareMapsPreparedJobCapacityToRateLimit(t *testing.T) {
 	jobs.prepareErr = domain.ErrPreparedJobLimitExceeded
 	req := safeImageMutationRequest(t, sessions, accountID, http.MethodPost, "/web/v1/image-jobs/prepare", map[string]string{
 		"prompt":        "night city after rain",
-		"model_id":      modelcatalog.MiniAppImageNanoBanana2,
+		"model_id":      modelcatalog.PublicImageNanoBanana2,
 		"image_quality": modelcatalog.ImageQuality2K,
 	})
 	rec := httptest.NewRecorder()
@@ -190,7 +190,7 @@ func TestWebImageJobPrepareReplayReturnsStoredJobBeforeCurrentPriceResolution(t 
 	originalSnapshot, err := pricing.Snapshot(pricingcatalog.ProductKey{
 		Operation:    domain.OperationImageGenerate,
 		Modality:     domain.ModalityImage,
-		ImageModelID: modelcatalog.MiniAppImageNanoBanana2,
+		ImageModelID: modelcatalog.PublicImageNanoBanana2,
 		Quality:      modelcatalog.ImageQuality2K,
 	})
 	if err != nil {
@@ -211,7 +211,7 @@ func TestWebImageJobPrepareReplayReturnsStoredJobBeforeCurrentPriceResolution(t 
 		PricingSnapshot: mustMarshalPricingSnapshot(originalSnapshot),
 		Params: mustMarshalWebImageJobParams(t, webImageJobParams{
 			Prompt:       "night city after rain",
-			ModelID:      modelcatalog.MiniAppImageNanoBanana2,
+			ModelID:      modelcatalog.PublicImageNanoBanana2,
 			ModelName:    "Nano Banana 2",
 			ImageQuality: modelcatalog.ImageQuality2K,
 			Provider:     domain.ProviderPoYo,
@@ -230,7 +230,7 @@ func TestWebImageJobPrepareReplayReturnsStoredJobBeforeCurrentPriceResolution(t 
 
 	req := safeImageMutationRequest(t, sessions, accountID, http.MethodPost, "/web/v1/image-jobs/prepare", map[string]string{
 		"prompt":        "night city after rain",
-		"model_id":      modelcatalog.MiniAppImageNanoBanana2,
+		"model_id":      modelcatalog.PublicImageNanoBanana2,
 		"image_quality": modelcatalog.ImageQuality2K,
 	})
 	req.Header.Set("X-Idempotency-Key", idempotencyKey.String())
@@ -267,7 +267,7 @@ func TestWebImageJobPrepareReplayRejectsDifferentPublicIntentBeforeCurrentPriceR
 	snapshot, err := pricing.Snapshot(pricingcatalog.ProductKey{
 		Operation:    domain.OperationImageGenerate,
 		Modality:     domain.ModalityImage,
-		ImageModelID: modelcatalog.MiniAppImageNanoBanana2,
+		ImageModelID: modelcatalog.PublicImageNanoBanana2,
 		Quality:      modelcatalog.ImageQuality2K,
 	})
 	if err != nil {
@@ -288,7 +288,7 @@ func TestWebImageJobPrepareReplayRejectsDifferentPublicIntentBeforeCurrentPriceR
 		PricingSnapshot: mustMarshalPricingSnapshot(snapshot),
 		Params: mustMarshalWebImageJobParams(t, webImageJobParams{
 			Prompt:       "night city after rain",
-			ModelID:      modelcatalog.MiniAppImageNanoBanana2,
+			ModelID:      modelcatalog.PublicImageNanoBanana2,
 			ModelName:    "Nano Banana 2",
 			ImageQuality: modelcatalog.ImageQuality2K,
 			Provider:     domain.ProviderPoYo,
@@ -303,7 +303,7 @@ func TestWebImageJobPrepareReplayRejectsDifferentPublicIntentBeforeCurrentPriceR
 
 	req := safeImageMutationRequest(t, sessions, accountID, http.MethodPost, "/web/v1/image-jobs/prepare", map[string]string{
 		"prompt":        "different prompt",
-		"model_id":      modelcatalog.MiniAppImageNanoBanana2,
+		"model_id":      modelcatalog.PublicImageNanoBanana2,
 		"image_quality": modelcatalog.ImageQuality2K,
 	})
 	req.Header.Set("X-Idempotency-Key", idempotencyKey.String())
@@ -332,7 +332,7 @@ func TestWebImageJobPrepareRejectsExpiredStoredConfirmationBeforeRateLimit(t *te
 	h.deps.ImageJobPrepareLimiter = limiter
 	req := safeImageMutationRequest(t, sessions, accountID, http.MethodPost, "/web/v1/image-jobs/prepare", map[string]string{
 		"prompt":        "night city after rain",
-		"model_id":      modelcatalog.MiniAppImageNanoBanana2,
+		"model_id":      modelcatalog.PublicImageNanoBanana2,
 		"image_quality": modelcatalog.ImageQuality2K,
 	})
 	req.Header.Set("X-Idempotency-Key", idempotencyKey.String())
@@ -382,7 +382,7 @@ func TestWebImageJobPrepareConflictRereadsStoredJobAfterPriceChange(t *testing.T
 	jobs.prepareErr = domain.ErrConflict
 	req := safeImageMutationRequest(t, sessions, accountID, http.MethodPost, "/web/v1/image-jobs/prepare", map[string]string{
 		"prompt":        "night city after rain",
-		"model_id":      modelcatalog.MiniAppImageNanoBanana2,
+		"model_id":      modelcatalog.PublicImageNanoBanana2,
 		"image_quality": modelcatalog.ImageQuality2K,
 	})
 	req.Header.Set("X-Idempotency-Key", idempotencyKey.String())
@@ -427,7 +427,7 @@ func TestWebImageModelsReturnsOnlyServerSafeCatalog(t *testing.T) {
 	if err := json.Unmarshal(rec.Body.Bytes(), &response); err != nil {
 		t.Fatalf("decode catalog: %v", err)
 	}
-	if len(response.Items) != 1 || response.Items[0].ID != modelcatalog.MiniAppImageNanoBanana2 || response.Items[0].Name != "Nano Banana 2" || response.Items[0].DefaultQuality != modelcatalog.ImageQuality1K {
+	if len(response.Items) != 1 || response.Items[0].ID != modelcatalog.PublicImageNanoBanana2 || response.Items[0].Name != "Nano Banana 2" || response.Items[0].DefaultQuality != modelcatalog.ImageQuality1K {
 		t.Fatalf("catalog = %+v", response.Items)
 	}
 	if response.Items[0].MaxReferenceImages != 0 || response.Items[0].SupportsReferenceImage || response.Items[0].MaxOutputCount != 1 {
@@ -449,7 +449,7 @@ func TestWebImageModelsHideUnpricedQualitiesAndModels(t *testing.T) {
 	h, _, sessions := newImageJobTestHandler(t)
 	h.cfg.ImageModels = []imagegeneration.PublicModel{
 		{
-			ID:             modelcatalog.MiniAppImageNanoBanana2,
+			ID:             modelcatalog.PublicImageNanoBanana2,
 			Name:           "Nano Banana 2",
 			Enabled:        true,
 			Ready:          true,
@@ -457,7 +457,7 @@ func TestWebImageModelsHideUnpricedQualitiesAndModels(t *testing.T) {
 			DefaultQuality: modelcatalog.ImageQuality1K,
 		},
 		{
-			ID:             modelcatalog.MiniAppImageGPTImage2,
+			ID:             modelcatalog.PublicImageGPTImage2,
 			Name:           "GPT Image 2",
 			Enabled:        true,
 			Ready:          true,
@@ -471,13 +471,13 @@ func TestWebImageModelsHideUnpricedQualitiesAndModels(t *testing.T) {
 			{
 				Operation:    domain.OperationImageGenerate,
 				Modality:     domain.ModalityImage,
-				ImageModelID: modelcatalog.MiniAppImageNanoBanana2,
+				ImageModelID: modelcatalog.PublicImageNanoBanana2,
 				Quality:      modelcatalog.ImageQuality1K,
 			}: true,
 			{
 				Operation:    domain.OperationImageGenerate,
 				Modality:     domain.ModalityImage,
-				ImageModelID: modelcatalog.MiniAppImageGPTImage2,
+				ImageModelID: modelcatalog.PublicImageGPTImage2,
 				Quality:      modelcatalog.ImageQuality1K,
 			}: true,
 		},
@@ -505,7 +505,7 @@ func TestWebImageModelsHideUnpricedQualitiesAndModels(t *testing.T) {
 		t.Fatalf("catalog items = %+v, want only the model with a priced quality", response.Items)
 	}
 	item := response.Items[0]
-	if item.ID != modelcatalog.MiniAppImageNanoBanana2 || !reflect.DeepEqual(item.QualityOptions, []string{modelcatalog.ImageQuality2K}) || item.DefaultQuality != modelcatalog.ImageQuality2K {
+	if item.ID != modelcatalog.PublicImageNanoBanana2 || !reflect.DeepEqual(item.QualityOptions, []string{modelcatalog.ImageQuality2K}) || item.DefaultQuality != modelcatalog.ImageQuality2K {
 		t.Fatalf("priced catalog model = %+v, want Nano Banana 2 with only its priced default quality", item)
 	}
 	if !reflect.DeepEqual(item.PriceByQuality, map[string]int64{modelcatalog.ImageQuality2K: 60}) {
@@ -527,7 +527,7 @@ func TestWebImageJobActivateUsesCookiePrincipalAndMapsInsufficientCredits(t *tes
 		CostEstimate:  60,
 		Params: mustMarshalWebImageJobParams(t, webImageJobParams{
 			Prompt:       "image prompt",
-			ModelID:      modelcatalog.MiniAppImageNanoBanana2,
+			ModelID:      modelcatalog.PublicImageNanoBanana2,
 			ModelName:    "Nano Banana 2",
 			ImageQuality: modelcatalog.ImageQuality2K,
 			Provider:     domain.ProviderPoYo,
@@ -564,7 +564,7 @@ func TestWebImageJobRetryUsesCookiePrincipalAndReturnsSafeQueuedJob(t *testing.T
 		CostEstimate:  60,
 		Params: mustMarshalWebImageJobParams(t, webImageJobParams{
 			Prompt:       "image prompt",
-			ModelID:      modelcatalog.MiniAppImageNanoBanana2,
+			ModelID:      modelcatalog.PublicImageNanoBanana2,
 			ModelName:    "Nano Banana 2",
 			ImageQuality: modelcatalog.ImageQuality2K,
 			Provider:     domain.ProviderPoYo,
@@ -600,7 +600,7 @@ func TestWebImageJobRetryMapsInsufficientCreditsToSafePaymentJob(t *testing.T) {
 		CostEstimate:  60,
 		Params: mustMarshalWebImageJobParams(t, webImageJobParams{
 			Prompt:       "image prompt",
-			ModelID:      modelcatalog.MiniAppImageNanoBanana2,
+			ModelID:      modelcatalog.PublicImageNanoBanana2,
 			ModelName:    "Nano Banana 2",
 			ImageQuality: modelcatalog.ImageQuality2K,
 			Provider:     domain.ProviderPoYo,
@@ -674,7 +674,7 @@ func TestWebImageJobReadUsesExactCookieAccountAndSafeDTO(t *testing.T) {
 		CostEstimate:  60,
 		Params: mustMarshalWebImageJobParams(t, webImageJobParams{
 			Prompt:       "image prompt",
-			ModelID:      modelcatalog.MiniAppImageNanoBanana2,
+			ModelID:      modelcatalog.PublicImageNanoBanana2,
 			ModelName:    "Nano Banana 2",
 			ImageQuality: modelcatalog.ImageQuality2K,
 			Provider:     domain.ProviderPoYo,
@@ -758,7 +758,7 @@ func TestWebImageJobHistoryUsesBoundedWebSourceCursor(t *testing.T) {
 			CostEstimate:  60,
 			Params: mustMarshalWebImageJobParams(t, webImageJobParams{
 				Prompt:       "image prompt",
-				ModelID:      modelcatalog.MiniAppImageNanoBanana2,
+				ModelID:      modelcatalog.PublicImageNanoBanana2,
 				ModelName:    "Nano Banana 2",
 				ImageQuality: modelcatalog.ImageQuality2K,
 				Provider:     domain.ProviderPoYo,
@@ -958,7 +958,7 @@ func TestWebImageJobResultUsesOwnerScopedWebJobAndSafeMetadata(t *testing.T) {
 		CostEstimate:  60,
 		Params: mustMarshalWebImageJobParams(t, webImageJobParams{
 			Prompt:       "image prompt",
-			ModelID:      modelcatalog.MiniAppImageNanoBanana2,
+			ModelID:      modelcatalog.PublicImageNanoBanana2,
 			ModelName:    "Nano Banana 2",
 			ImageQuality: modelcatalog.ImageQuality2K,
 			Provider:     domain.ProviderPoYo,
@@ -1021,7 +1021,7 @@ func TestWebImageArtifactStreamsOwnerModeratedOutputThroughWebOrigin(t *testing.
 		CostEstimate:  60,
 		Params: mustMarshalWebImageJobParams(t, webImageJobParams{
 			Prompt:       "image prompt",
-			ModelID:      modelcatalog.MiniAppImageNanoBanana2,
+			ModelID:      modelcatalog.PublicImageNanoBanana2,
 			ModelName:    "Nano Banana 2",
 			ImageQuality: modelcatalog.ImageQuality2K,
 			Provider:     domain.ProviderPoYo,
@@ -1086,7 +1086,7 @@ func TestWebImageArtifactRejectsSignedURLOutsideConfiguredObjectStore(t *testing
 		CostEstimate:  60,
 		Params: mustMarshalWebImageJobParams(t, webImageJobParams{
 			Prompt:       "image prompt",
-			ModelID:      modelcatalog.MiniAppImageNanoBanana2,
+			ModelID:      modelcatalog.PublicImageNanoBanana2,
 			ModelName:    "Nano Banana 2",
 			ImageQuality: modelcatalog.ImageQuality2K,
 			Provider:     domain.ProviderPoYo,
@@ -1188,7 +1188,7 @@ func TestWebImageArtifactDoesNotSignOutputOutsideTheModeratedResult(t *testing.T
 		CostEstimate:  60,
 		Params: mustMarshalWebImageJobParams(t, webImageJobParams{
 			Prompt:       "image prompt",
-			ModelID:      modelcatalog.MiniAppImageNanoBanana2,
+			ModelID:      modelcatalog.PublicImageNanoBanana2,
 			ModelName:    "Nano Banana 2",
 			ImageQuality: modelcatalog.ImageQuality2K,
 			Provider:     domain.ProviderPoYo,
@@ -1403,7 +1403,7 @@ func newWebImageHistoryJob(t *testing.T, accountID, jobID uuid.UUID, createdAt t
 		UpdatedAt:     createdAt,
 		Params: mustMarshalWebImageJobParams(t, webImageJobParams{
 			Prompt:       "image prompt",
-			ModelID:      modelcatalog.MiniAppImageNanoBanana2,
+			ModelID:      modelcatalog.PublicImageNanoBanana2,
 			ModelName:    "Nano Banana 2",
 			ImageQuality: modelcatalog.ImageQuality2K,
 			Provider:     domain.ProviderPoYo,
@@ -1535,7 +1535,7 @@ func newImageJobTestHandler(t *testing.T) (*Handler, *imageJobServiceStub, *sess
 	}
 	jobs := &imageJobServiceStub{}
 	h.cfg.ImageModels = []imagegeneration.PublicModel{{
-		ID:                     modelcatalog.MiniAppImageNanoBanana2,
+		ID:                     modelcatalog.PublicImageNanoBanana2,
 		Name:                   "Nano Banana 2",
 		Enabled:                true,
 		Ready:                  true,
@@ -1556,7 +1556,7 @@ func newImageJobTestHandler(t *testing.T) (*Handler, *imageJobServiceStub, *sess
 
 func seedream45PublicImageModel(t *testing.T) imagegeneration.PublicModel {
 	t.Helper()
-	model, ok := modelcatalog.ResolvePublicModel(domain.OperationImageGenerate, modelcatalog.MiniAppImageSeedream45)
+	model, ok := modelcatalog.ResolvePublicModel(domain.OperationImageGenerate, modelcatalog.PublicImageSeedream45)
 	if !ok {
 		t.Fatal("Seedream 4.5 public model missing")
 	}
@@ -1583,7 +1583,7 @@ func newPreparedWebImageJobForReplay(t *testing.T, accountID, idempotencyKey uui
 	snapshot, err := pricing.Snapshot(pricingcatalog.ProductKey{
 		Operation:    domain.OperationImageGenerate,
 		Modality:     domain.ModalityImage,
-		ImageModelID: modelcatalog.MiniAppImageNanoBanana2,
+		ImageModelID: modelcatalog.PublicImageNanoBanana2,
 		Quality:      modelcatalog.ImageQuality2K,
 	})
 	if err != nil {
@@ -1605,7 +1605,7 @@ func newPreparedWebImageJobForReplay(t *testing.T, accountID, idempotencyKey uui
 		ExpiresAt:       expiresAt,
 		Params: mustMarshalWebImageJobParams(t, webImageJobParams{
 			Prompt:       prompt,
-			ModelID:      modelcatalog.MiniAppImageNanoBanana2,
+			ModelID:      modelcatalog.PublicImageNanoBanana2,
 			ModelName:    "Nano Banana 2",
 			ImageQuality: modelcatalog.ImageQuality2K,
 			Provider:     domain.ProviderPoYo,

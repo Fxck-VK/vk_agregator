@@ -67,9 +67,6 @@ jobs:
       fail-fast: false
       matrix:
         include:
-          - app: Mini App
-            path: web/miniapp
-            lockfile: web/miniapp/package-lock.json
           - app: Admin
             path: web/admin
             lockfile: web/admin/package-lock.json
@@ -166,8 +163,7 @@ jobs:
             dockerfile: Dockerfile.provider-webhook
           - service: provider-balance-bot
             dockerfile: Dockerfile.provider-balance-bot
-          - service: miniapp
-            dockerfile: Dockerfile.miniapp
+
           - service: platform
             dockerfile: Dockerfile.platform
           - service: migrate

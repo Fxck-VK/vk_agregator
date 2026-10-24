@@ -10,7 +10,7 @@ groups:
         annotations:
           summary: API не отдает метрики
           description: Prometheus не может прочитать API /metrics.
-          impact: VK Bot, Mini App BFF, admin/operator API и health checks могут быть недоступны или не наблюдаться.
+          impact: VK Bot, website API, admin/operator API и health checks могут быть недоступны или не наблюдаться.
           dashboard: Grafana -> Product Observability / Product Health, API
           action: Проверь, запущен ли cmd/api; открой http://127.0.0.1:8080/healthz и http://127.0.0.1:8080/metrics; смотри .runtime/observability-dev/api-live.err.
           safe_logs: В чат отправляй только статус health, код ошибки и имя сервиса; не отправляй токены, headers, launch params, prompts или raw user data.
@@ -57,20 +57,6 @@ groups:
           action: Проверь cmd/provider-webhook; открой http://127.0.0.1:8082/readyz и /metrics; смотри .runtime/observability-dev/provider-webhook-live.err.
           safe_logs: Не отправляй raw YooKassa payload, Authorization, shop id, secret key, payment metadata или user identifiers.
 
-      - alert: MiniAppLocalProbeDown
-        expr: probe_success{job="blackbox-local-health", instance="http://miniapp:8080/"} == 0
-        for: 1m
-        labels:
-          severity: warning
-          surface: miniapp
-        annotations:
-          summary: Локальная Mini App не отвечает
-          description: Vite/Mini App local URL не вернул 2xx.
-          impact: Локальная проверка Mini App и VK iframe могут не открываться.
-          dashboard: Grafana -> Product Observability / Mini App Frontend
-          action: Открой http://127.0.0.1:5173; проверь Vite process и .runtime/observability-dev/vite-live.err; затем проверь API proxy /miniapp/*.
-          safe_logs: Можно отправить HTTP status и browser console error class; не отправляй full launch params, VK_APP_SECRET, user ids или cookies.
-
       - alert: PublicMetricsExposed
         expr: probe_success{job="blackbox-public-metrics"} == 1
         for: 30s
@@ -111,7 +97,7 @@ groups:
         annotations:
           summary: API readiness check is failing
           description: API /healthz did not return 2xx from the private Docker network. This usually means Postgres or Redis is unavailable, or cmd/api is degraded.
-          impact: VK webhook intake, Mini App BFF and operator APIs can fail even if the container is still running.
+          impact: VK webhook intake, website API and operator APIs can fail even if the container is still running.
           dashboard: Grafana -> Product Observability / Product Health
           action: Check docker compose ps, docker compose logs --tail=100 api, Postgres health and Redis health. Do not expose /metrics publicly while debugging.
           safe_logs: Share only service name, HTTP status and sanitized error class. Do not share tokens, launch params, prompts or PII.
@@ -167,7 +153,7 @@ groups:
         annotations:
           summary: Reverse proxy health check is failing
           description: The private reverse proxy health endpoint did not return 2xx.
-          impact: Cloudflare routes for VK, Mini App and YooKassa can be unavailable even if app containers are healthy.
+          impact: Cloudflare routes for VK, frontend and YooKassa can be unavailable even if app containers are healthy.
           dashboard: Grafana -> Product Observability / Product Health
           action: Check reverse-proxy container status, nginx config, upstream health and Cloudflare tunnel connector logs.
           safe_logs: Share route names and HTTP status only. Do not share query strings, launch params or payment identifiers.
@@ -184,7 +170,7 @@ groups:
         annotations:
           summary: Доля API 5xx выше 5 процентов
           description: Больше 5 процентов instrumented HTTP requests возвращают 5xx в течение 10 минут.
-          impact: Пользовательские сценарии VK Bot, Mini App, admin/operator API могут падать или деградировать.
+          impact: Пользовательские сценарии VK Bot, frontend, admin/operator API могут падать или деградировать.
           dashboard: Grafana -> Product Observability / Product Health, API
           action: Найди route с 5xx в Grafana; проверь api-live.err и зависимости Postgres/Redis/MinIO; начни с последних deploy/config изменений.
           safe_logs: Отправляй route, status code и sanitized error class; не отправляй request body, auth headers, prompts или launch params.
@@ -202,7 +188,7 @@ groups:
         annotations:
           summary: API p95 latency выше 500ms
           description: p95 latency instrumented HTTP route выше 500ms.
-          impact: Mini App и bot control paths могут ощущаться медленными, часть клиентов может повторять запросы.
+          impact: frontend и bot control paths могут ощущаться медленными, часть клиентов может повторять запросы.
           dashboard: Grafana -> Product Observability / Product Health, API
           action: Найди медленный route; проверь Postgres/Redis latency, очередь jobs, внешние зависимости и recent logs.
           safe_logs: Отправляй route и latency bucket; не отправляй payload, PII, prompts или private artifact URLs.
@@ -346,7 +332,7 @@ groups:
           impact: Пользователи не смогут использовать reference images; возможна abuse-атака или несовместимый клиент.
           kill_switch: Проверь upload/body limits и MIME policy; user video uploads должны оставаться заблокированы.
           money_risk: Низкий риск денег, если rejection происходит до job reservation/provider call.
-          dashboard: Grafana -> Product Observability / Mini App Frontend, Jobs Worker
+          dashboard: Grafana -> Product Observability / Frontend Telemetry (historical), Jobs Worker
           action: Проверь surface={{ $labels.surface }}, reason={{ $labels.reason }}, mime_class={{ $labels.mime_class }}; смотри request size limits и frontend upload guard.
           safe_logs: Отправляй только surface/reason/mime_class/count; не отправляй filenames, user ids, object keys, raw file bytes или private URLs.
 

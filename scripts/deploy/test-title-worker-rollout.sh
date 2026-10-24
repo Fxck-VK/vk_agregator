@@ -37,7 +37,7 @@ assert_bash_rollout() {
 
   bash -n "${script}"
   worker_line="$(assert_single_line "${script}" 'worker_up_args+=(worker)' 'worker startup')"
-  runtime_line="$(assert_single_line "${script}" 'runtime_services=(api maintenance-worker provider-webhook miniapp' 'API runtime list without worker')"
+  runtime_line="$(assert_single_line "${script}" 'runtime_services=(api maintenance-worker provider-webhook' 'API runtime list without worker')"
   relay_gate_line="$(assert_single_line "${script}" 'Refusing API cutover until every relay-only worker is upgraded or stopped.' 'relay-only worker rollout gate')"
   migration_line="$(assert_single_line "${script}" 'migrate_args=(up --no-deps --exit-code-from migrate)' 'migration startup')"
   assert_before "${worker_line}" "${runtime_line}" "${script} worker startup"
@@ -58,7 +58,7 @@ assert_powershell_rollout() {
   local migration_line
 
   worker_line="$(assert_single_line "${script}" 'Invoke-Step "start jobs worker before API rollout" {' 'worker startup')"
-  runtime_line="$(assert_single_line "${script}" '$runtimeServices = @("api", "maintenance-worker", "provider-webhook", "miniapp", "reverse-proxy")' 'API runtime list without worker')"
+  runtime_line="$(assert_single_line "${script}" '$runtimeServices = @("api", "maintenance-worker", "provider-webhook", "reverse-proxy")' 'API runtime list without worker')"
   relay_gate_line="$(assert_single_line "${script}" 'Refusing API cutover until every relay-only worker is upgraded or stopped.' 'relay-only worker rollout gate')"
   migration_line="$(assert_single_line "${script}" 'Invoke-Step "run migrations" {' 'migration startup')"
   assert_before "${worker_line}" "${runtime_line}" "${script} worker startup"

@@ -1,5 +1,9 @@
 # Account ID Only Audit
 
+Status: archived
+Do not use for current implementation.
+See: [current retirement contract](../docs/runbooks/VK_MINIAPP_RETIREMENT.md), [architecture](../docs/ARCHITECTURE.md) and [root agent rules](../AGENTS.md).
+
 Status: active rollout audit
 Updated: 2026-07-04
 

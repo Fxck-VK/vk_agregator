@@ -1,5 +1,9 @@
 # AGENTS_FULL.md — Full Project Constitution for VK AI Aggregator
 
+Status: archived
+Do not use for current implementation.
+See: [current retirement contract](../docs/runbooks/VK_MINIAPP_RETIREMENT.md), [architecture](../docs/ARCHITECTURE.md) and [root agent rules](../AGENTS.md).
+
 This is the full reference constitution for AI coding agents working on VK AI Aggregator.
 
 It is intentionally large. Do **not** load this whole document on every task. Use root `AGENTS.md` as the router and read only the relevant sections for the current scope.

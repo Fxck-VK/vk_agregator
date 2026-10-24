@@ -20,10 +20,6 @@ npm-debug.log*
 yarn-debug.log*
 yarn-error.log*
 pnpm-debug.log*
-web/miniapp/dist/
-web/miniapp/.vite/
-web/miniapp/test-results/
-web/miniapp/playwright-report/
 web/admin/dist/
 web/admin/.vite/
 web/admin/test-results/

@@ -229,7 +229,6 @@ validate_dev_env() {
   done
 
   require_dev_url PUBLIC_VK_BASE_URL "https://dev-vk.epifera.com"
-  require_dev_url PUBLIC_APP_BASE_URL "https://dev-app.epifera.com"
   require_dev_url PUBLIC_PAYMENT_WEBHOOK_URL "https://dev.epifera.com/billing/webhooks/yookassa"
 
   if [[ "${with_cloudflare}" == "true" ]]; then
@@ -404,7 +403,7 @@ if [[ ${#stateful_services[@]} -gt 0 ]]; then
 fi
 image_pull_services=(platform reverse-proxy)
 if [[ "${build_on_vps}" != "true" ]]; then
-  image_pull_services+=(api worker maintenance-worker provider-webhook miniapp migrate)
+  image_pull_services+=(api worker maintenance-worker provider-webhook migrate)
   if [[ "${provider_balance_bot_enabled}" == "true" ]]; then
     image_pull_services+=(provider-balance-bot)
   fi
@@ -425,7 +424,7 @@ if [[ "${build_on_vps}" == "true" ]]; then
   if [[ "${pull_base_images}" == "true" ]]; then
     build_args+=(--pull)
   fi
-  build_args+=(api worker maintenance-worker provider-webhook miniapp platform migrate)
+  build_args+=(api worker maintenance-worker provider-webhook platform migrate)
   if [[ "${provider_balance_bot_enabled}" == "true" ]]; then
     build_args+=(provider-balance-bot)
   fi
@@ -462,7 +461,7 @@ fi
 worker_up_args+=(worker)
 run_step run_compose "${worker_up_args[@]}"
 
-runtime_services=(api maintenance-worker provider-webhook miniapp platform reverse-proxy)
+runtime_services=(api maintenance-worker provider-webhook platform reverse-proxy)
 if [[ "${provider_balance_bot_enabled}" == "true" ]]; then
   runtime_services+=(provider-balance-bot)
 fi
@@ -490,7 +489,6 @@ if [[ "${no_health_check}" != "true" ]]; then
   wait_http provider-webhook "http://127.0.0.1:8082/readyz"
   wait_http worker "http://127.0.0.1:9090/readyz"
   wait_http maintenance-worker "http://127.0.0.1:9091/readyz"
-  wait_http miniapp "http://127.0.0.1:5173/"
   health_status="passed"
 
   if [[ "${with_cloudflare}" == "true" && "${skip_public_smoke}" != "true" ]]; then

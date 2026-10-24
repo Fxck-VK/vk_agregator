@@ -20,10 +20,10 @@ func TestCatalogBuildsOnlyPublicEnabledItems(t *testing.T) {
 			domain.ProviderPoYo:    true,
 		},
 		EnabledImageModels: map[string]bool{
-			modelcatalog.MiniAppImageNanoBanana2:   true,
-			modelcatalog.MiniAppImageNanoBananaPro: true,
-			modelcatalog.MiniAppImageGPTImage2:     true,
-			modelcatalog.MiniAppImageSeedream45:    true,
+			modelcatalog.PublicImageNanoBanana2:   true,
+			modelcatalog.PublicImageNanoBananaPro: true,
+			modelcatalog.PublicImageGPTImage2:     true,
+			modelcatalog.PublicImageSeedream45:    true,
 		},
 		VideoRoutes:    videoCatalog.PublicRoutes(),
 		PricingCatalog: staticPricingCatalog(t),
@@ -39,7 +39,7 @@ func TestCatalogBuildsOnlyPublicEnabledItems(t *testing.T) {
 		}
 	}
 
-	nano := findItem(items, modelcatalog.MiniAppImageNanoBanana2)
+	nano := findItem(items, modelcatalog.PublicImageNanoBanana2)
 	if nano == nil {
 		t.Fatalf("Nano Banana 2 missing from public catalog: %+v", items)
 	}
@@ -47,17 +47,17 @@ func TestCatalogBuildsOnlyPublicEnabledItems(t *testing.T) {
 	if !nano.SupportsReferenceImage || nano.MaxReferenceImages != 14 || nano.MaxOutputCount != 1 {
 		t.Fatalf("Nano Banana 2 reference limits missing: %+v", nano)
 	}
-	pro := findItem(items, modelcatalog.MiniAppImageNanoBananaPro)
+	pro := findItem(items, modelcatalog.PublicImageNanoBananaPro)
 	if pro == nil {
 		t.Fatalf("Nano Banana Pro missing from public catalog: %+v", items)
 	}
 	assertImageQualityOptions(t, "Nano Banana Pro", pro.DefaultQuality, pro.QualityOptions)
-	gptImage2 := findItem(items, modelcatalog.MiniAppImageGPTImage2)
+	gptImage2 := findItem(items, modelcatalog.PublicImageGPTImage2)
 	if gptImage2 == nil {
 		t.Fatalf("GPT Image 2 missing from public catalog: %+v", items)
 	}
 	assertImageQualityOptions(t, "GPT Image 2", gptImage2.DefaultQuality, gptImage2.QualityOptions)
-	seedream := findItem(items, modelcatalog.MiniAppImageSeedream45)
+	seedream := findItem(items, modelcatalog.PublicImageSeedream45)
 	if seedream == nil {
 		t.Fatalf("Seedream 4.5 missing from public catalog: %+v", items)
 	}
@@ -89,9 +89,9 @@ func TestCatalogFailsClosedForDisabledOrUnconfiguredModels(t *testing.T) {
 			domain.ProviderPoYo:    false,
 		},
 		EnabledImageModels: map[string]bool{
-			modelcatalog.MiniAppImageNanoBanana2:   false,
-			modelcatalog.MiniAppImageNanoBananaPro: true,
-			modelcatalog.MiniAppImageGPTImage2:     true,
+			modelcatalog.PublicImageNanoBanana2:   false,
+			modelcatalog.PublicImageNanoBananaPro: true,
+			modelcatalog.PublicImageGPTImage2:     true,
 		},
 		PricingCatalog: staticPricingCatalog(t),
 	})
@@ -128,12 +128,12 @@ func TestCatalogHidesSeedream45UnlessEnabledReadyAndPriced(t *testing.T) {
 					domain.ProviderPoYo: tc.providerReady,
 				},
 				EnabledImageModels: map[string]bool{
-					modelcatalog.MiniAppImageSeedream45: tc.enabled,
+					modelcatalog.PublicImageSeedream45: tc.enabled,
 				},
 				PricingCatalog: prices,
 			})
 
-			got := findItem(catalog.Items(), modelcatalog.MiniAppImageSeedream45) != nil
+			got := findItem(catalog.Items(), modelcatalog.PublicImageSeedream45) != nil
 			if got != tc.wantVisible {
 				t.Fatalf("Seedream visibility = %v, want %v; items=%+v", got, tc.wantVisible, catalog.Items())
 			}
@@ -145,7 +145,7 @@ func TestCatalogReturnsDefensiveCopies(t *testing.T) {
 	catalog := productcatalog.New(productcatalog.Config{
 		ImageProviderReady: map[domain.ProviderName]bool{domain.ProviderPoYo: true},
 		EnabledImageModels: map[string]bool{
-			modelcatalog.MiniAppImageNanoBanana2: true,
+			modelcatalog.PublicImageNanoBanana2: true,
 		},
 		PricingCatalog: staticPricingCatalog(t),
 	})

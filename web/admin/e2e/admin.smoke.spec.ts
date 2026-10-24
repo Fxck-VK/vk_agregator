@@ -1,4 +1,4 @@
-const playwright = await import("@playwright/test").catch(() => import("../../miniapp/node_modules/@playwright/test/index.mjs"));
+const playwright = await import("@playwright/test");
 const { expect, test } = playwright;
 
 const NOW = "2026-06-13T08:00:00Z";

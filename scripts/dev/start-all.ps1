@@ -6,7 +6,6 @@ param(
     [switch]$NoRestart,
     [switch]$NoWait,
     [switch]$OpenGrafana,
-    [switch]$OpenMiniApp,
     [switch]$OpenAdmin,
     [switch]$UseEnvProviders,
     [switch]$RealVkDelivery,
@@ -15,11 +14,10 @@ param(
     [string]$PaymentProvider = "mock",
     [ValidateSet("auto", "quic", "http2")]
     [string]$CloudflareProtocol = "http2",
-    [string[]]$PublicHostnames = @("local-app.epifera.com", "local-vk.epifera.com", "local-pay.epifera.com"),
+    [string[]]$PublicHostnames = @("local-vk.epifera.com", "local-pay.epifera.com"),
     [int]$ApiPort = 8080,
     [int]$WorkerMetricsPort = 9090,
     [int]$ProviderWebhookPort = 8082,
-    [int]$MiniAppPort = 5173,
     [int]$AdminPort = 5175,
     [int]$GrafanaPort = 3000,
     [int]$PrometheusPort = 9091,
@@ -30,7 +28,7 @@ param(
 )
 
 $ErrorActionPreference = "Stop"
-. (Join-Path $PSScriptRoot "_miniapp-common.ps1")
+. (Join-Path $PSScriptRoot "_dev-env.ps1")
 
 function Get-AllRuntimeDir {
     param([Parameter(Mandatory = $true)][string]$Root)
@@ -113,7 +111,7 @@ function Start-AllCloudflare {
         [int]$TimeoutSeconds = 60
     )
 
-    Import-MiniAppDevEnv -Root $Root
+    Import-DevEnv -Root $Root
     $token = [Environment]::GetEnvironmentVariable("CLOUDFLARED_TUNNEL_TOKEN", "Process")
     if ([string]::IsNullOrWhiteSpace($token)) {
         throw "CLOUDFLARED_TUNNEL_TOKEN is empty. Put the dashboard tunnel token into .env or run with -NoCloudflare."
@@ -187,7 +185,6 @@ $observabilityArgs = @(
     "-ApiPort", [string]$ApiPort,
     "-WorkerMetricsPort", [string]$WorkerMetricsPort,
     "-ProviderWebhookPort", [string]$ProviderWebhookPort,
-    "-MiniAppPort", [string]$MiniAppPort,
     "-AdminPort", [string]$AdminPort,
     "-GrafanaPort", [string]$GrafanaPort,
     "-PrometheusPort", [string]$PrometheusPort,
@@ -221,9 +218,6 @@ if ($NoRestart) {
 if ($OpenGrafana) {
     $observabilityArgs += "-OpenGrafana"
 }
-if ($OpenMiniApp) {
-    $observabilityArgs += "-OpenMiniApp"
-}
 if ($OpenAdmin) {
     $observabilityArgs += "-OpenAdmin"
 }
@@ -256,14 +250,12 @@ Write-Host "All local dev services are running."
 Write-Host "API health:        http://127.0.0.1:$ApiPort/healthz"
 Write-Host "Worker health:     http://127.0.0.1:$WorkerMetricsPort/healthz"
 Write-Host "Provider webhook:  http://127.0.0.1:$ProviderWebhookPort/readyz"
-Write-Host "Mini App:          http://127.0.0.1:$MiniAppPort"
 Write-Host "Admin UI:          http://127.0.0.1:$AdminPort"
 Write-Host "Grafana:           http://127.0.0.1:$GrafanaPort"
 Write-Host "Prometheus:        http://127.0.0.1:$PrometheusPort"
 Write-Host "Alertmanager:      http://127.0.0.1:$AlertmanagerPort"
 Write-Host "Cloudflare:        $cloudflareState"
 if (-not $NoCloudflare) {
-    Write-Host "Public Mini App:   https://local-app.epifera.com"
     Write-Host "Public VK API:     https://local-vk.epifera.com"
     Write-Host "Public payment:    https://local-pay.epifera.com"
 }

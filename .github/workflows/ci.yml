@@ -177,35 +177,6 @@ jobs:
         shell: pwsh
         run: ./scripts/ci/test-secret-scanning.ps1 -GitleaksPath gitleaks
 
-  miniapp:
-    name: Mini App
-    runs-on: ubuntu-latest
-    steps:
-      - name: Checkout
-        uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4.3.1
-
-      - name: Set up Node.js
-        uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
-        with:
-          node-version: "22"
-          cache: npm
-          cache-dependency-path: web/miniapp/package-lock.json
-
-      - name: Validate lockfile integrity
-        run: node scripts/ci/validate-npm-lockfiles.mjs web/miniapp/package-lock.json
-
-      - name: Install dependencies
-        run: npm --prefix web/miniapp ci
-
-      - name: Lint
-        run: npm --prefix web/miniapp run lint
-
-      - name: Typecheck
-        run: npm --prefix web/miniapp run typecheck
-
-      - name: Build
-        run: npm --prefix web/miniapp run build
-
   platform:
     name: Web Platform
     # Playwright 1.60 Chromium is not available on the new Ubuntu 26.04 runner.
@@ -364,24 +335,13 @@ jobs:
         shell: pwsh
         run: |
           ./scripts/ci/test-platform-csp.ps1
+          node scripts/ci/check-retired-miniapp.mjs
+          if ($LASTEXITCODE -ne 0) { throw "Mini App retirement check failed" }
           ./scripts/ci/validate-infra.ps1
 
-      - name: Test deploy env scripts
-        shell: bash
-        run: |
-          bash scripts/deploy/test-dev-web-auth.sh
-          bash scripts/deploy/test-title-worker-rollout.sh
-          bash scripts/deploy/test-dev-env.sh
-          bash scripts/deploy/test-dev-email.sh
-          bash scripts/deploy/test-dev-google.sh
-          bash scripts/deploy/test-dev-yandex.sh
-          bash scripts/deploy/test-dev-legal.sh
-          bash scripts/deploy/test-prod-env.sh
-          bash scripts/deploy/test-env-parity.sh
-          bash scripts/deploy/test-assemble-env-parts.sh
-          bash scripts/deploy/test-verify-release-images.sh
-          bash scripts/deploy/test-docker-login-retry.sh
-          bash scripts/deploy/test-compose-pull-retry.sh
+      - name: Validate shared release contract
+        shell: pwsh
+        run: ./scripts/ci/validate-release-contract.ps1
 
       - name: Test S3-compatible backup scripts
         shell: bash

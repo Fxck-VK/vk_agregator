@@ -309,8 +309,7 @@ wait_http() {
 
 run_public_smoke() {
   local public_vk_url="$1"
-  local public_app_url="$2"
-  local public_payment_webhook_url="$3"
+  local public_payment_webhook_url="$2"
   local deadline=$((SECONDS + timeout_seconds))
   local attempt=1
   while [[ ${SECONDS} -lt ${deadline} ]]; do
@@ -318,7 +317,6 @@ run_public_smoke() {
     if bash scripts/deploy/smoke-prod.sh \
       --env-file "${env_file}" \
       --vk-base-url "${public_vk_url}" \
-      --app-base-url "${public_app_url}" \
       --payment-webhook-url "${public_payment_webhook_url}" \
       --timeout-seconds "${timeout_seconds}"; then
       return 0
@@ -391,7 +389,7 @@ fi
 
 image_pull_services=("${stateful_services[@]}" reverse-proxy)
 if [[ "${build_on_vps}" != "true" ]]; then
-  image_pull_services+=(api worker maintenance-worker provider-webhook miniapp migrate)
+  image_pull_services+=(api worker maintenance-worker provider-webhook migrate)
   if [[ "${provider_balance_bot_enabled}" == "true" ]]; then
     image_pull_services+=(provider-balance-bot)
   fi
@@ -431,7 +429,7 @@ if [[ "${build_on_vps}" == "true" ]]; then
   if [[ "${pull_base_images}" == "true" ]]; then
     build_args+=(--pull)
   fi
-  build_args+=(api worker maintenance-worker provider-webhook miniapp migrate)
+  build_args+=(api worker maintenance-worker provider-webhook migrate)
   if [[ "${provider_balance_bot_enabled}" == "true" ]]; then
     build_args+=(provider-balance-bot)
   fi
@@ -492,7 +490,7 @@ fi
 worker_up_args+=(worker)
 run_step "${compose[@]}" "${worker_up_args[@]}"
 
-runtime_services=(api maintenance-worker provider-webhook miniapp reverse-proxy)
+runtime_services=(api maintenance-worker provider-webhook reverse-proxy)
 if [[ "${provider_balance_bot_enabled}" == "true" ]]; then
   runtime_services+=(provider-balance-bot)
 fi
@@ -517,14 +515,12 @@ if [[ "${no_health_check}" != "true" ]]; then
   wait_http provider-webhook "http://127.0.0.1:8082/readyz"
   wait_http worker "http://127.0.0.1:9090/readyz"
   wait_http maintenance-worker "http://127.0.0.1:9091/readyz"
-  wait_http miniapp "http://127.0.0.1:5173/"
   health_status="passed"
 
   if [[ "${with_cloudflare}" == "true" && "${skip_public_smoke}" != "true" ]]; then
     public_vk_url="$(get_public_url PUBLIC_VK_BASE_URL VK_BASE_URL https://vk.epifera.com)"
-    public_app_url="$(get_public_url PUBLIC_APP_BASE_URL APP_BASE_URL https://app.epifera.com)"
     public_payment_webhook_url="$(get_public_url PUBLIC_PAYMENT_WEBHOOK_URL PAYMENT_WEBHOOK_URL https://epifera.com/billing/webhooks/yookassa)"
-    run_public_smoke "${public_vk_url}" "${public_app_url}" "${public_payment_webhook_url}"
+    run_public_smoke "${public_vk_url}" "${public_payment_webhook_url}"
     public_smoke_status="passed"
   fi
 fi

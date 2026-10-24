@@ -193,12 +193,12 @@ func (r Resolver) Resolve(request Request) (Resolution, error) {
 // worker contract. VK and the shared resolver must use the same mapping.
 func WorkerResolution(modelID, quality string) string {
 	switch modelID {
-	case modelcatalog.MiniAppImageGPTImage25Flare, modelcatalog.MiniAppImageGPTImage25Sunburst:
+	case modelcatalog.PublicImageGPTImage25Flare, modelcatalog.PublicImageGPTImage25Sunburst:
 		resolution, _, _ := strings.Cut(quality, "-")
 		return resolution
-	case modelcatalog.MiniAppImageGrokImage15, "imagen_4_0":
+	case modelcatalog.PublicImageGrokImage15, "imagen_4_0":
 		return ""
-	case modelcatalog.MiniAppImageGrokImage20:
+	case modelcatalog.PublicImageGrokImage20:
 		return "quality"
 	default:
 		return quality
@@ -223,7 +223,7 @@ func (r Resolver) resolvePublic(request Request) (modelcatalog.Model, PublicSele
 	}
 
 	requestedModelID := strings.TrimSpace(request.ModelID)
-	if requestedModelID == modelcatalog.MiniAppImageMidjourneyV7 && (strings.Contains(request.Prompt, "--") || strings.ContainsAny(request.Prompt, "{}")) {
+	if requestedModelID == modelcatalog.PublicImageMidjourneyV7 && (strings.Contains(request.Prompt, "--") || strings.ContainsAny(request.Prompt, "{}")) {
 		return modelcatalog.Model{}, PublicSelection{}, ErrUnsupportedPromptOptions
 	}
 	trustedModel, ok := modelcatalog.ResolvePublicModel(domain.OperationImageGenerate, requestedModelID)
@@ -264,7 +264,7 @@ func (r Resolver) resolvePublic(request Request) (modelcatalog.Model, PublicSele
 	if err != nil {
 		return modelcatalog.Model{}, PublicSelection{}, err
 	}
-	if trustedModel.ModelID == modelcatalog.MiniAppImageSeedream50Lite && request.ReferenceCount+outputCount > 15 {
+	if trustedModel.ModelID == modelcatalog.PublicImageSeedream50Lite && request.ReferenceCount+outputCount > 15 {
 		return modelcatalog.Model{}, PublicSelection{}, ErrOutputCountLimit
 	}
 	if pricingcatalog.IsGPTImage25(trustedModel.ModelID) && len(request.Prompt) > domain.GPTImage25MaxPromptBytes {

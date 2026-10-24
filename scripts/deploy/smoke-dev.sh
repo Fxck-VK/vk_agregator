@@ -3,7 +3,6 @@ set -euo pipefail
 
 env_file=""
 vk_base_url=""
-app_base_url=""
 payment_webhook_url=""
 dev_web_base_url=""
 timeout_seconds="${TIMEOUT_SECONDS:-10}"
@@ -17,12 +16,11 @@ Usage: scripts/deploy/smoke-dev.sh [options]
 Options:
   --env-file PATH                    DEV server env file to read, for example .env
   --vk-base-url URL                  DEV VK/API base URL. Default: PUBLIC_VK_BASE_URL or https://dev-vk.epifera.com
-  --app-base-url URL                 DEV Mini App base URL. Default: PUBLIC_APP_BASE_URL or https://dev-app.epifera.com
   --payment-webhook-url URL          DEV YooKassa webhook URL. Default: PUBLIC_PAYMENT_WEBHOOK_URL or https://dev.epifera.com/billing/webhooks/yookassa
   --dev-web-base-url URL              DEV web gateway URL. Default: https://dev-web.epifera.com
   --timeout-seconds SECONDS          HTTP timeout. Default: 10
   --stabilization-seconds SECONDS    Recheck the public tunnel after this delay. Default: 60
-  --skip-local-health                Skip local API/worker/provider-webhook/Mini App/reverse-proxy health checks
+  --skip-local-health                Skip local API/worker/provider-webhook/reverse-proxy health checks
   -h, --help                         Show help.
 USAGE
 }
@@ -31,7 +29,6 @@ while [[ $# -gt 0 ]]; do
   case "$1" in
     --env-file) env_file="${2:?missing value for --env-file}"; shift 2 ;;
     --vk-base-url) vk_base_url="${2:?missing value for --vk-base-url}"; shift 2 ;;
-    --app-base-url) app_base_url="${2:?missing value for --app-base-url}"; shift 2 ;;
     --payment-webhook-url) payment_webhook_url="${2:?missing value for --payment-webhook-url}"; shift 2 ;;
     --dev-web-base-url) dev_web_base_url="${2:?missing value for --dev-web-base-url}"; shift 2 ;;
     --timeout-seconds) timeout_seconds="${2:?missing value for --timeout-seconds}"; shift 2 ;;
@@ -116,21 +113,17 @@ assert_dev_web_url() {
 load_env_file "${env_file}"
 
 vk_base_url="${vk_base_url:-$(get_env_value PUBLIC_VK_BASE_URL "https://dev-vk.epifera.com")}"
-app_base_url="${app_base_url:-$(get_env_value PUBLIC_APP_BASE_URL "https://dev-app.epifera.com")}"
 payment_webhook_url="${payment_webhook_url:-$(get_env_value PUBLIC_PAYMENT_WEBHOOK_URL "https://dev.epifera.com/billing/webhooks/yookassa")}"
 dev_web_base_url="${dev_web_base_url:-https://dev-web.epifera.com}"
 
 vk_base_url="${vk_base_url%/}"
-app_base_url="${app_base_url%/}"
 
 assert_dev_url "DEV VK base URL" "${vk_base_url}" "https://dev-vk.epifera.com"
-assert_dev_url "DEV Mini App base URL" "${app_base_url}" "https://dev-app.epifera.com"
 assert_dev_url "DEV payment webhook URL" "${payment_webhook_url}" "https://dev.epifera.com/billing/webhooks/yookassa"
 assert_dev_web_url "${dev_web_base_url}"
 
 args=(
   --vk-base-url "${vk_base_url}"
-  --app-base-url "${app_base_url}"
   --payment-webhook-url "${payment_webhook_url}"
   --timeout-seconds "${timeout_seconds}"
 )

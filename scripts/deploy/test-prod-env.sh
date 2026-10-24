@@ -30,7 +30,7 @@ S3_BUCKET=fixture
 VK_ACCESS_TOKEN=fixture
 VK_SECRET=fixture
 VK_CONFIRMATION_TOKEN=prod-fixture
-VK_APP_SECRET=fixture
+ACCOUNT_EMAIL_PROOF_SECRET=fixture
 ADMIN_TOKEN=fixture
 PAYMENT_PROVIDER=manual
 PROVIDER=deepinfra
@@ -127,8 +127,8 @@ VK_MENU_TOP_UP_ENABLED=true
 PUBLIC_VK_BASE_URL=https://vk.example.test
 YOOKASSA_RETURN_URL_MINIAPP=https://vk.com/app54623372?section_type=public_r_app
 EOF
-bash "${bash_checker}" --env-file "${topup_miniapp_env}" >/dev/null
-run_powershell_checker "${topup_miniapp_env}" >/dev/null
+expect_failure "retired app cannot replace receipt contact" bash "${bash_checker}" --env-file "${topup_miniapp_env}"
+expect_failure "retired app cannot replace receipt contact (PS)" run_powershell_checker "${topup_miniapp_env}"
 
 topup_missing_contact_route_env="${tmpdir}/topup-missing-contact-route.env"
 sed '/^YOOKASSA_RETURN_URL_MINIAPP=/d' "${topup_miniapp_env}" > "${topup_missing_contact_route_env}"

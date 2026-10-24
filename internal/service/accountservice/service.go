@@ -1,5 +1,5 @@
 // Package accountservice is the account boundary used by product surfaces.
-// VK Bot, Mini App and future Web/Mobile handlers should call this package
+// VK Bot, Web and future Mobile handlers should call this package
 // instead of reading or mutating account identities directly.
 package accountservice
 

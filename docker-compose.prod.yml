@@ -208,32 +208,6 @@ services:
       DEEPINFRA_API_KEY: ${DEEPINFRA_API_KEY:-}
       DEEPINFRA_BALANCE_BASE_URL: ${DEEPINFRA_BALANCE_BASE_URL:-https://api.deepinfra.com}
 
-  miniapp:
-    image: ${APP_IMAGE_REGISTRY:-ghcr.io/fxck-vk/vk_agregator}/miniapp:${IMAGE_TAG:?IMAGE_TAG is required}
-    build:
-      context: .
-      dockerfile: Dockerfile.miniapp
-    restart: unless-stopped
-    cap_drop:
-      - ALL
-    security_opt:
-      - no-new-privileges:true
-    read_only: true
-    tmpfs:
-      - /var/cache/nginx:rw,noexec,nosuid,size=32m,uid=101,gid=101,mode=0750
-      - /var/run:rw,noexec,nosuid,size=4m,uid=101,gid=101,mode=0750
-      - /tmp:rw,noexec,nosuid,size=16m
-    pids_limit: 64
-    cpus: "0.25"
-    mem_limit: 128m
-    ports:
-      - "127.0.0.1:5173:8080"
-    healthcheck:
-      test: ["CMD-SHELL", "wget -qO- http://127.0.0.1:8080/ >/dev/null"]
-      interval: 10s
-      timeout: 5s
-      retries: 10
-
   reverse-proxy:
     image: ${REVERSE_PROXY_IMAGE:-nginx:1.31.3-alpine@sha256:7068961d45b07b2af510ac002e9daa63a1d3eba2111202d6768798690800fffd}
     restart: unless-stopped
@@ -261,8 +235,6 @@ services:
       api:
         condition: service_healthy
       provider-webhook:
-        condition: service_healthy
-      miniapp:
         condition: service_healthy
     ports:
       - "127.0.0.1:${REVERSE_PROXY_HTTP_PORT:-8088}:80"

@@ -188,7 +188,6 @@ function Assert-DevStatusEnv {
 
     $expectedUrls = @{
         PUBLIC_VK_BASE_URL = "https://dev-vk.epifera.com"
-        PUBLIC_APP_BASE_URL = "https://dev-app.epifera.com"
         PUBLIC_PAYMENT_WEBHOOK_URL = "https://dev.epifera.com/billing/webhooks/yookassa"
     }
     foreach ($entry in $expectedUrls.GetEnumerator()) {
@@ -374,8 +373,7 @@ function Show-PortStatus {
         [pscustomobject]@{ Name = "reverse-proxy"; Port = $ReverseProxyPort },
         [pscustomobject]@{ Name = "api"; Port = 8080 },
         [pscustomobject]@{ Name = "provider-webhook"; Port = 8082 },
-        [pscustomobject]@{ Name = "worker"; Port = 9090 },
-        [pscustomobject]@{ Name = "miniapp"; Port = 5173 }
+        [pscustomobject]@{ Name = "worker"; Port = 9090 }
     )
 
     foreach ($item in $ports) {
@@ -512,17 +510,14 @@ try {
     Test-HttpStatus -Name "API health" -Url "http://127.0.0.1:8080/health" -ExpectedStatuses @(200) | Out-Null
     Test-HttpStatus -Name "Worker health" -Url "http://127.0.0.1:9090/healthz" -ExpectedStatuses @(200) | Out-Null
     Test-HttpStatus -Name "Provider webhook health" -Url "http://127.0.0.1:8082/health" -ExpectedStatuses @(200) | Out-Null
-    Test-HttpStatus -Name "Mini App frontend" -Url "http://127.0.0.1:5173/" -ExpectedStatuses @(200) | Out-Null
     Test-HttpStatus -Name "Reverse proxy health" -Url "http://127.0.0.1:$reverseProxyPort/proxy-health" -ExpectedStatuses @(200) | Out-Null
 
     Write-Host ""
     Write-Host "== DEV reverse proxy routes"
     Test-HttpStatus -Name "DEV VK health" -Url "http://127.0.0.1:$reverseProxyPort/health" -HostHeader "dev-vk.epifera.com" -ExpectedStatuses @(200) | Out-Null
     Test-VKCallbackConfirmation -Values $envValues -ReverseProxyPort $reverseProxyPort
-    Test-HttpStatus -Name "DEV Mini App" -Url "http://127.0.0.1:$reverseProxyPort/" -HostHeader "dev-app.epifera.com" -ExpectedStatuses @(200) | Out-Null
-    Test-HttpStatus -Name "DEV Mini App BFF" -Url "http://127.0.0.1:$reverseProxyPort/miniapp/balance" -HostHeader "dev-app.epifera.com" -ExpectedStatuses @(400, 401, 403) | Out-Null
     Test-HttpStatus -Name "DEV YooKassa webhook" -Url "http://127.0.0.1:$reverseProxyPort/billing/webhooks/yookassa" -HostHeader "dev.epifera.com" -Method "POST" -Body "{}" -ExpectedStatuses @(400, 401, 403) | Out-Null
-    Test-HttpStatus -Name "DEV metrics blocked" -Url "http://127.0.0.1:$reverseProxyPort/metrics" -HostHeader "dev-app.epifera.com" -ExpectedStatuses @(404) | Out-Null
+    Test-HttpStatus -Name "DEV metrics blocked" -Url "http://127.0.0.1:$reverseProxyPort/metrics" -HostHeader "dev-vk.epifera.com" -ExpectedStatuses @(404) | Out-Null
     Test-HttpStatus -Name "DEV admin blocked" -Url "http://127.0.0.1:$reverseProxyPort/admin/jobs" -HostHeader "dev-vk.epifera.com" -ExpectedStatuses @(404) | Out-Null
 
     Write-Host ""
@@ -530,10 +525,8 @@ try {
     $tunnelRunning = Show-CloudflaredStatus
     if ($tunnelRunning) {
         $publicVK = "$(Get-EnvValue -Values $envValues -Name 'PUBLIC_VK_BASE_URL')/health"
-        $publicApp = "$(Get-EnvValue -Values $envValues -Name 'PUBLIC_APP_BASE_URL')/"
         $publicWebhook = Get-EnvValue -Values $envValues -Name "PUBLIC_PAYMENT_WEBHOOK_URL"
         Test-HttpStatus -Name "Public DEV VK health" -Url $publicVK -ExpectedStatuses @(200) | Out-Null
-        Test-HttpStatus -Name "Public DEV Mini App" -Url $publicApp -ExpectedStatuses @(200) | Out-Null
         Test-HttpStatus -Name "Public DEV YooKassa webhook" -Url $publicWebhook -Method "POST" -Body "{}" -ExpectedStatuses @(400, 401, 403) | Out-Null
     } else {
         Write-StatusLine -State "WARN" -Name "Public DEV smoke" -Detail "skipped because tunnel is not running"

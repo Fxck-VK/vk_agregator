@@ -19,16 +19,16 @@ func TestRegistryIncludesCurrentPricedPublicImageModels(t *testing.T) {
 	registry := providermodels.StaticRegistry()
 
 	wantIDs := []string{
-		modelcatalog.MiniAppImageNanoBanana2,
-		modelcatalog.MiniAppImageNanoBananaPro,
-		modelcatalog.MiniAppImageGPTImage2,
+		modelcatalog.PublicImageNanoBanana2,
+		modelcatalog.PublicImageNanoBananaPro,
+		modelcatalog.PublicImageGPTImage2,
 	}
 	for _, publicID := range wantIDs {
 		model, ok := registry.PublicImageModel(publicID)
 		if !ok {
 			t.Fatalf("public image model %s missing from registry", publicID)
 		}
-		catalogModel, ok := modelcatalog.ResolveMiniAppModel(domain.OperationImageGenerate, publicID)
+		catalogModel, ok := modelcatalog.ResolvePublicModel(domain.OperationImageGenerate, publicID)
 		if !ok {
 			t.Fatalf("modelcatalog no longer resolves %s", publicID)
 		}
@@ -57,7 +57,7 @@ func TestRegistryIncludesCurrentPricedPublicImageModels(t *testing.T) {
 		}
 	}
 
-	if _, ok := registry.PublicImageModel(modelcatalog.MiniAppImageMock); ok {
+	if _, ok := registry.PublicImageModel(modelcatalog.PublicImageMock); ok {
 		t.Fatalf("loadtest-only mock image must not be in priced public image registry")
 	}
 }
@@ -65,9 +65,9 @@ func TestRegistryIncludesCurrentPricedPublicImageModels(t *testing.T) {
 func TestRegistryIncludesTextAliasAndLoadTestImageSeparately(t *testing.T) {
 	registry := providermodels.StaticRegistry()
 
-	text, ok := registry.TextAlias(modelcatalog.MiniAppChatModelID)
+	text, ok := registry.TextAlias(modelcatalog.PublicChatModelID)
 	if !ok {
-		t.Fatalf("text alias %s missing", modelcatalog.MiniAppChatModelID)
+		t.Fatalf("text alias %s missing", modelcatalog.PublicChatModelID)
 	}
 	if text.Provider != domain.ProviderDeepInfra || text.ProviderModelID == "" {
 		t.Fatalf("text alias provider mapping is incomplete: %+v", text)
@@ -76,9 +76,9 @@ func TestRegistryIncludesTextAliasAndLoadTestImageSeparately(t *testing.T) {
 		t.Fatalf("text alias should not pretend to have product pricing or feature flag: %+v", text)
 	}
 
-	mock, ok := registry.LoadTestImageModel(modelcatalog.MiniAppImageMock)
+	mock, ok := registry.LoadTestImageModel(modelcatalog.PublicImageMock)
 	if !ok {
-		t.Fatalf("loadtest image model %s missing", modelcatalog.MiniAppImageMock)
+		t.Fatalf("loadtest image model %s missing", modelcatalog.PublicImageMock)
 	}
 	if !mock.LoadTestOnly || mock.Provider != domain.ProviderMock || len(mock.PricingKeys) != 0 {
 		t.Fatalf("mock image should be tracked as loadtest-only and unpriced: %+v", mock)
@@ -88,7 +88,7 @@ func TestRegistryIncludesTextAliasAndLoadTestImageSeparately(t *testing.T) {
 func TestRegistryGPTImage2ReferenceLimitIsIsolated(t *testing.T) {
 	registry := providermodels.StaticRegistry()
 
-	gpt, ok := registry.PublicImageModel(modelcatalog.MiniAppImageGPTImage2)
+	gpt, ok := registry.PublicImageModel(modelcatalog.PublicImageGPTImage2)
 	if !ok {
 		t.Fatal("GPT Image 2 image model missing")
 	}
@@ -100,7 +100,7 @@ func TestRegistryGPTImage2ReferenceLimitIsIsolated(t *testing.T) {
 	}
 
 	stableImageLimits := map[string]int{
-		modelcatalog.MiniAppImageNanoBananaPro: 14,
+		modelcatalog.PublicImageNanoBananaPro: 14,
 	}
 	for publicID, want := range stableImageLimits {
 		model, ok := registry.PublicImageModel(publicID)
@@ -130,7 +130,7 @@ func TestRegistryGPTImage2ReferenceLimitIsIsolated(t *testing.T) {
 func TestRegistryNanoBanana2UsesPoyoSourceContract(t *testing.T) {
 	registry := providermodels.StaticRegistry()
 
-	model, ok := registry.PublicImageModel(modelcatalog.MiniAppImageNanoBanana2)
+	model, ok := registry.PublicImageModel(modelcatalog.PublicImageNanoBanana2)
 	if !ok {
 		t.Fatal("Nano Banana 2 image model missing")
 	}
@@ -151,7 +151,7 @@ func TestRegistryNanoBanana2UsesPoyoSourceContract(t *testing.T) {
 func TestRegistryNanoBananaProUsesAPIMartGemini3ProContract(t *testing.T) {
 	registry := providermodels.StaticRegistry()
 
-	model, ok := registry.PublicImageModel(modelcatalog.MiniAppImageNanoBananaPro)
+	model, ok := registry.PublicImageModel(modelcatalog.PublicImageNanoBananaPro)
 	if !ok {
 		t.Fatal("Nano Banana Pro image model missing")
 	}
@@ -176,8 +176,8 @@ func TestRegistryNanoBananaProUsesAPIMartGemini3ProContract(t *testing.T) {
 		modelID  string
 		maxRefs  int
 	}{
-		modelcatalog.MiniAppImageNanoBanana2: {provider: domain.ProviderPoYo, modelID: providermodels.ProviderModelPoYoNanoBanana2, maxRefs: 14},
-		modelcatalog.MiniAppImageGPTImage2:   {provider: domain.ProviderAPIMart, modelID: providermodels.ProviderModelGPTImage2, maxRefs: 15},
+		modelcatalog.PublicImageNanoBanana2: {provider: domain.ProviderPoYo, modelID: providermodels.ProviderModelPoYoNanoBanana2, maxRefs: 14},
+		modelcatalog.PublicImageGPTImage2:   {provider: domain.ProviderAPIMart, modelID: providermodels.ProviderModelGPTImage2, maxRefs: 15},
 	}
 	for publicID, want := range unchangedImages {
 		got, ok := registry.PublicImageModel(publicID)
@@ -194,7 +194,7 @@ func TestRegistryNanoBananaProUsesAPIMartGemini3ProContract(t *testing.T) {
 func TestRegistrySeedream45UsesPoyoSourceContract(t *testing.T) {
 	registry := providermodels.StaticRegistry()
 
-	model, ok := registry.PublicImageModel(modelcatalog.MiniAppImageSeedream45)
+	model, ok := registry.PublicImageModel(modelcatalog.PublicImageSeedream45)
 	if !ok {
 		t.Fatal("Seedream 4.5 image model missing")
 	}
@@ -245,13 +245,13 @@ func TestRegistryImageAspectRatiosFailClosedBeforePricing(t *testing.T) {
 	}{
 		{
 			name:        "qwen rejects generic panoramic ratio",
-			publicID:    modelcatalog.MiniAppImageQwenImage3,
+			publicID:    modelcatalog.PublicImageQwenImage3,
 			quality:     pricingcatalog.ImageQuality1K,
 			aspectRatio: "21:9",
 		},
 		{
 			name:        "seedream 4.5 rejects generic portrait crop",
-			publicID:    modelcatalog.MiniAppImageSeedream45,
+			publicID:    modelcatalog.PublicImageSeedream45,
 			quality:     pricingcatalog.ImageQuality2K,
 			aspectRatio: "4:5",
 		},

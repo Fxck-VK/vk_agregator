@@ -193,7 +193,6 @@ $summaries.Add((Invoke-K6Scenario -Name "basic-api-smoke" -ScriptPath "tests/k6/
     K6_BASIC_DURATION = $duration
     K6_HEALTH_VUS = "1"
     K6_VK_VUS = "1"
-    K6_MINIAPP_VUS = "1"
 }) -OutputDir $ReportDir))
 
 $summaries.Add((Invoke-K6Scenario -Name "vk-bot-smoke" -ScriptPath "tests/k6/vk-bot.js" -Values $envValues -Overrides (Merge-Hashtable -Base $commonOverrides -Overrides @{
@@ -205,27 +204,6 @@ $summaries.Add((Invoke-K6Scenario -Name "vk-bot-smoke" -ScriptPath "tests/k6/vk-
     K6_VK_RATE_LIMIT_EVENTS = "5"
     K6_VK_RATE_LIMIT_MAX_DURATION = "1m"
     K6_VK_STEP_SLEEP_SECONDS = "0"
-}) -OutputDir $ReportDir))
-
-foreach ($workload in @("text", "image", "video")) {
-    $rateKey = "K6_JOB_{0}_RATE" -f $workload.ToUpperInvariant()
-    $summaries.Add((Invoke-K6Scenario -Name "job-$workload-smoke" -ScriptPath "tests/k6/job-worker.js" -Values $envValues -Overrides (Merge-Hashtable -Base $commonOverrides -Overrides @{
-        K6_JOB_WORKLOAD = $workload
-        K6_JOB_DURATION = $duration
-        $rateKey = "1"
-        K6_JOB_POLL = "true"
-        K6_JOB_POLL_ATTEMPTS = "10"
-        K6_JOB_POLL_INTERVAL_SECONDS = "0.5"
-        K6_JOB_SLEEP_SECONDS = "0"
-    }) -OutputDir $ReportDir))
-}
-
-$summaries.Add((Invoke-K6Scenario -Name "billing-mock-smoke" -ScriptPath "tests/k6/billing-payments.js" -Values $envValues -Overrides (Merge-Hashtable -Base $commonOverrides -Overrides @{
-    K6_PAYMENT_DURATION = $duration
-    K6_PAYMENT_RATE = "1"
-    K6_PAYMENT_PREALLOCATED_VUS = "2"
-    K6_PAYMENT_MAX_VUS = "10"
-    K6_PAYMENT_SLEEP_SECONDS = "0"
 }) -OutputDir $ReportDir))
 
 $dlqDepth = $null

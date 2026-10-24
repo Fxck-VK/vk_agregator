@@ -73,12 +73,12 @@ cutover="${tmpdir}/cutover.env"
 bash "${script}" --target dev --output "${cutover}" \
   --web-origin https://dev-web.epifera.com --dev-public-domain epifera.com
 grep -Fx 'PUBLIC_VK_BASE_URL="https://dev-vk.epifera.com"' "${cutover}" >/dev/null
-grep -Fx 'PUBLIC_APP_BASE_URL=https://dev-app.epifera.com/miniapp' "${cutover}" >/dev/null
+! grep -q '^PUBLIC_APP_BASE_URL=' "${cutover}" >/dev/null
 grep -Fx 'PUBLIC_PAYMENT_WEBHOOK_URL=https://dev.epifera.com/webhooks/yookassa' "${cutover}" >/dev/null
-grep -Fx 'YOOKASSA_RETURN_URL_MINIAPP=https://dev-app.epifera.com/payment?payment_id=fixture' "${cutover}" >/dev/null
+! grep -q '^YOOKASSA_RETURN_URL_MINIAPP=' "${cutover}" >/dev/null
 grep -Fx 'YOOKASSA_RETURN_URL_VK_BOT=https://vk.com/app123' "${cutover}" >/dev/null
 grep -Fx 'ADMIN_TOKEN=fixture-neiirohub.ru-secret' "${cutover}" >/dev/null
-grep -Fx 'PROVIDER_REFERENCE_BASE_URL="https://dev-app.epifera.com"' "${cutover}" >/dev/null
+grep -Fx 'PROVIDER_REFERENCE_BASE_URL="https://dev-vk.epifera.com"' "${cutover}" >/dev/null
 
 export ENV_COMMON="${ENV_COMMON//neiirohub.ru/epifera.com}"
 export ENV_PROVIDERS_COMMON="${ENV_PROVIDERS_COMMON//neiirohub.ru/epifera.com}"
@@ -117,7 +117,7 @@ fi
 export ENV_COMMON=$'APP_ENV=development\nPUBLIC_VK_BASE_URL=https://dev-vk.epifera.com\nPUBLIC_APP_BASE_URL=https://dev-app.epifera.com\nPUBLIC_PAYMENT_WEBHOOK_URL=https://dev.epifera.com'
 for wrong_return_url in 'https://app.neiirohub.ru/payment' 'https://app.epifera.com/payment' 'http://dev-app.neiirohub.ru/payment'; do
   export ENV_PAYMENTS_DEV="PAYMENT_PROVIDER=mock
-YOOKASSA_RETURN_URL_MINIAPP=${wrong_return_url}"
+YOOKASSA_RETURN_URL=${wrong_return_url}"
   if bash "${script}" --target dev --output "${tmpdir}/wrong-return.env" \
     --dev-public-domain epifera.com >/dev/null 2>&1; then
     echo "Expected production or non-HTTPS owned return URL in DEV to fail" >&2

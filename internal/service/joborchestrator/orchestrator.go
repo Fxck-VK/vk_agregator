@@ -355,7 +355,7 @@ func (o *Orchestrator) CreateJob(ctx context.Context, in CreateJobInput) (*domai
 	if existing, err := o.jobs.GetByIdempotencyKey(ctx, in.IdempotencyKey); err == nil {
 		// Prepared account-native jobs deliberately share the durable unique key
 		// column but are not executable legacy requests. Never expose such a row
-		// through the legacy/VK/Mini App create path on a cross-surface key
+		// through the legacy/VK create path on a cross-surface key
 		// collision.
 		if existing.Status == domain.JobStatusPrepared || !createJobReplayMatches(existing, in) {
 			return nil, domain.ErrConflict

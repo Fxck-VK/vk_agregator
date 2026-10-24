@@ -112,8 +112,7 @@ jobs:
             dockerfile: Dockerfile.provider-webhook
           - service: provider-balance-bot
             dockerfile: Dockerfile.provider-balance-bot
-          - service: miniapp
-            dockerfile: Dockerfile.miniapp
+
           - service: platform
             dockerfile: Dockerfile.platform
           - service: migrate
@@ -175,8 +174,7 @@ jobs:
             dockerfile: Dockerfile.provider-webhook
           - service: provider-balance-bot
             dockerfile: Dockerfile.provider-balance-bot
-          - service: miniapp
-            dockerfile: Dockerfile.miniapp
+
           - service: platform
             dockerfile: Dockerfile.platform
           - service: migrate

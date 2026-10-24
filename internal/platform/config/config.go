@@ -157,10 +157,6 @@ type Config struct {
 	// WebhookRateLimitRPS/Burst bound inbound webhook traffic per source.
 	WebhookRateLimitRPS   float64
 	WebhookRateLimitBurst int
-	// MiniAppJobRateLimitRPS/Burst bound Mini App job creation per verified
-	// vk_user_id.
-	MiniAppJobRateLimitRPS   float64
-	MiniAppJobRateLimitBurst int
 	// VKAntiSpam* bound user-level VK bot messages and billable GPT jobs.
 	VKAntiSpamEnabled             bool
 	VKAntiSpamMessageLimit        int
@@ -204,34 +200,29 @@ type Config struct {
 	RuntimePricingRefreshInterval time.Duration
 
 	// PaymentProvider selects the money provider for balance top-ups.
-	PublicVKBaseURL                           string
-	PaymentRedirectRateLimitRPS               float64
-	PaymentRedirectRateLimitBurst             int
-	AdminRateLimitLimit                       int
-	AdminRateLimitWindow                      time.Duration
-	PaymentProvider                           string
-	YooKassaShopID                            string
-	YooKassaSecretKey                         string
-	YooKassaBaseURL                           string
-	YooKassaReturnURL                         string
-	YooKassaReturnURLMiniApp                  string
-	YooKassaReturnURLVKBot                    string
-	YooKassaWebhookIPAllowlistEnabled         bool
-	YooKassaWebhookIPAllowlist                []string
-	PaymentWebhookRequireHTTPS                bool
-	PaymentWebhookTrustedProxies              []string
-	PaymentWebhookAddr                        string
-	PaymentWebhookPollInterval                time.Duration
-	PaymentWebhookBatchLimit                  int
-	PaymentReconciliationInterval             time.Duration
-	PaymentReconciliationLimit                int
-	PaymentReconciliationStaleAfter           time.Duration
-	FeatureVKTopUpStatusEditEnabled           bool
-	FeatureMiniAppPaymentCancelEnabled        bool
-	FeatureMiniAppTopUpCatalogDropdownEnabled bool
-	FeatureMiniAppDarkThemeOnlyEnabled        bool
-	FeatureMiniAppTopUpHistoryDropdownEnabled bool
-	FeatureDevPaymentTestProductEnabled       bool
+	PublicVKBaseURL                     string
+	PaymentRedirectRateLimitRPS         float64
+	PaymentRedirectRateLimitBurst       int
+	AdminRateLimitLimit                 int
+	AdminRateLimitWindow                time.Duration
+	PaymentProvider                     string
+	YooKassaShopID                      string
+	YooKassaSecretKey                   string
+	YooKassaBaseURL                     string
+	YooKassaReturnURL                   string
+	YooKassaReturnURLVKBot              string
+	YooKassaWebhookIPAllowlistEnabled   bool
+	YooKassaWebhookIPAllowlist          []string
+	PaymentWebhookRequireHTTPS          bool
+	PaymentWebhookTrustedProxies        []string
+	PaymentWebhookAddr                  string
+	PaymentWebhookPollInterval          time.Duration
+	PaymentWebhookBatchLimit            int
+	PaymentReconciliationInterval       time.Duration
+	PaymentReconciliationLimit          int
+	PaymentReconciliationStaleAfter     time.Duration
+	FeatureVKTopUpStatusEditEnabled     bool
+	FeatureDevPaymentTestProductEnabled bool
 
 	// Provider selects the primary generation provider. ProviderChain, when set,
 	// enables router/fallback selection across multiple providers.
@@ -253,7 +244,7 @@ type Config struct {
 	VideoAspectRatio string
 	VideoDraft       bool
 
-	// Media pipeline config is worker-owned. VK Bot and Mini App surfaces must
+	// Media pipeline config is worker-owned. VK Bot and website surfaces must
 	// not call ffmpeg/ffprobe directly.
 	MediaPipelineEnabled         bool
 	MediaVideoProbePolicy        string
@@ -442,7 +433,7 @@ type Config struct {
 	VKMenuStudentsReportEnabled        bool
 	VKMenuStudentsQAEnabled            bool
 	// VKTopUpReceiptEmail/VKTopUpReceiptPhone are server-side receipt contacts
-	// used by the VK Bot quick top-up flow. Mini App may still collect a user
+	// used by the VK Bot quick top-up flow. The website independently requires a verified user
 	// receipt contact explicitly.
 	VKTopUpReceiptEmail string
 	VKTopUpReceiptPhone string
@@ -459,19 +450,6 @@ type Config struct {
 	ReferralReferredSignupRewardCredits int64
 	// ReferralRewardOnActivation gates reward ledger writes during rollout.
 	ReferralRewardOnActivation bool
-
-	// VKAppID is the VK Mini App application identifier.
-	VKAppID string
-	// VKAppSecret is the VK Mini App protected key used to verify launch-params
-	// signatures. When empty the signature check is skipped (dev/mock mode).
-	VKAppSecret string
-	// MiniAppLaunchParamsMaxAge is the maximum age of VK launch params before
-	// they are rejected. Zero disables the age check.
-	MiniAppLaunchParamsMaxAge time.Duration
-	// MiniAppAllowQueryLaunchParams enables the legacy launch_params query
-	// fallback for explicit local development/tests only. Server environments
-	// reject this setting because signed credentials must use a request header.
-	MiniAppAllowQueryLaunchParams bool
 	// AccountEmailLink* control short-lived email identity verification codes.
 	AccountEmailLinkCodeTTL       time.Duration
 	AccountEmailLinkCodeDigits    int
@@ -529,11 +507,9 @@ type Config struct {
 	AccountOAuthVKIDClientIDs           []string
 	AccountOAuthVKIDIssuer              string
 	AccountOAuthVKIDJWKSURL             string
-	// FrontendTelemetryEnabled accepts safe Mini App client telemetry events.
-	FrontendTelemetryEnabled bool
-	// FrontendTelemetryUserHashSecret enables anonymized client user hashing
-	// later; raw user identifiers must never be emitted in telemetry labels.
-	FrontendTelemetryUserHashSecret string
+	// AccountEmailProofSecret hashes email verification and recovery proofs.
+	// It is independent of OAuth credentials and application transports.
+	AccountEmailProofSecret string
 
 	// ArtifactURLTTL is how long signed artifact delivery URLs stay valid.
 	ArtifactURLTTL time.Duration
@@ -686,9 +662,6 @@ func (c Config) Validate() error {
 	var missing []string
 	if c.WebImageArtifactAllowInsecureHTTP && !strings.EqualFold(strings.TrimSpace(c.Env), "development") {
 		return fmt.Errorf("config: WEB_IMAGE_ARTIFACT_ALLOW_INSECURE_HTTP is allowed only in development")
-	}
-	if c.IsServerEnv() && c.MiniAppAllowQueryLaunchParams {
-		return fmt.Errorf("config: MINIAPP_ALLOW_QUERY_LAUNCH_PARAMS must be false in production/staging")
 	}
 	if err := c.ValidateDataServiceModes(); err != nil {
 		return err
@@ -1072,6 +1045,9 @@ func (c Config) Validate() error {
 		if strings.EqualFold(strings.TrimSpace(c.PaymentProvider), "mock") {
 			return fmt.Errorf("config: PAYMENT_PROVIDER=mock is not allowed in production")
 		}
+		if strings.TrimSpace(c.AccountEmailProofSecret) == "" {
+			missing = append(missing, "ACCOUNT_EMAIL_PROOF_SECRET")
+		}
 		if c.VKSecret == "" {
 			missing = append(missing, "VK_SECRET")
 		}
@@ -1080,11 +1056,6 @@ func (c Config) Validate() error {
 		}
 		if c.VKConfirmationToken == "" || c.VKConfirmationToken == "dev-confirmation" {
 			missing = append(missing, "VK_CONFIRMATION_TOKEN")
-		}
-		// The Mini App BFF must verify launch-param signatures for real in
-		// production; an empty secret would silently disable the check.
-		if c.VKAppSecret == "" {
-			missing = append(missing, "VK_APP_SECRET")
 		}
 		if strings.EqualFold(strings.TrimSpace(c.PaymentProvider), "yookassa") && len(c.PaymentWebhookTrustedProxies) == 0 {
 			missing = append(missing, "PAYMENT_WEBHOOK_TRUSTED_PROXIES")
@@ -1290,8 +1261,6 @@ func Load() Config {
 
 		WebhookRateLimitRPS:           envFloat("WEBHOOK_RATE_LIMIT_RPS", 20),
 		WebhookRateLimitBurst:         envInt("WEBHOOK_RATE_LIMIT_BURST", 40),
-		MiniAppJobRateLimitRPS:        envFloat("MINIAPP_JOB_RATE_LIMIT_RPS", 1),
-		MiniAppJobRateLimitBurst:      envInt("MINIAPP_JOB_RATE_LIMIT_BURST", 5),
 		VKAntiSpamEnabled:             envBool("VK_ANTISPAM_ENABLED", true),
 		VKAntiSpamMessageLimit:        envInt("VK_ANTISPAM_MESSAGE_LIMIT", 40),
 		VKAntiSpamMessageWindow:       envDuration("VK_ANTISPAM_MESSAGE_WINDOW", time.Minute),
@@ -1320,132 +1289,127 @@ func Load() Config {
 		RuntimePricingStaticFallbackEnabled: envBool("RUNTIME_PRICING_STATIC_FALLBACK_ENABLED", false),
 		RuntimePricingRefreshInterval:       envDuration("RUNTIME_PRICING_REFRESH_INTERVAL", 0),
 
-		PublicVKBaseURL:                           env("PUBLIC_VK_BASE_URL", ""),
-		PaymentRedirectRateLimitRPS:               envFloat("PAYMENT_REDIRECT_RATE_LIMIT_RPS", 5),
-		PaymentRedirectRateLimitBurst:             envInt("PAYMENT_REDIRECT_RATE_LIMIT_BURST", 10),
-		AdminRateLimitLimit:                       envInt("ADMIN_RATE_LIMIT_LIMIT", 120),
-		AdminRateLimitWindow:                      envDuration("ADMIN_RATE_LIMIT_WINDOW", time.Minute),
-		PaymentProvider:                           env("PAYMENT_PROVIDER", "mock"),
-		YooKassaShopID:                            env("YOOKASSA_SHOP_ID", ""),
-		YooKassaSecretKey:                         env("YOOKASSA_SECRET_KEY", ""),
-		YooKassaBaseURL:                           env("YOOKASSA_BASE_URL", "https://api.yookassa.ru/v3"),
-		YooKassaReturnURL:                         env("YOOKASSA_RETURN_URL", ""),
-		YooKassaReturnURLMiniApp:                  env("YOOKASSA_RETURN_URL_MINIAPP", ""),
-		YooKassaReturnURLVKBot:                    env("YOOKASSA_RETURN_URL_VK_BOT", ""),
-		YooKassaWebhookIPAllowlistEnabled:         envBool("YOOKASSA_WEBHOOK_IP_ALLOWLIST_ENABLED", false),
-		YooKassaWebhookIPAllowlist:                envList("YOOKASSA_WEBHOOK_IP_ALLOWLIST"),
-		PaymentWebhookRequireHTTPS:                envBool("PAYMENT_WEBHOOK_REQUIRE_HTTPS", false),
-		PaymentWebhookTrustedProxies:              envList("PAYMENT_WEBHOOK_TRUSTED_PROXIES"),
-		PaymentWebhookAddr:                        env("PAYMENT_WEBHOOK_ADDR", ":8082"),
-		PaymentWebhookPollInterval:                envDuration("PAYMENT_WEBHOOK_POLL_INTERVAL", 5*time.Second),
-		PaymentWebhookBatchLimit:                  envInt("PAYMENT_WEBHOOK_BATCH_LIMIT", 20),
-		PaymentReconciliationInterval:             envDuration("PAYMENT_RECONCILIATION_INTERVAL", time.Minute),
-		PaymentReconciliationLimit:                envInt("PAYMENT_RECONCILIATION_LIMIT", 100),
-		PaymentReconciliationStaleAfter:           envDuration("PAYMENT_RECONCILIATION_STALE_AFTER", 30*time.Second),
-		FeatureVKTopUpStatusEditEnabled:           envBool("FEATURE_VK_TOPUP_STATUS_EDIT_ENABLED", false),
-		FeatureMiniAppPaymentCancelEnabled:        envBool("FEATURE_MINIAPP_PAYMENT_CANCEL_ENABLED", false),
-		FeatureMiniAppTopUpCatalogDropdownEnabled: envBool("FEATURE_MINIAPP_TOPUP_CATALOG_DROPDOWN_ENABLED", false),
-		FeatureMiniAppDarkThemeOnlyEnabled:        envBool("FEATURE_MINIAPP_DARK_THEME_ONLY_ENABLED", false),
-		FeatureMiniAppTopUpHistoryDropdownEnabled: envBool("FEATURE_MINIAPP_TOPUP_HISTORY_DROPDOWN_ENABLED", false),
-		FeatureDevPaymentTestProductEnabled:       envBool("FEATURE_DEV_PAYMENT_TEST_PRODUCT_ENABLED", false),
-		Provider:                                  provider,
-		ProviderChain:                             providerChain,
-		ImageProvider:                             env("IMAGE_PROVIDER", ""),
-		VideoProvider:                             env("VIDEO_PROVIDER", ""),
-		ImageModel:                                env("IMAGE_MODEL", ""),
-		ImageSize:                                 env("IMAGE_SIZE", ""),
-		VideoModel:                                env("VIDEO_MODEL", ""),
-		VideoDurationSec:                          envInt("VIDEO_DURATION_SEC", 5),
-		VideoResolution:                           env("VIDEO_RESOLUTION", "720p"),
-		VideoAspectRatio:                          env("VIDEO_ASPECT_RATIO", "16:9"),
-		VideoDraft:                                envBool("VIDEO_DRAFT", true),
-		MediaPipelineEnabled:                      mediaPipelineEnabled,
-		MediaVideoProbePolicy:                     envConfigToken("MEDIA_VIDEO_PROBE_POLICY", defaultMediaVideoProbePolicy(appEnv, mediaPipelineEnabled)),
-		MediaVideoTranscodePolicy:                 envConfigToken("MEDIA_VIDEO_TRANSCODE_POLICY", MediaVideoTranscodePolicyNever),
-		MediaDeliverRawProviderVideo:              envConfigToken("MEDIA_DELIVER_RAW_PROVIDER_VIDEO", defaultMediaDeliverRawProviderVideo(appEnv, mediaPipelineEnabled)),
-		FFProbePath:                               env("FFPROBE_PATH", "ffprobe"),
-		FFmpegPath:                                env("FFMPEG_PATH", "ffmpeg"),
-		MediaMaxVideoSizeBytes:                    envInt64("MEDIA_MAX_VIDEO_SIZE_BYTES", 256<<20),
-		MediaMaxVideoDurationSec:                  envInt("MEDIA_MAX_VIDEO_DURATION_SEC", 60),
-		MediaMaxVideoWidth:                        envInt("MEDIA_MAX_VIDEO_WIDTH", 1920),
-		MediaMaxVideoHeight:                       envInt("MEDIA_MAX_VIDEO_HEIGHT", 1080),
-		MediaMaxVideoBitrate:                      envInt64("MEDIA_MAX_VIDEO_BITRATE", 12000000),
-		MediaAllowedVideoContainers:               envNormalizedList("MEDIA_ALLOWED_VIDEO_CONTAINERS", []string{"mp4", "mov", "webm"}),
-		MediaAllowedVideoCodecs:                   envNormalizedList("MEDIA_ALLOWED_VIDEO_CODECS", []string{"h264", "h265", "hevc", "vp8", "vp9", "av1"}),
-		MediaProbeTimeout:                         envDuration("MEDIA_PROBE_TIMEOUT", 10*time.Second),
-		MediaTranscodeTimeout:                     envDuration("MEDIA_TRANSCODE_TIMEOUT", 10*time.Minute),
-		MediaMaxConcurrentProbes:                  envInt("MEDIA_MAX_CONCURRENT_PROBES", 2),
-		MediaMaxConcurrentTranscodes:              envInt("MEDIA_MAX_CONCURRENT_TRANSCODES", 1),
-		MediaMaxPendingVariants:                   envInt("MEDIA_MAX_PENDING_VARIANTS", 16),
-		MediaMaxActiveVideoJobsPerUser:            envInt("MEDIA_MAX_ACTIVE_VIDEO_JOBS_PER_USER", 1),
-		MediaProviderMaxAttemptsPerJob:            envInt("MEDIA_PROVIDER_MAX_ATTEMPTS_PER_JOB", 1),
-		MediaProviderFallbackBudget:               envInt("MEDIA_PROVIDER_FALLBACK_BUDGET_PER_JOB", 0),
-		MediaQueueDegradeThreshold:                envInt64("MEDIA_QUEUE_DEGRADE_THRESHOLD", 1000),
-		MediaMaxConcurrentUploads:                 envInt("MEDIA_MAX_CONCURRENT_UPLOADS", 4),
-		MediaReferenceUploadsEnabled:              envBool("MEDIA_REFERENCE_UPLOADS_ENABLED", defaultMediaReferenceUploadsEnabled(appEnv)),
-		MediaReferenceWebPEnabled:                 envBool("MEDIA_REFERENCE_WEBP_ENABLED", false),
-		MediaMaxImageUploadBytes:                  envInt64("MEDIA_MAX_IMAGE_UPLOAD_BYTES", 20<<20),
-		MediaMaxImageWidth:                        envInt("MEDIA_MAX_IMAGE_WIDTH", 4096),
-		MediaMaxImageHeight:                       envInt("MEDIA_MAX_IMAGE_HEIGHT", 4096),
-		MediaMaxImagePixels:                       envInt64("MEDIA_MAX_IMAGE_PIXELS", 4096*4096),
-		MediaProviderQualityGuardEnabled:          envBool("MEDIA_PROVIDER_QUALITY_GUARD_ENABLED", false),
-		MediaProviderQualityDegradedFailures:      envInt("MEDIA_PROVIDER_QUALITY_DEGRADED_FAILURES", 3),
-		MediaProviderQualityDisabledFailures:      envInt("MEDIA_PROVIDER_QUALITY_DISABLED_FAILURES", 5),
-		MediaProviderQualityRecoverySuccesses:     envInt("MEDIA_PROVIDER_QUALITY_RECOVERY_SUCCESSES", 2),
-		MediaProviderContractsRaw:                 mediaProviderContractsRaw,
-		MediaProviderContracts:                    mediaProviderContracts,
-		APIMartAPIKey:                             env("APIMART_API_KEY", ""),
-		APIMartBaseURL:                            env("APIMART_BASE_URL", "https://api.apimart.ai/v1"),
-		APIMartProviderEnabled:                    envBool("APIMART_PROVIDER_ENABLED", false),
-		KIEAPIKey:                                 env("KIE_API_KEY", ""),
-		KIEBaseURL:                                env("KIE_BASE_URL", "https://api.kie.ai"),
-		KIEProviderEnabled:                        envBool("KIE_PROVIDER_ENABLED", false),
-		KIETextLimitsVerified:                     envBool("KIE_TEXT_LIMITS_VERIFIED", false),
-		APIMartTextLimitsVerified:                 envBool("APIMART_TEXT_LIMITS_VERIFIED", false),
-		FeatureTextClaudeOpus48Enabled:            envBool("FEATURE_TEXT_CLAUDE_OPUS_4_8_ENABLED", false),
-		FeatureTextGPT56TerraEnabled:              envBool("FEATURE_TEXT_GPT_5_6_TERRA_ENABLED", false),
-		FeatureTextGPT6AstraEnabled:               envBool("FEATURE_TEXT_GPT_6_ASTRA_ENABLED", false),
-		FeatureTextClaudeOpus5Enabled:             envBool("FEATURE_TEXT_CLAUDE_OPUS_5_ENABLED", false),
-		FeatureTextGemini37FlashEnabled:           envBool("FEATURE_TEXT_GEMINI_3_7_FLASH_ENABLED", false),
-		FeatureTextClaudeFable51Enabled:           envBool("FEATURE_TEXT_CLAUDE_FABLE_5_1_ENABLED", false),
-		FeatureTextClaudeFable5Enabled:            envBool("FEATURE_TEXT_CLAUDE_FABLE_5_ENABLED", false),
-		FeatureTextGemini36FlashEnabled:           envBool("FEATURE_TEXT_GEMINI_3_6_FLASH_ENABLED", false),
-		FeatureTextGPT55Enabled:                   envBool("FEATURE_TEXT_GPT_5_5_ENABLED", false),
-		FeatureTextClaudeOpus47Enabled:            envBool("FEATURE_TEXT_CLAUDE_OPUS_4_7_ENABLED", false),
-		FeatureTextGemini31ProEnabled:             envBool("FEATURE_TEXT_GEMINI_3_1_PRO_ENABLED", false),
-		ProviderBalanceBotEnabled:                 envBool("PROVIDER_BALANCE_BOT_ENABLED", false),
-		ProviderBalancePollInterval:               envDuration("PROVIDER_BALANCE_POLL_INTERVAL", 15*time.Minute),
-		APIMartBalanceWarnRemainBalance:           envFloat("APIMART_BALANCE_WARN_REMAIN_BALANCE", 20),
-		APIMartBalanceWarnRemainCredits:           envFloat("APIMART_BALANCE_WARN_REMAIN_CREDITS", 200),
-		AlertTelegramBotToken:                     env("ALERT_TELEGRAM_BOT_TOKEN", ""),
-		TelegramAdminChatID:                       env("TELEGRAM_ADMIN_CHAT_ID", ""),
-		TelegramAdminThreadID:                     envInt64("TELEGRAM_ADMIN_THREAD_ID", 0),
-		PoYoAPIKey:                                env("POYO_API_KEY", ""),
-		PoYoBaseURL:                               env("POYO_BASE_URL", ""),
-		PoYoProviderEnabled:                       envBool("POYO_PROVIDER_ENABLED", false),
-		RunwayMLAPISecret:                         env("RUNWAYML_API_SECRET", ""),
-		RunwayMLBaseURL:                           env("RUNWAYML_BASE_URL", "https://api.dev.runwayml.com/v1"),
-		RunwayProviderEnabled:                     envBool("RUNWAY_PROVIDER_ENABLED", false),
-		DeepInfraBalanceProviderEnabled:           envBool("DEEPINFRA_BALANCE_PROVIDER_ENABLED", false),
-		DeepInfraBalanceBaseURL:                   env("DEEPINFRA_BALANCE_BASE_URL", "https://api.deepinfra.com"),
-		FeatureImageModelNanoBananaProEnabled:     envBool("FEATURE_IMAGE_MODEL_NANO_BANANA_PRO_ENABLED", false),
-		FeatureImageModelGPTImage2Enabled:         envBool("FEATURE_IMAGE_MODEL_GPT_IMAGE_2_ENABLED", false),
-		FeatureAPIMartGPTImage25FlareEnabled:      envBool("FEATURE_APIMART_GPT_IMAGE_2_5_FLARE_ENABLED", false),
-		FeatureAPIMartGPTImage25SunburstEnabled:   envBool("FEATURE_APIMART_GPT_IMAGE_2_5_SUNBURST_ENABLED", false),
-		FeatureAPIMartQwenImage3Enabled:           envBool("FEATURE_APIMART_QWEN_IMAGE_3_ENABLED", false),
-		FeatureAPIMartMidjourneyV7Enabled:         envBool("FEATURE_APIMART_MIDJOURNEY_V7_ENABLED", false),
-		FeatureAPIMartFlux2ProEnabled:             envBool("FEATURE_APIMART_FLUX_2_PRO_ENABLED", false),
-		FeatureAPIMartGrokImage15Enabled:          envBool("FEATURE_APIMART_GROK_IMAGE_1_5_ENABLED", false),
-		FeatureAPIMartGrokImage20Enabled:          envBool("FEATURE_APIMART_GROK_IMAGE_2_0_ENABLED", false),
-		FeatureAPIMartSeedream50LiteEnabled:       envBool("FEATURE_APIMART_SEEDREAM_5_0_LITE_ENABLED", false),
-		FeatureAPIMartSeedream50ProEnabled:        envBool("FEATURE_APIMART_SEEDREAM_5_0_PRO_ENABLED", false),
-		FeatureImageModelNanoBanana2Enabled:       envBool("FEATURE_IMAGE_MODEL_NANO_BANANA_2_ENABLED", false),
-		FeatureImageModelSeedream45Enabled:        envBool("FEATURE_IMAGE_MODEL_SEEDREAM_4_5_ENABLED", false),
-		FeatureImageModelMockEnabled:              envBool("FEATURE_IMAGE_MODEL_MOCK_ENABLED", false),
-		FeatureVideoRouterEnabled:                 envBool("FEATURE_VIDEO_ROUTER_ENABLED", false),
-		FeatureDEVModelSmokeEnabled:               envBool("FEATURE_DEV_MODEL_SMOKE_ENABLED", false),
-		FeatureVideoRouteHailuo23FastEnabled:      envBool("FEATURE_VIDEO_ROUTE_HAILUO_2_3_FAST_ENABLED", false),
-		FeatureVideoRouteHailuo23StandardEnabled:  envBool("FEATURE_VIDEO_ROUTE_HAILUO_2_3_STANDARD_ENABLED", false),
+		PublicVKBaseURL:                          env("PUBLIC_VK_BASE_URL", ""),
+		PaymentRedirectRateLimitRPS:              envFloat("PAYMENT_REDIRECT_RATE_LIMIT_RPS", 5),
+		PaymentRedirectRateLimitBurst:            envInt("PAYMENT_REDIRECT_RATE_LIMIT_BURST", 10),
+		AdminRateLimitLimit:                      envInt("ADMIN_RATE_LIMIT_LIMIT", 120),
+		AdminRateLimitWindow:                     envDuration("ADMIN_RATE_LIMIT_WINDOW", time.Minute),
+		PaymentProvider:                          env("PAYMENT_PROVIDER", "mock"),
+		YooKassaShopID:                           env("YOOKASSA_SHOP_ID", ""),
+		YooKassaSecretKey:                        env("YOOKASSA_SECRET_KEY", ""),
+		YooKassaBaseURL:                          env("YOOKASSA_BASE_URL", "https://api.yookassa.ru/v3"),
+		YooKassaReturnURL:                        env("YOOKASSA_RETURN_URL", ""),
+		YooKassaReturnURLVKBot:                   env("YOOKASSA_RETURN_URL_VK_BOT", ""),
+		YooKassaWebhookIPAllowlistEnabled:        envBool("YOOKASSA_WEBHOOK_IP_ALLOWLIST_ENABLED", false),
+		YooKassaWebhookIPAllowlist:               envList("YOOKASSA_WEBHOOK_IP_ALLOWLIST"),
+		PaymentWebhookRequireHTTPS:               envBool("PAYMENT_WEBHOOK_REQUIRE_HTTPS", false),
+		PaymentWebhookTrustedProxies:             envList("PAYMENT_WEBHOOK_TRUSTED_PROXIES"),
+		PaymentWebhookAddr:                       env("PAYMENT_WEBHOOK_ADDR", ":8082"),
+		PaymentWebhookPollInterval:               envDuration("PAYMENT_WEBHOOK_POLL_INTERVAL", 5*time.Second),
+		PaymentWebhookBatchLimit:                 envInt("PAYMENT_WEBHOOK_BATCH_LIMIT", 20),
+		PaymentReconciliationInterval:            envDuration("PAYMENT_RECONCILIATION_INTERVAL", time.Minute),
+		PaymentReconciliationLimit:               envInt("PAYMENT_RECONCILIATION_LIMIT", 100),
+		PaymentReconciliationStaleAfter:          envDuration("PAYMENT_RECONCILIATION_STALE_AFTER", 30*time.Second),
+		FeatureVKTopUpStatusEditEnabled:          envBool("FEATURE_VK_TOPUP_STATUS_EDIT_ENABLED", false),
+		FeatureDevPaymentTestProductEnabled:      envBool("FEATURE_DEV_PAYMENT_TEST_PRODUCT_ENABLED", false),
+		Provider:                                 provider,
+		ProviderChain:                            providerChain,
+		ImageProvider:                            env("IMAGE_PROVIDER", ""),
+		VideoProvider:                            env("VIDEO_PROVIDER", ""),
+		ImageModel:                               env("IMAGE_MODEL", ""),
+		ImageSize:                                env("IMAGE_SIZE", ""),
+		VideoModel:                               env("VIDEO_MODEL", ""),
+		VideoDurationSec:                         envInt("VIDEO_DURATION_SEC", 5),
+		VideoResolution:                          env("VIDEO_RESOLUTION", "720p"),
+		VideoAspectRatio:                         env("VIDEO_ASPECT_RATIO", "16:9"),
+		VideoDraft:                               envBool("VIDEO_DRAFT", true),
+		MediaPipelineEnabled:                     mediaPipelineEnabled,
+		MediaVideoProbePolicy:                    envConfigToken("MEDIA_VIDEO_PROBE_POLICY", defaultMediaVideoProbePolicy(appEnv, mediaPipelineEnabled)),
+		MediaVideoTranscodePolicy:                envConfigToken("MEDIA_VIDEO_TRANSCODE_POLICY", MediaVideoTranscodePolicyNever),
+		MediaDeliverRawProviderVideo:             envConfigToken("MEDIA_DELIVER_RAW_PROVIDER_VIDEO", defaultMediaDeliverRawProviderVideo(appEnv, mediaPipelineEnabled)),
+		FFProbePath:                              env("FFPROBE_PATH", "ffprobe"),
+		FFmpegPath:                               env("FFMPEG_PATH", "ffmpeg"),
+		MediaMaxVideoSizeBytes:                   envInt64("MEDIA_MAX_VIDEO_SIZE_BYTES", 256<<20),
+		MediaMaxVideoDurationSec:                 envInt("MEDIA_MAX_VIDEO_DURATION_SEC", 60),
+		MediaMaxVideoWidth:                       envInt("MEDIA_MAX_VIDEO_WIDTH", 1920),
+		MediaMaxVideoHeight:                      envInt("MEDIA_MAX_VIDEO_HEIGHT", 1080),
+		MediaMaxVideoBitrate:                     envInt64("MEDIA_MAX_VIDEO_BITRATE", 12000000),
+		MediaAllowedVideoContainers:              envNormalizedList("MEDIA_ALLOWED_VIDEO_CONTAINERS", []string{"mp4", "mov", "webm"}),
+		MediaAllowedVideoCodecs:                  envNormalizedList("MEDIA_ALLOWED_VIDEO_CODECS", []string{"h264", "h265", "hevc", "vp8", "vp9", "av1"}),
+		MediaProbeTimeout:                        envDuration("MEDIA_PROBE_TIMEOUT", 10*time.Second),
+		MediaTranscodeTimeout:                    envDuration("MEDIA_TRANSCODE_TIMEOUT", 10*time.Minute),
+		MediaMaxConcurrentProbes:                 envInt("MEDIA_MAX_CONCURRENT_PROBES", 2),
+		MediaMaxConcurrentTranscodes:             envInt("MEDIA_MAX_CONCURRENT_TRANSCODES", 1),
+		MediaMaxPendingVariants:                  envInt("MEDIA_MAX_PENDING_VARIANTS", 16),
+		MediaMaxActiveVideoJobsPerUser:           envInt("MEDIA_MAX_ACTIVE_VIDEO_JOBS_PER_USER", 1),
+		MediaProviderMaxAttemptsPerJob:           envInt("MEDIA_PROVIDER_MAX_ATTEMPTS_PER_JOB", 1),
+		MediaProviderFallbackBudget:              envInt("MEDIA_PROVIDER_FALLBACK_BUDGET_PER_JOB", 0),
+		MediaQueueDegradeThreshold:               envInt64("MEDIA_QUEUE_DEGRADE_THRESHOLD", 1000),
+		MediaMaxConcurrentUploads:                envInt("MEDIA_MAX_CONCURRENT_UPLOADS", 4),
+		MediaReferenceUploadsEnabled:             envBool("MEDIA_REFERENCE_UPLOADS_ENABLED", defaultMediaReferenceUploadsEnabled(appEnv)),
+		MediaReferenceWebPEnabled:                envBool("MEDIA_REFERENCE_WEBP_ENABLED", false),
+		MediaMaxImageUploadBytes:                 envInt64("MEDIA_MAX_IMAGE_UPLOAD_BYTES", 20<<20),
+		MediaMaxImageWidth:                       envInt("MEDIA_MAX_IMAGE_WIDTH", 4096),
+		MediaMaxImageHeight:                      envInt("MEDIA_MAX_IMAGE_HEIGHT", 4096),
+		MediaMaxImagePixels:                      envInt64("MEDIA_MAX_IMAGE_PIXELS", 4096*4096),
+		MediaProviderQualityGuardEnabled:         envBool("MEDIA_PROVIDER_QUALITY_GUARD_ENABLED", false),
+		MediaProviderQualityDegradedFailures:     envInt("MEDIA_PROVIDER_QUALITY_DEGRADED_FAILURES", 3),
+		MediaProviderQualityDisabledFailures:     envInt("MEDIA_PROVIDER_QUALITY_DISABLED_FAILURES", 5),
+		MediaProviderQualityRecoverySuccesses:    envInt("MEDIA_PROVIDER_QUALITY_RECOVERY_SUCCESSES", 2),
+		MediaProviderContractsRaw:                mediaProviderContractsRaw,
+		MediaProviderContracts:                   mediaProviderContracts,
+		APIMartAPIKey:                            env("APIMART_API_KEY", ""),
+		APIMartBaseURL:                           env("APIMART_BASE_URL", "https://api.apimart.ai/v1"),
+		APIMartProviderEnabled:                   envBool("APIMART_PROVIDER_ENABLED", false),
+		KIEAPIKey:                                env("KIE_API_KEY", ""),
+		KIEBaseURL:                               env("KIE_BASE_URL", "https://api.kie.ai"),
+		KIEProviderEnabled:                       envBool("KIE_PROVIDER_ENABLED", false),
+		KIETextLimitsVerified:                    envBool("KIE_TEXT_LIMITS_VERIFIED", false),
+		APIMartTextLimitsVerified:                envBool("APIMART_TEXT_LIMITS_VERIFIED", false),
+		FeatureTextClaudeOpus48Enabled:           envBool("FEATURE_TEXT_CLAUDE_OPUS_4_8_ENABLED", false),
+		FeatureTextGPT56TerraEnabled:             envBool("FEATURE_TEXT_GPT_5_6_TERRA_ENABLED", false),
+		FeatureTextGPT6AstraEnabled:              envBool("FEATURE_TEXT_GPT_6_ASTRA_ENABLED", false),
+		FeatureTextClaudeOpus5Enabled:            envBool("FEATURE_TEXT_CLAUDE_OPUS_5_ENABLED", false),
+		FeatureTextGemini37FlashEnabled:          envBool("FEATURE_TEXT_GEMINI_3_7_FLASH_ENABLED", false),
+		FeatureTextClaudeFable51Enabled:          envBool("FEATURE_TEXT_CLAUDE_FABLE_5_1_ENABLED", false),
+		FeatureTextClaudeFable5Enabled:           envBool("FEATURE_TEXT_CLAUDE_FABLE_5_ENABLED", false),
+		FeatureTextGemini36FlashEnabled:          envBool("FEATURE_TEXT_GEMINI_3_6_FLASH_ENABLED", false),
+		FeatureTextGPT55Enabled:                  envBool("FEATURE_TEXT_GPT_5_5_ENABLED", false),
+		FeatureTextClaudeOpus47Enabled:           envBool("FEATURE_TEXT_CLAUDE_OPUS_4_7_ENABLED", false),
+		FeatureTextGemini31ProEnabled:            envBool("FEATURE_TEXT_GEMINI_3_1_PRO_ENABLED", false),
+		ProviderBalanceBotEnabled:                envBool("PROVIDER_BALANCE_BOT_ENABLED", false),
+		ProviderBalancePollInterval:              envDuration("PROVIDER_BALANCE_POLL_INTERVAL", 15*time.Minute),
+		APIMartBalanceWarnRemainBalance:          envFloat("APIMART_BALANCE_WARN_REMAIN_BALANCE", 20),
+		APIMartBalanceWarnRemainCredits:          envFloat("APIMART_BALANCE_WARN_REMAIN_CREDITS", 200),
+		AlertTelegramBotToken:                    env("ALERT_TELEGRAM_BOT_TOKEN", ""),
+		TelegramAdminChatID:                      env("TELEGRAM_ADMIN_CHAT_ID", ""),
+		TelegramAdminThreadID:                    envInt64("TELEGRAM_ADMIN_THREAD_ID", 0),
+		PoYoAPIKey:                               env("POYO_API_KEY", ""),
+		PoYoBaseURL:                              env("POYO_BASE_URL", ""),
+		PoYoProviderEnabled:                      envBool("POYO_PROVIDER_ENABLED", false),
+		RunwayMLAPISecret:                        env("RUNWAYML_API_SECRET", ""),
+		RunwayMLBaseURL:                          env("RUNWAYML_BASE_URL", "https://api.dev.runwayml.com/v1"),
+		RunwayProviderEnabled:                    envBool("RUNWAY_PROVIDER_ENABLED", false),
+		DeepInfraBalanceProviderEnabled:          envBool("DEEPINFRA_BALANCE_PROVIDER_ENABLED", false),
+		DeepInfraBalanceBaseURL:                  env("DEEPINFRA_BALANCE_BASE_URL", "https://api.deepinfra.com"),
+		FeatureImageModelNanoBananaProEnabled:    envBool("FEATURE_IMAGE_MODEL_NANO_BANANA_PRO_ENABLED", false),
+		FeatureImageModelGPTImage2Enabled:        envBool("FEATURE_IMAGE_MODEL_GPT_IMAGE_2_ENABLED", false),
+		FeatureAPIMartGPTImage25FlareEnabled:     envBool("FEATURE_APIMART_GPT_IMAGE_2_5_FLARE_ENABLED", false),
+		FeatureAPIMartGPTImage25SunburstEnabled:  envBool("FEATURE_APIMART_GPT_IMAGE_2_5_SUNBURST_ENABLED", false),
+		FeatureAPIMartQwenImage3Enabled:          envBool("FEATURE_APIMART_QWEN_IMAGE_3_ENABLED", false),
+		FeatureAPIMartMidjourneyV7Enabled:        envBool("FEATURE_APIMART_MIDJOURNEY_V7_ENABLED", false),
+		FeatureAPIMartFlux2ProEnabled:            envBool("FEATURE_APIMART_FLUX_2_PRO_ENABLED", false),
+		FeatureAPIMartGrokImage15Enabled:         envBool("FEATURE_APIMART_GROK_IMAGE_1_5_ENABLED", false),
+		FeatureAPIMartGrokImage20Enabled:         envBool("FEATURE_APIMART_GROK_IMAGE_2_0_ENABLED", false),
+		FeatureAPIMartSeedream50LiteEnabled:      envBool("FEATURE_APIMART_SEEDREAM_5_0_LITE_ENABLED", false),
+		FeatureAPIMartSeedream50ProEnabled:       envBool("FEATURE_APIMART_SEEDREAM_5_0_PRO_ENABLED", false),
+		FeatureImageModelNanoBanana2Enabled:      envBool("FEATURE_IMAGE_MODEL_NANO_BANANA_2_ENABLED", false),
+		FeatureImageModelSeedream45Enabled:       envBool("FEATURE_IMAGE_MODEL_SEEDREAM_4_5_ENABLED", false),
+		FeatureImageModelMockEnabled:             envBool("FEATURE_IMAGE_MODEL_MOCK_ENABLED", false),
+		FeatureVideoRouterEnabled:                envBool("FEATURE_VIDEO_ROUTER_ENABLED", false),
+		FeatureDEVModelSmokeEnabled:              envBool("FEATURE_DEV_MODEL_SMOKE_ENABLED", false),
+		FeatureVideoRouteHailuo23FastEnabled:     envBool("FEATURE_VIDEO_ROUTE_HAILUO_2_3_FAST_ENABLED", false),
+		FeatureVideoRouteHailuo23StandardEnabled: envBool("FEATURE_VIDEO_ROUTE_HAILUO_2_3_STANDARD_ENABLED", false),
 		FeatureVideoRouteKlingO3StandardEnabled: envBool(
 			"FEATURE_VIDEO_ROUTE_KLING_O3_STANDARD_ENABLED",
 			envBool("FEATURE_VIDEO_ROUTE_KLING_O3_ENABLED", false),
@@ -1554,12 +1518,7 @@ func Load() Config {
 			"REFERRAL_REFERRED_SIGNUP_REWARD_CREDITS",
 			0,
 		)),
-		ReferralRewardOnActivation: envBool("REFERRAL_REWARD_ON_ACTIVATION", true),
-
-		VKAppID:                             env("VK_APP_ID", ""),
-		VKAppSecret:                         env("VK_APP_SECRET", ""),
-		MiniAppLaunchParamsMaxAge:           envDuration("MINIAPP_LAUNCH_PARAMS_MAX_AGE", time.Hour),
-		MiniAppAllowQueryLaunchParams:       envBool("MINIAPP_ALLOW_QUERY_LAUNCH_PARAMS", false),
+		ReferralRewardOnActivation:          envBool("REFERRAL_REWARD_ON_ACTIVATION", true),
 		AccountEmailLinkCodeTTL:             envDuration("ACCOUNT_EMAIL_LINK_CODE_TTL", 10*time.Minute),
 		AccountEmailLinkCodeDigits:          envInt("ACCOUNT_EMAIL_LINK_CODE_DIGITS", 6),
 		AccountEmailLinkRequestLimit:        envInt("ACCOUNT_EMAIL_LINK_REQUEST_LIMIT", 3),
@@ -1609,8 +1568,7 @@ func Load() Config {
 		AccountOAuthVKIDClientIDs:           envList("ACCOUNT_OAUTH_VK_ID_CLIENT_IDS"),
 		AccountOAuthVKIDIssuer:              env("ACCOUNT_OAUTH_VK_ID_ISSUER", ""),
 		AccountOAuthVKIDJWKSURL:             env("ACCOUNT_OAUTH_VK_ID_JWKS_URL", ""),
-		FrontendTelemetryEnabled:            envBool("FRONTEND_TELEMETRY_ENABLED", false),
-		FrontendTelemetryUserHashSecret:     env("FRONTEND_TELEMETRY_USER_HASH_SECRET", ""),
+		AccountEmailProofSecret:             env("ACCOUNT_EMAIL_PROOF_SECRET", ""),
 
 		ArtifactURLTTL:                 envDuration("ARTIFACT_URL_TTL", time.Hour),
 		SignedDelivery:                 envBool("SIGNED_DELIVERY", false),

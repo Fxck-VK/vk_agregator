@@ -233,7 +233,6 @@ func TestOverviewReadOnlySafeDTO(t *testing.T) {
 	required := map[string]bool{
 		"api":                    false,
 		"vk_bot":                 false,
-		"miniapp":                false,
 		"workers":                false,
 		"provider_webhook":       false,
 		"queue_backlog":          false,

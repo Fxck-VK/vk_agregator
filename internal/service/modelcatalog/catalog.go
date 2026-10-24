@@ -11,26 +11,26 @@ import (
 )
 
 const (
-	MiniAppChatModelID   = providermodels.PublicTextChatGPT
-	MiniAppChatModelName = "NeiroHub Chat"
+	PublicChatModelID   = providermodels.PublicTextChatGPT
+	PublicChatModelName = "NeiroHub Chat"
 
-	MiniAppImageNanoBananaPro      = providermodels.PublicImageNanoBananaPro
-	MiniAppImageGPTImage2          = providermodels.PublicImageGPTImage2
-	MiniAppImageGPTImage25Flare    = providermodels.PublicImageGPTImage25Flare
-	MiniAppImageGPTImage25Sunburst = providermodels.PublicImageGPTImage25Sunburst
-	MiniAppImageSeedream50Lite     = providermodels.PublicImageSeedream50Lite
-	MiniAppImageSeedream50Pro      = providermodels.PublicImageSeedream50Pro
-	MiniAppImageQwenImage3         = providermodels.PublicImageQwenImage3
-	MiniAppImageMidjourneyV7       = providermodels.PublicImageMidjourneyV7
-	MiniAppImageFlux2Pro           = providermodels.PublicImageFlux2Pro
-	MiniAppImageGrokImage15        = providermodels.PublicImageGrokImage15
-	MiniAppImageGrokImage20        = providermodels.PublicImageGrokImage20
-	MiniAppImageNanoBananaFlash    = "nano_banana_flash"
-	MiniAppImageNanoBanana2        = providermodels.PublicImageNanoBanana2
-	MiniAppImageSeedream45         = providermodels.PublicImageSeedream45
-	MiniAppImageSDXLTurbo          = "sdxl_turbo"
-	MiniAppImageMock               = providermodels.LoadTestImageMock
-	MiniAppVideoKling              = "kling"
+	PublicImageNanoBananaPro      = providermodels.PublicImageNanoBananaPro
+	PublicImageGPTImage2          = providermodels.PublicImageGPTImage2
+	PublicImageGPTImage25Flare    = providermodels.PublicImageGPTImage25Flare
+	PublicImageGPTImage25Sunburst = providermodels.PublicImageGPTImage25Sunburst
+	PublicImageSeedream50Lite     = providermodels.PublicImageSeedream50Lite
+	PublicImageSeedream50Pro      = providermodels.PublicImageSeedream50Pro
+	PublicImageQwenImage3         = providermodels.PublicImageQwenImage3
+	PublicImageMidjourneyV7       = providermodels.PublicImageMidjourneyV7
+	PublicImageFlux2Pro           = providermodels.PublicImageFlux2Pro
+	PublicImageGrokImage15        = providermodels.PublicImageGrokImage15
+	PublicImageGrokImage20        = providermodels.PublicImageGrokImage20
+	PublicImageNanoBananaFlash    = "nano_banana_flash"
+	PublicImageNanoBanana2        = providermodels.PublicImageNanoBanana2
+	PublicImageSeedream45         = providermodels.PublicImageSeedream45
+	PublicImageSDXLTurbo          = "sdxl_turbo"
+	PublicImageMock               = providermodels.LoadTestImageMock
+	PublicVideoKling              = "kling"
 
 	VKVideoPrunaAI = "prunaai"
 
@@ -63,34 +63,28 @@ type Model struct {
 	AllowedAspectRatios    []string
 }
 
-var miniAppDefaultModel = map[domain.OperationType]string{
-	domain.OperationTextGenerate:  MiniAppChatModelID,
-	domain.OperationImageGenerate: MiniAppImageNanoBananaPro,
+var publicDefaultModel = map[domain.OperationType]string{
+	domain.OperationTextGenerate:  PublicChatModelID,
+	domain.OperationImageGenerate: PublicImageNanoBananaPro,
 	domain.OperationVideoGenerate: "",
 }
 
 var vkVideoModels = map[string]Model{}
 
 // ResolvePublicModel resolves a server-trusted public product identifier to its
-// private execution model. The name is channel-neutral: Mini App is one
-// consumer, not the owner of the underlying product catalog.
+// private execution model shared by the website and VK bot.
 func ResolvePublicModel(op domain.OperationType, raw string) (Model, bool) {
 	modelID := strings.TrimSpace(raw)
 	if modelID == "" {
-		modelID = miniAppDefaultModel[op]
+		modelID = publicDefaultModel[op]
 	}
-	models := miniAppModels(op)
+	models := publicModels(op)
 	model, ok := models[modelID]
 	return model, ok
 }
 
-// ResolveMiniAppModel is kept for compatibility with existing Mini App callers.
-// New channel-neutral services should use ResolvePublicModel.
-func ResolveMiniAppModel(op domain.OperationType, raw string) (Model, bool) {
-	return ResolvePublicModel(op, raw)
-}
-
-func MiniAppResponseModelID(model Model) string {
+// PublicResponseModelID returns only explicitly public identifiers.
+func PublicResponseModelID(model Model) string {
 	if model.ExposeID {
 		return model.ModelID
 	}
@@ -134,12 +128,12 @@ func ApplyImageQuality(model Model, quality string) Model {
 	return model
 }
 
-func ListMiniAppModels(op domain.OperationType) []Model {
-	ordered := orderedMiniAppModels(op)
+func ListPublicModels(op domain.OperationType) []Model {
+	ordered := orderedPublicModels(op)
 	if len(ordered) == 0 {
 		return nil
 	}
-	models := miniAppModels(op)
+	models := publicModels(op)
 	out := make([]Model, 0, len(ordered)+len(models))
 	seen := map[string]struct{}{}
 	for _, orderedModel := range ordered {
@@ -167,21 +161,21 @@ func ResolveVKVideoModel(raw string) (Model, bool) {
 	return model, ok
 }
 
-func miniAppModels(op domain.OperationType) map[string]Model {
+func publicModels(op domain.OperationType) map[string]Model {
 	switch op {
 	case domain.OperationTextGenerate:
-		return miniAppTextModels()
+		return publicTextModels()
 	case domain.OperationImageGenerate:
-		return miniAppImageModels()
+		return publicImageModels()
 	default:
 		return map[string]Model{}
 	}
 }
 
-func orderedMiniAppModels(op domain.OperationType) []Model {
+func orderedPublicModels(op domain.OperationType) []Model {
 	switch op {
 	case domain.OperationTextGenerate:
-		if model, ok := miniAppTextModels()[MiniAppChatModelID]; ok {
+		if model, ok := publicTextModels()[PublicChatModelID]; ok {
 			return []Model{model}
 		}
 	case domain.OperationImageGenerate:
@@ -198,7 +192,7 @@ func orderedMiniAppModels(op domain.OperationType) []Model {
 	return nil
 }
 
-func miniAppTextModels() map[string]Model {
+func publicTextModels() map[string]Model {
 	models := map[string]Model{}
 	for _, alias := range providermodels.RuntimeRegistry().TextAliasModels() {
 		model := Model{
@@ -214,13 +208,13 @@ func miniAppTextModels() map[string]Model {
 		models[alias.DisplayName] = model
 		models[alias.ProviderModelID] = model
 	}
-	if model, ok := models[MiniAppChatModelID]; ok {
+	if model, ok := models[PublicChatModelID]; ok {
 		models["deepseek-v4-flash"] = model
 	}
 	return models
 }
 
-func miniAppImageModels() map[string]Model {
+func publicImageModels() map[string]Model {
 	registry := providermodels.RuntimeRegistry()
 	models := map[string]Model{}
 	for _, registryModel := range registry.PublicImageModels() {
@@ -231,7 +225,7 @@ func miniAppImageModels() map[string]Model {
 		model := modelFromRegistryImage(registryModel)
 		models[model.ModelID] = model
 	}
-	if model, ok := models[MiniAppImageNanoBananaPro]; ok {
+	if model, ok := models[PublicImageNanoBananaPro]; ok {
 		models["kandinsky"] = model
 	}
 	return models

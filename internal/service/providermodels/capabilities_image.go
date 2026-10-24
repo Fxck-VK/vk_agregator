@@ -102,10 +102,6 @@ func ImageCapabilitiesForSurface(id, surface string, pricedOptions []string) *Mo
 	}
 	setImageOptions(c.Application.Image, id, pricedOptions)
 	switch surface {
-	case "miniapp":
-		c.Application.Image.MaxOutputCount = integer(1)
-		c.Application.Image.AspectRatios = []string{"1:1"}
-		c.Application.Notes = append(c.Application.Notes, "В Mini App сейчас доступен один квадратный результат за запрос.")
 	case "web":
 		c.Application.Image.Images = noInput()
 		c.Application.Notes = append(c.Application.Notes, "На сайте загрузка фото в запрос генерации ещё не подключена.")

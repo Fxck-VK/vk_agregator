@@ -169,9 +169,9 @@ rewrite_dev_public_url() {
   local key="$1" line="$2" prefix="" value quote="" domain origin authority host suffix
   case "${key}" in
     PUBLIC_VK_BASE_URL) prefix="dev-vk" ;;
-    PUBLIC_APP_BASE_URL|PROVIDER_REFERENCE_BASE_URL) prefix="dev-app" ;;
+    PROVIDER_REFERENCE_BASE_URL) prefix="dev-vk" ;;
     PUBLIC_PAYMENT_WEBHOOK_URL) prefix="dev" ;;
-    YOOKASSA_RETURN_URL|YOOKASSA_RETURN_URL_MINIAPP|YOOKASSA_RETURN_URL_VK_BOT) ;;
+    YOOKASSA_RETURN_URL|YOOKASSA_RETURN_URL_VK_BOT) ;;
     *) printf '%s' "${line}"; return ;;
   esac
   value="${line#*=}"
@@ -190,6 +190,9 @@ rewrite_dev_public_url() {
   if [[ -n "${prefix}" ]]; then
     for domain in neiirohub.ru neirohub.ru "${dev_public_domain}"; do
       origin="https://${prefix}.${domain}"
+      if [[ "${key}" == PROVIDER_REFERENCE_BASE_URL && "${value}" == "https://dev-app.${domain}"* ]]; then
+        origin="https://dev-app.${domain}"
+      fi
       if [[ "${value}" == "${origin}" || "${value}" == "${origin}/"* || "${value}" == "${origin}?"* || "${value}" == "${origin}#"* ]]; then
         printf '%s=%shttps://%s.%s%s%s' "${key}" "${quote}" "${prefix}" "${dev_public_domain}" "${value#"${origin}"}" "${quote}"
         return
@@ -292,4 +295,4 @@ if [[ -n "${ghcr_username}" ]]; then
 fi
 
 mkdir -p "$(dirname "${output}")"
-install -m 600 "${tmp}" "${output}"
+bash "$(dirname "${BASH_SOURCE[0]}")/retire-miniapp-env.sh" "${tmp}" "${output}"

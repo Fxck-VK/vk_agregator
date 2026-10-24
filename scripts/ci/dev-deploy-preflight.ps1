@@ -88,23 +88,56 @@ if (-not [string]::IsNullOrWhiteSpace($worktreeChanges)) {
 # Validate before the stage cache is consulted.
 Assert-TrivyFilesystemScanScope -RepositoryRoot $repoRoot -ConfigPath (Join-Path $repoRoot "trivy-filesystem.yaml")
 Assert-CIBashEnvironment
+foreach ($required in @("go", "node", "npm", "pwsh", "docker")) {
+    if (-not (Get-Command $required -ErrorAction SilentlyContinue)) { throw "Missing preflight prerequisite: $required" }
+}
+$dockerVersion = & docker version --format '{{.Server.Version}}' 2>$null
+if ($LASTEXITCODE -ne 0 -or [string]::IsNullOrWhiteSpace($dockerVersion)) {
+    throw "Docker engine must be running before preflight; no expensive checks have started."
+}
 
 $gitDirectory = Get-GitOutput -Arguments @("rev-parse", "--absolute-git-dir")
 $npmCommand = if ($IsWindows) { "npm.cmd" } else { "npm" }
-$policyVersion = "v4"
-$stageNames = @("tests", "audit", "govulncheck", "infrastructure", "trivy")
+$policyVersion = "v5"
+# Fail on source contracts and fresh advisories before lengthy source builds/tests.
+$stageNames = @("release-contract", "audit", "govulncheck", "infrastructure", "trivy", "tests")
+function Get-RuntimeVersion([string]$Command, [string[]]$Arguments) {
+    $version = (& $Command @Arguments | Out-String).Trim()
+    if ($LASTEXITCODE -ne 0 -or [string]::IsNullOrWhiteSpace($version)) {
+        throw "Cannot determine preflight runtime version: $Command"
+    }
+    return $version
+}
+$runtimeInputs = [ordered]@{
+    go = Get-RuntimeVersion "go" @("env", "GOVERSION")
+    node = Get-RuntimeVersion "node" @("--version")
+    npm = Get-RuntimeVersion $npmCommand @("--version")
+    docker = [string]$dockerVersion
+    powershell = $PSVersionTable.PSVersion.ToString()
+    os = [Environment]::OSVersion.ToString()
+    settings = [ordered]@{}
+}
+foreach ($name in @("CI", "NODE_ENV", "NODE_OPTIONS", "GOTOOLCHAIN", "GOFLAGS", "GOWORK", "CGO_ENABLED", "VITEST_MAX_WORKERS")) {
+    $runtimeInputs.settings[$name] = [Environment]::GetEnvironmentVariable($name)
+}
+$inputBytes = [Text.Encoding]::UTF8.GetBytes(($runtimeInputs | ConvertTo-Json -Depth 4 -Compress))
+$inputFingerprint = [Convert]::ToHexString([Security.Cryptography.SHA256]::HashData($inputBytes)).ToLowerInvariant()
 
 $runStage = {
     param([string]$Stage)
 
     switch ($Stage) {
+        "release-contract" {
+            & pwsh -NoProfile -File scripts/ci/validate-release-contract.ps1
+            if ($LASTEXITCODE -ne 0) { throw "Shared release contract failed before source tests" }
+        }
         "tests" {
             Invoke-Native -Command "git" -Arguments @("diff", "--check", "$commitSha^", $commitSha)
             Invoke-Native -Command "go" -Arguments @("test", "./...")
             Invoke-Native -Command "go" -Arguments @("vet", "./...")
             Invoke-Native -Command "go" -Arguments @("run", "./scripts/models/check")
             Invoke-Native -Command "go" -Arguments @("run", "./scripts/models/preview", "-check")
-            foreach ($packagePath in @("web/miniapp", "web/admin", "web/platform")) {
+            foreach ($packagePath in @("web/admin", "web/platform")) {
                 Install-NpmDependenciesIfNeeded -PackagePath $packagePath
                 Invoke-Native -Command $npmCommand -Arguments @("--prefix", $packagePath, "run", "lint")
                 Invoke-Native -Command $npmCommand -Arguments @("--prefix", $packagePath, "run", "typecheck")
@@ -115,13 +148,12 @@ $runStage = {
         }
         "audit" {
             foreach ($lockfile in @(
-                "web/miniapp/package-lock.json",
                 "web/admin/package-lock.json",
                 "web/platform/package-lock.json"
             )) {
                 Invoke-Native -Command "node" -Arguments @("scripts/ci/validate-npm-lockfiles.mjs", $lockfile)
             }
-            foreach ($packagePath in @("web/miniapp", "web/admin", "web/platform")) {
+            foreach ($packagePath in @("web/admin", "web/platform")) {
                 Invoke-Native -Command $npmCommand -Arguments @("--prefix", $packagePath, "audit", "--audit-level=moderate")
             }
         }
@@ -154,6 +186,8 @@ $runStage = {
             $bashResult = Invoke-CIBashScript -RepositoryRoot $repoRoot -ScriptPath "scripts/ci/test-wait-for-github-workflow.sh"
             $bashResult.Output | Out-Host
             if ($bashResult.ExitCode -ne 0) { throw "Bash workflow monitor tests failed with exit code $($bashResult.ExitCode)" }
+            & node scripts/ci/check-retired-miniapp.mjs
+            if ($LASTEXITCODE -ne 0) { throw "Mini App retirement check failed" }
             & pwsh -NoProfile -File scripts/ci/validate-infra.ps1
             if ($LASTEXITCODE -ne 0) { throw "Infrastructure validation failed" }
             & pwsh -NoProfile -File scripts/ci/validate-nightly-quality.ps1
@@ -194,6 +228,7 @@ $result = Invoke-DevDeployPreflight `
     -PolicyVersion $policyVersion `
     -StageNames $stageNames `
     -RunStage $runStage `
+    -InputFingerprint $inputFingerprint `
     -LockTimeoutSeconds $LockTimeoutSeconds `
     -Force:$Force
 
@@ -202,3 +237,4 @@ if ($result.Cached) {
 } else {
     Write-Host "DEV preflight passed: $($result.StagesRun -join ', ')"
 }
+Write-Host "Measured preflight receipt: $($result.TimingPath)"

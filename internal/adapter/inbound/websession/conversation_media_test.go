@@ -67,7 +67,7 @@ func TestConversationSeedreamPromptBoundaryRejectsBeforeJobs(t *testing.T) {
 
 	rec := submitConversationMedia(t, h, sessions, owner, conversation.ID, map[string]any{
 		"prompt":        strings.Repeat("я", 3001),
-		"model_id":      modelcatalog.MiniAppImageSeedream45,
+		"model_id":      modelcatalog.PublicImageSeedream45,
 		"image_quality": modelcatalog.ImageQuality2K,
 		"aspect_ratio":  "1:1",
 	})
@@ -77,7 +77,7 @@ func TestConversationSeedreamPromptBoundaryRejectsBeforeJobs(t *testing.T) {
 
 	rec = submitConversationMedia(t, h, sessions, owner, conversation.ID, map[string]any{
 		"prompt":        strings.Repeat("я", 3000),
-		"model_id":      modelcatalog.MiniAppImageSeedream45,
+		"model_id":      modelcatalog.PublicImageSeedream45,
 		"image_quality": modelcatalog.ImageQuality2K,
 		"aspect_ratio":  "1:1",
 	})

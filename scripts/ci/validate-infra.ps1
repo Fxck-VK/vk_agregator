@@ -216,26 +216,23 @@ function Assert-ReverseProxyConfig {
     $requiredSnippets = @(
         "include /etc/nginx/dev-web.conf;",
         "vk.epifera.com",
-        "app.epifera.com",
         "epifera.com",
         "dev-vk.epifera.com",
-        "dev-app.epifera.com",
         "dev.epifera.com",
         "location = /webhooks/vk",
         "location = /billing/webhooks/yookassa",
-        "location ^~ /miniapp/",
         "proxy_pass http://api;",
         "proxy_pass http://provider_webhook;",
-        "proxy_pass http://miniapp_frontend;",
         "X-Forwarded-Proto",
         "proxy_set_header X-Forwarded-Proto https;",
         'proxy_set_header Forwarded "proto=https;host=$host";',
         "/(admin|metrics|debug",
         "Strict-Transport-Security",
         "Content-Security-Policy",
-        "frame-ancestors 'self' https://vk.com https://*.vk.com https://vk.ru https://*.vk.ru",
-        "https://*.userapi.com",
-        "https://*.vkuserphoto.ru",
+        "default-src 'none'; frame-ancestors 'none'; object-src 'none'; base-uri 'none'",
+        "location ^~ /provider-references/",
+        "access_log off;",
+        "proxy_buffering off;",
         "X-Content-Type-Options",
         "Referrer-Policy",
         "Permissions-Policy"
@@ -434,36 +431,6 @@ function Assert-ImageDependencySecurityFloor {
     Write-Host "image dependency security floor OK: golang.org/x/text v$installed; platform runtime excludes unused package managers"
 }
 
-function Assert-MiniAppStaticSecurityHeaders {
-    $path = Join-Path $repoRoot "deployments\nginx\miniapp.static.conf"
-    if (-not (Test-Path -LiteralPath $path)) {
-        throw "Mini App static nginx config is missing"
-    }
-
-    $content = Get-Content -LiteralPath $path -Raw
-    foreach ($snippet in @(
-        "Strict-Transport-Security",
-        "Content-Security-Policy",
-        "frame-ancestors 'self' https://vk.com https://*.vk.com https://vk.ru https://*.vk.ru",
-        "https://*.userapi.com",
-        "https://*.vkuserphoto.ru",
-        "X-Content-Type-Options",
-        "Referrer-Policy",
-        "Permissions-Policy"
-    )) {
-        if (-not $content.Contains($snippet)) {
-            throw "Mini App static nginx config is missing required security policy: $snippet"
-        }
-    }
-    if ($content -match '(?im)^\s*add_header\s+Access-Control-Allow-Origin\s+["'']?\*') {
-        throw "Mini App static nginx must not enable broad wildcard CORS"
-    }
-    if ($content -match '(?im)script-src\s+[^;]*(unsafe-inline|unsafe-eval)') {
-        throw "Mini App static CSP must not allow unsafe inline/eval scripts"
-    }
-
-    Write-Host "Mini App static browser security headers OK"
-}
 
 function Assert-DevReverseProxySmokeScript {
     $path = Join-Path $repoRoot "scripts\dev\check-dev-reverse-proxy.ps1"
@@ -475,11 +442,9 @@ function Assert-DevReverseProxySmokeScript {
     $requiredSnippets = @(
         "http://127.0.0.1:8088",
         "dev-vk.epifera.com",
-        "dev-app.epifera.com",
         "dev.epifera.com",
         "dev-web.epifera.com",
         "/health",
-        "/miniapp/balance",
         "/billing/webhooks/yookassa",
         "/metrics",
         "/admin/jobs",
@@ -516,7 +481,6 @@ function Assert-DevStartStackScript {
         "api",
         "worker",
         "provider-webhook",
-        "miniapp",
         "reverse-proxy",
         "cloudflared DEV tunnel",
         "DEV_ALLOW_REAL_AI_PROVIDERS",
@@ -530,7 +494,6 @@ function Assert-DevStartStackScript {
         "check-dev-reverse-proxy.ps1",
         "-SkipDevWebGatewayCheck",
         "https://dev-vk.epifera.com/health",
-        "https://dev-app.epifera.com/",
         "https://dev.epifera.com/billing/webhooks/yookassa",
         "DEV stack is running."
     )
@@ -574,13 +537,10 @@ function Assert-DevStopStatusScripts {
                 "YOOKASSA_SECRET_KEY must be a YooKassa test key in DEV",
                 "cloudflared.pid",
                 "dev-vk.epifera.com",
-                "dev-app.epifera.com",
                 "dev.epifera.com",
                 "/webhooks/vk",
-                "/miniapp/balance",
                 "/billing/webhooks/yookassa",
                 "VK callback",
-                "Mini App",
                 "Tunnel",
                 "Public DEV smoke"
             )
@@ -615,13 +575,11 @@ function Assert-DevPublicSmokeScript {
     $content = Get-Content -LiteralPath $path -Raw
     $requiredSnippets = @(
         "https://dev-vk.epifera.com",
-        "https://dev-app.epifera.com",
         "https://dev.epifera.com",
         "https://dev-web.epifera.com",
         "must use HTTPS",
         "/health",
         "/webhooks/vk",
-        "/miniapp/balance",
         "/billing/webhooks/yookassa",
         "/admin/jobs",
         "/metrics",
@@ -639,7 +597,6 @@ function Assert-DevPublicSmokeScript {
 
     $forbiddenSnippets = @(
         "https://vk.epifera.com",
-        "https://app.epifera.com",
         "https://epifera.com/billing/webhooks/yookassa"
     )
 
@@ -722,7 +679,7 @@ function Assert-DevWebOperatorDocs {
             "dashboard-managed",
             "dev-web.epifera.com/* -> http://127.0.0.1:8088",
             "DEV-only",
-            "three local hostnames",
+            "two local hostnames",
             "remote DEV browser platform",
             "docker-compose.dev-web.yml"
         )
@@ -737,7 +694,7 @@ function Assert-DevWebOperatorDocs {
             "/web/v1/me",
             "CSRF reject",
             "deep-link return",
-            "three local DEV hostnames",
+            "two local DEV hostnames",
             "remote-only browser platform overlay",
             "-SkipDevWebGatewayCheck"
         )
@@ -797,7 +754,6 @@ function Assert-CloudflareDeploymentConfig {
 
     $requiredSnippets = @(
         "hostname: vk.epifera.com",
-        "hostname: app.epifera.com",
         "hostname: epifera.com",
         "service: http://127.0.0.1:8088",
         "service: http_status:404"
@@ -811,10 +767,8 @@ function Assert-CloudflareDeploymentConfig {
 
     $requiredReadmeSnippets = @(
         "vk.epifera.com",
-        "app.epifera.com",
         "https://epifera.com/billing/webhooks/yookassa",
         "dev-vk.epifera.com",
-        "dev-app.epifera.com",
         "https://dev.epifera.com/billing/webhooks/yookassa",
         "CLOUDFLARED_TUNNEL_TOKEN",
         "PUBLIC_PAYMENT_WEBHOOK_URL",
@@ -1044,7 +998,6 @@ function Assert-DeployScripts {
                 "IMAGE_TAG",
                 "migrateArgs",
                 "exit-code-from",
-                "api", "worker", "provider-webhook", "miniapp", "reverse-proxy",
                 "provider-balance",
                 "provider-balance-bot",
                 "Provider balance bot:",
@@ -1080,7 +1033,6 @@ function Assert-DeployScripts {
                 "IMAGE_TAG",
                 "migrate_args",
                 "exit-code-from",
-                "runtime_services=(api maintenance-worker provider-webhook miniapp reverse-proxy)",
                 "--relay-only-workers-upgraded",
                 "worker_up_args",
                 "provider-balance",
@@ -1112,7 +1064,6 @@ function Assert-DeployScripts {
                 "ARTIFACT_SCANNER",
                 "CLOUDFLARED_TUNNEL_TOKEN",
                 "PUBLIC_VK_BASE_URL",
-                "PUBLIC_APP_BASE_URL",
                 "PUBLIC_PAYMENT_WEBHOOK_URL",
                 "MIGRATION_ALLOW_DESTRUCTIVE",
                 "MIGRATION_BACKUP_CONFIRMED",
@@ -1142,7 +1093,6 @@ function Assert-DeployScripts {
                 "ARTIFACT_SCANNER",
                 "CLOUDFLARED_TUNNEL_TOKEN",
                 "PUBLIC_VK_BASE_URL",
-                "PUBLIC_APP_BASE_URL",
                 "PUBLIC_PAYMENT_WEBHOOK_URL",
                 "MIGRATION_ALLOW_DESTRUCTIVE",
                 "MIGRATION_BACKUP_CONFIRMED",
@@ -1193,7 +1143,6 @@ function Assert-DeployScripts {
                 "EnvFile",
                 "/health",
                 "/readyz",
-                "/miniapp/balance",
                 "/billing/webhooks/yookassa",
                 "PaymentWebhookOnly",
                 "SkipLocalHealth",
@@ -1219,7 +1168,6 @@ function Assert-DeployScripts {
                 "--env-file",
                 "/health",
                 "/readyz",
-                "/miniapp/balance",
                 "/billing/webhooks/yookassa",
                 "--payment-webhook-only",
                 "--skip-local-health",
@@ -1294,7 +1242,6 @@ function Assert-DockerImageWorkflow {
         "Dockerfile.worker",
         "Dockerfile.provider-webhook",
         "Dockerfile.provider-balance-bot",
-        "Dockerfile.miniapp",
         "Dockerfile.platform",
         "Dockerfile.migrate",
         "Dockerfile.backup",
@@ -1302,7 +1249,6 @@ function Assert-DockerImageWorkflow {
         "service: worker",
         "service: provider-webhook",
         "service: provider-balance-bot",
-        "service: miniapp",
         "service: platform",
         "service: migrate",
         "service: backup",
@@ -1355,7 +1301,6 @@ function Assert-RollbackConfig {
         '${APP_IMAGE_REGISTRY:-ghcr.io/fxck-vk/vk_agregator}/worker:${IMAGE_TAG:?IMAGE_TAG is required}',
         '${APP_IMAGE_REGISTRY:-ghcr.io/fxck-vk/vk_agregator}/provider-webhook:${IMAGE_TAG:?IMAGE_TAG is required}',
         '${APP_IMAGE_REGISTRY:-ghcr.io/fxck-vk/vk_agregator}/provider-balance-bot:${IMAGE_TAG:?IMAGE_TAG is required}',
-        '${APP_IMAGE_REGISTRY:-ghcr.io/fxck-vk/vk_agregator}/miniapp:${IMAGE_TAG:?IMAGE_TAG is required}',
         '${APP_IMAGE_REGISTRY:-ghcr.io/fxck-vk/vk_agregator}/migrate:${IMAGE_TAG:?IMAGE_TAG is required}',
         '${APP_IMAGE_REGISTRY:-ghcr.io/fxck-vk/vk_agregator}/backup:${BACKUP_IMAGE_TAG:?BACKUP_IMAGE_TAG is required}'
     )
@@ -1428,7 +1373,6 @@ function Assert-ObservabilityConfig {
         "api:8080",
         "worker:9090",
         "provider-webhook:8082",
-        "miniapp:8080",
         "reverse-proxy/proxy-health",
         "payment_webhook_oldest_unprocessed_age_seconds",
         "vkagg_queue_oldest_age_seconds",
@@ -1712,7 +1656,6 @@ Assert-NoActiveEnvExampleReferences
 Assert-CloudflareConfigHasNoSecrets
 Assert-CloudflareDeploymentConfig
 Assert-ReverseProxyConfig
-Assert-MiniAppStaticSecurityHeaders
 Assert-DevReverseProxySmokeScript
 Assert-DevStartStackScript
 Assert-DevStopStatusScripts

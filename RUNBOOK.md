@@ -1,5 +1,7 @@
 # RUNBOOK - VK AI Aggregator
 
+Current Mini App retirement, env migration and historical compatibility: [runbook](docs/runbooks/VK_MINIAPP_RETIREMENT.md).
+
 This file is the operational entry point only. Keep it short.
 
 For documentation routing, read:
@@ -34,7 +36,7 @@ Do not use old handoff or merge files as the default source of truth.
 - `dev-deploy` is the DEV deployment branch.
 - `serega` is the active integration/development branch unless `.agents/state.json`
   says otherwise.
-- VK Bot, Mini App and `cmd/api` must not call AI providers directly. Provider
+- VK Bot, website API and `cmd/api` must not call AI providers directly. Provider
   calls belong to workers/adapters.
 - Billing remains ledger-based. Redirect URLs are not proof of payment.
 - `/admin/*`, `/metrics`, `/debug/*` must not be public.

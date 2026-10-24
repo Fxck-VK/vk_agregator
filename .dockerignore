@@ -21,7 +21,6 @@ dist
 coverage
 
 **/node_modules
-web/miniapp/dist
 web/platform/.next
 web/platform/playwright-report
 web/platform/test-results

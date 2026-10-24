@@ -39,7 +39,7 @@ func ValidatePricedRequest(s pricingcatalog.PricingSnapshot, req Request, provid
 	if !allowed {
 		return ErrUnsupportedAspectRatio
 	}
-	if req.ModelID == modelcatalog.MiniAppImageSeedream50Lite && req.ReferenceCount+count > 15 {
+	if req.ModelID == modelcatalog.PublicImageSeedream50Lite && req.ReferenceCount+count > 15 {
 		return ErrOutputCountLimit
 	}
 	if pricingcatalog.IsGPTImage25(req.ModelID) && (s.ImageAspectRatio != ratio || len(req.Prompt) > s.ImagePromptByteCap) {

@@ -38,7 +38,6 @@ $expectedDockerfiles = @(
     "Dockerfile.api",
     "Dockerfile.backup",
     "Dockerfile.migrate",
-    "Dockerfile.miniapp",
     "Dockerfile.platform",
     "Dockerfile.provider-balance-bot",
     "Dockerfile.provider-webhook",
@@ -139,13 +138,12 @@ foreach ($workflowFile in $workflowFiles) {
 Assert-Contains $nightly 'github.com/rhysd/actionlint/cmd/actionlint@v1.7.12' 'Nightly Quality'
 Assert-Contains $nightly 'github.com/securego/gosec/v2/cmd/gosec@v2.28.0' 'Nightly Quality'
 Assert-Contains $nightly 'golang.org/x/vuln/cmd/govulncheck@v1.6.0' 'Nightly Quality'
-Assert-Contains $nightly 'path: web/miniapp' 'Nightly Quality frontend matrix'
 Assert-Contains $nightly 'path: web/admin' 'Nightly Quality frontend matrix'
 Assert-Contains $nightly 'path: web/platform' 'Nightly Quality frontend matrix'
 Assert-Contains $nightly 'npm --prefix "${{ matrix.path }}" audit --audit-level=moderate' 'Nightly Quality'
 Assert-Contains $nightly 'node scripts/ci/validate-npm-lockfiles.mjs "${{ matrix.lockfile }}"' 'Nightly Quality lockfile integrity'
-if ([regex]::Matches($ci, 'node scripts/ci/validate-npm-lockfiles\.mjs web/(?:miniapp|admin|platform)/package-lock\.json').Count -ne 3) {
-    throw 'CI must validate immutable source metadata for all three frontend lockfiles.'
+if ([regex]::Matches($ci, 'node scripts/ci/validate-npm-lockfiles\.mjs web/(?:admin|platform)/package-lock\.json').Count -ne 2) {
+    throw 'CI must validate immutable source metadata for both frontend lockfiles.'
 }
 Assert-Contains $nightly 'trivy-filesystem:' 'Nightly Quality'
 Assert-Contains $nightly 'trivy-images:' 'Nightly Quality'
@@ -251,8 +249,20 @@ Assert-Contains (Get-Content -LiteralPath $preflightScriptPath -Raw) '"status", 
 Assert-Contains (Get-Content -LiteralPath $preflightScriptPath -Raw) 'scripts/ci/test-wait-for-github-workflow.sh' 'DEV preflight workflow monitor regression test'
 Assert-Contains (Get-Content -LiteralPath $preflightScriptPath -Raw) 'Install-NpmDependenciesIfNeeded -PackagePath $packagePath' 'DEV preflight lockfile-scoped npm bootstrap'
 Assert-Contains (Get-Content -LiteralPath $preflightScriptPath -Raw) '"--prefix", $PackagePath, "ci"' 'DEV preflight reproducible npm install'
-Assert-Contains (Get-Content -LiteralPath $preflightModulePath -Raw) '$CommitSha-$stage.ok' 'DEV preflight exact-commit stage cache'
+$preflightModule = Get-Content -LiteralPath $preflightModulePath -Raw
+Assert-Contains $preflightModule 'dev-deploy-preflight-$PolicyVersion-$CommitSha' 'DEV preflight exact-commit cache'
+Assert-Contains $preflightModule '$cacheBase-$stage.ok' 'DEV preflight individual stage receipts'
+Assert-Contains $preflightModule 'Test-StageReceipt $stageCachePath $stage' 'DEV preflight receipt validation'
+Assert-Contains $preflightModule '$values.fingerprint -ne $InputFingerprint' 'DEV preflight runtime input validation'
+Assert-Contains $preflightModule '$age.TotalHours -gt $SecurityCacheHours' 'DEV preflight security cache expiry'
+Assert-Contains $preflightModule 'stages = $timings.ToArray()' 'DEV preflight measured stage receipt'
+Assert-Contains $ci './scripts/ci/validate-release-contract.ps1' 'Shared local and CI release regression entrypoint'
+$releaseContractRunner = Get-Content -LiteralPath (Join-Path $repoRoot 'scripts/ci/validate-release-contract.ps1') -Raw
+Assert-Contains $releaseContractRunner 'scripts/ci/check-release-contract.mjs' 'Actual release source validation'
+Assert-Contains $releaseContractRunner 'scripts/ci/release-contract.test.mjs' 'Release contract mutation tests'
 $preflightScript = Get-Content -LiteralPath $preflightScriptPath -Raw
+Assert-Contains $preflightScript 'scripts/ci/validate-release-contract.ps1' 'DEV preflight shared release regressions'
+Assert-Contains $preflightScript 'Docker engine must be running before preflight' 'DEV preflight early Docker check'
 Assert-Contains $preflightScript '"--config", "/src/trivy-filesystem.yaml"' 'DEV preflight explicit filesystem config'
 Assert-Contains $preflightScript 'Assert-TrivyFilesystemScanScope -RepositoryRoot $repoRoot' 'DEV preflight filesystem scope guard'
 Assert-Contains $preflightScript 'scripts/ci/test-trivy-filesystem-scope.ps1' 'DEV preflight scope regression test'
@@ -315,12 +325,12 @@ Assert-Contains $deployProd 'tag="${env_tag}"' 'Production previous release capt
 Assert-NotMatch $deployProd 'Current IMAGE_TAG does not match the checked-out production revision\.' 'Production recoverable checkout drift'
 Assert-Contains $deployProd 'git checkout --detach "${previous_revision}"' 'Production rollback source alignment'
 Assert-Contains $deployProd 'scripts/deploy/docker-login-retry.sh' 'Production GHCR login retry'
-Assert-Contains $ci 'bash scripts/deploy/test-docker-login-retry.sh' 'GHCR login retry regression test'
+Assert-Contains $releaseContractRunner '"docker-login-retry"' 'GHCR login retry regression test'
 Assert-Contains $deployProdScript 'compose-pull-retry.sh' 'Production image pull retry'
 Assert-Contains $deployDevScript 'compose-pull-retry.sh' 'DEV image pull retry'
 Assert-Contains $rollbackProdScript 'compose-pull-retry.sh' 'Production rollback image pull retry'
 Assert-Contains $composePullRetry '--kill-after=' 'Bounded image pull timeout'
-Assert-Contains $ci 'bash scripts/deploy/test-compose-pull-retry.sh' 'Image pull retry regression test'
+Assert-Contains $releaseContractRunner '"compose-pull-retry"' 'Image pull retry regression test'
 
 $releaseVerifierTest = Get-Content -LiteralPath $releaseVerifierTestPath -Raw
 Assert-Contains $releaseVerifierTest 'mismatched image tag' 'Release verifier negative tests'
@@ -331,11 +341,11 @@ Assert-Contains $dependabot 'package-ecosystem: "github-actions"' 'Dependabot Gi
 Assert-Contains $dependabot 'package-ecosystem: "docker"' 'Dependabot Docker updates'
 Assert-Contains $dependabot 'package-ecosystem: "gomod"' 'Dependabot Go updates'
 Assert-Contains $dependabot 'package-ecosystem: "npm"' 'Dependabot npm updates'
-if ([regex]::Matches($dependabot, 'package-ecosystem:\s*"npm"').Count -ne 6) {
-    throw 'Dependabot must audit Mini App, Admin, and Platform npm lockfiles on the default and DEV target branches.'
+if ([regex]::Matches($dependabot, 'package-ecosystem:\s*"npm"').Count -ne 4) {
+    throw 'Dependabot must audit Admin and Platform npm lockfiles on the default and DEV target branches.'
 }
-if ([regex]::Matches($dependabot, 'target-branch:\s*"dev-deploy"').Count -ne 6) {
-    throw 'Dependabot must target DEV version updates for Actions, Docker, Go, Mini App, Admin, and Platform.'
+if ([regex]::Matches($dependabot, 'target-branch:\s*"dev-deploy"').Count -ne 5) {
+    throw 'Dependabot must target DEV version updates for Actions, Docker, Go, Admin and Platform.'
 }
 Assert-Contains $codeowners '.github/workflows/' 'CODEOWNERS workflow protection'
 Assert-Contains $codeowners 'scripts/deploy/**' 'CODEOWNERS deploy script protection'

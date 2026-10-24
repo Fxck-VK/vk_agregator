@@ -1,465 +1,115 @@
 # DEV Contour
 
-This document defines the isolated development contour for local/manual VK and
-Mini App testing. It is intentionally production-shaped, but it must never use
-production secrets, production VK community settings, production YooKassa
-webhooks or production data stores.
+The active development applications are the Epifera website, VK bot and operator
+UI. VK Mini App has been removed. Its former launch/auth/UI instructions are
+superseded by [the retirement runbook](../docs/runbooks/VK_MINIAPP_RETIREMENT.md).
+Detailed rollout commands and gates live in [DEV operations](../docs/runbooks/DEV.md).
 
-## Purpose
+## One local website
 
-The DEV contour exists so local development can exercise the same public
-surface shape as production:
-
-- VK Callback API
-- VK Mini App frontend
-- Mini App BFF
-- Browser platform (outer-gated for DEV only)
-- YooKassa webhook entrypoint
-- reverse proxy routing
-
-The implementation must keep the same architecture boundaries as production:
-VK Bot and Mini App create backend requests/jobs only; providers are called
-only by workers; payments are completed only through provider-verified
-webhook/reconciliation and billing ledger.
-
-## Public Hosts
-
-| Surface | DEV URL | Production URL |
-|---|---|---|
-| VK Callback API | `https://dev-vk.epifera.com/webhooks/vk` | `https://vk.epifera.com/webhooks/vk` |
-| Mini App | `https://dev-app.epifera.com` | `https://app.epifera.com` |
-| Mini App BFF | `https://dev-app.epifera.com/miniapp/*` | `https://app.epifera.com/miniapp/*` |
-| YooKassa webhook | `https://dev.epifera.com/billing/webhooks/yookassa` | `https://epifera.com/billing/webhooks/yookassa` |
-| Browser platform | `https://dev-web.epifera.com` | not published in this rollout |
-
-The three local DEV hostnames (`dev-vk`, `dev-app`, and `dev`) point through
-the existing dashboard-managed Cloudflare Tunnel for DEV, separate from
-production, to the same local reverse-proxy origin:
-
-```text
-http://127.0.0.1:8088
-```
-
-The local reverse proxy is responsible for routing these three local routes by
-hostname/path:
-
-| DEV hostname/path | Target service |
-|---|---|
-| `dev-vk.epifera.com/webhooks/vk` | `cmd/api` |
-| `dev-vk.epifera.com/health` | `cmd/api` |
-| `dev-app.epifera.com/` | Mini App frontend |
-| `dev-app.epifera.com/miniapp/*` | `cmd/api` |
-| `dev.epifera.com/billing/webhooks/yookassa` | `cmd/provider-webhook` |
-
-The local reverse proxy listens on `127.0.0.1:8088`. Cloudflare must not route
-directly to `cmd/api`, `cmd/provider-webhook` or the Mini App dev server; all
-three local DEV hostnames go to the same reverse proxy origin and are separated by
-`Host` header plus path.
-
-The browser platform is a remote-only browser platform overlay. It is supplied
-by `docker-compose.dev-web.yml` on the remote DEV deployment, not by the
-standard local `start-dev-stack.ps1` Compose set. When that remote overlay is
-published, its additional DEV-only route is
-`dev-web.epifera.com/* -> http://127.0.0.1:8088` and Nginx requires the
-gateway before forwarding to the platform.
-
-After the local services and DEV Cloudflare tunnel are running, verify the
-three local routes from the workstation:
+Use only `C:/Users/Lenovo/Documents/агрегатор/epifera-domain-cutover` and
+`http://localhost:7159`. Reuse the existing process; start it only when stopped:
 
 ```powershell
-.\scripts\dev\check-dev-reverse-proxy.ps1 -SkipDevWebGatewayCheck
+npm --prefix web/platform run dev:preview
 ```
 
-The script sends local requests to `http://127.0.0.1:8088` with DEV `Host`
-headers. It expects the API/Mini App/webhook paths to be routed and sensitive
-paths such as `/admin/*` and `/metrics` to stay blocked. The explicit
-`-SkipDevWebGatewayCheck` is required only because the standard local stack
-does not include the remote platform overlay. Without that switch, the script
-strictly requires `dev-web.epifera.com/` to return `401`.
+Do not start another checkout, frontend port or production tunnel. Optional
+backend/observability scripts serve this same checkout; they do not start a
+second website. `check-dev-reverse-proxy.ps1 -SkipDevWebGatewayCheck` is for the
+local backend-only contour where the remote website overlay is absent.
 
-`smoke-dev.ps1` verifies the remote DEV deployment's public Cloudflare routes
-over HTTPS after its browser-platform overlay is published. It checks the DEV
-VK health/callback route, Mini App frontend and BFF, YooKassa webhook entrypoint,
-an unauthenticated `https://dev-web.epifera.com/` gateway response of exactly
-`401`, and confirms that `/admin/*` and `/metrics` are not publicly open. It
-refuses non-HTTPS URLs and production hostnames. Smoke scripts never read, send
-or log gateway credentials.
+## Public hosts
 
-## GitHub Actions DEV Deploy
+The two local DEV hostnames (`dev-vk` and `dev`) point to the same loopback
+reverse proxy at `http://127.0.0.1:8088` through the DEV-only tunnel.
 
-The remote DEV VPS deploy mirrors the production deploy process without the
-main-branch approval gate. A push to `dev-deploy` builds immutable GHCR images
-and then runs the `Deploy DEV` workflow.
+| Host/path | Destination |
+| --- | --- |
+| `dev-vk.epifera.com/webhooks/vk` | verified VK callback intake |
+| `dev-vk.epifera.com/health` | API health |
+| `dev-vk.epifera.com/provider-references/*` | signed job-bound input reads |
+| `dev.epifera.com/billing/webhooks/yookassa` | verified payment webhook intake |
 
-Required repository secrets:
+The remote-only browser platform overlay is `docker-compose.dev-web.yml`.
+Its separate DEV-only route is
+`dev-web.epifera.com/* -> http://127.0.0.1:8088`.
+The website is protected by the outer gateway; `/admin`, `/metrics` and other
+private backend paths remain closed. See [tunnel routing](../deployments/cloudflare/README.md).
+No Mini App host is required. Browser VK ID uses its own configured client IDs.
 
-```text
-DEV_DEPLOY_HOST
-DEV_DEPLOY_USER
-DEV_DEPLOY_SSH_KEY
-DEV_DEPLOY_PATH
-ENV_COMMON
-ENV_PROVIDERS_COMMON
-ENV_SECRETS_DEV
-ENV_PAYMENTS_DEV
-GHCR_USERNAME
-GHCR_TOKEN
-DEV_WEB_BASIC_AUTH_HTPASSWD
-```
+## GitHub Actions DEV deploy
 
-`DEV_WEB_BASIC_AUTH_HTPASSWD` is a separate Development-environment secret.
-Store a single pre-hashed htpasswd entry only; it is never a plaintext password
-and must not be added to the assembled application `.env`.
+An explicitly authorized `dev-deploy` push runs exact-SHA checks, immutable
+signed image builds, the DEV rollout and smoke checks. Existing DEV SSH settings
+are `DEV_DEPLOY_HOST`, `DEV_DEPLOY_USER`, `DEV_DEPLOY_SSH_KEY` and
+`DEV_DEPLOY_PATH`. Split envs are `ENV_COMMON`, `ENV_PROVIDERS_COMMON`,
+`ENV_SECRETS_DEV`, `ENV_PAYMENTS_DEV`; GHCR pulls use `GHCR_USERNAME` and
+`GHCR_TOKEN`. No secret values belong in Git or output.
 
-The workflow assembles the DEV server `.env` from split GitHub Secrets. The DEV
-parts must contain DEV-only values: `APP_ENV=development`, `dev-*` public URLs,
-the DEV VK group id, the DEV Cloudflare tunnel token, and either
-`PAYMENT_PROVIDER=mock` or an explicit DEV/test YooKassa configuration.
+The website API requires exactly `WEB_ORIGIN=https://dev-web.epifera.com`.
+`DEV_WEB_BASIC_AUTH_HTPASSWD` holds a single pre-hashed htpasswd entry,
+never a plaintext password. It is a separate Development secret, not a public
+frontend variable or the account login password.
 
-The workflow does not keep provider/payment business rules in YAML. It only
-orchestrates deployment:
+The workflow assembles private env parts, prepares and validates DEV settings,
+verifies signed images against the exact source revision, deploys through
+`scripts/deploy/deploy-dev.sh` and runs `scripts/deploy/smoke-dev.sh`. Seven
+current images are required; rollback to a revision with the old Mini App still
+requires its eighth signed image. A successful local check does not mean DEV
+has received a change.
 
-```text
-checkout
-wait for GHCR images
-connect to DEV VPS
-assemble split DEV env to a temporary file
-run scripts/deploy/prepare-dev-env.sh
-run scripts/deploy/check-dev-env.sh
-upload .env to DEV VPS
-run scripts/deploy/deploy-dev.sh
-run scripts/deploy/smoke-dev.sh
-write GitHub summary / Telegram notification
-```
+Env preparation preserves `ACCOUNT_EMAIL_PROOF_SECRET` or migrates the old
+shared value without rotation. Signed reference URLs use the DEV VK API host.
+Retired Mini App settings are omitted. Do not rotate keys or remove object-store
+data as part of this transport cleanup.
 
-`prepare-dev-env.sh` renders the final server `.env`, pins runtime and backup
-images to the deploy SHA, appends GHCR pull credentials, and prints only
-non-secret readiness flags.
-It also caps the DEV jobs worker at `1.00` CPU for the current one-vCPU DEV
-server. Production keeps the Compose default of `2.00` CPUs unless
-`WORKER_CPU_LIMIT` is explicitly overridden there.
-`check-dev-env.sh` blocks production hostnames, production VK group id, missing
-Cloudflare tunnel token, unsupported payment providers and non-development
-`APP_ENV` before the env can reach the VPS.
+## Isolation and security
 
-Local validation for these scripts:
+- DEV has its own VPS/tunnel, VK community, stores and payment settings.
+- Do not start production tunnels, change production VK callbacks or point DEV
+  at production Postgres, Redis or S3.
+- Never copy payment values between DEV and PROD or commit private env files.
+- Real AI providers require explicit DEV configuration and the existing paid
+  call authorization; ordinary checks use mock providers.
+- Deliberate DEV payment smoke requires `DEV_ALLOW_REAL_PAYMENTS=true` and a
+  YooKassa test key. Live production keys are rejected.
+- Provider calls belong to workers; API/frontend/VK handlers only create jobs,
+  read owned results or perform control operations.
+- Keep account ownership, session verification, CSRF, ledger idempotency,
+  moderation, webhook verification, TLS and private metrics enforcement intact.
+
+Compare DEV/PROD variable names through
+`scripts/deploy/check-env-parity.sh --dev dev.env --prod prod.env`.
+It reports names only. Keep allowlist exceptions narrow; values and complete
+env contents must never be printed. Normalize old transport settings before
+comparing rendered runtime contracts.
+
+## Checks
 
 ```bash
+node scripts/ci/check-retired-miniapp.mjs
+bash scripts/deploy/test-retire-miniapp-env.sh
+bash scripts/deploy/test-assemble-env-parts.sh
 bash scripts/deploy/test-dev-env.sh
 bash scripts/deploy/test-env-parity.sh
 ```
 
-The test uses fake tokens only. It checks `bash -n scripts/deploy/*.sh`, valid
-mock DEV env, valid DEV YooKassa env, production URL rejection, and verifies
-that fake secret markers are not printed to logs.
-
-## DEV/PROD Env Parity
-
-When a DEV feature starts working because a new env key was added, check that
-production has the same variable name before promoting the change. The parity
-checker compares names only and never prints values, env contents or source file
-paths:
-
-```bash
-scripts/deploy/check-env-parity.sh --dev dev.env --prod prod.env
-```
-
-Sources:
-
-- `ENV_COMMON`, `ENV_PROVIDERS_COMMON`, `ENV_SECRETS_DEV` and
-  `ENV_PAYMENTS_DEV` from GitHub Secrets or the local `.env.d` split files
-- `ENV_COMMON`, `ENV_PROVIDERS_COMMON`, `ENV_SECRETS_PROD` and
-  `ENV_PAYMENTS_PROD` from GitHub Secrets or the production VPS `.env`
-- the checked-in config loader and deploy scripts as the runtime contract
-
-Allowed DEV-only and PROD-only names are explicit allowlist patterns in
-`scripts/deploy/env-parity.allowlist`. Anything else is reported as drift, for
-example a provider key present in DEV but missing from PROD. The report lists
-variable names only. Keep allowlist patterns narrow; do not add broad token or
-secret patterns that could hide production gaps.
-
-Deploy workflows do not read the opposite contour's env secrets: DEV deploy
-uses only DEV parts, and production deploy uses only production parts. Run
-DEV/PROD parity as a separate operator check when changing env structure.
-
-## Mini App Model Catalog Migration
-
-Mini App model selection uses one public BFF endpoint:
-
-```text
-GET /miniapp/model-catalog
-```
-
-The old catalog endpoints were removed and must keep returning `404`:
-
-```text
-GET /miniapp/image-models
-GET /miniapp/video-routes
-```
-
-The Mini App frontend is already migrated to `/miniapp/model-catalog`. Keep
-Cloudflare routes, VK Mini App settings, smoke scripts and external monitors off
-the removed endpoints. Direct unauthenticated probes to `/miniapp/model-catalog`
-may return `401`; that still means the route exists behind Mini App auth.
-
-## Start Command
-
-Start the full local DEV contour with one command:
-
-```powershell
-.\scripts\dev\start-dev-stack.ps1 -WithCloudflare
-```
-
-Normal DEV startup builds runtime images from the current working tree. This
-keeps DEV and production architecture identical while changing only env,
-Cloudflare tunnel and external test community/provider settings. Do not use
-prebuilt `:dev` images for regular local development.
-
-What it does:
-
-- checks that `dev.env` exists and is a DEV environment, not production;
-- refuses `-SkipBuild` unless `DEV_ALLOW_REMOTE_IMAGES=true` is deliberately
-  set for image-tag smoke testing;
-- loads `dev.env` into the current process for Docker Compose interpolation;
-- starts local Docker Postgres, Redis and MinIO;
-- runs migrations through the existing `migrate` service;
-- starts `cmd/api`, `cmd/worker`, `cmd/provider-webhook`, Mini App and the
-  reverse proxy;
-- does not start the remote-only `docker-compose.dev-web.yml` browser-platform
-  overlay, so its local reverse-proxy smoke explicitly skips only that gateway
-  assertion;
-- starts the local `cloudflared` connector when `-WithCloudflare` is passed;
-- verifies local service health and reverse-proxy routing;
-- verifies public DEV hosts unless `-SkipPublicSmoke` is passed.
-
-Useful commands:
-
-```powershell
-.\scripts\dev\start-dev-stack.ps1 -StatusOnly
-.\scripts\dev\start-dev-stack.ps1 -StopOnly
-.\scripts\dev\start-dev-stack.ps1 -WithCloudflare -SkipPublicSmoke
-```
-
-`-SkipBuild` is not a normal DEV command. It is blocked by default because it
-can run an already-built GHCR image that differs from the local project. Use it
-only for explicit image smoke testing with `DEV_ALLOW_REMOTE_IMAGES=true` and a
-known `IMAGE_TAG`.
-
-Dedicated wrappers:
-
-```powershell
-.\scripts\dev\status-dev-stack.ps1
-.\scripts\dev\stop-dev-stack.ps1
-.\scripts\dev\smoke-dev.ps1
-```
-
-`status-dev-stack.ps1` is read-only. It prints Docker Compose services, local
-ports, local health endpoints, DEV reverse-proxy routes, VK callback
-confirmation behavior, Mini App reachability and tunnel/public route status. It
-does not print VK tokens, tunnel tokens or other secrets.
-
-`stop-dev-stack.ps1` stops the local DEV stack through the existing start script
-and preserves Docker volumes. It does not delete local Postgres/Redis/MinIO
-data and does not touch production infrastructure.
-
-`smoke-dev.ps1` is the public smoke check for the remote DEV deployment. Run it
-after that deployment has published `docker-compose.dev-web.yml` to verify:
-
-```text
-https://dev-vk.epifera.com/health
-https://dev-vk.epifera.com/webhooks/vk
-https://dev-app.epifera.com
-https://dev-app.epifera.com/miniapp/balance
-https://dev.epifera.com/billing/webhooks/yookassa
-https://dev-web.epifera.com/ -> exactly 401 without gateway credentials
-```
-
-The same smoke also verifies that public `/admin/*` and `/metrics` routes are
-blocked.
-
-The script preserves Docker volumes on stop. It does not touch production
-Cloudflare, production VK settings, production YooKassa settings or production
-data stores.
-
-## Isolation Rules
-
-- Do not run the production Cloudflare tunnel token on a development machine.
-- Do not point DEV hostnames to the production VPS.
-- Do not edit production VK Callback API settings for local tests.
-- Do not reuse the production VK community token in local DEV.
-- Do not reuse production YooKassa webhook settings for local DEV.
-- Do not connect local DEV services to production Postgres, Redis or S3/MinIO.
-- Do not commit local `dev.env`, tunnel tokens, VK tokens, YooKassa keys or
-  provider keys.
-
-## Security Rules
-
-The DEV scripts enforce these rules before they start or inspect the stack:
-
-```text
-DEV secrets must stay local and untracked.
-PROD secrets must not be used by local DEV scripts.
-Production Cloudflare tunnel must not be started locally.
-DEV VK token and callback settings must belong to the DEV VK community.
-DEV YooKassa can be enabled only with a test key.
-AI providers can run against DEV/test provider credentials only.
-```
-
-Real AI providers are allowed only when explicitly enabled:
-
-```text
-DEV_ALLOW_REAL_AI_PROVIDERS=true
-```
-
-When this flag is not enabled, `PROVIDER`, `PROVIDER_CHAIN`, `IMAGE_PROVIDER`
-and `VIDEO_PROVIDER` must stay `mock`, route provider flags must stay disabled,
-and provider API keys must stay empty. The committed DEV template enables this
-flag so manual VK testing can mirror production behavior with DEV-only provider
-keys.
-
-Real YooKassa is blocked by default. To run a deliberate YooKassa test-store
-smoke, set:
-
-```text
-DEV_ALLOW_REAL_PAYMENTS=true
-PAYMENT_PROVIDER=yookassa
-```
-
-In that mode `YOOKASSA_SECRET_KEY` must be a YooKassa test key. Production
-YooKassa credentials are not allowed in the DEV contour.
-
-## Required DEV Inputs
-
-The local `dev.env` for this contour must be assembled from the split DEV env
-parts or filled manually with DEV-only values:
-
-```powershell
-notepad dev.env
-```
-
-```text
-PUBLIC_VK_BASE_URL=https://dev-vk.epifera.com
-PUBLIC_APP_BASE_URL=https://dev-app.epifera.com
-PUBLIC_PAYMENT_WEBHOOK_URL=https://dev.epifera.com/billing/webhooks/yookassa
-WEB_ORIGIN=https://dev-web.epifera.com
-
-VK_ACCESS_TOKEN=<dev VK community token>
-VK_SECRET=<dev VK Callback API secret>
-VK_CONFIRMATION_TOKEN=<dev VK confirmation string>
-VK_GROUP_ID=<dev VK group id>
-
-CLOUDFLARED_TUNNEL_TOKEN=<dev dashboard-managed tunnel token>
-DEEPINFRA_API_KEY=<dev/test DeepInfra key>
-APIMART_API_KEY=<dev/test APIMart key>
-APIMART_BASE_URL=https://api.apimart.ai/v1
-POYO_API_KEY=<dev/test PoYo key>
-RUNWAYML_API_SECRET=<dev/test Runway key>
-PAYMENT_PROVIDER=mock
-PROVIDER_CHAIN=deepinfra,apimart,poyo,runway,mock
-VK_DELIVERY_MODE=mock
-DEV_ALLOW_REAL_AI_PROVIDERS=true
-DEV_ALLOW_REAL_PAYMENTS=false
-VK_MENU_VIDEO_ROUTES_PREVIEW_ENABLED=true
-```
-
-`PUBLIC_VK_BASE_URL` is also used by VK Bot payment buttons. The bot sends a
-server-owned `/payments/vk/{intent_id}` link and the API redirects active
-`vk_bot` payment intents to the provider confirmation page. The redirect route
-is rate-limited (`PAYMENT_REDIRECT_RATE_LIMIT_RPS` /
-`PAYMENT_REDIRECT_RATE_LIMIT_BURST`), and production fails closed when VK bot
-top-up is enabled without a valid HTTPS `PUBLIC_VK_BASE_URL`. Runtime VK bot
-output also fails closed to a safe unavailable-payment notice instead of
-falling back to direct provider checkout links when this base URL is missing or
-invalid.
-
-Rate limiting is split by layer. Nginx/Cloudflare own production-shaped
-source-IP limits before proxying. Redis-backed services own durable user/action
-limits such as VK antispam. The Go in-process limiter is a bounded local
-fallback: buckets expire after idle time, total bucket count is capped per
-process, and spoofable proxy headers are ignored unless a caller adds explicit
-trusted-proxy normalization.
-
-Mini App reference uploads are bounded at both the API and proxy layer. The API
-uses `MEDIA_MAX_IMAGE_UPLOAD_BYTES` and `MEDIA_MAX_CONCURRENT_UPLOADS` to cap
-per-process upload memory; with the committed DEV defaults this is
-approximately `20 MiB * 4` file-buffer memory per API process, plus a small
-multipart envelope. The production nginx route for `POST /miniapp/artifacts`
-uses a matching `21m` body limit and disables proxy request buffering for that
-exact upload endpoint.
-
-Real provider mode is part of the DEV contour for manual VK testing, but it
-must use DEV/test credentials only. Payments stay mocked unless
-`DEV_ALLOW_REAL_PAYMENTS=true` is deliberately set with YooKassa test-store
-credentials.
-
-`VK_MENU_VIDEO_ROUTES_PREVIEW_ENABLED=true` is a development-only UI parity
-switch. It lets the VK bot show the same video model route buttons as the
-production-shaped menu. Provider route execution still requires the matching
-route flags, provider config and worker path. This flag is ignored in
-production.
-
-## Cloudflare
-
-Use the existing dashboard-managed DEV tunnel, separate from production, for
-example:
-
-```text
-neiirohub-vk-dev
-```
-
-The local DEV tunnel publishes these three host routes:
-
-| Hostname | Service |
-|---|---|
-| `dev-vk.epifera.com` | `http://127.0.0.1:8088` |
-| `dev-app.epifera.com` | `http://127.0.0.1:8088` |
-| `dev.epifera.com` | `http://127.0.0.1:8088` |
-
-The remote DEV browser-platform overlay additionally publishes
-`dev-web.epifera.com/* -> http://127.0.0.1:8088` through that same DEV tunnel.
-It is not part of the local start flow.
-
-Do not add broad public routes for `/admin/*`, `/metrics`, `/debug/*` or broad
-`/billing/*`. Only the exact YooKassa webhook path is public.
-
-## Readiness Criteria
-
-The remote DEV deployment is ready when all checks pass:
-
-```text
-https://dev-vk.epifera.com/health -> 200
-https://dev-vk.epifera.com/webhooks/vk -> controlled non-5xx for invalid GET
-https://dev-app.epifera.com -> Mini App frontend
-https://dev-app.epifera.com/miniapp/* -> API/BFF responses
-https://dev.epifera.com/billing/webhooks/yookassa -> controlled non-5xx for invalid body
-https://dev-web.epifera.com/ -> exactly 401 without gateway credentials
-.\scripts\dev\smoke-dev.ps1 -> public DEV smoke passes
-```
-
-## DEV Web Manual Acceptance
-
-After the DEV-only dashboard-managed route
-`dev-web.epifera.com/* -> http://127.0.0.1:8088` is published, use this exact
-manual sequence:
-
-`401 outside gate`; gateway credentials then password login; Secure host-only Lax cookies; `/web/v1/me`; CSRF reject; deep-link return.
-
-1. From outside the gateway, request `https://dev-web.epifera.com/` and verify
-   `401 outside the gateway`.
-2. Complete the outer DEV gateway login without disabling the gate. Before platform sign-in, verify
-   `/web/v1/me -> 401` from the anonymous BFF and a protected administrative
-   path -> 404.
-3. Restore the gateway, enter the gateway credentials, then password login
-   with a verified DEV account.
-4. Confirm `Secure, host-only, SameSite=Lax cookies` on
-   `dev-web.epifera.com`.
-5. Verify the authenticated `/web/v1/me` response.
-6. Submit a mutation without its CSRF value and verify CSRF rejection.
-7. Start at a protected deep link, sign in, and verify deep-link return.
-
-The DEV API value must be exactly
-`WEB_ORIGIN=https://dev-web.epifera.com`. The outer gateway uses the distinct
-`DEV_WEB_BASIC_AUTH_HTPASSWD` Development secret as one single pre-hashed
-htpasswd entry, never a plaintext password.
-
-Production must remain reachable and unchanged while DEV is started/stopped.
+Fixtures contain synthetic values only. The checks must preserve bot/OAuth,
+email and payment settings independently of removed Mini App configuration.
+
+## DEV web manual acceptance
+
+The acceptance sequence remains: `401 outside gate`; gateway credentials then password login;
+Secure host-only Lax cookies; `/web/v1/me`; CSRF reject;
+deep-link return.
+
+1. Confirm the anonymous outer gateway requires authentication.
+2. Complete the outer gateway login. Before account sign-in, `/web/v1/me` must
+   return 401 and protected administrative paths must return 404.
+3. Sign into an existing verified DEV account and check secure host-only cookies.
+4. Verify the authenticated profile and reject mutations missing CSRF proof.
+5. Sign in from a protected deep link and confirm return to that local path.
+6. Verify browser VK ID/Yandex login availability and owned file/chat access.
+
+Production must remain unchanged while DEV is started, stopped or deployed.

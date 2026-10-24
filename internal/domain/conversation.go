@@ -12,7 +12,8 @@ import (
 type ConversationSource string
 
 const (
-	ConversationSourceVKBot   ConversationSource = "vk_bot"
+	ConversationSourceVKBot ConversationSource = "vk_bot"
+	// ConversationSourceMiniApp is a historical value, retained for existing rows.
 	ConversationSourceMiniApp ConversationSource = "miniapp"
 	ConversationSourceWeb     ConversationSource = "web"
 )

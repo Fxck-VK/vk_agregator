@@ -329,7 +329,7 @@
           "refId": "B"
         }
       ],
-      "title": "Mini App Frontend Latency p95",
+      "title": "Frontend Telemetry (historical) Latency p95",
       "type": "timeseries"
     },
     {

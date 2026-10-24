@@ -1,5 +1,5 @@
 // Command provider-webhook runs the payment provider webhook intake and async
-// inbox processor. It does not mount VK or Mini App auth.
+// inbox processor. It does not mount VK callback or website session auth.
 package main
 
 import (

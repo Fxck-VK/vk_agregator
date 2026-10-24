@@ -1,5 +1,5 @@
 // Package referralservice owns shared VK referral business rules for the bot
-// and future Mini App entry points.
+// with historical source compatibility.
 package referralservice
 
 import (

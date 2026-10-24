@@ -1,6 +1,6 @@
 import http from "k6/http";
 import { check } from "k6";
-import { Counter, Rate } from "k6/metrics";
+import { Rate } from "k6/metrics";
 
 const rawBaseURL = __ENV.K6_BASE_URL || __ENV.BASE_URL || "";
 const allowProductionLiveSmoke = boolEnv("K6_ALLOW_PRODUCTION_LIVE_SMOKE", false);
@@ -11,9 +11,6 @@ const runID = `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
 
 const healthOK = new Rate("ramp_health_ok");
 const vkOK = new Rate("ramp_vk_ok");
-const miniappOK = new Rate("ramp_miniapp_ok");
-const jobCreateOK = new Rate("ramp_job_create_ok");
-const jobCreated = new Counter("ramp_job_created_total");
 
 export const options = enabled
   ? {
@@ -33,8 +30,6 @@ export const options = enabled
         http_req_duration: ["p(95)<1500"],
         ramp_health_ok: ["rate>0.95"],
         ramp_vk_ok: ["rate>0.95"],
-        ramp_miniapp_ok: ["rate>0.95"],
-        ramp_job_create_ok: ["rate>0.90"],
       },
       userAgent: "vk-ai-aggregator-k6-api-ramp/1.0",
       summaryTrendStats: ["avg", "min", "med", "p(90)", "p(95)", "p(99)", "max"],
@@ -54,21 +49,10 @@ export function noop() {
   console.log("k6 API ramp skipped: set K6_BASE_URL to run against a loadtest/dev API.");
 }
 
+
 export function apiRamp() {
-  const route = chooseRoute();
-  switch (route) {
-    case "health":
-      healthReadiness();
-      return;
-    case "vk":
-      vkWebhook();
-      return;
-    case "miniapp":
-      miniappBalance();
-      return;
-    default:
-      textJobCreate();
-  }
+  if (Math.random() < 0.4) healthReadiness();
+  else vkWebhook();
 }
 
 function healthReadiness() {
@@ -113,91 +97,15 @@ function vkWebhook() {
   vkOK.add(ok);
 }
 
-function miniappBalance() {
-  const vkUserID = syntheticVKUserID("K6_RAMP_MINIAPP_USER_BASE", 920000000);
-  const res = http.get(`${baseURL}/miniapp/balance`, {
-    headers: miniappHeaders(vkUserID),
-    tags: { surface: "miniapp", route: "balance" },
-  });
-  const ok = check(res, {
-    "ramp GET /miniapp/balance is 200": (r) => r.status === 200,
-    "ramp GET /miniapp/balance has balance_credits": (r) => jsonFieldExists(r, "balance_credits"),
-  });
-  miniappOK.add(ok);
-}
 
-function textJobCreate() {
-  const vkUserID = syntheticVKUserID("K6_RAMP_JOB_USER_BASE", 930000000);
-  const headers = {
-    ...miniappHeaders(vkUserID),
-    "Content-Type": "application/json",
-    "X-Idempotency-Key": `k6.${runID}.ramp.job.${__VU}.${__ITER}`,
-  };
-  const payload = {
-    operation: "text_generate",
-    prompt: __ENV.K6_RAMP_JOB_PROMPT || "load-test ramp text prompt",
-  };
 
-  const res = http.post(`${baseURL}/miniapp/jobs`, JSON.stringify(payload), {
-    headers,
-    tags: { surface: "miniapp", route: "jobs_create_text" },
-  });
-  const ok = check(res, {
-    "ramp POST /miniapp/jobs text is 201": (r) => r.status === 201,
-    "ramp POST /miniapp/jobs text returns id": (r) => jsonFieldExists(r, "id"),
-  });
-  jobCreateOK.add(ok);
-  if (ok) {
-    jobCreated.add(1);
-  }
-}
 
-function chooseRoute() {
-  const healthWeight = nonNegativeIntEnv("K6_RAMP_HEALTH_WEIGHT", 20);
-  const vkWeight = nonNegativeIntEnv("K6_RAMP_VK_WEIGHT", 30);
-  const miniappWeight = nonNegativeIntEnv("K6_RAMP_MINIAPP_WEIGHT", 30);
-  const jobWeight = nonNegativeIntEnv("K6_RAMP_JOB_WEIGHT", 20);
-  const total = Math.max(1, healthWeight + vkWeight + miniappWeight + jobWeight);
-  const roll = Math.random() * total;
-
-  if (roll < healthWeight) {
-    return "health";
-  }
-  if (roll < healthWeight + vkWeight) {
-    return "vk";
-  }
-  if (roll < healthWeight + vkWeight + miniappWeight) {
-    return "miniapp";
-  }
-  return "job";
-}
-
-function miniappHeaders(vkUserID) {
-  const headers = {};
-  const launchParams = __ENV.K6_MINIAPP_LAUNCH_PARAMS || __ENV.MINIAPP_LAUNCH_PARAMS || "";
-  if (launchParams !== "") {
-    headers["X-Launch-Params"] = launchParams;
-    return headers;
-  }
-  headers["X-VK-User-ID"] = String(vkUserID);
-  return headers;
-}
 
 function jsonHeaders() {
   return { "Content-Type": "application/json" };
 }
 
-function jsonField(res, field) {
-  try {
-    return res.json(field);
-  } catch (_) {
-    return undefined;
-  }
-}
 
-function jsonFieldExists(res, field) {
-  return jsonField(res, field) !== undefined;
-}
 
 function syntheticVKUserID(baseEnvName, defaultBase) {
   return intEnv(baseEnvName, defaultBase) + (__VU * 100000) + (__ITER % 100000);

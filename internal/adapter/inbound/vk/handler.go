@@ -88,9 +88,6 @@ type Config struct {
 	// TopUpReturnURL is the server-owned YooKassa redirect target for bot
 	// top-up intents.
 	TopUpReturnURL string
-	// TopUpMiniAppURL opens the Mini App top-up UI when the VK bot does not
-	// have a server-side receipt contact configured.
-	TopUpMiniAppURL string
 	// TopUpPaymentRedirectBaseURL is the public API base used to hide provider
 	// confirmation URLs behind a server-owned redirect endpoint.
 	TopUpPaymentRedirectBaseURL string
@@ -132,7 +129,7 @@ type DialogState interface {
 }
 
 // ReferralService is the shared backend referral service used by VK bot and
-// future VK Mini App flows.
+// other verified identity flows.
 type ReferralService interface {
 	Stats(ctx context.Context, userID uuid.UUID) (*domain.ReferralCode, int, error)
 	StatsDetailed(ctx context.Context, userID uuid.UUID) (*domain.ReferralCode, domain.ReferralStats, error)
@@ -1429,9 +1426,6 @@ func (h *Handler) createAndSendTopUpPayment(ctx context.Context, groupID int64, 
 	email := strings.TrimSpace(h.cfg.TopUpReceiptEmail)
 	phone := strings.TrimSpace(h.cfg.TopUpReceiptPhone)
 	if email == "" && phone == "" {
-		if _, ok := h.topUpMiniAppLink(); ok {
-			return h.sendTopUpCatalog(ctx, idemKey, peerID, user, forceNew, false)
-		}
 		return h.sendTopUpNotice(ctx, idemKey, peerID, "Платежи временно недоступны: не настроены данные для чека.")
 	}
 	if h.deps.Payment == nil {
@@ -1513,7 +1507,7 @@ func (h *Handler) sendPhotoQualitySelection(ctx context.Context, modelID, idemKe
 		h.clearDialogMode(ctx, peerID)
 		return h.sendControlResponse(ctx, domain.CommandMenuImage, idemKey, 0, peerID, &domain.User{}, allowEdit)
 	}
-	model, ok := modelcatalog.ResolveMiniAppModel(domain.OperationImageGenerate, modelID)
+	model, ok := modelcatalog.ResolvePublicModel(domain.OperationImageGenerate, modelID)
 	if !ok {
 		h.clearDialogMode(ctx, peerID)
 		return h.sendControlResponse(ctx, domain.CommandMenuImage, idemKey, 0, peerID, &domain.User{}, allowEdit)
@@ -1544,7 +1538,7 @@ func (h *Handler) sendPhotoPromptForQuality(ctx context.Context, modelID, rawQua
 		h.clearDialogMode(ctx, peerID)
 		return h.sendControlResponse(ctx, domain.CommandMenuImage, idemKey, 0, peerID, &domain.User{}, allowEdit)
 	}
-	model, ok := modelcatalog.ResolveMiniAppModel(domain.OperationImageGenerate, modelID)
+	model, ok := modelcatalog.ResolvePublicModel(domain.OperationImageGenerate, modelID)
 	if !ok {
 		h.clearDialogMode(ctx, peerID)
 		return fmt.Errorf("resolve photo model: %s", modelID)
@@ -2387,16 +2381,16 @@ func photoSelectionFromDialogMode(mode dialogMode) (photoDialogSelection, bool) 
 	if !ok {
 		switch mode {
 		case dialogModePhotoNanoBanana2:
-			modelID, quality = modelcatalog.MiniAppImageNanoBanana2, modelcatalog.ImageQuality1K
+			modelID, quality = modelcatalog.PublicImageNanoBanana2, modelcatalog.ImageQuality1K
 		case dialogModePhotoGPTImage2:
-			modelID, quality = modelcatalog.MiniAppImageGPTImage2, modelcatalog.ImageQuality1K
+			modelID, quality = modelcatalog.PublicImageGPTImage2, modelcatalog.ImageQuality1K
 		case dialogModePhotoText:
-			modelID, quality = modelcatalog.MiniAppImageNanoBananaPro, modelcatalog.ImageQuality1K
+			modelID, quality = modelcatalog.PublicImageNanoBananaPro, modelcatalog.ImageQuality1K
 		default:
 			return photoDialogSelection{}, false
 		}
 	}
-	model, ok := modelcatalog.ResolveMiniAppModel(domain.OperationImageGenerate, modelID)
+	model, ok := modelcatalog.ResolvePublicModel(domain.OperationImageGenerate, modelID)
 	if !ok {
 		return photoDialogSelection{}, false
 	}
@@ -2407,15 +2401,15 @@ func photoSelectionFromDialogMode(mode dialogMode) (photoDialogSelection, bool) 
 func photoModelIDFromCommand(t domain.CommandType) (string, bool) {
 	switch t {
 	case domain.CommandMenuImageNanoBanana2:
-		return modelcatalog.MiniAppImageNanoBanana2, true
+		return modelcatalog.PublicImageNanoBanana2, true
 	case domain.CommandMenuImageDeepInfraSeedream:
-		return modelcatalog.MiniAppImageSeedream45, true
+		return modelcatalog.PublicImageSeedream45, true
 	case domain.CommandMenuImageDeepInfraSDXL:
-		return modelcatalog.MiniAppImageSDXLTurbo, true
+		return modelcatalog.PublicImageSDXLTurbo, true
 	case domain.CommandMenuImageGPTImage2:
-		return modelcatalog.MiniAppImageGPTImage2, true
+		return modelcatalog.PublicImageGPTImage2, true
 	case domain.CommandMenuImageText:
-		return modelcatalog.MiniAppImageNanoBananaPro, true
+		return modelcatalog.PublicImageNanoBananaPro, true
 	default:
 		return "", false
 	}

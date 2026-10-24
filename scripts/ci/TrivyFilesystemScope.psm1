@@ -8,8 +8,8 @@ function Get-TrivyFilesystemSkipDirectories {
     # configuration keys that can weaken the existing vulnerability gate.
     $allowedDirectories = @(
         ".runtime", ".cache", "node_modules", "**/node_modules",
-        "web/platform/.next", "web/miniapp/dist", "web/admin/dist", "coverage",
-        "web/platform/coverage", "web/miniapp/coverage", "web/admin/coverage",
+        "web/platform/.next", "web/admin/dist", "coverage",
+        "web/platform/coverage", "web/admin/coverage",
         "web/platform/playwright-report", "web/platform/test-results"
     )
     if (-not (Test-Path -LiteralPath $ConfigPath -PathType Leaf)) {

@@ -199,8 +199,7 @@ func usableLoginProvidersFromConfig(cfg config.Config) domain.UsableLoginProvide
 			strings.TrimSpace(cfg.AccountWebOAuthTelegramClientSecret) != "") {
 		providers[domain.IdentityProviderTelegram] = true
 	}
-	if strings.TrimSpace(cfg.VKAppSecret) != "" ||
-		strings.TrimSpace(cfg.VKSecret) != "" ||
+	if strings.TrimSpace(cfg.VKSecret) != "" ||
 		(browserOAuthAvailable && firstConfiguredOAuthClientID(cfg.AccountOAuthVKIDClientIDs) != "") {
 		providers[domain.IdentityProviderVK] = true
 	}

@@ -3,7 +3,6 @@
 import { readFile } from "node:fs/promises";
 
 const defaultLockfiles = [
-  "web/miniapp/package-lock.json",
   "web/admin/package-lock.json",
   "web/platform/package-lock.json",
 ];

@@ -1,5 +1,7 @@
 # DEV Runbook
 
+> VK Mini App was retired on 2026-10-23. The website, browser VK ID and VK bot remain. Old Mini App routes, launch-auth and UI examples below are historical only. Current replacement and migration details: [retirement runbook](../../docs/runbooks/VK_MINIAPP_RETIREMENT.md).
+
 The DEV contour mirrors production architecture with separate secrets, domains,
 VK community, YooKassa/test settings and Cloudflare tunnel.
 
@@ -253,8 +255,6 @@ workaround. This rollout does not change production authentication.
 | --- | --- |
 | VK Callback API | `https://dev-vk.epifera.com/webhooks/vk` |
 | VK health | `https://dev-vk.epifera.com/health` |
-| Mini App | `https://dev-app.epifera.com` |
-| Mini App BFF | `https://dev-app.epifera.com/miniapp/*` |
 | YooKassa webhook | `https://dev.epifera.com/billing/webhooks/yookassa` |
 
 ## Local DEV Start
@@ -441,18 +441,19 @@ The October 21 security baseline uses Go 1.26.10 and `golang.org/x/net` v0.60.0.
 All Go build images use the same pinned Go release and immutable digest.
 See the [Go release history](https://go.dev/doc/devel/release#go1.26.10).
 
-It runs source tests, npm audits, `govulncheck`, documentation/infrastructure
-policy and the pinned Trivy filesystem scan in that order. Policy v4 first checks
+It runs the shared release contract (the same entrypoint as CI), npm audits,
+`govulncheck`, documentation/infrastructure policy and the pinned Trivy scan
+before the full source tests/builds. Policy v5 first checks
 the committed tree against the inventory, before any cached result. Missing,
 modified or unexpected committed files block publication. `-ManifestPath` selects
 another reviewed inventory. Frontend production builds and static model-registry
 checks run locally too, alongside the existing documentation and routing checks.
 It includes the same documentation regression and routing checks as CI before push and
 validates the filesystem exclusions before consulting cached results.
-It also checks the Bash runtime prerequisites before any long stage starts.
+It checks Go/Node/npm/PowerShell, Bash/WSL and the Docker engine before any long stage starts.
 Only one full preflight may run in
 a worktree at a time. A successful result is cached under private Git metadata
-for the exact commit, policy version, and completed stage. If a late stage
+for the exact commit, policy version, runtime-input fingerprint and completed stage. If a late stage
 fails, retrying the same commit resumes from that stage instead of repeating
 earlier successful checks. Failures are not cached. Use `-Force` only when
 intentionally repeating every check for the same commit.
@@ -495,7 +496,7 @@ checking the default policy. Test isolation, timeouts, retries and assertions
 retain their previous behavior. This changes test scheduling only.
 
 Local and nightly Trivy filesystem scans explicitly load `trivy-filesystem.yaml`.
-It skips only local `.runtime`/`.cache`, installed `node_modules`, the three web
+It skips only local `.runtime`/`.cache`, installed `node_modules`, the two web
 apps' build output, coverage, and platform browser-test reports. Keep these
 directories in place; no manual moving or deletion is needed before scanning.
 `scripts/ci/validate-trivy-filesystem-scope.ps1` rejects unsupported exclusions,
@@ -508,7 +509,7 @@ New commits on `dev-deploy` cancel obsolete CI for that branch. Image workflows
 queue the newest pending release without interrupting a child deployment's
 migrations. A source guard skips old releases before the mutating job. `main`
 runs are not cancelled. Signed release publication still emits
-all eight exact-SHA images; per-service BuildKit cache scopes make unchanged
+all seven current exact-SHA images (older rollback revisions still require eight); per-service BuildKit cache scopes make unchanged
 builds cheap without relabelling old provenance.
 
 Mail-only pushes skip Release Images but still start CI. If such a push cancels
@@ -600,7 +601,7 @@ go test ./internal/service/modelcontract ./scripts/models/check -count=1
 go test ./internal/adapter/provider/... ./internal/domain -count=1
 go test ./internal/service/providermodels ./internal/service/modelcatalog ./internal/service/videorouter ./internal/service/productcatalog -count=1
 go test ./cmd/worker ./internal/worker ./internal/domain -run "ProviderMedia|MediaContract|Provider|Video" -count=1
-go test ./cmd/api ./internal/adapter/inbound/miniapp ./internal/adapter/inbound/vk -count=1
+go test ./cmd/api ./internal/adapter/inbound/vk -count=1
 git diff --check
 rg -n "internal/adapter/provider" cmd/api internal/adapter/inbound internal/app -g '*.go'
 rg -n "Authorization|Bearer |OPENAI_API_KEY|DEEPINFRA_API_KEY|APIMART_API_KEY|POYO_API_KEY|RUNWAYML_API_SECRET"
@@ -781,7 +782,7 @@ All model flags retain false application defaults. New flag names:
 `FEATURE_APIMART_VEO_3_1_FAST_ENABLED`,
 `FEATURE_APIMART_VEO_3_1_QUALITY_ENABLED`.
 
-Motion requires `PROVIDER_REFERENCE_BASE_URL=https://dev-app.epifera.com` and
+Motion requires `PROVIDER_REFERENCE_BASE_URL=https://dev-vk.epifera.com` and
 `PROVIDER_REFERENCE_SIGNING_KEY` (dedicated random secret, at least 32 bytes),
 owned by the DEV secret env part. API now needs ffprobe, included in its image.
 Nginx forwards signed provider reads and permits 101 MiB multipart requests on
@@ -793,3 +794,42 @@ static v13 keys before exposing routes; publish through the operator workflow.
 Smoke checks should verify flags/catalog visibility, unsigned relay rejection,
 unauthenticated upload rejection and runtime health. A real generation is paid
 and requires separate explicit authorization.
+
+### Shared release contract and measured retries (2026-10-24)
+
+The mandatory entrypoint for agents is the root AGENTS.md release contract,
+linked by the parent workspace AGENTS.md. Local and CI use the same
+`scripts/ci/validate-release-contract.ps1`: actual-source image inventories,
+certificate/source SHA, quality gate, reusable deployment, rollback history,
+serialized rollout, smoke and all existing env/signature deployment regressions.
+The static validator intentionally recognizes the repository's literal workflow
+structure; unsupported structural changes fail until the contract is updated.
+
+Preflight policy v5 runs this as `release-contract` before source tests. The
+order is contract, npm audit, Go vulnerability scan, infrastructure, Trivy,
+then the full source tests/builds. A newly published advisory must be detected
+before long tests; update the affected packages instead of suppressing it.
+The cache validates each stage receipt, including the full runtime fingerprint.
+The fingerprint covers actual Go/Node/npm/Docker/PowerShell/OS versions and the
+bounded build/test settings; only the SHA-256 digest is persisted. Do not log
+settings or private env contents. New stages cannot hide behind a complete-cache
+marker. Security stage receipts expire after 24 hours; source tests may still be
+reused for the unchanged commit and runtime. Malformed receipts are rejected.
+A failed forced refresh invalidates its previous success before retry.
+
+Each invocation writes measured stage timings beside its private Git-metadata
+receipt (`*.ok.timings.json`), including cached stages, failure and total elapsed
+time. Keep the reviewed manifest, local timings and exact-SHA GitHub/rollout
+results together in an ignored release folder. Do not add timestamps or runtime
+status commits that themselves trigger an unneeded second release.
+
+CI checks, exact-source image generation and deployment signature checks remain
+mandatory across their trust boundaries. BuildKit reuses unchanged layers;
+images keep the current source's truthful provenance. Cached local success must
+never replace required GitHub checks, or a failed/cancelled run.
+
+For this authorized control release, include both Mini App retirement and the
+release-contract improvements. Verify seven running/published application image
+identities and website/VK ID/health, preserve email-proof key continuity and
+signed reference routing, then remove only the obsolete Mini App container in
+the exact DEV Compose project, without volumes or broad orphan cleanup.

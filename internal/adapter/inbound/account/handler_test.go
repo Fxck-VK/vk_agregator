@@ -2,17 +2,11 @@ package account
 
 import (
 	"context"
-	"crypto/hmac"
-	"crypto/sha256"
-	"encoding/base64"
 	"encoding/json"
 	"errors"
 	"fmt"
 	"net/http"
 	"net/http/httptest"
-	"net/url"
-	"sort"
-	"strconv"
 	"strings"
 	"sync"
 	"testing"
@@ -53,7 +47,7 @@ func TestAccountAPIProfileAndIdentitiesAreSafe(t *testing.T) {
 	}
 
 	req := httptest.NewRequest(http.MethodGet, "/account/me", nil)
-	req.Header.Set("X-VK-User-ID", "123456789")
+	authorizeAccountRequest(t, h, req, "123456789")
 	rec := httptest.NewRecorder()
 	h.Routes().ServeHTTP(rec, req)
 
@@ -63,7 +57,7 @@ func TestAccountAPIProfileAndIdentitiesAreSafe(t *testing.T) {
 	assertNoRawPII(t, rec.Body.String())
 
 	req = httptest.NewRequest(http.MethodGet, "/account/identities", nil)
-	req.Header.Set("X-VK-User-ID", "123456789")
+	authorizeAccountRequest(t, h, req, "123456789")
 	rec = httptest.NewRecorder()
 	h.Routes().ServeHTTP(rec, req)
 
@@ -88,45 +82,6 @@ func TestAccountAPIRejectsUnauthenticatedRequest(t *testing.T) {
 	}
 }
 
-func TestAccountAPILaunchParamsTransportIsHeaderOnlyByDefault(t *testing.T) {
-	h, _ := newTestHandler(t)
-	const secret = "account-launch-transport-test-secret"
-	h.cfg = Config{AppSecret: secret, LaunchParamsMaxAge: time.Hour}
-	launchParams := signedAccountLaunchParams(t, 123456789, secret)
-
-	queryReq := httptest.NewRequest(http.MethodGet, "/account/me?launch_params="+url.QueryEscape(launchParams), nil)
-	queryRec := httptest.NewRecorder()
-	h.Routes().ServeHTTP(queryRec, queryReq)
-	if queryRec.Code != http.StatusUnauthorized {
-		t.Fatalf("query launch params status = %d, want 401", queryRec.Code)
-	}
-
-	headerReq := httptest.NewRequest(http.MethodGet, "/account/me", nil)
-	headerReq.Header.Set("X-Launch-Params", launchParams)
-	headerRec := httptest.NewRecorder()
-	h.Routes().ServeHTTP(headerRec, headerReq)
-	if headerRec.Code != http.StatusOK {
-		t.Fatalf("header launch params status = %d, want 200, body = %s", headerRec.Code, headerRec.Body.String())
-	}
-}
-
-func TestAccountAPIQueryLaunchParamsRequireExplicitOptIn(t *testing.T) {
-	h, _ := newTestHandler(t)
-	const secret = "account-query-opt-in-test-secret"
-	h.cfg = Config{
-		AppSecret:              secret,
-		LaunchParamsMaxAge:     time.Hour,
-		AllowQueryLaunchParams: true,
-	}
-	launchParams := signedAccountLaunchParams(t, 123456789, secret)
-	req := httptest.NewRequest(http.MethodGet, "/account/me?launch_params="+url.QueryEscape(launchParams), nil)
-	rec := httptest.NewRecorder()
-	h.Routes().ServeHTTP(rec, req)
-	if rec.Code != http.StatusOK {
-		t.Fatalf("explicit query opt-in status = %d, want 200, body = %s", rec.Code, rec.Body.String())
-	}
-}
-
 func TestAccountAPIUnlinkIdentity(t *testing.T) {
 	h, service := newTestHandler(t)
 	ctx := context.Background()
@@ -145,7 +100,7 @@ func TestAccountAPIUnlinkIdentity(t *testing.T) {
 
 	req := httptest.NewRequest(http.MethodDelete, "/account/identities/"+email.ID.String(), nil)
 	req.SetPathValue("id", email.ID.String())
-	req.Header.Set("X-VK-User-ID", "777")
+	authorizeAccountRequest(t, h, req, "777")
 	rec := httptest.NewRecorder()
 	h.Routes().ServeHTTP(rec, req)
 
@@ -168,7 +123,7 @@ func TestAccountAPILinkEndpointFailsClosedWithoutVerifiedProof(t *testing.T) {
 
 	body := strings.NewReader(`{"method":"email_password","external_id":"owner@example.com"}`)
 	req := httptest.NewRequest(http.MethodPost, "/account/identities/link", body)
-	req.Header.Set("X-VK-User-ID", "555")
+	authorizeAccountRequest(t, h, req, "555")
 	rec := httptest.NewRecorder()
 	h.Routes().ServeHTTP(rec, req)
 
@@ -185,7 +140,7 @@ func TestAccountAPILinkEndpointDoesNotTrustClientVerifiedFlag(t *testing.T) {
 
 	body := strings.NewReader(`{"method":"email_password","external_id":"owner@example.com","verified":true}`)
 	req := httptest.NewRequest(http.MethodPost, "/account/identities/link", body)
-	req.Header.Set("X-VK-User-ID", "555")
+	authorizeAccountRequest(t, h, req, "555")
 	rec := httptest.NewRecorder()
 	h.Routes().ServeHTTP(rec, req)
 
@@ -233,7 +188,7 @@ func TestAccountAPIRejectsTrailingJSONValues(t *testing.T) {
 			h, _ := newTestHandler(t)
 			req := httptest.NewRequest(http.MethodPost, tc.path, strings.NewReader(tc.body))
 			if tc.auth {
-				req.Header.Set("X-VK-User-ID", "555")
+				authorizeAccountRequest(t, h, req, "555")
 			}
 			rec := httptest.NewRecorder()
 
@@ -254,7 +209,7 @@ func TestAccountAPIEmailLinkCodeFlow(t *testing.T) {
 		"/account/identities/email/request-code",
 		strings.NewReader(`{"email":"Owner.Name@Example.COM"}`),
 	)
-	req.Header.Set("X-VK-User-ID", "555")
+	authorizeAccountRequest(t, h, req, "555")
 	rec := httptest.NewRecorder()
 	h.Routes().ServeHTTP(rec, req)
 
@@ -268,7 +223,7 @@ func TestAccountAPIEmailLinkCodeFlow(t *testing.T) {
 
 	verifyBody := fmt.Sprintf(`{"email":"owner.name@example.com","code":%q}`, service.emailSender.code)
 	req = httptest.NewRequest(http.MethodPost, "/account/identities/email/verify", strings.NewReader(verifyBody))
-	req.Header.Set("X-VK-User-ID", "555")
+	authorizeAccountRequest(t, h, req, "555")
 	rec = httptest.NewRecorder()
 	h.Routes().ServeHTTP(rec, req)
 
@@ -292,7 +247,7 @@ func TestAccountAPIPhoneLinkOTPFlow(t *testing.T) {
 		"/account/identities/phone/request-otp",
 		strings.NewReader(`{"phone":"+7 (999) 123-45-67"}`),
 	)
-	req.Header.Set("X-VK-User-ID", "555")
+	authorizeAccountRequest(t, h, req, "555")
 	rec := httptest.NewRecorder()
 	h.Routes().ServeHTTP(rec, req)
 
@@ -306,7 +261,7 @@ func TestAccountAPIPhoneLinkOTPFlow(t *testing.T) {
 
 	verifyBody := fmt.Sprintf(`{"phone":"+79991234567","code":%q}`, service.emailSender.phoneCode)
 	req = httptest.NewRequest(http.MethodPost, "/account/identities/phone/verify", strings.NewReader(verifyBody))
-	req.Header.Set("X-VK-User-ID", "555")
+	authorizeAccountRequest(t, h, req, "555")
 	rec = httptest.NewRecorder()
 	h.Routes().ServeHTTP(rec, req)
 
@@ -330,7 +285,7 @@ func TestAccountAPIEmailLinkRejectsWrongCode(t *testing.T) {
 		"/account/identities/email/request-code",
 		strings.NewReader(`{"email":"owner@example.com"}`),
 	)
-	req.Header.Set("X-VK-User-ID", "555")
+	authorizeAccountRequest(t, h, req, "555")
 	rec := httptest.NewRecorder()
 	h.Routes().ServeHTTP(rec, req)
 	if rec.Code != http.StatusAccepted {
@@ -342,7 +297,7 @@ func TestAccountAPIEmailLinkRejectsWrongCode(t *testing.T) {
 		"/account/identities/email/verify",
 		strings.NewReader(`{"email":"owner@example.com","code":"000000"}`),
 	)
-	req.Header.Set("X-VK-User-ID", "555")
+	authorizeAccountRequest(t, h, req, "555")
 	rec = httptest.NewRecorder()
 	h.Routes().ServeHTTP(rec, req)
 	if rec.Code != http.StatusBadRequest {
@@ -359,7 +314,7 @@ func TestAccountAPIPhoneLinkRejectsWrongCode(t *testing.T) {
 		"/account/identities/phone/request-otp",
 		strings.NewReader(`{"phone":"+7 (999) 123-45-67"}`),
 	)
-	req.Header.Set("X-VK-User-ID", "555")
+	authorizeAccountRequest(t, h, req, "555")
 	rec := httptest.NewRecorder()
 	h.Routes().ServeHTTP(rec, req)
 	if rec.Code != http.StatusAccepted {
@@ -371,7 +326,7 @@ func TestAccountAPIPhoneLinkRejectsWrongCode(t *testing.T) {
 		"/account/identities/phone/verify",
 		strings.NewReader(`{"phone":"+79991234567","code":"000000"}`),
 	)
-	req.Header.Set("X-VK-User-ID", "555")
+	authorizeAccountRequest(t, h, req, "555")
 	rec = httptest.NewRecorder()
 	h.Routes().ServeHTTP(rec, req)
 	if rec.Code != http.StatusBadRequest {
@@ -395,7 +350,7 @@ func TestAccountAPIEmailLinkExpiredCode(t *testing.T) {
 		"/account/identities/email/request-code",
 		strings.NewReader(`{"email":"owner@example.com"}`),
 	)
-	req.Header.Set("X-VK-User-ID", "555")
+	authorizeAccountRequest(t, h, req, "555")
 	rec := httptest.NewRecorder()
 	h.Routes().ServeHTTP(rec, req)
 	if rec.Code != http.StatusAccepted {
@@ -408,7 +363,7 @@ func TestAccountAPIEmailLinkExpiredCode(t *testing.T) {
 		"/account/identities/email/verify",
 		strings.NewReader(fmt.Sprintf(`{"email":"owner@example.com","code":%q}`, service.emailSender.code)),
 	)
-	req.Header.Set("X-VK-User-ID", "555")
+	authorizeAccountRequest(t, h, req, "555")
 	rec = httptest.NewRecorder()
 	h.Routes().ServeHTTP(rec, req)
 	if rec.Code != http.StatusGone {
@@ -429,7 +384,7 @@ func TestAccountAPIEmailLinkRequestRateLimited(t *testing.T) {
 			"/account/identities/email/request-code",
 			strings.NewReader(`{"email":"owner@example.com"}`),
 		)
-		req.Header.Set("X-VK-User-ID", "555")
+		authorizeAccountRequest(t, h, req, "555")
 		rec := httptest.NewRecorder()
 		h.Routes().ServeHTTP(rec, req)
 		if rec.Code != want {
@@ -451,7 +406,7 @@ func TestAccountAPIPhoneLinkRequestRateLimited(t *testing.T) {
 			"/account/identities/phone/request-otp",
 			strings.NewReader(`{"phone":"+7 (999) 123-45-67"}`),
 		)
-		req.Header.Set("X-VK-User-ID", "555")
+		authorizeAccountRequest(t, h, req, "555")
 		rec := httptest.NewRecorder()
 		h.Routes().ServeHTTP(rec, req)
 		if rec.Code != want {
@@ -466,7 +421,7 @@ func TestAccountAPISessionLifecycle(t *testing.T) {
 	router := h.Routes()
 
 	issueReq := httptest.NewRequest(http.MethodPost, "/account/sessions", strings.NewReader(`{"device_info":"Chrome on Windows"}`))
-	issueReq.Header.Set("X-VK-User-ID", "555")
+	authorizeAccountRequest(t, h, issueReq, "555")
 	issueReq.Header.Set("X-Forwarded-For", "203.0.113.10")
 	issueReq.Header.Set("User-Agent", "UnitTest/1.0")
 	issueRec := httptest.NewRecorder()
@@ -484,7 +439,7 @@ func TestAccountAPISessionLifecycle(t *testing.T) {
 	}
 
 	listReq := httptest.NewRequest(http.MethodGet, "/account/sessions", nil)
-	listReq.Header.Set("X-VK-User-ID", "555")
+	authorizeAccountRequest(t, h, listReq, "555")
 	listRec := httptest.NewRecorder()
 	router.ServeHTTP(listRec, listReq)
 	if listRec.Code != http.StatusOK {
@@ -507,7 +462,7 @@ func TestAccountAPISessionLifecycle(t *testing.T) {
 	}
 
 	revokeReq := httptest.NewRequest(http.MethodPost, "/account/sessions/"+refreshed.Session.ID.String()+"/revoke", nil)
-	revokeReq.Header.Set("X-VK-User-ID", "555")
+	authorizeAccountRequest(t, h, revokeReq, "555")
 	revokeRec := httptest.NewRecorder()
 	router.ServeHTTP(revokeRec, revokeReq)
 	if revokeRec.Code != http.StatusOK {
@@ -541,7 +496,7 @@ func TestAccountAPIPasswordSetAndLogin(t *testing.T) {
 	}
 
 	req := httptest.NewRequest(http.MethodPost, "/account/password/set", strings.NewReader(`{"email":"owner@example.com","password":"correct horse battery staple"}`))
-	req.Header.Set("X-VK-User-ID", "555")
+	authorizeAccountRequest(t, h, req, "555")
 	rec := httptest.NewRecorder()
 	h.Routes().ServeHTTP(rec, req)
 	if rec.Code != http.StatusNoContent {
@@ -817,7 +772,7 @@ func TestAccountAPIOAuthLinkAttachesSafeIdentity(t *testing.T) {
 	}
 
 	req := httptest.NewRequest(http.MethodPost, "/account/oauth/link", strings.NewReader(`{"provider":"google","id_token":"raw-id-token"}`))
-	req.Header.Set("X-VK-User-ID", "555")
+	authorizeAccountRequest(t, h, req, "555")
 	rec := httptest.NewRecorder()
 	h.Routes().ServeHTTP(rec, req)
 
@@ -853,7 +808,7 @@ func TestAccountAPIOAuthLinkConflictRequiresMergeConfirmation(t *testing.T) {
 	}
 
 	req := httptest.NewRequest(http.MethodPost, "/account/oauth/link", strings.NewReader(`{"provider":"google","id_token":"raw-id-token"}`))
-	req.Header.Set("X-VK-User-ID", "2002")
+	authorizeAccountRequest(t, h, req, "2002")
 	rec := httptest.NewRecorder()
 	h.Routes().ServeHTTP(rec, req)
 
@@ -973,7 +928,7 @@ func newTestHandlerWithEmailConfig(t *testing.T, emailCfg accountlink.Config) (*
 	if err != nil {
 		t.Fatalf("new account email linker: %v", err)
 	}
-	return NewHandler(Config{}, Deps{
+	return NewHandler(Deps{
 		Identity:  resolver,
 		Account:   accountSvc,
 		Logins:    auth,
@@ -1005,31 +960,6 @@ type identityLinkerOverride struct {
 
 func (l identityLinkerOverride) RequestEmailCode(ctx context.Context, accountID uuid.UUID, email string) (accountlink.RequestResult, error) {
 	return l.requestEmailCode(ctx, accountID, email)
-}
-
-func signedAccountLaunchParams(t *testing.T, vkUserID int64, secret string) string {
-	t.Helper()
-	values := url.Values{
-		"vk_app_id":   {"123456"},
-		"vk_platform": {"desktop_web"},
-		"vk_ts":       {strconv.FormatInt(time.Now().Unix(), 10)},
-		"vk_user_id":  {strconv.FormatInt(vkUserID, 10)},
-	}
-	keys := make([]string, 0, len(values))
-	for key := range values {
-		keys = append(keys, key)
-	}
-	sort.Strings(keys)
-	parts := make([]string, 0, len(keys))
-	for _, key := range keys {
-		parts = append(parts, key+"="+url.QueryEscape(values.Get(key)))
-	}
-	mac := hmac.New(sha256.New, []byte(secret))
-	if _, err := mac.Write([]byte(strings.Join(parts, "&"))); err != nil {
-		t.Fatalf("sign launch params: %v", err)
-	}
-	values.Set("sign", base64.RawURLEncoding.EncodeToString(mac.Sum(nil)))
-	return values.Encode()
 }
 
 func (f fakeOAuthVerifier) Verify(_ context.Context, _ accountoauth.VerifyRequest) (domain.VerifiedAccountLogin, error) {

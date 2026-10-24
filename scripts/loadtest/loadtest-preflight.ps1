@@ -184,7 +184,6 @@ if (Get-BoolEnv -Values $values -Name "ALLOW_PRODUCTION_LOADTEST_REDIS_DIAGNOSTI
 
 $realSecretKeys = @(
     "VK_ACCESS_TOKEN",
-    "VK_APP_SECRET",
     "OPENAI_API_KEY",
     "DEEPINFRA_API_KEY",
     "FAL_API_KEY",

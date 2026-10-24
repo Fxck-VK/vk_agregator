@@ -24,22 +24,22 @@ function Assert-ThrowsLike {
 }
 
 $safeTrackedFiles = @(
-    "go.mod", "go.sum", "Dockerfile.api", "Dockerfile.miniapp",
-    "docker-compose.dev.yml", "deployments/nginx/miniapp.static.conf",
+    "go.mod", "go.sum", "Dockerfile.api", "Dockerfile.platform",
+    "docker-compose.dev.yml", "deployments/nginx/dev-web.conf",
     "internal/service/example.go", "web/platform/src/app/page.tsx",
-    "web/platform/package-lock.json", "web/miniapp/package-lock.json",
+    "web/platform/package-lock.json", "web/admin/package-lock.json",
     "web/admin/package-lock.json", "scripts/ci/example.ps1",
     ".cache-not-generated/source.go", "web/platform/.next-not-generated/source.ts",
-    "docs/node_modules-guide.md", "web/miniapp/distribution/source.ts"
+    "docs/node_modules-guide.md", "web/admin/distribution/source.ts"
 )
 Assert-TrivyFilesystemScanScope -RepositoryRoot $repoRoot -ConfigPath $configPath -TrackedFiles $safeTrackedFiles
 
 foreach ($hiddenSource in @(
     ".runtime/source.go", ".cache/package-lock.json", "node_modules/private-package/index.js",
     "web/platform/node_modules/private-package/package.json",
-    "web/platform/.next/source.ts", "web/miniapp/dist/source.ts",
+    "web/platform/.next/source.ts", "web/admin/dist/source.ts",
     "web/admin/dist/config.yaml", "coverage/Dockerfile",
-    "web/platform/coverage/source.ts", "web/miniapp/coverage/source.ts",
+    "web/platform/coverage/source.ts", "web/admin/coverage/source.ts",
     "web/admin/coverage/source.ts", "web/platform/playwright-report/source.ts",
     "web/platform/test-results/source.ts"
 )) {

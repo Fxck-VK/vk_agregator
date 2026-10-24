@@ -53,7 +53,16 @@ case "${workflow_name}" in
   *) echo "Unsupported image workflow name at the expected source revision." >&2; exit 1 ;;
 esac
 
-services=(api worker provider-webhook provider-balance-bot miniapp platform migrate backup)
+services=(api worker provider-webhook provider-balance-bot platform migrate backup)
+for service in "${services[@]}"; do
+  git cat-file -e "${revision}:Dockerfile.${service}" || {
+    echo "Required release image source is missing: ${service}" >&2; exit 1;
+  }
+done
+# Older immutable revisions still require their eighth signature for rollback.
+if git cat-file -e "${revision}:Dockerfile.miniapp" 2>/dev/null; then
+  services+=(miniapp)
+fi
 certificate_identity="https://github.com/${repository}/.github/workflows/docker-images.yml@${workflow_ref}"
 oidc_issuer="https://token.actions.githubusercontent.com"
 repository_lc="${repository,,}"

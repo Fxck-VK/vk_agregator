@@ -1,5 +1,7 @@
 # Browser account access
 
+> VK Mini App was retired on 2026-10-23. The website, browser VK ID and VK bot remain. Old Mini App routes, launch-auth and UI examples below are historical only. Current replacement and migration details: [retirement runbook](../../docs/runbooks/VK_MINIAPP_RETIREMENT.md).
+
 Status: implemented browser integration, 2026-10-04. Provider login and code delivery require operator configuration and real-provider smoke before enabling them for users.
 
 The platform uses `/web/v1` cookie sessions and the shared Account Layer, rather than token-returning `/account` login routes. `GET /web/v1/auth/methods` exposes availability flags and configured provider names. Login and profile receive this contract on the server; missing configuration disables the corresponding actions.
@@ -73,7 +75,7 @@ The selected public DEV web application ID is versioned in
 `deployments/dev-web-vkid-client-id.txt` (currently `54810695`).
 `prepare-dev-env.sh` puts it first in `ACCOUNT_OAUTH_VK_ID_CLIENT_IDS`, retaining
 and deduplicating existing numeric audiences. This is the website application,
-independent of the Mini App's `VK_APP_ID`; no VK client secret is needed by the
+independent of the retired application settings; no VK client secret is needed by the
 browser PKCE flow. In that existing VK ID application, register base domain
 `dev-web.epifera.com` and exact redirect
 `https://dev-web.epifera.com/web/v1/auth/oauth/vk/callback`.

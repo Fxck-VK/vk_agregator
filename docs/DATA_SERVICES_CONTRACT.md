@@ -1,5 +1,7 @@
 # Data Services Contract
 
+> VK Mini App was retired on 2026-10-23. The website, browser VK ID and VK bot remain. Old Mini App routes, launch-auth and UI examples below are historical only. Current replacement and migration details: [retirement runbook](../docs/runbooks/VK_MINIAPP_RETIREMENT.md).
+
 This document defines where durable data lives for development, staging and
 production. The goal is to keep application runtimes stateless so API, worker,
 provider-webhook and Mini App containers can be recreated, moved or scaled

@@ -19,7 +19,7 @@ func TestValidateProductionSecrets(t *testing.T) {
 		t.Fatal("expected validation error")
 	}
 	msg := err.Error()
-	for _, want := range []string{"VK_SECRET", "ADMIN_TOKEN", "VK_CONFIRMATION_TOKEN", "VK_APP_SECRET"} {
+	for _, want := range []string{"ACCOUNT_EMAIL_PROOF_SECRET", "VK_SECRET", "ADMIN_TOKEN", "VK_CONFIRMATION_TOKEN"} {
 		if !strings.Contains(msg, want) {
 			t.Fatalf("expected %s in validation error, got %q", want, msg)
 		}
@@ -175,32 +175,6 @@ func TestLoadProviderChain(t *testing.T) {
 	}
 }
 
-func TestLoadMiniAppQueryLaunchParamsDefaultsOffAndSupportsDevOptIn(t *testing.T) {
-	restore := clearEnv(t, "MINIAPP_ALLOW_QUERY_LAUNCH_PARAMS")
-	defer restore()
-
-	cfg := config.Load()
-	if cfg.MiniAppAllowQueryLaunchParams {
-		t.Fatal("query launch params fallback must default to false")
-	}
-
-	t.Setenv("MINIAPP_ALLOW_QUERY_LAUNCH_PARAMS", "true")
-	cfg = config.Load()
-	if !cfg.MiniAppAllowQueryLaunchParams {
-		t.Fatal("explicit development query launch params opt-in was not loaded")
-	}
-}
-
-func TestValidateProductionRejectsQueryLaunchParamsFallback(t *testing.T) {
-	cfg := productionDeepInfraConfig()
-	cfg.MiniAppAllowQueryLaunchParams = true
-
-	err := cfg.Validate()
-	if err == nil || !strings.Contains(err.Error(), "MINIAPP_ALLOW_QUERY_LAUNCH_PARAMS") {
-		t.Fatalf("expected production query fallback validation error, got %v", err)
-	}
-}
-
 func TestLoadDataServiceModesDefaultLocal(t *testing.T) {
 	for _, key := range []string{"DATA_SERVICES_MODE", "POSTGRES_MODE", "REDIS_MODE", "S3_MODE"} {
 		restore := clearEnv(t, key)
@@ -342,41 +316,21 @@ func TestLoadTracingOTLPConfig(t *testing.T) {
 	}
 }
 
-func TestLoadFrontendTelemetryConfig(t *testing.T) {
-	t.Setenv("FRONTEND_TELEMETRY_ENABLED", "true")
-	t.Setenv("FRONTEND_TELEMETRY_USER_HASH_SECRET", "test-hash-secret")
+func TestLoadAccountEmailProofSecret(t *testing.T) {
+	t.Setenv("ACCOUNT_EMAIL_PROOF_SECRET", "test-proof-secret")
 
 	cfg := config.Load()
-	if !cfg.FrontendTelemetryEnabled {
-		t.Fatal("FrontendTelemetryEnabled = false, want true")
-	}
-	if cfg.FrontendTelemetryUserHashSecret != "test-hash-secret" {
-		t.Fatalf("FrontendTelemetryUserHashSecret = %q", cfg.FrontendTelemetryUserHashSecret)
+	if cfg.AccountEmailProofSecret != "test-proof-secret" {
+		t.Fatal("Dedicated account proof secret not loaded")
 	}
 }
 
 func TestLoadTopUpFeatureFlags(t *testing.T) {
 	t.Setenv("FEATURE_VK_TOPUP_STATUS_EDIT_ENABLED", "true")
-	t.Setenv("FEATURE_MINIAPP_PAYMENT_CANCEL_ENABLED", "true")
-	t.Setenv("FEATURE_MINIAPP_TOPUP_CATALOG_DROPDOWN_ENABLED", "true")
-	t.Setenv("FEATURE_MINIAPP_DARK_THEME_ONLY_ENABLED", "true")
-	t.Setenv("FEATURE_MINIAPP_TOPUP_HISTORY_DROPDOWN_ENABLED", "true")
 
 	cfg := config.Load()
 	if !cfg.FeatureVKTopUpStatusEditEnabled {
 		t.Fatal("FeatureVKTopUpStatusEditEnabled = false, want true")
-	}
-	if !cfg.FeatureMiniAppPaymentCancelEnabled {
-		t.Fatal("FeatureMiniAppPaymentCancelEnabled = false, want true")
-	}
-	if !cfg.FeatureMiniAppTopUpCatalogDropdownEnabled {
-		t.Fatal("FeatureMiniAppTopUpCatalogDropdownEnabled = false, want true")
-	}
-	if !cfg.FeatureMiniAppDarkThemeOnlyEnabled {
-		t.Fatal("FeatureMiniAppDarkThemeOnlyEnabled = false, want true")
-	}
-	if !cfg.FeatureMiniAppTopUpHistoryDropdownEnabled {
-		t.Fatal("FeatureMiniAppTopUpHistoryDropdownEnabled = false, want true")
 	}
 }
 
@@ -1703,10 +1657,10 @@ func validProductionConfig() config.Config {
 		DeepInfraAPIKey:              "test-deepinfra-key",
 		OpenAIAPIKey:                 "test-openai-key",
 		ArtifactScanner:              "openai",
+		AccountEmailProofSecret:      "test-email-proof-secret",
 		VKSecret:                     "test-vk-secret",
 		AdminToken:                   "test-admin-token",
 		VKConfirmationToken:          "test-confirmation-token",
-		VKAppSecret:                  "test-vk-app-secret",
 		PaymentProvider:              "yookassa",
 		YooKassaShopID:               "test-shop",
 		YooKassaSecretKey:            "live-yookassa-secret",
@@ -1848,7 +1802,6 @@ func TestLoadPaymentConfig(t *testing.T) {
 	t.Setenv("YOOKASSA_SECRET_KEY", "secret")
 	t.Setenv("YOOKASSA_BASE_URL", "https://example.com/v3")
 	t.Setenv("YOOKASSA_RETURN_URL", "https://epifera.com/payments/return")
-	t.Setenv("YOOKASSA_RETURN_URL_MINIAPP", "https://vk.com/app54623372?section_type=public_r_app")
 	t.Setenv("YOOKASSA_RETURN_URL_VK_BOT", "https://vk.com/write-239332376")
 	t.Setenv("YOOKASSA_WEBHOOK_IP_ALLOWLIST_ENABLED", "true")
 	t.Setenv("YOOKASSA_WEBHOOK_IP_ALLOWLIST", "203.0.113.0/24,198.51.100.10")
@@ -1874,8 +1827,8 @@ func TestLoadPaymentConfig(t *testing.T) {
 	if cfg.YooKassaBaseURL != "https://example.com/v3" || cfg.YooKassaReturnURL != "https://epifera.com/payments/return" {
 		t.Fatalf("unexpected YooKassa URLs: base=%q return=%q", cfg.YooKassaBaseURL, cfg.YooKassaReturnURL)
 	}
-	if cfg.YooKassaReturnURLMiniApp != "https://vk.com/app54623372?section_type=public_r_app" || cfg.YooKassaReturnURLVKBot != "https://vk.com/write-239332376" {
-		t.Fatalf("unexpected surface YooKassa URLs: miniapp=%q vkbot=%q", cfg.YooKassaReturnURLMiniApp, cfg.YooKassaReturnURLVKBot)
+	if cfg.YooKassaReturnURLVKBot != "https://vk.com/write-239332376" {
+		t.Fatalf("unexpected VK bot YooKassa URL: %q", cfg.YooKassaReturnURLVKBot)
 	}
 	if !cfg.YooKassaWebhookIPAllowlistEnabled {
 		t.Fatal("YooKassaWebhookIPAllowlistEnabled = false, want true")
@@ -2479,15 +2432,15 @@ func TestValidateYooKassaRequiresConfig(t *testing.T) {
 
 func TestValidateProductionYooKassaRequiresTrustedProxies(t *testing.T) {
 	cfg := config.Config{
-		Env:                 "production",
-		PaymentProvider:     "yookassa",
-		YooKassaShopID:      "shop",
-		YooKassaSecretKey:   "live-yookassa-secret",
-		YooKassaReturnURL:   "https://app.example.com",
-		VKSecret:            "vk",
-		AdminToken:          "admin",
-		VKConfirmationToken: "confirm",
-		VKAppSecret:         "app",
+		Env:                     "production",
+		PaymentProvider:         "yookassa",
+		YooKassaShopID:          "shop",
+		YooKassaSecretKey:       "live-yookassa-secret",
+		YooKassaReturnURL:       "https://app.example.com",
+		AccountEmailProofSecret: "test-email-proof-secret",
+		VKSecret:                "vk",
+		AdminToken:              "admin",
+		VKConfirmationToken:     "confirm",
 	}
 
 	err := cfg.Validate()
@@ -2581,43 +2534,6 @@ func TestLoadReadsUnderscoreEnvFallback(t *testing.T) {
 
 	if cfg.VKAPIVersion != "5.201" {
 		t.Fatalf("VKAPIVersion = %q, want value from _env", cfg.VKAPIVersion)
-	}
-}
-
-func TestLoadMiniAppJobRateLimit(t *testing.T) {
-	t.Setenv("MINIAPP_JOB_RATE_LIMIT_RPS", "2.5")
-	t.Setenv("MINIAPP_JOB_RATE_LIMIT_BURST", "7")
-	t.Setenv("PAYMENT_REDIRECT_RATE_LIMIT_RPS", "3.5")
-	t.Setenv("PAYMENT_REDIRECT_RATE_LIMIT_BURST", "11")
-	t.Setenv("ADMIN_RATE_LIMIT_LIMIT", "77")
-	t.Setenv("ADMIN_RATE_LIMIT_WINDOW", "2m")
-	t.Setenv("ACCOUNT_AUTH_RATE_LIMIT_LIMIT", "12")
-	t.Setenv("ACCOUNT_AUTH_RATE_LIMIT_WINDOW", "4m")
-
-	cfg := config.Load()
-	if cfg.MiniAppJobRateLimitRPS != 2.5 {
-		t.Fatalf("MiniAppJobRateLimitRPS = %v", cfg.MiniAppJobRateLimitRPS)
-	}
-	if cfg.MiniAppJobRateLimitBurst != 7 {
-		t.Fatalf("MiniAppJobRateLimitBurst = %v", cfg.MiniAppJobRateLimitBurst)
-	}
-	if cfg.PaymentRedirectRateLimitRPS != 3.5 {
-		t.Fatalf("PaymentRedirectRateLimitRPS = %v", cfg.PaymentRedirectRateLimitRPS)
-	}
-	if cfg.PaymentRedirectRateLimitBurst != 11 {
-		t.Fatalf("PaymentRedirectRateLimitBurst = %v", cfg.PaymentRedirectRateLimitBurst)
-	}
-	if cfg.AdminRateLimitLimit != 77 {
-		t.Fatalf("AdminRateLimitLimit = %v", cfg.AdminRateLimitLimit)
-	}
-	if cfg.AdminRateLimitWindow != 2*time.Minute {
-		t.Fatalf("AdminRateLimitWindow = %v", cfg.AdminRateLimitWindow)
-	}
-	if cfg.AccountAuthRateLimitLimit != 12 {
-		t.Fatalf("AccountAuthRateLimitLimit = %v", cfg.AccountAuthRateLimitLimit)
-	}
-	if cfg.AccountAuthRateLimitWindow != 4*time.Minute {
-		t.Fatalf("AccountAuthRateLimitWindow = %v", cfg.AccountAuthRateLimitWindow)
 	}
 }
 
@@ -2926,8 +2842,8 @@ func productionDeepInfraConfig() config.Config {
 		Env:                          "production",
 		WebOrigin:                    "https://app.example.test",
 		VKConfirmationToken:          "prod-confirmation",
+		AccountEmailProofSecret:      "test-email-proof-secret",
 		VKSecret:                     "vk-secret",
-		VKAppSecret:                  "vk-app-secret",
 		AdminToken:                   "admin-token",
 		PaymentProvider:              "yookassa",
 		YooKassaShopID:               "shop-id",

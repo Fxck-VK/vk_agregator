@@ -78,11 +78,15 @@ git init -q "${fixture_repo}"
 git -C "${fixture_repo}" config user.name "Verifier fixture"
 git -C "${fixture_repo}" config user.email "fixture@example.invalid"
 mkdir -p "${fixture_repo}/.github/workflows"
+for service in api worker provider-webhook provider-balance-bot platform migrate backup miniapp; do
+  printf 'FROM scratch\n' >"${fixture_repo}/Dockerfile.${service}"
+done
 printf 'name: Docker Images\n' >"${fixture_repo}/.github/workflows/docker-images.yml"
 git -C "${fixture_repo}" add .
 git -C "${fixture_repo}" commit -qm legacy
 legacy_revision="$(git -C "${fixture_repo}" rev-parse HEAD)"
 printf 'name: Release Images\n' >"${fixture_repo}/.github/workflows/docker-images.yml"
+rm "${fixture_repo}/Dockerfile.miniapp"
 git -C "${fixture_repo}" commit -qam renamed
 current_revision="$(git -C "${fixture_repo}" rev-parse HEAD)"
 printf 'name: Untrusted Images\n' >"${fixture_repo}/.github/workflows/docker-images.yml"
@@ -126,8 +130,8 @@ export MOCK_REVISION="${current_revision}"
 export MOCK_WORKFLOW_REF="refs/heads/dev-deploy"
 export MOCK_WORKFLOW_NAME="Release Images"
 renamed_output="$(run_verifier)"
-[[ "$(grep -c '^Verified signed release image:' <<<"${renamed_output}")" == "8" ]]
-echo "PASS positive: renamed workflow verified from its exact source revision"
+[[ "$(grep -c '^Verified signed release image:' <<<"${renamed_output}")" == "7" ]] || { echo "Retired image must not be required by a current release" >&2; exit 1; }
+echo "PASS positive: seven current images; legacy eight-image rollback remains verified"
 
 expect_failure "wrong signed workflow name" env MOCK_WORKFLOW_NAME="Docker Images" PATH="${mock_bin}:${PATH}" \
   bash "${verifier}" \
@@ -147,12 +151,12 @@ expect_failure "unsupported source workflow name" env MOCK_REVISION="${unsupport
 
 v1_success_output="$(MOCK_PROVENANCE_SCHEMA=v1 run_verifier)"
 v1_verified_count="$(grep -c '^Verified signed release image:' <<<"${v1_success_output}")"
-[[ "${v1_verified_count}" == "8" ]] || { echo "Expected eight verified SLSA v1 release images; got ${v1_verified_count}." >&2; exit 1; }
-echo "PASS positive: eight exact signed image digests with SLSA v1 provenance"
+[[ "${v1_verified_count}" == "7" ]] || { echo "Expected seven verified SLSA v1 release images; got ${v1_verified_count}." >&2; exit 1; }
+echo "PASS positive: seven exact signed image digests with SLSA v1 provenance"
 
 fragment_success_output="$(MOCK_PROVENANCE_SCHEMA=v1 MOCK_MATERIAL_SUFFIX="#${MOCK_REVISION}" run_verifier)"
 fragment_verified_count="$(grep -c '^Verified signed release image:' <<<"${fragment_success_output}")"
-[[ "${fragment_verified_count}" == "8" ]] || { echo "Expected eight verified provenance materials with pinned Git fragments; got ${fragment_verified_count}." >&2; exit 1; }
+[[ "${fragment_verified_count}" == "7" ]] || { echo "Expected seven verified provenance materials with pinned Git fragments; got ${fragment_verified_count}." >&2; exit 1; }
 echo "PASS positive: provenance Git material fragment matches the exact revision"
 
 expect_failure "mismatched image tag" \

@@ -23,12 +23,6 @@ export const options = enabled
           vus: intEnv("K6_VK_VUS", 1),
           duration: __ENV.K6_BASIC_DURATION || "30s",
         },
-        miniapp_jobs: {
-          executor: "constant-vus",
-          exec: "miniappJobs",
-          vus: intEnv("K6_MINIAPP_VUS", 1),
-          duration: __ENV.K6_BASIC_DURATION || "30s",
-        },
       },
       thresholds: {
         http_req_failed: ["rate<0.05"],
@@ -96,80 +90,13 @@ export function vkWebhook() {
   sleep(floatEnv("K6_SLEEP_SECONDS", 1));
 }
 
-export function miniappJobs() {
-  const vkUserID = syntheticVKUserID("K6_MINIAPP_USER_BASE", 810000000);
-  const headers = miniappHeaders(vkUserID);
 
-  const balance = http.get(`${baseURL}/miniapp/balance`, {
-    headers,
-    tags: { surface: "miniapp", route: "balance" },
-  });
-  check(balance, {
-    "GET /miniapp/balance is 200": (r) => r.status === 200,
-    "GET /miniapp/balance has balance_credits": (r) => jsonFieldExists(r, "balance_credits"),
-  });
-
-  const createHeaders = {
-    ...headers,
-    "Content-Type": "application/json",
-    "X-Idempotency-Key": `k6.${runID}.miniapp.${__VU}.${__ITER}`,
-  };
-  const createPayload = {
-    operation: "text_generate",
-    prompt: __ENV.K6_MINIAPP_PROMPT || "basic load-test prompt",
-  };
-
-  const created = http.post(`${baseURL}/miniapp/jobs`, JSON.stringify(createPayload), {
-    headers: createHeaders,
-    tags: { surface: "miniapp", route: "jobs_create" },
-  });
-  const jobID = jsonField(created, "id");
-
-  check(created, {
-    "POST /miniapp/jobs is 201": (r) => r.status === 201,
-    "POST /miniapp/jobs returns id": () => typeof jobID === "string" && jobID.length > 0,
-  });
-
-  if (typeof jobID === "string" && jobID.length > 0) {
-    const job = http.get(`${baseURL}/miniapp/jobs/${encodeURIComponent(jobID)}`, {
-      headers,
-      tags: { surface: "miniapp", route: "jobs_get" },
-    });
-    check(job, {
-      "GET /miniapp/jobs/{id} is 200": (r) => r.status === 200,
-      "GET /miniapp/jobs/{id} returns same id": (r) => jsonField(r, "id") === jobID,
-    });
-  }
-
-  sleep(floatEnv("K6_SLEEP_SECONDS", 1));
-}
-
-function miniappHeaders(vkUserID) {
-  const headers = {};
-  const launchParams = __ENV.K6_MINIAPP_LAUNCH_PARAMS || __ENV.MINIAPP_LAUNCH_PARAMS || "";
-  if (launchParams !== "") {
-    headers["X-Launch-Params"] = launchParams;
-    return headers;
-  }
-  headers["X-VK-User-ID"] = String(vkUserID);
-  return headers;
-}
 
 function jsonHeaders() {
   return { "Content-Type": "application/json" };
 }
 
-function jsonField(res, field) {
-  try {
-    return res.json(field);
-  } catch (_) {
-    return undefined;
-  }
-}
 
-function jsonFieldExists(res, field) {
-  return jsonField(res, field) !== undefined;
-}
 
 function syntheticVKUserID(baseEnvName, defaultBase) {
   return intEnv(baseEnvName, defaultBase) + (__VU * 100000) + __ITER;

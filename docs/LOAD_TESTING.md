@@ -1,5 +1,7 @@
 # Load Testing Plan
 
+Status: historical scenario design. Mini-App-only job/payment load entrypoints were retired on 2026-10-23. Use [the current load-testing runbook](runbooks/LOAD_TESTING.md) for runnable commands and actual coverage; old capacity claims are not current measurements.
+
 This document defines the load-testing rollout for VK AI Aggregator. It is a
 test contract, not an instruction to hit production traffic or paid providers.
 

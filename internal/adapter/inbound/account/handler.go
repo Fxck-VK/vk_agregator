@@ -15,7 +15,6 @@ import (
 	"github.com/google/uuid"
 
 	"vk-ai-aggregator/internal/adapter/accountoauth"
-	miniappauth "vk-ai-aggregator/internal/adapter/inbound/miniapp"
 	"vk-ai-aggregator/internal/domain"
 	"vk-ai-aggregator/internal/service/accountauth"
 	"vk-ai-aggregator/internal/service/accountlink"
@@ -34,19 +33,6 @@ const ctxAccountIDKey contextKey = iota
 
 const ctxBrowserPrincipalKey contextKey = iota + 1
 
-// Config holds account API auth settings.
-type Config struct {
-	// AppSecret is the VK Mini App protected key used to verify launch params.
-	// When empty, local/dev requests may use X-VK-User-ID.
-	AppSecret string
-	// LaunchParamsMaxAge bounds replay of VK launch params. Zero disables age
-	// validation and is intended only for local tests.
-	LaunchParamsMaxAge time.Duration
-	// AllowQueryLaunchParams permits the legacy launch_params query fallback.
-	// It is dev/test-only because URLs leak through browser and proxy surfaces.
-	AllowQueryLaunchParams bool
-}
-
 // AccountService is the safe product account boundary.
 type AccountService interface {
 	Profile(ctx context.Context, accountID uuid.UUID) (accountservice.AccountProfile, error)
@@ -55,9 +41,9 @@ type AccountService interface {
 	UnlinkIdentity(ctx context.Context, actorAccountID, accountID, identityID uuid.UUID) error
 }
 
-// SessionService owns Web/Mobile account sessions. VK launch auth stays a
-// separate channel-specific authenticator.
+// SessionService owns server-verified account sessions.
 type SessionService interface {
+	AuthenticateAccessToken(ctx context.Context, token string) (domain.RequestPrincipal, error)
 	IssueSession(ctx context.Context, accountID uuid.UUID, meta accountauth.SessionMetadata) (accountauth.SessionTokens, error)
 	RefreshSession(ctx context.Context, refreshToken string, meta accountauth.SessionMetadata) (accountauth.SessionTokens, error)
 	Logout(ctx context.Context, refreshToken string) error
@@ -108,20 +94,18 @@ type Deps struct {
 
 // Handler serves /account/* endpoints.
 type Handler struct {
-	cfg                Config
 	deps               Deps
 	logger             *slog.Logger
 	passwordResetSlots chan struct{}
 }
 
 // NewHandler builds an account API handler.
-func NewHandler(cfg Config, deps Deps) *Handler {
+func NewHandler(deps Deps) *Handler {
 	logger := deps.Logger
 	if logger == nil {
 		logger = slog.Default()
 	}
 	return &Handler{
-		cfg:                cfg,
 		deps:               deps,
 		logger:             logger,
 		passwordResetSlots: make(chan struct{}, passwordResetConcurrency),
@@ -156,52 +140,27 @@ func (h *Handler) Routes() http.Handler {
 
 func (h *Handler) auth(next http.HandlerFunc) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
-		accountID, err := h.accountIDFromRequest(r)
+		principal, err := h.principalFromRequest(r)
 		if err != nil {
 			writeError(w, http.StatusUnauthorized, "unauthorized")
 			return
 		}
-		ctx := context.WithValue(r.Context(), ctxAccountIDKey, accountID)
+		ctx := context.WithValue(r.Context(), ctxAccountIDKey, principal.AccountID)
+		ctx = context.WithValue(ctx, ctxBrowserPrincipalKey, principal)
 		next(w, r.WithContext(ctx))
 	}
 }
 
-func (h *Handler) accountIDFromRequest(r *http.Request) (uuid.UUID, error) {
-	if h.deps.Identity == nil {
-		return uuid.Nil, errors.New("account api: identity resolver is required")
+func (h *Handler) principalFromRequest(r *http.Request) (domain.RequestPrincipal, error) {
+	token, ok := strings.CutPrefix(r.Header.Get("Authorization"), "Bearer ")
+	if !ok || strings.TrimSpace(token) == "" || h.deps.Sessions == nil {
+		return domain.RequestPrincipal{}, accountauth.ErrInvalidSession
 	}
-	raw := strings.TrimSpace(r.Header.Get("X-Launch-Params"))
-	if raw == "" && h.cfg.AllowQueryLaunchParams {
-		raw = strings.TrimSpace(r.URL.Query().Get("launch_params"))
+	principal, err := h.deps.Sessions.AuthenticateAccessToken(r.Context(), token)
+	if err != nil || principal.Validate() != nil || principal.Method != domain.AuthenticationMethodAccountSession {
+		return domain.RequestPrincipal{}, accountauth.ErrInvalidSession
 	}
-	if raw == "" && h.cfg.AppSecret == "" {
-		rawVK := strings.TrimSpace(r.Header.Get("X-VK-User-ID"))
-		vkUserID, err := strconv.ParseInt(rawVK, 10, 64)
-		if err != nil || vkUserID <= 0 {
-			return uuid.Nil, miniappauth.ErrMissingUserID
-		}
-		return h.resolveVKAccount(r.Context(), vkUserID)
-	}
-	params, err := miniappauth.VerifyLaunchParams(raw, h.cfg.AppSecret, h.cfg.LaunchParamsMaxAge)
-	if err != nil {
-		return uuid.Nil, err
-	}
-	vkUserID, err := miniappauth.VKUserIDFromParams(params)
-	if err != nil {
-		return uuid.Nil, err
-	}
-	return h.resolveVKAccount(r.Context(), vkUserID)
-}
-
-func (h *Handler) resolveVKAccount(ctx context.Context, vkUserID int64) (uuid.UUID, error) {
-	resolution, err := h.deps.Identity.ResolveOrCreate(ctx, domain.IdentityProviderVK, strconv.FormatInt(vkUserID, 10))
-	if err != nil {
-		return uuid.Nil, err
-	}
-	if resolution.AccountID == uuid.Nil {
-		return uuid.Nil, errors.New("account api: resolver returned empty account id")
-	}
-	return resolution.AccountID, nil
+	return principal, nil
 }
 
 func accountIDFromContext(ctx context.Context) (uuid.UUID, bool) {

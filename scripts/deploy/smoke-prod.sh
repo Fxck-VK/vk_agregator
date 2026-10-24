@@ -3,13 +3,11 @@ set -euo pipefail
 
 env_file=""
 vk_base_url=""
-app_base_url=""
 payment_webhook_url=""
 api_health_url=""
 worker_health_url=""
 maintenance_worker_health_url=""
 provider_webhook_health_url=""
-miniapp_health_url=""
 reverse_proxy_health_url=""
 timeout_seconds="${TIMEOUT_SECONDS:-10}"
 payment_webhook_only="false"
@@ -23,17 +21,15 @@ Usage: scripts/deploy/smoke-prod.sh [options]
 Options:
   --env-file PATH                    Server env file to read, for example .env
   --vk-base-url URL                  Public VK/API base URL. Default: PUBLIC_VK_BASE_URL or https://vk.epifera.com
-  --app-base-url URL                 Public Mini App base URL. Default: PUBLIC_APP_BASE_URL or https://app.epifera.com
   --payment-webhook-url URL          Public YooKassa webhook URL. Default: PUBLIC_PAYMENT_WEBHOOK_URL or https://epifera.com/billing/webhooks/yookassa
   --api-health-url URL               Local API readiness URL. Default: http://127.0.0.1:8080/readyz
   --worker-health-url URL            Local worker readiness URL. Default: http://127.0.0.1:9090/readyz
   --maintenance-worker-health-url URL Local maintenance-worker readiness URL. Default: http://127.0.0.1:9091/readyz
   --provider-webhook-health-url URL  Local provider-webhook readiness URL. Default: http://127.0.0.1:8082/readyz
-  --miniapp-health-url URL           Local Mini App health URL. Default: http://127.0.0.1:5173/
   --reverse-proxy-health-url URL     Local reverse-proxy health URL. Default: http://127.0.0.1:8088/proxy-health
   --timeout-seconds SECONDS          HTTP timeout. Default: 10
   --payment-webhook-only             Check only YooKassa webhook reachability and blocked public routes.
-  --skip-local-health                Skip local API/worker/provider-webhook/Mini App/reverse-proxy health checks.
+  --skip-local-health                Skip local API/worker/provider-webhook/reverse-proxy health checks.
   --allow-insecure-http              Allow http:// public URLs for local/staging reverse-proxy checks.
   -h, --help                         Show help.
 USAGE
@@ -47,10 +43,6 @@ while [[ $# -gt 0 ]]; do
       ;;
     --vk-base-url)
       vk_base_url="${2:?missing value for --vk-base-url}"
-      shift 2
-      ;;
-    --app-base-url)
-      app_base_url="${2:?missing value for --app-base-url}"
       shift 2
       ;;
     --payment-webhook-url)
@@ -71,10 +63,6 @@ while [[ $# -gt 0 ]]; do
       ;;
     --provider-webhook-health-url)
       provider_webhook_health_url="${2:?missing value for --provider-webhook-health-url}"
-      shift 2
-      ;;
-    --miniapp-health-url)
-      miniapp_health_url="${2:?missing value for --miniapp-health-url}"
       shift 2
       ;;
     --reverse-proxy-health-url)
@@ -174,7 +162,6 @@ url_from_listen_addr() {
 load_env_file "$env_file"
 
 vk_base_url="${vk_base_url:-$(get_env_value PUBLIC_VK_BASE_URL "$(get_env_value VK_BASE_URL "https://vk.epifera.com")")}"
-app_base_url="${app_base_url:-$(get_env_value PUBLIC_APP_BASE_URL "$(get_env_value APP_BASE_URL "https://app.epifera.com")")}"
 payment_webhook_url="${payment_webhook_url:-$(get_env_value PUBLIC_PAYMENT_WEBHOOK_URL "$(get_env_value PAYMENT_WEBHOOK_URL "https://epifera.com/billing/webhooks/yookassa")")}"
 payment_base_url="$(get_env_value PUBLIC_PAYMENT_BASE_URL "")"
 if [[ -z "$payment_base_url" ]]; then
@@ -186,11 +173,9 @@ api_health_url="${api_health_url:-$(url_from_listen_addr "$(get_env_value HTTP_A
 worker_health_url="${worker_health_url:-$(url_from_listen_addr "$(get_env_value WORKER_METRICS_ADDR ":9090")" "/readyz")}"
 maintenance_worker_health_url="${maintenance_worker_health_url:-http://127.0.0.1:9091/readyz}"
 provider_webhook_health_url="${provider_webhook_health_url:-$(url_from_listen_addr "$(get_env_value PAYMENT_WEBHOOK_ADDR ":8082")" "/readyz")}"
-miniapp_health_url="${miniapp_health_url:-http://127.0.0.1:5173/}"
 reverse_proxy_health_url="${reverse_proxy_health_url:-http://127.0.0.1:$(get_env_value REVERSE_PROXY_HTTP_PORT "8088")/proxy-health}"
 
 vk_base_url="${vk_base_url%/}"
-app_base_url="${app_base_url%/}"
 payment_base_url="${payment_base_url%/}"
 
 assert_https_url() {
@@ -251,7 +236,7 @@ expect_auth_required() {
   local name="$1"
   local status="$2"
   if [[ "$status" -ge 200 && "$status" -lt 300 ]]; then
-    echo "[FAIL] $name is public without Mini App auth, got $status" >&2
+    echo "[FAIL] $name is public without authentication, got $status" >&2
     exit 1
   fi
   if [[ "$status" == "404" || "$status" -ge 500 || "$status" == "000" ]]; then
@@ -290,12 +275,10 @@ if [[ -n "$env_file" ]]; then
   echo "Env file: $env_file"
 fi
 echo "VK base: $vk_base_url"
-echo "Mini App base: $app_base_url"
 echo "Payment webhook: $payment_webhook_url"
 echo "Payment/admin base: $payment_base_url"
 
 assert_https_url "VK base URL" "$vk_base_url"
-assert_https_url "Mini App base URL" "$app_base_url"
 assert_https_url "YooKassa webhook URL" "$payment_webhook_url"
 assert_https_url "Payment/admin base URL" "$payment_base_url"
 
@@ -312,8 +295,6 @@ if [[ "$payment_webhook_only" != "true" && "$skip_local_health" != "true" ]]; th
   status="$(http_status GET "$provider_webhook_health_url")"
   expect_2xx "Provider webhook local health" "$status"
 
-  status="$(http_status GET "$miniapp_health_url")"
-  expect_2xx "Mini App local health" "$status"
 
   status="$(http_status GET "$reverse_proxy_health_url")"
   expect_2xx "Reverse proxy local health" "$status"
@@ -326,11 +307,7 @@ if [[ "$payment_webhook_only" != "true" ]]; then
   status="$(http_status POST "$vk_base_url/webhooks/vk" "{}")"
   expect_controlled_route_response "VK webhook route" "$status"
 
-  status="$(http_status GET "$app_base_url/")"
-  expect_2xx "Public Mini App open" "$status"
 
-  status="$(http_status GET "$app_base_url/miniapp/balance")"
-  expect_auth_required "Mini App /miniapp/balance" "$status"
 fi
 
 status="$(http_status POST "$payment_webhook_url" "{}")"
@@ -356,14 +333,6 @@ blocked_urls=(
 
 if [[ "$payment_webhook_only" != "true" ]]; then
   blocked_urls+=(
-    "$app_base_url/admin/jobs"
-    "$app_base_url/admin/access/operator"
-    "$app_base_url/admin/audit/operator"
-    "$app_base_url/admin/retention/operator/run-cleanup"
-    "$app_base_url/metrics"
-    "$app_base_url/debug/pprof"
-    "$app_base_url/billing/payment-intents"
-    "$app_base_url/billing/webhooks/yookassa"
   )
 fi
 
@@ -379,7 +348,6 @@ Manual live smoke still required:
 - VK ask NeuroHub
 - VK photo
 - VK video
-- Mini App authenticated /miniapp/balance
 - YooKassa payment.succeeded real checkout webhook
 - worker job completion
 - artifact delivery

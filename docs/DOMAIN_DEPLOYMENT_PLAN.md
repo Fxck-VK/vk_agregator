@@ -1,5 +1,9 @@
 # Domain Deployment Plan - neiirohub.ru
 
+Status: archived
+Do not use for current implementation.
+See: [current retirement contract](../docs/runbooks/VK_MINIAPP_RETIREMENT.md), [architecture](../docs/ARCHITECTURE.md) and [root agent rules](../AGENTS.md).
+
 This is a planning note for replacing temporary ngrok/localhost.run tunnels with
 the owned domain.
 

@@ -1,5 +1,7 @@
 # Channel-neutral result-delivery rollout
 
+> VK Mini App was retired on 2026-10-23. The website, browser VK ID and VK bot remain. Old Mini App routes, launch-auth and UI examples below are historical only. Current replacement and migration details: [retirement runbook](../../docs/runbooks/VK_MINIAPP_RETIREMENT.md).
+
 **Scope:** migrations `000043_account_native_legacy_nullable`,
 `000044_channel_context_and_result_mode`, and
 `000045_outbox_claim_lease`. This runbook is for operators rolling out

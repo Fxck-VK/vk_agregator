@@ -1,5 +1,7 @@
 # Billing Runbook
 
+> VK Mini App was retired on 2026-10-23. The website, browser VK ID and VK bot remain. Old Mini App routes, launch-auth and UI examples below are historical only. Current replacement and migration details: [retirement runbook](../../docs/runbooks/VK_MINIAPP_RETIREMENT.md).
+
 Billing is ledger-based and provider-verified. Redirect URLs are not proof of
 payment.
 

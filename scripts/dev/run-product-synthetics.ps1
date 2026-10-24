@@ -1,11 +1,8 @@
 param(
     [string]$ApiBaseUrl = "http://127.0.0.1:8080",
     [string]$ProviderWebhookBaseUrl = "http://127.0.0.1:8082",
-    [string]$MiniAppBaseUrl = "http://127.0.0.1:5173",
-    [string]$MiniAppLaunchParams = $env:VITE_DEV_LAUNCH_PARAMS,
-    [string]$PublicAppBaseUrl = "https://app.epifera.com",
+    [string]$PublicWebBaseUrl = "https://dev-web.epifera.com",
     [string]$PublicVkBaseUrl = "https://vk.epifera.com",
-    [switch]$AllowMockEstimate,
     [switch]$CheckPublicMetricsExposure,
     [switch]$Strict
 )
@@ -73,29 +70,11 @@ function New-SkippedSynthetic {
 $results = @()
 $results += Invoke-SyntheticHttp -Name "api_healthz" -Url "$ApiBaseUrl/healthz" -ExpectedStatus @(200, 503)
 $results += Invoke-SyntheticHttp -Name "provider_webhook_readyz" -Url "$ProviderWebhookBaseUrl/readyz" -ExpectedStatus @(200, 503)
-$results += Invoke-SyntheticHttp -Name "miniapp_root" -Url "$MiniAppBaseUrl/" -ExpectedStatus @(200)
-
-if ($AllowMockEstimate) {
-    if ([string]::IsNullOrWhiteSpace($MiniAppLaunchParams)) {
-        $results += [pscustomobject]@{
-            name = "miniapp_estimate_mock"
-            ok = $false
-            status = 0
-            duration_ms = 0
-            skipped_reason = "missing_launch_params"
-        }
-    } else {
-        $headers = @{ "X-Launch-Params" = $MiniAppLaunchParams }
-        $body = '{"operation":"text_generate","prompt":"synthetic health check"}'
-        $results += Invoke-SyntheticHttp -Name "miniapp_estimate_mock" -Method "POST" -Url "$ApiBaseUrl/miniapp/estimate" -Headers $headers -Body $body -ExpectedStatus @(200, 400, 401)
-    }
-} else {
-    $results += New-SkippedSynthetic -Name "miniapp_estimate_mock" -Reason "disabled_until_AllowMockEstimate"
-}
+$results += Invoke-SyntheticHttp -Name "web_balance_requires_session" -Url "$ApiBaseUrl/web/v1/balance" -ExpectedStatus @(401)
 
 if ($CheckPublicMetricsExposure) {
     $closedStatuses = @(0, 401, 403, 404, 405, 502, 530)
-    $results += Invoke-SyntheticHttp -Name "public_app_metrics_closed" -Url "$PublicAppBaseUrl/metrics" -ExpectedStatus $closedStatuses
+    $results += Invoke-SyntheticHttp -Name "public_web_metrics_closed" -Url "$PublicWebBaseUrl/metrics" -ExpectedStatus $closedStatuses
     $results += Invoke-SyntheticHttp -Name "public_vk_metrics_closed" -Url "$PublicVkBaseUrl/metrics" -ExpectedStatus $closedStatuses
 }
 

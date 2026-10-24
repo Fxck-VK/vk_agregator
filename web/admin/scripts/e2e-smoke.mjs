@@ -23,10 +23,6 @@ function playwrightCliPath() {
   if (fs.existsSync(local)) {
     return local;
   }
-  const workspaceFallback = path.resolve(root, "..", "miniapp", "node_modules", "@playwright", "test", "cli.js");
-  if (fs.existsSync(workspaceFallback)) {
-    return workspaceFallback;
-  }
   throw new Error("Playwright test CLI is not installed. Run npm --prefix web/admin install first.");
 }
 

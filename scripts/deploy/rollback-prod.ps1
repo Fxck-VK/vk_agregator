@@ -271,7 +271,7 @@ try {
         $backupStatus = "skipped by operator"
     }
 
-    $runtimeServices = @("api", "worker", "maintenance-worker", "provider-webhook", "miniapp", "reverse-proxy")
+    $runtimeServices = @("api", "worker", "maintenance-worker", "provider-webhook", "reverse-proxy")
     if ($providerBalanceBotEnabled) {
         $runtimeServices += "provider-balance-bot"
     } else {
@@ -302,7 +302,6 @@ try {
         Wait-Http -Name "provider-webhook" -Url "http://127.0.0.1:8082/readyz"
         Wait-Http -Name "worker" -Url "http://127.0.0.1:9090/readyz"
         Wait-Http -Name "maintenance-worker" -Url "http://127.0.0.1:9091/readyz"
-        Wait-Http -Name "miniapp" -Url "http://127.0.0.1:5173/"
         $healthStatus = "passed"
     }
 

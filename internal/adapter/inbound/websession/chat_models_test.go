@@ -51,7 +51,7 @@ func TestWebChatModelsRequireSessionAndExposeOnlyPublicChoices(t *testing.T) {
 }
 
 func TestWebChatUsesTheRequestedPublicModelInTheSameConversation(t *testing.T) {
-	for _, model := range modelcatalog.ListMiniAppModels(domain.OperationTextGenerate) {
+	for _, model := range modelcatalog.ListPublicModels(domain.OperationTextGenerate) {
 		t.Run(model.ModelID, func(t *testing.T) {
 			h, conversations, sessions, jobs, _ := newWebConversationMessageTestHandler(t)
 			prices, _ := pricingcatalog.NewStaticCatalog()

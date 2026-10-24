@@ -1,5 +1,5 @@
 // Package paymentservice owns payment-intent lifecycle rules shared by VK Bot,
-// VK Mini App and protected operator endpoints.
+// the website and protected operator endpoints.
 package paymentservice
 
 import (

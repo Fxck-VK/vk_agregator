@@ -34,6 +34,8 @@ Read only the document that matches the current task:
 
 | Task scope | Active document |
 | --- | --- |
+| Mandatory agent release rules, shared local/CI contracts and measured safe retries | [Release contract plan](superpowers/plans/2026-10-24-release-contract.md); [DEV operations](../docs/runbooks/DEV.md) |
+| VK Mini App removal, private env migration, historical data and seven-image releases | [Retirement runbook](../docs/runbooks/VK_MINIAPP_RETIREMENT.md) |
 | One combined DEV rollout of all agreed local product changes | [Unified release and verification](superpowers/plans/2026-10-23-unified-dev-release.md); [local reference library](../references/README.md) |
 | Bounded CI downloads, same-commit DEV rollout and complete release inventory | [Reliability plan](superpowers/plans/2026-10-23-dev-release-reliability.md); [DEV operations](../docs/runbooks/DEV.md) |
 | Two-calendar-month generated-file deadlines and shared preview expiry | [Implementation and live verification](superpowers/plans/2026-10-23-generated-output-retention.md); [retention contract](../docs/DATA_RETENTION_POLICY.md#generated-file-lifetime-two-calendar-months) |
@@ -79,9 +81,9 @@ Read only the document that matches the current task:
 | Existing model evidence gaps and live verification scope | [43-record verification matrix](runbooks/model-onboarding/existing-models-2026-09-14.md) |
 | APIMart Nano Banana Pro provider migration | `docs/superpowers/plans/2026-07-05-apimart-nano-banana-pro-migration.md` |
 | DEV contour, local DEV tunnel, DEV deploy | `docs/DEV_CONTOUR.md` |
-| Production/runtime deployment domains | `docs/DOMAIN_DEPLOYMENT_PLAN.md` |
+| Production/runtime deployment domains | `docs/runbooks/DEPLOYMENT.md`; `deployments/cloudflare/README.md` |
 | Data services, Postgres/Redis/S3 modes | `docs/DATA_SERVICES_CONTRACT.md` |
-| Account identity, multi-UI login, VK/TG/Web/Mobile ownership model | `docs/ACCOUNT_IDENTITY_CONTRACT.md`; current account-only rollout audit: `docs/ACCOUNT_ID_ONLY_AUDIT.md` |
+| Account identity, multi-UI login, VK/TG/Web/Mobile ownership model | `docs/ACCOUNT_IDENTITY_CONTRACT.md` |
 | Standalone NeiroHub web platform, browser UX, SEO, performance, web sessions | accepted architecture: `docs/superpowers/specs/2026-07-29-neirohub-web-platform-design.md`; active route contract: `docs/WEB_PLATFORM_ROUTE_BOUNDARIES.md`; public/private route boundary plan: `docs/superpowers/plans/2026-08-17-public-private-route-boundary.md`; public content and localization design: `docs/superpowers/specs/2026-08-17-content-and-localization-design.md`; implementation plan: `docs/superpowers/plans/2026-08-17-content-and-localization.md`; local platform setup: `web/platform/README.md` |
 | NeiroHub web static assets, reusable SVG icons and feature-local media | approved design: `docs/superpowers/specs/2026-08-19-web-asset-library-design.md`; implementation plan: `docs/superpowers/plans/2026-08-19-web-asset-library.md` |
 | Reusing NeiroHub web UI components, shared styles and tokens | Start with `web/platform/docs/ui-index.md`, then read only the linked catalog section/example. Workflow: `web/platform/AGENTS.md`. The archived draft inventory is supporting baseline evidence only. |
@@ -103,7 +105,7 @@ Read only the document that matches the current task:
 | Operator/admin UI and safety | `docs/OPERATOR_UI.md` |
 | Video providers, routes, model visibility | `docs/VIDEO_GENERATION.md` |
 | VK bot behavior and agent guidance | `docs/VK_BOT_AGENT_GUIDE.md` |
-| Full agent policy reference | `docs/AGENTS_FULL.md` |
+| Agent workflow and safety policy | `AGENTS.md` |
 | Current explicit merge handoff: workspace UI, localization, preloading and blocked DEV rollout | [Merge handoff](../docs/HANDOFF_CURRENT.md) |
 
 Use local package-level `AGENTS.md` files when touching a package or app surface
@@ -153,7 +155,9 @@ archaeology.
 
 ## Deprecated
 
-No active deprecated documentation is listed yet.
+`docs/AGENTS_FULL.md`, `docs/DOMAIN_DEPLOYMENT_PLAN.md` and
+`docs/ACCOUNT_ID_ONLY_AUDIT.md` are archived references. Their top banners link
+to the current implementation contracts; do not use them for current setup.
 
 When a document becomes obsolete, do not silently edit it as if it were still
 current. Do one of the following:

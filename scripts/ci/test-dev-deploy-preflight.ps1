@@ -97,6 +97,47 @@ try {
         throw "successful partial retry must write the complete cache marker"
     }
 
+    $changedStages = Invoke-DevDeployPreflight -GitDirectory $tempRoot -CommitSha $sha -PolicyVersion v1 `
+        -StageNames (@("release-contract") + $stages) -RunStage { param($stage) }
+    Assert-Equal "release-contract" ($changedStages.StagesRun -join ",") "new stage cannot hide behind complete cache"
+
+    $runtimeSha = "d" * 40
+    $runtimeA = Invoke-DevDeployPreflight -GitDirectory $tempRoot -CommitSha $runtimeSha -PolicyVersion v1 `
+        -InputFingerprint ("a" * 64) -StageNames $stages -RunStage { param($stage) }
+    $runtimeB = Invoke-DevDeployPreflight -GitDirectory $tempRoot -CommitSha $runtimeSha -PolicyVersion v1 `
+        -InputFingerprint ("b" * 64) -StageNames $stages -RunStage { param($stage) }
+    Assert-Equal ($stages -join ",") ($runtimeB.StagesRun -join ",") "changed toolchain/settings invalidate cache"
+    if ($runtimeA.CachePath -eq $runtimeB.CachePath) { throw "Runtime fingerprints must isolate cache receipts" }
+
+    # A marker's existence is insufficient: it must belong to this input/stage.
+    $corruptMarker = Join-Path $tempRoot "dev-deploy-preflight-v1-$sha-tests.ok"
+    [IO.File]::WriteAllText($corruptMarker, "untrusted or incomplete marker")
+    $repaired = Invoke-DevDeployPreflight -GitDirectory $tempRoot -CommitSha $sha -PolicyVersion v1 `
+        -StageNames $stages -RunStage { param($stage) }
+    Assert-Equal "tests" ($repaired.StagesRun -join ",") "corrupt stage receipt reruns only that stage"
+
+    foreach ($stage in @("audit", "govulncheck", "trivy")) {
+        $marker = Join-Path $tempRoot "dev-deploy-preflight-v1-$sha-$stage.ok"
+        $content = [IO.File]::ReadAllText($marker)
+        $content = [regex]::Replace($content, 'completed_at=[^\r\n]+', "completed_at=$([DateTime]::UtcNow.AddHours(-25).ToString('O'))")
+        [IO.File]::WriteAllText($marker, $content)
+    }
+    $freshSecurity = Invoke-DevDeployPreflight -GitDirectory $tempRoot -CommitSha $sha -PolicyVersion v1 `
+        -StageNames $stages -RunStage { param($stage) }
+    Assert-Equal "audit,govulncheck,trivy" ($freshSecurity.StagesRun -join ",") "expired security checks refresh without source-test rerun"
+    if (-not (Test-Path -LiteralPath $freshSecurity.TimingPath)) { throw "Preflight must write measured stage timing receipt" }
+    $timing = Get-Content -LiteralPath $freshSecurity.TimingPath -Raw | ConvertFrom-Json
+    Assert-Equal "passed" $timing.status "timing receipt result"
+    Assert-Equal $stages.Count $timing.stages.Count "timings include reused and executed stages"
+
+    Assert-ThrowsLike {
+        Invoke-DevDeployPreflight -GitDirectory $tempRoot -CommitSha $sha -PolicyVersion v1 `
+            -StageNames $stages -Force -RunStage { throw "forced recheck failed" }
+    } "*forced recheck failed*" "forced refresh failure"
+    $retryForced = Invoke-DevDeployPreflight -GitDirectory $tempRoot -CommitSha $sha -PolicyVersion v1 `
+        -StageNames $stages -RunStage { param($stage) }
+    Assert-Equal "tests" ($retryForced.StagesRun -join ",") "failed forced refresh discards stale success"
+
     $lockPath = Join-Path $tempRoot "dev-deploy-preflight.lock"
     $heldLock = [System.IO.File]::Open($lockPath, [System.IO.FileMode]::OpenOrCreate, [System.IO.FileAccess]::ReadWrite, [System.IO.FileShare]::None)
     try {
@@ -114,7 +155,10 @@ try {
     }
 } finally {
     if (Test-Path -LiteralPath $tempRoot) {
-        Remove-Item -LiteralPath $tempRoot -Recurse -Force
+        $absolute = [IO.Path]::GetFullPath($tempRoot)
+        $parent = [IO.Path]::GetFullPath([IO.Path]::GetTempPath()).TrimEnd([IO.Path]::DirectorySeparatorChar) + [IO.Path]::DirectorySeparatorChar
+        if (-not $absolute.StartsWith($parent, [StringComparison]::OrdinalIgnoreCase) -or [IO.Path]::GetFileName($absolute) -notlike "dev-preflight-*") { throw "Unsafe fixture cleanup path" }
+        Remove-Item -LiteralPath $absolute -Recurse -Force
     }
 }
 

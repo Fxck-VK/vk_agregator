@@ -30,7 +30,6 @@ import (
 	redisstore "vk-ai-aggregator/internal/adapter/storage/redis"
 	s3store "vk-ai-aggregator/internal/adapter/storage/s3"
 	apiapp "vk-ai-aggregator/internal/app/api"
-	miniappapp "vk-ai-aggregator/internal/app/miniapp"
 	"vk-ai-aggregator/internal/app/vkbot"
 	"vk-ai-aggregator/internal/domain"
 	"vk-ai-aggregator/internal/platform/config"
@@ -235,7 +234,7 @@ func main() {
 			PhoneRequestWindow: cfg.AccountPhoneLinkRequestWindow,
 			PhoneVerifyLimit:   cfg.AccountPhoneLinkVerifyLimit,
 			PhoneVerifyWindow:  cfg.AccountPhoneLinkVerifyWindow,
-			HashSecret:         cfg.VKAppSecret,
+			HashSecret:         cfg.AccountEmailProofSecret,
 		},
 	)
 	if err != nil {
@@ -328,11 +327,7 @@ func main() {
 		VKIDIssuer:        cfg.AccountOAuthVKIDIssuer,
 		VKIDJWKSURL:       cfg.AccountOAuthVKIDJWKSURL,
 	})
-	account := accountapi.NewHandler(accountapi.Config{
-		AppSecret:              cfg.VKAppSecret,
-		LaunchParamsMaxAge:     cfg.MiniAppLaunchParamsMaxAge,
-		AllowQueryLaunchParams: cfg.MiniAppAllowQueryLaunchParams,
-	}, accountapi.Deps{
+	account := accountapi.NewHandler(accountapi.Deps{
 		Identity:  core.Identity,
 		Account:   core.Account,
 		Logins:    core.AccountAuth,
@@ -383,7 +378,7 @@ func main() {
 	}
 	var emailRegistration websession.EmailRegistrationService
 	if strings.EqualFold(cfg.AccountEmailDeliveryProvider, "smtp") {
-		emailRegistration, err = accountregistration.New(redisstore.NewAccountRegistrationStore(rdb), accountSender, core.AccountAuth, cfg.VKAppSecret)
+		emailRegistration, err = accountregistration.New(redisstore.NewAccountRegistrationStore(rdb), accountSender, core.AccountAuth, cfg.AccountEmailProofSecret)
 		if err != nil {
 			logger.Error("email registration wiring failed", logging.ErrorAttr(err))
 			os.Exit(1)
@@ -454,22 +449,6 @@ func main() {
 		logger.Warn("web image preparation expiry reconciliation failed", logging.ErrorAttr(err))
 	})
 
-	miniapp := miniappapp.NewHandler(ctx, cfg, miniappapp.Deps{
-		Users:          core.Users,
-		Identity:       core.Identity,
-		Jobs:           core.Jobs,
-		Conversations:  core.Conversations,
-		Artifacts:      core.Artifacts,
-		Moderation:     core.Moderation,
-		Billing:        core.Billing,
-		BillingRepo:    core.BillingRepo,
-		Payment:        core.Payment,
-		Referrals:      core.Referrals,
-		Orchestrator:   core.Orchestrator,
-		RuntimeCatalog: runtimeCatalog,
-		Logger:         logger,
-	})
-
 	// Per-IP rate limiting protects the webhook intake from flooding/abuse
 	// (audit S3).
 	webhookLimiter := ratelimit.New(cfg.WebhookRateLimitRPS, cfg.WebhookRateLimitBurst)
@@ -486,7 +465,6 @@ func main() {
 	mux.Handle("/payments/", metrics.Middleware("payment_redirect", paymentRedirect.Routes()))
 	mux.Handle("/account/", metrics.Middleware("account", account.Routes()))
 	mux.Handle("/web/v1/", metrics.Middleware("websession", web.Routes()))
-	mux.Handle("/miniapp/", metrics.Middleware("miniapp", miniapp.Routes()))
 	if providerReferenceGateway != nil {
 		mux.Handle("/provider-references/", metrics.Middleware("provider_reference", providerReferenceGateway))
 	}

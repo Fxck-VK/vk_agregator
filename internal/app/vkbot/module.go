@@ -138,7 +138,6 @@ func NewHandler(ctx context.Context, cfg config.Config, deps Deps) http.Handler 
 		TopUpReceiptEmail:                   cfg.VKTopUpReceiptEmail,
 		TopUpReceiptPhone:                   cfg.VKTopUpReceiptPhone,
 		TopUpReturnURL:                      firstNonEmpty(cfg.YooKassaReturnURLVKBot, cfg.YooKassaReturnURL),
-		TopUpMiniAppURL:                     cfg.YooKassaReturnURLMiniApp,
 		TopUpPaymentRedirectBaseURL:         cfg.PublicVKBaseURL,
 		TopUpStatusEditEnabled:              cfg.FeatureVKTopUpStatusEditEnabled,
 		ReferenceUploadsDisabled:            !cfg.MediaReferenceUploadsEnabled,
@@ -225,7 +224,7 @@ func menuFeatures(cfg config.Config, catalog productcatalog.RuntimeCatalog) vkin
 
 	imageMenuReady := cfg.VKMenuImageEnabled && len(imageModels) > 0
 	disableWhenFalse(imageMenuReady, domain.CommandMenuImage)
-	disableWhenFalse(imageAvailable(modelcatalog.MiniAppImageNanoBananaPro), domain.CommandMenuImageText)
+	disableWhenFalse(imageAvailable(modelcatalog.PublicImageNanoBananaPro), domain.CommandMenuImageText)
 	disableWhenFalse(cfg.VKMenuGPTEnabled, domain.CommandMenuText)
 	disableWhenFalse(cfg.VKMenuStudentsEnabled, domain.CommandMenuStudents)
 	disableWhenFalse(cfg.VKMenuAccountEnabled, domain.CommandAccount)
@@ -254,10 +253,10 @@ func menuFeatures(cfg config.Config, catalog productcatalog.RuntimeCatalog) vkin
 	enableWhenTrue(hailuoStandardReady || hailuoFastReady, domain.CommandMenuVideoHailuo02)
 	enableWhenTrue(hailuoStandardReady, domain.CommandMenuVideoHailuo02Standard)
 	enableWhenTrue(hailuoFastReady, domain.CommandMenuVideoHailuo02Fast)
-	disableWhenFalse(imageAvailable(modelcatalog.MiniAppImageNanoBanana2), domain.CommandMenuImageNanoBanana2)
-	disableWhenFalse(imageAvailable(modelcatalog.MiniAppImageSeedream45), domain.CommandMenuImageDeepInfraSeedream)
-	disableWhenFalse(imageAvailable(modelcatalog.MiniAppImageSDXLTurbo), domain.CommandMenuImageDeepInfraSDXL)
-	disableWhenFalse(imageAvailable(modelcatalog.MiniAppImageGPTImage2), domain.CommandMenuImageGPTImage2)
+	disableWhenFalse(imageAvailable(modelcatalog.PublicImageNanoBanana2), domain.CommandMenuImageNanoBanana2)
+	disableWhenFalse(imageAvailable(modelcatalog.PublicImageSeedream45), domain.CommandMenuImageDeepInfraSeedream)
+	disableWhenFalse(imageAvailable(modelcatalog.PublicImageSDXLTurbo), domain.CommandMenuImageDeepInfraSDXL)
+	disableWhenFalse(imageAvailable(modelcatalog.PublicImageGPTImage2), domain.CommandMenuImageGPTImage2)
 	disableWhenFalse(imageMenuReady, domain.CommandMenuImageReference)
 	disableWhenFalse(cfg.VKMenuStudentsSolverEnabled, domain.CommandMenuStudentSolver)
 	disableWhenFalse(cfg.VKMenuStudentsPresentationEnabled, domain.CommandMenuStudentPresentation)

@@ -162,7 +162,7 @@ type ProviderRequest struct {
 
 // ImageGenerationRequest is the provider-agnostic contract for still-image
 // generation/editing. Concrete adapters translate this shape into their native
-// API and return ImageGenerationResult; VK, Mini App and billing code must not
+// API and return ImageGenerationResult; VK, website and billing code must not
 // depend on provider-specific request bodies.
 type ImageGenerationRequest struct {
 	JobID                uuid.UUID       `json:"job_id"`

@@ -32,13 +32,9 @@ cleanup and billing reconciliation metrics.
 API metrics are served at `GET /metrics`; worker-local metrics are served at
 `WORKER_METRICS_ADDR` (default `:9090`).
 
-The same `cmd/api` binary mounts both user-facing app surfaces: VK text bot at
-`/webhooks/vk` and VK Mini App BFF under `/miniapp/*`. Surface wiring lives in
-`internal/app/vkbot` and `internal/app/miniapp`; `cmd/api/main.go` is now a thin
-bootstrap over shared backend core. Mini App requests verify VK launch params
-server-side, create jobs through the shared `joborchestrator`, use backend
-billing/idempotency, and fetch artifacts only through owner-checked backend
-endpoints.
+The `cmd/api` binary mounts VK bot callbacks, the account-session API, the
+website `/web/v1` API and protected operator routes over shared backend services.
+VK Mini App is retired; see [retirement and compatibility](docs/runbooks/VK_MINIAPP_RETIREMENT.md).
 
 Real integrations are implemented at adapter level and remain **opt-in**:
 
@@ -59,7 +55,7 @@ Real integrations are implemented at adapter level and remain **opt-in**:
 - `IMAGE_PROVIDER`, `IMAGE_MODEL` and `IMAGE_SIZE` are worker-only image
   generation defaults. They prefer one provider/model for image jobs while
   keeping `PROVIDER_CHAIN` as fallback. Current image-capable adapters are
-  mock, OpenAI and DeepInfra Seedream. VK bot and Mini App surfaces still only
+  mock, OpenAI and DeepInfra Seedream. VK bot and website surfaces still only
   create Jobs and never call image providers directly.
 - `VK_DELIVERY_MODE=real` enables VK `messages.send` plus raw photo upload and
   generated-video delivery. `VK_VIDEO_DELIVERY_MODE=doc` uploads mp4 as a VK
@@ -101,26 +97,15 @@ Real integrations are implemented at adapter level and remain **opt-in**:
   backend pricing catalog;
   reference-photo generation stays hidden behind
   `VK_MENU_IMAGE_REFERENCE_ENABLED=false` until input photo artifacts are wired.
-- Text-mode dialog context is persisted in Postgres for both VK bot and Mini
-  App chat. VK bot conversations use `source=vk_bot` scoped by backend user and
-  VK peer; Mini App chat uses `source=miniapp` scoped by backend user and an
-  opaque `conversation_id` / `external_thread_id`. The worker stores
-  user/assistant turns in `conversations`, `conversation_messages` and
-  `conversation_summaries`, then sends providers a bounded context packet: bot
-  profile, rolling summary, recent messages and the current request. Defaults
-  are `TEXT_CONTEXT_MAX_INPUT_TOKENS=1600`,
-  `TEXT_CONTEXT_MAX_OUTPUT_TOKENS=800`, summary up to 400 estimated tokens and
-  the last 6 messages. The full dialog is never sent to a provider, and Mini
-  App local storage keeps only active thread/tab/theme UI state.
+- Text dialogs share Postgres conversation/message/summary repositories. The
+  website uses account-owned `source=web`; VK bot uses `source=vk_bot` and the
+  verified VK peer. Workers prepare bounded provider context and persist replies.
 - Shared VK referral foundation is implemented in the backend. Each internal
   user receives one stable public referral code in `referral_codes`; accepted
   invitations are stored in `referrals` with source `vk_bot` or `vk_miniapp`.
   The VK bot account screen shows the "безлимитное общение" note,
   invited-user count, one plain-text referral link and support handle
-  `@neirohub_help`; it does not render a share button. The Mini App account
-  screen uses the same backend service/repository through `/miniapp/referral`,
-  renders the same bot-style invite URL, and can idempotently apply referral
-  codes through `/miniapp/referral/accept` as `source=vk_miniapp`.
+  `@neirohub_help`; it does not render a share button.
   `/start <code>` / VK `ref` handling records the relation without creating a
   billable job. Signup rewards are posted through billing ledger entries with
   idempotency keys.
@@ -132,7 +117,7 @@ Real integrations are implemented at adapter level and remain **opt-in**:
   `payment_intents`, `payment_events` and `payment_refunds` with price
   snapshots, 54-FZ receipt contact fields, webhook inbox dedup and
   reconciliation indexes. Migration `000010_payment_product_catalog` seeds the
-  initial active credit packages consumed by both VK Bot and VK Mini App.
+  initial active credit packages consumed by the website and VK Bot.
   Migration `000011_payment_intent_receipt_snapshot` snapshots
   `receipt_description`, `vat_code`, `payment_subject` and `payment_mode` onto
   each intent, so YooKassa payment retries and refunds use the original fiscal
@@ -164,19 +149,11 @@ Real integrations are implemented at adapter level and remain **opt-in**:
   `price_version` for future intents when price, credits or 54-FZ receipt
   fields change. The protected operator create route may pass `capture:false`
   for YooKassa `waiting_for_capture -> canceled` smoke tests; user-facing
-  Mini App and VK Bot top-ups still use immediate capture. Existing payment
-  intents keep their snapshotted amount, credits, price version and fiscal fields. Authenticated Mini App routes exist under
-  `/miniapp/payment-products` and `/miniapp/payments*`. The Mini App Settings
-  payment UI loads active backend products, requires a receipt email or phone,
-  creates an intent with `X-Idempotency-Key` and redirects the user to the safe
-  `confirmation_url`. It also shows safe payment history from
-  `GET /miniapp/payments`, including active payment continuation links without
-  treating provider redirects as balance proof. The VK Bot top-up control path
-  uses the same product catalog. With a server-side
-  `VK_TOP_UP_RECEIPT_EMAIL` / `VK_TOP_UP_RECEIPT_PHONE` contact it creates the
-  intent through `paymentservice` and sends a safe payment link. Without that
-  contact it opens the Mini App, where the payer selects the package and enters
-  the receipt contact. The bot handler never grants credits.
+  website and VK Bot top-ups still use immediate capture. Existing intents keep
+  their snapshotted price, credits and fiscal fields. The VK bot uses the shared
+  catalog and server-side receipt contact through paymentservice. Without that
+  contact it reports top-up unavailable and creates no payment intent.
+  The bot handler never grants credits.
   `cmd/provider-webhook` exposes
   `POST /billing/webhooks/yookassa`, stores raw provider events in the
   `payment_events` inbox, returns 200 quickly, then asynchronously verifies the
@@ -190,7 +167,7 @@ Real integrations are implemented at adapter level and remain **opt-in**:
   adjustment entries instead of direct balance mutation. Partial refund
   attribution and automatic refund webhook reversal remain follow-up work. A
   local YooKassa smoke passed successful checkout through reconciliation,
-  webhook replay dedup, idempotent manual refund and safe Mini App history; the
+  webhook replay dedup, idempotent manual refund and safe historical payment DTOs; the
   remaining payment rollout checks are public HTTPS YooKassa dashboard webhook
   delivery and an explicit provider `payment.canceled` smoke. User return/redirect after payment
   is navigation only and never grants credits by itself.
@@ -277,7 +254,6 @@ internal/
   app/
     api/             bootstrap helper for shared API core deps
     vkbot/           VK text bot surface wiring
-    miniapp/         VK Mini App BFF surface wiring
   domain/            entities, state machines, repository interfaces (no infra)
   service/           billing, joborchestrator, commandrouter, artifactservice
   worker/            generation, provider-poll and delivery workers + engine
@@ -339,120 +315,8 @@ Callback URL:
 https://<random>.trycloudflare.com/webhooks/vk
 ```
 
-The scripts are intentionally scoped to the VK bot runtime. They do not start
-the VK Mini App frontend. Runtime pid/log/url files are written under
+The scripts are scoped to the VK bot runtime; the website uses its own 7159 preview server. Runtime pid/log/url files are written under
 `.runtime/vk-bot/` and are ignored by Git.
-
-### VK Mini App local dev (HTTPS via `*.lhr.life`)
-
-For opening the Mini App inside VK during UI work, use the Mini App dev scripts
-(Vite on `:5173`, tunnel = `localhost.run` / `*.lhr.life`, not ngrok):
-
-```powershell
-.\scripts\dev\start-miniapp.ps1 -NoWait
-.\scripts\dev\status-miniapp.ps1
-.\scripts\dev\stop-miniapp.ps1
-```
-
-The root `start-miniapp-ngrok.ps1` wrapper remains for backward compatibility.
-Paste the printed `https://....lhr.life` URL into **dev.vk.com → URL для
-разработки**. Runtime pid/log/url files live under `.runtime/vk-miniapp/`.
-Details: `web/miniapp/README.md` and `RUNBOOK.md`.
-
-For a stable local VK Callback URL, configure a named Cloudflare Tunnel once:
-
-```powershell
-.\scripts\dev\setup-cloudflare-tunnel.ps1 -Login
-.\scripts\dev\start-bot.ps1 -TunnelMode named
-```
-
-The default named-tunnel hostname is:
-
-```text
-https://vk.epifera.com/webhooks/vk
-```
-
-This requires the `epifera.com` DNS zone to be active in Cloudflare. The
-tunnel config and credentials stay under `.runtime/vk-bot/` and the user's
-Cloudflare profile; they are not committed.
-On named-tunnel startup, `start-bot.ps1` verifies the local VK confirmation
-response and the public `/health` endpoint. If the hostname is attached to a
-stale Cloudflare DNS record, the script repairs the route with
-`cloudflared tunnel route dns --overwrite-dns` and retries before reporting the
-bot as ready. The VK secret is used only against the local callback URL, not in
-public tunnel diagnostics.
-
-Start the infrastructure (PostgreSQL, Redis, MinIO):
-
-```bash
-docker compose up -d
-```
-
-| Service     | Address                | Credentials                 |
-|-------------|------------------------|-----------------------------|
-| PostgreSQL  | `localhost:5432`       | `vk_ai_aggregator` / same   |
-| Redis       | `localhost:6379`       | —                           |
-| MinIO (S3)  | `localhost:9000`       | `minioadmin` / `minioadmin` |
-| MinIO web   | `localhost:9001`       | `minioadmin` / `minioadmin` |
-
-Apply migrations:
-
-```bash
-go run ./cmd/migrate up
-```
-
-Start the API (VK webhook, admin API, health endpoint) — listens on `:8080`:
-
-```bash
-go run ./cmd/api
-```
-
-Start the workers (generation, provider poll, delivery) in a second terminal:
-
-```bash
-go run ./cmd/worker
-```
-
-Check health:
-
-```bash
-curl localhost:8080/health   # {"status":"ok","checks":{"postgres":"ok","redis":"ok"}}
-```
-
-See [`RUNBOOK.md`](RUNBOOK.md) for full runtime validation, curl examples and
-expected results.
-
-Real adapter modes are opt-in:
-
-```bash
-# DeepInfra text generation.
-PROVIDER_CHAIN=deepinfra DEEPINFRA_API_KEY=... go run ./cmd/worker
-
-# Image/video routes are enabled through the model catalog and provider flags,
-# not through DeepInfra media overrides.
-PROVIDER_CHAIN=deepinfra,apimart,poyo,runway APIMART_PROVIDER_ENABLED=true POYO_PROVIDER_ENABLED=true RUNWAY_PROVIDER_ENABLED=true go run ./cmd/worker
-
-# Real VK messages.send + photo/video upload; requires a real token.
-VK_DELIVERY_MODE=real VK_ACCESS_TOKEN=... go run ./cmd/worker
-
-# Real VK /start menu replies from the API; requires a real token.
-VK_ACCESS_TOKEN=... go run ./cmd/api
-
-# Real output moderation and text/image artifact scanner.
-MODERATION_PROVIDER=openai ARTIFACT_SCANNER=openai OPENAI_API_KEY=... go run ./cmd/worker
-```
-
-For production, set `APP_ENV=production` and configure non-default
-`VK_SECRET`, `ADMIN_TOKEN` and `VK_CONFIRMATION_TOKEN`. Both `cmd/api` and
-`cmd/worker` run fail-closed config validation. `PROVIDER_CHAIN=deepinfra`
-requires `DEEPINFRA_API_KEY`; APIMart, PoYo and Runway routes require their
-provider switch, key and base URL. `IMAGE_PROVIDER=deepinfra` and
-`VIDEO_PROVIDER=deepinfra` are invalid because DeepInfra is text-only in the
-current runtime. `VK_DELIVERY_MODE=real` requires `VK_ACCESS_TOKEN` in any
-environment. `MODERATION_PROVIDER=openai` and `ARTIFACT_SCANNER=openai` require
-`OPENAI_API_KEY`.
-For a VK welcome banner, set `VK_WELCOME_ATTACHMENT` to a pre-uploaded
-attachment string such as `photo-239332376_123_accesskey`.
 
 ## Admin API
 
@@ -481,10 +345,6 @@ curl "http://localhost:8080/admin/jobs?status=succeeded&limit=20" \
 gofmt -l .             # formatting check; should print nothing
 go test ./...          # unit + in-memory E2E; external infra is skipped
 go vet ./...
-npm --prefix web/miniapp ci
-npm --prefix web/miniapp run lint
-npm --prefix web/miniapp run typecheck
-npm --prefix web/miniapp run build
 docker compose config
 powershell -NoProfile -ExecutionPolicy Bypass -File scripts/ci/validate-infra.ps1
 ```
@@ -512,12 +372,11 @@ stores. In `loadtest`, config validation requires mock AI providers, mock
 payments and mock VK delivery before the process starts.
 
 The first safe k6 script is `tests/k6/basic-api.js`. It covers health,
-readiness, VK webhook intake and Mini App balance/job endpoints. A second
+readiness and mock VK webhook intake. A second
 script, `tests/k6/vk-bot.js`, exercises the VK Bot journey: `/start`, menu
 callbacks, "Спросить у НейроХаб", ordinary text, duplicate replay and
-rate-limit/cooldown bursts. `tests/k6/job-worker.js` creates text/image/video
-mock jobs and measures API acceptance, polling completion and worker queue
-pressure. `scripts/loadtest/postgres-diagnostics.ps1` captures read-only
+rate-limit/cooldown bursts. Authenticated website worker/payment capacity
+scenarios are pending after retiring the Mini-App-only load tests. `scripts/loadtest/postgres-diagnostics.ps1` captures read-only
 Postgres diagnostics before/after load runs: locks, slow-query visibility,
 table growth, sequential scans, index usage, retention candidates and analytics
 freshness. `scripts/loadtest/redis-diagnostics.ps1` captures read-only Redis
@@ -543,7 +402,6 @@ be updated through pull requests and requires these checks from `.github/workflo
 
 - `Backend`: `gofmt -l .`, `golangci-lint run`, `go test ./...`, `go vet ./...`.
 - `Secret Scan`: Gitleaks with `.gitleaks.toml`.
-- `Mini App`: `npm ci`, `npm run lint`, `npm run typecheck`, `npm run build`.
 - `Infrastructure`: `scripts/ci/validate-infra.ps1`, including compose,
   migration naming/order, tracked `.env` guard and Cloudflare config secret
   guard.
@@ -561,7 +419,7 @@ Production deploy is automated after `main` changes:
 
 ```text
 push/merge to main
-  -> Docker Images workflow builds api/worker/provider-webhook/miniapp/migrate/backup images
+  -> Docker Images workflow builds api/worker/provider-webhook/provider-balance-bot/platform/migrate/backup images
   -> deploy-prod workflow connects to the VPS
   -> VPS pulls immutable GHCR images by sha-<commit>
   -> deploy-prod.sh starts the runtime
@@ -587,7 +445,7 @@ summary.
 
 **GitHub required checks are missing in branch protection.**
 Push the workflow to a branch and let Actions run once. Then edit the `main`
-branch protection rule and add `Backend`, `Secret Scan`, `Mini App` and
+branch protection rule and add `Backend`, `Secret Scan`, website checks and
 `Infrastructure` as required checks.
 
 **Secret Scan fails.**
@@ -596,8 +454,8 @@ placeholder/false positive. Remove the secret from the commit, rotate the
 credential if it was real, and keep `.env`, tunnel tokens, launch params,
 provider keys and raw webhook payloads out of Git.
 
-**A payment, VK or Mini App test fails in CI.**
-Keep the architecture boundary intact while debugging: VK/Mini App handlers
+**A payment, VK or website test fails in CI.**
+Keep the architecture boundary intact while debugging: VK/website handlers
 must create jobs or payment intents only, providers stay in workers, payment
 credit changes stay in ledger/webhook/reconciliation flows, and tests should
 use mock/default config unless they are explicitly environment-gated smoke

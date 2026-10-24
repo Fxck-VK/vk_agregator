@@ -1,5 +1,7 @@
 # VK Bot Agent Guide
 
+> VK Mini App was retired on 2026-10-23. The website, browser VK ID and VK bot remain. Old Mini App routes, launch-auth and UI examples below are historical only. Current replacement and migration details: [retirement runbook](../docs/runbooks/VK_MINIAPP_RETIREMENT.md).
+
 Этот файл для агента, который работает рядом с VK Mini App или shared backend и
 может случайно затронуть VK bot. Перед изменениями в общих backend-модулях
 прочитай этот guide, корневой `AGENTS.md` и релевантные части `RUNBOOK.md`.

@@ -1,4 +1,4 @@
-const playwright = await import("@playwright/test").catch(() => import("../miniapp/node_modules/@playwright/test/index.mjs"));
+const playwright = await import("@playwright/test");
 const { defineConfig, devices } = playwright;
 
 const shouldStartWebServer = process.env.PLAYWRIGHT_SKIP_WEBSERVER !== "1";

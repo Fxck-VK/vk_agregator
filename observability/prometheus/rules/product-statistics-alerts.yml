@@ -61,7 +61,7 @@ groups:
         annotations:
           summary: Низкая доля успешных генераций
           description: За последние 30 минут больше 10 jobs дошли до terminal state, но доля succeeded ниже 95%.
-          impact: Пользователи VK Bot или Mini App создают jobs, но заметная часть не получает успешный результат.
+          impact: Пользователи VK Bot или frontend создают jobs, но заметная часть не получает успешный результат.
           dashboard: Grafana -> Product Observability / Product Statistics, Jobs Worker, Providers
           action: Проверь Product Statistics success ratio, затем Jobs Worker DLQ/retry, Providers error/rate-limit и delivery failures. Не меняй баланс вручную; billing исправляй только ledger-safe путем.
           safe_logs: В чат отправляй только surface, operation, modality, result, error_class и counts. Не отправляй prompts, job_id, user_id, raw provider payloads или private artifact URLs.
@@ -89,12 +89,12 @@ groups:
         for: 10m
         labels:
           severity: warning
-          surface: miniapp
+          surface: frontend
         annotations:
-          summary: Mini App видит медленные API ответы
+          summary: frontend видит медленные API ответы
           description: Клиентская p95 latency по безопасным route templates выше 2 секунд.
-          impact: Пользовательский путь в Mini App ощущается медленным; пользователи могут повторять действия и создавать лишнюю нагрузку.
-          dashboard: Grafana -> Product Observability / Product Statistics, Mini App Frontend, Product Health
+          impact: Пользовательский путь в frontend ощущается медленным; пользователи могут повторять действия и создавать лишнюю нагрузку.
+          dashboard: Grafana -> Product Observability / Product Statistics, Frontend Telemetry (historical), Product Health
           action: Найди route/status в Product Statistics, затем проверь API latency, Postgres/Redis, queue pressure и browser console error class.
           safe_logs: Отправляй route template, status и latency bucket. Не отправляй full URL, launch params, request body, prompts, cookies или user ids.
 
@@ -199,7 +199,7 @@ groups:
           description: За 10 минут на protected surfaces много auth или signature failures.
           impact: Это может быть сломанный env/config, атакующий трафик, сломанный VK launch signature flow или неверное использование admin token.
           dashboard: Grafana -> Product Observability / Security Config
-          action: Проверь failures by surface/reason, VK_APP_SECRET/config presence, admin token usage, forwarding headers и recent deploy. Не ослабляй auth или signature checks.
+          action: Проверь failures by surface/reason, account session/OAuth config presence, admin token usage, forwarding headers и recent deploy. Не ослабляй auth или signature checks.
           safe_logs: В чат отправляй только surface, reason и counts. Не отправляй admin token, launch params, cookies, auth headers или user ids.
 
       - alert: ProductReferralRewardErrors

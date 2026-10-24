@@ -33,7 +33,7 @@ func (h *Handler) getOperatorPricing(w http.ResponseWriter, r *http.Request) {
 		Entries:        entries,
 		EntryCount:     len(entries),
 		Notes: []string{
-			"Entries are read-only and derived from the runtime pricing catalog used by Mini App, VK bot and job creation.",
+			"Entries are read-only and derived from the runtime pricing catalog used by the website, VK bot and job creation.",
 		},
 	})
 }

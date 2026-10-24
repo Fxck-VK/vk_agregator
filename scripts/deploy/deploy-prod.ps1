@@ -386,7 +386,7 @@ try {
 
     $imagePullServices = @($statefulServices + @("reverse-proxy"))
     if (-not $shouldBuildOnVPS) {
-        $imagePullServices += @("api", "worker", "maintenance-worker", "provider-webhook", "miniapp", "migrate")
+        $imagePullServices += @("api", "worker", "maintenance-worker", "provider-webhook", "migrate")
         if ($providerBalanceBotEnabled) {
             $imagePullServices += "provider-balance-bot"
         }
@@ -440,7 +440,7 @@ try {
         if ($PullBaseImages) {
             $buildArgs += "--pull"
         }
-        $buildArgs += @("api", "worker", "maintenance-worker", "provider-webhook", "miniapp", "migrate")
+        $buildArgs += @("api", "worker", "maintenance-worker", "provider-webhook", "migrate")
         if ($providerBalanceBotEnabled) {
             $buildArgs += "provider-balance-bot"
         }
@@ -528,7 +528,7 @@ try {
         Invoke-DockerCompose @workerUpArgs
     }
 
-    $runtimeServices = @("api", "maintenance-worker", "provider-webhook", "miniapp", "reverse-proxy")
+    $runtimeServices = @("api", "maintenance-worker", "provider-webhook", "reverse-proxy")
     if ($providerBalanceBotEnabled) {
         $runtimeServices += "provider-balance-bot"
     }
@@ -555,18 +555,15 @@ try {
         Wait-Http -Name "provider-webhook" -Url "http://127.0.0.1:8082/readyz" -TimeoutSeconds $TimeoutSeconds
         Wait-Http -Name "worker" -Url "http://127.0.0.1:9090/readyz" -TimeoutSeconds $TimeoutSeconds
         Wait-Http -Name "maintenance-worker" -Url "http://127.0.0.1:9091/readyz" -TimeoutSeconds $TimeoutSeconds
-        Wait-Http -Name "miniapp" -Url "http://127.0.0.1:5173/" -TimeoutSeconds $TimeoutSeconds
         $healthStatus = "passed"
 
         if ($WithCloudflare -and -not $SkipPublicSmoke) {
             $publicVkUrl = Get-PublicUrlValue -Path $EnvFile -PrimaryName "PUBLIC_VK_BASE_URL" -LegacyName "VK_BASE_URL" -Default "https://vk.epifera.com"
-            $publicAppUrl = Get-PublicUrlValue -Path $EnvFile -PrimaryName "PUBLIC_APP_BASE_URL" -LegacyName "APP_BASE_URL" -Default "https://app.epifera.com"
             $publicPaymentWebhookUrl = Get-PublicUrlValue -Path $EnvFile -PrimaryName "PUBLIC_PAYMENT_WEBHOOK_URL" -LegacyName "PAYMENT_WEBHOOK_URL" -Default "https://epifera.com/billing/webhooks/yookassa"
             Invoke-Step "public Cloudflare/DNS smoke" {
                 & (Join-Path $PSScriptRoot "smoke-prod.ps1") `
                     -EnvFile $EnvFile `
                     -VkBaseUrl $publicVkUrl `
-                    -AppBaseUrl $publicAppUrl `
                     -PaymentWebhookUrl $publicPaymentWebhookUrl `
                     -TimeoutSeconds $TimeoutSeconds
             }

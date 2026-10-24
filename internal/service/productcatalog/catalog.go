@@ -1,5 +1,5 @@
 // Package productcatalog builds public, product-level model choices for
-// inbound surfaces. It is safe for Mini App and VK bot UI code: provider
+// inbound surfaces. It is safe for website and VK bot UI code: provider
 // names, model codes, keys and private URLs never appear in exported items.
 package productcatalog
 
@@ -156,7 +156,7 @@ func imageModels(cfg Config) []ImageModel {
 	if cfg.PricingCatalog == nil {
 		return nil
 	}
-	models := modelcatalog.ListMiniAppModels(domain.OperationImageGenerate)
+	models := modelcatalog.ListPublicModels(domain.OperationImageGenerate)
 	out := make([]ImageModel, 0, len(models))
 	for _, model := range models {
 		if !cfg.EnabledImageModels[model.ModelID] {
@@ -165,7 +165,7 @@ func imageModels(cfg Config) []ImageModel {
 		if !cfg.ImageProviderReady[model.Provider] {
 			continue
 		}
-		modelID := modelcatalog.MiniAppResponseModelID(model)
+		modelID := modelcatalog.PublicResponseModelID(model)
 		if modelID == "" {
 			continue
 		}
@@ -311,38 +311,38 @@ func displayVideoEstimateCredits(catalog *pricingcatalog.Catalog, alias domain.V
 }
 
 func imageDescription(modelID string) string {
-	if modelID == modelcatalog.MiniAppImageFlux2Pro {
+	if modelID == modelcatalog.PublicImageFlux2Pro {
 		return "Генерация по тексту. Разрешение 1–4 МП, одно изображение за запрос."
 	}
-	if modelID == modelcatalog.MiniAppImageMock {
+	if modelID == modelcatalog.PublicImageMock {
 		return "Synthetic image route for load tests without paid provider calls."
 	}
 	switch modelID {
-	case modelcatalog.MiniAppImageGPTImage25Flare:
+	case modelcatalog.PublicImageGPTImage25Flare:
 		return "Создание изображений и визуальных концептов с выбором детализации."
-	case modelcatalog.MiniAppImageGPTImage25Sunburst:
+	case modelcatalog.PublicImageGPTImage25Sunburst:
 		return "Детализированные изображения для товаров, рекламы и дизайна."
-	case modelcatalog.MiniAppImageSeedream50Lite:
+	case modelcatalog.PublicImageSeedream50Lite:
 		return "Генерация и редактирование с референсами, 2K–4K, до 15 изображений."
-	case modelcatalog.MiniAppImageSeedream50Pro:
+	case modelcatalog.PublicImageSeedream50Pro:
 		return "Генерация и редактирование с референсами, 1K–2K."
-	case modelcatalog.MiniAppImageMidjourneyV7:
+	case modelcatalog.PublicImageMidjourneyV7:
 		return "Генерация по тексту и референсам. Relax, Fast и Turbo; цена за весь результат Imagine."
-	case modelcatalog.MiniAppImageNanoBanana2:
+	case modelcatalog.PublicImageNanoBanana2:
 		return "Быстрая генерация и редактирование изображений с референсами."
-	case modelcatalog.MiniAppImageNanoBananaPro:
+	case modelcatalog.PublicImageNanoBananaPro:
 		return "Премиальная генерация изображений с сильной детализацией и референсами."
-	case modelcatalog.MiniAppImageGPTImage2:
+	case modelcatalog.PublicImageGPTImage2:
 		return "Качественная генерация и редактирование изображений с надежной композицией."
-	case modelcatalog.MiniAppImageQwenImage3:
+	case modelcatalog.PublicImageQwenImage3:
 		return "Генерация и редактирование изображений с текстом, 1K и 2K."
-	case modelcatalog.MiniAppImageGrokImage15:
+	case modelcatalog.PublicImageGrokImage15:
 		return "Генерация изображений по тексту и редактирование с одним референсом."
-	case modelcatalog.MiniAppImageGrokImage20:
+	case modelcatalog.PublicImageGrokImage20:
 		return "Генерация изображений по тексту с выбором формата кадра."
-	case modelcatalog.MiniAppImageSeedream45:
+	case modelcatalog.PublicImageSeedream45:
 		return "Быстрая эстетичная генерация изображений для концептов и визуалов."
-	case modelcatalog.MiniAppImageSDXLTurbo:
+	case modelcatalog.PublicImageSDXLTurbo:
 		return "Быстрая недорогая генерация простых визуальных идей."
 	default:
 		return "Генерация изображений."
@@ -377,7 +377,7 @@ func videoDescription(alias domain.VideoRouteAlias) string {
 	case domain.VideoRouteKlingV3:
 		return "Видео на 3–15 секунд, до 4K. Можно задать первый и последний кадры и включить звук."
 	case domain.VideoRouteKling26Motion:
-		return "Перенос движений из видео на персонажа с фотографии. Загрузите фото и ролик на 3–30 секунд в Mini App."
+		return "Перенос движений из видео на персонажа с фотографии. Загрузите фото и ролик на 3–30 секунд в форме модели."
 	case domain.VideoRouteVeo31Fast:
 		return "Быстрая генерация видео на 8 секунд, до 4K, по тексту или до трём изображениям."
 	case domain.VideoRouteVeo31Quality:

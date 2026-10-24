@@ -12,7 +12,7 @@ type ReferralSource string
 const (
 	// ReferralSourceVKBot is a referral applied through the VK bot dialog.
 	ReferralSourceVKBot ReferralSource = "vk_bot"
-	// ReferralSourceVKMiniApp is reserved for the VK Mini App BFF.
+	// ReferralSourceVKMiniApp preserves historical referrals only; no inbound exists.
 	ReferralSourceVKMiniApp ReferralSource = "vk_miniapp"
 )
 

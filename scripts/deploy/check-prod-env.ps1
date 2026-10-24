@@ -193,7 +193,7 @@ foreach ($required in @(
     "VK_ACCESS_TOKEN",
     "VK_SECRET",
     "VK_CONFIRMATION_TOKEN",
-    "VK_APP_SECRET",
+    "ACCOUNT_EMAIL_PROOF_SECRET",
     "ADMIN_TOKEN"
 )) {
     Require-Value -Values $envValues -Problems $problems -Name $required -Reason "required for server runtime"
@@ -344,7 +344,7 @@ if (Is-TrueValue (Get-Value -Values $envValues -Name "VK_MENU_TOP_UP_ENABLED")) 
     $email = Get-Value -Values $envValues -Name "VK_TOP_UP_RECEIPT_EMAIL"
     $phone = Get-Value -Values $envValues -Name "VK_TOP_UP_RECEIPT_PHONE"
     if ([string]::IsNullOrWhiteSpace($email) -and [string]::IsNullOrWhiteSpace($phone)) {
-        Require-HttpsUrl -Values $envValues -Problems $problems -Name "YOOKASSA_RETURN_URL_MINIAPP" -Reason "required when VK top-up has no server receipt contact"
+        Add-Problem -Problems $problems -Name "VK_TOP_UP_RECEIPT_EMAIL" -Reason "VK top-up requires a configured receipt email or phone"
     } else {
         Require-HttpsUrl -Values $envValues -Problems $problems -Name "PUBLIC_VK_BASE_URL" -Reason "required for VK top-up payment links"
         if (-not (Is-TrueValue (Get-Value -Values $envValues -Name "FEATURE_VK_TOPUP_STATUS_EDIT_ENABLED" -Default "false"))) {
@@ -361,7 +361,6 @@ if (Is-TrueValue (Get-Value -Values $envValues -Name "VK_MENU_TOP_UP_ENABLED")) 
 if ($WithCloudflare) {
     Require-Value -Values $envValues -Problems $problems -Name "CLOUDFLARED_TUNNEL_TOKEN" -Reason "required when deploying with Cloudflare tunnel; store it only in the server .env"
     Require-HttpsUrl -Values $envValues -Problems $problems -Name "PUBLIC_VK_BASE_URL" -Reason "required for Cloudflare deploy smoke, expected https://vk.epifera.com"
-    Require-HttpsUrl -Values $envValues -Problems $problems -Name "PUBLIC_APP_BASE_URL" -Reason "required for Cloudflare deploy smoke, expected https://app.epifera.com"
     Require-HttpsUrl -Values $envValues -Problems $problems -Name "PUBLIC_PAYMENT_WEBHOOK_URL" -Reason "required for Cloudflare deploy smoke, expected https://epifera.com/billing/webhooks/yookassa"
 }
 

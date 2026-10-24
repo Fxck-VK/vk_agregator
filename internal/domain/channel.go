@@ -12,12 +12,14 @@ const MaxChannelReferenceLength = 512
 
 // Channel identifies a trusted product transport. The set is deliberately
 // closed so an unknown value cannot silently route work to a publisher.
+// Retired stored values remain readable for reconciliation and migrations.
 type Channel string
 
 const (
 	// ChannelVKBot represents the VK Bot transport.
 	ChannelVKBot Channel = "vk_bot"
-	// ChannelVKMiniApp represents the signed VK Mini App transport.
+	// ChannelVKMiniApp is compatibility-only provenance in historical rows.
+	// Its transport and inbound authentication have been removed.
 	ChannelVKMiniApp Channel = "vk_miniapp"
 	// ChannelWeb represents the standalone web platform transport.
 	ChannelWeb Channel = "web"

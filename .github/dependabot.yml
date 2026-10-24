@@ -29,15 +29,6 @@ updates:
           - "*"
 
   - package-ecosystem: "npm"
-    directory: "/web/miniapp"
-    schedule:
-      interval: "weekly"
-    groups:
-      miniapp-dependencies:
-        patterns:
-          - "*"
-
-  - package-ecosystem: "npm"
     directory: "/web/admin"
     schedule:
       interval: "weekly"
@@ -84,16 +75,6 @@ updates:
       interval: "weekly"
     groups:
       dev-go-dependencies:
-        patterns:
-          - "*"
-
-  - package-ecosystem: "npm"
-    directory: "/web/miniapp"
-    target-branch: "dev-deploy"
-    schedule:
-      interval: "weekly"
-    groups:
-      dev-miniapp-dependencies:
         patterns:
           - "*"
 

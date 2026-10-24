@@ -17,7 +17,7 @@ data store.
   statuses, ownership claims, or moderation results.
 - Do not render user/provider content as trusted HTML.
 - Do not expose raw provider or private storage URLs.
-- Do not make `/miniapp/*` the permanent API contract for the web platform.
+- Use the versioned `/web/v1` API rather than retired client contracts.
 
 ## Must
 
@@ -29,8 +29,8 @@ data store.
 - Keep authentication material in secure, server-managed cookie/session flows;
   never put credentials in query strings or local storage.
 - Escape untrusted content and normalize user-facing errors.
-- Keep the app independently buildable, testable, and deployable from the VK
-  Mini App and operator frontend.
+- Keep the app independently buildable, testable, and deployable from the
+  operator frontend.
 
 ## Implementation Gate
 

@@ -19,7 +19,6 @@ loopback only.
 | Public hostname/path | Cloudflare Tunnel service | Reverse proxy target |
 |---|---|---|
 | `vk.epifera.com` | `http://127.0.0.1:8088` | `cmd/api` for `/webhooks/vk` and `/health` |
-| `app.epifera.com` | `http://127.0.0.1:8088` | Mini App static for `/`, `cmd/api` for `/miniapp/*` |
 | `epifera.com` | `http://127.0.0.1:8088` | `cmd/provider-webhook` only for `/billing/webhooks/yookassa` |
 
 The canonical YooKassa webhook URL is:
@@ -31,9 +30,9 @@ https://epifera.com/billing/webhooks/yookassa
 Do not route broad `/billing/*`, `/admin/*`, `/metrics`, `/debug/*` or private
 health/readiness endpoints publicly.
 
-The Mini App host also routes `/provider-references/*` to `cmd/api` for
+The VK API host also routes `/provider-references/*` to `cmd/api` for
 HMAC-signed, one-hour, job-bound video reads. The private object store stays
-unexposed. Use `https://dev-app.epifera.com` for DEV
+unexposed. Use `https://dev-vk.epifera.com` for DEV
 `PROVIDER_REFERENCE_BASE_URL`; production requires its own signing key and host.
 Unsigned/expired reads must return 403. Proxy access logs are disabled on this
 path; query tokens must never be logged.
@@ -41,13 +40,12 @@ path; query tokens must never be logged.
 ## Development Tunnel Route Map
 
 For an isolated local VK dev community, use the existing DEV dashboard-managed
-tunnel (separate from production) and route these three local hostnames to the
+tunnel (separate from production) and route these two local hostnames to the
 same loopback reverse-proxy origin:
 
 | Public hostname/path | Cloudflare Tunnel service | Reverse proxy target |
 |---|---|---|
 | `dev-vk.epifera.com` | `http://127.0.0.1:8088` | `cmd/api` for `/webhooks/vk` and `/health` |
-| `dev-app.epifera.com` | `http://127.0.0.1:8088` | Mini App static for `/`, `cmd/api` for `/miniapp/*` |
 | `dev.epifera.com` | `http://127.0.0.1:8088` | `cmd/provider-webhook` only for `/billing/webhooks/yookassa` |
 
 The remote DEV browser platform is a separate `docker-compose.dev-web.yml`
@@ -72,12 +70,11 @@ https://dev.epifera.com/billing/webhooks/yookassa
 Use the existing dashboard-managed DEV tunnel, for example
 `neiirohub-vk-dev`. Do not reuse the production tunnel token locally.
 
-Add these three local published application routes:
+Add these two local published application routes:
 
 | Hostname | Path | Service |
 |---|---|---|
 | `dev-vk.epifera.com` | `*` | `http://127.0.0.1:8088` |
-| `dev-app.epifera.com` | `*` | `http://127.0.0.1:8088` |
 | `dev.epifera.com` | `*` | `http://127.0.0.1:8088` |
 
 For the remote DEV browser-platform overlay, add the DEV-only dashboard-managed

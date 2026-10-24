@@ -1,5 +1,9 @@
 Ќиже Ч **максимальна€ production-архитектура** дл€ агрегатора нейросетей во ¬ онтакте. я бы проектировал это не как УботаФ, а как **AI Job Processing Platform**: платформа принимает сообщени€ из VK, превращает их в задачи, выбирает провайдера/модель, контролирует лимиты и деньги, получает артефакты Ч текст, фото, видео, аудио Ч и доставл€ет результат обратно пользователю.
 
+> VK Mini App was retired on 2026-10-23. The website, browser VK ID and VK bot remain. Old Mini App routes, launch-auth and UI examples below are historical only. Current replacement and migration details: [retirement runbook](../docs/runbooks/VK_MINIAPP_RETIREMENT.md).
+
+`/account/*` now requires existing verified account-session Bearer tokens; client VK IDs and launch params never authenticate it. Email proofs use the dedicated preserved `ACCOUNT_EMAIL_PROOF_SECRET`. Signed reference reads use the VK API host; new releases contain seven images. No data migration or provider/billing change accompanies retirement.
+
 —разу позици€: **основной backend Ч Go**. Python можно добавить отдельными workerТами дл€ локальной обработки медиа, ffmpeg-обв€зки, ML-инструментов, но orchestration/backend/provider gateway/job processing лучше держать на Go.
 
 > **—татус реализации:** этот документ описывает целевую production-архитектуру
@@ -11,6 +15,13 @@
 ---
 
 # Current implementation addendum: app surfaces and backend core
+Release admission uses the same source-contract and deployment regression runner
+in local preflight and CI. Source inventories, signed image identities and
+exact-SHA quality/rollout gates are checked together. Independent signature
+verification remains mandatory before deployment. Local stage receipts bind
+commit, policy and runtime inputs; security results expire after 24 hours.
+See [DEV release contract](runbooks/DEV.md).
+
 Generated output images/videos/audio/documents and their variants have a persisted
 two-calendar-month UTC deadline from the original creation time (migration 000061).
 Database guards preserve earlier user deletion and prevent later previews from
@@ -104,8 +115,8 @@ cmd/api
        repositories + billingservice + joborchestrator + commandrouter
   -> internal/app/vkbot.NewHandler
        mounts POST /webhooks/vk
-  -> internal/app/miniapp.NewHandler
-       mounts /miniapp/*
+  -> internal/adapter/inbound/websession
+       mounts /web/v1/* with account session ownership
   -> admin, health, metrics, graceful shutdown
 
 cmd/worker
@@ -121,9 +132,6 @@ Surface modules are intentionally thin wiring layers:
 - `internal/app/vkbot` owns VK text bot HTTP wiring: VK callback handler setup,
   VK control/profile clients, menu feature flags, Redis dialog mode,
   anti-spam and referral dependencies.
-- `internal/app/miniapp` owns Mini App BFF wiring: launch-param protected
-  handler setup, Mini App rate limiting, S3 artifact read access, and the
-  Mini App inbound handler dependencies.
 - `internal/app/api` is bootstrap-only glue for `cmd/api`: it groups shared
   repositories and shared services so `cmd/api/main.go` stays readable.
 
@@ -144,11 +152,10 @@ Current production runtime map for VPS:
 
 | Runtime | Public surface | Responsibility | Durable dependencies |
 |---------|----------------|----------------|----------------------|
-| `cmd/api` | Yes, behind Cloudflare/reverse proxy | VK Callback API `/webhooks/vk`, Mini App BFF `/miniapp/*`, protected admin/operator routes, `/health`, `/healthz`, private `/metrics` | Postgres, Redis, S3/MinIO for owner-checked artifact reads |
+| `cmd/api` | Yes, behind Cloudflare/reverse proxy | VK Callback API `/webhooks/vk`, website `/web/v1/*`, protected admin/operator routes, `/health`, `/healthz`, private `/metrics` | Postgres, Redis, S3/MinIO for owner-checked artifact reads |
 | `cmd/worker` | No | Consumes job streams, calls AI providers through adapters, polls async provider tasks, creates artifacts, runs moderation/scanning/media processing, performs delivery and billing capture/release | Postgres, Redis, S3/MinIO, provider credentials, VK delivery credentials |
-| `cmd/worker` with `WORKER_MODE=maintenance` | No | Runs scheduled retention cleanup, job event cleanup, orphan/expired artifact deletion, provider payload redaction and daily analytics aggregate refresh without VK/Mini App involvement | Postgres, Redis, S3/MinIO |
+| `cmd/worker` with `WORKER_MODE=maintenance` | No | Runs scheduled retention cleanup, job event cleanup, orphan/expired artifact deletion, provider payload redaction and daily analytics aggregate refresh without client transport involvement | Postgres, Redis, S3/MinIO |
 | `cmd/provider-webhook` | Yes, HTTPS only behind Cloudflare/reverse proxy | YooKassa webhook intake `/billing/webhooks/yookassa`, webhook inbox dedup, async provider-verified payment processing and reconciliation | Postgres, payment provider credentials |
-| `web/miniapp/dist` | Yes, static frontend | VK Mini App static UI. It calls backend `/miniapp/*`; it must not call AI/payment providers or own trusted balance/job state | Static file hosting only |
 | Postgres | No | Source of truth for users, jobs, billing ledger, payment intents/events/refunds, artifacts metadata, conversations, referrals, inbox/outbox/dedup | Persistent disk, backups, migrations |
 | Redis | No | Queues/streams, rate limits, VK dialog state, transient locks/cache | Persistent volume recommended; rebuildable from Postgres where possible |
 | S3/MinIO | No public bucket | Binary artifacts: generated photos, videos, files, provider outputs and safe media variants. Ownership metadata stays in Postgres | Durable object storage and lifecycle policy |
@@ -202,8 +209,6 @@ vk.epifera.com/webhooks/vk                    -> cmd/api
 vk.epifera.com/health                         -> cmd/api
 vk.epifera.com/billing/webhooks/yookassa       -> cmd/provider-webhook
 epifera.com/billing/webhooks/yookassa          -> cmd/provider-webhook (compat exact route)
-app.epifera.com/                              -> web/miniapp/dist
-app.epifera.com/miniapp/*                     -> cmd/api
 ```
 
 `/metrics`, Grafana, Prometheus, Loki, Tempo, Alertmanager, storage consoles and
@@ -215,7 +220,7 @@ arrive at `cmd/provider-webhook` with HTTPS scheme headers preserved.
 Cloudflare is the public HTTPS edge for the production VPS. Public DNS records
 for `vk.epifera.com`, `app.epifera.com` and the optional root-domain YooKassa
 compatibility route must be proxied and routed through Cloudflare Tunnel to the
-reverse proxy. Cloudflare Access must stay disabled on VK callback, Mini App and
+reverse proxy. Cloudflare Access must stay disabled on VK callback and
 YooKassa webhook routes. The exact YooKassa webhook location must forward
 `X-Forwarded-Proto: https` / `Forwarded: proto=https` to
 `cmd/provider-webhook`; broad `/billing/*` routes remain private/operator-only.
@@ -253,13 +258,13 @@ redis-exporter:9121
 ```
 
 Blackbox probes check private readiness routes for `api`, `worker`,
-`maintenance-worker`, `provider-webhook`, `miniapp` and `reverse-proxy`; separate public probes assert
+`maintenance-worker`, `provider-webhook` and `reverse-proxy`; separate public probes assert
 that `/metrics` is not exposed through public domains. Grafana, Prometheus,
 Loki, Tempo, Alertmanager and raw `/metrics` endpoints must remain loopback,
 VPN, SSH-tunnel or private-network only.
 
 Production smoke is an operator workflow, not an application bypass. Safe smoke
-scripts may only check public routing, health, Mini App auth rejection, exact
+scripts may only check public routing, health, website session rejection, exact
 YooKassa webhook reachability with an invalid body, and blocked public
 `/admin/*` / `/metrics` / broad `/billing/*` routes. Production smoke scripts
 must use HTTPS public URLs by default; plain HTTP is only acceptable for local
@@ -313,25 +318,16 @@ Current durable shared chat context:
   polling is bounded to 15 minutes and stops on terminal failures. A public job
   ID and baseline sequence in sessionStorage allow refresh recovery. This
   integration introduces no schema change or separate billing implementation.
-- VK bot and Mini App text chat both use the same Postgres-backed conversation
+- Website and VK bot text chat both use the same Postgres-backed conversation
   core: `conversations`, `conversation_messages`, `conversation_summaries` and
   `internal/service/dialogcontext`.
 - VK bot chat uses `source=vk_bot`, scoped by backend `user_id` and `vk_peer_id`.
-  Mini App chat uses `source=miniapp`, scoped by backend `user_id` and opaque
+  Historical Mini App chat used `source=miniapp`, scoped by backend `user_id` and opaque
   `external_thread_id` / public `conversation_id`.
 - `cmd/worker` is the only flow that prepares bounded prompt context, calls
   providers and stores assistant turns. `cmd/api`, VK inbound handlers and Mini
   App BFF handlers only create jobs/control responses and read owner-scoped
   history.
-- Mini App exposes authenticated conversation list/history endpoints under
-  `/miniapp/chat/conversations`. Responses are product DTOs only: thread ids,
-  titles/timestamps/previews and `user` / `bot` message text. Provider ids,
-  billing internals and artifact storage internals are not exposed.
-- Mini App local storage is only UI state: active thread, active tab, theme and
-  legacy cache cleanup. It must not store prompt bodies, generated answers,
-  launch params, tokens, balance, provider details or artifact URLs.
-- User-visible Mini App chat model output remains the public alias `ChatGPT`.
-
 Current image-generation foundation:
 
 - Image jobs use the same asynchronous Job -> worker -> provider -> Artifact
@@ -367,7 +363,7 @@ Current image-generation foundation:
 - `joborchestrator` owner-checks input artifact IDs before reservation. The
   worker resolves accepted reference artifacts into sanitized provider inputs
   and provider adapters enforce per-model caps and request fields. VK handlers,
-  Mini App BFF and `cmd/api` still do not call providers or construct
+  website API and `cmd/api` still do not call providers or construct
   provider-native payloads.
 - VK bot text-to-video UX follows the same surface-state pattern: enabled route
   buttons store peer-scoped `video:*` dialog mode, the next plain text creates a
@@ -382,13 +378,13 @@ Current image-generation foundation:
 - Image provider failures that reach terminal state release reserved credits
   before delivery and can produce a short VK failure notice; they must not be
   captured as successful billable delivery.
-- VK bot and Mini App handlers still only create jobs or control responses; they
+- VK bot and website handlers still only create jobs or control responses; they
   do not call OpenAI, DeepInfra, Gemini, Seedream or any other provider.
 
 Current payment/top-up foundation:
 
 - Payment top-ups are being added as backend-owned billing flows shared by VK
-  Bot and VK Mini App, not as frontend-confirmed balance changes.
+  Bot and the website, not as frontend-confirmed balance changes.
 - `internal/domain/payment.go` defines payment-provider codes, payment products,
   payment intents, webhook inbox events, refunds and an explicit intent state
   machine. Late provider events must not roll a successful payment back to a
@@ -398,7 +394,7 @@ Current payment/top-up foundation:
   `product_id` and `price_version`; webhook handling must not recalculate old
   payments from the current product catalog.
 - Migration `000010_payment_product_catalog` seeds the initial active credit
-  packages. VK Bot and VK Mini App must read top-up choices from this shared
+  packages. VK Bot and the website must read top-up choices from this shared
   catalog instead of hardcoding separate per-surface packages.
 - Migration `000011_payment_intent_receipt_snapshot` adds intent-level fiscal
   receipt snapshots: `receipt_description`, `vat_code`, `payment_subject` and
@@ -451,7 +447,7 @@ Current payment/top-up foundation:
   internal `user_id` from operator context but must not trust a public JSON
   body as identity. Only this protected operator create path may pass
   `capture: false` to create a two-stage YooKassa smoke intent; user-facing
-  Mini App and VK Bot top-ups remain immediate-capture payments.
+  Website and VK Bot top-ups remain immediate-capture payments.
 - The standalone web BFF exposes cookie-authenticated `/web/v1/payment-products`,
   `POST /web/v1/payments/intents` (Origin/CSRF, account-scoped idempotency and rate
   limit), and owner-scoped `GET /web/v1/payments/{id}`. It reuses
@@ -464,21 +460,11 @@ Current payment/top-up foundation:
   WEB_ORIGIN and includes a local payment ID for authenticated return-page status
   recovery. VK return URLs and the append-only ledger remain unchanged. See
   `docs/runbooks/BILLING.md` for configuration and smoke requirements.
-- The Mini App BFF exposes authenticated user payment routes:
-  `GET /miniapp/payment-products`, `POST /miniapp/payments/intents`,
-  `GET /miniapp/payments` and `GET /miniapp/payments/{id}`. These routes derive
-  the backend user from verified VK launch params / trusted dev auth, require
-  `X-Idempotency-Key` for creation, owner-check reads and never expose
-  `provider_payment_id`, raw YooKassa payloads or credentials. Mini App Settings
-  renders the safe payment history DTOs and may redirect the user to a returned
-  `confirmation_url`, including active waiting-intent continuation links, but the return URL is
-  only navigation and must not grant credits.
 - VK Bot top-up is a control path. When a server-side
   `VK_TOP_UP_RECEIPT_EMAIL` / `VK_TOP_UP_RECEIPT_PHONE` contact exists, it lists
   the shared products, creates the intent through
   `internal/service/paymentservice` and sends the safe payment link. Without a
-  server receipt contact, the bot opens the configured Mini App instead; the
-  payer selects the product and enters the receipt contact there. Neither path
+  server receipt contact, the bot fails closed without creating an intent. Neither path
   calls YooKassa from the handler or mutates balance from a button click or
   provider redirect.
 - `cmd/provider-webhook` owns payment provider webhook intake. It exposes
@@ -553,23 +539,12 @@ VK Callback API -> /webhooks/vk -> internal/app/vkbot
   -> cmd/worker -> provider/artifact/moderation/delivery/billing capture
 ```
 
-```text
-VK Mini App:
-VK launch params -> /miniapp/* -> internal/app/miniapp
-  -> internal/adapter/inbound/miniapp
-  -> joborchestrator/billingservice for jobs
-  -> backend-owned estimate/balance/status/artifact ownership checks
-  -> cmd/worker for provider/artifact/moderation/delivery/billing capture
-```
 
 Where to add features:
 
 - New VK bot command/menu behavior: start in `internal/adapter/inbound/vk` and
   related command/router/service tests. Only touch `internal/app/vkbot` when the
   command needs new wiring dependencies or feature flags.
-- New Mini App endpoint: add the BFF handler/DTO/tests in
-  `internal/adapter/inbound/miniapp`; wire only dependency construction in
-  `internal/app/miniapp` if a new shared service/repository is required.
 - New business rule, price, balance, job transition, provider choice or
   moderation rule: implement it in backend core (`internal/domain`,
   `internal/service`, `internal/worker`, provider/storage adapters as
@@ -586,7 +561,7 @@ Provider API architecture:
   readiness requirements, route specs, request limits, active/disabled pricing
   keys and static media contract classes. It stores config/env names only; it
   does not read env values and does not call providers.
-- `internal/service/modelcatalog` resolves public Mini App/VK model choices
+- `internal/service/modelcatalog` resolves public website/VK model choices
   from the registry. Public catalogs expose public IDs and display constraints,
   not provider names, model codes or provider model IDs.
 - `internal/service/videorouter` derives route specs from the registry and
@@ -606,7 +581,7 @@ Add a provider:
 3. Normalize provider statuses and errors into domain types; keep
    provider-native response details inside the adapter.
 4. Add readiness metadata to `providermodels` using env/config names only.
-5. Wire construction only in `cmd/worker`; API/VK/Mini App surfaces must remain
+5. Wire construction only in `cmd/worker`; API/VK/website surfaces must remain
    provider-free.
 6. Run provider tests and the provider security scans before enabling the
    provider.
@@ -641,7 +616,7 @@ URLs.
 Forbidden shortcuts:
 
 - Do not call providers from `internal/app/*`, `cmd/api`, VK inbound handlers or
-  Mini App BFF handlers.
+  website API handlers.
 - Do not mutate balances outside `billingservice` and ledger-backed storage.
 - Do not trust frontend state for balance, pricing, job status, ownership,
   moderation or identity.

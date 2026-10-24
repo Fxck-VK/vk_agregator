@@ -616,7 +616,7 @@ jobs:
           echo "==> DEV diagnostic migrate logs"
           "${compose[@]}" logs --no-color --tail=200 migrate || true
 
-          for service in api worker maintenance-worker provider-webhook provider-balance-bot miniapp platform reverse-proxy cloudflared; do
+          for service in api worker maintenance-worker provider-webhook provider-balance-bot platform reverse-proxy cloudflared; do
             echo "==> DEV diagnostic ${service} logs"
             "${compose[@]}" logs --no-color --tail=80 "${service}" || true
           done

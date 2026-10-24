@@ -47,7 +47,7 @@ func (r *JobRepository) Create(ctx context.Context, job *domain.Job) error {
 	channel, recipientRef, threadRef := channelContextValues(job.ChannelContext)
 	targetChannel, targetRecipientRef, targetThreadRef := deliveryTargetValues(job.DeliveryTarget)
 	// command_id is nullable; pass nil when the job has no associated command
-	// (e.g. jobs created directly through the Mini App BFF).
+	// (e.g. jobs created directly through a backend API).
 	var commandID *uuid.UUID
 	if job.CommandID != uuid.Nil {
 		commandID = &job.CommandID

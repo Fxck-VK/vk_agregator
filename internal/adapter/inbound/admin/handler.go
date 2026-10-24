@@ -113,7 +113,7 @@ type Deps struct {
 	Maintenance      maintenanceOverviewReader
 	RetentionCleanup retentionCleanupRunner
 	// PricingCache is the single runtime generation pricing catalog used by
-	// Mini App, VK bot and job creation paths.
+	// website, VK bot and job creation paths.
 	PricingCache *pricingcatalog.RuntimeCatalogCache
 }
 
@@ -334,12 +334,6 @@ func (h *Handler) getOverview(w http.ResponseWriter, r *http.Request) {
 			Title:   "VK Bot",
 			Status:  overviewStatusNotWired,
 			Summary: "Live VK control and delivery health needs a dedicated read-only source.",
-		},
-		{
-			ID:      "miniapp",
-			Title:   "Mini App",
-			Status:  overviewStatusNotWired,
-			Summary: "Mini App BFF health is mounted, but per-surface operator health is not wired yet.",
 		},
 		h.workerOverviewCard(r.Context()),
 		h.paymentProcessingOverviewCard(r.Context(), now),

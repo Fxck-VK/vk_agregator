@@ -171,7 +171,7 @@ for required in \
   APP_IMAGE_REGISTRY IMAGE_TAG \
   DATABASE_URL REDIS_ADDR \
   S3_ENDPOINT S3_ACCESS_KEY S3_SECRET_KEY S3_BUCKET \
-  VK_ACCESS_TOKEN VK_SECRET VK_CONFIRMATION_TOKEN VK_APP_SECRET ADMIN_TOKEN; do
+  VK_ACCESS_TOKEN VK_SECRET VK_CONFIRMATION_TOKEN ACCOUNT_EMAIL_PROOF_SECRET ADMIN_TOKEN; do
   require_value "${required}" "required for server runtime"
 done
 
@@ -318,7 +318,7 @@ if is_true_value "$(get_value VK_MENU_TOP_UP_ENABLED)"; then
   email="$(get_value VK_TOP_UP_RECEIPT_EMAIL)"
   phone="$(get_value VK_TOP_UP_RECEIPT_PHONE)"
   if [[ -z "${email//[[:space:]]/}" && -z "${phone//[[:space:]]/}" ]]; then
-    require_https_url YOOKASSA_RETURN_URL_MINIAPP "required when VK top-up has no server receipt contact"
+    add_problem VK_TOP_UP_RECEIPT_EMAIL "VK top-up requires a configured receipt email or phone"
   else
     require_https_url PUBLIC_VK_BASE_URL "required for VK top-up payment links"
     if ! is_true_value "$(get_value FEATURE_VK_TOPUP_STATUS_EDIT_ENABLED false)"; then
@@ -335,7 +335,6 @@ fi
 if [[ "${with_cloudflare}" == "true" ]]; then
   require_value CLOUDFLARED_TUNNEL_TOKEN "required when deploying with Cloudflare tunnel; store it only in the server .env"
   require_https_url PUBLIC_VK_BASE_URL "required for Cloudflare deploy smoke, expected https://vk.epifera.com"
-  require_https_url PUBLIC_APP_BASE_URL "required for Cloudflare deploy smoke, expected https://app.epifera.com"
   require_https_url PUBLIC_PAYMENT_WEBHOOK_URL "required for Cloudflare deploy smoke, expected https://epifera.com/billing/webhooks/yookassa"
 fi
 

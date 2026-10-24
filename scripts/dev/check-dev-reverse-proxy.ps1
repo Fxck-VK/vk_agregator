@@ -72,19 +72,6 @@ $checks = @(
         ExpectedStatuses = @(200)
     },
     @{
-        Name = "DEV Mini App frontend"
-        HostName = "dev-app.epifera.com"
-        Path = "/"
-        ExpectedStatuses = @(200)
-    },
-    @{
-        Name = "DEV Mini App BFF route"
-        HostName = "dev-app.epifera.com"
-        Path = "/miniapp/balance"
-        ExpectedStatuses = @(400, 401, 403)
-        ForbiddenStatuses = @(404, 500, 502, 503, 504)
-    },
-    @{
         Name = "DEV YooKassa webhook route"
         HostName = "dev.epifera.com"
         Path = "/billing/webhooks/yookassa"
@@ -94,16 +81,16 @@ $checks = @(
         ForbiddenStatuses = @(404, 500, 502, 503, 504)
     },
     @{
-        Name = "DEV Mini App metrics blocked"
-        HostName = "dev-app.epifera.com"
-        Path = "/metrics"
+        Name = "DEV VK admin blocked"
+        HostName = "dev-vk.epifera.com"
+        Path = "/admin/jobs"
         ExpectedStatuses = @(404)
         ForbiddenStatuses = @(200, 500, 502, 503, 504)
     },
     @{
-        Name = "DEV VK admin blocked"
+        Name = "DEV VK metrics blocked"
         HostName = "dev-vk.epifera.com"
-        Path = "/admin/jobs"
+        Path = "/metrics"
         ExpectedStatuses = @(404)
         ForbiddenStatuses = @(200, 500, 502, 503, 504)
     }

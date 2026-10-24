@@ -15,7 +15,7 @@ import (
 
 func TestResolver_UsesTrustedModelAndExactPricingSnapshot(t *testing.T) {
 	pricing := staticPricingCatalog(t)
-	const modelID = modelcatalog.MiniAppImageSeedream45
+	const modelID = modelcatalog.PublicImageSeedream45
 	resolver := imagegeneration.NewResolver([]imagegeneration.PublicModel{{
 		ID:                     modelID,
 		Name:                   "Seedream 4.5",
@@ -75,7 +75,7 @@ func TestResolver_UsesTrustedModelAndExactPricingSnapshot(t *testing.T) {
 
 func TestResolver_NormalizesAndValidatesOutputCount(t *testing.T) {
 	resolver := imagegeneration.NewResolver([]imagegeneration.PublicModel{{
-		ID:             modelcatalog.MiniAppImageNanoBanana2,
+		ID:             modelcatalog.PublicImageNanoBanana2,
 		Name:           "Nano Banana 2",
 		Enabled:        true,
 		Ready:          true,
@@ -84,7 +84,7 @@ func TestResolver_NormalizesAndValidatesOutputCount(t *testing.T) {
 		MaxOutputCount: 4,
 	}}, staticPricingCatalog(t))
 
-	defaulted, err := resolver.Resolve(imagegeneration.Request{ModelID: modelcatalog.MiniAppImageNanoBanana2})
+	defaulted, err := resolver.Resolve(imagegeneration.Request{ModelID: modelcatalog.PublicImageNanoBanana2})
 	if err != nil {
 		t.Fatalf("resolve default output count: %v", err)
 	}
@@ -92,12 +92,12 @@ func TestResolver_NormalizesAndValidatesOutputCount(t *testing.T) {
 		t.Fatalf("default output count = %d / %d, want %d", defaulted.Public.OutputCount, defaulted.Worker.OutputCount, imagegeneration.DefaultOutputCount)
 	}
 
-	_, err = resolver.Resolve(imagegeneration.Request{ModelID: modelcatalog.MiniAppImageNanoBanana2, OutputCount: 5})
+	_, err = resolver.Resolve(imagegeneration.Request{ModelID: modelcatalog.PublicImageNanoBanana2, OutputCount: 5})
 	if !errors.Is(err, imagegeneration.ErrOutputCountLimit) {
 		t.Fatalf("output count limit error = %v, want ErrOutputCountLimit", err)
 	}
 
-	_, err = resolver.Resolve(imagegeneration.Request{ModelID: modelcatalog.MiniAppImageNanoBanana2, OutputCount: -1})
+	_, err = resolver.Resolve(imagegeneration.Request{ModelID: modelcatalog.PublicImageNanoBanana2, OutputCount: -1})
 	if !errors.Is(err, imagegeneration.ErrInvalidOutputCount) {
 		t.Fatalf("invalid output count error = %v, want ErrInvalidOutputCount", err)
 	}
@@ -105,7 +105,7 @@ func TestResolver_NormalizesAndValidatesOutputCount(t *testing.T) {
 
 func TestResolver_ResolvePublicSelectionDoesNotRequireCurrentPrice(t *testing.T) {
 	resolver := imagegeneration.NewResolver([]imagegeneration.PublicModel{{
-		ID:                     modelcatalog.MiniAppImageNanoBanana2,
+		ID:                     modelcatalog.PublicImageNanoBanana2,
 		Name:                   "Nano Banana 2",
 		Enabled:                true,
 		Ready:                  true,
@@ -116,21 +116,21 @@ func TestResolver_ResolvePublicSelectionDoesNotRequireCurrentPrice(t *testing.T)
 	}}, nil)
 
 	selection, err := resolver.ResolvePublic(imagegeneration.Request{
-		ModelID: modelcatalog.MiniAppImageNanoBanana2,
+		ModelID: modelcatalog.PublicImageNanoBanana2,
 		Quality: " 2k ",
 	})
 
 	if err != nil {
 		t.Fatalf("resolve public selection: %v", err)
 	}
-	if selection.ModelID != modelcatalog.MiniAppImageNanoBanana2 || selection.ModelName != "Nano Banana 2" || selection.ImageQuality != modelcatalog.ImageQuality2K {
+	if selection.ModelID != modelcatalog.PublicImageNanoBanana2 || selection.ModelName != "Nano Banana 2" || selection.ImageQuality != modelcatalog.ImageQuality2K {
 		t.Fatalf("public selection = %+v", selection)
 	}
 }
 
 func TestResolver_NormalizesAndValidatesAspectRatio(t *testing.T) {
 	resolver := imagegeneration.NewResolver([]imagegeneration.PublicModel{{
-		ID:             modelcatalog.MiniAppImageNanoBanana2,
+		ID:             modelcatalog.PublicImageNanoBanana2,
 		Name:           "Nano Banana 2",
 		Enabled:        true,
 		Ready:          true,
@@ -139,7 +139,7 @@ func TestResolver_NormalizesAndValidatesAspectRatio(t *testing.T) {
 	}}, staticPricingCatalog(t))
 
 	defaulted, err := resolver.Resolve(imagegeneration.Request{
-		ModelID: modelcatalog.MiniAppImageNanoBanana2,
+		ModelID: modelcatalog.PublicImageNanoBanana2,
 	})
 	if err != nil {
 		t.Fatalf("resolve default aspect ratio: %v", err)
@@ -149,7 +149,7 @@ func TestResolver_NormalizesAndValidatesAspectRatio(t *testing.T) {
 	}
 
 	selected, err := resolver.Resolve(imagegeneration.Request{
-		ModelID:     modelcatalog.MiniAppImageNanoBanana2,
+		ModelID:     modelcatalog.PublicImageNanoBanana2,
 		AspectRatio: " 4:5 ",
 	})
 	if err != nil {
@@ -160,7 +160,7 @@ func TestResolver_NormalizesAndValidatesAspectRatio(t *testing.T) {
 	}
 
 	_, err = resolver.Resolve(imagegeneration.Request{
-		ModelID:     modelcatalog.MiniAppImageNanoBanana2,
+		ModelID:     modelcatalog.PublicImageNanoBanana2,
 		AspectRatio: "7:5",
 	})
 	if !errors.Is(err, imagegeneration.ErrUnsupportedAspectRatio) {
@@ -177,7 +177,7 @@ func TestResolver_FailsClosedForDisabledOrUnreadyPublicModel(t *testing.T) {
 		{
 			name: "disabled",
 			models: []imagegeneration.PublicModel{{
-				ID:      modelcatalog.MiniAppImageNanoBanana2,
+				ID:      modelcatalog.PublicImageNanoBanana2,
 				Enabled: false,
 				Ready:   true,
 			}},
@@ -185,7 +185,7 @@ func TestResolver_FailsClosedForDisabledOrUnreadyPublicModel(t *testing.T) {
 		{
 			name: "unready",
 			models: []imagegeneration.PublicModel{{
-				ID:      modelcatalog.MiniAppImageNanoBanana2,
+				ID:      modelcatalog.PublicImageNanoBanana2,
 				Enabled: true,
 				Ready:   false,
 			}},
@@ -193,7 +193,7 @@ func TestResolver_FailsClosedForDisabledOrUnreadyPublicModel(t *testing.T) {
 		{
 			name: "not in ready public catalog",
 			models: []imagegeneration.PublicModel{{
-				ID:      modelcatalog.MiniAppImageSeedream45,
+				ID:      modelcatalog.PublicImageSeedream45,
 				Enabled: true,
 				Ready:   true,
 			}},
@@ -203,7 +203,7 @@ func TestResolver_FailsClosedForDisabledOrUnreadyPublicModel(t *testing.T) {
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
 			_, err := imagegeneration.NewResolver(test.models, pricing).Resolve(imagegeneration.Request{
-				ModelID: modelcatalog.MiniAppImageNanoBanana2,
+				ModelID: modelcatalog.PublicImageNanoBanana2,
 			})
 			if !errors.Is(err, imagegeneration.ErrPublicModelUnavailable) {
 				t.Fatalf("resolve error = %v, want ErrPublicModelUnavailable", err)
@@ -214,7 +214,7 @@ func TestResolver_FailsClosedForDisabledOrUnreadyPublicModel(t *testing.T) {
 
 func TestResolver_FailsClosedWhenReadyPublicCatalogIsMissing(t *testing.T) {
 	_, err := imagegeneration.NewResolver(nil, staticPricingCatalog(t)).Resolve(imagegeneration.Request{
-		ModelID: modelcatalog.MiniAppImageNanoBanana2,
+		ModelID: modelcatalog.PublicImageNanoBanana2,
 	})
 	if !errors.Is(err, imagegeneration.ErrPublicModelUnavailable) {
 		t.Fatalf("resolve error = %v, want ErrPublicModelUnavailable", err)
@@ -223,7 +223,7 @@ func TestResolver_FailsClosedWhenReadyPublicCatalogIsMissing(t *testing.T) {
 
 func TestResolverRejectsLegacyAliasThatIsNotInThePublicCatalog(t *testing.T) {
 	resolver := imagegeneration.NewResolver([]imagegeneration.PublicModel{{
-		ID:                     modelcatalog.MiniAppImageNanoBananaPro,
+		ID:                     modelcatalog.PublicImageNanoBananaPro,
 		Name:                   "Nano Banana Pro",
 		Enabled:                true,
 		Ready:                  true,
@@ -242,7 +242,7 @@ func TestResolverRejectsLegacyAliasThatIsNotInThePublicCatalog(t *testing.T) {
 func TestResolver_RejectsUnsupportedQualityAndReferenceCount(t *testing.T) {
 	pricing := staticPricingCatalog(t)
 	resolver := imagegeneration.NewResolver([]imagegeneration.PublicModel{{
-		ID:                     modelcatalog.MiniAppImageNanoBanana2,
+		ID:                     modelcatalog.PublicImageNanoBanana2,
 		Name:                   "Nano Banana 2",
 		Enabled:                true,
 		Ready:                  true,
@@ -253,7 +253,7 @@ func TestResolver_RejectsUnsupportedQualityAndReferenceCount(t *testing.T) {
 	}}, pricing)
 
 	_, err := resolver.Resolve(imagegeneration.Request{
-		ModelID: modelcatalog.MiniAppImageNanoBanana2,
+		ModelID: modelcatalog.PublicImageNanoBanana2,
 		Quality: modelcatalog.ImageQuality4K,
 	})
 	if !errors.Is(err, imagegeneration.ErrUnsupportedQuality) {
@@ -261,7 +261,7 @@ func TestResolver_RejectsUnsupportedQualityAndReferenceCount(t *testing.T) {
 	}
 
 	_, err = resolver.Resolve(imagegeneration.Request{
-		ModelID:        modelcatalog.MiniAppImageNanoBanana2,
+		ModelID:        modelcatalog.PublicImageNanoBanana2,
 		ReferenceCount: 3,
 	})
 	if !errors.Is(err, imagegeneration.ErrReferenceLimit) {
@@ -271,7 +271,7 @@ func TestResolver_RejectsUnsupportedQualityAndReferenceCount(t *testing.T) {
 
 func TestPublicSelectionAndRequestCannotCarryProviderOrClientPrice(t *testing.T) {
 	selectionJSON, err := json.Marshal(imagegeneration.PublicSelection{
-		ModelID:      modelcatalog.MiniAppImageNanoBanana2,
+		ModelID:      modelcatalog.PublicImageNanoBanana2,
 		ModelName:    "Nano Banana 2",
 		ImageQuality: modelcatalog.ImageQuality1K,
 	})
