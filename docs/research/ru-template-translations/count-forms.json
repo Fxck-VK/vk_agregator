@@ -1,0 +1,5 @@
+[
+ {"id":"units.materials.one","source":"{count} material","ru":"{count} материал","back":"{count} material"},
+ {"id":"units.materials.few","source":"{count} materials","ru":"{count} материала","back":"{count} materials","note":"Russian genitive singular after 2–4 and decimal counts; shared by two/other."},
+ {"id":"units.materials.many","source":"{count} materials","ru":"{count} материалов","back":"{count} materials","note":"Russian genitive plural; also the zero form."}
+]

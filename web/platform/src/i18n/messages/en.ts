@@ -5,6 +5,12 @@ import { messagesMusicCatalogEn } from "../music-catalog";
 import { messagesMusicEn } from "../music";
 
 export const messagesEn = {
+  "units.materials.zero": "{count} materials",
+  "units.materials.one": "{count} material",
+  "units.materials.two": "{count} materials",
+  "units.materials.few": "{count} materials",
+  "units.materials.many": "{count} materials",
+  "units.materials.other": "{count} materials",
   ...messagesSpeechEn,
   ...messagesMusicCatalogEn,
   ...messagesMusicEn,

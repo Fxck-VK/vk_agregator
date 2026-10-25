@@ -9,12 +9,12 @@ export const homeEn = {
   navigation: [
     { label: "Creative Suite", groups: [
       { title: "Create", links: [{ label: "Image Generator", href: "/app/image" }, { label: "Video Generator", href: "/app/models" }, { label: "Music Generator", href: "/app/music" }, { label: "Text to Speech", href: "/app/speech" }] },
-      { title: "Explore", links: [{ label: "All AI models", href: "/app/models" }, { label: "AI chat", href: "/app" }, { label: "Inspiration", href: "/app/inspiration" }] },
+      { title: "Explore", links: [{ label: "All AI tools", href: "/ai" }, { label: "Kling family", href: "/ai/kling" }, { label: "All AI models", href: "/app/models" }, { label: "AI chat", href: "/app" }, { label: "Inspiration", href: "/app/inspiration" }] },
       { title: "Your workspace", links: [{ label: "My files", href: "/app/files" }, { label: "Conversations", href: "/app/chats" }, { label: "Start creating", href: "/app" }] },
     ] },
     { label: "Inspiration", groups: [{ title: "Find your next idea", links: [{ label: "Visual inspiration", href: "/app/inspiration" }, { label: "Image examples", href: "/ai/image-generator#examples" }, { label: "Creative possibilities", href: "#possibilities" }] }] },
-    { label: "Resources", groups: [{ title: "Learn and explore", links: [{ label: "How it works", href: "#workflow" }, { label: "Questions and answers", href: "#questions" }, { label: "Contact support", href: "mailto:support@epifera.com" }] }] },
-    { label: "For teams", href: "#teams" }, { label: "Plans", href: "#plans" },
+    { label: "Resources", groups: [{ title: "Learn and explore", links: [{ label: `About ${brandName}`, href: "/company/about-us" }, { label: "Creative Sessions", href: "/events/creative-sessions" }, { label: "Editorial library", href: "/blog/author/epifera" },{ label: "How it works", href: "#workflow" }, { label: "Questions and answers", href: "#questions" }, { label: "Contact support", href: "mailto:support@epifera.com" }] }] },
+    { label: "For teams", href: "/business" }, { label: "Plans", href: "#plans" },
   ],
   login: "Log in", signup: "Sign up",
   hero: { eyebrow: "Your creative tools, all together", title: "The creative platform to direct your best work", description: "AI models for video, image, and audio. Explore ideas, shape your visual world, and move from your first prompt to a result worth sharing.", modelCaption: "Find your creative flow with leading AI model families", capabilities: ["Generate images", "Bring ideas to life", "Create your own music", "Tell your story", "Explore new worlds", "Find the right words"], partners: ["Google", "OpenAI", "FLUX", "KLING", "Suno", "elevenlabs"] },
@@ -78,8 +78,8 @@ export const homeEn = {
   ] },
   closing: `Be ${brandName}`, footer: { description: "A creative workspace for your next idea.", copyright: "All rights reserved.", legalLabel: "Legal", supportEmail: "support@epifera.com", groups: [
     { title: "Create", links: [{ label: "AI Image Generator", href: "/app/image" }, { label: "Video Generator", href: "/app/models" }, { label: "Music Generator", href: "/app/music" }, { label: "Text to Speech", href: "/app/speech" }, { label: "AI Chat", href: "/app" }] },
-    { title: "Explore", links: [{ label: "All AI models", href: "/app/models" }, { label: "Inspiration", href: "/app/inspiration" }, { label: "My files", href: "/app/files" }, { label: "Your workspace", href: "/app" }] },
-    { title: "Resources", links: [{ label: "Questions and answers", href: "#questions" }, { label: "Contact support", href: "mailto:support@epifera.com" }, { label: "Legal documents", href: "/legal" }] },
+    { title: "Explore", links: [{ label: "All AI tools", href: "/ai" }, { label: "All AI models", href: "/app/models" }, { label: "Inspiration", href: "/app/inspiration" }, { label: "My files", href: "/app/files" }, { label: "Your workspace", href: "/app" }] },
+    { title: "Resources", links: [{ label: `About ${brandName}`, href: "/company/about-us" }, { label: "Creative Sessions", href: "/events/creative-sessions" }, { label: "Editorial library", href: "/blog/author/epifera" },{ label: "Questions and answers", href: "#questions" }, { label: "Contact support", href: "mailto:support@epifera.com" }, { label: "Legal documents", href: "/legal" }] },
   ], legal: [{ label: "User agreement", href: "/legal/user-agreement" }, { label: "Privacy policy", href: "/legal/privacy-policy" }, { label: "Payment and refunds", href: "/legal/paid-access" }] },
 } as const;
 

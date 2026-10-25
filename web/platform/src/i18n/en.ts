@@ -1,10 +1,8 @@
 import { brandName, brandMonogram } from "@/config/brand";
 import { accountAuthText } from "./account-auth";
-import { imageLandingText } from "./image-landing";
 import { legalText } from "./legal";
 
 export const en = {
-  imageLanding: imageLandingText.en,
   auth: accountAuthText.en,
   legal: legalText.en,
   preloading: {

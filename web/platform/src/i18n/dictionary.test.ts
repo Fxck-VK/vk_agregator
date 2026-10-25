@@ -35,6 +35,9 @@ describe("translation catalogs", () => {
       .toEqual(["0 файлов", "1 файл", "2 файла", "5 файлов", "21 файл", "1,5 файла"]);
     expect([0, 1, 2, 21].map(n => countLabel(en, "tokens", n)))
       .toEqual(["0 tokens", "1 token", "2 tokens", "21 tokens"]);
+    expect([0,1,2,5,21].map(n=>countLabel(ru,'materials',n)))
+      .toEqual(['0 материалов','1 материал','2 материала','5 материалов','21 материал']);
+    expect(countLabel(en,'materials',1)).toBe('1 material');
     expect(getCreditAmountLabel(0, undefined, ru)).toBe("0 звёзд");
     expect(getCreditAmountLabel(21, undefined, en)).toBe("21 stars");
     expect(getCreditAmountLabel(1.5, undefined, ru)).toBe("1,5 звезды");

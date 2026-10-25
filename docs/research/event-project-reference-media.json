@@ -1,0 +1,75 @@
+{
+  "reference": 22,
+  "sourcePage": "https://www.magnific.com/events/cannes-lions",
+  "notice": "Saved Magnific design references for a local noindex Epifera project concept. Film Candela credited to Myriam Mira/Magnific; venue/meet-up/interface images do not depict an Epifera event. Replace/clear media before indexed publication.",
+  "files": [
+    {
+      "file": "/assets/images/event-project/hero.webp",
+      "format": "webp",
+      "width": 2000,
+      "height": 849,
+      "bytes": 69846,
+      "sha256": "656b965996890338feb9e94cbecef631c19e8d17d1c7268af5cc8f536eba06a0",
+      "sourceUrl": "https://media.magnific.com/images/cannes-lions/hero.webp?w=2000&h=1200&q=75",
+      "cachedFile": ".cache/magnific-html-assets/files/e545f314fb7c41f146a7.webp",
+      "byteIdentical": true
+    },
+    {
+      "file": "/assets/images/event-project/candela-cover.avif",
+      "format": "avif",
+      "width": 2000,
+      "height": 1125,
+      "bytes": 50569,
+      "sha256": "dc81f0ff658a8a78fa1377f772130cee40f159cfd7b00988398b435dfb561f21",
+      "sourceUrl": "https://media.magnific.com/images/cannes-lions/candela-cover.webp?w=2000&h=1200&q=75",
+      "cachedFile": ".cache/magnific-html-assets/files/294458bf8a65cc98feac.webp",
+      "byteIdentical": true
+    },
+    {
+      "file": "/assets/images/event-project/cabana.avif",
+      "format": "avif",
+      "width": 1560,
+      "height": 1200,
+      "bytes": 99292,
+      "sha256": "0bc9d069ad9f15e5b0b19ac3519d5c594849891535d87c445f91441f553d57a7",
+      "sourceUrl": "https://media.magnific.com/images/cannes-lions/cabana.webp?w=2000&h=1200&q=75",
+      "cachedFile": ".cache/magnific-html-assets/files/5ee989000c0cb4bca183.webp",
+      "byteIdentical": true
+    },
+    {
+      "file": "/assets/images/event-project/happy-hour.avif",
+      "format": "avif",
+      "width": 1200,
+      "height": 1200,
+      "bytes": 129000,
+      "sha256": "33783e4a0e9aaf0891cae5f48f9f9bcc4e531aacb7d5adc93720bc6e58008d29",
+      "sourceUrl": "https://media.magnific.com/images/cannes-lions/happy-hour.webp?w=2000&h=1200&q=75",
+      "cachedFile": ".cache/magnific-html-assets/files/99831e6c74deac3f998c.webp",
+      "byteIdentical": true
+    },
+    {
+      "file": "/assets/images/event-project/enterprise-spaces.avif",
+      "format": "avif",
+      "width": 2000,
+      "height": 987,
+      "bytes": 136073,
+      "sha256": "ad93e1c754fd158b4e4870c3eef18d987f3b0f2a8b45f0759e87b33a9e4ba2d6",
+      "sourceUrl": "https://media.magnific.com/images/cannes-lions/enterprise-spaces.webp?w=2000&h=1200&q=75",
+      "cachedFile": ".cache/magnific-html-assets/files/5b15f974d3887bd2bc52.webp",
+      "byteIdentical": true
+    },
+    {
+      "file": "/assets/videos/event-project/candela-trailer.mp4",
+      "format": "mp4",
+      "bytes": 8064218,
+      "sha256": "7f2ed242bf16caf45b07db41a1dc75c4fe04739499abc2ed56146cba65d2c375",
+      "sourceUrl": "https://media.magnific.com/images/cannes-lions/candela-trailer-15s.mp4",
+      "cachedFile": ".cache/magnific-html-assets/files/616a67af8aecec96fa7f.mp4",
+      "byteIdentical": true,
+      "durationSeconds": 18.517,
+      "width": 1920,
+      "height": 1080,
+      "metadataVerification": "Native browser loadedmetadata and playback on localhost:7159, 2026-10-25"
+    }
+  ]
+}

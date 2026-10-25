@@ -1,0 +1,111 @@
+import { brandName } from "@/config/brand";
+
+export type OverviewAction = { readonly title: string; readonly description: string; readonly icon?: string; readonly href?: string; readonly planned?: boolean };
+export type OverviewCategory = { readonly id: string; readonly label: string; readonly tone: string; readonly tools: readonly OverviewAction[] };
+
+const imageModels = [
+  { id: "flux_2_pro", name: "FLUX 2 Pro", description: "Explore photographic detail, product concepts and visual directions with FLUX." },
+  { id: "nano_banana_pro", name: "Nano Banana Pro", description: "Shape a visual idea with the image and reference options available in your workspace." },
+  { id: "nano_banana_2", name: "Nano Banana 2", description: "Try a fresh direction for your images, from a simple idea to an expressive composition." },
+  { id: "seedream_5_0_lite", name: "Seedream 5.0 Lite", description: "Explore the Seedream family for editorial ideas, product images and creative briefs." },
+  { id: "seedream_4_5", name: "Seedream 4.5", description: "Find another approach to image generation and the visual style of your next project." },
+  { id: "gpt_image_2", name: "GPT Image 2", description: "Turn a written idea into an image and explore the model's available creative controls." },
+  { id: "gpt_image_2_5_flare", name: "GPT Image 2.5 Flare", description: "Explore an OpenAI image model for your next illustration, campaign or visual concept." },
+  { id: "imagen_4_0", name: "Imagen 4", description: "Explore Google's image model family and find a direction for your next composition." },
+  { id: "midjourney_v7", name: "Midjourney V7", description: "Explore expressive visual styles and image concepts with the Midjourney family." },
+] as const;
+const videoModels = [
+  { id: "video_veo_3_1_fast", name: "Veo 3.1 Fast" }, { id: "video_veo_3_1_quality", name: "Veo 3.1" },
+  { id: "video_runway_gen4_5", name: "Runway Gen 4.5" }, { id: "video_kling_v3", name: "Kling 3.0" },
+  { id: "video_kling_3_0_turbo", name: "Kling 3.0 Turbo" }, { id: "kling_2_6", name: "Kling 2.6" },
+  { id: "video_kling_o3_standard", name: "Kling O3" }, { id: "kling_video_o1", name: "Kling O1" },
+  { id: "seedance_2_0", name: "Seedance 2.0" }, { id: "video_seedance_2_0_fast", name: "Seedance 2.0 Fast" },
+  { id: "wan_3_0", name: "Wan 3.0" }, { id: "video_minimax_h3", name: "MiniMax H3" },
+  { id: "skyreels_v4_fast", name: "SkyReels V4" }, { id: "pixverse_v6", name: "PixVerse V6" },
+  { id: "grok_imagine_1_5_video", name: "Grok Imagine" }, { id: "happyhorse_1_0", name: "Happy Horse 1.0" },
+].map(model => ({ ...model, description: `Explore ${model.name} in the video catalog. Review the available inputs, settings and price before creating.` }));
+
+export const aiToolsEn = {
+  metadata: { title: `${brandName} AI tools — Everything you need to create`, description: "Explore AI tools for images, video, music, speech and text. Find the right model and creative workflow in Epifera." },
+  announcement: "Where ideas take shape", skip: "Skip to content",
+  hero: { title: "A creative platform to make anything", description: "AI tools, models, and creative workflows—for any idea you have in your head", shortcuts: [
+    { title: "Spaces", description: "A shared creative canvas is planned for Epifera.", icon: "spaces", planned: true, tone: "purple" },
+    { title: "Image Gen", description: "Explore the image generator.", icon: "images", href: "/ai/image-generator", tone: "blue" },
+    { title: "Video Gen", description: "Explore video models.", icon: "video", href: "/app/models", tone: "green" },
+    { title: "Audio Gen", description: "Create your next soundtrack.", icon: "volume", href: "/app/music", tone: "teal" },
+    { title: "Agent", description: "Connected creative agents are planned for Epifera.", icon: "assistant", planned: true, tone: "neutral" },
+  ] },
+  navigation: [
+    { label: "Creative Suite", groups: [
+      { title: "Create", links: [{ label: "Image Generator", href: "/ai/image-generator" }, { label: "Video Generator", href: "/app/models" }, { label: "Music Generator", href: "/app/music" }, { label: "Text to Speech", href: "/app/speech" }] },
+      { title: "Explore", links: [{ label: "All tools", href: "/ai#tools" }, { label: "Kling family", href: "/ai/kling" }, { label: "AI models", href: "/ai#models" }, { label: "Inspiration", href: "/app/inspiration" }] },
+      { title: "Workspace", links: [{ label: "AI chat", href: "/app" }, { label: "My files", href: "/app/files" }, { label: "Conversations", href: "/app/chats" }] },
+    ] },
+    { label: "Inspiration", href: "/app/inspiration" },
+    { label: "Resources", groups: [{ title: "Get started", links: [{ label: `About ${brandName}`, href: "/company/about-us" }, { label: "Creative Sessions", href: "/events/creative-sessions" }, { label: "Editorial library", href: "/blog/author/epifera" }, { label: "Tools and guides", href: "/ai#docs" }, { label: "Questions and answers", href: "/#questions" }, { label: "Legal documents", href: "/legal" }, { label: "Contact support", href: "mailto:support@epifera.com" }] }] },
+    { label: "For teams", href: "/business" }, { label: "Models", href: "/ai#models" },
+  ],
+  controls: { tools: "Creative tools", styles: "Model styles", clients: "AI client connections", close: "Close preview", comingSoon: "Coming soon", preview: "Preview", explore: "Explore available tools", previous: "Previous", next: "Next" },
+  directory: { title: "Great ideas don't fit in one medium", description: "Choose the tools that work best for you" },
+  plugins: { title: "Plugins for your favorite editors", description: "A preview of the creative apps we want to connect with Epifera.", items: [
+    { name: "After Effects", mark: "Ae" }, { name: "Premiere Pro", mark: "Pr" }, { name: "Final Cut Pro", mark: "FCP" }, { name: "DaVinci Resolve", mark: "DR" },
+    { name: "Photoshop", mark: "Ps" }, { name: "Figma", mark: "F" }, { name: "Illustrator", mark: "Ai" }, { name: "InDesign", mark: "Id" },
+    { name: "Microsoft Office", mark: "M" }, { name: "ComfyUI", mark: "C" }, { name: "Affinity", mark: "A" }, { name: "Blender", mark: "B" }, { name: "Maya", mark: "M" },
+  ] },
+  models: { title: "Every artistic vision has a model", description: "Give your content the right look with the model you really need", note: "Review each model's availability, settings and price in your workspace.", styles: [
+    { id: "photorealism", label: "Photorealism", description: "Lifelike detail and lighting for product and editorial shots.", models: imageModels },
+    { id: "illustration", label: "Illustration", description: "Bold, graphic styles for posters, covers and key art.", models: imageModels.slice(1,8) },
+    { id: "cinematic", label: "Cinematic", description: "Cinematic frames with depth, grain and dramatic light.", models: videoModels },
+    { id: "3d-render", label: "3D render", description: "Explore the look of a 3D render through image generation.", models: imageModels.slice(0,5) },
+    { id: "concept-art", label: "Concept art", description: "Expressive visual directions with character and texture.", models: [imageModels[0],imageModels[2],imageModels[3],imageModels[6],imageModels[8]] },
+    { id: "vector-brand", label: "Vector & brand", description: "Explore visual concepts for marks, identities and graphic compositions.", models: [imageModels[0],imageModels[4],imageModels[5],imageModels[7],imageModels[8]] },
+  ] },
+  connections: { title: `Connect ${brandName} MCP to your favorite AI tools`, description: "A preview of planned AI-client connections. Create in the Epifera workspace while these integrations take shape.", about: `Explore ${brandName} MCP`, clients: ["Claude", "Claude Code", "ChatGPT", "Cursor", "Codex", "VS Code", "Gemini", "Hermes"], steps: ["Choose the creative tools for your workflow.", "Connection details will appear here when the integration is available.", "Until then, explore images, video and audio in your Epifera workspace."], endpoint: "Connection details are being prepared.", clientPrefix: "Planned connection for" },
+  teams: { title: "You direct, the work shows it", description: "For studios, agencies, brands, and independent creatives exploring their next idea", audiences: ["Studio", "Media & Broadcasting", "Agencies & Creative", "End-user Brands"], cards: [
+    { description: "Follow a product campaign from brief to visual review.", href: "/workflows/product-campaign" },
+    { description: "Explore marketing workflows for your next campaign.", href: "/ai/marketing" },
+    { description: "Explore a character, a style and the next shot.", href: "/app/image" },
+    { description: "Move from a concept to images, video and sound.", href: "/app/models" },
+    { description: "Keep your results together for the next step.", href: "/app/files" },
+  ] },
+  docs: { title: `Dive into ${brandName} AI docs`, description: "Find your starting point, explore creative tools, and review the information you need to use Epifera with confidence.", more: "View more", items: [
+    { title: "Quickstart", description: "Create an account and explore your creative workspace.", href: "/login?mode=register" },
+    { title: "Pricing", description: "Review how payments, credits and refunds work.", href: "/legal/paid-access" },
+    { title: "Image Generator", description: "Explore images from prompts and references.", href: "/ai/image-generator" },
+    { title: "Video Generator", description: "Find the available video models in the catalog.", href: "/app/models" },
+    { title: "Retouch images", description: "Describe the details you want to change in an image.", href: "/app/image" },
+    { title: "Background Remover", description: "A dedicated background-removal workflow is planned.", planned: true },
+    { title: "Upscale videos", description: "A dedicated video-upscaling workflow is planned.", planned: true },
+    { title: "Video Editor", description: "A browser video-editing workflow is planned.", planned: true },
+    { title: "Character concepts", description: "Explore a character idea with an image reference.", href: "/app/image" },
+    { title: "Objects (LoRAs)", description: "Custom model training is a planned integration.", planned: true },
+    { title: "AI image models", description: "Explore available image models and settings.", href: "/app/models" },
+    { title: "AI video models", description: "Find the right model for the next scene.", href: "/app/models" },
+  ] },
+  showcase: { title: "Tools to skyrocket your creative freedom", description: "Explore your creative workspace today and preview the tools that could shape your next workflow.", items: [
+    { description: "A connected creative canvas", planned: true },
+    { description: "From words to images", href: "/ai/image-generator" },
+    { description: "Find your next video model", href: "/app/models" },
+    { description: "Explore ideas in a conversation", href: "/app" },
+    { description: "Describe a change to your image", href: "/app/image" },
+    { description: "A planned browser video editor", planned: true },
+    { description: "A planned dedicated image upscaler", planned: true },
+    { description: "A planned dedicated video upscaler", planned: true },
+    { description: "Give your words a voice", href: "/app/speech" },
+    { description: "A planned background-removal tool", planned: true },
+    { description: "A planned image-expansion workflow", planned: true },
+    { description: "Explore a different detail", href: "/app/image" },
+    { description: "Visualize your next product concept", href: "/app/image" },
+    { description: "Explore image variations", href: "/app/image" },
+    { description: "A planned browser design editor", planned: true },
+    { description: "Explore a visual idea for an icon", href: "/app/image" },
+  ] },
+  closing: { title: "Your best work is ahead", description: "Your next idea starts with the right tool", action: "Start creating" },
+  planned: { description: "This dedicated tool or integration is being prepared for Epifera. You can explore the available creative tools in the meantime." },
+  footer: { description: "The creative workspace for your next idea. Explore images, video, music and more in one place.", copyright: "All rights reserved.", supportEmail: "support@epifera.com", legalLabel: "Legal", legal: [], groups: [
+    { title: "Products", links: [{ label: "AI Image Generator", href: "/ai/image-generator" }, { label: "AI Video Generator", href: "/app/models" }, { label: "Music Generator", href: "/app/music" }, { label: "Text to Speech", href: "/app/speech" }, { label: "AI chat", href: "/app" }, { label: "All AI tools", href: "/ai#tools" }] },
+    { title: "Get started", links: [{ label: "Create an account", href: "/login?mode=register" }, { label: "Your workspace", href: "/app" }, { label: "Tools and guides", href: "/ai#docs" }, { label: "Inspiration", href: "/app/inspiration" }, { label: "My files", href: "/app/files" }] },
+    { title: "Company", links: [{ label: `About ${brandName}`, href: "/company/about-us" }, { label: "Creative Sessions", href: "/events/creative-sessions" }, { label: "Editorial library", href: "/blog/author/epifera" }, { label: "Contact", href: "/company/about-us#contact" },{ label: "Legal documents", href: "/legal" }, { label: "Terms of use", href: "/legal/user-agreement" }, { label: "Privacy policy", href: "/legal/privacy-policy" }, { label: "Payments and refunds", href: "/legal/paid-access" }, { label: "Payment details", href: "/legal/payment-details" }, { label: "Email preferences", href: "/app/profile" }] },
+    { title: "Get in touch", links: [{ label: "Customer support", href: "mailto:support@epifera.com" }, { label: "Questions and answers", href: "/#questions" }, { label: "Explore Epifera", href: "/" }] },
+  ] },
+} as const;

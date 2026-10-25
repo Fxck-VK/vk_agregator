@@ -1,0 +1,236 @@
+{
+  "reference": 21,
+  "notice": "Local draft/noindex design references from Magnific about page. No foreign staff, client logos or testimonials packaged. Background/interface/model preview media are source illustrations, not evidence of Epifera customers, staff or results. Clear/replace before indexed launch.",
+  "files": [
+    {
+      "sourceUrl": "https://media.magnific.com/magnific/landings/about-us/hero-about-us-aeo.webp?w=1920&h=820",
+      "sourcePage": "https://www.magnific.com/company/about-us",
+      "cachedFile": ".cache/magnific-html-assets/files/b93c8850352c1d99fcfe.webp",
+      "file": "/assets/images/about/hero.avif",
+      "format": "avif",
+      "width": 1920,
+      "height": 820,
+      "bytes": 86635,
+      "sha256": "c34b1a3dd422e42aa3b3b0047d538e8773513e76f53afbdd1a0525c9ae858344",
+      "byteIdentical": true
+    },
+    {
+      "sourceUrl": "https://media.magnific.com/landings/press/product-visuals/all-tools.webp?w=2944",
+      "sourcePage": "https://www.magnific.com/company/about-us",
+      "cachedFile": ".cache/magnific-html-assets/files/100002dc6a531957c2cd.webp",
+      "file": "/assets/images/about/products.avif",
+      "format": "avif",
+      "width": 1457,
+      "height": 626,
+      "bytes": 45594,
+      "sha256": "958e899f9bdf5253863877fb4cc8e523b0ccfacf6378779e9079d342129a6b89",
+      "byteIdentical": true
+    },
+    {
+      "sourceUrl": "https://media.magnific.com/landings/press/enterprise-use-cases/bk-rga.webp?w=2000&h=1200&q=75",
+      "sourcePage": "https://www.magnific.com/company/about-us",
+      "cachedFile": ".cache/magnific-html-assets/files/5124638c25b55da5bed8.webp",
+      "file": "/assets/images/about/scenario-1.avif",
+      "format": "avif",
+      "width": 2000,
+      "height": 969,
+      "bytes": 13595,
+      "sha256": "c3a1dbba2f5c6d44c669634c8dfce0caef9c9ee1deee58f30c6e26279085f299",
+      "byteIdentical": true
+    },
+    {
+      "sourceUrl": "https://media.magnific.com/landings/press/enterprise-use-cases/bk-damm.webp?w=626&h=1200&q=75",
+      "sourcePage": "https://www.magnific.com/company/about-us",
+      "cachedFile": ".cache/magnific-html-assets/files/3368b4437efb12036129.webp",
+      "file": "/assets/images/about/scenario-2.avif",
+      "format": "avif",
+      "width": 626,
+      "height": 624,
+      "bytes": 33045,
+      "sha256": "89be05cb6d02923e26fb71d687974ec5d9f741656d37b4d0b87f219afc05098b",
+      "byteIdentical": true
+    },
+    {
+      "sourceUrl": "https://media.magnific.com/landings/press/enterprise-use-cases/bk-jobtalent.webp?w=626&h=1200&q=75",
+      "sourcePage": "https://www.magnific.com/company/about-us",
+      "cachedFile": ".cache/magnific-html-assets/files/fec7af477c74bea3d728.webp",
+      "file": "/assets/images/about/scenario-3.avif",
+      "format": "avif",
+      "width": 626,
+      "height": 624,
+      "bytes": 5718,
+      "sha256": "5f22fc534e603771f96510c9080503063f51d20886161f96c8a284ddfeb50756",
+      "byteIdentical": true
+    },
+    {
+      "sourceUrl": "https://media.magnific.com/landings/press/enterprise-use-cases/bk-deliveryhero.webp?w=626&h=1200&q=75",
+      "sourcePage": "https://www.magnific.com/company/about-us",
+      "cachedFile": ".cache/magnific-html-assets/files/6a3d6800479a432d8a93.webp",
+      "file": "/assets/images/about/scenario-4.avif",
+      "format": "avif",
+      "width": 626,
+      "height": 624,
+      "bytes": 23157,
+      "sha256": "915a355b78a6908731f04f96f1ed665a5b672ef39ab789724ed047f08eae18bf",
+      "byteIdentical": true
+    },
+    {
+      "sourceUrl": "https://media.magnific.com/landings/press/enterprise-use-cases/bk-haworth.webp?w=626&h=1200&q=75",
+      "sourcePage": "https://www.magnific.com/company/about-us",
+      "cachedFile": ".cache/magnific-html-assets/files/e05a830ef3f6417996cf.webp",
+      "file": "/assets/images/about/scenario-5.avif",
+      "format": "avif",
+      "width": 626,
+      "height": 624,
+      "bytes": 7217,
+      "sha256": "5595dcd084169c5e8c3930d751f393094d586b0ff2d65d9a34c175f71983a5a5",
+      "byteIdentical": true
+    },
+    {
+      "sourceUrl": "https://media.magnific.com/landings/press/enterprise-use-cases/bk-phantomx.webp?w=626&h=1200&q=75",
+      "sourcePage": "https://www.magnific.com/company/about-us",
+      "cachedFile": ".cache/magnific-html-assets/files/d57f8f630bb03b476d61.webp",
+      "file": "/assets/images/about/scenario-6.webp",
+      "format": "webp",
+      "width": 626,
+      "height": 624,
+      "bytes": 91094,
+      "sha256": "7b44cba670f662121affa900256567e70ac32758c50147e36ffb134b707219a6",
+      "byteIdentical": true
+    },
+    {
+      "sourceUrl": "https://media.magnific.com/landings/press/enterprise-use-cases/bk-nativeforeign.webp?w=626&h=1200&q=75",
+      "sourcePage": "https://www.magnific.com/company/about-us",
+      "cachedFile": ".cache/magnific-html-assets/files/422d4972547266efb1b5.webp",
+      "file": "/assets/images/about/scenario-7.avif",
+      "format": "avif",
+      "width": 626,
+      "height": 624,
+      "bytes": 8314,
+      "sha256": "5b5992880439d4e05faa50c01cc01a5667609a9899958a9988890a91f7038ab2",
+      "byteIdentical": true
+    },
+    {
+      "sourceUrl": "https://media.magnific.com/landings/press/enterprise-use-cases/bk-guess.webp?w=626&h=1200&q=75",
+      "sourcePage": "https://www.magnific.com/company/about-us",
+      "cachedFile": ".cache/magnific-html-assets/files/bacf3c57e3067dd348e6.webp",
+      "file": "/assets/images/about/scenario-8.avif",
+      "format": "avif",
+      "width": 626,
+      "height": 792,
+      "bytes": 68164,
+      "sha256": "c2abb5de10188e1eac6fd2eb594516027c51ef45fe9f683b897be4ca0c6d07c4",
+      "byteIdentical": true
+    },
+    {
+      "sourceUrl": "https://media.magnific.com/home/relaunch/media/ai-models/NanoBanana.webm",
+      "sourcePage": "https://www.magnific.com/company/about-us",
+      "cachedFile": ".cache/magnific-html-assets/files/d6ac541ea43a8a86e5ea.webm",
+      "file": "/assets/videos/about/nano-banana.webm",
+      "format": "webm",
+      "bytes": 416828,
+      "sha256": "dd2c5ea6220ca5c0bf14fdd3e06d59288b9116da36bfcd36b61890c5db8485aa",
+      "byteIdentical": true
+    },
+    {
+      "sourceUrl": "https://media.magnific.com/home/relaunch/media/ai-models/Grok.webm",
+      "sourcePage": "https://www.magnific.com/company/about-us",
+      "cachedFile": ".cache/magnific-html-assets/files/89e5165d027aaa92d3b9.webm",
+      "file": "/assets/videos/about/grok.webm",
+      "format": "webm",
+      "bytes": 98687,
+      "sha256": "cea89becfcae8b36911b94c2b4d3d16d51c536b50360702578ebb1607a327acc",
+      "byteIdentical": true
+    },
+    {
+      "sourceUrl": "https://media.magnific.com/home/relaunch/media/ai-models/Happyhorse.webm",
+      "sourcePage": "https://www.magnific.com/company/about-us",
+      "cachedFile": ".cache/magnific-html-assets/files/d771a8df8ae86c1d27d5.webm",
+      "file": "/assets/videos/about/happyhorse.webm",
+      "format": "webm",
+      "bytes": 1343558,
+      "sha256": "7c3364a2d1b8227d9fbd4169fab843bd2b7bfca11bd729a884c9e5c8f08f84d0",
+      "byteIdentical": true
+    },
+    {
+      "sourceUrl": "https://media.magnific.com/home/relaunch/media/ai-models/Veo3Flow.webm",
+      "sourcePage": "https://www.magnific.com/company/about-us",
+      "cachedFile": ".cache/magnific-html-assets/files/5d4334d2d9cb5543ed0e.webm",
+      "file": "/assets/videos/about/veo3flow.webm",
+      "format": "webm",
+      "bytes": 803801,
+      "sha256": "b39c7685972efc1047fc68b96e22c34b89aed0d5fd7b1e70339f83f09d703400",
+      "byteIdentical": true
+    },
+    {
+      "sourceUrl": "https://media.magnific.com/home/relaunch/media/ai-models/Seedream.webm",
+      "sourcePage": "https://www.magnific.com/company/about-us",
+      "cachedFile": ".cache/magnific-html-assets/files/6afee1042dc0b0f6105c.webm",
+      "file": "/assets/videos/about/seedream.webm",
+      "format": "webm",
+      "bytes": 474855,
+      "sha256": "6dafdd50fd00edb657944a0f8ce8b64f7305f38675d45c3f590e2307941a7268",
+      "byteIdentical": true
+    },
+    {
+      "sourceUrl": "https://media.magnific.com/home/relaunch/media/ai-models/Seedance.webm",
+      "sourcePage": "https://www.magnific.com/company/about-us",
+      "cachedFile": ".cache/magnific-html-assets/files/0a80a6fb94910c717286.webm",
+      "file": "/assets/videos/about/seedance.webm",
+      "format": "webm",
+      "bytes": 60888,
+      "sha256": "c646ab3a18916906c7bbe5ec61f14fc3a3a5dfd4dfeea549c21323f275775364",
+      "byteIdentical": true
+    },
+    {
+      "sourceUrl": "https://media.magnific.com/home/relaunch/media/ai-models/Kling.webm",
+      "sourcePage": "https://www.magnific.com/company/about-us",
+      "cachedFile": ".cache/magnific-html-assets/files/f6bfcf25aaee5aa7070d.webm",
+      "file": "/assets/videos/about/kling.webm",
+      "format": "webm",
+      "bytes": 384284,
+      "sha256": "d591ab9c865019dbfe601cd47a9aaff5fe938e8594f035113dd02f236f051cd7",
+      "byteIdentical": true
+    },
+    {
+      "sourceUrl": "https://media.magnific.com/home/relaunch/media/ai-models/Flux2.webm",
+      "sourcePage": "https://www.magnific.com/company/about-us",
+      "cachedFile": ".cache/magnific-html-assets/files/d67cea5719659ae29360.webm",
+      "file": "/assets/videos/about/flux2.webm",
+      "format": "webm",
+      "bytes": 384435,
+      "sha256": "9c90530bcac7504f9e206a1613e8f6d369804058c577da63db55ec5cceb08818",
+      "byteIdentical": true
+    },
+    {
+      "sourceUrl": "https://media.magnific.com/home/relaunch/media/ai-models/Runway.webm",
+      "sourcePage": "https://www.magnific.com/company/about-us",
+      "cachedFile": ".cache/magnific-html-assets/files/3bb0cd292de8578ceb9c.webm",
+      "file": "/assets/videos/about/runway.webm",
+      "format": "webm",
+      "bytes": 542519,
+      "sha256": "50cf04d5ad619ff0bb2c957eef43311a42e77b3f4f1fb3c82a9a223c5c8a3c97",
+      "byteIdentical": true
+    },
+    {
+      "sourceUrl": "https://media.magnific.com/home/relaunch/media/ai-models/Wan.webm",
+      "sourcePage": "https://www.magnific.com/company/about-us",
+      "cachedFile": ".cache/magnific-html-assets/files/f09ce68c1963588bd657.webm",
+      "file": "/assets/videos/about/wan.webm",
+      "format": "webm",
+      "bytes": 622945,
+      "sha256": "a7bff26d2b6ef941c56b6b9104c261612ce15218a5befdccbf88acc2c84d7e25",
+      "byteIdentical": true
+    },
+    {
+      "sourceUrl": "https://media.magnific.com/home/relaunch/media/ai-models/MiniMax.webm",
+      "sourcePage": "https://www.magnific.com/company/about-us",
+      "cachedFile": ".cache/magnific-html-assets/files/1bf835c72362a37401f6.webm",
+      "file": "/assets/videos/about/mini-max.webm",
+      "format": "webm",
+      "bytes": 171939,
+      "sha256": "d4922853aa69bd8693aa266d8a3f67d4a2ec2eb7ce4914a2ce267a460a2b6a88",
+      "byteIdentical": true
+    }
+  ]
+}

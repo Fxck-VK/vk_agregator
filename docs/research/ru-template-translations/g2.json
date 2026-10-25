@@ -1,0 +1,3943 @@
+[
+  {
+    "id": "u0529",
+    "ru": "Как писать промпты для ИИ-изображений | Epifera",
+    "back": "How to write prompts for AI images | Epifera",
+    "keepReason": "Preserved brand, model or technical notation: Epifera."
+  },
+  {
+    "id": "u0530",
+    "ru": "Узнайте, как описывать объект, окружение, стиль, свет и кадрирование для ИИ-изображений. Изучите практические советы и четыре примера брифов с Epifera.",
+    "back": "Learn how to describe the subject, surroundings, style, light and framing for AI images. Explore practical advice and four sample briefs with Epifera.",
+    "keepReason": "Preserved brand, model or technical notation: Epifera."
+  },
+  {
+    "id": "u0531",
+    "ru": "Как писать промпты для создания изображений с ИИ",
+    "back": "How to write prompts for creating images with AI"
+  },
+  {
+    "id": "u0532",
+    "ru": "Хорошее изображение начинается с ясной идеи.",
+    "back": "A good image begins with a clear idea."
+  },
+  {
+    "id": "u0533",
+    "ru": " Промпт для ИИ-изображения помогает превратить эту идею в бриф: что изображено, где это находится, как падает свет и какое впечатление должна создавать картинка. Можно начать с обычных слов и добавлять детали по мере того, как замысел становится яснее.",
+    "back": " A prompt for an AI image helps turn this idea into a brief: what is depicted, where it is, how light falls and what impression the picture should create. You can start with ordinary words and add details as the intention becomes clearer."
+  },
+  {
+    "id": "u0534",
+    "ru": "В этом руководстве мы разберём составные части промпта, практические способы его уточнения и четыре примера, которые можно адаптировать. Когда будете готовы, откройте ",
+    "back": "In this guide we examine the components of a prompt, practical ways to refine it and four examples you can adapt. When ready, open the "
+  },
+  {
+    "id": "u0535",
+    "ru": "генератор изображений Epifera",
+    "back": "Epifera image generator",
+    "keepReason": "Preserved brand, model or technical notation: Epifera."
+  },
+  {
+    "id": "u0536",
+    "ru": " и выберите модель и настройки, подходящие вашему проекту.",
+    "back": " and select the model and settings that suit your project."
+  },
+  {
+    "id": "u0537",
+    "ru": "Что такое промпт для ИИ?",
+    "back": "What is a prompt for AI?"
+  },
+  {
+    "id": "u0538",
+    "ru": "Промпт для ИИ-изображения — это творческий бриф.",
+    "back": "A prompt for an AI image is a creative brief."
+  },
+  {
+    "id": "u0539",
+    "ru": " Он объясняет модели изображений, что вы хотите увидеть: объект, окружение, композицию и визуальное направление. Полезный бриф описывает важные для картинки детали, а не собирает эффектно звучащие слова.",
+    "back": " It explains to an image model what you want to see: a subject, surroundings, composition and a visual direction. A useful brief describes details important to the picture rather than collecting impressive-sounding words."
+  },
+  {
+    "id": "u0540",
+    "ru": "Сравните просто «портрет» и портрет с определённым кадрированием, выражением лица и светом. Оба варианта подходят для начала. Второй даёт более ясные детали для оценки готового изображения. Промпт не обязан описывать каждый лист или нитку; он должен делать ваши приоритеты понятными.",
+    "back": "Compare simply a portrait with a portrait with particular framing, expression and light. Both are suitable starting points. The second provides clearer details to assess in the finished image. A prompt need not describe every leaf or thread; it should make your priorities understandable."
+  },
+  {
+    "id": "u0541",
+    "ru": "Как работают генераторы ИИ-изображений?",
+    "back": "How do AI image generators work?"
+  },
+  {
+    "id": "u0542",
+    "ru": "Модель изображений создаёт визуальную интерпретацию ваших указаний. На результат влияют выбранная модель, ваши слова и настройки. Удобно рассматривать бриф, элементы управления и оценку результата отдельно.",
+    "back": "An image model creates a visual interpretation of your instructions. The selected model, your words and settings affect the result. It is convenient to consider the brief, controls and assessment separately."
+  },
+  {
+    "id": "u0543",
+    "ru": "Опишите картинку.",
+    "back": "Describe the picture."
+  },
+  {
+    "id": "u0544",
+    "ru": " Промпт объясняет, что должно быть в сцене и какое впечатление она должна создавать. Помогают конкретные связи: чашка на столе, человек у окна или гора за озером. Укажите, какой элемент должен первым привлекать взгляд.",
+    "back": " The prompt explains what should be in the scene and the impression it should create. Concrete relationships help: a cup on a table, a person by a window or a mountain behind a lake. State which element should attract attention first."
+  },
+  {
+    "id": "u0545",
+    "ru": "Выберите доступные настройки.",
+    "back": "Select available settings."
+  },
+  {
+    "id": "u0546",
+    "ru": " Соотношение сторон, разрешение и референсы зависят от выбранной модели. Задавайте размеры результата настройками разрешения в рабочем пространстве; слово «8K» в тексте не задаёт размер экспортируемого файла. Референс может помочь передать замысел, если выбранная модель его поддерживает.",
+    "back": " Aspect ratio, resolution and references depend on the selected model. Set output dimensions using the resolution controls in the workspace; the word 8K in the text does not set the size of the exported file. A reference can help convey the intention if the selected model supports it.",
+    "keepReason": "Preserved brand, model or technical notation: 8K."
+  },
+  {
+    "id": "u0547",
+    "ru": "Оцените интерпретацию.",
+    "back": "Assess the interpretation."
+  },
+  {
+    "id": "u0548",
+    "ru": " Сравните результат с брифом. Проверьте кадрирование, важные детали, нежелательные объекты и любой текст. Даже при похожих формулировках две генерации могут различаться. Считайте каждый результат направлением, которое нужно изучить и уточнить, и не полагайте, что подробное предложение гарантирует точную картинку.",
+    "back": " Compare the result with the brief. Check framing, important details, unwanted objects and any text. Even with similar wording two generations may differ. Treat each result as a direction to examine and refine, and do not assume a detailed sentence guarantees an exact picture."
+  },
+  {
+    "id": "u0549",
+    "ru": "Доступный процесс работы можно изучить в ",
+    "back": "You can explore the available workflow in the "
+  },
+  {
+    "id": "u0550",
+    "ru": "генераторе изображений",
+    "back": "image generator"
+  },
+  {
+    "id": "u0551",
+    "ru": ". Если для вашей идеи важны фотореференсы, ",
+    "back": ". If photo references are important to your idea, the "
+  },
+  {
+    "id": "u0552",
+    "ru": "сравнение моделей для аватаров",
+    "back": "avatar model comparison"
+  },
+  {
+    "id": "u0553",
+    "ru": " объясняет различия между указанными настройками входных данных.",
+    "back": " explains differences between the listed input controls."
+  },
+  {
+    "id": "u0554",
+    "ru": "Как написать промпт для ИИ-изображения",
+    "back": "How to write a prompt for an AI image"
+  },
+  {
+    "id": "u0555",
+    "ru": "Начните с простого описания изображения, которое вам действительно нужно. Например, вместо «собака» укажите, какая это собака, что она делает и где находится. Затем добавьте несколько визуальных решений, которые делают эту картинку полезной именно вам.",
+    "back": "Start with a simple description of the image you actually need. For example, instead of dog, specify what kind of dog, what it does and where it is. Then add several visual decisions that make this picture useful specifically to you."
+  },
+  {
+    "id": "u0556",
+    "ru": "Объект и действие: ",
+    "back": "Subject and action: "
+  },
+  {
+    "id": "u0557",
+    "ru": "Назовите главный объект и опишите его позу или занятие. «Маленькая белая собака смотрит вверх, оторвавшись от раскрытой книги» задаёт более полезный центр внимания, чем список несвязанных объектов.",
+    "back": "Name the main subject and describe its pose or activity. A small white dog looking up from an open book gives a more useful focus than a list of unrelated objects."
+  },
+  {
+    "id": "u0558",
+    "ru": "Окружение и связи: ",
+    "back": "Surroundings and relationships: "
+  },
+  {
+    "id": "u0559",
+    "ru": "Укажите, где находится объект и как устроена сцена. Опишите передний и задний план и пространство, которое нужно оставить свободным. На изображении товара для баннера может понадобиться место рядом с объектом.",
+    "back": "State where the subject is and how the scene is arranged. Describe foreground and background and space to leave free. A product image for a banner may need space next to the subject."
+  },
+  {
+    "id": "u0560",
+    "ru": "Свет, цвет и настроение: ",
+    "back": "Light, color and mood: "
+  },
+  {
+    "id": "u0561",
+    "ru": "Выберите направление, подходящее идее: мягкий свет из окна, холодная ночная палитра, тёплые закатные отражения или жизнерадостный рисованный сад. Описание света должно соответствовать окружению.",
+    "back": "Choose a direction suited to the idea: soft window light, a cold nighttime palette, warm sunset reflections or a cheerful illustrated garden. The light description should fit the surroundings."
+  },
+  {
+    "id": "u0562",
+    "ru": "Визуальный стиль: ",
+    "back": "Visual style: "
+  },
+  {
+    "id": "u0563",
+    "ru": "Опишите желаемую технику или визуальные свойства: например, акварельную иллюстрацию, фактурный коллаж или студийную фотографию. Конкретные свойства проще менять, чем длинный набор названий стилей.",
+    "back": "Describe the desired medium or visual properties: for example watercolor illustration, textured collage or studio photography. Concrete properties are easier to change than a long collection of style names."
+  },
+  {
+    "id": "u0564",
+    "ru": "Кадрирование и важные детали: ",
+    "back": "Framing and important details: "
+  },
+  {
+    "id": "u0565",
+    "ru": "Если это важно, попросите крупный план, общий вид или центральную композицию. Укажите материалы, выражения лиц и формы, требующие внимания. Фактические соотношение сторон и размер результата задавайте в настройках выбранной модели.",
+    "back": "If important, request a close-up, wide view or centered composition. State materials, expressions and shapes that need attention. Set actual aspect ratio and output size in the selected model's controls."
+  },
+  {
+    "id": "u0566",
+    "ru": "Советы для более точных промптов",
+    "back": "Tips for more precise prompts"
+  },
+  {
+    "id": "u0567",
+    "ru": "Самый полезный промпт — тот, который вы можете понять, проверить и изменить. Сохраняйте ясную связь между изменяемыми словами и частью картинки, которую хотите улучшить. Эти привычки упростят процесс:",
+    "back": "The most useful prompt is one you can understand, test and change. Maintain a clear connection between changed words and the part of the picture you want to improve. These habits simplify the process:"
+  },
+  {
+    "id": "u0568",
+    "ru": "Используйте прямые формулировки. ",
+    "back": "Use direct wording. "
+  },
+  {
+    "id": "u0569",
+    "ru": "Просто опишите объект и важные связи. «Красная керамическая чашка на светлом деревянном столе» — понятная отправная точка. Добавляйте специальные термины, если они передают визуальное решение, которое вы сможете распознать в результате.",
+    "back": "Describe the subject and important relationships simply. A red ceramic cup on a light wooden table is an understandable starting point. Add specialist terms if they convey a visual decision you can recognize in the result."
+  },
+  {
+    "id": "u0570",
+    "ru": "Начните с приоритетов. ",
+    "back": "Begin with priorities. "
+  },
+  {
+    "id": "u0571",
+    "ru": "Прежде чем добавлять декоративные детали, решите, что делает изображение удачным. Если важнее всего кадрирование и выражение лица, опишите их ясно. Длинный промпт полезен лишь тогда, когда дополнительная информация помогает картинке; универсального идеального количества слов нет.",
+    "back": "Before adding decorative details decide what makes the image successful. If framing and expression matter most, describe them clearly. A long prompt is useful only if the extra information helps the picture; there is no universal ideal word count."
+  },
+  {
+    "id": "u0572",
+    "ru": "Сохраняйте согласованность брифа. ",
+    "back": "Keep the brief consistent. "
+  },
+  {
+    "id": "u0573",
+    "ru": "Проверьте, нет ли противоречивых указаний, например пустого фона, заполненного предметами. Стили можно сочетать намеренно, но объясните их связь, чтобы модели не пришлось угадывать, какое указание важнее.",
+    "back": "Check for contradictory instructions, such as an empty background filled with objects. You can combine styles deliberately, but explain their connection so the model does not have to guess which instruction is more important."
+  },
+  {
+    "id": "u0574",
+    "ru": "Меняйте один важный параметр. ",
+    "back": "Change one important variable. "
+  },
+  {
+    "id": "u0575",
+    "ru": "Если композиция нравится, но хочется более мягкого света, сначала измените описание освещения. Если одновременно переписать объект, палитру и кадрирование, сложнее понять, какое изменение помогло.",
+    "back": "If you like the composition but want softer light, change the lighting description first. Rewriting subject, palette and framing together makes it harder to understand which change helped."
+  },
+  {
+    "id": "u0576",
+    "ru": "Проверяйте в нужном размере. ",
+    "back": "Check at the required size. "
+  },
+  {
+    "id": "u0577",
+    "ru": "Внимательно проверьте изображение на мелкие ошибки, затем оцените его в том кадрировании, в котором будете использовать. Привлекательный на полном экране фон может отвлекать на крошечной фотографии профиля. Сохраняйте удачные формулировки рядом с результатом, чтобы развивать их дальше.",
+    "back": "Inspect the image for small errors, then assess it with the framing you will use. A background attractive at full screen can distract in a tiny profile photo. Save successful wording next to the result to develop it further."
+  },
+  {
+    "id": "u0578",
+    "ru": "Примеры промптов для ИИ-изображений",
+    "back": "Examples of prompts for AI images"
+  },
+  {
+    "id": "u0579",
+    "ru": "Используйте эти брифы как отправные точки.",
+    "back": "Use these briefs as starting points."
+  },
+  {
+    "id": "u0580",
+    "ru": " Они описывают четыре разных визуальных направления. Адаптируйте объект, кадрирование и атмосферу под проект, выберите модель и проверьте настройки перед генерацией. Сопровождающие картинки — иллюстрации для ориентира, а не проверенные результаты этих переписанных брифов.",
+    "back": " They describe four different visual directions. Adapt subject, framing and atmosphere for the project, select a model and check settings before generation. The accompanying pictures are reference illustrations rather than tested results of these rewritten briefs."
+  },
+  {
+    "id": "u0581",
+    "ru": "Пейзаж у озера: ",
+    "back": "Lakeside landscape: "
+  },
+  {
+    "id": "u0582",
+    "ru": "Тихое горное озеро в сумерках, далёкие вершины отражаются в неподвижной воде, сосны обрамляют передний план, тёплая полоса заката у горизонта, мягкие голубые тени, подробная цифровая иллюстрация со спокойной атмосферой и широкой композицией.",
+    "back": "A quiet mountain lake at dusk, distant peaks reflected in still water, pines framing the foreground, a warm strip of sunset at the horizon, soft blue shadows, a detailed digital illustration with calm atmosphere and wide composition."
+  },
+  {
+    "id": "u0583",
+    "ru": "Футуристический город: ",
+    "back": "Futuristic city: "
+  },
+  {
+    "id": "u0584",
+    "ru": "Мокрая от дождя улица вымышленного города ночью, пурпурные и циановые огни отражаются на мостовой, несколько пешеходов под зонтами, высокие здания растворяются в тумане, кинематографичный фотографический стиль, вид с уровня глаз и свободный проход через сцену.",
+    "back": "A rain-wet street in a fictional city at night, magenta and cyan lights reflected on the pavement, several pedestrians with umbrellas, tall buildings dissolving into mist, cinematic photographic style, eye-level view and a clear passage through the scene."
+  },
+  {
+    "id": "u0585",
+    "ru": "Портрет в винограднике: ",
+    "back": "Portrait in a vineyard: "
+  },
+  {
+    "id": "u0586",
+    "ru": "Вымышленный взрослый персонаж в кремовом льняном пиджаке стоит рядом с виноградными лозами, расслабленное выражение лица, тёплый послеполуденный свет сбоку, мягкий зелёный фон, естественная портретная фотография, композиция по грудь с акцентом на лице и фактуре ткани.",
+    "back": "A fictional adult character in a cream linen jacket standing beside grapevines, relaxed expression, warm afternoon light from the side, soft green background, natural portrait photography, chest-up composition emphasizing face and fabric texture."
+  },
+  {
+    "id": "u0587",
+    "ru": "Игривая иллюстрация: ",
+    "back": "Playful illustration: "
+  },
+  {
+    "id": "u0588",
+    "ru": "Маленькая пушистая белая собака сидит рядом с раскрытой книгой сказок в красочном саду, любопытное выражение мордочки, округлые формы, мягкие рисованные текстуры, яркие цветы и нежный дневной свет, жизнерадостная иллюстрация для детской книги с лаконичной центральной композицией.",
+    "back": "A small fluffy white dog sitting beside an open storybook in a colorful garden, curious expression, rounded forms, soft painted textures, bright flowers and gentle daylight, a cheerful children's book illustration with an uncluttered central composition."
+  },
+  {
+    "id": "u0589",
+    "ru": "Сохраняйте удачные части брифа и меняйте неудачные. Цель — воспроизводимый творческий процесс: описать идею, оценить результат и осознанно выбрать следующее изменение. Красивое первое изображение полезно, но понимание того, почему оно подходит проекту, помогает создать следующее.",
+    "back": "Keep successful parts of a brief and change unsuccessful ones. The goal is a repeatable creative process: describe an idea, assess the result and consciously choose the next change. A beautiful first image helps, but understanding why it fits the project helps create the next one."
+  },
+  {
+    "id": "u0590",
+    "ru": "В качестве ещё одной отправной точки изучите ",
+    "back": "For another starting point explore the "
+  },
+  {
+    "id": "u0591",
+    "ru": "руководство по генератору изображений",
+    "back": "image generator guide"
+  },
+  {
+    "id": "u0592",
+    "ru": " или посмотрите, как бриф превращается в ",
+    "back": " or see how a brief turns into a "
+  },
+  {
+    "id": "u0593",
+    "ru": "визуальное направление для маркетинга",
+    "back": "visual direction for marketing"
+  },
+  {
+    "id": "u0594",
+    "ru": ". Также можно ",
+    "back": ". You can also "
+  },
+  {
+    "id": "u0595",
+    "ru": "сравнить настройки моделей для аватаров",
+    "back": "compare avatar model settings"
+  },
+  {
+    "id": "u0596",
+    "ru": " перед выбором варианта для портретной концепции.",
+    "back": " before choosing an option for a portrait concept."
+  },
+  {
+    "id": "u0597",
+    "ru": "Блог",
+    "back": "Blog"
+  },
+  {
+    "id": "u0598",
+    "ru": "Руководства",
+    "back": "Guides"
+  },
+  {
+    "id": "u0599",
+    "ru": "Редакционный черновик Epifera · 25 октября 2026 года. Иллюстрации взяты из сохранённого референса Magnific и не являются результатами генерации Epifera.",
+    "back": "Epifera editorial draft · October 25, 2026. Illustrations come from the saved Magnific reference and are not Epifera generation results.",
+    "keepReason": "Preserved brand, model or technical notation: Epifera, Magnific."
+  },
+  {
+    "id": "u0600",
+    "ru": "Перейти в Epifera",
+    "back": "Go to Epifera",
+    "keepReason": "Preserved brand, model or technical notation: Epifera."
+  },
+  {
+    "id": "u0601",
+    "ru": "Поиск",
+    "back": "Search"
+  },
+  {
+    "id": "u0602",
+    "ru": "Инструменты ИИ",
+    "back": "AI tools"
+  },
+  {
+    "id": "u0603",
+    "ru": "Открыть рабочее пространство",
+    "back": "Open workspace"
+  },
+  {
+    "id": "u0604",
+    "ru": "Навигационная цепочка",
+    "back": "Breadcrumb trail"
+  },
+  {
+    "id": "u0605",
+    "ru": "Прослушать статью",
+    "back": "Listen to the article"
+  },
+  {
+    "id": "u0606",
+    "ru": "Поделиться статьёй",
+    "back": "Share the article"
+  },
+  {
+    "id": "u0607",
+    "ru": "Поделиться ссылкой",
+    "back": "Share link"
+  },
+  {
+    "id": "u0608",
+    "ru": "Копировать ссылку",
+    "back": "Copy link"
+  },
+  {
+    "id": "u0609",
+    "ru": "Ссылка скопирована",
+    "back": "Link copied"
+  },
+  {
+    "id": "u0610",
+    "ru": "Копирование…",
+    "back": "Copying…"
+  },
+  {
+    "id": "u0611",
+    "ru": "Выделите и скопируйте ссылку ниже. Не удалось получить доступ к буферу обмена.",
+    "back": "Select and copy the link below. Access to the clipboard could not be obtained."
+  },
+  {
+    "id": "u0612",
+    "ru": "Ссылка на страницу",
+    "back": "Page link"
+  },
+  {
+    "id": "u0613",
+    "ru": "Аудиоверсия",
+    "back": "Audio version"
+  },
+  {
+    "id": "u0614",
+    "ru": "Озвучка этой статьи пока недоступна. Можно продолжить чтение здесь или отдельно изучить инструменты для работы с речью.",
+    "back": "Narration of this article is not yet available. You can continue reading here or explore speech tools separately."
+  },
+  {
+    "id": "u0615",
+    "ru": "Изучить инструменты для речи",
+    "back": "Explore speech tools"
+  },
+  {
+    "id": "u0616",
+    "ru": "Наверх",
+    "back": "To the top"
+  },
+  {
+    "id": "u0617",
+    "ru": "Иллюстрация из референса Magnific",
+    "back": "Illustration from the Magnific reference",
+    "keepReason": "Preserved brand, model or technical notation: Magnific."
+  },
+  {
+    "id": "u0618",
+    "ru": "На этой странице",
+    "back": "On this page"
+  },
+  {
+    "id": "u0619",
+    "ru": "мин на чтение",
+    "back": "min to read"
+  },
+  {
+    "id": "u0620",
+    "ru": "Автор: Epifera",
+    "back": "Author: Epifera",
+    "keepReason": "Preserved brand, model or technical notation: Epifera."
+  },
+  {
+    "id": "u0621",
+    "ru": "Черновик · 25 октября 2026 года",
+    "back": "Draft · October 25, 2026"
+  },
+  {
+    "id": "u0622",
+    "ru": "Найдите следующую визуальную идею",
+    "back": "Find your next visual idea"
+  },
+  {
+    "id": "u0623",
+    "ru": "Найти вдохновение",
+    "back": "Find inspiration"
+  },
+  {
+    "id": "u0624",
+    "ru": "Похожие руководства",
+    "back": "Related guides"
+  },
+  {
+    "id": "u0625",
+    "ru": "Изучите основы Epifera",
+    "back": "Learn Epifera basics",
+    "keepReason": "Preserved brand, model or technical notation: Epifera."
+  },
+  {
+    "id": "u0626",
+    "ru": "Пройдите короткие уроки о брифах, моделях, медиа и ваших результатах.",
+    "back": "Take short lessons about briefs, models, media and your results."
+  },
+  {
+    "id": "u0627",
+    "ru": "Сравнения",
+    "back": "Comparisons"
+  },
+  {
+    "id": "u0628",
+    "ru": "Сравните модели для концепций аватаров",
+    "back": "Compare models for avatar concepts"
+  },
+  {
+    "id": "u0629",
+    "ru": "Изучите референсы и настройки результата для восьми моделей изображений.",
+    "back": "Explore references and output settings for eight image models."
+  },
+  {
+    "id": "u0630",
+    "ru": "Для маркетологов",
+    "back": "For marketers"
+  },
+  {
+    "id": "u0631",
+    "ru": "Разработайте направление кампании",
+    "back": "Develop a campaign direction"
+  },
+  {
+    "id": "u0632",
+    "ru": "Изучите брифы, визуальные концепции и инструменты для следующей кампании.",
+    "back": "Explore briefs, visual concepts and tools for the next campaign."
+  },
+  {
+    "id": "u0633",
+    "ru": "Промпты для ИИ-изображений: коллаж из портретов и пейзажей",
+    "back": "Prompts for AI images: a collage of portraits and landscapes"
+  },
+  {
+    "id": "u0634",
+    "ru": "Вариации портретов и описательный бриф в сцене виноградника",
+    "back": "Portrait variations and a descriptive brief in a vineyard scene"
+  },
+  {
+    "id": "u0635",
+    "ru": "Нарисованные собаки со словами, описывающими их стиль и окружение",
+    "back": "Drawn dogs with words describing their style and surroundings"
+  },
+  {
+    "id": "u0636",
+    "ru": "Пейзаж у озера и неоновый город с описательными брифами",
+    "back": "A lakeside landscape and neon city with descriptive briefs"
+  },
+  {
+    "id": "u1049",
+    "ru": "Сравнение 8 моделей ИИ-изображений для концепций аватаров | Epifera",
+    "back": "Comparison of 8 AI image models for avatar concepts | Epifera",
+    "keepReason": "Preserved brand, model or technical notation: Epifera."
+  },
+  {
+    "id": "u1050",
+    "ru": "Сравните настройки восьми моделей изображений в предварительном каталоге Epifera: референсы, обозначения разрешения, соотношения сторон и ограничения числа результатов. Составьте список кандидатов для концепции аватара.",
+    "back": "Compare the settings of eight image models in Epifera's preview catalog: references, resolution labels, aspect ratios and output-count limits. Make a shortlist for an avatar concept.",
+    "keepReason": "Preserved brand, model or technical notation: Epifera."
+  },
+  {
+    "id": "u1051",
+    "ru": "Сравнение моделей для аватаров",
+    "back": "Avatar model comparison"
+  },
+  {
+    "id": "u1052",
+    "ru": "8 моделей ИИ для концепций аватаров",
+    "back": "8 AI models for avatar concepts"
+  },
+  {
+    "id": "u1053",
+    "ru": "Содержание статьи",
+    "back": "Article contents"
+  },
+  {
+    "id": "u1054",
+    "ru": "Восемь моделей в этом руководстве:",
+    "back": "Eight models in this guide:"
+  },
+  {
+    "id": "u1055",
+    "ru": "Восемь моделей изображений в сравнении по настройкам, доступным в предварительном каталоге Epifera. Изучите референсы, настройки результата и вопросы, важные при разработке реалистичного или рисованного аватара.",
+    "back": "Eight image models compared by the controls available in Epifera's preview catalog. Explore references, output settings and questions important when developing a realistic or illustrated avatar.",
+    "keepReason": "Preserved brand, model or technical notation: Epifera."
+  },
+  {
+    "id": "u1056",
+    "ru": "Для этого руководства не проводилось контролируемого сравнительного тестирования качества. Настройки входных данных и результата взяты из предварительного каталога Epifera и проверены 25 октября 2026 года. Сравнивайте настройки по этим полям, а перед созданием проверьте текущую модель, настройки и цену в рабочем пространстве.",
+    "back": "No controlled comparative quality testing was conducted for this guide. Input and output settings come from Epifera's preview catalog and were checked October 25, 2026. Compare controls using these fields and check the current model, settings and price in the workspace before creating.",
+    "keepReason": "Preserved brand, model or technical notation: Epifera."
+  },
+  {
+    "id": "u1057",
+    "ru": "Снимок предварительной версии приложения · 25 октября 2026 года",
+    "back": "Application preview snapshot · October 25, 2026"
+  },
+  {
+    "id": "u1058",
+    "ru": "Используйте эти настройки, чтобы составить список кандидатов. Прежде чем выбирать модель для конкретного портретного проекта, сравните фактические результаты с одинаковым брифом.",
+    "back": "Use these controls to make a shortlist. Before selecting a model for a specific portrait project compare actual results with the same brief."
+  },
+  {
+    "id": "u1059",
+    "ru": "Прослушать сравнение",
+    "back": "Listen to the comparison"
+  },
+  {
+    "id": "u1060",
+    "ru": "Поделиться сравнением",
+    "back": "Share the comparison"
+  },
+  {
+    "id": "u1061",
+    "ru": "Озвучка этого руководства пока недоступна. Читайте статью здесь или отдельно изучите существующее рабочее пространство для речи; эта страница не создаёт аудио и не запускает платное задание.",
+    "back": "Narration of this guide is not yet available. Read the article here or explore the existing speech workspace separately; this page does not create audio or start a paid job."
+  },
+  {
+    "id": "u1062",
+    "ru": "Референсы",
+    "back": "References"
+  },
+  {
+    "id": "u1063",
+    "ru": "Не представлены в этом снимке интерфейса",
+    "back": "Not presented in this interface snapshot"
+  },
+  {
+    "id": "u1064",
+    "ru": "Не указано",
+    "back": "Unspecified"
+  },
+  {
+    "id": "u1065",
+    "ru": "до",
+    "back": "up to"
+  },
+  {
+    "id": "u1066",
+    "ru": "изображений",
+    "back": "images"
+  },
+  {
+    "id": "u1067",
+    "ru": "Обозначения разрешения",
+    "back": "Resolution labels"
+  },
+  {
+    "id": "u1068",
+    "ru": "Соотношения сторон",
+    "back": "Aspect ratios"
+  },
+  {
+    "id": "u1069",
+    "ru": "Режимы качества",
+    "back": "Quality modes"
+  },
+  {
+    "id": "u1070",
+    "ru": "Максимальное число результатов",
+    "back": "Maximum number of outputs"
+  },
+  {
+    "id": "u1071",
+    "ru": "Общий лимит изображений",
+    "back": "Combined image limit"
+  },
+  {
+    "id": "u1072",
+    "ru": "Посмотреть эту модель в рабочем пространстве",
+    "back": "View this model in the workspace"
+  },
+  {
+    "id": "u1073",
+    "ru": "Nano Banana Pro — одна из моделей с поддержкой референсов в этом снимке. Её можно включить в список кандидатов для брифа аватара на основе фотографий, которые разрешено использовать, но итоговый результат всё равно нужно проверить на сходство и точность деталей.",
+    "back": "Nano Banana Pro is one of the models supporting references in this snapshot. It can be shortlisted for an avatar brief based on photographs permitted for use, but the final result still needs checking for likeness and accurate details.",
+    "keepReason": "Preserved brand, model or technical notation: Nano Banana Pro, Nano Banana."
+  },
+  {
+    "id": "u1074",
+    "ru": "Составьте конкретный бриф с помощью показанных настроек референсов. Опишите, что должно остаться узнаваемым, а что можно менять, затем оцените полученное изображение, не делая выводов о точности сходства по названию модели.",
+    "back": "Prepare a focused brief using the displayed reference controls. Describe what must remain recognizable and what can change, then assess the resulting image without inferring likeness accuracy from the model name."
+  },
+  {
+    "id": "u1075",
+    "ru": "В этом снимке Nano Banana 2 предлагает те же варианты числа референсов и обозначения разрешения, что и Nano Banana Pro. Это позволяет напрямую сравнить их настройки входных данных, но вопросы качества и скорости эти поля каталога не решают.",
+    "back": "In this snapshot Nano Banana 2 offers the same reference-count choices and resolution labels as Nano Banana Pro. This allows direct comparison of their input controls, but these catalog fields do not resolve quality and speed questions.",
+    "keepReason": "Preserved brand, model or technical notation: Nano Banana Pro, Nano Banana 2, Nano Banana."
+  },
+  {
+    "id": "u1076",
+    "ru": "При сравнении двух моделей сохраняйте одинаковые бриф, референсы и кадрирование. Запишите фактически использованные настройки и оцените одни и те же детали каждого результата, не принимая номер версии за оценку качества.",
+    "back": "When comparing the two models keep brief, references and framing identical. Record the settings actually used and assess the same details in each result, without taking a version number as a quality rating."
+  },
+  {
+    "id": "u1077",
+    "ru": "GPT Image 2 — ещё один вариант с поддержкой референсов в предварительном каталоге. Указанный лимит референсов отличается от моделей Nano Banana, а максимальное число результатов в этом снимке по-прежнему равно одному.",
+    "back": "GPT Image 2 is another reference-enabled option in the preview catalog. The listed reference limit differs from the Nano Banana models, while the maximum outputs in this snapshot remains one.",
+    "keepReason": "Preserved brand, model or technical notation: Nano Banana, GPT Image 2."
+  },
+  {
+    "id": "u1078",
+    "ru": "Более высокий лимит референсов — не повод добавлять несвязанные фотографии. Выберите референсы, которые ясно передают внешность человека или визуальное направление, проверьте допустимые файлы в рабочем пространстве и стоимость перед запуском.",
+    "back": "A higher reference limit is no reason to add unrelated photos. Choose references clearly conveying the person's appearance or visual direction, check acceptable files in the workspace and the cost before starting."
+  },
+  {
+    "id": "u1079",
+    "ru": "На зафиксированной здесь границе приложения GPT Image 2.5 Flare принимает только текст: ввод фотореференсов не представлен. Она предлагает несколько обозначений режимов качества и иной предел числа результатов, чем GPT Image 2.",
+    "back": "At the application boundary recorded here GPT Image 2.5 Flare takes text only: photo-reference input is not presented. It offers several quality-mode labels and a different output-count limit than GPT Image 2.",
+    "keepReason": "Preserved brand, model or technical notation: GPT Image 2.5 Flare, GPT Image 2."
+  },
+  {
+    "id": "u1080",
+    "ru": "Это полезное различие при составлении брифа. Изучайте вымышленного персонажа или стиль по тексту, но не предполагайте, что недоступный ввод фотографии позволит сохранить внешность конкретного человека. Проверьте настройки выбранной операции.",
+    "back": "This is a useful distinction when composing the brief. Explore a fictional character or style from text, but do not assume unavailable photo input can preserve a particular person's appearance. Check settings for the selected operation."
+  },
+  {
+    "id": "u1081",
+    "ru": "Seedream 5.0 Lite предлагает референсы изображений, несколько обозначений разрешения, предел числа результатов и общий лимит изображений. Эти ограничения следует учитывать вместе, не предполагая, что все максимальные значения можно запросить одновременно.",
+    "back": "Seedream 5.0 Lite offers image references, several resolution labels, an output-count limit and a combined image limit. These restrictions should be considered together, without assuming all maxima can be requested simultaneously.",
+    "keepReason": "Preserved brand, model or technical notation: Seedream 5.0 Lite."
+  },
+  {
+    "id": "u1082",
+    "ru": "Для проработки аватара начните с небольшого целевого набора референсов. Если изучаете несколько результатов, сравнивайте их с одинаковым кадрированием и критериями оценки. Окончательная проверка — конфигурация, которую принимает рабочее пространство.",
+    "back": "For avatar development begin with a small purposeful reference set. If exploring multiple outputs compare them using identical framing and assessment criteria. The final check is the configuration accepted by the workspace."
+  },
+  {
+    "id": "u1083",
+    "ru": "Seedream 4.5 также предлагает ввод референсов, но с другим пределом их числа и списком разрешений, чем у Seedream 5.0 Lite. В этом снимке она даёт ещё один набор настроек для проработки портретного или иллюстративного брифа.",
+    "back": "Seedream 4.5 also offers reference inputs, with a different count limit and resolution list than Seedream 5.0 Lite. In this snapshot it gives another set of controls for developing a portrait or illustration brief.",
+    "keepReason": "Preserved brand, model or technical notation: Seedream 5.0 Lite, Seedream 4.5."
+  },
+  {
+    "id": "u1084",
+    "ru": "Выбирайте модель по входным данным и настройкам, которые вам действительно нужны. Поля каталога не определяют победителя по качеству портретов, а отсутствие общего лимита изображений здесь должно оставаться неизвестным значением, а не трактоваться как отсутствие ограничений.",
+    "back": "Choose a model by the inputs and settings actually needed. Catalog fields do not determine a portrait quality winner, and the absence of a combined image limit here should remain an unknown value rather than being interpreted as no restrictions."
+  },
+  {
+    "id": "u1085",
+    "ru": "В этом снимке приложения FLUX.2 Pro принимает только текст. Варианты размера обозначены в мегапикселях; их не следует считать напрямую взаимозаменяемыми с настройками с обозначением K, показанными для ряда других моделей.",
+    "back": "In this application snapshot FLUX.2 Pro accepts text only. Size options are labeled in megapixels; they should not be considered directly interchangeable with K-labeled settings displayed for several other models.",
+    "keepReason": "Preserved brand, model or technical notation: FLUX.2 Pro, K."
+  },
+  {
+    "id": "u1086",
+    "ru": "Опишите персонажа, композицию, стиль и фон в брифе. Если задача требует фотореференса, проверьте другую модель, в текущих настройках рабочего пространства которой такой ввод доступен, не предполагая, что функция базового провайдера доступна и здесь.",
+    "back": "Describe character, composition, style and background in the brief. If the task needs a photo reference, check another model with that input available in its current workspace controls, without assuming a feature of the underlying provider is available here too."
+  },
+  {
+    "id": "u1087",
+    "ru": "Imagen 4.0 — ещё одна модель, принимающая только текст в этом снимке. В каталоге указаны соотношения сторон и предел числа результатов, но список разрешений не задан, поэтому в руководстве это поле остаётся неизвестным.",
+    "back": "Imagen 4.0 is another text-only model in this snapshot. The catalog gives aspect ratios and an output-count ceiling but no resolution list, so the guide leaves this field unknown.",
+    "keepReason": "Preserved brand, model or technical notation: Imagen 4.0."
+  },
+  {
+    "id": "u1088",
+    "ru": "Оставляйте неизвестные значения неизвестными. Изучите видимые настройки реального рабочего пространства и решите, подходят ли они брифу. Отсутствующее поле не доказывает ни слабость, ни неограниченные возможности.",
+    "back": "Leave unknown values unknown. Examine the visible controls of the actual workspace and decide whether they suit the brief. A missing field proves neither weakness nor unlimited ability."
+  },
+  {
+    "id": "u1089",
+    "ru": "Реалистичные, стилизованные и 3D-аватары",
+    "back": "Realistic, stylized and 3D avatars",
+    "keepReason": "Preserved brand, model or technical notation: 3D."
+  },
+  {
+    "id": "u1090",
+    "ru": "Реалистичные, стилизованные и 3D-аватары: три разные цели",
+    "back": "Realistic, stylized and 3D avatars: three different goals",
+    "keepReason": "Preserved brand, model or technical notation: 3D."
+  },
+  {
+    "id": "u1091",
+    "ru": "Начните с нужного результата. Узнаваемый портрет для профиля, рисованный персонаж и анимированный 3D-аватар для игры — разные виды работы. Восемь моделей ниже — варианты генерации изображений в предварительном каталоге Epifera. Они создают концепции изображений, а не персонажа с ригом, скан лица с измерениями или удостоверение личности.",
+    "back": "Start with the result needed. A recognizable profile portrait, drawn character and animated 3D game avatar are different kinds of work. The eight models below are image generation options in Epifera's preview catalog. They create image concepts, not a rigged character, face scan with measurements or identity credential.",
+    "keepReason": "Preserved brand, model or technical notation: Epifera, 3D."
+  },
+  {
+    "id": "u1092",
+    "ru": "Для концепции реалистичного портрета решите, какие детали должны остаться узнаваемыми: форма лица, причёска, очки или привычный наряд. Модель с вводом референсов может помочь проработать такой бриф, но одна лишь поддержка референсов не доказывает, что она точно сохранит индивидуальные черты человека.",
+    "back": "For a realistic portrait concept decide which details must remain recognizable: face shape, hairstyle, glasses or established outfit. A model with reference input can help develop such a brief, but reference support alone does not prove it will accurately preserve a person's individual features."
+  },
+  {
+    "id": "u1093",
+    "ru": "Для стилизованного аватара опишите визуальный язык: характер линий, цветовую палитру, свет, кадрирование и настроение персонажа. Модель с вводом только текста может пригодиться для нового вымышленного персонажа, но это не означает, что результат будет похож на конкретного реального человека.",
+    "back": "For a stylized avatar describe the visual language: line work, color palette, light, framing and character mood. A text-only model can be useful for a new fictional character, but that does not mean the result will resemble a particular real person."
+  },
+  {
+    "id": "u1094",
+    "ru": "Портрет с видом 3D остаётся изображением. Если нужны сетка, риг, настройки анимации или экспорт в игровой движок, это отдельный производственный процесс. Не выбирайте одну из этих моделей изображений в расчёте на экспорт таких материалов.",
+    "back": "A portrait with a 3D look remains an image. If a mesh, rig, animation controls or game engine export is needed, that is a separate production workflow. Do not choose these image models expecting export of such assets.",
+    "keepReason": "Preserved brand, model or technical notation: 3D."
+  },
+  {
+    "id": "u1095",
+    "ru": "Восемь моделей и их настройки",
+    "back": "Eight models and their settings"
+  },
+  {
+    "id": "u1096",
+    "ru": "Восемь моделей изображений для проработки концепций аватаров",
+    "back": "Eight image models for developing avatar concepts"
+  },
+  {
+    "id": "u1097",
+    "ru": "Порядок ниже предназначен для чтения, а не является рейтингом качества. Для каждой модели используется одинаковый набор полей приложения, чтобы сравнивать варианты с похожими названиями, не придумывая преимущества, скорость или оценки сходства.",
+    "back": "The order below is intended for reading rather than a quality ranking. Each model uses the same application fields to compare similarly named options without inventing advantages, speed or likeness ratings."
+  },
+  {
+    "id": "u1098",
+    "ru": "Как сравнить эти модели",
+    "back": "How to compare these models"
+  },
+  {
+    "id": "u1099",
+    "ru": "В текущем снимке ввод изображений для брифа на основе референсов доступен у Nano Banana Pro, Nano Banana 2, GPT Image 2, Seedream 5.0 Lite и Seedream 4.5. У GPT Image 2.5 Flare, FLUX.2 Pro и Imagen 4.0 такой ввод не представлен. Это описание интерфейса приложения, зафиксированного для руководства; оно не утверждает, что у базового API провайдера те же ограничения.",
+    "back": "In the current snapshot image inputs for a reference-based brief are available for Nano Banana Pro, Nano Banana 2, GPT Image 2, Seedream 5.0 Lite and Seedream 4.5. Such input is not presented for GPT Image 2.5 Flare, FLUX.2 Pro and Imagen 4.0. This describes the application interface recorded for the guide; it does not assert the provider's underlying API has identical restrictions.",
+    "keepReason": "Preserved brand, model or technical notation: Nano Banana Pro, Nano Banana 2, Nano Banana, GPT Image 2.5 Flare, GPT Image 2, Seedream 5.0 Lite, Seedream 4.5, FLUX.2 Pro, Imagen 4.0, API."
+  },
+  {
+    "id": "u1100",
+    "ru": "В этом снимке Nano Banana Pro и Nano Banana 2 имеют одинаковые отображаемые настройки разрешения и числа референсов. Эти поля не показывают, какая модель создаёт лучший портрет, точнее следует указаниям или быстрее выполняет задание. Если это важно для работы, сравните результаты с одинаковым брифом.",
+    "back": "In this snapshot Nano Banana Pro and Nano Banana 2 have identical displayed resolution and reference-count controls. These fields do not show which model makes a better portrait, follows instructions more accurately or finishes a job faster. If this matters for your work compare results with an identical brief.",
+    "keepReason": "Preserved brand, model or technical notation: Nano Banana Pro, Nano Banana 2, Nano Banana."
+  },
+  {
+    "id": "u1101",
+    "ru": "Обозначения разрешения тоже требуют контекста. Вариант в мегапикселях и вариант с обозначением K — разные способы описания настройки результата; сортировка их названий не является содержательной проверкой резкости. У Imagen 4.0 в этом снимке нет списка разрешений, поэтому руководство оставляет поле неуказанным, не подставляя предполагаемое значение.",
+    "back": "Resolution labels also require context. A megapixel option and a K-labeled option are different ways to describe an output setting; sorting their names is not a meaningful sharpness test. Imagen 4.0 has no resolution list in this snapshot, so the guide leaves the field unspecified instead of inserting a presumed value.",
+    "keepReason": "Preserved brand, model or technical notation: Imagen 4.0, K."
+  },
+  {
+    "id": "u1102",
+    "ru": "Число результатов и референсов — верхние пределы, а не обещание, что любое их сочетание поместится в один запрос. Seedream 5.0 Lite также предлагает общий лимит изображений. Перед подтверждением генерации проверяйте выбранную операцию, допустимые входные данные и текущую стоимость в рабочем пространстве.",
+    "back": "Output and reference counts are upper limits rather than a promise that any combination fits a single request. Seedream 5.0 Lite also offers a combined image limit. Check the selected operation, acceptable inputs and current cost in the workspace before confirming generation.",
+    "keepReason": "Preserved brand, model or technical notation: Seedream 5.0 Lite."
+  },
+  {
+    "id": "u1103",
+    "ru": "Для самостоятельного сравнения качества сохраняйте одинаковые бриф, соотношение сторон и предполагаемое кадрирование. До создания решите, что будете оценивать: узнаваемые черты, глаза и руки, очки, отвлекающий фон и читаемость в размере, в котором появится аватар. Один привлекательный результат — пример, а не контролируемый сравнительный тест.",
+    "back": "To compare quality yourself keep brief, aspect ratio and intended framing identical. Decide before creating what to assess: recognizable features, eyes and hands, glasses, distracting background and readability at the avatar's display size. One attractive result is an example rather than a controlled comparative test."
+  },
+  {
+    "id": "u1104",
+    "ru": "От брифа к концепции аватара",
+    "back": "From brief to avatar concept"
+  },
+  {
+    "id": "u1105",
+    "ru": "Процесс работы в Epifera: от брифа к концепции аватара",
+    "back": "Epifera workflow: from brief to avatar concept",
+    "keepReason": "Preserved brand, model or technical notation: Epifera."
+  },
+  {
+    "id": "u1106",
+    "ru": "Напишите бриф до выбора модели. Укажите, вымышленный ли это аватар или основанный на человеке, его назначение, кадрирование и визуальный стиль. Отделите детали, которые должны сохраняться, от тех, с которыми готовы экспериментировать.",
+    "back": "Write a brief before choosing a model. State whether the avatar is fictional or based on a person, its purpose, framing and visual style. Separate details that must be preserved from those you are willing to experiment with."
+  },
+  {
+    "id": "u1107",
+    "ru": "Откройте генератор изображений и изучите модели, доступные в текущем рабочем пространстве. Для использования фотографии выберите модель, настройки ввода которой её поддерживают. Проверьте допустимые формат, размер и число референсов, не предполагая, что все модели принимают одинаковые файлы.",
+    "back": "Open the image generator and examine models available in the current workspace. To use a photograph choose a model whose input controls support it. Check acceptable format, size and reference count without assuming all models accept identical files."
+  },
+  {
+    "id": "u1108",
+    "ru": "Выберите поддерживаемые настройки результата, проверьте стоимость и подтвердите генерацию в рабочем пространстве. Сравните результат с брифом, прежде чем решать, какое направление развивать. Держите исходные референсы под рукой для этой оценки.",
+    "back": "Select supported output settings, check cost and confirm generation in the workspace. Compare the result with the brief before deciding which direction to develop. Keep original references handy for this assessment."
+  },
+  {
+    "id": "u1109",
+    "ru": "Проверяйте результат по брифу, а не только по общему впечатлению. Посмотрите на глаза, рот, очки, контуры волос и любой текст или аксессуары. Если важная деталь изменилась, уточните бриф или попробуйте другой разрешённый референс, не считая первый результат готовым изображением, сохраняющим узнаваемость человека.",
+    "back": "Check the result against the brief rather than just the overall impression. Look at eyes, mouth, glasses, hair edges and any text or accessories. If an important detail changed, refine the brief or try another permitted reference, without treating the first output as a finished image preserving the person’s recognizability."
+  },
+  {
+    "id": "u1110",
+    "ru": "Скачайте результат, который хотите сохранить, и подготовьте итоговое кадрирование для места использования. Даже квадратное изображение может потерять важные детали в круглой рамке профиля, поэтому оставьте немного места вокруг лица или силуэта персонажа. Перед загрузкой проверьте текущие требования площадки к изображениям.",
+    "back": "Download the result you want to keep and prepare final framing for the destination. Even a square image may lose important details in a circular profile frame, so leave some space around face or character silhouette. Before uploading check the destination's current image requirements."
+  },
+  {
+    "id": "u1111",
+    "ru": "Подготовка исходной фотографии",
+    "back": "Preparing the source photo"
+  },
+  {
+    "id": "u1112",
+    "ru": "Какой должна быть исходная фотография",
+    "back": "What the source photo should be like"
+  },
+  {
+    "id": "u1113",
+    "ru": "Если модель поддерживает референсы, выберите чёткое изображение, которое вы вправе использовать. Видимое, хорошо освещённое и достаточно крупное для оценки лицо даёт более понятную отправную точку, чем сильно сжатый фрагмент или фото с несколькими конкурирующими объектами.",
+    "back": "If the model supports references choose a clear image you are entitled to use. A visible, well-lit face large enough to assess gives a more understandable starting point than a heavily compressed crop or photo with several competing subjects."
+  },
+  {
+    "id": "u1114",
+    "ru": "Не смешивайте референсы, противоречащие брифу, без объяснения различий. Если одно фото задаёт причёску, а другое — наряд, укажите это. Большее число файлов не делает запрос лучше автоматически, а максимум референсов — ограничение, а не цель.",
+    "back": "Do not mix references contradicting the brief without explaining the differences. If one photo establishes hair and another the outfit, state that. More files do not automatically improve a request, and maximum references are a restriction rather than a goal."
+  },
+  {
+    "id": "u1115",
+    "ru": "Сохраните оригинал для сравнения. Сгенерированный результат может менять детали, даже если в целом выглядит убедительно. Если для использования нужно точное сходство, внимательно проверьте результат, не предполагая, что поддержка референсов подтверждает эту точность.",
+    "back": "Keep an original for comparison. A generated result may change details even when it looks convincing overall. If usage requires accurate likeness inspect the output closely rather than assuming reference support confirms that accuracy."
+  },
+  {
+    "id": "u1116",
+    "ru": "Профили, игры и справочники команды",
+    "back": "Profiles, games and team directories"
+  },
+  {
+    "id": "u1117",
+    "ru": "Профессиональный профиль, игровой значок и справочник команды предъявляют разные требования к итоговому изображению. Определите назначение до сравнения настроек моделей. Единое кадрирование может быть важнее сложного фона, а вымышленному персонажу может подойти более простой и выразительный силуэт.",
+    "back": "A professional profile, gaming icon and team directory place different demands on the final image. Determine its purpose before comparing model controls. Consistent framing may be more important than a complex background, while a fictional character may benefit from a simpler, more expressive silhouette."
+  },
+  {
+    "id": "u1118",
+    "ru": "Профессиональные профили: оцените, как портрет представляет человека, и перед использованием проверьте текущие правила целевой платформы.",
+    "back": "Professional profiles: assess how the portrait represents the person and check the destination platform's current rules before use."
+  },
+  {
+    "id": "u1119",
+    "ru": "Значки для игр и сообществ: проверяйте дизайн в маленьком размере, включая круглое или квадратное кадрирование, в котором он появится.",
+    "back": "Icons for games and communities: check the design at small size including the circular or square crop where it will appear."
+  },
+  {
+    "id": "u1120",
+    "ru": "Справочники команды: договоритесь о кадрировании, фонах и критериях оценки до того, как люди создадут отдельные изображения. Это руководство не подразумевает наличия в Epifera общего продукта для администрирования команды.",
+    "back": "Team directories: agree on framing, backgrounds and assessment criteria before people create separate images. This guide does not imply Epifera has a shared team administration product.",
+    "keepReason": "Preserved brand, model or technical notation: Epifera."
+  },
+  {
+    "id": "u1121",
+    "ru": "Рисованные персонажи или персонажи с видом 3D: задайте ясное визуальное направление, отделяя генерацию изображений от риггинга, захвата движений и экспорта 3D.",
+    "back": "Drawn characters or characters with a 3D look: set a clear visual direction, separating image generation from rigging, motion capture and 3D export.",
+    "keepReason": "Preserved brand, model or technical notation: 3D."
+  },
+  {
+    "id": "u1122",
+    "ru": "Семь ошибок для проверки",
+    "back": "Seven mistakes to check"
+  },
+  {
+    "id": "u1123",
+    "ru": "Семь ошибок, которые ухудшают аватар",
+    "back": "Seven mistakes that worsen an avatar"
+  },
+  {
+    "id": "u1124",
+    "ru": "Прежде чем считать результат готовым, пройдите короткий список проверок. Они помогают оценить результат, не предполагая, что одна модель всегда лучше остальных.",
+    "back": "Before considering a result finished go through a short checklist. These checks help assess the result without assuming one model is always better than the others."
+  },
+  {
+    "id": "u1125",
+    "ru": "Выбирать модель, не решив, нужен ли вымышленный персонаж или узнаваемый человек.",
+    "back": "Choosing a model without deciding whether a fictional character or recognizable person is needed."
+  },
+  {
+    "id": "u1126",
+    "ru": "Предполагать, что ввод только текста сохранит индивидуальные черты с посторонней фотографии.",
+    "back": "Assuming text-only input will preserve individual features from an unrelated photo."
+  },
+  {
+    "id": "u1127",
+    "ru": "Считать лимит референсов поводом загрузить все имеющиеся фотографии.",
+    "back": "Taking the reference limit as a reason to upload all available photographs."
+  },
+  {
+    "id": "u1128",
+    "ru": "Сравнивать результаты разных брифов или кадрирования и называть это контролируемым тестом.",
+    "back": "Comparing outputs from different briefs or framing and calling it a controlled test."
+  },
+  {
+    "id": "u1129",
+    "ru": "Игнорировать мелкие ошибки в глазах, очках, украшениях, надписях или контурах волос.",
+    "back": "Ignoring small errors in eyes, glasses, jewelry, lettering or hair edges."
+  },
+  {
+    "id": "u1130",
+    "ru": "Проверять только полноразмерное изображение вместо маленького фрагмента для профиля.",
+    "back": "Checking only the full-size image instead of a small profile crop."
+  },
+  {
+    "id": "u1131",
+    "ru": "Считать, что привлекательное изображение подтверждает права, согласие, точность сходства или пригодность для любой платформы.",
+    "back": "Assuming an attractive image confirms rights, consent, likeness accuracy or suitability for every platform."
+  },
+  {
+    "id": "u1132",
+    "ru": "Референсы, разрешения и использование",
+    "back": "References, permissions and use"
+  },
+  {
+    "id": "u1133",
+    "ru": "Используйте референсы, которые вправе предоставлять, и избегайте ненужной загрузки личных или чувствительных изображений. Если в проекте участвует другой человек, согласуйте разрешение и назначение до включения его фото в творческий процесс.",
+    "back": "Use references you are entitled to provide and avoid unnecessarily uploading personal or sensitive images. If another person is involved in the project agree on permission and purpose before including their photo in the creative process."
+  },
+  {
+    "id": "u1134",
+    "ru": "Это черновое сравнение не обещает защиту авторских прав, эксклюзивность, права на коммерческое использование или принятие аватара третьей стороной. Изучите условия Epifera, политику данных и применимые условия модели для фактически выбранной операции.",
+    "back": "This draft comparison does not promise copyright protection, exclusivity, commercial-use rights or acceptance of an avatar by a third party. Read Epifera terms, data policy and applicable model conditions for the operation actually chosen.",
+    "keepReason": "Preserved brand, model or technical notation: Epifera."
+  },
+  {
+    "id": "u1135",
+    "ru": "Для совместного проекта согласуйте назначение и процесс оценки до создания набора аватаров. Перед публикацией проверьте итоговые изображения и выбранное кадрирование вместе с участниками.",
+    "back": "For a shared project agree on purpose and assessment process before creating an avatar set. Before publication check final images and selected framing together with participants."
+  },
+  {
+    "id": "u1136",
+    "ru": "Частые вопросы",
+    "back": "Frequently asked questions"
+  },
+  {
+    "id": "u1137",
+    "ru": "Какая модель лучше всего подходит для ИИ-аватара?",
+    "back": "Which model is best suited for an AI avatar?"
+  },
+  {
+    "id": "u1138",
+    "ru": "Это руководство не выбирает победителя по качеству. Начните с нужных входных данных, используйте текущие настройки рабочего пространства и сравните результаты с одинаковым брифом и списком проверок.",
+    "back": "This guide does not pick a quality winner. Start with needed inputs, use current workspace controls and compare results with identical brief and checklist."
+  },
+  {
+    "id": "u1139",
+    "ru": "Можно ли превратить селфи в аватар?",
+    "back": "Can a selfie be turned into an avatar?"
+  },
+  {
+    "id": "u1140",
+    "ru": "Выберите модель, текущие настройки приложения которой поддерживают референсы изображений, и используйте фото, которое вправе предоставлять. Поддержка референсов не гарантирует точное сходство или принятие целевой платформой.",
+    "back": "Choose a model whose current application controls support image references and use a photo you are entitled to provide. Reference support guarantees neither accurate likeness nor acceptance by the destination platform."
+  },
+  {
+    "id": "u1141",
+    "ru": "Все восемь моделей принимают фотографии?",
+    "back": "Do all eight models accept photos?"
+  },
+  {
+    "id": "u1142",
+    "ru": "Нет. В предварительном снимке ввод референсов изображений не представлен для GPT Image 2.5 Flare, FLUX.2 Pro и Imagen 4.0. У остальных пяти моделей он указан с учётом их собственных ограничений и текущего окружения.",
+    "back": "No. In the preview snapshot image-reference input is not presented for GPT Image 2.5 Flare, FLUX.2 Pro and Imagen 4.0. It is listed for the other five models, subject to their own limits and current environment.",
+    "keepReason": "Preserved brand, model or technical notation: GPT Image 2.5 Flare, GPT Image 2, FLUX.2 Pro, Imagen 4.0."
+  },
+  {
+    "id": "u1143",
+    "ru": "Включает ли это сравнение игровые 3D-аватары?",
+    "back": "Does this comparison include 3D game avatars?",
+    "keepReason": "Preserved brand, model or technical notation: 3D."
+  },
+  {
+    "id": "u1144",
+    "ru": "Оно охватывает модели изображений и концепции аватаров. Изображение с видом 3D — не сетка с ригом и не экспорт в игровой движок. Такие результаты требуют отдельного процесса.",
+    "back": "It covers image models and avatar concepts. An image with a 3D look is not a rigged mesh or game engine export. Such outputs require a separate workflow.",
+    "keepReason": "Preserved brand, model or technical notation: 3D."
+  },
+  {
+    "id": "u1145",
+    "ru": "Сколько стоит генерация?",
+    "back": "How much does generation cost?"
+  },
+  {
+    "id": "u1146",
+    "ru": "Выбранная модель и настройки определяют текущую стоимость, показанную в рабочем пространстве до подтверждения. Эта статья не обещает цену, бесплатную квоту или безлимитный план.",
+    "back": "The chosen model and settings determine current cost displayed in the workspace before confirmation. This article promises no price, free quota or unlimited plan."
+  },
+  {
+    "id": "u1147",
+    "ru": "Можно ли использовать аватар в коммерческих целях?",
+    "back": "Can an avatar be used commercially?"
+  },
+  {
+    "id": "u1148",
+    "ru": "Изучите условия Epifera, условия выбранной модели и права или разрешения на используемые референсы. Это сравнение не обещает владение, эксклюзивность или пригодность для конкретного коммерческого применения.",
+    "back": "Read Epifera terms, conditions of the selected model and rights or permissions for references used. This comparison promises no ownership, exclusivity or suitability for particular commercial use.",
+    "keepReason": "Preserved brand, model or technical notation: Epifera."
+  },
+  {
+    "id": "u1149",
+    "ru": "Создайте концепцию своего аватара",
+    "back": "Create your avatar concept"
+  },
+  {
+    "id": "u1150",
+    "ru": "Выберите модель, проверьте её входные данные и стоимость и изучите следующее визуальное направление.",
+    "back": "Select a model, check its inputs and cost and explore the next visual direction."
+  },
+  {
+    "id": "u1151",
+    "ru": "Открыть генератор изображений",
+    "back": "Open image generator"
+  },
+  {
+    "id": "u1152",
+    "ru": "Пишите более ясные промпты для изображений",
+    "back": "Write clearer image prompts"
+  },
+  {
+    "id": "u1153",
+    "ru": "Составьте визуальный бриф с объектами, светом, стилем и кадрированием.",
+    "back": "Build a visual brief with subjects, light, style and framing."
+  },
+  {
+    "id": "u1154",
+    "ru": "Руководства по моделям",
+    "back": "Model guides"
+  },
+  {
+    "id": "u1155",
+    "ru": "Изучите семейство Kling",
+    "back": "Explore the Kling family",
+    "keepReason": "Preserved brand, model or technical notation: Kling."
+  },
+  {
+    "id": "u1156",
+    "ru": "Посмотрите доступное семейство моделей и страницы его версий.",
+    "back": "View the available model family and its version pages."
+  },
+  {
+    "id": "u1157",
+    "ru": "Политика данных",
+    "back": "Data policy"
+  },
+  {
+    "id": "u1158",
+    "ru": "Скульптурный фиолетовый объект со стеклянным основанием и длинной тенью",
+    "back": "A sculptural purple object with a glass base and long shadow"
+  },
+  {
+    "id": "u1159",
+    "ru": "Стилизованный портрет на красном фоне",
+    "back": "A stylized portrait on a red background"
+  },
+  {
+    "id": "u1160",
+    "ru": "Абстрактные цветные свет и фактура",
+    "back": "Abstract colored light and texture"
+  },
+  {
+    "id": "u1161",
+    "ru": "Секундомер с розовым сегментом",
+    "back": "A stopwatch with a pink segment"
+  },
+  {
+    "id": "u1162",
+    "ru": "Контактный лист из сохранённого референса Magnific по видеомоделям",
+    "back": "A contact sheet from the saved Magnific video model reference",
+    "keepReason": "Preserved brand, model or technical notation: Magnific."
+  },
+  {
+    "id": "u1163",
+    "ru": "Основы Epifera",
+    "back": "Epifera basics",
+    "keepReason": "Preserved brand, model or technical notation: Epifera."
+  },
+  {
+    "id": "u1164",
+    "ru": "Освойте работу с изображениями, видео, музыкой и речью",
+    "back": "Learn to work with images, video, music and speech"
+  },
+  {
+    "id": "u1165",
+    "ru": "Навигация",
+    "back": "Navigation"
+  },
+  {
+    "id": "u1166",
+    "ru": "Разберитесь в навигации",
+    "back": "Understand navigation"
+  },
+  {
+    "id": "u1167",
+    "ru": "Найдите основные рабочие пространства и узнайте, где появляется ваша работа.",
+    "back": "Find the main workspaces and learn where your work appears."
+  },
+  {
+    "id": "u1168",
+    "ru": "Прежде чем что-либо создавать, изучите платформу. Понятный путь между инструментами, чатами и файлами упростит следующие шаги.",
+    "back": "Explore the platform before creating anything. An understandable path between tools, chats and files will simplify the next steps."
+  },
+  {
+    "id": "u1169",
+    "ru": "Откройте рабочее пространство и найдите навигацию к изображениям, моделям, музыке, речи и вашим файлам. У разных задач свои настройки, а меню аккаунта остаётся доступным.",
+    "back": "Open the workspace and find navigation to images, models, music, speech and your files. Different tasks have their own controls while the account menu remains accessible."
+  },
+  {
+    "id": "u1170",
+    "ru": "Откройте каталог моделей и изучите названия и категории. Чтение описания модели помогает составить список кандидатов; оно не запускает генерацию.",
+    "back": "Open the model catalog and examine names and categories. Reading a model description helps build a shortlist; it does not start generation."
+  },
+  {
+    "id": "u1171",
+    "ru": "Откройте свои чаты и файлы. Разговор содержит контекст задачи, а библиотека файлов собирает сгенерированные медиа. Используйте оба представления для поиска прошлых работ.",
+    "back": "Open your chats and files. A conversation contains task context while the file library collects generated media. Use both views to find past work."
+  },
+  {
+    "id": "u1172",
+    "ru": "Изучите каталог моделей и вернитесь в рабочее пространство. Найдите библиотеку файлов, ничего не создавая и не загружая.",
+    "back": "Explore the model catalog and return to the workspace. Find the file library without creating or uploading anything."
+  },
+  {
+    "id": "u1173",
+    "ru": "Вы знаете, как переходить между инструментами, разговорами и сгенерированными файлами.",
+    "back": "You know how to move between tools, conversations and generated files."
+  },
+  {
+    "id": "u1174",
+    "ru": "Выберите модель для задачи",
+    "back": "Choose a model for a task"
+  },
+  {
+    "id": "u1175",
+    "ru": "Выбирайте модель по нужным входным данным и результату.",
+    "back": "Choose a model by the inputs and output needed."
+  },
+  {
+    "id": "u1176",
+    "ru": "Начните с задачи, а не названия модели. Для текстового ответа, неподвижного изображения и движущегося кадра нужны разные типы моделей и настроек.",
+    "back": "Start with the task rather than the model name. A text answer, still image and moving shot need different model types and settings."
+  },
+  {
+    "id": "u1177",
+    "ru": "Запишите, какой результат нужен и есть ли у вас исходные медиа. Это даст конкретное основание выбрать инструмент для изображений, видео, аудио или текста.",
+    "back": "Write down the result needed and whether you have source media. This gives a concrete reason to choose an image, video, audio or text tool."
+  },
+  {
+    "id": "u1178",
+    "ru": "Проверьте текущие настройки входных данных выбранной модели. Возможность из общего описания модели может не быть доступной операцией в вашем рабочем пространстве.",
+    "back": "Check the selected model's current input controls. A capability in its general description may not be an available operation in your workspace."
+  },
+  {
+    "id": "u1179",
+    "ru": "Проверьте выбранные настройки и показанную стоимость перед подтверждением генерации. Если необходимый ввод или настройка отсутствуют, выберите другой доступный путь, не предполагая, что система догадается сама.",
+    "back": "Check selected controls and displayed cost before confirming generation. If a necessary input or setting is absent choose another available route without assuming the system will infer it."
+  },
+  {
+    "id": "u1180",
+    "ru": "Выберите две модели изображений и отметьте, доступен ли у каждой ввод референсов изображений. Ничего генерировать не нужно.",
+    "back": "Choose two image models and note whether each offers image-reference input. Nothing needs generating."
+  },
+  {
+    "id": "u1181",
+    "ru": "У вас есть список кандидатов, основанный на реальной задаче и доступных настройках.",
+    "back": "You have a shortlist based on the real task and available controls."
+  },
+  {
+    "id": "u1182",
+    "ru": "Генерация изображений",
+    "back": "Image generation"
+  },
+  {
+    "id": "u1183",
+    "ru": "Напишите визуальный бриф",
+    "back": "Write a visual brief"
+  },
+  {
+    "id": "u1184",
+    "ru": "Превратите идею в ясные указания для изображения.",
+    "back": "Turn an idea into clear image instructions."
+  },
+  {
+    "id": "u1185",
+    "ru": "Бриф изображения описывает картинку, которую вы хотите разработать. Начните с объекта и важных связей, затем добавьте визуальное направление.",
+    "back": "An image brief describes the picture you want to develop. Start with the subject and important relationships, then add a visual direction."
+  },
+  {
+    "id": "u1186",
+    "ru": "Назовите главный объект и его действие или позу. Добавляйте окружение, только если оно помогает объяснить картинку. Сохраняйте понятный центр внимания.",
+    "back": "Name the main subject and its action or pose. Add surroundings only if they help explain the picture. Keep a clear focus."
+  },
+  {
+    "id": "u1187",
+    "ru": "Выберите свет, палитру и технику. Мягкий свет из окна и рисованная ночная сцена задают разные направления; не добавляйте противоречивые обозначения без объяснения задуманного сочетания.",
+    "back": "Choose light, palette and medium. Soft window light and a drawn night scene give different directions; do not add contradictory labels without explaining the intended combination."
+  },
+  {
+    "id": "u1188",
+    "ru": "Опишите кадрирование и детали, которые будете оценивать. Если картинке нужно место для заголовка, укажите, где его оставить. Фактические размеры выбирайте в настройках рабочего пространства.",
+    "back": "Describe framing and details you will assess. If the picture needs room for a heading state where to leave it. Choose actual dimensions in workspace controls."
+  },
+  {
+    "id": "u1189",
+    "ru": "Напишите короткий бриф для одного вымышленного товара или пейзажа. В своих заметках подчеркните объект, свет и кадрирование.",
+    "back": "Write a short brief for one fictional product or landscape. Underline subject, light and framing in your notes."
+  },
+  {
+    "id": "u1190",
+    "ru": "У вас есть бриф с ясным объектом и визуальным направлением, которое можно оценить.",
+    "back": "You have a brief with a clear subject and a visual direction that can be assessed."
+  },
+  {
+    "id": "u1191",
+    "ru": "Работайте с референсами изображений",
+    "back": "Work with image references"
+  },
+  {
+    "id": "u1192",
+    "ru": "Подготовьте подходящие референсы, если выбранная модель их поддерживает.",
+    "back": "Prepare suitable references if the selected model supports them."
+  },
+  {
+    "id": "u1193",
+    "ru": "Референс помогает передать визуальную отправную точку. Его роль должна быть ясна: композиция, объект, который разрешено использовать, предмет или стилевое направление.",
+    "back": "A reference helps convey a visual starting point. Its role should be clear: composition, a permitted subject, an object or style direction."
+  },
+  {
+    "id": "u1194",
+    "ru": "Проверьте, доступен ли ввод референсов для текущих модели и операции. Перед выбором файлов изучите допустимые форматы, ограничения файлов и число референсов.",
+    "back": "Check whether reference input is available for the current model and operation. Before selecting files examine accepted formats, file restrictions and reference count."
+  },
+  {
+    "id": "u1195",
+    "ru": "Используйте изображения, которые вправе предоставлять, и выбирайте только относящиеся к брифу. Не добавляйте ненужные личные или чувствительные материалы.",
+    "back": "Use images you are entitled to provide and choose only those relevant to the brief. Do not add unnecessary personal or sensitive material."
+  },
+  {
+    "id": "u1196",
+    "ru": "Объясните вклад каждого референса и детали, которые должны измениться. Сравнивайте любой сгенерированный результат с оригиналом; поддержка референсов не гарантирует точное воспроизведение.",
+    "back": "Explain each reference's contribution and the details that should change. Compare any generated output with the original; reference support does not guarantee exact reproduction."
+  },
+  {
+    "id": "u1197",
+    "ru": "Подготовьте список возможных референсов и укажите назначение каждого. Загрузка или генерация необязательны.",
+    "back": "Prepare a list of possible references and state the purpose of each. Uploading or generation is optional."
+  },
+  {
+    "id": "u1198",
+    "ru": "Ваш набор референсов имеет ясное назначение и соответствует доступным входным данным выбранной модели.",
+    "back": "Your reference set has a clear purpose and matches the chosen model's available inputs."
+  },
+  {
+    "id": "u1199",
+    "ru": "Настройки изображений и оценка",
+    "back": "Image settings and assessment"
+  },
+  {
+    "id": "u1200",
+    "ru": "Задайте кадрирование и размер результата",
+    "back": "Set framing and output size"
+  },
+  {
+    "id": "u1201",
+    "ru": "Осознанно выбирайте кадрирование и размеры.",
+    "back": "Choose framing and dimensions deliberately."
+  },
+  {
+    "id": "u1202",
+    "ru": "Композиция и размер результата связаны, но задаются разными указаниями. Промпт может описывать широкую композицию; настройки определяют доступный формат результата.",
+    "back": "Composition and output size are related but set by different instructions. A prompt can describe a wide composition; controls determine the available output format."
+  },
+  {
+    "id": "u1203",
+    "ru": "Решите, где будет использоваться изображение, и выберите доступное соотношение сторон, подходящее месту размещения. Учтите, как последующее кадрирование может убрать важные детали.",
+    "back": "Decide where the image will be used and select an available aspect ratio fitting that placement. Consider how later cropping may remove important details."
+  },
+  {
+    "id": "u1204",
+    "ru": "Изучите варианты разрешения и качества выбранной модели. Модели используют разные обозначения, поэтому не сравнивайте резкость только по названию настройки.",
+    "back": "Examine the selected model's resolution and quality options. Models use different labels so do not compare sharpness only by a setting's name."
+  },
+  {
+    "id": "u1205",
+    "ru": "Проверьте всю конфигурацию и стоимость до подтверждения. Слова вроде «8K» в брифе не задают размеры экспортируемого изображения.",
+    "back": "Check the full configuration and cost before confirmation. Words like 8K in the brief do not set exported image dimensions.",
+    "keepReason": "Preserved brand, model or technical notation: 8K."
+  },
+  {
+    "id": "u1206",
+    "ru": "Сравните квадратную и вертикальную композиции для одной идеи. Отметьте, какие детали нужно переместить внутри кадра.",
+    "back": "Compare square and vertical compositions for one idea. Note which details need moving within the frame."
+  },
+  {
+    "id": "u1207",
+    "ru": "Выбранное кадрирование имеет практическое назначение, и вы знаете, где задать размеры результата.",
+    "back": "The chosen framing has a practical purpose and you know where to set output dimensions."
+  },
+  {
+    "id": "u1208",
+    "ru": "Оцените и уточните изображение",
+    "back": "Assess and refine an image"
+  },
+  {
+    "id": "u1209",
+    "ru": "Пользуйтесь единым списком проверок, чтобы решить, что менять.",
+    "back": "Use a consistent checklist to decide what to change."
+  },
+  {
+    "id": "u1210",
+    "ru": "Эффектный результат всё ещё может не соответствовать брифу. Прежде чем решать, стоит ли сохранять изображение, проверьте важные для проекта детали.",
+    "back": "A striking result may still not fit the brief. Before deciding whether to keep the image check details important to the project."
+  },
+  {
+    "id": "u1211",
+    "ru": "Сверьте главный объект, позу, кадрирование и общее направление с брифом. Отделите изменение вкуса от детали, которая мешает изображению выполнять задачу.",
+    "back": "Check the main subject, pose, crop and overall direction against the brief. Separate a change of taste from a detail preventing the image from doing its job."
+  },
+  {
+    "id": "u1212",
+    "ru": "Проверьте мелкие элементы: надписи, края, руки и отражения, если они есть. Затем оцените картинку в размере, в котором будете использовать.",
+    "back": "Check small elements: lettering, edges, hands and reflections if present. Then assess the picture at the size in which it will be used."
+  },
+  {
+    "id": "u1213",
+    "ru": "Выбирайте по одному важному изменению за раз. Сохраняйте полезные формулировки и меняйте связанную с проблемой часть брифа, чтобы сделать выводы из следующего результата.",
+    "back": "Choose one important change at a time. Keep useful wording and change the part of the brief related to the problem, so you can learn from the next result."
+  },
+  {
+    "id": "u1214",
+    "ru": "Оцените изображение, которое вам уже разрешено использовать, и запишите три конкретных наблюдения. Новая генерация не нужна.",
+    "back": "Assess an image you are already permitted to use and record three specific observations. No new generation is needed."
+  },
+  {
+    "id": "u1215",
+    "ru": "У вас есть конкретное изменение вместо расплывчатой просьбы улучшить картинку.",
+    "back": "You have a concrete revision instead of a vague request to improve the picture."
+  },
+  {
+    "id": "u1216",
+    "ru": "Опишите движущийся кадр",
+    "back": "Describe a moving shot"
+  },
+  {
+    "id": "u1217",
+    "ru": "Напишите видеобриф, объясняющий движение во времени.",
+    "back": "Write a video brief explaining movement over time."
+  },
+  {
+    "id": "u1218",
+    "ru": "Видеобрифу нужно больше, чем описание неподвижного кадра. Продумайте действие объекта, камеру и то, как кадр начинается и заканчивается.",
+    "back": "A video brief needs more than a still-frame description. Think through the subject's action, camera and how the shot begins and ends."
+  },
+  {
+    "id": "u1219",
+    "ru": "Выберите одно понятное действие объекта. Опишите видимое движение и окружение, не вмещая несвязанные события в короткий кадр.",
+    "back": "Choose one understandable subject action. Describe the visible movement and surroundings without packing unrelated events into a short shot."
+  },
+  {
+    "id": "u1220",
+    "ru": "Добавляйте указание для камеры, только если оно помогает идее. Медленное приближение, неподвижный вид и следящая съёмка предъявляют разные требования к композиции.",
+    "back": "Add a camera instruction only if it serves the idea. A slow push-in, locked view and tracking shot make different demands on composition."
+  },
+  {
+    "id": "u1221",
+    "ru": "Если используете начальное изображение, объясните задуманное движение, не повторяя каждую уже видимую деталь. Проверьте, поддерживает ли выбранная модель нужные исходные данные.",
+    "back": "If using an initial image explain the intended motion without repeating every detail already visible. Check whether the selected model supports the source inputs needed."
+  },
+  {
+    "id": "u1222",
+    "ru": "Напишите один короткий бриф кадра с действием объекта и одним решением для камеры. Укажите, что должно оставаться неизменным.",
+    "back": "Write one short shot brief with a subject action and one camera decision. State what must remain unchanged."
+  },
+  {
+    "id": "u1223",
+    "ru": "Ваш бриф описывает связный кадр, а не список неподвижных визуальных деталей.",
+    "back": "Your brief describes a coherent shot instead of a list of static visual details."
+  },
+  {
+    "id": "u1224",
+    "ru": "Проверьте входные данные и настройки видео",
+    "back": "Check video inputs and settings"
+  },
+  {
+    "id": "u1225",
+    "ru": "Перед созданием проверьте выбранную видеооперацию.",
+    "back": "Check the selected video operation before creating."
+  },
+  {
+    "id": "u1226",
+    "ru": "Длительность, кадрирование, исходные медиа и возможности аудио зависят от модели и операции. Читайте настройки текущего выбора, не предполагая, что все способы работы с видео одинаковы.",
+    "back": "Duration, framing, source media and audio options depend on model and operation. Read controls for the current choice without assuming all video routes are the same."
+  },
+  {
+    "id": "u1227",
+    "ru": "Если кадр начинается с готовых медиа, проверьте допустимые входные изображения или видео. Уточните доступные требования к файлам до выбора источника.",
+    "back": "If the shot starts from existing media check acceptable image or video inputs. Clarify available file requirements before choosing a source."
+  },
+  {
+    "id": "u1228",
+    "ru": "Проверьте длительность, соотношение сторон и фактически показанные варианты аудио. Если нужной настройки нет, продумайте другой путь вместо обещания её в брифе.",
+    "back": "Check duration, aspect ratio and audio choices actually displayed. If a needed setting is missing plan another route instead of promising it in the brief."
+  },
+  {
+    "id": "u1229",
+    "ru": "Проверьте стоимость и подтверждайте, только когда конфигурация соответствует задаче. Оцените движение, непрерывность и последний кадр результата перед планированием следующего кадра.",
+    "back": "Check cost and confirm only when configuration matches the task. Assess resulting movement, continuity and final frame before planning the next shot."
+  },
+  {
+    "id": "u1230",
+    "ru": "Сравните видимые настройки двух доступных вариантов видео и отметьте одно практическое различие. Генерация необязательна.",
+    "back": "Compare visible settings of two available video options and note one practical difference. Generation is optional."
+  },
+  {
+    "id": "u1231",
+    "ru": "Вы можете объяснить, почему конкретная видеоконфигурация подходит вашему кадру.",
+    "back": "You can explain why a particular video configuration fits your shot."
+  },
+  {
+    "id": "u1232",
+    "ru": "Музыка и речь",
+    "back": "Music and speech"
+  },
+  {
+    "id": "u1233",
+    "ru": "Подготовьте музыкальный бриф",
+    "back": "Prepare a music brief"
+  },
+  {
+    "id": "u1234",
+    "ru": "Опишите роль и направление саундтрека.",
+    "back": "Describe the role and direction of a soundtrack."
+  },
+  {
+    "id": "u1235",
+    "ru": "Начните с того, какую задачу музыка должна выполнять в проекте. Фоновая музыка для устного объяснения требует иной аранжировки, чем песня в центре внимания.",
+    "back": "Begin with the job music should do in the project. Background music for spoken explanation requires a different arrangement than a song at the center of attention."
+  },
+  {
+    "id": "u1236",
+    "ru": "Опишите настроение, энергичность и назначение. Выберите небольшой набор узнаваемых музыкальных свойств вместо нагромождения несвязанных жанров.",
+    "back": "Describe mood, energy and purpose. Choose a small set of recognizable musical properties instead of a pile of unrelated genres."
+  },
+  {
+    "id": "u1237",
+    "ru": "Изучите текущие режимы и поля рабочего пространства музыки. Отделяйте текст песни от указаний по стилю, когда выбранный режим предлагает разные настройки.",
+    "back": "Examine current modes and fields in the music workspace. Separate lyrics from style instructions when the chosen mode offers different controls."
+  },
+  {
+    "id": "u1238",
+    "ru": "Проверьте настройки и стоимость перед созданием. Прослушайте весь результат, оценив структуру, переходы и соответствие проекту, прежде чем решать, что сохранить.",
+    "back": "Check settings and cost before creating. Listen to the whole result assessing structure, transitions and fit with the project before deciding what to save."
+  },
+  {
+    "id": "u1239",
+    "ru": "Напишите бриф для вымышленной тридцатисекундной презентации товара. Опишите музыкальное направление, не запрашивая запись конкретного исполнителя.",
+    "back": "Write a brief for a fictional thirty-second product introduction. Describe the musical direction without requesting a particular artist's recording."
+  },
+  {
+    "id": "u1240",
+    "ru": "Ваш бриф саундтрека передаёт настроение, энергичность и назначение.",
+    "back": "Your soundtrack brief conveys mood, energy and purpose."
+  },
+  {
+    "id": "u1241",
+    "ru": "Подготовьте текст для озвучки",
+    "back": "Prepare a narration script"
+  },
+  {
+    "id": "u1242",
+    "ru": "Напишите текст, понятный при произнесении вслух.",
+    "back": "Write text understandable when spoken aloud."
+  },
+  {
+    "id": "u1243",
+    "ru": "Удобный для чтения абзац не всегда удобен для озвучки. Короткие предложения, ясная пунктуация и единообразные имена облегчают оценку подачи.",
+    "back": "A paragraph easy to read is not always easy to narrate. Short sentences, clear punctuation and consistent names make delivery easier to assess."
+  },
+  {
+    "id": "u1244",
+    "ru": "Прочитайте черновик вслух и уберите фразы, которые сложно понять с первого раза. Обозначьте границы предложений пунктуацией.",
+    "back": "Read the draft aloud and remove phrases difficult to understand on first hearing. Mark sentence boundaries with punctuation."
+  },
+  {
+    "id": "u1245",
+    "ru": "Изучите доступные голоса и настройки инструмента для речи. Используйте только текущие варианты выбранной операции и проверьте допустимую длину текста.",
+    "back": "Examine available voices and settings of the speech tool. Use only current options of the selected operation and check acceptable script length."
+  },
+  {
+    "id": "u1246",
+    "ru": "Проверяйте произношение, паузы и задуманный тон любого сгенерированного аудио. Осознанно меняйте текст или доступные настройки; не предполагайте, что письменная подсказка произношения одинаково сработает в каждой модели.",
+    "back": "Check pronunciation, pauses and intended tone of any generated audio. Deliberately change script or available controls; do not assume a written pronunciation hint works identically in every model."
+  },
+  {
+    "id": "u1247",
+    "ru": "Перепишите короткий абзац как устное вступление. Отметьте имена и термины, произношение которых нужно проверить.",
+    "back": "Rewrite a short paragraph as a spoken introduction. Mark names and terms whose pronunciation needs checking."
+  },
+  {
+    "id": "u1248",
+    "ru": "У вас есть краткий текст и список деталей для проверки при прослушивании.",
+    "back": "You have a concise script and a list of details to check while listening."
+  },
+  {
+    "id": "u1249",
+    "ru": "Файлы и результаты",
+    "back": "Files and results"
+  },
+  {
+    "id": "u1250",
+    "ru": "Найдите и скачайте результаты",
+    "back": "Find and download results"
+  },
+  {
+    "id": "u1251",
+    "ru": "Сохраните результаты, которые хотите использовать за пределами рабочего пространства.",
+    "back": "Keep outputs you want to use outside the workspace."
+  },
+  {
+    "id": "u1252",
+    "ru": "Сгенерированные медиа появляются в своём разговоре и библиотеке файлов. Используйте эти представления для оценки результата и скачивания всего, что хотите сохранить для проекта.",
+    "back": "Generated media appears in its conversation and the file library. Use these views to assess the result and download anything you want to keep for the project."
+  },
+  {
+    "id": "u1253",
+    "ru": "Откройте разговор, в котором создан результат, чтобы изучить контекст. Откройте библиотеку файлов для просмотра медиа из разных задач.",
+    "back": "Open the conversation where the result was created to examine context. Open the file library to view media from different tasks."
+  },
+  {
+    "id": "u1254",
+    "ru": "Перед скачиванием откройте и проверьте результат. Убедитесь, что сохраняете нужную версию, не полагаясь лишь на маленькое превью.",
+    "back": "Open and check a result before downloading. Make sure you save the needed version without relying only on a small preview."
+  },
+  {
+    "id": "u1255",
+    "ru": "Сохраняйте нужные файлы в собственных папках проекта. Скачайте важные результаты до окончания срока хранения в сервисе; библиотека не является постоянным архивом.",
+    "back": "Keep needed files in your own project folders. Download important outputs before the service retention period ends; the library is not a permanent archive."
+  },
+  {
+    "id": "u1256",
+    "ru": "Если доступен уже принадлежащий вам результат, найдите его и кнопку скачивания. Если библиотека пуста, отметьте, где появятся будущие результаты.",
+    "back": "If an output you already own is available find it and its download button. If the library is empty note where future results will appear."
+  },
+  {
+    "id": "u1257",
+    "ru": "Вы знаете, где оценивать результаты и как сохранить копию для проекта.",
+    "back": "You know where to assess results and how to save a copy for the project."
+  },
+  {
+    "id": "u1258",
+    "ru": "Разберитесь с удалением файлов",
+    "back": "Understand file deletion"
+  },
+  {
+    "id": "u1259",
+    "ru": "Узнайте, что означает удаление сгенерированного файла.",
+    "back": "Learn what deleting a generated file means."
+  },
+  {
+    "id": "u1260",
+    "ru": "Удаление файла — осознанное действие в библиотеке. Подтверждение объясняет, что результат удаляется из ваших файлов и разговора, где был создан, вместе с сохранёнными вариантами медиа.",
+    "back": "File deletion is a deliberate action in the library. The confirmation explains that the result is removed from your files and the conversation where it was created, together with stored media variants."
+  },
+  {
+    "id": "u1261",
+    "ru": "Прочитайте подтверждение удаления до действия. Убедитесь, что скачали всё ещё нужное, поскольку интерфейс не предлагает восстановление удалённого файла.",
+    "back": "Read deletion confirmation before acting. Make sure you downloaded everything still needed because the interface does not offer recovery of deleted files."
+  },
+  {
+    "id": "u1262",
+    "ru": "Различайте сгенерированный медиафайл и окружающий разговор. Удаление одного результата не означает удаление всех сообщений или остальных результатов в чате.",
+    "back": "Distinguish generated media file from surrounding conversation. Removing one output does not mean removing every message or other results in the chat."
+  },
+  {
+    "id": "u1263",
+    "ru": "Используйте удаление, когда действительно хотите убрать результат. Этот урок не требует удаления реального файла; можно изучить процесс, читая интерфейс без подтверждения.",
+    "back": "Use deletion when you actually want to remove an output. This lesson requires no deletion of real files; you can explore the process by reading the interface without confirming."
+  },
+  {
+    "id": "u1264",
+    "ru": "Напишите короткий список того, что проверили бы до удаления результата. Не удаляйте файл ради упражнения.",
+    "back": "Write a short checklist of what you would check before removing a result. Do not delete a file for the exercise."
+  },
+  {
+    "id": "u1265",
+    "ru": "Вы понимаете последствия подтверждения и можете избежать удаления нужного результата.",
+    "back": "You understand the consequences of confirmation and can avoid deleting a needed result."
+  },
+  {
+    "id": "u1266",
+    "ru": "Воспроизводимые процессы работы",
+    "back": "Repeatable workflows"
+  },
+  {
+    "id": "u1267",
+    "ru": "Разработайте идею кампании",
+    "back": "Develop a campaign idea"
+  },
+  {
+    "id": "u1268",
+    "ru": "Свяжите бриф, выбор модели и список проверок.",
+    "back": "Connect brief, model selection and checklist."
+  },
+  {
+    "id": "u1269",
+    "ru": "Небольшая концепция кампании помогает объединить идеи курса. Определите один итоговый материал и осознанно пройдите процесс, не пытаясь попробовать все инструменты сразу.",
+    "back": "A small campaign concept helps combine the course ideas. Define one deliverable and deliberately work through the process without trying every tool at once."
+  },
+  {
+    "id": "u1270",
+    "ru": "Выберите вымышленный товар и одно место размещения, например квадратное изображение для соцсетей. Определите сообщение, объект и место, нужное для последующей вёрстки.",
+    "back": "Choose a fictional product and one placement, such as a square social media image. Define message, subject and space required for later layout."
+  },
+  {
+    "id": "u1271",
+    "ru": "Напишите визуальный бриф и выберите модель с подходящими входными данными. Проверьте кадрирование и стоимость, прежде чем решать, создавать ли вариант.",
+    "back": "Write a visual brief and choose a model with suitable inputs. Check framing and cost before deciding whether to create a candidate."
+  },
+  {
+    "id": "u1272",
+    "ru": "Оцените вариант по тому же списку: объект, композиция, важные детали и соответствие размещению. Решите, что изменить, и запишите полезное направление.",
+    "back": "Assess the candidate using the same list: subject, composition, important details and fit for placement. Decide what to revise and record the useful direction."
+  },
+  {
+    "id": "u1273",
+    "ru": "Подготовьте одностраничный план изображения для вымышленной кампании. Включите бриф, предполагаемый формат и три критерия оценки; фактическая генерация необязательна.",
+    "back": "Prepare a one-page plan of an image for a fictional campaign. Include brief, intended format and three assessment criteria; actual generation is optional."
+  },
+  {
+    "id": "u1274",
+    "ru": "У вас есть целенаправленный творческий процесс, связывающий идею с результатом, который можно оценить.",
+    "back": "You have a focused creative workflow linking an idea to an assessable result."
+  },
+  {
+    "id": "u1275",
+    "ru": "Составьте следующий бриф",
+    "back": "Build the next brief"
+  },
+  {
+    "id": "u1276",
+    "ru": "Переносите полезные решения в следующий проект.",
+    "back": "Carry useful decisions into the next project."
+  },
+  {
+    "id": "u1277",
+    "ru": "Воспроизводимый процесс сохраняет полезные решения, не считая один промпт гарантией. Следующий объект или место размещения могут потребовать иных входных данных и кадрирования.",
+    "back": "A repeatable process keeps useful decisions without treating one prompt as a guarantee. The next subject or placement may need different inputs and framing."
+  },
+  {
+    "id": "u1278",
+    "ru": "Кратко записывайте цель, полезные формулировки, выбранные настройки и критерии оценки. Храните это в собственных заметках проекта без ненужных личных материалов.",
+    "back": "Briefly record goal, useful wording, selected controls and assessment criteria. Keep this in your own project notes without unnecessary personal materials."
+  },
+  {
+    "id": "u1279",
+    "ru": "Определите, какие части относятся к конкретному проекту, а какие могут стать списком проверок. Используйте структуру повторно, переписывая объект и ограничения для следующей задачи.",
+    "back": "Determine which parts belong to a particular project and which can become a checklist. Reuse the structure, rewriting subject and restrictions for the next task."
+  },
+  {
+    "id": "u1280",
+    "ru": "При новом старте перепроверьте доступные модели, настройки и стоимость. Курс даёт процесс принятия решений; сведения о каждой операции по-прежнему нужно сверять с текущими настройками рабочего пространства.",
+    "back": "When starting again recheck available models, controls and cost. The course gives a decision-making process; information on each operation must still be checked against current workspace settings."
+  },
+  {
+    "id": "u1281",
+    "ru": "Напишите собственную многоразовую структуру брифа: назначение, объект, референсы, визуальное направление, формат и список проверок.",
+    "back": "Write your own reusable brief structure: purpose, subject, references, visual direction, format and checklist."
+  },
+  {
+    "id": "u1282",
+    "ru": "Вы получите практическую структуру для следующего проекта с изображениями, видео или аудио.",
+    "back": "You will get a practical structure for the next image, video or audio project."
+  },
+  {
+    "id": "u1283",
+    "ru": "Основы Epifera — практический курс для начинающих",
+    "back": "Epifera basics — a practical beginner course",
+    "keepReason": "Preserved brand, model or technical notation: Epifera."
+  },
+  {
+    "id": "u1284",
+    "ru": "Изучите Epifera с помощью четырнадцати коротких текстовых уроков и практических упражнений. Научитесь выбирать модели, писать брифы, оценивать медиа и сохранять результаты.",
+    "back": "Explore Epifera through fourteen short text lessons and practical exercises. Learn to select models, write briefs, assess media and save results.",
+    "keepReason": "Preserved brand, model or technical notation: Epifera."
+  },
+  {
+    "id": "u1285",
+    "ru": "Для начинающих",
+    "back": "For beginners"
+  },
+  {
+    "id": "u1286",
+    "ru": "уроков",
+    "back": "lessons"
+  },
+  {
+    "id": "u1287",
+    "ru": "мин чтения",
+    "back": "min reading"
+  },
+  {
+    "id": "u1288",
+    "ru": "Ориентировочное время чтения не включает практику.",
+    "back": "Estimated reading time excludes practice."
+  },
+  {
+    "id": "u1289",
+    "ru": "Узнайте, как перейти от идеи к полезному творческому брифу, выбрать доступные инструменты и оценить созданное. Этот курс знакомит с рабочим пространством Epifera через короткие уроки, которые можно читать в своём темпе.",
+    "back": "Learn how to move from an idea to a useful creative brief, select available tools and assess what was created. This course introduces the Epifera workspace through short lessons you can read at your own pace.",
+    "keepReason": "Preserved brand, model or technical notation: Epifera."
+  },
+  {
+    "id": "u1290",
+    "ru": "Начните с навигации и выбора модели, затем изучите брифы изображений, ввод референсов и настройки результата. Тот же подход применяется к видео, музыке и речи: объясните задачу, проверьте выбранную операцию и осознанно оцените результат.",
+    "back": "Start with navigation and model selection, then explore image briefs, reference input and output settings. The same approach applies to video, music and speech: explain the task, check the selected operation and deliberately assess the output."
+  },
+  {
+    "id": "u1291",
+    "ru": "Последние модули посвящены поиску и скачиванию результатов, пониманию удаления файлов и построению воспроизводимого процесса. Каждый урок содержит упражнение и конкретный ориентир результата. Весь курс можно прочитать без создания медиа; необязательная генерация зависит от текущей доступности и цен рабочего пространства.",
+    "back": "Final modules address finding and downloading results, understanding file deletion and building a repeatable workflow. Each lesson contains an exercise and a concrete target outcome. The entire course can be read without media creation; optional generation depends on current workspace availability and pricing."
+  },
+  {
+    "id": "u1292",
+    "ru": "Составьте ясный бриф, выберите подходящий доступный инструмент и используйте единый список проверок.",
+    "back": "Build a clear brief, select a suitable available tool and use a consistent checklist."
+  },
+  {
+    "id": "u1293",
+    "ru": "Браузер и идея проекта; опыт работы с ИИ не нужен.",
+    "back": "A browser and a project idea; no AI experience is needed."
+  },
+  {
+    "id": "u1294",
+    "ru": "Читать и планировать можно в гостевом режиме. Для практики в рабочем пространстве нужен вход в аккаунт.",
+    "back": "You can read and plan as a guest. Workspace practice requires signing into an account."
+  },
+  {
+    "id": "u1295",
+    "ru": "Создавать медиа необязательно; при создании действуют текущие настройки модели и показанная стоимость.",
+    "back": "Creating media is optional; creation uses current model settings and displayed cost."
+  },
+  {
+    "id": "u1296",
+    "ru": "навигация",
+    "back": "navigation"
+  },
+  {
+    "id": "u1297",
+    "ru": "работа с промптами",
+    "back": "working with prompts"
+  },
+  {
+    "id": "u1298",
+    "ru": "генерация изображений",
+    "back": "image generation"
+  },
+  {
+    "id": "u1299",
+    "ru": "видео",
+    "back": "video"
+  },
+  {
+    "id": "u1300",
+    "ru": "аудио",
+    "back": "audio"
+  },
+  {
+    "id": "u1301",
+    "ru": "файлы",
+    "back": "files"
+  },
+  {
+    "id": "u1302",
+    "ru": "Справочный центр",
+    "back": "Help center"
+  },
+  {
+    "id": "u1303",
+    "ru": "Перейти к курсу",
+    "back": "Go to course"
+  },
+  {
+    "id": "u1304",
+    "ru": "Открыть навигацию",
+    "back": "Open navigation"
+  },
+  {
+    "id": "u1305",
+    "ru": "Закрыть меню",
+    "back": "Close menu"
+  },
+  {
+    "id": "u1306",
+    "ru": "Содержание курса",
+    "back": "Course contents"
+  },
+  {
+    "id": "u1307",
+    "ru": "Открыть меню курса",
+    "back": "Open course menu"
+  },
+  {
+    "id": "u1308",
+    "ru": "Новый чат",
+    "back": "New chat"
+  },
+  {
+    "id": "u1309",
+    "ru": "Все модели ИИ",
+    "back": "All AI models"
+  },
+  {
+    "id": "u1310",
+    "ru": "Правовые документы",
+    "back": "Legal documents"
+  },
+  {
+    "id": "u1311",
+    "ru": "Курсы",
+    "back": "Courses"
+  },
+  {
+    "id": "u1312",
+    "ru": "Статьи",
+    "back": "Articles"
+  },
+  {
+    "id": "u1313",
+    "ru": "Поиск по курсу",
+    "back": "Search the course"
+  },
+  {
+    "id": "u1314",
+    "ru": "Уроки не найдены. Попробуйте другое слово.",
+    "back": "No lessons found. Try another word."
+  },
+  {
+    "id": "u1315",
+    "ru": "Показать больше",
+    "back": "Show more"
+  },
+  {
+    "id": "u1316",
+    "ru": "Показать меньше",
+    "back": "Show less"
+  },
+  {
+    "id": "u1317",
+    "ru": "Обзор курса",
+    "back": "Course overview"
+  },
+  {
+    "id": "u1318",
+    "ru": "Начать курс",
+    "back": "Start course"
+  },
+  {
+    "id": "u1319",
+    "ru": "О курсе",
+    "back": "About the course"
+  },
+  {
+    "id": "u1320",
+    "ru": "Теги",
+    "back": "Tags"
+  },
+  {
+    "id": "u1321",
+    "ru": "Перед началом",
+    "back": "Before starting"
+  },
+  {
+    "id": "u1322",
+    "ru": "Чему вы научитесь",
+    "back": "What you will learn"
+  },
+  {
+    "id": "u1323",
+    "ru": "Попробуйте сами",
+    "back": "Try it yourself"
+  },
+  {
+    "id": "u1324",
+    "ru": "Что должно получиться",
+    "back": "What should result"
+  },
+  {
+    "id": "u1325",
+    "ru": "Пройдите урок",
+    "back": "Work through the lesson"
+  },
+  {
+    "id": "u1326",
+    "ru": "Назад к курсу",
+    "back": "Back to course"
+  },
+  {
+    "id": "u1327",
+    "ru": "Следующий урок",
+    "back": "Next lesson"
+  },
+  {
+    "id": "u1328",
+    "ru": "Предыдущий урок",
+    "back": "Previous lesson"
+  },
+  {
+    "id": "u1329",
+    "ru": "Открыть рабочее пространство для практики",
+    "back": "Open workspace for practice"
+  },
+  {
+    "id": "u1330",
+    "ru": "Урок",
+    "back": "Lesson"
+  },
+  {
+    "id": "u1331",
+    "ru": "Поделиться уроком",
+    "back": "Share lesson"
+  },
+  {
+    "id": "u1332",
+    "ru": "Слушать",
+    "back": "Listen"
+  },
+  {
+    "id": "u1333",
+    "ru": "Поделиться курсом",
+    "back": "Share course"
+  },
+  {
+    "id": "u1453",
+    "ru": "Начало работы",
+    "back": "Getting started"
+  },
+  {
+    "id": "u1454",
+    "ru": "Творческие инструменты и файлы",
+    "back": "Creative tools and files"
+  },
+  {
+    "id": "u1455",
+    "ru": "Оплата и кредиты",
+    "back": "Payments and credits"
+  },
+  {
+    "id": "u1456",
+    "ru": "Аккаунт и решение проблем",
+    "back": "Account and troubleshooting"
+  },
+  {
+    "id": "u1457",
+    "ru": "Быстрый старт",
+    "back": "Quick start"
+  },
+  {
+    "id": "u1458",
+    "ru": "Освойте навигацию Epifera и начните с ясного творческого брифа.",
+    "back": "Learn Epifera navigation and start with a clear creative brief.",
+    "keepReason": "Preserved brand, model or technical notation: Epifera."
+  },
+  {
+    "id": "u1459",
+    "ru": "Это руководство знакомит с рабочим пространством, каталогом моделей и проверками перед созданием первого результата.",
+    "back": "This guide introduces workspace, model catalog and checks before creating the first result."
+  },
+  {
+    "id": "u1460",
+    "ru": "Откройте рабочее пространство",
+    "back": "Open the workspace"
+  },
+  {
+    "id": "u1461",
+    "ru": "Начните с ",
+    "back": "Start with the "
+  },
+  {
+    "id": "u1462",
+    "ru": "рабочего пространства",
+    "back": "workspace"
+  },
+  {
+    "id": "u1463",
+    "ru": ". Войдите, когда появится запрос, чтобы работа была связана с аккаунтом. Навигация включает чаты, «Мои файлы», модели ИИ, музыку и речь.",
+    "back": ". Sign in when prompted to keep work tied to the account. Navigation includes chats, My files, AI models, music and speech."
+  },
+  {
+    "id": "u1464",
+    "ru": "Откройте ",
+    "back": "Open "
+  },
+  {
+    "id": "u1465",
+    "ru": " и выберите модель под задачу. Показанные настройки выбранной модели описывают текущие доступные входные данные и операции.",
+    "back": " and choose a model for the task. Displayed controls of the selected model describe currently available inputs and operations."
+  },
+  {
+    "id": "u1466",
+    "ru": "Опишите, что хотите создать.",
+    "back": "Describe what you want to create."
+  },
+  {
+    "id": "u1467",
+    "ru": "Проверьте поддерживаемые входные данные, настройки результата и показанную стоимость в кредитах.",
+    "back": "Check supported inputs, output settings and displayed cost in credits."
+  },
+  {
+    "id": "u1468",
+    "ru": "Проверьте итоговый запрос перед отправкой.",
+    "back": "Check the final request before submitting."
+  },
+  {
+    "id": "u1469",
+    "ru": "Создайте и оцените",
+    "back": "Create and assess"
+  },
+  {
+    "id": "u1470",
+    "ru": "Подготовьте бриф",
+    "back": "Prepare the brief"
+  },
+  {
+    "id": "u1471",
+    "ru": "Укажите объект, назначение, визуальное направление и полезные ограничения. Добавляйте файлы-референсы, только если выбранный инструмент предлагает такой ввод.",
+    "back": "State subject, purpose, visual direction and useful restrictions. Add reference files only if the selected tool offers such input."
+  },
+  {
+    "id": "u1472",
+    "ru": "Отправляйте осознанно",
+    "back": "Submit deliberately"
+  },
+  {
+    "id": "u1473",
+    "ru": "Запуск генерации — отдельное действие в рабочем пространстве. Чтение руководства или открытие инструмента её не запускает.",
+    "back": "Starting generation is a separate workspace action. Reading a guide or opening a tool does not start it."
+  },
+  {
+    "id": "u1474",
+    "ru": "Оцените результат",
+    "back": "Assess the result"
+  },
+  {
+    "id": "u1475",
+    "ru": "Проверьте результат на ошибки и пригодность. Скачайте файлы, которые хотите сохранить.",
+    "back": "Check the output for errors and suitability. Download files you want to keep."
+  },
+  {
+    "id": "u1476",
+    "ru": "Для подробного примера изучите ",
+    "back": "For a detailed example explore the "
+  },
+  {
+    "id": "u1477",
+    "ru": "процесс работы над продуктовой кампанией",
+    "back": "product campaign workflow"
+  },
+  {
+    "id": "u1478",
+    "ru": ". Для практики с инструкциями откройте ",
+    "back": ". For guided practice open "
+  },
+  {
+    "id": "u1479",
+    "ru": ". О хранении и удалении файлов читайте в разделе ",
+    "back": ". For file storage and deletion read the section "
+  },
+  {
+    "id": "u1480",
+    "ru": "Файлы и хранение",
+    "back": "Files and storage"
+  },
+  {
+    "id": "u1481",
+    "ru": "Выберите модель изображений, подготовьте промпт и оцените результаты.",
+    "back": "Choose an image model, prepare a prompt and assess the results."
+  },
+  {
+    "id": "u1482",
+    "ru": "Настройки изображений зависят от выбранных модели и операции. Актуальные сведения о доступных входных данных, форматах результата и стоимости смотрите в настройках рабочего пространства.",
+    "back": "Image settings depend on selected model and operation. See workspace controls for current information about available inputs, output formats and cost."
+  },
+  {
+    "id": "u1483",
+    "ru": "Откройте рабочее пространство изображений",
+    "back": "Open the image workspace"
+  },
+  {
+    "id": "u1484",
+    "ru": " или выберите модель изображений в каталоге. Выберите модель до подготовки запроса.",
+    "back": " or select an image model in the catalog. Select the model before preparing a request."
+  },
+  {
+    "id": "u1485",
+    "ru": "Напишите полезный промпт",
+    "back": "Write a useful prompt"
+  },
+  {
+    "id": "u1486",
+    "ru": "Назовите главный объект и назначение изображения.",
+    "back": "Name the main subject and purpose of the image."
+  },
+  {
+    "id": "u1487",
+    "ru": "Опишите композицию, свет, материалы и визуальный стиль.",
+    "back": "Describe composition, light, materials and visual style."
+  },
+  {
+    "id": "u1488",
+    "ru": "Укажите важный текст или детали, которые нужно проверить в результате.",
+    "back": "State important text or details to check in the result."
+  },
+  {
+    "id": "u1489",
+    "ru": "Смотрите ",
+    "back": "See "
+  },
+  {
+    "id": "u1490",
+    "ru": "наше руководство по промптам для ИИ-изображений",
+    "back": "our guide to prompts for AI images"
+  },
+  {
+    "id": "u1491",
+    "ru": " для более подробного разбора.",
+    "back": " for a more detailed walkthrough."
+  },
+  {
+    "id": "u1492",
+    "ru": "Проверьте входные данные и настройки",
+    "back": "Check inputs and settings"
+  },
+  {
+    "id": "u1493",
+    "ru": "Загружайте референсы только там, где выбранный инструмент их поддерживает. Доступные размер, соотношение сторон, качество и число результатов могут различаться у моделей.",
+    "back": "Upload references only where the selected tool supports them. Available size, aspect ratio, quality and output count can differ between models."
+  },
+  {
+    "id": "u1494",
+    "ru": "Название модели или пример в руководстве не гарантируют, что все операции включены. Перед отправкой проверьте фактические настройки.",
+    "back": "A model name or guide example does not guarantee all operations are enabled. Check actual controls before submitting."
+  },
+  {
+    "id": "u1495",
+    "ru": "Оцените и сохраните результаты",
+    "back": "Assess and save results"
+  },
+  {
+    "id": "u1496",
+    "ru": "Когда запрос завершится, оцените изображения в разговоре и разделе ",
+    "back": "When the request finishes assess images in the conversation and in the section "
+  },
+  {
+    "id": "u1497",
+    "ru": ". Скачайте важные оригиналы и перед использованием проверьте сгенерированный текст, руки, лица и мелкие детали.",
+    "back": ". Download important originals and check generated text, hands, faces and small details before use."
+  },
+  {
+    "id": "u1498",
+    "ru": "Находите, скачивайте и удаляйте файлы, которые создаёте в Epifera.",
+    "back": "Find, download and remove files you create in Epifera.",
+    "keepReason": "Preserved brand, model or technical notation: Epifera."
+  },
+  {
+    "id": "u1499",
+    "ru": "Раздел «Мои файлы» собирает доступные результаты вашего аккаунта. Сгенерированные файлы хранятся временно, поэтому скачайте результаты, которые хотите сохранить.",
+    "back": "My files collects available results of your account. Generated files are stored temporarily, so download results you want to keep."
+  },
+  {
+    "id": "u1500",
+    "ru": "Найдите свои файлы",
+    "back": "Find your files"
+  },
+  {
+    "id": "u1501",
+    "ru": ". Используйте вкладки категорий, чтобы сузить результаты. Файл также может появляться в разговоре, где он был создан.",
+    "back": ". Use category tabs to narrow results. A file may also appear in the conversation where it was created."
+  },
+  {
+    "id": "u1502",
+    "ru": "Скачайте оригинал",
+    "back": "Download the original"
+  },
+  {
+    "id": "u1503",
+    "ru": "Нажмите «Скачать» у результата, который хотите сохранить. Превью предназначено для просмотра; если нужен оригинальный файл, используйте скачивание.",
+    "back": "Click Download on the result you want to keep. The preview is intended for browsing; use downloading if you need the original file."
+  },
+  {
+    "id": "u1504",
+    "ru": "Удалите файл",
+    "back": "Delete a file"
+  },
+  {
+    "id": "u1505",
+    "ru": "Выберите «Удалить»",
+    "back": "Select Delete"
+  },
+  {
+    "id": "u1506",
+    "ru": "Используйте действие удаления на карточке файла.",
+    "back": "Use the delete action on the file card."
+  },
+  {
+    "id": "u1507",
+    "ru": "Прочитайте подтверждение",
+    "back": "Read the confirmation"
+  },
+  {
+    "id": "u1508",
+    "ru": "Подтверждайте, только если файл больше не нужен. Отмена сохраняет его.",
+    "back": "Confirm only if the file is no longer needed. Cancellation keeps it."
+  },
+  {
+    "id": "u1509",
+    "ru": "Проверьте обновлённый результат",
+    "back": "Check the updated result"
+  },
+  {
+    "id": "u1510",
+    "ru": "Удалённый результат исчезает из раздела «Мои файлы» и своего разговора. Остальные результаты и текст разговора сохраняются.",
+    "back": "The deleted output disappears from My files and its conversation. Other outputs and conversation text are preserved."
+  },
+  {
+    "id": "u1511",
+    "ru": "Удаление закрывает доступ к оригиналу и превью. Даже если очистка хранилища задерживается, удалённый файл открыть уже нельзя. До удаления скачайте всё нужное.",
+    "back": "Deletion closes access to the original and previews. Even if storage cleanup is delayed the deleted file cannot be opened anymore. Download everything needed before deletion."
+  },
+  {
+    "id": "u1512",
+    "ru": "Как долго файлы доступны",
+    "back": "How long files are available"
+  },
+  {
+    "id": "u1513",
+    "ru": "Сгенерированные нетекстовые файлы результатов хранятся два календарных месяца с исходной даты создания. Скачайте их до этого срока. Более раннее удаление файла приближает его очистку; просмотр или создание превью не продлевает срок хранения.",
+    "back": "Generated non-text output files are stored for two calendar months from the original creation date. Download them before that deadline. Earlier file deletion brings cleanup forward; viewing or creating a preview does not extend retention."
+  },
+  {
+    "id": "u1514",
+    "ru": "Эта политика файлов отделена от текста чатов, загруженных входных данных и платёжных записей. Прочитайте ",
+    "back": "This file policy is separate from chat text, uploaded inputs and payment records. Read the "
+  },
+  {
+    "id": "u1515",
+    "ru": "политику конфиденциальности",
+    "back": "privacy policy"
+  },
+  {
+    "id": "u1516",
+    "ru": " для ознакомления с применимыми условиями работы с данными.",
+    "back": " to learn the applicable data terms."
+  },
+  {
+    "id": "u1517",
+    "ru": "Кредиты и платежи",
+    "back": "Credits and payments"
+  },
+  {
+    "id": "u1518",
+    "ru": "Разберитесь в сведениях о балансе и стоимости, показанных до генерации.",
+    "back": "Understand balance and cost information displayed before generation."
+  },
+  {
+    "id": "u1519",
+    "ru": "Кредиты используются для запросов генерации. Выбранные модель, операция и настройки определяют стоимость, показанную в рабочем пространстве.",
+    "back": "Credits are used for generation requests. Selected model, operation and settings determine cost displayed in the workspace."
+  },
+  {
+    "id": "u1520",
+    "ru": "Проверьте стоимость перед отправкой",
+    "back": "Check cost before submitting"
+  },
+  {
+    "id": "u1521",
+    "ru": "Перед запуском проверьте сумму в кредитах для текущей операции. Смена модели или настроек может изменить её. Пример на странице помощи не является ценовым предложением.",
+    "back": "Check the credit amount for the current operation before starting. Changing model or settings can change it. A help-page example is not a price quotation."
+  },
+  {
+    "id": "u1522",
+    "ru": "Баланс и обрабатываемые запросы",
+    "back": "Balance and requests being processed"
+  },
+  {
+    "id": "u1523",
+    "ru": "ваше рабочее пространство",
+    "back": "your workspace"
+  },
+  {
+    "id": "u1524",
+    "ru": " для просмотра баланса и доступных вариантов покупки. При обработке запроса кредиты могут резервироваться; временный резерв и итоговое списание — разные этапы.",
+    "back": " to view balance and available purchase options. Credits can be reserved while processing a request; temporary reservation and final charge are different stages."
+  },
+  {
+    "id": "u1525",
+    "ru": "Если запрос ещё обрабатывается, проверьте его статус перед повторной отправкой того же запроса.",
+    "back": "If a request is still processing check its status before submitting the same request again."
+  },
+  {
+    "id": "u1526",
+    "ru": "Если платёж или баланс выглядят неверно",
+    "back": "If payment or balance looks incorrect"
+  },
+  {
+    "id": "u1527",
+    "ru": "Проверьте, завершён ли платёж и вошли ли вы в нужный аккаунт.",
+    "back": "Check whether payment finished and you signed into the intended account."
+  },
+  {
+    "id": "u1528",
+    "ru": "Сохраните дату платежа, сумму и чек или идентификатор транзакции.",
+    "back": "Keep payment date, amount and receipt or transaction identifier."
+  },
+  {
+    "id": "u1529",
+    "ru": "Обратитесь в поддержку, если аккаунт по-прежнему показывает неожиданный баланс. Никогда не отправляйте номер карты, защитный код или пароль.",
+    "back": "Contact support if the account still displays an unexpected balance. Never send card number, security code or password."
+  },
+  {
+    "id": "u1530",
+    "ru": "Условия оплаты и возврата",
+    "back": "Payment and refund terms"
+  },
+  {
+    "id": "u1531",
+    "ru": "Прочитайте ",
+    "back": "Read the "
+  },
+  {
+    "id": "u1532",
+    "ru": "условия оплаты и возврата",
+    "back": "payment and refund terms"
+  },
+  {
+    "id": "u1533",
+    "ru": " и ",
+    "back": " and "
+  },
+  {
+    "id": "u1534",
+    "ru": "информацию об оплате",
+    "back": "payment information"
+  },
+  {
+    "id": "u1535",
+    "ru": " перед покупкой. Применимые условия описаны в этих документах. Обратитесь в поддержку, если нужна помощь с покупкой.",
+    "back": " before buying. Applicable conditions are described in those documents. Contact support if help with a purchase is needed."
+  },
+  {
+    "id": "u1536",
+    "ru": "Решение проблем",
+    "back": "Troubleshooting"
+  },
+  {
+    "id": "u1537",
+    "ru": "Разберитесь с распространёнными проблемами входа, загрузки и генерации.",
+    "back": "Work through common sign-in, loading and generation problems."
+  },
+  {
+    "id": "u1538",
+    "ru": "Сначала определите, какая часть процесса затронута. Это помогает избежать повторных отправок и упрощает расследование обращения в поддержку.",
+    "back": "First determine which part of the workflow is affected. This helps avoid repeat submissions and makes a support request easier to investigate."
+  },
+  {
+    "id": "u1539",
+    "ru": "Если не получается войти",
+    "back": "If you cannot sign in"
+  },
+  {
+    "id": "u1540",
+    "ru": "Используйте тот же адрес электронной почты или связанный способ входа, что и раньше. Если письмо с подтверждением не пришло, следуйте руководству ",
+    "back": "Use the same email address or linked sign-in method as before. If the verification email did not arrive follow the guide "
+  },
+  {
+    "id": "u1541",
+    "ru": "Доставка писем",
+    "back": "Email delivery"
+  },
+  {
+    "id": "u1542",
+    "ru": ". Настройки аккаунта описаны в разделе ",
+    "back": ". Account settings are described in the section "
+  },
+  {
+    "id": "u1543",
+    "ru": "Управление аккаунтом",
+    "back": "Account management"
+  },
+  {
+    "id": "u1544",
+    "ru": "Если страница не загружается",
+    "back": "If a page does not load"
+  },
+  {
+    "id": "u1545",
+    "ru": "Проверьте соединение и попробуйте перезагрузить страницу.",
+    "back": "Check connection and try reloading the page."
+  },
+  {
+    "id": "u1546",
+    "ru": "Проверьте, не блокирует ли браузер всплывающее окно входа или необходимые файлы cookie.",
+    "back": "Check whether the browser blocks the sign-in popup or necessary cookies."
+  },
+  {
+    "id": "u1547",
+    "ru": "Если проблема сохраняется, запишите адрес страницы, браузер и видимое сообщение об ошибке.",
+    "back": "If the problem persists record page address, browser and visible error message."
+  },
+  {
+    "id": "u1548",
+    "ru": "Если запрос обрабатывается или завершился ошибкой",
+    "back": "If a request is processing or failed"
+  },
+  {
+    "id": "u1549",
+    "ru": "Сначала проверьте статус в существующем разговоре. После обрыва сети дайте интерфейсу восстановить соединение. Не отправляйте один запрос повторно, пока исходный ещё обрабатывается.",
+    "back": "First check status in the existing conversation. After a network interruption let the interface reconnect. Do not send one request repeatedly while the original is still processing."
+  },
+  {
+    "id": "u1550",
+    "ru": "Если ошибка сохраняется, запишите примерное время и выбранные модель или операцию. Не отправляйте личные загруженные файлы или чувствительное содержимое промпта, если поддержке специально не нужен подходящий пример.",
+    "back": "If the error persists record approximate time and chosen model or operation. Do not send personal uploaded files or sensitive prompt content unless support specifically needs an appropriate example."
+  },
+  {
+    "id": "u1551",
+    "ru": "Напишите на ",
+    "back": "Write to "
+  },
+  {
+    "id": "u1552",
+    "ru": " с кратким описанием, адресом страницы и показанной ошибкой. Никогда не включайте пароли, коды подтверждения, ключи API или полные данные платёжной карты.",
+    "back": " with a short description, page address and displayed error. Never include passwords, verification codes, API keys or full payment card details.",
+    "keepReason": "Preserved brand, model or technical notation: API."
+  },
+  {
+    "id": "u1553",
+    "ru": "Всё необходимое для управления аккаунтом Epifera — от входа до изменения настроек.",
+    "back": "Everything necessary to manage an Epifera account — from sign-in to changing settings.",
+    "keepReason": "Preserved brand, model or technical notation: Epifera."
+  },
+  {
+    "id": "u1554",
+    "ru": "Узнайте, как создать аккаунт, войти, обновить профиль, управлять сеансами и изменить пароль.",
+    "back": "Learn how to create an account, sign in, update profile, manage sessions and change password."
+  },
+  {
+    "id": "u1555",
+    "ru": "Откройте страницу входа",
+    "back": "Open sign-in page"
+  },
+  {
+    "id": "u1556",
+    "ru": "Выберите «Зарегистрироваться» для регистрации по электронной почте или доступного провайдера идентификации.",
+    "back": "Select Sign up to register by email, or select an available identity provider."
+  },
+  {
+    "id": "u1557",
+    "ru": "Подтвердите электронную почту",
+    "back": "Verify email"
+  },
+  {
+    "id": "u1558",
+    "ru": "При регистрации по почте введите код подтверждения, отправленный на указанный адрес. Никому не сообщайте этот код.",
+    "back": "For email registration enter the confirmation code sent to the supplied address. Do not share the code."
+  },
+  {
+    "id": "u1559",
+    "ru": "Завершите регистрацию",
+    "back": "Finish registration"
+  },
+  {
+    "id": "u1560",
+    "ru": "Следуйте форме для задания учётных данных. После входа откройте рабочее пространство, чтобы проверить аккаунт.",
+    "back": "Follow the form to set credentials. After signing in open the workspace to check the account."
+  },
+  {
+    "id": "u1561",
+    "ru": "Начать можно на ",
+    "back": "You can start on the "
+  },
+  {
+    "id": "u1562",
+    "ru": "странице входа",
+    "back": "sign-in page"
+  },
+  {
+    "id": "u1563",
+    "ru": "Способы входа",
+    "back": "Sign-in methods"
+  },
+  {
+    "id": "u1564",
+    "ru": "Используйте способ, уже связанный с нужным аккаунтом. Экран входа показывает, какие способы доступны сейчас.",
+    "back": "Use a method already linked to the intended account. The sign-in screen shows which methods are available now."
+  },
+  {
+    "id": "u1565",
+    "ru": "Электронная почта и пароль — используйте подтверждённый адрес, связанный с аккаунтом, и пароль аккаунта.",
+    "back": "Email and password — use a verified address linked to the account and the account password."
+  },
+  {
+    "id": "u1566",
+    "ru": "Yandex ID — выберите вход через Yandex, если он доступен.",
+    "back": "Yandex ID — select sign-in through Yandex if available.",
+    "keepReason": "Preserved brand, model or technical notation: Yandex ID, Yandex."
+  },
+  {
+    "id": "u1567",
+    "ru": "VK ID — выберите вход через VK, если он доступен.",
+    "back": "VK ID — select sign-in through VK if available.",
+    "keepReason": "Preserved brand, model or technical notation: VK ID, VK."
+  },
+  {
+    "id": "u1568",
+    "ru": "Другая, несвязанная учётная запись может открыть другой аккаунт. Если файлы или баланс незнакомы, проверьте, в какой аккаунт вошли, прежде чем делать ещё одну покупку.",
+    "back": "Another unlinked identity may open another account. If files or balance are unfamiliar check which account you entered before making another purchase."
+  },
+  {
+    "id": "u1569",
+    "ru": "Коды подтверждения по электронной почте",
+    "back": "Email verification codes"
+  },
+  {
+    "id": "u1570",
+    "ru": "Epifera использует коды подтверждения при регистрации по почте, восстановлении и привязке адреса. Вводите код только в форму, которую открыли сами. Поддержке не нужны ваш код подтверждения или пароль.",
+    "back": "Epifera uses confirmation codes for email registration, recovery and address linking. Enter a code only in a form you opened yourself. Support needs neither verification code nor password.",
+    "keepReason": "Preserved brand, model or technical notation: Epifera."
+  },
+  {
+    "id": "u1571",
+    "ru": "Если код не приходит, прочитайте раздел ",
+    "back": "If a code does not arrive read the section "
+  },
+  {
+    "id": "u1572",
+    "ru": "Восстановление пароля",
+    "back": "Password recovery"
+  },
+  {
+    "id": "u1573",
+    "ru": "Выберите восстановление пароля",
+    "back": "Choose password recovery"
+  },
+  {
+    "id": "u1574",
+    "ru": "Откройте экран входа и выберите вариант для забытого пароля.",
+    "back": "Open the sign-in screen and choose the forgotten-password option."
+  },
+  {
+    "id": "u1575",
+    "ru": "Введите связанный адрес электронной почты",
+    "back": "Enter a linked email address"
+  },
+  {
+    "id": "u1576",
+    "ru": "Используйте адрес, уже подтверждённый в аккаунте, который хотите восстановить.",
+    "back": "Use an address already verified on the account you want to recover."
+  },
+  {
+    "id": "u1577",
+    "ru": "Подтвердите и задайте новый пароль",
+    "back": "Confirm and set a new password"
+  },
+  {
+    "id": "u1578",
+    "ru": "Следуйте форме проверки кода и пароля. Если письма нет, проверьте спам; используйте самый новый запрошенный код.",
+    "back": "Follow the code verification and password form. If the email is missing check spam; use the newest requested code."
+  },
+  {
+    "id": "u1579",
+    "ru": "Вернитесь к ",
+    "back": "Return to the "
+  },
+  {
+    "id": "u1580",
+    "ru": " — когда будете готовы.",
+    "back": " — when ready."
+  },
+  {
+    "id": "u1581",
+    "ru": "Создайте надёжный пароль",
+    "back": "Create a strong password"
+  },
+  {
+    "id": "u1582",
+    "ru": "Используйте длинный уникальный пароль, которого нет на других сайтах.",
+    "back": "Use a long unique password not used on other sites."
+  },
+  {
+    "id": "u1583",
+    "ru": "Избегайте имён, дат рождения и простых последовательностей.",
+    "back": "Avoid names, birth dates and simple sequences."
+  },
+  {
+    "id": "u1584",
+    "ru": "Храните пароли и коды восстановления в тайне; менеджер паролей может помочь.",
+    "back": "Keep passwords and recovery codes secret; a password manager can help."
+  },
+  {
+    "id": "u1585",
+    "ru": "Выходите из аккаунта на общем устройстве.",
+    "back": "Sign out on a shared device."
+  },
+  {
+    "id": "u1586",
+    "ru": "Измените электронную почту или пароль",
+    "back": "Change email or password"
+  },
+  {
+    "id": "u1587",
+    "ru": "ваш профиль",
+    "back": "your profile"
+  },
+  {
+    "id": "u1588",
+    "ru": " и раздел безопасности аккаунта. Доступные настройки позволяют управлять подтверждёнными адресами электронной почты и задавать или менять пароль аккаунта. Если пароль уже установлен, при смене потребуется текущий.",
+    "back": " and the account security section. Available controls allow management of verified email addresses and setting or changing the account password. If a password is already set the current one is required for a change."
+  },
+  {
+    "id": "u1589",
+    "ru": "Добавление или замена адреса требует подтверждения новой почты. Следуйте подписям формы, не предполагая, что смена отображаемого имени меняет данные входа.",
+    "back": "Adding or replacing an address requires verification of the new email. Follow form labels without assuming a display-name change changes sign-in details."
+  },
+  {
+    "id": "u1590",
+    "ru": "Привяжите или отвяжите способ входа",
+    "back": "Link or unlink a sign-in method"
+  },
+  {
+    "id": "u1591",
+    "ru": "Для управления связанными способами в разделе безопасности аккаунта откройте ",
+    "back": "To manage linked methods in the account security section open "
+  },
+  {
+    "id": "u1592",
+    "ru": ". Привязывайте способ, находясь в аккаунте, который хотите сохранить. Подтвердите новый способ перед удалением старого.",
+    "back": ". Link a method while in the account you want to keep. Verify the new method before deleting the old one."
+  },
+  {
+    "id": "u1593",
+    "ru": "Нельзя удалить последний пригодный способ входа. Привязка способа не объединяет файлы, балансы или историю двух существующих аккаунтов.",
+    "back": "The last usable sign-in method cannot be removed. Linking a method does not combine files, balances or history of two existing accounts."
+  },
+  {
+    "id": "u1594",
+    "ru": "Основная и резервная электронная почта",
+    "back": "Primary and backup email"
+  },
+  {
+    "id": "u1595",
+    "ru": "В аккаунте может быть один основной и один резервный адрес электронной почты. Экран безопасности аккаунта указывает их роли и предлагает доступные действия добавления, замены или отвязки. Резервный адрес тоже нужно подтвердить.",
+    "back": "An account can have one primary and one backup email address. The account security screen identifies their roles and offers available add, replace or unlink actions. The backup address also needs verification."
+  },
+  {
+    "id": "u1596",
+    "ru": "Подтверждённые адреса используют общий пароль аккаунта; добавление резервного адреса не создаёт второй пароль аккаунта.",
+    "back": "Verified email addresses use a shared account password; adding a backup address does not create a second account password."
+  },
+  {
+    "id": "u1597",
+    "ru": "Управляйте активными сеансами",
+    "back": "Manage active sessions"
+  },
+  {
+    "id": "u1598",
+    "ru": "Откройте ",
+    "back": "Open "
+  },
+  {
+    "id": "u1599",
+    "ru": ", а затем проверьте активные сеансы в разделе безопасности аккаунта. Текущий сеанс отмечен. Отзовите сеанс, который больше не узнаёте или не используете, и проверьте пароль, если подозреваете посторонний доступ.",
+    "back": ", then check active sessions in account security. The current session is marked. Revoke a session you no longer recognize or use, and check your password if you suspect unauthorized access."
+  },
+  {
+    "id": "u1600",
+    "ru": "Удаление текущего сеанса завершает ваш вход. Управление сеансами не удаляет файлы или разговоры.",
+    "back": "Removing the current session signs you out. Session management does not delete files or conversations."
+  },
+  {
+    "id": "u1601",
+    "ru": "Обновите профиль",
+    "back": "Update profile"
+  },
+  {
+    "id": "u1602",
+    "ru": "Откройте меню аккаунта и выберите ",
+    "back": "Open the account menu and select "
+  },
+  {
+    "id": "u1603",
+    "ru": " для просмотра профиля и сведений о безопасности. Отображаемое имя отделено от подтверждённых учётных данных для входа.",
+    "back": " to view profile and security information. A display name is separate from verified sign-in identities."
+  },
+  {
+    "id": "u1604",
+    "ru": "Тема и язык",
+    "back": "Theme and language"
+  },
+  {
+    "id": "u1605",
+    "ru": "В меню аккаунта рабочего пространства находятся настройки темы и языка. Выберите системную тему, чтобы следовать устройству, или светлую либо тёмную. Эти предпочтения не меняют учётные данные для входа.",
+    "back": "The workspace account menu has theme and language controls. Select system theme to follow the device, or light or dark. These preferences do not change sign-in identities."
+  },
+  {
+    "id": "u1606",
+    "ru": "Согласие на маркетинговые письма необязательно и управляется отдельно от доступа к аккаунту. Если это доступно в профиле, его можно просмотреть или отозвать. Маркетинговое согласие связано с подтверждённым основным адресом; письма о безопасности и подтверждении имеют другое назначение.",
+    "back": "Consent to marketing email is optional and managed separately from account access. If available in the profile it can be viewed or withdrawn. Marketing consent is linked to a confirmed primary address; security and verification emails have another purpose."
+  },
+  {
+    "id": "u1607",
+    "ru": " для ознакомления с применимыми сведениями об обработке данных.",
+    "back": " to learn applicable data processing information."
+  },
+  {
+    "id": "u1608",
+    "ru": "Запросы на удаление аккаунта",
+    "back": "Account deletion requests"
+  },
+  {
+    "id": "u1609",
+    "ru": "Чтобы запросить удаление аккаунта или помощь с персональными данными, обратитесь на ",
+    "back": "To request account deletion or help with personal data contact "
+  },
+  {
+    "id": "u1610",
+    "ru": " с адреса, связанного с аккаунтом. Поддержке может понадобиться проверить, что запрос принадлежит вам.",
+    "back": " from an address linked to the account. Support may need to check the request belongs to you."
+  },
+  {
+    "id": "u1611",
+    "ru": "Удаление отдельного результата в разделе «Мои файлы» — самостоятельное действие. Оно не удаляет аккаунт, текст чатов или историю платежей.",
+    "back": "Deleting an individual result in My files is a separate action. It does not delete the account, chat text or payment history."
+  },
+  {
+    "id": "u1612",
+    "ru": "Частые вопросы",
+    "back": "Common questions"
+  },
+  {
+    "id": "u1613",
+    "ru": "Почему мне пришёл код подтверждения?",
+    "back": "Why did I receive a verification code?"
+  },
+  {
+    "id": "u1614",
+    "ru": "Его может запросить форма регистрации, восстановления или привязки почты. Если действие начали не вы, не сообщайте и не вводите код; при беспокойстве проверьте безопасность аккаунта.",
+    "back": "A registration, recovery or email-linking form may request it. If you did not start the action do not share or enter the code; check account security if concerned."
+  },
+  {
+    "id": "u1615",
+    "ru": "Где мои файлы и баланс?",
+    "back": "Where are my files and balance?"
+  },
+  {
+    "id": "u1616",
+    "ru": "Проверьте, что использовали те же связанные учётные данные, что и раньше. Разные несвязанные учётные данные могут принадлежать разным аккаунтам.",
+    "back": "Check that you used the same linked identities as before. Different unlinked identities may belong to different accounts."
+  },
+  {
+    "id": "u1617",
+    "ru": "Можно ли удалить вход через провайдера?",
+    "back": "Can provider sign-in be removed?"
+  },
+  {
+    "id": "u1618",
+    "ru": "Используйте настройки связанных способов, когда они доступны. Перед удалением сохраните другой подтверждённый и пригодный способ входа.",
+    "back": "Use linked-method controls when available. Keep another verified, usable sign-in method before removal."
+  },
+  {
+    "id": "u1619",
+    "ru": "Что проверить, если письмо подтверждения аккаунта или восстановления не пришло.",
+    "back": "What to check if account confirmation or recovery email did not arrive."
+  },
+  {
+    "id": "u1620",
+    "ru": "Письма подтверждения связаны с формой, через которую вы их запросили. Начните с адреса и почтового ящика, прежде чем запрашивать новые коды.",
+    "back": "Verification emails are linked to the form through which you requested them. Start with address and mailbox before requesting new codes."
+  },
+  {
+    "id": "u1621",
+    "ru": "Проверьте адрес и почтовый ящик",
+    "back": "Check address and mailbox"
+  },
+  {
+    "id": "u1622",
+    "ru": "Проверьте адрес",
+    "back": "Check the address"
+  },
+  {
+    "id": "u1623",
+    "ru": "Убедитесь, что в форме нужный адрес электронной почты. Для восстановления нужен адрес, уже связанный с аккаунтом.",
+    "back": "Make sure the form has the intended email address. Recovery needs an address already linked to the account."
+  },
+  {
+    "id": "u1624",
+    "ru": "Посмотрите другие папки",
+    "back": "Look in other folders"
+  },
+  {
+    "id": "u1625",
+    "ru": "Проверьте спам, нежелательную почту и другие папки фильтрации. Поищите Epifera в почтовом ящике.",
+    "back": "Check spam, junk mail and other filtered folders. Search for Epifera in the mailbox.",
+    "keepReason": "Preserved brand, model or technical notation: Epifera."
+  },
+  {
+    "id": "u1626",
+    "ru": "Используйте текущее письмо",
+    "back": "Use the current email"
+  },
+  {
+    "id": "u1627",
+    "ru": "Если запросили новый код, вернитесь к текущей форме и используйте самое новое письмо. Никому его не пересылайте.",
+    "back": "If a new code was requested return to the current form and use the newest email. Do not forward it to anyone."
+  },
+  {
+    "id": "u1628",
+    "ru": "Перед запросом ещё одного кода",
+    "back": "Before requesting another code"
+  },
+  {
+    "id": "u1629",
+    "ru": "Дайте письму время прийти и проверьте, принимает ли ящик другую почту. Следуйте таймеру повторной попытки или сообщению об ограничении частоты в форме. Повторные запросы могут затруднить определение текущего кода.",
+    "back": "Give the email time to arrive and check the mailbox accepts other mail. Follow the retry timer or rate-limit message in the form. Repeat requests can make identifying the current code harder."
+  },
+  {
+    "id": "u1630",
+    "ru": "Если письмо по-прежнему не приходит",
+    "back": "If the email still does not arrive"
+  },
+  {
+    "id": "u1631",
+    "ru": "Обратитесь на ",
+    "back": "Contact "
+  },
+  {
+    "id": "u1632",
+    "ru": " и укажите примерное время запроса, тип действия и почтовый сервис. Никогда не включайте пароль или код подтверждения.",
+    "back": " and state approximate request time, action type and email provider. Never include a password or verification code."
+  },
+  {
+    "id": "u1633",
+    "ru": "Для полного руководства по аккаунту вернитесь в раздел ",
+    "back": "For the full account guide return to the section "
+  },
+  {
+    "id": "u1634",
+    "ru": "Руководства по аккаунту Epifera, творческим инструментам, файлам и кредитам.",
+    "back": "Guides to the Epifera account, creative tools, files and credits.",
+    "keepReason": "Preserved brand, model or technical notation: Epifera."
+  },
+  {
+    "id": "u1635",
+    "ru": "Выберите тему ниже или найдите статью через навигацию.",
+    "back": "Choose a topic below or find an article through navigation."
+  },
+  {
+    "id": "u1636",
+    "ru": "Перейти к статье",
+    "back": "Go to article"
+  },
+  {
+    "id": "u1637",
+    "ru": "Справочные статьи",
+    "back": "Help articles"
+  },
+  {
+    "id": "u1638",
+    "ru": "Открыть справочные статьи",
+    "back": "Open help articles"
+  },
+  {
+    "id": "u1639",
+    "ru": "Поиск по справочным статьям",
+    "back": "Search help articles"
+  },
+  {
+    "id": "u1640",
+    "ru": "Поиск...",
+    "back": "Search..."
+  },
+  {
+    "id": "u1641",
+    "ru": "Статьи не найдены. Попробуйте другое слово.",
+    "back": "No articles found. Try another word."
+  },
+  {
+    "id": "u1642",
+    "ru": "В этой статье",
+    "back": "In this article"
+  },
+  {
+    "id": "u1643",
+    "ru": "Не находите ответ на свой вопрос?",
+    "back": "Cannot find an answer to your question?"
+  },
+  {
+    "id": "u1644",
+    "ru": "Наша поддержка поможет с аккаунтом или проблемой использования Epifera.",
+    "back": "Our support can help with your account or a problem using Epifera.",
+    "keepReason": "Preserved brand, model or technical notation: Epifera."
+  },
+  {
+    "id": "u1645",
+    "ru": "Открыть справочные статьи",
+    "back": "Open help articles"
+  },
+  {
+    "id": "u1646",
+    "ru": "Поделиться статьёй",
+    "back": "Share article"
+  },
+  {
+    "id": "u1647",
+    "ru": "Не удалось скопировать. Выделите ссылку и скопируйте вручную.",
+    "back": "Copying failed. Select the link and copy manually."
+  },
+  {
+    "id": "u3449",
+    "ru": "Продуктовая кампания",
+    "back": "Product campaign"
+  },
+  {
+    "id": "u3450",
+    "ru": "social-post.webp",
+    "back": "social-post.webp",
+    "keepReason": "Technical asset filename; preserve the exact identifier."
+  },
+  {
+    "id": "u3451",
+    "ru": "Превратите идею товара в ясный бриф, направления для изображений и список проверок. Изучите каждый шаг, затем продолжите в рабочем пространстве Epifera.",
+    "back": "Turn a product idea into a clear brief, image directions and checklist. Explore each step then continue in the Epifera workspace.",
+    "keepReason": "Preserved brand, model or technical notation: Epifera."
+  },
+  {
+    "id": "u3452",
+    "ru": "Описание товара или фотореференс, который вам разрешено использовать.",
+    "back": "A product description or photo reference you are permitted to use."
+  },
+  {
+    "id": "u3453",
+    "ru": "Ваша аудитория, цель кампании и предполагаемое размещение.",
+    "back": "Your audience, campaign goal and intended placement."
+  },
+  {
+    "id": "u3454",
+    "ru": "Фирменные цвета, визуальное направление и детали, которые нужно сохранить.",
+    "back": "Brand colors, visual direction and details to preserve."
+  },
+  {
+    "id": "u3455",
+    "ru": "Творческий бриф для конкретного товара.",
+    "back": "A creative brief for a particular product."
+  },
+  {
+    "id": "u3456",
+    "ru": "Набор визуальных направлений для оценки.",
+    "back": "A set of visual directions for assessment."
+  },
+  {
+    "id": "u3457",
+    "ru": "Список проверок для выбора и сохранения итоговых медиа.",
+    "back": "A checklist for selecting and keeping final media."
+  },
+  {
+    "id": "u3458",
+    "ru": "Составьте творческий бриф",
+    "back": "Build a creative brief"
+  },
+  {
+    "id": "u3459",
+    "ru": "Определите, что должна сообщать кампания, до выбора модели или написания промпта.",
+    "back": "Determine what the campaign should communicate before selecting a model or writing a prompt."
+  },
+  {
+    "id": "u3460",
+    "ru": "Опишите товар и целевую аудиторию.",
+    "back": "Describe the product and target audience."
+  },
+  {
+    "id": "u3461",
+    "ru": "Выберите сцену, визуальный стиль и место размещения.",
+    "back": "Choose a scene, visual style and placement."
+  },
+  {
+    "id": "u3462",
+    "ru": "Перечислите детали бренда, которые должны остаться узнаваемыми.",
+    "back": "List brand details that must remain recognizable."
+  },
+  {
+    "id": "u3463",
+    "ru": "Разработайте направления для изображений",
+    "back": "Develop directions for images"
+  },
+  {
+    "id": "u3464",
+    "ru": "По брифу проработайте небольшой набор сцен с товаром. Добавляйте референс только там, где выбранная модель предлагает такой ввод.",
+    "back": "Use the brief to develop a small set of product scenes. Add a reference only where the selected model offers that input."
+  },
+  {
+    "id": "u3465",
+    "ru": "Выберите доступную модель и проверьте поддерживаемые входные данные.",
+    "back": "Select an available model and check supported inputs."
+  },
+  {
+    "id": "u3466",
+    "ru": "Задайте формат и проверьте показанную стоимость в кредитах.",
+    "back": "Set format and check displayed cost in credits."
+  },
+  {
+    "id": "u3467",
+    "ru": "Отправьте осознанно и проверьте результат перед продолжением.",
+    "back": "Submit deliberately and check the result before continuing."
+  },
+  {
+    "id": "u3468",
+    "ru": "Адаптируйте выбранное направление",
+    "back": "Adapt the chosen direction"
+  },
+  {
+    "id": "u3469",
+    "ru": "Доработайте самую удачную идею для предполагаемого размещения. После каждого изменения проверяйте товар и любые надписи.",
+    "back": "Refine the strongest idea for intended placement. Check product and any lettering after each change."
+  },
+  {
+    "id": "u3470",
+    "ru": "Оцените и сохраните результат",
+    "back": "Assess and save the result"
+  },
+  {
+    "id": "u3471",
+    "ru": "Сравните медиа с исходным брифом, затем скачайте файлы, которые хотите сохранить.",
+    "back": "Compare media with the original brief then download files you want to keep."
+  },
+  {
+    "id": "u3472",
+    "ru": "Проверьте товар, текст, цвета и мелкие детали.",
+    "back": "Check product, text, colors and small details."
+  },
+  {
+    "id": "u3473",
+    "ru": "Проверьте разрешения и пригодность для предполагаемого размещения.",
+    "back": "Check permissions and suitability for intended placement."
+  },
+  {
+    "id": "u3474",
+    "ru": "Скачайте оригиналы до окончания срока хранения.",
+    "back": "Download originals before retention expires."
+  },
+  {
+    "id": "u3475",
+    "ru": "Процесс работы над продуктовой кампанией — от брифа к визуальным материалам | Epifera",
+    "back": "Product campaign workflow — from brief to visual materials | Epifera",
+    "keepReason": "Preserved brand, model or technical notation: Epifera."
+  },
+  {
+    "id": "u3476",
+    "ru": "Изучите процесс работы над продуктовой кампанией с инструкциями: от творческого брифа к направлениям для изображений и списку проверок. Продолжите в доступных инструментах Epifera.",
+    "back": "Explore a guided product campaign workflow: from creative brief to image directions and checklist. Continue in available Epifera tools.",
+    "keepReason": "Preserved brand, model or technical notation: Epifera."
+  },
+  {
+    "id": "u3477",
+    "ru": "Перейти к процессу работы",
+    "back": "Go to workflow"
+  },
+  {
+    "id": "u3478",
+    "ru": "Референсные изображения: Magnific",
+    "back": "Reference images: Magnific",
+    "keepReason": "Preserved brand, model or technical notation: Magnific."
+  },
+  {
+    "id": "u3479",
+    "ru": "Процесс работы с инструкциями",
+    "back": "Guided workflow"
+  },
+  {
+    "id": "u3480",
+    "ru": "Предыдущий шаг",
+    "back": "Previous step"
+  },
+  {
+    "id": "u3481",
+    "ru": "Следующий шаг",
+    "back": "Next step"
+  },
+  {
+    "id": "u3482",
+    "ru": "Что понадобится",
+    "back": "What is needed"
+  },
+  {
+    "id": "u3483",
+    "ru": "К чему вы будете двигаться",
+    "back": "What you will work towards"
+  },
+  {
+    "id": "u3484",
+    "ru": "Шаг",
+    "back": "Step"
+  },
+  {
+    "id": "u3485",
+    "ru": "Шаги процесса",
+    "back": "Workflow steps"
+  },
+  {
+    "id": "u3486",
+    "ru": "Продолжить в рабочем пространстве",
+    "back": "Continue in workspace"
+  },
+  {
+    "id": "u3487",
+    "ru": "Проверьте перед продолжением",
+    "back": "Check before continuing"
+  },
+  {
+    "id": "u3488",
+    "ru": "Проходите шаги в своём темпе. Перед созданием медиа выберите модель, настройки и стоимость в кредитах в рабочем пространстве.",
+    "back": "Work through steps at your pace. Before creating media select model, settings and credit cost in the workspace."
+  },
+  {
+    "id": "u3489",
+    "ru": "Референсное изображение",
+    "back": "Reference image"
+  },
+  {
+    "id": "u3490",
+    "ru": "Заметки для оценки",
+    "back": "Assessment notes"
+  },
+  {
+    "id": "u3491",
+    "ru": "Сохраните узнаваемость товара. Попробуйте низкий ракурс камеры, естественный свет и чистое небо. Проверьте цвета и надписи перед выбором итогового результата.",
+    "back": "Keep the product recognizable. Try a low camera angle, natural light and clear sky. Check colors and lettering before choosing the final result."
+  },
+  {
+    "id": "u3492",
+    "ru": "Сравните результат с брифом. Проверьте детали товара, композицию и место, нужное для текста кампании.",
+    "back": "Compare the output with the brief. Check product details, composition and space needed for campaign text."
+  },
+  {
+    "id": "u3493",
+    "ru": "Посмотреть шаг подготовки брифа",
+    "back": "View the brief preparation step"
+  },
+  {
+    "id": "u3494",
+    "ru": "Посмотреть шаг создания изображения",
+    "back": "View the image creation step"
+  },
+  {
+    "id": "u3495",
+    "ru": "Посмотреть шаг оценки",
+    "back": "View the assessment step"
+  },
+  {
+    "id": "u3496",
+    "ru": "Бриф",
+    "back": "Brief"
+  },
+  {
+    "id": "u3497",
+    "ru": "Найдите способ начать",
+    "back": "Find a way to start"
+  },
+  {
+    "id": "u3498",
+    "ru": "Изучите входные данные, пройдите шаги и найдите подходящий инструмент для каждой части процесса.",
+    "back": "Explore inputs, work through steps and find the suitable tool for each part of the process."
+  },
+  {
+    "id": "u3499",
+    "ru": "Открыть пошаговое руководство",
+    "back": "Open step-by-step guide"
+  },
+  {
+    "id": "u3500",
+    "ru": "Изучите семейства моделей, доступные в рабочем пространстве",
+    "back": "Explore model families available in the workspace"
+  },
+  {
+    "id": "u3501",
+    "ru": "Sora",
+    "back": "Sora",
+    "keepReason": "Preserved brand, model or technical notation: Sora."
+  },
+  {
+    "id": "u3502",
+    "ru": "Начните с ясного творческого направления",
+    "back": "Begin with a clear creative direction"
+  },
+  {
+    "id": "u3503",
+    "ru": "Возьмите продуктовую кампанию за отправную точку. Принесите собственный бриф и референсы, затем осознанно пройдите каждый этап.",
+    "back": "Use a product campaign as a starting point. Bring your own brief and references then deliberately work through each stage."
+  },
+  {
+    "id": "u3504",
+    "ru": "Один товар. Больше возможностей.",
+    "back": "One product. More possibilities."
+  },
+  {
+    "id": "u3505",
+    "ru": "Изучите визуальное направление, создайте вариации и оцените самые удачные идеи для следующей кампании.",
+    "back": "Explore a visual direction, create variations and assess the strongest ideas for the next campaign."
+  },
+  {
+    "id": "u3506",
+    "ru": "Изучить руководство по кампании",
+    "back": "Explore campaign guide"
+  },
+  {
+    "id": "u3507",
+    "ru": "Разрабатывайте идеи, экспериментируйте и дорабатывайте",
+    "back": "Develop ideas, experiment and refine"
+  },
+  {
+    "id": "u3508",
+    "ru": "Переходите от ясного брифа к творческим вариантам и осознанной оценке.",
+    "back": "Move from a clear brief to creative options and deliberate assessment."
+  },
+  {
+    "id": "u3509",
+    "ru": "Связный творческий процесс",
+    "back": "A connected creative process"
+  },
+  {
+    "id": "u3510",
+    "ru": "Посмотрите, как связаны входные данные, бриф, направления для изображений и оценка, прежде чем начинать создание.",
+    "back": "See how inputs, brief, image directions and assessment connect before starting creation."
+  },
+  {
+    "id": "u3511",
+    "ru": "Более ясная оценка",
+    "back": "Clearer assessment"
+  },
+  {
+    "id": "u3512",
+    "ru": "Принимайте решения с практическим списком проверок под рукой: детали товара, визуальная согласованность и итоговое размещение.",
+    "back": "Make decisions with a practical checklist at hand: product details, visual consistency and final placement."
+  },
+  {
+    "id": "u3513",
+    "ru": "Детали товара остаются узнаваемыми",
+    "back": "Product details remain recognizable"
+  },
+  {
+    "id": "u3514",
+    "ru": "Композиция подходит размещению",
+    "back": "Composition fits the placement"
+  },
+  {
+    "id": "u3515",
+    "ru": "Текст и цвета проверены",
+    "back": "Text and colors checked"
+  },
+  {
+    "id": "u3516",
+    "ru": "Для тех, кто придумывает, создаёт и реализует",
+    "back": "For those who devise, create and execute"
+  },
+  {
+    "id": "u3517",
+    "ru": "Примените структурированный подход к следующей творческой задаче, работаете ли вы в одиночку или готовите бриф для других.",
+    "back": "Apply a structured approach to the next creative task, whether working alone or preparing a brief for others."
+  },
+  {
+    "id": "u3518",
+    "ru": "Рекламные креаторы",
+    "back": "Advertising creatives"
+  },
+  {
+    "id": "u3519",
+    "ru": "Превратите цель кампании в бриф и визуальные направления.",
+    "back": "Turn a campaign goal into a brief and visual directions."
+  },
+  {
+    "id": "u3520",
+    "ru": "Маркетинговые команды",
+    "back": "Marketing teams"
+  },
+  {
+    "id": "u3521",
+    "ru": "Планируйте вариации для нужных форматов и размещений.",
+    "back": "Plan variations for the formats and placements needed."
+  },
+  {
+    "id": "u3522",
+    "ru": "Независимые авторы",
+    "back": "Independent creators"
+  },
+  {
+    "id": "u3523",
+    "ru": "Используйте воспроизводимый процесс для проработки, сравнения и уточнения идеи.",
+    "back": "Use a repeatable process to develop, compare and refine an idea."
+  },
+  {
+    "id": "u3524",
+    "ru": "Выберите инструмент для каждого шага",
+    "back": "Choose a tool for each step"
+  },
+  {
+    "id": "u3525",
+    "ru": "Продолжите в существующем рабочем пространстве Epifera, когда будете готовы создавать.",
+    "back": "Continue in the existing Epifera workspace when ready to create.",
+    "keepReason": "Preserved brand, model or technical notation: Epifera."
+  },
+  {
+    "id": "u3526",
+    "ru": "Творческие процессы для проработки следующей идеи",
+    "back": "Creative workflows for developing the next idea"
+  },
+  {
+    "id": "u3527",
+    "ru": "Начните с примера, принесите собственные материалы и следуйте руководству в своём темпе.",
+    "back": "Start with an example, bring your own materials and follow the guide at your pace."
+  },
+  {
+    "id": "u3528",
+    "ru": "Адаптируйте рекламную идею",
+    "back": "Adapt an advertising idea"
+  },
+  {
+    "id": "u3529",
+    "ru": "adapt-ads.webp",
+    "back": "adapt-ads.webp",
+    "keepReason": "Technical asset filename; preserve the exact identifier."
+  },
+  {
+    "id": "u3530",
+    "ru": "Проработайте рекламную концепцию для нового размещения.",
+    "back": "Develop an advertising concept for a new placement."
+  },
+  {
+    "id": "u3531",
+    "ru": "Бриф кампании и нужные форматы.",
+    "back": "A campaign brief and required formats."
+  },
+  {
+    "id": "u3532",
+    "ru": "Готовое изображение или описание его направления.",
+    "back": "An existing visual or description of its direction."
+  },
+  {
+    "id": "u3533",
+    "ru": "Определите размещение",
+    "back": "Define placement"
+  },
+  {
+    "id": "u3534",
+    "ru": "Опишите аудиторию, сообщение и место для текста в целевом размещении.",
+    "back": "Describe audience, message and room for text in the target placement."
+  },
+  {
+    "id": "u3535",
+    "ru": "Определите аудиторию и назначение.",
+    "back": "Determine audience and purpose."
+  },
+  {
+    "id": "u3536",
+    "ru": "Перечислите важные детали и ограничения.",
+    "back": "List important details and restrictions."
+  },
+  {
+    "id": "u3537",
+    "ru": "Выберите направление для проработки в следующем инструменте.",
+    "back": "Select a direction to develop in the next tool."
+  },
+  {
+    "id": "u3538",
+    "ru": "Проработайте адаптированное изображение",
+    "back": "Develop an adapted visual"
+  },
+  {
+    "id": "u3539",
+    "ru": "Используйте поддерживаемые входные данные выбранной модели для проработки композиции. Проверьте все детали бренда и товара.",
+    "back": "Use supported inputs of the selected model to develop composition. Check all brand and product details."
+  },
+  {
+    "id": "u3540",
+    "ru": "Проверенный набор творческих направлений и список проверок итоговых медиа.",
+    "back": "A reviewed set of creative directions and final media checklist."
+  },
+  {
+    "id": "u3541",
+    "ru": "Создайте вариации товара в контексте",
+    "back": "Create product variations in context"
+  },
+  {
+    "id": "u3542",
+    "ru": "product-variations.webp",
+    "back": "product-variations.webp",
+    "keepReason": "Technical asset filename; preserve the exact identifier."
+  },
+  {
+    "id": "u3543",
+    "ru": "Проработайте несколько направлений сцен для одного товара.",
+    "back": "Develop several scene directions for one product."
+  },
+  {
+    "id": "u3544",
+    "ru": "Описание товара или разрешённое референсное изображение.",
+    "back": "A product description or permitted reference image."
+  },
+  {
+    "id": "u3545",
+    "ru": "Список сцен или визуальных стилей.",
+    "back": "A list of scenes or visual styles."
+  },
+  {
+    "id": "u3546",
+    "ru": "Выберите направления сцен",
+    "back": "Choose scene directions"
+  },
+  {
+    "id": "u3547",
+    "ru": "Опишите различия между версиями и детали товара, которые должны оставаться одинаковыми.",
+    "back": "Describe differences between versions and product details that must remain consistent."
+  },
+  {
+    "id": "u3548",
+    "ru": "Проработайте вариации",
+    "back": "Develop variations"
+  },
+  {
+    "id": "u3549",
+    "ru": "Создайте каждое направление в рабочем пространстве изображений и сравните его с брифом товара.",
+    "back": "Create each direction in the image workspace and compare with the product brief."
+  },
+  {
+    "id": "u3550",
+    "ru": "Создайте изображение для соцсетей",
+    "back": "Create a social media image"
+  },
+  {
+    "id": "u3551",
+    "ru": "Разработайте визуальное направление для публикации в соцсетях.",
+    "back": "Develop a visual direction for a social media post."
+  },
+  {
+    "id": "u3552",
+    "ru": "Ваш товар или объект.",
+    "back": "Your product or subject."
+  },
+  {
+    "id": "u3553",
+    "ru": "Аудитория, формат публикации и ключевое сообщение.",
+    "back": "Audience, post format and key message."
+  },
+  {
+    "id": "u3554",
+    "ru": "Спланируйте публикацию",
+    "back": "Plan a post"
+  },
+  {
+    "id": "u3555",
+    "ru": "Выберите одно сообщение и опишите композицию, тон и предполагаемое размещение.",
+    "back": "Choose one message and describe composition, tone and intended placement."
+  },
+  {
+    "id": "u3556",
+    "ru": "Создайте изображение",
+    "back": "Create a visual"
+  },
+  {
+    "id": "u3557",
+    "ru": "Проработайте подходящее изображение и проверьте, как оно оставляет место для итогового текста.",
+    "back": "Develop a suitable image and check how it leaves room for final copy."
+  },
+  {
+    "id": "u3558",
+    "ru": "Изучите ракурсы товара",
+    "back": "Explore product angles"
+  },
+  {
+    "id": "u3559",
+    "ru": "product-views.webp",
+    "back": "product-views.webp",
+    "keepReason": "Technical asset filename; preserve the exact identifier."
+  },
+  {
+    "id": "u3560",
+    "ru": "Спланируйте альтернативные виды концепции товара.",
+    "back": "Plan alternative views of a product concept."
+  },
+  {
+    "id": "u3561",
+    "ru": "Референс товара или подробное описание.",
+    "back": "A product reference or detailed description."
+  },
+  {
+    "id": "u3562",
+    "ru": "Ракурсы, которые хотите проработать.",
+    "back": "Angles you want to develop."
+  },
+  {
+    "id": "u3563",
+    "ru": "Перечислите виды",
+    "back": "List the views"
+  },
+  {
+    "id": "u3564",
+    "ru": "Опишите положение камеры для каждого изображения и детали, по которым узнаётся товар.",
+    "back": "Describe camera position for each image and the details identifying the product."
+  },
+  {
+    "id": "u3565",
+    "ru": "Проработайте виды",
+    "back": "Develop the views"
+  },
+  {
+    "id": "u3566",
+    "ru": "Сгенерируйте отдельные визуальные эскизы и проверьте согласованность. Оцените каждый вид как самостоятельное изображение.",
+    "back": "Generate separate visual studies and check consistency. Assess each view as a separate image."
+  },
+  {
+    "id": "u3567",
+    "ru": "Сгенерируйте идеи сцен с товаром",
+    "back": "Generate product scene ideas"
+  },
+  {
+    "id": "u3568",
+    "ru": "product-scenes.webp",
+    "back": "product-scenes.webp",
+    "keepReason": "Technical asset filename; preserve the exact identifier."
+  },
+  {
+    "id": "u3569",
+    "ru": "Проработайте окружение, которое поддерживает историю товара.",
+    "back": "Develop surroundings supporting the product's story."
+  },
+  {
+    "id": "u3570",
+    "ru": "Описание товара.",
+    "back": "A product description."
+  },
+  {
+    "id": "u3571",
+    "ru": "Сцена, направление света и назначение.",
+    "back": "A scene, lighting direction and purpose."
+  },
+  {
+    "id": "u3572",
+    "ru": "Задайте сцену",
+    "back": "Set the scene"
+  },
+  {
+    "id": "u3573",
+    "ru": "Определите окружение, материалы, свет и историю вокруг товара.",
+    "back": "Determine environment, materials, light and story around the product."
+  },
+  {
+    "id": "u3574",
+    "ru": "Создайте эскизы сцен",
+    "back": "Create scene studies"
+  },
+  {
+    "id": "u3575",
+    "ru": "Проработайте сцену в рабочем пространстве изображений, затем проверьте тени, масштаб и детали товара.",
+    "back": "Develop the scene in the image workspace then check shadows, scale and product details."
+  },
+  {
+    "id": "u3576",
+    "ru": "Спланируйте локализованную озвучку",
+    "back": "Plan localized narration"
+  },
+  {
+    "id": "u3577",
+    "ru": "localize-video.webp",
+    "back": "localize-video.webp",
+    "keepReason": "Technical asset filename; preserve the exact identifier."
+  },
+  {
+    "id": "u3578",
+    "ru": "Подготовьте устную версию текста кампании.",
+    "back": "Prepare a spoken version of campaign copy."
+  },
+  {
+    "id": "u3579",
+    "ru": "Текст, который вам разрешено адаптировать.",
+    "back": "Text you are permitted to adapt."
+  },
+  {
+    "id": "u3580",
+    "ru": "Целевой язык, аудитория и тон.",
+    "back": "Target language, audience and tone."
+  },
+  {
+    "id": "u3581",
+    "ru": "Адаптируйте текст",
+    "back": "Adapt the script"
+  },
+  {
+    "id": "u3582",
+    "ru": "Проверьте формулировки для аудитории, а также имена, единицы измерения и произношение.",
+    "back": "Check wording for the audience, along with names, units and pronunciation."
+  },
+  {
+    "id": "u3583",
+    "ru": "Попробуйте голос",
+    "back": "Try a voice"
+  },
+  {
+    "id": "u3584",
+    "ru": "Откройте рабочее пространство речи и выберите доступные голос и операцию для текста.",
+    "back": "Open the speech workspace and select an available voice and operation for the script."
+  },
+  {
+    "id": "u3585",
+    "ru": "Уточните язык и доступные настройки голоса.",
+    "back": "Confirm language and available voice settings."
+  },
+  {
+    "id": "u3586",
+    "ru": "Проверьте показанную стоимость перед отправкой.",
+    "back": "Check displayed cost before submitting."
+  },
+  {
+    "id": "u3587",
+    "ru": "Прослушайте результат и проверьте произношение.",
+    "back": "Listen to the result and check pronunciation."
+  },
+  {
+    "id": "u3588",
+    "ru": "Переработайте композицию с товаром",
+    "back": "Rework a product composition"
+  },
+  {
+    "id": "u3589",
+    "ru": "replace-product.webp",
+    "back": "replace-product.webp",
+    "keepReason": "Technical asset filename; preserve the exact identifier."
+  },
+  {
+    "id": "u3590",
+    "ru": "Проработайте новую композицию с товаром на основе существующего направления.",
+    "back": "Develop a new product composition based on an existing direction."
+  },
+  {
+    "id": "u3591",
+    "ru": "Направление дизайна, которое вам разрешено использовать.",
+    "back": "A design direction you are permitted to use."
+  },
+  {
+    "id": "u3592",
+    "ru": "Важные детали товара.",
+    "back": "Important product details."
+  },
+  {
+    "id": "u3593",
+    "ru": "Опишите изменение",
+    "back": "Describe a change"
+  },
+  {
+    "id": "u3594",
+    "ru": "Перечислите, что должно измениться и что сохраниться, включая свет, масштаб и композицию.",
+    "back": "List what should change and what remain, including light, scale and composition."
+  },
+  {
+    "id": "u3595",
+    "ru": "Проработайте новую композицию",
+    "back": "Develop the new composition"
+  },
+  {
+    "id": "u3596",
+    "ru": "Используйте референс только там, где он поддерживается, и проверьте каждую изменённую деталь товара.",
+    "back": "Use a reference only where supported and check every changed product detail."
+  },
+  {
+    "id": "u3597",
+    "ru": "Проработайте улучшение фотографии",
+    "back": "Develop a photo refinement"
+  },
+  {
+    "id": "u3598",
+    "ru": "restore-memories.webp",
+    "back": "restore-memories.webp",
+    "keepReason": "Technical asset filename; preserve the exact identifier."
+  },
+  {
+    "id": "u3599",
+    "ru": "Спланируйте изменения фотографии, к которой хотите вернуться.",
+    "back": "Plan changes to a photo you want to revisit."
+  },
+  {
+    "id": "u3600",
+    "ru": "Фотография, которую вам разрешено использовать.",
+    "back": "A photo you are permitted to use."
+  },
+  {
+    "id": "u3601",
+    "ru": "Ясное описание запрошенных изменений.",
+    "back": "A clear description of requested changes."
+  },
+  {
+    "id": "u3602",
+    "ru": "Выберите детали для доработки",
+    "back": "Choose details to refine"
+  },
+  {
+    "id": "u3603",
+    "ru": "Опишите видимые проблемы и черты, которые должны остаться узнаваемыми.",
+    "back": "Describe visible problems and features that must remain recognizable."
+  },
+  {
+    "id": "u3604",
+    "ru": "Оцените доработанную версию",
+    "back": "Assess the refined version"
+  },
+  {
+    "id": "u3605",
+    "ru": "Используйте поддерживаемую операцию с изображением и сравните результат с оригиналом. Сохраните оригинал как референс.",
+    "back": "Use a supported image operation and compare the result with the original. Keep the original as reference."
+  },
+  {
+    "id": "u3606",
+    "ru": "Спланируйте раскадровку",
+    "back": "Plan a storyboard"
+  },
+  {
+    "id": "u3607",
+    "ru": "storyboard.webp",
+    "back": "storyboard.webp",
+    "keepReason": "Technical asset filename; preserve the exact identifier."
+  },
+  {
+    "id": "u3608",
+    "ru": "Превратите сюжетную идею в последовательность визуальных эскизов.",
+    "back": "Turn a story idea into a sequence of visual studies."
+  },
+  {
+    "id": "u3609",
+    "ru": "Короткая история или план сцены.",
+    "back": "A short story or scene outline."
+  },
+  {
+    "id": "u3610",
+    "ru": "Референсы персонажей и визуальные референсы.",
+    "back": "Character references and visual references."
+  },
+  {
+    "id": "u3611",
+    "ru": "Наметьте последовательность",
+    "back": "Outline the sequence"
+  },
+  {
+    "id": "u3612",
+    "ru": "Разбейте историю на несколько эпизодов с объектом, действием и направлением камеры для каждого.",
+    "back": "Split the story into several beats, each with subject, action and camera direction."
+  },
+  {
+    "id": "u3613",
+    "ru": "Проработайте кадры",
+    "back": "Develop the frames"
+  },
+  {
+    "id": "u3614",
+    "ru": "Создайте визуальные эскизы эпизодов и проверьте непрерывность, прежде чем рассматривать видеомодель.",
+    "back": "Create visual studies of the beats and check continuity before considering a video model."
+  },
+  {
+    "id": "u3615",
+    "ru": "Проработайте студийный снимок товара",
+    "back": "Develop a studio product shot"
+  },
+  {
+    "id": "u3616",
+    "ru": "studio-product.webp",
+    "back": "studio-product.webp",
+    "keepReason": "Technical asset filename; preserve the exact identifier."
+  },
+  {
+    "id": "u3617",
+    "ru": "Создайте направление в студийном стиле для изображения товара.",
+    "back": "Create a studio-style direction for a product image."
+  },
+  {
+    "id": "u3618",
+    "ru": "Референс или описание товара.",
+    "back": "A product reference or description."
+  },
+  {
+    "id": "u3619",
+    "ru": "Требования к фону, свету и оформлению.",
+    "back": "Requirements for background, light and styling."
+  },
+  {
+    "id": "u3620",
+    "ru": "Напишите студийный бриф",
+    "back": "Write a studio brief"
+  },
+  {
+    "id": "u3621",
+    "ru": "Опишите поверхность, задний фон, положение камеры и свет, которые хотите проработать.",
+    "back": "Describe surface, backdrop, camera position and light you want to develop."
+  },
+  {
+    "id": "u3622",
+    "ru": "Создайте студийное направление",
+    "back": "Create a studio direction"
+  },
+  {
+    "id": "u3623",
+    "ru": "Используйте рабочее пространство изображений для проработки брифа и проверьте узнаваемость товара, отражения и тени.",
+    "back": "Use the image workspace to develop the brief and check product recognizability, reflections and shadows."
+  },
+  {
+    "id": "u3624",
+    "ru": "С чего начать этот процесс работы?",
+    "back": "Where to start this workflow?"
+  },
+  {
+    "id": "u3625",
+    "ru": "Выберите «Изучить процесс работы», чтобы посмотреть входные данные и шаги. Каждый шаг содержит ссылку на соответствующее рабочее пространство Epifera, когда вы будете готовы продолжить.",
+    "back": "Select Explore the workflow to view inputs and steps. Each step contains a link to the relevant Epifera workspace when ready to continue.",
+    "keepReason": "Preserved brand, model or technical notation: Epifera."
+  },
+  {
+    "id": "u3626",
+    "ru": "Расходует ли чтение руководства кредиты?",
+    "back": "Does reading the guide spend credits?"
+  },
+  {
+    "id": "u3627",
+    "ru": "Руководство и его шаги можно изучать без создания медиа. Генерация — отдельное действие в рабочем пространстве, где можно проверить модель, настройки и показанную стоимость в кредитах.",
+    "back": "The guide and its steps can be explored without media creation. Generation is a separate workspace action where model, settings and displayed credit cost can be checked."
+  },
+  {
+    "id": "u3628",
+    "ru": "Из каких шагов состоит процесс работы?",
+    "back": "What steps make up a workflow?"
+  },
+  {
+    "id": "u3629",
+    "ru": "Шаг — одна часть творческого процесса: подготовка входных данных, написание брифа, проработка изображения или оценка результата. Используйте шаги как руководство и адаптируйте бриф к своему проекту.",
+    "back": "A step is one part of a creative process: preparing inputs, writing a brief, developing an image or assessing output. Use steps as a guide and adapt the brief to your project."
+  },
+  {
+    "id": "u3630",
+    "ru": "Какие инструменты можно использовать?",
+    "back": "What tools can be used?"
+  },
+  {
+    "id": "u3631",
+    "ru": "Руководство ссылается на существующие экраны чата, изображений, моделей, музыки, речи и файлов. Доступные операции и типы входных данных зависят от выбранных инструмента и модели.",
+    "back": "The guide links to existing chat, image, model, music, speech and file screens. Available operations and input types depend on selected tool and model."
+  },
+  {
+    "id": "u3632",
+    "ru": "Как оценить процесс работы вместе с кем-то?",
+    "back": "How can a workflow be assessed together with someone?"
+  },
+  {
+    "id": "u3633",
+    "ru": "Поделитесь брифом и скачанными результатами с людьми, оценивающими проект. Согласуйте важные критерии и сравните идеи по списку проверок перед выбором итоговых медиа.",
+    "back": "Share the brief and downloaded results with people assessing the project. Agree on important criteria and compare ideas using the checklist before selecting final media."
+  },
+  {
+    "id": "u3634",
+    "ru": "Подготовьте ясный бриф, изучите варианты и сохраните результаты, подходящие проекту.",
+    "back": "Prepare a clear brief, explore options and keep results fitting the project."
+  }
+]

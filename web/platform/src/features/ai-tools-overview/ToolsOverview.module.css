@@ -1,0 +1,202 @@
+@font-face { font-family: "Landing Display"; src: url("/assets/fonts/public-home/display-extrabold.woff2") format("woff2"); font-weight: 800; font-style: normal; font-display: swap; }
+.page { --landing-banner-height: 47px; --overview-display: "Landing Display", var(--font-sans); --color-text: #300c06; --color-text-muted: #7d6b63; --color-panel: #fff; --color-card-border: #dedbd3; position: relative; overflow: clip; color: #300c06; background: #f6f4ef; font-family: var(--font-sans); font-feature-settings: "ss02" on; }
+.page *, .page *::before, .page *::after { box-sizing: border-box; }
+.page [hidden] { display: none !important; }
+.page :is(a,button,input,[tabindex]):focus-visible { outline: 2px solid #cf477f; outline-offset: 4px; }
+.page :where(button) { font: inherit; cursor: pointer; }
+.page button:disabled { cursor: default; opacity: .35; }
+.page a { color: inherit; text-decoration: none; }
+.skip { position: absolute; z-index: 80; top: -100px; left: 20px; padding: 12px 18px; background: white; color: #111 !important; border-radius: 8px; }
+.skip:focus { top: 10px; }
+.announcement { display: flex; align-items: center; justify-content: center; gap: 12px; block-size: var(--landing-banner-height); color: #fa63b0 !important; background: #050505; font-size: 14px; }
+.announcement svg { inline-size: 17px; }
+.hero { position: relative; isolation: isolate; display: grid; place-items: center; min-block-size: 720px; padding: 176px 32px 112px; color: #fff; background: #111828; }
+.heroImage { z-index: -3; object-fit: cover; object-position: center; }
+.heroShade { position: absolute; z-index: -2; inset: 0; background: #0008; }
+.heroInner { inline-size: min(100%, 1200px); text-align: center; }
+.hero h1 { max-inline-size: 1120px; margin: 0 auto; font-family: var(--overview-display); font-size: 56px; font-weight: 800; line-height: 1.04; letter-spacing: -.01em; }
+.heroInner > p { max-inline-size: 1000px; margin: 32px auto; color: #b3b9c5; font-size: 18px; line-height: 1.5; }
+.shortcuts { display: flex; justify-content: center; gap: 16px; }
+.shortcut { position: relative; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 14px; flex: 0 0 144px; inline-size: 144px; min-block-size: 114px; padding: 16px; border: 1px solid transparent; border-radius: 24px; background: #69728642; color: #fff; font-size: 13px; font-weight: var(--font-weight-medium); transition: background 160ms, transform 160ms; }
+.shortcut:hover { border-color: #ffffff20; background: #7882985c; transform: translateY(-3px); }
+.shortcut small { position: absolute; bottom: 3px; font-size: 9px; font-weight: 400; color: #d1d3df; }
+.shortcutIcon { display: grid; place-items: center; inline-size: 48px; block-size: 48px; border-radius: 16px; color: var(--tool-ink); background: var(--tool-bg); }
+.shortcutIcon svg { inline-size: 22px; block-size: 22px; }
+.page [data-tone="blue"] { --tool-bg: #b5c2ff24; --tool-ink: #8f9fff; }
+.page [data-tone="green"] { --tool-bg: #24cda522; --tool-ink: #3dd3ad; }
+.page [data-tone="teal"] { --tool-bg: #25b6b623; --tool-ink: #45c6c2; }
+.page [data-tone="purple"] { --tool-bg: #b297f221; --tool-ink: #a990e5; }
+.page [data-tone="pink"] { --tool-bg: #f4c4df3b; --tool-ink: #b7528d; }
+.page [data-tone="orange"] { --tool-bg: #f4d0ab38; --tool-ink: #ae7544; }
+.page [data-tone="neutral"] { --tool-bg: #b7bedb1f; --tool-ink: #e7e8ee; }
+.sections { display: flex; flex-direction: column; gap: 192px; inline-size: min(100%, 1280px); margin-inline: auto; padding: 80px 32px; }
+.sections > section { min-inline-size: 0; scroll-margin-top: 24px; }
+.sectionHeading { display: flex; align-items: flex-end; justify-content: space-between; gap: 32px; }
+.sectionHeading > div { min-inline-size: 0; }
+.sectionHeading h2, .closing h2 { margin: 0; font-family: var(--overview-display); font-size: 36px; font-weight: 800; line-height: 1.12; letter-spacing: -.01em; }
+.sectionHeading p { max-inline-size: 740px; margin: 18px 0 0; font-size: 18px; line-height: 1.5; }
+.toolTabs { display: flex; gap: 4px; inline-size: fit-content; max-inline-size: 100%; margin: 48px auto 32px; padding: 4px; overflow-x: auto; overscroll-behavior-inline: contain; scrollbar-width: none; border-radius: 999px; background: #fff; }
+.toolTabs button, .styleTabs button, .clientTabs button { flex-shrink: 0; padding: 10px 20px; border: 0; border-radius: 999px; background: transparent; color: #151515; font-size: 14px; line-height: 20px; white-space: nowrap; }
+.toolTabs button:hover, .styleTabs button:hover, .clientTabs button:hover { background: #f3f3f1; }
+.toolTabs button[aria-selected="true"], .styleTabs button[aria-selected="true"], .clientTabs button[aria-selected="true"] { color: #fff; background: #151515; }
+.toolGrid { display: grid; grid-template-columns: repeat(3, minmax(0,1fr)); gap: 24px 20px; padding: 32px; border-radius: 24px; background: white; }
+.toolGrid[data-tone="blue"] { --tool-bg: #eff0ff; --tool-ink: #7e8ee1; }
+.toolGrid[data-tone="green"] { --tool-bg: #e8faf3; --tool-ink: #4bbf9a; }
+.toolGrid[data-tone="teal"] { --tool-bg: #e8f7f7; --tool-ink: #49b3b2; }
+.toolGrid[data-tone="purple"] { --tool-bg: #f0edfb; --tool-ink: #9375be; }
+.toolItem { display: flex; align-items: center; gap: 10px; min-inline-size: 0; padding: 6px; border: 0; border-radius: 8px; background: transparent; color: inherit; text-align: start; }
+.toolItem:hover { background: #f6f6f2; }
+.toolIcon { display: grid; place-items: center; flex: 0 0 40px; block-size: 40px; border-radius: 8px; background: var(--tool-bg); color: var(--tool-ink); }
+.toolIcon svg { inline-size: 19px; block-size: 19px; }
+.toolText { display: flex; flex-direction: column; gap: 4px; min-inline-size: 0; }
+.toolTitle { display: flex; align-items: center; gap: 8px; min-inline-size: 0; font-size: 19px; line-height: 1.4; }
+.toolTitle small { flex-shrink: 0; padding: 1px 4px; border-radius: 3px; color: #8a7b76; background: #f3efeb; font-size: 8px; line-height: 1.3; }
+.toolDescription { overflow: hidden; color: #938d86; font-size: 16px; line-height: 1.5; text-overflow: ellipsis; white-space: nowrap; }
+.carouselSection [data-landing-carousel] { margin-block-start: 64px; }
+.carouselSection [data-landing-carousel] > div:first-child { position: absolute; top: -100px; right: 0; gap: 8px; margin: 0; }
+.page [data-landing-carousel] > div:first-child button { inline-size: 32px; block-size: 32px; border-radius: 6px; }
+.page [data-landing-carousel-viewport] { gap: 24px; }
+.page .pluginTrack, .page .scenarioTrack, .page .showcaseTrack { align-items: stretch; }
+.pluginCard { display: flex; flex-direction: column; align-items: flex-start; gap: 4px; inline-size: calc(25% - 18px); min-block-size: 216px; padding: 24px; border: 1px solid transparent; border-radius: 12px; background: #fff; color: inherit; text-align: start; }
+.pluginCard:hover { border-color: #d6d0c6; }
+.editorMark { display: grid; place-items: center; inline-size: 36px; block-size: 36px; margin-block-end: 16px; border: 1px solid #dedbd5; border-radius: 8px; font-size: 12px; font-weight: var(--font-weight-semibold); }
+.pluginTitle { font-size: 19px; font-weight: var(--font-weight-medium); }
+.pluginDescription { font-size: 15px; line-height: 1.5; }
+.pluginStatus { margin-block-start: auto; padding-block-start: 10px; color: #9c8982; font-size: 10px; }
+.modelBoard { display: grid; grid-template-columns: 172px minmax(0,1fr); gap: 40px; margin-block-start: 64px; padding: 40px; border-radius: 24px; background: #fff; }
+.styleTabs { display: flex; flex-direction: column; align-items: flex-start; gap: 16px; min-inline-size: 0; }
+.styleTabs button { padding-inline: 16px; }
+.styleTitle { margin: 0; font-family: var(--overview-display); font-size: 34px; font-weight: 800; line-height: 1.15; letter-spacing: -.035em; }
+.styleDescription { margin: 20px 0 44px; color: #75625a; font-size: 18px; line-height: 1.5; }
+.modelGrid { display: grid; grid-template-columns: repeat(3,minmax(0,1fr)); gap: 20px; }
+.modelCard { position: relative; display: flex; flex-direction: column; gap: 10px; min-inline-size: 0; min-block-size: 113px; padding: 18px 24px; border: 1px solid #dad9d5; border-radius: 12px; transition: border-color 150ms, box-shadow 150ms; }
+.modelCard:hover { border-color: #a9a1c8; box-shadow: 0 4px 12px #21151808; }
+.modelTitle { display: flex; align-items: center; gap: 8px; padding-inline-end: 4px; font-size: 17px; font-weight: var(--font-weight-medium); line-height: 1.3; }
+.modelTitle .modelIcon { inline-size: 17px; block-size: 17px; padding: 0; border-radius: 0; background: transparent; object-fit: contain; }
+.modelDescription { display: -webkit-box; overflow: hidden; -webkit-box-orient: vertical; -webkit-line-clamp: 2; font-size: 14px; line-height: 1.55; }
+.modelDot { position: absolute; top: 14px; right: 12px; inline-size: 7px; block-size: 7px; border-radius: 50%; background: #6364d9; }
+.modelNote { margin: 14px 4px 0; color: #9c8c84; font-size: 11px; }
+.connectionSection .sectionHeading > div { max-inline-size: 760px; }
+.outlineAction { display: inline-flex; align-items: center; justify-content: center; gap: 16px; flex-shrink: 0; padding: 10px 14px; border: 1px solid #bcb1a6; border-radius: 6px; color: inherit; background: transparent; font-size: 13px !important; }
+.connectionBoard { margin-block-start: 40px; padding: 56px 48px; border-radius: 24px; background: white; }
+.clientTabs { display: flex; gap: 6px; max-inline-size: 100%; overflow-x: auto; scrollbar-width: none; margin-block-end: 24px; }
+.clientTabs button { padding: 8px 14px; font-size: 12px; }
+.connectionPanel { padding: 24px; border-radius: 18px; background: #f2f2f0; }
+.connectionMeta { display: flex; align-items: center; justify-content: space-between; gap: 16px; font-size: 15px; }
+.comingSoon { display: inline-flex; align-items: center; width: fit-content; padding: 4px 8px; border-radius: 5px; color: #796761; background: #ece7e2; font-size: 11px; line-height: 1.4; white-space: nowrap; }
+.connectionPanel ol { margin: 20px 0; padding-inline-start: 20px; color: #6c625c; font-size: 14px; line-height: 1.8; }
+.connectionEndpoint { display: flex; align-items: center; justify-content: space-between; gap: 18px; padding: 10px 12px; border-radius: 12px; background: #e7e7e4; font-size: 12px; }
+.connectionEndpoint > a { display: inline-flex; align-items: center; gap: 12px; flex-shrink: 0; padding: 9px 12px; border-radius: 999px; color: white; background: #191918; }
+.audienceFilters { display: flex; gap: 26px; margin-block: 40px 24px; overflow-x: auto; scrollbar-width: none; }
+.audienceFilters button { flex-shrink: 0; padding: 0 0 10px; border: 0; border-bottom: 2px solid transparent; color: inherit; background: transparent; font-family: var(--overview-display); font-size: 24px; font-weight: 800; letter-spacing: -.025em; white-space: nowrap; }
+.audienceFilters button[aria-pressed="true"] { border-bottom-color: #571a20; }
+.teamsSection [data-landing-carousel] > div:first-child { margin-block-end: 16px; }
+.scenarioCard { inline-size: 360px; }
+.scenarioImage { position: relative; overflow: hidden; aspect-ratio: 1.15; border-radius: 16px; background: #e7e2da; }
+.scenarioImage img { object-fit: cover; transition: transform 300ms; }
+.scenarioCard:hover img { transform: scale(1.04); }
+.scenarioCard h3 { margin: 20px 0 8px; font-family: var(--overview-display); font-size: 23px; font-weight: 800; line-height: 1.2; letter-spacing: -.025em; }
+.scenarioCard p { margin: 0; font-size: 15px; line-height: 1.5; }
+.docsSection .sectionHeading { max-inline-size: 640px; }
+.docsSection .sectionHeading h2 { font-weight: 400; }
+.docsGrid { display: grid; grid-template-columns: repeat(4,minmax(0,1fr)); gap: 24px; margin: 64px 0 40px; padding: 0; list-style: none; }
+.docsGrid li { min-inline-size: 0; }
+.docCard { position: relative; display: flex; flex-direction: column; align-items: flex-start; inline-size: 100%; min-block-size: 182px; block-size: 100%; padding: 24px; border: 1px solid transparent; border-radius: 10px; background: #fff; color: inherit; text-align: start; }
+.docCard:hover { border-color: #d6d0c6; }
+.docCard h3 { margin: 0 0 8px; font-size: 18px; line-height: 1.3; font-weight: var(--font-weight-medium); }
+.docCard p { margin: 0 0 20px; font-size: 14px; line-height: 1.5; }
+.docCard small { color: #9c8982; font-size: 10px; }
+.docCard > span:last-child { position: absolute; right: 22px; bottom: 18px; }
+.viewMore { display: flex; align-items: center; justify-content: center; gap: 16px; width: fit-content; margin-inline: auto; padding: 10px 14px; border: 1px solid #bcb1a6; border-radius: 6px; font-size: 13px; }
+.showcaseCard { position: relative; display: block; overflow: hidden; inline-size: 300px; aspect-ratio: .65; padding: 0; border: 0; border-radius: 12px; background: #292624; color: white !important; text-align: start; }
+.showcaseCard > img { object-fit: cover; transition: transform 300ms; }
+.showcaseCard:hover > img { transform: scale(1.05); }
+.showcaseShade { position: absolute; inset: 0; background: linear-gradient(transparent 30%, #000b); }
+.showcaseText { position: absolute; inset: auto 24px 24px; }
+.showcaseText h3 { margin: 0 0 8px; font-family: var(--overview-display); font-size: 24px; font-weight: 800; line-height: 1.15; letter-spacing: -.025em; }
+.showcaseText > span { display: block; font-size: 14px; line-height: 1.5; }
+.showcaseText small { display: inline-block; margin-block-start: 10px; padding: 3px 7px; border-radius: 4px; color: white; background: #ffffff1f; font-size: 10px; }
+.closing { padding: 40px 32px; border-radius: 24px; background: #fff; text-align: center; }
+.closing h2 { font-size: 38px; }
+.closing p { margin: 20px 0 28px; font-size: 18px; line-height: 1.5; }
+.closing a { display: inline-flex; justify-content: center; align-items: center; gap: 20px; padding: 14px 24px; border-radius: 8px; background: #300400; color: white; font-size: 15px; font-weight: var(--font-weight-medium); }
+.previewDescription { margin: 20px 0; font-size: 15px; line-height: 1.6; }
+.previewAction { display: inline-flex; align-items: center; gap: 16px; padding: 12px 18px; border-radius: 8px; background: #300400; color: #fff; text-decoration: none; font-size: 14px; }
+@media (min-width: 1280px) { .showcaseCard { inline-size: 360px; } }
+@media (max-width: 1023px) {
+  .hero { min-block-size: 640px; padding-inline: 24px; }
+  .hero h1 { font-size: 44px; }
+  .shortcuts { gap: 12px; }
+  .shortcut { flex-basis: 120px; inline-size: 120px; }
+  .modelBoard { grid-template-columns: 152px minmax(0,1fr); gap: 28px; padding: 32px; }
+  .modelGrid { grid-template-columns: repeat(2,minmax(0,1fr)); }
+  .toolGrid { grid-template-columns: repeat(2,minmax(0,1fr)); }
+  .pluginCard { inline-size: calc(50% - 12px); }
+  .sectionHeading h2 { font-size: 32px; }
+  .sectionHeading p { font-size: 16px; }
+  .docsGrid { grid-template-columns: repeat(3,minmax(0,1fr)); }
+  .scenarioCard { inline-size: 320px; }
+}
+@media (max-width: 767px) {
+  .hero { min-block-size: 0; padding: 132px 20px 64px; }
+  .hero h1 { font-size: 32px; line-height: 1; letter-spacing: -.01em; }
+  .heroInner > p { margin: 24px auto; font-size: 14px; line-height: 1.65; }
+  .shortcuts { display: grid; grid-template-columns: repeat(2,144px); gap: 12px; justify-content: center; }
+  .shortcut { inline-size: 144px; min-block-size: 114px; }
+  .shortcut:last-child { grid-column: 1 / -1; justify-self: center; }
+  .sections { gap: 144px; padding: 80px 20px; }
+  .sectionHeading { display: block; }
+  .sectionHeading h2 { font-size: 29px; line-height: 1.07; }
+  .sectionHeading p { margin-block-start: 20px; font-size: 14px; line-height: 1.6; }
+  .toolTabs { margin-block: 40px 32px; }
+  .toolTabs button { padding-inline: 22px; }
+  .toolGrid { grid-template-columns: minmax(0,1fr); gap: 24px; padding: 24px; }
+  .toolTitle { font-size: 15px; }
+  .toolDescription { font-size: 12px; }
+  .toolTitle small { font-size: 8px; }
+  .toolIcon { flex-basis: 36px; block-size: 36px; }
+  .toolItem { padding: 4px 0; }
+  .carouselSection [data-landing-carousel] { margin-block-start: 24px; }
+  .carouselSection [data-landing-carousel] > div:first-child { position: static; margin-block-end: 24px; }
+  .pluginCard { inline-size: 82%; min-block-size: 208px; }
+  .pluginTitle { font-size: 17px; }
+  .pluginDescription { font-size: 14px; }
+  .modelBoard { display: block; margin-block-start: 40px; padding: 24px; }
+  .styleTabs { flex-direction: row; gap: 6px; overflow-x: auto; scrollbar-width: none; margin-block-end: 28px; }
+  .styleTabs button { padding: 8px 16px; font-size: 13px; }
+  .styleTitle { font-size: 27px; }
+  .styleDescription { margin: 16px 0 28px; font-size: 14px; }
+  .modelGrid { grid-template-columns: minmax(0,1fr); gap: 16px; }
+  .modelCard { min-block-size: 110px; padding: 18px 20px; }
+  .modelTitle { font-size: 16px; }
+  .modelDescription { font-size: 13px; }
+  .modelNote { font-size: 10px; }
+  .outlineAction { margin-block-start: 24px; }
+  .connectionBoard { margin-block-start: 32px; padding: 32px 24px; }
+  .clientTabs { margin-block-end: 24px; }
+  .clientTabs button { padding-inline: 12px; font-size: 11px; }
+  .connectionPanel { padding: 18px 16px; border-radius: 14px; }
+  .connectionMeta { flex-wrap: wrap; gap: 8px; font-size: 13px; }
+  .connectionPanel ol { font-size: 12px; line-height: 1.7; }
+  .connectionEndpoint { flex-direction: column; align-items: stretch; gap: 16px; padding: 14px; }
+  .connectionEndpoint > a { justify-content: center; font-size: 11px; }
+  .audienceFilters { gap: 24px; margin-block: 32px 24px; }
+  .audienceFilters button { font-size: 22px; }
+  .scenarioCard { inline-size: 280px; }
+  .scenarioImage { border-radius: 12px; }
+  .scenarioCard h3 { margin-block-start: 16px; font-size: 20px; }
+  .scenarioCard p { font-size: 13px; }
+  .docsGrid { grid-template-columns: minmax(0,1fr); margin-block: 40px 32px; gap: 16px; }
+  .docCard { min-block-size: 150px; padding: 24px; }
+  .docCard h3 { font-size: 17px; }
+  .docCard p { font-size: 13px; }
+  .showcaseCard { inline-size: 270px; }
+  .showcaseText { inset-inline: 20px; inset-block-end: 24px; }
+  .showcaseText h3 { font-size: 23px; }
+  .closing { padding: 36px 24px; border-radius: 18px; }
+  .closing h2 { font-size: 27px; }
+  .closing p { margin-block: 16px 24px; font-size: 14px; }
+  .closing a { font-size: 13px; }
+}
+@media (max-width: 359px) { .hero h1 { font-size: 31px; } .shortcuts { grid-template-columns: repeat(2,132px); } .shortcut { inline-size: 132px; } .toolGrid { padding-inline: 18px; } }
+@media (prefers-reduced-motion: reduce) { .page *, .page *::before, .page *::after { scroll-behavior: auto !important; transition: none !important; animation: none !important; } }

@@ -11,6 +11,7 @@ import { ModalBackdrop } from "@/components/ui/ModalBackdrop/ModalBackdrop";
 import { ModalCloseButton } from "@/components/ui/ModalCloseButton/ModalCloseButton";
 import { ScrollArea } from "@/components/ui/ScrollArea/ScrollArea";
 
+import { subscriptionPlanDialogValues } from "@/features/pricing/subscription-preview";
 import { PromoCodeDialog } from "./PromoCodeDialog";
 import styles from "./SubscriptionPlansDialog.module.css";
 
@@ -73,12 +74,10 @@ export function SubscriptionPlansDialog({ onClose }: SubscriptionPlansDialogProp
   const msg = useMessages();
   const plans: Plan[] = [
     {
-      name: "Lite",
-      price: "199",
+      ...subscriptionPlanDialogValues("lite"),
       period: msg("subscriptionPlansDialog.week"),
       description: msg("subscriptionPlansDialog.trialPlan"),
       creditPeriod: msg("subscriptionPlansDialog.oneTime"),
-      credits: "400",
       features: [
         { icon: "imageGeneration", text: msg("subscriptionPlansDialog.upTo13ImageGenerationsNanoBanana") },
         { icon: "videoGeneration", text: msg("subscriptionPlansDialog.upTo2VideoGenerationsVideoGenerator") },
@@ -86,14 +85,12 @@ export function SubscriptionPlansDialog({ onClose }: SubscriptionPlansDialogProp
       ],
     },
     {
-      name: "Start+",
-      price: "549",
+      ...subscriptionPlanDialogValues("start"),
       period: msg("subscriptionPlansDialog.month"),
       previousPrice: "632",
       discount: "−15%",
       description: msg("subscriptionPlansDialog.aGreatPlaceToStart"),
       creditPeriod: msg("subscriptionPlansDialog.monthly"),
-      credits: "1250",
       features: [
         { icon: "imageGeneration", text: msg("subscriptionPlansDialog.upTo41ImageGenerationsWithPopular") },
         { icon: "videoGeneration", text: msg("subscriptionPlansDialog.upTo15VideoGenerations") },
@@ -102,14 +99,12 @@ export function SubscriptionPlansDialog({ onClose }: SubscriptionPlansDialogProp
       ],
     },
     {
-      name: "Pro",
-      price: "999",
+      ...subscriptionPlanDialogValues("pro"),
       period: msg("subscriptionPlansDialog.month"),
       previousPrice: "1200",
       discount: "−20%",
       description: msg("subscriptionPlansDialog.aBalancedChoice"),
       creditPeriod: msg("subscriptionPlansDialog.monthly"),
-      credits: "2250",
       features: [
         { icon: "imageGeneration", text: msg("subscriptionPlansDialog.upTo75ImageGenerationsWithPopular") },
         { icon: "videoGeneration", text: msg("subscriptionPlansDialog.upTo15VideoGenerations") },
@@ -118,14 +113,12 @@ export function SubscriptionPlansDialog({ onClose }: SubscriptionPlansDialogProp
       ],
     },
     {
-      name: "Ultima",
-      price: "1999",
+      ...subscriptionPlanDialogValues("ultima"),
       period: msg("subscriptionPlansDialog.month"),
       previousPrice: "2600",
       discount: "−30%",
       description: msg("subscriptionPlansDialog.morePossibilities"),
       creditPeriod: msg("subscriptionPlansDialog.monthly"),
-      credits: "4800",
       features: [
         { icon: "imageGeneration", text: msg("subscriptionPlansDialog.upTo160ImageGenerations") },
         { icon: "videoGeneration", text: msg("subscriptionPlansDialog.upTo32VideoGenerations") },
@@ -135,14 +128,12 @@ export function SubscriptionPlansDialog({ onClose }: SubscriptionPlansDialogProp
       popular: true,
     },
     {
-      name: "Elite",
-      price: "4999",
+      ...subscriptionPlanDialogValues("elite"),
       period: msg("subscriptionPlansDialog.month"),
       previousPrice: "7000",
       discount: "−40%",
       description: msg("subscriptionPlansDialog.maximumValue"),
       creditPeriod: msg("subscriptionPlansDialog.monthly"),
-      credits: "12000",
       features: [
         { icon: "imageGeneration", text: msg("subscriptionPlansDialog.upTo408ImageGenerations") },
         { icon: "videoGeneration", text: msg("subscriptionPlansDialog.upTo62VideoGenerations") },

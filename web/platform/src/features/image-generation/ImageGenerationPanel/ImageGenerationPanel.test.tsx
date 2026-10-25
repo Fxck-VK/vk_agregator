@@ -28,6 +28,7 @@ import {
 } from "@/features/models/WorkspaceModelSelection/WorkspaceModelSelection";
 
 import { ImageGenerationPanel } from "./ImageGenerationPanel";
+import { clearImagePrompt, readImagePrompt, stageImagePrompt } from "../image-prompt-draft";
 
 function parseImageModelList(value: unknown): ImageModelList {
   return { items: parseImageModels(value).items.map(imageModelFixture) };
@@ -154,9 +155,18 @@ describe("ImageGenerationPanel", () => {
   });
 
   afterEach(() => {
+    clearImagePrompt(readImagePrompt());
     cleanup();
     vi.clearAllMocks();
     vi.unstubAllGlobals();
+  });
+
+  it("receives a transient landing prompt without preparing or submitting a job", async () => {
+    stageImagePrompt("A paper bird above a cloud");
+    const editor = await renderReadyEditor();
+    expect(editor).toHaveValue("A paper bird above a cloud");
+    expect(readImagePrompt()).toBe("");
+    expect(webBrowserMutation).not.toHaveBeenCalled();
   });
 
   it("loads the compact composer without a duplicated model selector", async () => {

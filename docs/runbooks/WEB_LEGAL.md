@@ -23,6 +23,15 @@ Russian is the authoritative text; English navigation does not imply a translate
 contract. Pages render escaped text, are dynamic, public and noindex. Links exist
 in registration, public/marketing footers, checkout and account profile.
 
+The local 2026-10-25 presentation rebuild uses saved Magnific reference 23:
+`LegalPageFrame` owns its icon rail, compact header, grouped document navigation
+and reading pane. Mobile navigation uses the existing modal primitives. The old
+test layout and page-only CSS were removed; registration/profile styling stays
+separate. `LegalPageContent` still renders the same server-resolved catalog,
+without copying operator fields into client navigation props. This UI change
+does not revise document texts, checksums, publication flags or acceptance rules.
+Its deployment must be verified separately before describing it as live.
+
 Operator fields are runtime-only configuration, never frontend public env/build
 arguments, source, logs or browser storage:
 

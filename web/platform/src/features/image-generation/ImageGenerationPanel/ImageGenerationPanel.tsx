@@ -1,6 +1,8 @@
 "use client";
 
+import { useEffect, useState } from "react";
 import { useDictionary } from "@/i18n/LocaleProvider";
+import { clearImagePrompt, readImagePrompt } from "../image-prompt-draft";
 
 
 import { useSearchParams } from "@/i18n/navigation";
@@ -16,12 +18,14 @@ type ImageGenerationPanelProps = Omit<ImageGenerationOptions, "initialValues">;
 export function ImageGenerationPanel(props: Readonly<ImageGenerationPanelProps>) {
   const t = useDictionary();
   const searchParams = useSearchParams();
+  const [landingPrompt] = useState(readImagePrompt);
+  useEffect(() => { clearImagePrompt(landingPrompt); }, [landingPrompt]);
   const generation = useImageGeneration({
     ...props,
     initialValues: {
       modelID: searchParams.get("model"),
       imageQuality: searchParams.get("quality"),
-      prompt: searchParams.get("prompt") ?? "",
+      prompt: landingPrompt || searchParams.get("prompt") || "",
     },
   });
 

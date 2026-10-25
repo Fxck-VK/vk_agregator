@@ -2,10 +2,19 @@
 
 Статус: активный. Входная точка для задач по интерфейсу `web/platform`.
 
+Все 24 публичных шаблона `/ru` и `/en`, словари редакционных данных,
+обратный перевод и проверка новых текстов:
+[контракт локализации публичных шаблонов](public-template-localization.md).
+
 Юридические ссылки, страницы документов, принятие условий и отдельная рассылка:
 [`features/legal`](../src/features/legal/LegalLinks.tsx),
 [контракт компонентов](ui-catalog.md#legal-documents),
 [runtime и публикация](../../../docs/runbooks/WEB_LEGAL.md).
+
+Публичные `/legal` и `/legal/[slug]` заново оформлены по референсу Magnific №23:
+`LegalPageFrame`, `LegalNavigation`, общий `HelpCenterDrawer` и серверный `LegalPageContent`.
+У них собственные панель иконок, меню документов и область чтения; шапка и подвал
+главной здесь не используются. Утверждённый каталог и согласия не меняются.
 
 Тексты и язык интерфейса: [локализация](localization.md). Использовать общий `LocaleProvider`, `useDictionary` / `useMessages`; язык переключает готовый `LanguageSwitcher`. Не добавлять прямые импорты `ru` и надписи вне словарей.
 
@@ -22,10 +31,31 @@
 
 | Запрос / задача | Готовое решение | Читать точечно |
 | --- | --- | --- |
+| Английская страница автора по референсу 24 | `AuthorLanding` на `/en/blog/author/epifera`: редакционный бренд, 25 существующих материалов, сетка 12/12/1, query-пагинация и поиск всего архива; RU пустой, draft/noindex | [Автор](ui-catalog.md#author-archive-template) |
+| Английский шаблон события / проекта по референсу 22 | `EventLanding` на `/en/events/creative-sessions`: концепт, программа, локальный трейлер, обсуждение, блоки встречи, журнал и FAQ; RU пустой, draft/noindex | [Событие / проект](ui-catalog.md#event-and-project-template) |
+| Английская страница о компании и контактах по референсу 21 | `AboutLanding` на `/en/company/about-us`: направления работы, сценарии, ценности, модели, FAQ и реальные контакты; RU пустой, draft/noindex | [О компании](ui-catalog.md#about-and-contacts-template) |
+| Английская история клиента по референсу 20 | `CustomerStory` на `/en/customers/football-campaign`: attributed CaseStudy, показатели, 4 раздела/YouTube-ссылки, галерея и титры; это reference case Magnific, RU пустой, draft/noindex | [История клиента](ui-catalog.md#customer-story-template) |
+| Английская страница для команд по референсу 19 | `BusinessLanding` на `/en/business`: видео/мозаика, 8 сценариев, 5 разделов, trust/capacity, 4 шага и enquiry 2–100 человек; Business planned, RU пустой, draft/noindex | [Для команд](ui-catalog.md#business-template) |
+| Английские тарифы по референсу 18 | `PricingLanding` на `/en/pricing`: individual/team, месяц/годовая оценка, capacity selector, сравнение, справка, enquiry brief и 10 FAQ; цены из общего UI-preview, оплаты нет, RU пустой, draft/noindex | [Тарифы](ui-catalog.md#pricing-template) |
+| Английская интеграция MCP по референсу 17 | `IntegrationLanding` на `/en/mcp`: 8 клиентов, status/guide, reference video, 5 feature rows, 6 copyable briefs и 11 FAQ; реальный connector пока planned, RU пустой, draft/noindex | [Интеграция](ui-catalog.md#integration-template) |
+| Английская карточка материала по референсу 16 | `MaterialDetailPage` на `/en/stock/items/dried-gypsophila/gypsophila-01`: фото/автор, source rights, PNG/WebP, save/share, related carousels и video stills; русский пустой, draft/noindex | [Карточка материала](ui-catalog.md#material-detail) |
+| Английская категория материалов по референсу 15 | `MaterialCategoryPage` на `/en/photos/nature`: 50 фото, поиск, фильтры/сортировка, Masonry/Square, страницы 24/24/2, просмотр и скачивание; русский маршрут пустой, обе версии draft/noindex | [Категория материалов](ui-catalog.md#material-category) |
+| Английский публичный пример результата по референсу 14 | `PublicExamplePage` на `/en/inspiration/examples/aesthetic-flowers`: изображение, информация об источнике, PNG/WebP, действия, форма вариации и карусели; русский маршрут пустой, обе версии draft/noindex | [Публичный пример](ui-catalog.md#public-example) |
+| Английская подборка примеров / промптов по референсу 13 | `ExampleCollection` на `/en/inspiration/cinematic-scenes`: 48 изображений, поиск, меню Use, просмотр и подсказки; сохранение публичного ID на устройстве, поделиться; русский маршрут пустой, обе версии draft/noindex | [Подборка примеров](ui-catalog.md#example-collection) |
 | Имя пользователя в меню аккаунта | `AccountControl` → `AccountMenu`: серверный `display_name`, иначе прежняя подпись почты/провайдера; без запросов к VK | [Аккаунт](ui-catalog.md#browser-account) |
 | Смена светлой, тёмной и системной темы | Только `AccountMenu` в личном кабинете через `ModeSwitchPanel`; в публичных шапках и других местах переключателя нет | [Ограничения](ui-catalog.md#limits) |
 | Английская публичная главная по референсу Magnific | `PublicHome` + общие `Landing*`: `/en`, первый экран, вкладки, карточки, FAQ; `/ru` пустая, обе версии draft/noindex | [Публичная главная](ui-catalog.md#marketing-home) |
-| Демонстрация публичной страницы генератора изображений | `ImageToolLanding` в `/ru/ai/image-generator` и `/en/ai/image-generator`: иллюстрации, модели, инструкция и FAQ; noindex, переход в существующий генератор | [Пример страницы инструмента](ui-catalog.md#image-tool-preview) |
+| Английский обзор AI-инструментов по референсу 02 | `ToolsOverview` на `/en/ai`: восемь категорий, модели, AI-клиенты, сценарии, карточки и центрированный подвал; `/ru/ai` пустая, обе версии draft/noindex | [Обзор инструментов](ui-catalog.md#ai-tools-overview) |
+| Английская страница семейства моделей по референсу 04 | `KlingFamily` на `/en/ai/kling`: таблица версий, видео, рекомендации, сравнение, исследование и FAQ; `/ru/ai/kling` пустая, обе версии draft/noindex | [Семейство моделей](ui-catalog.md#model-family) |
+| Английская страница отдельной версии модели по референсу 05 | `Kling30Landing` на `/en/ai/kling/kling-3-0`: характеристики, примеры, сценарии и FAQ; русский маршрут пустой, обе версии draft/noindex | [Версия модели](ui-catalog.md#model-version) |
+| Английское решение конкретной задачи по референсу 06 | `TattooSolution` на `/en/ai/tattoo-generator`: форма идеи/стиля/места, пять примеров, инструкция и связанные блоки; русский маршрут пустой, обе версии draft/noindex | [Решение задачи](ui-catalog.md#task-solution) |
+| Английская страница профессии / отрасли по референсу 07 | `MarketingAudience` на `/en/ai/marketing`: видеофон, фильтры примеров, четыре панели задач, инструкции и каталог инструментов; русский маршрут пустой, обе версии draft/noindex | [Профессия / отрасль](ui-catalog.md#audience-page) |
+| Английское сравнение моделей по референсу 08 | `AvatarComparison` на `/en/compare/ai-avatar-models`: светлая редакционная шапка, оглавление, восемь разборов моделей, инструкции, FAQ и обмен ссылкой; русский маршрут пустой, обе версии draft/noindex | [Сравнение](ui-catalog.md#model-comparison) |
+| Английская статья по референсу 09 | `ArtPromptsArticle` на `/en/blog/ai-art-prompts`: общий `EditorialPage` со сравнением, пять разделов, три иллюстрации, списки и четыре примера; русский маршрут пустой, обе версии draft/noindex | [Статья и общая редакционная оболочка](ui-catalog.md#editorial-article) |
+| Английская последовательность действий / workflow по референсу 12 | `WorkflowLanding` на `/en/workflows/product-campaign`: схема процесса, десять сценариев, пошаговый guide, inputs/outputs, карусель и FAQ. Русский пустой, обе версии draft/noindex | [Workflow](ui-catalog.md#workflow-template) |
+| Английская документация / помощь по референсу 11 | `DocumentationCenter` на `/en/ai/docs` и семи статьях, включая `/en/ai/docs/account-management`: поиск по тексту, дерево, оглавление, шаги, переходы и support; общий `HelpCenterFrame`. Русский пустой, все draft/noindex | [Документация и помощь](ui-catalog.md#documentation-help) |
+| Английский курс / урок по референсу 10 | `AcademyCourse` на `/en/academy/courses/epifera-essentials` и 14 маршрутах уроков: семь модулей, поиск, обзор, упражнения и переходы; общий `HelpCenterFrame` с документами. Русский пустой, все draft/noindex | [Курс и учебная оболочка](ui-catalog.md#academy-course) |
+| Английская страница генератора изображений по референсу 03 | `ImageGeneratorLanding` на `/en/ai/image-generator`: галерея, четыре режима, модели, сценарии, графики, FAQ; `/ru` пустая, обе версии draft/noindex | [Страница инструмента](ui-catalog.md#image-tool-preview) |
 | Вход, регистрация, восстановление, основная и одна резервная почта, замена и сессии | `LoginWindow`/`LoginShowcase` (выбор способа входа и промослайды), `LoginForm`, `EmailRegistration`, общий `completeSignIn` с проверкой cookie-сессии и новым документом; `CredentialField`, `AccountSecurity`, `InputSurface`, `Button`, `AsyncState` и серверная доступность способов | [Аккаунт](ui-catalog.md#browser-account) |
 | Приглашения на сайт и статистика аккаунта | `ProfileReferralProgram`: код в памяти текущей сессии, независимое обновление `/web/v1/referrals/stats`; `InviteEntry`, общий `Button`/`StateNotice`; бонусы пока выключены | [Аккаунт](ui-catalog.md#browser-account), [контракт приглашений](../../../docs/runbooks/WEB_REFERRALS.md) |
 | Фирменная страница 404 с рабочим меню | `NotFoundContent` внутри WorkspaceFrame / GuestWorkspaceFrame; общий Button outline и языковой Link | [404](ui-catalog.md#not-found), [дизайн и проверка](not-found-page-plan.md) |

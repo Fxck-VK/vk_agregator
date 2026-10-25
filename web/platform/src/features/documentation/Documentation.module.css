@@ -1,0 +1,74 @@
+.main { max-inline-size: 100%; padding: 112px 44px 64px; }
+.article { max-inline-size: 800px; margin-inline: auto; color: #e5e5e1; font-size: 16px; line-height: 1.6; overflow-wrap: anywhere; }
+.article h1, .article h2 { color: var(--legal-ink); font-weight: 400; letter-spacing: -.03em; }
+.hero h1 { margin: 0; font-size: 32px; line-height: 1.25; }
+.hero p { margin: 4px 0 0; }
+.article p { margin-block: 0 16px; }
+.article .hero p { margin-block: 4px 0; }
+.article .introduction { margin-block: 16px 0; min-block-size: 3.2em; }
+.article h2 { margin: 0 0 16px; font-size: 28px; line-height: 1.3; }
+.article h3 { margin: 32px 0 12px; color: var(--legal-ink); font-size: 18px; font-weight: var(--font-weight-medium); }
+.article :is(.toc,.section) { margin-block-start: 40px; }
+.section { scroll-margin-block: 32px; }
+.article ul { margin: 0 0 24px; padding-inline-start: 24px; }
+.article li { margin-block-end: 8px; }
+.article a { color: #9295ff; text-decoration: underline; text-underline-offset: 3px; text-decoration-color: #9295ff80; }
+.article a:hover { color: #babaff; text-decoration-color: currentColor; }
+.article .steps { list-style: none; margin: 16px 0 24px; padding: 0; counter-reset: step; }
+.steps li { position: relative; min-block-size: 32px; margin: 0; padding: 0 0 28px 44px; counter-increment: step; }
+.steps li:last-child { padding-block-end: 0; }
+.steps li::before { position: absolute; inset: 0 auto auto 0; display: grid; place-items: center; inline-size: 28px; block-size: 28px; border-radius: 50%; background: #30302e; color: #ddd; font-size: 12px; content: counter(step); }
+.steps li:not(:last-child)::after { position: absolute; inset: 32px auto 0 13px; inline-size: 1px; background: #373734; content: ""; }
+.steps li p { margin: 0 0 4px; }
+.steps li p + p { margin: 0; color: var(--legal-muted); font-size: 14px; }
+.callout { position: relative; margin-block: 24px; border-inline-start: 4px solid #787eff; border-radius: 0 8px 8px 0; padding: 14px 16px 14px 48px; background: #777dff0c; }
+.callout > span { position: absolute; inset: 18px auto auto 18px; display: grid; place-items: center; inline-size: 18px; block-size: 18px; border: 1px solid #9295ff; border-radius: 50%; color: #9295ff; font-size: 12px; font-weight: var(--font-weight-semibold); }
+.article .callout p { margin: 0; }
+.neighbours { display: grid; grid-template-columns: 1fr 1fr; gap: 24px; margin-block: 64px 48px; padding-block: 24px; border-block: 1px solid var(--legal-border); }
+.article .neighbours a { display: grid; gap: 6px; text-decoration: none; color: var(--legal-ink); }
+.neighbours a:last-child { text-align: end; }
+.neighbours small { color: var(--legal-muted); font-size: 12px; }
+.support { margin-block-start: 48px; padding: 32px; border: 1px solid var(--legal-border); border-radius: 12px; text-align: center; }
+.article .support h2 { margin-block-end: 8px; font-size: 22px; }
+.article .support p { color: var(--legal-muted); font-size: 14px; }
+.article .support a { display: inline-flex; align-items: center; gap: 12px; min-block-size: 40px; padding: 8px 16px; border-radius: 8px; background: #f0f0ed; color: #161615; font-size: 14px; text-decoration: none; }
+.directory { margin-block: 40px; }
+.directory section + section { margin-block-start: 32px; }
+.article .directory ul { list-style: none; padding: 0; }
+.directory li a { display: grid; gap: 4px; padding-block: 16px; border-block-end: 1px solid var(--legal-border); text-decoration: none; }
+.directory small { color: var(--legal-muted); font-size: 14px; }
+.navigation { font-size: 13px; line-height: 1.6; }
+.search { display: flex; align-items: center; gap: 10px; block-size: 36px; margin-block: 16px 8px; padding-inline: 12px 6px; border: 1px solid var(--legal-border); border-radius: 8px; background: #111; }
+.search:focus-within { border-color: #aaa9a4; }
+.search svg { inline-size: 18px; block-size: 18px; color: #babab4; flex-shrink: 0; }
+.search input { min-inline-size: 0; inline-size: 100%; border: 0; outline: 0; background: transparent; color: var(--legal-ink); font: inherit; }
+.search input::placeholder { color: #c1c1bc; opacity: 1; }
+.navigationLink { display: flex; align-items: center; gap: 12px; min-block-size: 44px; padding-inline: 16px 8px; color: var(--legal-ink); font-size: 14px; }
+.navigationLink svg { inline-size: 18px; block-size: 18px; flex-shrink: 0; }
+.navigationLink:is(a):hover { color: #fff; background: #ffffff05; border-radius: 8px; }
+.tree { margin-block: 0 12px; padding-inline-start: 16px; color: var(--legal-muted); }
+.tree details { min-inline-size: 0; }
+.tree summary { display: flex; align-items: center; gap: 10px; min-block-size: 40px; padding: 6px 8px 6px 14px; cursor: pointer; list-style: none; }
+.tree summary::-webkit-details-marker { display: none; }
+.tree summary > span { display: inline-block; inline-size: 10px; font-size: 15px; transform: rotate(90deg); }
+.tree details[open] > summary > span { transform: rotate(-90deg); }
+.tree summary:hover { color: var(--legal-ink); }
+.articleLinks { display: grid; margin-inline-start: 32px; }
+.articleLinks a { padding: 7px 12px; border-inline-start: 1px solid transparent; }
+.articleLinks a:hover { color: var(--legal-ink); }
+.articleLinks a[aria-current="page"] { color: var(--legal-ink); border-inline-start-color: #b56e99; background: #ffffff03; }
+.noResults { margin: 16px 12px; color: var(--legal-muted); }
+@media (min-width: 1600px) { .main { padding-inline: 64px; } }
+@media (max-width: 1023px) {
+  :global([data-help-center="documentation"]):has(.main) :global(header nav > [aria-current="page"]),
+  :global([data-help-center="documentation"]):has(.main) :global(header nav > span:nth-last-child(2)) { display: none; }
+  .main { padding: 62px 36px 48px; }
+  .hero h1 { font-size: 28px; }
+  .article h2 { font-size: 28px; }
+  .navigation .search { margin-block-start: 8px; }
+  .navigationLink { padding-inline-start: 16px; }
+  .tree { padding-inline-start: 16px; }
+  .support { padding: 24px 16px; }
+  .neighbours { gap: 16px; }
+}
+@media (max-width: 359px) { .main { padding-inline: 24px; } .neighbours { grid-template-columns: 1fr; } .neighbours a:last-child { text-align: start; } }

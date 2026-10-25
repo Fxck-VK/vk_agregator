@@ -15,7 +15,7 @@ export type LandingNavigationItem = {
 };
 type Labels = { openMenu: string; closeMenu: string; navigation: string; search: string; login: string; signup: string };
 
-export function LandingHeader({ navigation, labels, onSearch }: { navigation: readonly LandingNavigationItem[]; labels: Labels; onSearch: () => void }) {
+export function LandingHeader({ navigation, labels, onSearch, variant = "overlay", siteAction }: { navigation: readonly LandingNavigationItem[]; labels: Labels; onSearch: () => void; variant?: "overlay" | "editorial"; siteAction?: { readonly label: string; readonly href: string } }) {
   const [open, setOpen] = useState<number | null>(null);
   const [mobileOpen, setMobileOpen] = useState(false);
   const header = useRef<HTMLElement>(null);
@@ -56,7 +56,7 @@ export function LandingHeader({ navigation, labels, onSearch }: { navigation: re
     return () => { document.body.style.overflow = previous; background.forEach((element, index) => { element.inert = previousInert[index]; }); window.removeEventListener("keydown", trap); };
   }, [mobileOpen]);
 
-  return <header ref={header} className={styles.header} data-mobile-open={mobileOpen || undefined} data-menu-open={open !== null || undefined}>
+  return <header ref={header} className={styles.header} data-variant={variant === "editorial" ? variant : undefined} data-mobile-open={mobileOpen || undefined} data-menu-open={open !== null || undefined}>
     <div className={styles.headerBar}>
       <button type="button" ref={mobileTrigger} className={styles.mobileTrigger} aria-label={mobileOpen ? labels.closeMenu : labels.openMenu} aria-expanded={mobileOpen} aria-controls="landing-navigation" onClick={() => { setMobileOpen(!mobileOpen); setOpen(null); }}><span /><span /><span /></button>
       <Link href="/" className={styles.brand} aria-label={brandName}><BrandLogo size={33} /><BrandName /></Link>
@@ -75,7 +75,7 @@ export function LandingHeader({ navigation, labels, onSearch }: { navigation: re
             </div> : null}</> : <Link href={item.href!} onClick={close} className={styles.navButton}>{item.label}</Link>}
         </div>)}
       </nav>
-      <div className={styles.actions}><button type="button" className={styles.searchTrigger} onClick={search} aria-label={labels.search}><svg aria-hidden="true" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8"><circle cx="10.5" cy="10.5" r="6.5" /><path d="m16 16 5 5" /></svg><span>{labels.search}</span></button><Link href="/login" className={styles.login}>{labels.login}</Link><Link href="/login?mode=register" className={styles.signup}>{labels.signup}</Link></div>
+      <div className={styles.actions}><button type="button" className={styles.searchTrigger} onClick={search} aria-label={labels.search}><svg aria-hidden="true" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8"><circle cx="10.5" cy="10.5" r="6.5" /><path d="m16 16 5 5" /></svg><span>{labels.search}</span></button>{variant === "editorial" && siteAction ? <Link href={siteAction.href} className={styles.siteAction}>{siteAction.label}</Link> : <><Link href="/login" className={styles.login}>{labels.login}</Link><Link href="/login?mode=register" className={styles.signup}>{labels.signup}</Link></>}</div>
     </div>
   </header>;
 }

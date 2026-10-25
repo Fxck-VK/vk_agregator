@@ -1,0 +1,4 @@
+export const referenceEn={
+  navigation:"Explore Epifera",create:"Create an image",home:"Home",openSearch:"Open collection search",search:"Search this collection",openTools:"Open tools",tools:"All tools",workflows:"Workflows",imageGenerator:"Image Generator",videoGenerator:"Video Generator",musicGenerator:"Music Generator",academy:"Academy",help:"Help",pricing:"Pricing",login:"Log in",signup:"Sign up",quickNav:"Quick navigation",files:"My files",browseTools:"Browse tools",toolsShort:"Tools",searchShort:"Search",close:"Close",
+  links:[{label:"Image Generator",href:"/app/image",icon:"grid"},{label:"Video Generator",href:"/app/models",icon:"play"},{label:"Music Generator",href:"/app/music",icon:"play"},{label:"All AI tools",href:"/ai",icon:"grid"},{label:"Workflows",href:"/workflows/product-campaign",icon:"file"},{label:"Documentation",href:"/ai/docs",icon:"book"}],
+} as const;

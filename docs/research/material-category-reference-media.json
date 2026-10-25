@@ -1,0 +1,1006 @@
+{
+  "reference": 15,
+  "notice": "Existing saved public references for local noindex reconstruction. Unknown license/people metadata is not inferred. Editorial suggestions are not original prompts. Dominant color is measured from cached pixels.",
+  "files": [
+    {
+      "id": "nature-01",
+      "sourcePage": "https://www.magnific.com/photos/nature",
+      "sourceUrl": "https://img.magnific.com/free-photo/lavender-field-sunset-near-valensole_268835-3910.jpg",
+      "cachedFile": "references/magnific-html/15-nature-category_files/74eb2f91af3adff53f84.jpg",
+      "sourceSha256": "92cb31040f19d676631dba8fd912c5e6e4e60f35c652f08593e10278b664ad3d",
+      "sourceFormat": "heif",
+      "width": 740,
+      "height": 493,
+      "dominant": {
+        "r": 136,
+        "g": 104,
+        "b": 120
+      },
+      "aiLabel": false,
+      "file": "/assets/images/material-category/nature-01.webp",
+      "sha256": "558ec07769e47dd993724beda644966a041356d81c20e1f3e08d0d93a8da59d2",
+      "bytes": 358000,
+      "pixelIdentical": true
+    },
+    {
+      "id": "nature-02",
+      "sourcePage": "https://www.magnific.com/photos/nature",
+      "sourceUrl": "https://img.magnific.com/free-photo/river-trees_410324-28.jpg",
+      "cachedFile": "references/magnific-html/15-nature-category_files/995672fbccc44dc03e6d.jpg",
+      "sourceSha256": "bbb76c18bf499e84e2f11d5a0b65d66357250cb794e29fb1cea3c3f6fed6c38f",
+      "sourceFormat": "heif",
+      "width": 494,
+      "height": 740,
+      "dominant": {
+        "r": 24,
+        "g": 24,
+        "b": 24
+      },
+      "aiLabel": false,
+      "file": "/assets/images/material-category/nature-02.webp",
+      "sha256": "eec8be49dde3fe42d2dfb0f45265e310ef6f0ee88a2f35c97256ced712b9357e",
+      "bytes": 389838,
+      "pixelIdentical": true
+    },
+    {
+      "id": "nature-03",
+      "sourcePage": "https://www.magnific.com/photos/nature",
+      "sourceUrl": "https://img.magnific.com/free-photo/aerial-view-colorful-mixed-forest-shrouded-morning-fog-beautiful-autumn-day_1153-3817.jpg",
+      "cachedFile": "references/magnific-html/15-nature-category_files/579b67752fc90e2c1904.jpg",
+      "sourceSha256": "1e4911e11fd2aaf47971fa1f99f571c64906191150a4eeb84f8f9842261217ed",
+      "sourceFormat": "heif",
+      "width": 740,
+      "height": 493,
+      "dominant": {
+        "r": 24,
+        "g": 24,
+        "b": 24
+      },
+      "aiLabel": false,
+      "file": "/assets/images/material-category/nature-03.webp",
+      "sha256": "bcf2161f854df3df7f5c997ee617e0f1ef61fd145f72714bf5ad951721ca7c7e",
+      "bytes": 257468,
+      "pixelIdentical": true
+    },
+    {
+      "id": "nature-04",
+      "sourcePage": "https://www.magnific.com/photos/nature",
+      "sourceUrl": "https://img.magnific.com/free-photo/vertical-shot-river-surrounded-by-mountains-meadows-scotland_181624-27881.jpg",
+      "cachedFile": "references/magnific-html/15-nature-category_files/cf05c2f9bbe8b65e0d11.jpg",
+      "sourceSha256": "dec6cbc48cbc91b1971b117cd1c44fedc152ff27e81763deef91077758480536",
+      "sourceFormat": "heif",
+      "width": 494,
+      "height": 740,
+      "dominant": {
+        "r": 248,
+        "g": 248,
+        "b": 248
+      },
+      "aiLabel": false,
+      "file": "/assets/images/material-category/nature-04.webp",
+      "sha256": "cbb27d8872f4a16528959811f7d4db309a4638b6e3e0c114e341efa4c67ac09e",
+      "bytes": 391608,
+      "pixelIdentical": true
+    },
+    {
+      "id": "nature-05",
+      "sourcePage": "https://www.magnific.com/photos/nature",
+      "sourceUrl": "https://img.magnific.com/free-photo/nature-journey-travel-trekking-summertime-concept-vertical-shot-pathway-park-leading-forested-area-outdoor-view-wooden-boardwalk-along-tall-pine-trees-morning-forest_343059-3064.jpg",
+      "cachedFile": "references/magnific-html/15-nature-category_files/145eb790da402083d052.jpg",
+      "sourceSha256": "fee24d306bdfd0769b9c4d3dfbb810465fa659146e9ee85e56c68fff8a5fdc66",
+      "sourceFormat": "heif",
+      "width": 493,
+      "height": 740,
+      "dominant": {
+        "r": 8,
+        "g": 24,
+        "b": 24
+      },
+      "aiLabel": false,
+      "file": "/assets/images/material-category/nature-05.webp",
+      "sha256": "787ec270fe263c189339b9f4093bd6b2ff39443353b82b8a56ab50843b0c89cb",
+      "bytes": 451710,
+      "pixelIdentical": true
+    },
+    {
+      "id": "nature-06",
+      "sourcePage": "https://www.magnific.com/photos/nature",
+      "sourceUrl": "https://img.magnific.com/premium-photo/dolomites-italy-landscape-lake-antorno_31965-3235.jpg",
+      "cachedFile": "references/magnific-html/15-nature-category_files/031a44dd87e5d8a81565.jpg",
+      "sourceSha256": "2a29bbd9200dd592cc7355d81c9df75dd01f9123a5a8302b65840bef115e9e2b",
+      "sourceFormat": "jpeg",
+      "width": 555,
+      "height": 740,
+      "dominant": {
+        "r": 40,
+        "g": 56,
+        "b": 56
+      },
+      "aiLabel": false,
+      "file": "/assets/images/material-category/nature-06.webp",
+      "sha256": "227a6bbb00cdc0563a1f9bb0905405d675d567b74ea0b65e1cbb9a0d8bb27f7b",
+      "bytes": 360074,
+      "pixelIdentical": true
+    },
+    {
+      "id": "nature-07",
+      "sourcePage": "https://www.magnific.com/photos/nature",
+      "sourceUrl": "https://img.magnific.com/premium-photo/nature-reserve-zelenci-krajnska-gora-slovenia-europe-wonderful-morning-view-zelenci-nature-reserve-slovenia-travel_527096-20488.jpg",
+      "cachedFile": "references/magnific-html/15-nature-category_files/2fa399d4817f78cbb882.jpg",
+      "sourceSha256": "dd578edf878bd788decc558b6954936a637b0b9aa03a410f701d79c01f709a8d",
+      "sourceFormat": "jpeg",
+      "width": 492,
+      "height": 740,
+      "dominant": {
+        "r": 216,
+        "g": 232,
+        "b": 232
+      },
+      "aiLabel": false,
+      "file": "/assets/images/material-category/nature-07.webp",
+      "sha256": "b7b9178fcd305fbb6a890feb77378c9b5372955a4cddea3138f0a30ac51106a6",
+      "bytes": 351084,
+      "pixelIdentical": true
+    },
+    {
+      "id": "nature-08",
+      "sourcePage": "https://www.magnific.com/photos/nature",
+      "sourceUrl": "https://img.magnific.com/free-photo/santa-maddalena-dolomites-rangesouth-tyrol_661209-237.jpg",
+      "cachedFile": "references/magnific-html/15-nature-category_files/e430f9baee14731b1c25.jpg",
+      "sourceSha256": "0185988d7a2d07bd7e1e2a4dccb4488b1ed28602e26d8d7c2fb6f65c5e5c1b91",
+      "sourceFormat": "heif",
+      "width": 740,
+      "height": 488,
+      "dominant": {
+        "r": 120,
+        "g": 168,
+        "b": 216
+      },
+      "aiLabel": false,
+      "file": "/assets/images/material-category/nature-08.webp",
+      "sha256": "e58b8193a54245352da56887a92d8f9e3ab6cfcf62c472031b7beff09dd24e39",
+      "bytes": 409540,
+      "pixelIdentical": true
+    },
+    {
+      "id": "nature-09",
+      "sourcePage": "https://www.magnific.com/photos/nature",
+      "sourceUrl": "https://img.magnific.com/premium-photo/beautiful-nature-scenery-wallpaper-view_1123191-1001.jpg",
+      "cachedFile": "references/magnific-html/15-nature-category_files/312a502c2cca73aace3d.jpg",
+      "sourceSha256": "372898688612a35c5582fa502db3f9a45344e2d044f428a30dc750d1dfb606b2",
+      "sourceFormat": "jpeg",
+      "width": 740,
+      "height": 415,
+      "dominant": {
+        "r": 40,
+        "g": 72,
+        "b": 72
+      },
+      "aiLabel": false,
+      "file": "/assets/images/material-category/nature-09.webp",
+      "sha256": "2b9f303494001c0430c53b0aaa572c1542828f71c540896782d753ad29352cb3",
+      "bytes": 259518,
+      "pixelIdentical": true
+    },
+    {
+      "id": "nature-10",
+      "sourcePage": "https://www.magnific.com/photos/nature",
+      "sourceUrl": "https://img.magnific.com/free-photo/odenwald-germany-is-pure-nature_181624-32381.jpg",
+      "cachedFile": "references/magnific-html/15-nature-category_files/dff90865683f08e817c6.jpg",
+      "sourceSha256": "022732a4673d78cf9f43eb18d588509c80bcd32b770384c9ab6a113c9e10dc44",
+      "sourceFormat": "heif",
+      "width": 740,
+      "height": 492,
+      "dominant": {
+        "r": 200,
+        "g": 216,
+        "b": 232
+      },
+      "aiLabel": false,
+      "file": "/assets/images/material-category/nature-10.webp",
+      "sha256": "08b4a2622ea8931bce783edc666cd2a4de27075857582eb5d0456d4bba63b186",
+      "bytes": 492778,
+      "pixelIdentical": true
+    },
+    {
+      "id": "nature-11",
+      "sourcePage": "https://www.magnific.com/photos/nature",
+      "sourceUrl": "https://img.magnific.com/free-photo/waterfall-chae-son-national-park-lampang-thailand_554837-639.jpg",
+      "cachedFile": "references/magnific-html/15-nature-category_files/fa7d0af1c46bbd9aa858.jpg",
+      "sourceSha256": "71757bb1e85ef64f5846f75b276f1e40d1f7c3e5f297248ac75fbb5a9dd082c8",
+      "sourceFormat": "heif",
+      "width": 493,
+      "height": 740,
+      "dominant": {
+        "r": 56,
+        "g": 40,
+        "b": 8
+      },
+      "aiLabel": false,
+      "file": "/assets/images/material-category/nature-11.webp",
+      "sha256": "bdb22c57c93097138ecbe481fde0e2bc758e750a6e5cb50ddb966d1a143575b4",
+      "bytes": 559614,
+      "pixelIdentical": true
+    },
+    {
+      "id": "nature-12",
+      "sourcePage": "https://www.magnific.com/photos/nature",
+      "sourceUrl": "https://img.magnific.com/free-photo/sunset-field-wild-flowers-summertime_53876-95071.jpg",
+      "cachedFile": "references/magnific-html/15-nature-category_files/abfd80af4e104a0662fa.jpg",
+      "sourceSha256": "2127b7d4a183cd33db97b796bfbd5368ecc67225bcebbf98f4ca29eac49656de",
+      "sourceFormat": "heif",
+      "width": 493,
+      "height": 740,
+      "dominant": {
+        "r": 248,
+        "g": 248,
+        "b": 248
+      },
+      "aiLabel": false,
+      "file": "/assets/images/material-category/nature-12.webp",
+      "sha256": "96e297e4518447a0d3c1901b700db35a2d5bd17724c4f6808c5c072427d0599d",
+      "bytes": 316812,
+      "pixelIdentical": true
+    },
+    {
+      "id": "nature-13",
+      "sourcePage": "https://www.magnific.com/photos/nature",
+      "sourceUrl": "https://img.magnific.com/free-photo/river-surrounded-by-forests-cloudy-sky-thuringia-germany_181624-30863.jpg",
+      "cachedFile": "references/magnific-html/15-nature-category_files/f1fb8e79d0c79e0c3bd0.jpg",
+      "sourceSha256": "e8c50f033d1e487ce994bc1dd18c42186757a71beb59b0596ea3309c828d023d",
+      "sourceFormat": "heif",
+      "width": 740,
+      "height": 462,
+      "dominant": {
+        "r": 8,
+        "g": 8,
+        "b": 8
+      },
+      "aiLabel": false,
+      "file": "/assets/images/material-category/nature-13.webp",
+      "sha256": "941f669163809fcdd2188ef5c158264f33215c70d73236b74b98b5f807b121b6",
+      "bytes": 378842,
+      "pixelIdentical": true
+    },
+    {
+      "id": "nature-14",
+      "sourcePage": "https://www.magnific.com/photos/nature",
+      "sourceUrl": "https://img.magnific.com/free-photo/retro-nature-picture-flower_23-2149728504.jpg",
+      "cachedFile": "references/magnific-html/15-nature-category_files/51f454e11ec76f188cf7.jpg",
+      "sourceSha256": "9c613668dcb024c9803392106f135ee9d7ef35138b0bccacc40a34ac21ca83d3",
+      "sourceFormat": "heif",
+      "width": 493,
+      "height": 740,
+      "dominant": {
+        "r": 248,
+        "g": 248,
+        "b": 248
+      },
+      "aiLabel": false,
+      "file": "/assets/images/material-category/nature-14.webp",
+      "sha256": "80d5621b94b9f286f298a25c768595cfbab34dedfef4c48a0e8e892a5e1c1571",
+      "bytes": 100742,
+      "pixelIdentical": true
+    },
+    {
+      "id": "nature-15",
+      "sourcePage": "https://www.magnific.com/photos/nature",
+      "sourceUrl": "https://img.magnific.com/free-photo/nature-chalal-trek-trail-sosan-india_181624-29503.jpg",
+      "cachedFile": "references/magnific-html/15-nature-category_files/b49c09c4535cf5fdc86d.jpg",
+      "sourceSha256": "d3ed9fc2f63b13801f3ec24807b83bec9270d2aa9927912e46bb77f726709e98",
+      "sourceFormat": "heif",
+      "width": 740,
+      "height": 493,
+      "dominant": {
+        "r": 8,
+        "g": 8,
+        "b": 8
+      },
+      "aiLabel": false,
+      "file": "/assets/images/material-category/nature-15.webp",
+      "sha256": "506a5bb8cabd97d12c2320e9a12b15391c28307dbff863afce05367bdaf9b2db",
+      "bytes": 493026,
+      "pixelIdentical": true
+    },
+    {
+      "id": "nature-16",
+      "sourcePage": "https://www.magnific.com/photos/nature",
+      "sourceUrl": "https://img.magnific.com/premium-photo/beautiful-landscape-mountain-peaks-rivers-lakes-wild-nature-altai-mountains-clouds-mountain-ranges-russia-altai-republic_91497-11051.jpg",
+      "cachedFile": "references/magnific-html/15-nature-category_files/cf7a82273a09e500745d.jpg",
+      "sourceSha256": "d0121b216704e3cc73bb34ab52452ddf8e4f8f93d0e6305a24cad17cda396e3f",
+      "sourceFormat": "jpeg",
+      "width": 740,
+      "height": 493,
+      "dominant": {
+        "r": 24,
+        "g": 24,
+        "b": 8
+      },
+      "aiLabel": false,
+      "file": "/assets/images/material-category/nature-16.webp",
+      "sha256": "45d91a9d575a6d3210daf2ab9106245ef12edf009104a06fdbdb409cef679404",
+      "bytes": 540110,
+      "pixelIdentical": true
+    },
+    {
+      "id": "nature-17",
+      "sourcePage": "https://www.magnific.com/photos/nature",
+      "sourceUrl": "https://img.magnific.com/premium-photo/picturesque-sunset-landscapes-waterfalls_146671-14016.jpg",
+      "cachedFile": "references/magnific-html/15-nature-category_files/0e56b8caa106eed4f323.jpg",
+      "sourceSha256": "b32569dee3c9f1028605ecdfccf0d248fbe1665304e5cfe413f1dc403b7638fd",
+      "sourceFormat": "heif",
+      "width": 740,
+      "height": 494,
+      "dominant": {
+        "r": 8,
+        "g": 24,
+        "b": 8
+      },
+      "aiLabel": false,
+      "file": "/assets/images/material-category/nature-17.webp",
+      "sha256": "4375879221b4edaddfca8639f7e9a67c0698a9d98d14c579bbb6852c69cf6304",
+      "bytes": 502010,
+      "pixelIdentical": true
+    },
+    {
+      "id": "nature-18",
+      "sourcePage": "https://www.magnific.com/photos/nature",
+      "sourceUrl": "https://img.magnific.com/premium-photo/nature-landscape_1086760-352925.jpg",
+      "cachedFile": "references/magnific-html/15-nature-category_files/c25332a1f9858fd38f01.jpg",
+      "sourceSha256": "7e12bd7836a0a6a0e40c2aebf519dca905357204958955915ddccd5a28c10145",
+      "sourceFormat": "jpeg",
+      "width": 740,
+      "height": 415,
+      "dominant": {
+        "r": 24,
+        "g": 40,
+        "b": 40
+      },
+      "aiLabel": true,
+      "file": "/assets/images/material-category/nature-18.webp",
+      "sha256": "6ebf47720b2e9f252e5ca48a5fe76a4c23046aa7772236c0e56e0694e377fb7f",
+      "bytes": 288206,
+      "pixelIdentical": true
+    },
+    {
+      "id": "nature-19",
+      "sourcePage": "https://www.magnific.com/photos/nature",
+      "sourceUrl": "https://img.magnific.com/premium-photo/nature-reserve-zelenci-krajnska-gora-slovenia-europe-wonderful-morning-view-zelenci-nature-reserve-slovenia-travel_527096-20490.jpg",
+      "cachedFile": "references/magnific-html/15-nature-category_files/77751403ab663aff1ec2.jpg",
+      "sourceSha256": "09b4dd6b8ac2825764bb459ce279a826e717d019a878478ca16932a4a636c22c",
+      "sourceFormat": "jpeg",
+      "width": 492,
+      "height": 740,
+      "dominant": {
+        "r": 56,
+        "g": 56,
+        "b": 40
+      },
+      "aiLabel": false,
+      "file": "/assets/images/material-category/nature-19.webp",
+      "sha256": "5abccf80604d0b0887cb6316930d4cabb47b2fb728bd5216739cac57200f0824",
+      "bytes": 385502,
+      "pixelIdentical": true
+    },
+    {
+      "id": "nature-20",
+      "sourcePage": "https://www.magnific.com/photos/nature",
+      "sourceUrl": "https://img.magnific.com/premium-photo/fog-nature_1114367-4722.jpg",
+      "cachedFile": "references/magnific-html/15-nature-category_files/e7e9e408878844ca8745.jpg",
+      "sourceSha256": "807269f979acc7338c7ca0b8ae18e371017c597a195212531dae08a84ee6c6aa",
+      "sourceFormat": "jpeg",
+      "width": 740,
+      "height": 576,
+      "dominant": {
+        "r": 40,
+        "g": 40,
+        "b": 40
+      },
+      "aiLabel": true,
+      "file": "/assets/images/material-category/nature-20.webp",
+      "sha256": "ea5b076956f4824721fcb539a959ee821700c7615e668c90f5daf372a3abb8dc",
+      "bytes": 410194,
+      "pixelIdentical": true
+    },
+    {
+      "id": "nature-21",
+      "sourcePage": "https://www.magnific.com/photos/nature",
+      "sourceUrl": "https://img.magnific.com/premium-photo/beautiful-wildflowers-mountains-sunset-nature-background_533998-16612.jpg",
+      "cachedFile": "references/magnific-html/15-nature-category_files/1519deef2e882dcd5c6a.jpg",
+      "sourceSha256": "d1ed274557f8e2224917e8f423df3b490fdbfe6dd83bacbd799d9711240961ea",
+      "sourceFormat": "jpeg",
+      "width": 740,
+      "height": 493,
+      "dominant": {
+        "r": 248,
+        "g": 248,
+        "b": 248
+      },
+      "aiLabel": true,
+      "file": "/assets/images/material-category/nature-21.webp",
+      "sha256": "a8dd2636b41f8a8256a2df0b05ef4a9f13f5b88f1bc2b304d687a72ad7514916",
+      "bytes": 275504,
+      "pixelIdentical": true
+    },
+    {
+      "id": "nature-22",
+      "sourcePage": "https://www.magnific.com/photos/nature",
+      "sourceUrl": "https://img.magnific.com/free-photo/summer-wildflower-meadow_23-2151956331.jpg",
+      "cachedFile": "references/magnific-html/15-nature-category_files/de2526378e6473cae468.jpg",
+      "sourceSha256": "9456da8efd5bc591b9990e65cfea7c1b6796e7aefc29b8ee10f3784338f9e390",
+      "sourceFormat": "heif",
+      "width": 740,
+      "height": 493,
+      "dominant": {
+        "r": 248,
+        "g": 248,
+        "b": 248
+      },
+      "aiLabel": true,
+      "file": "/assets/images/material-category/nature-22.webp",
+      "sha256": "0d3b3ca537ec27792566cb3af449924a10f3a877bf1f2f0324492ea6de94db4e",
+      "bytes": 352360,
+      "pixelIdentical": true
+    },
+    {
+      "id": "nature-23",
+      "sourcePage": "https://www.magnific.com/photos/nature",
+      "sourceUrl": "https://img.magnific.com/free-photo/tranquil-scene-flowing-water-nature-generated-by-ai_188544-44582.jpg",
+      "cachedFile": "references/magnific-html/15-nature-category_files/314e3e8e40f234528d7f.jpg",
+      "sourceSha256": "81464687ae3e7835844e8a3bfb70d70a0868fde2268b2d834e1207e8ef69c417",
+      "sourceFormat": "heif",
+      "width": 740,
+      "height": 423,
+      "dominant": {
+        "r": 8,
+        "g": 8,
+        "b": 8
+      },
+      "aiLabel": true,
+      "file": "/assets/images/material-category/nature-23.webp",
+      "sha256": "12a6192c7bc8683777ad4bb3f9365d5ab1f2bfc39bd2ceb21a049fa11ca7a3d9",
+      "bytes": 309146,
+      "pixelIdentical": true
+    },
+    {
+      "id": "nature-24",
+      "sourcePage": "https://www.magnific.com/photos/nature",
+      "sourceUrl": "https://img.magnific.com/free-photo/vertical-shot-small-stream-water-flowing-through-autumn-forested-area-misty-day_181624-52173.jpg",
+      "cachedFile": "references/magnific-html/15-nature-category_files/8b161c2749526bda20dc.jpg",
+      "sourceSha256": "479b693e0c86adf242060476ee5139fd51e586b8ce3fdf16d803d8eb6827c9ed",
+      "sourceFormat": "heif",
+      "width": 493,
+      "height": 740,
+      "dominant": {
+        "r": 216,
+        "g": 216,
+        "b": 216
+      },
+      "aiLabel": false,
+      "file": "/assets/images/material-category/nature-24.webp",
+      "sha256": "fbe0182a495782e587aa2e3e1d2bc860b719b3f1a7daa2551b7ed2f54189481d",
+      "bytes": 308956,
+      "pixelIdentical": true
+    },
+    {
+      "id": "nature-25",
+      "sourcePage": "https://www.magnific.com/photos/nature",
+      "sourceUrl": "https://img.magnific.com/free-photo/horizontal-shot-prags-lake-fanes-senns-prags-nature-park-located-south-tyrol_181624-32615.jpg",
+      "cachedFile": "references/magnific-html/15-nature-category_files/450498651fe87dc4358a.jpg",
+      "sourceSha256": "534a9c63c3c04956be83076a69f21df8a69572187eaef4e306b31f5ca1ddbe2d",
+      "sourceFormat": "heif",
+      "width": 740,
+      "height": 493,
+      "dominant": {
+        "r": 24,
+        "g": 24,
+        "b": 8
+      },
+      "aiLabel": false,
+      "file": "/assets/images/material-category/nature-25.webp",
+      "sha256": "0557e9e355337fa22b4014c9194504c81b4c39c46bdab06dd0a81cb7052865f7",
+      "bytes": 400120,
+      "pixelIdentical": true
+    },
+    {
+      "id": "nature-26",
+      "sourcePage": "https://www.magnific.com/photos/nature",
+      "sourceUrl": "https://img.magnific.com/premium-photo/beauty-nature-concept-background-fantastic-panorama-tatra-mountains-lake-with-turquoise-color-poland-picturesque-sunset-mountains-europe_782515-581.jpg",
+      "cachedFile": "references/magnific-html/15-nature-category_files/c9f2a298d32f86a5aacf.jpg",
+      "sourceSha256": "e6724d4d39b34de07f3fb6aa90bf397f4822425ac4c4fc6102b508db3fed2b4f",
+      "sourceFormat": "jpeg",
+      "width": 494,
+      "height": 740,
+      "dominant": {
+        "r": 200,
+        "g": 200,
+        "b": 200
+      },
+      "aiLabel": false,
+      "file": "/assets/images/material-category/nature-26.webp",
+      "sha256": "d188a53f45432d4ae41f313371398eb1c71a75934e2b76cfba1c2249fca41cda",
+      "bytes": 427750,
+      "pixelIdentical": true
+    },
+    {
+      "id": "nature-27",
+      "sourcePage": "https://www.magnific.com/photos/nature",
+      "sourceUrl": "https://img.magnific.com/free-photo/brown-trees-snow-covered-ground-daytime_414077-47.jpg",
+      "cachedFile": "references/magnific-html/15-nature-category_files/2b578c33751cf71a7dde.jpg",
+      "sourceSha256": "343425089d89e31b83b50220cfe47f0aaaccd31b7a294c52283b1287c37a8809",
+      "sourceFormat": "heif",
+      "width": 493,
+      "height": 740,
+      "dominant": {
+        "r": 216,
+        "g": 216,
+        "b": 216
+      },
+      "aiLabel": false,
+      "file": "/assets/images/material-category/nature-27.webp",
+      "sha256": "538d7e0a990ce279542ee0232e16f5583ccb09fe5b3705d2ce093098e6eb1a20",
+      "bytes": 223158,
+      "pixelIdentical": true
+    },
+    {
+      "id": "nature-28",
+      "sourcePage": "https://www.magnific.com/photos/nature",
+      "sourceUrl": "https://img.magnific.com/premium-photo/fog-nature-autumn-mountain-range-calm-nature_1345137-3974.jpg",
+      "cachedFile": "references/magnific-html/15-nature-category_files/a6a7ccfb8af5a4458dad.jpg",
+      "sourceSha256": "b379298ca66457cf1fa90e7c199356e08fdbb248aedf2ab92ada73814749e911",
+      "sourceFormat": "jpeg",
+      "width": 740,
+      "height": 557,
+      "dominant": {
+        "r": 232,
+        "g": 232,
+        "b": 232
+      },
+      "aiLabel": false,
+      "file": "/assets/images/material-category/nature-28.webp",
+      "sha256": "7853e46006092d5747ceed8da21ec15396a0b253830cd1e7307a7a21992fedd4",
+      "bytes": 311968,
+      "pixelIdentical": true
+    },
+    {
+      "id": "nature-29",
+      "sourcePage": "https://www.magnific.com/photos/nature",
+      "sourceUrl": "https://img.magnific.com/free-photo/horizontal-shot-prags-lake-fanes-senns-prags-nature-park-located-south-tyrol-italy_181624-32231.jpg",
+      "cachedFile": "references/magnific-html/15-nature-category_files/09b2f38658990681e785.jpg",
+      "sourceSha256": "146ae83393eb9e2d8150c77f6a7b1cb82263b4c9a4c438f1ab52bde9ad058eb8",
+      "sourceFormat": "heif",
+      "width": 740,
+      "height": 493,
+      "dominant": {
+        "r": 248,
+        "g": 248,
+        "b": 248
+      },
+      "aiLabel": false,
+      "file": "/assets/images/material-category/nature-29.webp",
+      "sha256": "29ed4312c13d5877b9f87386a9a34c7144665faa8eddb8a1d7261ac38b9271fd",
+      "bytes": 387592,
+      "pixelIdentical": true
+    },
+    {
+      "id": "nature-30",
+      "sourcePage": "https://www.magnific.com/photos/nature",
+      "sourceUrl": "https://img.magnific.com/free-photo/calm-lake-low-flying-clouds-covering-rough-mountain-covered-with-colorful-autumn-foliage_181624-38989.jpg",
+      "cachedFile": "references/magnific-html/15-nature-category_files/6701702ee41f82f88850.jpg",
+      "sourceSha256": "f60f2bf92596ea5320c1841d62b72065589efb7758eec65a258d3a973b8965cd",
+      "sourceFormat": "heif",
+      "width": 493,
+      "height": 740,
+      "dominant": {
+        "r": 8,
+        "g": 40,
+        "b": 24
+      },
+      "aiLabel": false,
+      "file": "/assets/images/material-category/nature-30.webp",
+      "sha256": "0a6380a544cf031631d777727f5175fbc2abcbb71af55385828bda848f4b0897",
+      "bytes": 332246,
+      "pixelIdentical": true
+    },
+    {
+      "id": "nature-31",
+      "sourcePage": "https://www.magnific.com/photos/nature",
+      "sourceUrl": "https://img.magnific.com/free-photo/pink-flowers-near-lake-mountains-cloudy-sky-daytime_414077-81.jpg",
+      "cachedFile": "references/magnific-html/15-nature-category_files/811dcc41e2ca175cc41c.jpg",
+      "sourceSha256": "217e44804b7aeb91749d39fb34042aeb6b4301d10782a61bc10f60544a5169fe",
+      "sourceFormat": "heif",
+      "width": 493,
+      "height": 740,
+      "dominant": {
+        "r": 8,
+        "g": 8,
+        "b": 8
+      },
+      "aiLabel": false,
+      "file": "/assets/images/material-category/nature-31.webp",
+      "sha256": "4a4197e255f0ebefcc5e28f7b8695dbfd6252f26a5eddb1d9f138b0853753877",
+      "bytes": 243704,
+      "pixelIdentical": true
+    },
+    {
+      "id": "nature-32",
+      "sourcePage": "https://www.magnific.com/photos/nature",
+      "sourceUrl": "https://img.magnific.com/premium-photo/misty-flowering-valley-dawn-scenic-landscape-with-wild-growing-flowers-single-tree-color-cloudy-sky-daffodil-valley-nature-reserve-near-khust-transcarpathia-ukraine_1028938-156917.jpg",
+      "cachedFile": "references/magnific-html/15-nature-category_files/705931737457f46b204a.jpg",
+      "sourceSha256": "22013399894a1120fcaec2a0b1d94b093b0e7b79277e3f6a7b88506e18162dfd",
+      "sourceFormat": "heif",
+      "width": 493,
+      "height": 740,
+      "dominant": {
+        "r": 8,
+        "g": 56,
+        "b": 104
+      },
+      "aiLabel": false,
+      "file": "/assets/images/material-category/nature-32.webp",
+      "sha256": "b562c4a367beffa2ef132538afffcb394a1fd34c3c4d19343778309ad3195d26",
+      "bytes": 360712,
+      "pixelIdentical": true
+    },
+    {
+      "id": "nature-33",
+      "sourcePage": "https://www.magnific.com/photos/nature",
+      "sourceUrl": "https://img.magnific.com/premium-photo/lush-green-hills-mountains-morning-light-nature-landscape-travel-tourism-hiking-theme_124013-6533.jpg",
+      "cachedFile": "references/magnific-html/15-nature-category_files/d3687b398836214ecb7b.jpg",
+      "sourceSha256": "c525b0903162e5abe52e2a20b76418e7b76c0b69b5990ea85d9ae2144b9fda57",
+      "sourceFormat": "jpeg",
+      "width": 576,
+      "height": 740,
+      "dominant": {
+        "r": 24,
+        "g": 24,
+        "b": 24
+      },
+      "aiLabel": false,
+      "file": "/assets/images/material-category/nature-33.webp",
+      "sha256": "0abf2d4b743566f4e6e6f7385d3a0d3d215c2a0d75ee7dd91e44407af10f420c",
+      "bytes": 427716,
+      "pixelIdentical": true
+    },
+    {
+      "id": "nature-34",
+      "sourcePage": "https://www.magnific.com/photos/nature",
+      "sourceUrl": "https://img.magnific.com/premium-photo/tranquil-lake-landscape-with-reflections-surrounding-nature_1079150-146954.jpg",
+      "cachedFile": "references/magnific-html/15-nature-category_files/f2500d88576d27304cb0.jpg",
+      "sourceSha256": "930be5f7e876e2d14797f9979dd356856f39a87791f4077baa3a64807238a517",
+      "sourceFormat": "jpeg",
+      "width": 557,
+      "height": 740,
+      "dominant": {
+        "r": 136,
+        "g": 152,
+        "b": 152
+      },
+      "aiLabel": false,
+      "file": "/assets/images/material-category/nature-34.webp",
+      "sha256": "ab2ad27515cf53f5079098b72084cbed395f8fc9fce20f12efaa6485ac1b404c",
+      "bytes": 529098,
+      "pixelIdentical": true
+    },
+    {
+      "id": "nature-35",
+      "sourcePage": "https://www.magnific.com/photos/nature",
+      "sourceUrl": "https://img.magnific.com/free-photo/vertical-shot-grass-growing-hills-beautiful-sunrise-morning_181624-56909.jpg",
+      "cachedFile": "references/magnific-html/15-nature-category_files/d818c0588fe4215b6659.jpg",
+      "sourceSha256": "3f198095f024d2a1dd34637af9ecc58d4781d650ad038676533dac129eb69270",
+      "sourceFormat": "jpeg",
+      "width": 493,
+      "height": 740,
+      "dominant": {
+        "r": 120,
+        "g": 136,
+        "b": 200
+      },
+      "aiLabel": false,
+      "file": "/assets/images/material-category/nature-35.webp",
+      "sha256": "e66f3201724b59877fbb0b046e6cf971aa719f78e7086908bf3b85de20464b66",
+      "bytes": 351508,
+      "pixelIdentical": true
+    },
+    {
+      "id": "nature-36",
+      "sourcePage": "https://www.magnific.com/photos/nature",
+      "sourceUrl": "https://img.magnific.com/premium-photo/land-pine-trees-rain-forest-mist-autumn-fog_1114948-44420.jpg",
+      "cachedFile": "references/magnific-html/15-nature-category_files/8ffae04aa909db606c31.jpg",
+      "sourceSha256": "b29dc042ea077d4b33e3999e4a6bb51d071f4fd4807b40a4b0c1d2ae79318fd1",
+      "sourceFormat": "jpeg",
+      "width": 740,
+      "height": 319,
+      "dominant": {
+        "r": 168,
+        "g": 200,
+        "b": 200
+      },
+      "aiLabel": false,
+      "file": "/assets/images/material-category/nature-36.webp",
+      "sha256": "3740ff8cf3c53b43edb0c146c362a3854a32d0c935352de1e8caf97680c9ba0f",
+      "bytes": 229028,
+      "pixelIdentical": true
+    },
+    {
+      "id": "nature-37",
+      "sourcePage": "https://www.magnific.com/photos/nature",
+      "sourceUrl": "https://img.magnific.com/premium-photo/macro-photograph-purple-wild-pea-butterfly-misty-morning-scenery-concept-wildlife-photography-macro-photography-nature-morning-mist-purple-wild-pea-butterfly_864588-279961.jpg",
+      "cachedFile": "references/magnific-html/15-nature-category_files/43158ddc01450eaeffba.jpg",
+      "sourceSha256": "eb60ef51eb1af146c7694759924d438d8dfc9df05fad2b5ef3f4d43fd7a79d42",
+      "sourceFormat": "jpeg",
+      "width": 740,
+      "height": 370,
+      "dominant": {
+        "r": 56,
+        "g": 104,
+        "b": 104
+      },
+      "aiLabel": false,
+      "file": "/assets/images/material-category/nature-37.webp",
+      "sha256": "ffa926e1e3638cc49d960572b085a26ef435ea50c75d128e9c79a857a2107128",
+      "bytes": 201902,
+      "pixelIdentical": true
+    },
+    {
+      "id": "nature-38",
+      "sourcePage": "https://www.magnific.com/photos/nature",
+      "sourceUrl": "https://img.magnific.com/free-photo/beautiful-scenery-green-valley-near-alp-mountains-austria-cloudy-sky_181624-6979.jpg",
+      "cachedFile": "references/magnific-html/15-nature-category_files/207bfd7f9b2472711091.jpg",
+      "sourceSha256": "07cd84286ecf9742caa09cf768b40aa4e00f7b86a19a5a5e24a98b617ec40b18",
+      "sourceFormat": "jpeg",
+      "width": 740,
+      "height": 491,
+      "dominant": {
+        "r": 248,
+        "g": 248,
+        "b": 248
+      },
+      "aiLabel": false,
+      "file": "/assets/images/material-category/nature-38.webp",
+      "sha256": "4c25a4adf6f0814bf7ff5235cd7d05ecd6eadc8e0b91228e27ca3f5131188254",
+      "bytes": 559942,
+      "pixelIdentical": true
+    },
+    {
+      "id": "nature-39",
+      "sourcePage": "https://www.magnific.com/photos/nature",
+      "sourceUrl": "https://img.magnific.com/free-photo/beautiful-vertical-shot-river-flowing-trees-stones_181624-2699.jpg",
+      "cachedFile": "references/magnific-html/15-nature-category_files/18db9f5a277b1ea2a125.jpg",
+      "sourceSha256": "3034244da5c1e86ea187e54130786e66d4c32cac0e1422a9aaf29abeb097c8c7",
+      "sourceFormat": "jpeg",
+      "width": 493,
+      "height": 740,
+      "dominant": {
+        "r": 24,
+        "g": 24,
+        "b": 24
+      },
+      "aiLabel": false,
+      "file": "/assets/images/material-category/nature-39.webp",
+      "sha256": "958a096377d024dfd04b89a4bdfb4126152365072f1a4c6b7370f64c24741f39",
+      "bytes": 379374,
+      "pixelIdentical": true
+    },
+    {
+      "id": "nature-40",
+      "sourcePage": "https://www.magnific.com/photos/nature",
+      "sourceUrl": "https://img.magnific.com/premium-photo/sun-rays-shining-through-blooming-pink-cherry-blossoms-spring-floral-background-soft-light-delicate-petals-natural-beauty-seasonal-nature-concept_790807-4749.jpg",
+      "cachedFile": "references/magnific-html/15-nature-category_files/e88d240e3652a329e5b1.jpg",
+      "sourceSha256": "677fd11396c0414311ab1d543b50528ad5bb52c5b9f717f8c0992b58be808337",
+      "sourceFormat": "jpeg",
+      "width": 529,
+      "height": 740,
+      "dominant": {
+        "r": 40,
+        "g": 24,
+        "b": 8
+      },
+      "aiLabel": false,
+      "file": "/assets/images/material-category/nature-40.webp",
+      "sha256": "4cfe3ef085a8c7d6770bae7b554b3f6a546b66bc27b3c7e197fb579ead3c3e79",
+      "bytes": 455190,
+      "pixelIdentical": true
+    },
+    {
+      "id": "nature-41",
+      "sourcePage": "https://www.magnific.com/photos/nature",
+      "sourceUrl": "https://img.magnific.com/free-photo/grass-flower-sunset_335224-926.jpg",
+      "cachedFile": "references/magnific-html/15-nature-category_files/b1c59badad9bb9744e02.jpg",
+      "sourceSha256": "dc487adfead4394e17d7b962f2f118b0436c2553cec1d6e5886d6f12300ee297",
+      "sourceFormat": "jpeg",
+      "width": 740,
+      "height": 492,
+      "dominant": {
+        "r": 232,
+        "g": 232,
+        "b": 232
+      },
+      "aiLabel": false,
+      "file": "/assets/images/material-category/nature-41.webp",
+      "sha256": "59031e6cc611a1db86d16a3ce43cb4c7b1877573adfea569ca29a47abbc18989",
+      "bytes": 381978,
+      "pixelIdentical": true
+    },
+    {
+      "id": "nature-42",
+      "sourcePage": "https://www.magnific.com/photos/nature",
+      "sourceUrl": "https://img.magnific.com/premium-photo/rafting-sport-background-river-course-valley-vertical-nature-panorama_233593-49.jpg",
+      "cachedFile": "references/magnific-html/15-nature-category_files/ab6273add463b977d50a.jpg",
+      "sourceSha256": "d7a1ae32822c58f3eb534377d9599c06f6d8d18aa67b041ad1defc55b67c9bd5",
+      "sourceFormat": "jpeg",
+      "width": 490,
+      "height": 740,
+      "dominant": {
+        "r": 24,
+        "g": 40,
+        "b": 8
+      },
+      "aiLabel": false,
+      "file": "/assets/images/material-category/nature-42.webp",
+      "sha256": "1e2dc1534af269074d734c40c24a3fc42490a1c4e1da936883153d930c646ed5",
+      "bytes": 555382,
+      "pixelIdentical": true
+    },
+    {
+      "id": "nature-43",
+      "sourcePage": "https://www.magnific.com/photos/nature",
+      "sourceUrl": "https://img.magnific.com/premium-photo/no-humans-scenery-outdoors-field-nature-tree-flower-sky-cloud-sunset-forest-mountain-flower-field-landscape-sun_943872-597.jpg",
+      "cachedFile": "references/magnific-html/15-nature-category_files/4620e84d83dab7b88d4f.jpg",
+      "sourceSha256": "141fb618a7e04e3a2e4b6a66802e7dc6ed87f22225b8c383a7924e1c98dccce7",
+      "sourceFormat": "jpeg",
+      "width": 740,
+      "height": 616,
+      "dominant": {
+        "r": 248,
+        "g": 232,
+        "b": 216
+      },
+      "aiLabel": false,
+      "file": "/assets/images/material-category/nature-43.webp",
+      "sha256": "2403211fe05b6e935172f750bb2b45c0e17c27ed740f7a0392c9a41097082648",
+      "bytes": 679870,
+      "pixelIdentical": true
+    },
+    {
+      "id": "nature-44",
+      "sourcePage": "https://www.magnific.com/photos/nature",
+      "sourceUrl": "https://img.magnific.com/free-photo/beautiful-shot-sunrise-country-road-netherlands_181624-29198.jpg",
+      "cachedFile": "references/magnific-html/15-nature-category_files/9e0eae4d7ab677f5520a.jpg",
+      "sourceSha256": "4088d6333519393d066c4c0412f4c0cfb2477ec14d86130f3bf26eb0b7bef2f6",
+      "sourceFormat": "jpeg",
+      "width": 740,
+      "height": 493,
+      "dominant": {
+        "r": 40,
+        "g": 40,
+        "b": 8
+      },
+      "aiLabel": false,
+      "file": "/assets/images/material-category/nature-44.webp",
+      "sha256": "cf9c20f595a59bb6404a8661b34a34d8bc8556b8a7ef7b33dc778f349154d487",
+      "bytes": 597744,
+      "pixelIdentical": true
+    },
+    {
+      "id": "nature-45",
+      "sourcePage": "https://www.magnific.com/photos/nature",
+      "sourceUrl": "https://img.magnific.com/premium-photo/nature-wallpaper-beautiful-nature-wallpaper-4k-nature-wallpapers-hd-nature-wallpaper-green-nature_722194-188.jpg",
+      "cachedFile": "references/magnific-html/15-nature-category_files/62123e575caa8ff1024f.jpg",
+      "sourceSha256": "9cde15467f2d8f20fbd75d12c6d66742ef0ab33ce8dab8d991cce3bc02b0de2d",
+      "sourceFormat": "jpeg",
+      "width": 493,
+      "height": 740,
+      "dominant": {
+        "r": 248,
+        "g": 248,
+        "b": 248
+      },
+      "aiLabel": false,
+      "file": "/assets/images/material-category/nature-45.webp",
+      "sha256": "44320f34131b9da4789b7d0ddaa0a2c50f00c72e349f0cce42390d804b32de50",
+      "bytes": 456400,
+      "pixelIdentical": true
+    },
+    {
+      "id": "nature-46",
+      "sourcePage": "https://www.magnific.com/photos/nature",
+      "sourceUrl": "https://img.magnific.com/free-photo/freshness-mountain-meadow-beauty-nature-generated-by-ai_188544-27835.jpg",
+      "cachedFile": "references/magnific-html/15-nature-category_files/b9b2a99ed110c3bb6f0d.jpg",
+      "sourceSha256": "60c305939cfc182e322967393a36820ec5827a4c59ba62a9f09d3577bc5b09d0",
+      "sourceFormat": "jpeg",
+      "width": 740,
+      "height": 423,
+      "dominant": {
+        "r": 40,
+        "g": 40,
+        "b": 40
+      },
+      "aiLabel": true,
+      "file": "/assets/images/material-category/nature-46.webp",
+      "sha256": "ce49ba4bf40afc09308a3f70bf15c60f74b1c692fe7dee68640f4cde07a364ba",
+      "bytes": 299560,
+      "pixelIdentical": true
+    },
+    {
+      "id": "nature-47",
+      "sourcePage": "https://www.magnific.com/photos/nature",
+      "sourceUrl": "https://img.magnific.com/free-photo/raging-river-nature_422131-102.jpg",
+      "cachedFile": "references/magnific-html/15-nature-category_files/8a612317ba36690aac52.jpg",
+      "sourceSha256": "99708e69729e01684ddb0add144a7dd90ebcb58561aedef785f27b98a6962e57",
+      "sourceFormat": "jpeg",
+      "width": 413,
+      "height": 740,
+      "dominant": {
+        "r": 8,
+        "g": 8,
+        "b": 8
+      },
+      "aiLabel": false,
+      "file": "/assets/images/material-category/nature-47.webp",
+      "sha256": "22ba73e6c1b27e7a62d869fad874cf32464615e19638acc1dbb00a18b6410f5b",
+      "bytes": 386784,
+      "pixelIdentical": true
+    },
+    {
+      "id": "nature-48",
+      "sourcePage": "https://www.magnific.com/photos/nature",
+      "sourceUrl": "https://img.magnific.com/free-photo/aerial-shot-hallstatt-town-austria_181624-35881.jpg",
+      "cachedFile": "references/magnific-html/15-nature-category_files/357bcf9f606fac9d672f.jpg",
+      "sourceSha256": "4294dda701f4ba1eb15e1e13803cccda6d835d91405becdec79bceb25e8b1c20",
+      "sourceFormat": "jpeg",
+      "width": 740,
+      "height": 493,
+      "dominant": {
+        "r": 232,
+        "g": 248,
+        "b": 248
+      },
+      "aiLabel": false,
+      "file": "/assets/images/material-category/nature-48.webp",
+      "sha256": "1f3d0d7e66a75ea53680e0dc203488bbc46048149ca0bd052d9b3bb639354a6f",
+      "bytes": 438962,
+      "pixelIdentical": true
+    },
+    {
+      "id": "nature-49",
+      "sourcePage": "https://www.magnific.com/photos/nature",
+      "sourceUrl": "https://img.magnific.com/free-photo/mountains-lake_1398-1153.jpg",
+      "cachedFile": "references/magnific-html/15-nature-category_files/6d91a48aada89283e1a6.jpg",
+      "sourceSha256": "eb40f749a634166940ab666eded8b756bf8e801efa7828f0b3f18ad8524758e8",
+      "sourceFormat": "jpeg",
+      "width": 740,
+      "height": 493,
+      "dominant": {
+        "r": 184,
+        "g": 200,
+        "b": 232
+      },
+      "aiLabel": false,
+      "file": "/assets/images/material-category/nature-49.webp",
+      "sha256": "207ec2d6a09ea8104337129fbd950ead6fbab093df972aedc42d9b74fdd124ae",
+      "bytes": 410958,
+      "pixelIdentical": true
+    },
+    {
+      "id": "nature-50",
+      "sourcePage": "https://www.magnific.com/photos/nature",
+      "sourceUrl": "https://img.magnific.com/free-photo/beautiful-shot-red-flowers-near-green-trees-with-forested-mountains-distance_181624-8440.jpg",
+      "cachedFile": "references/magnific-html/15-nature-category_files/a94c638ee15f69f7e879.jpg",
+      "sourceSha256": "7e498a9d9c1ff73511e6aeb8b01ec52fa9887a92be5c387a418a643728dd81d7",
+      "sourceFormat": "jpeg",
+      "width": 740,
+      "height": 490,
+      "dominant": {
+        "r": 184,
+        "g": 200,
+        "b": 216
+      },
+      "aiLabel": false,
+      "file": "/assets/images/material-category/nature-50.webp",
+      "sha256": "33cdd37c7592ea79089b7c9ba8555f0f54990ed8ace1492f118fed3baf3d3b7a",
+      "bytes": 520344,
+      "pixelIdentical": true
+    }
+  ]
+}

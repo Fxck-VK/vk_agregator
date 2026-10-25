@@ -95,10 +95,18 @@ function main() {
   const base = git('rev-parse', '--verify', `${args[1]}^{commit}`).trim();
   if (git('diff', '--name-only', '--diff-filter=U').trim()) throw new Error('Resolve unmerged source before preparing a release');
   const nul = value => value.split('\0').filter(Boolean);
-  const changed = [...nul(git('diff', '--name-only', '--no-renames', '-z', base, '--')), ...nul(git('ls-files', '--others', '--exclude-standard', '-z'))];
+  const untracked = nul(git('ls-files', '--others', '--exclude-standard', '-z'));
+  const changed = [...nul(git('diff', '--name-only', '--no-renames', '-z', base, '--')), ...untracked];
   for (const path of changed) {
     safePath(path);
     if (existsSync(path) && !lstatSync(path).isFile()) throw new Error('Changed source must be a regular file');
+  }
+  // A baseline diff does not include untracked files. Use Git's own whitespace
+  // rules for each new file before any lint/test commands can be selected.
+  for (const path of untracked) {
+    const result = spawnSync('git', ['diff', '--no-index', '--check', '--no-ext-diff', '--no-textconv', '--', '/dev/null', path], { encoding: 'utf8' });
+    // --no-index also returns 1 for an ordinary clean added-file diff.
+    if (![0, 1].includes(result.status)) throw new Error(`Whitespace check failed for new source: ${path}`);
   }
   const existing = nul(git('ls-files', '--cached', '--others', '--exclude-standard', '-z'))
     .filter(path => existsSync(path) && lstatSync(path).isFile());

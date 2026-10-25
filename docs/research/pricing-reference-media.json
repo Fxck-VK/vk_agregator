@@ -1,0 +1,19 @@
+{
+  "reference": 18,
+  "notice": "Saved background from Magnific pricing, local draft/noindex layout reference. Native Epifera artwork and existing workflow references are used elsewhere. No foreign customer logos, testimonials, avatars or scripts. Replace/clear media rights before indexed launch.",
+  "files": [
+    {
+      "sourceUrl": "https://media.magnific.com/pricing/campaigns/kling20bg-streaks.webp",
+      "sourcePage": "https://www.magnific.com/pricing",
+      "cachedFile": ".cache/magnific-html-assets/files/0bab2c290c5edd9a768e.webp",
+      "sourceFormat": "png",
+      "width": 626,
+      "height": 86,
+      "sourceSha256": "c07ea4fc4939f68ff90a3b1f4a5ec7a60363d4a10f545c7b550e2059685a514b",
+      "file": "/assets/images/pricing/streaks.png",
+      "sha256": "c07ea4fc4939f68ff90a3b1f4a5ec7a60363d4a10f545c7b550e2059685a514b",
+      "bytes": 78269,
+      "pixelIdentical": true
+    }
+  ]
+}

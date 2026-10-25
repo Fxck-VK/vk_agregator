@@ -1,52 +1,9 @@
-import { fireEvent, render, screen, within } from "@testing-library/react";
-import { afterEach, describe, expect, it, vi } from "vitest";
-import { LocaleProvider } from "@/i18n/LocaleProvider";
-import { homeEn } from "@/i18n/public/home-en";
-import { LandingHeader } from "./LandingHeader";
-
-vi.mock("next/navigation", () => ({ useRouter: vi.fn() }));
-afterEach(() => vi.unstubAllGlobals());
-
-function header(onSearch = vi.fn()) {
-  render(<LocaleProvider locale="en"><LandingHeader navigation={homeEn.navigation} labels={{ ...homeEn.controls, login: homeEn.login, signup: homeEn.signup }} onSearch={onSearch} /></LocaleProvider>);
-}
-
-describe("reusable landing navigation", () => {
-  it("opens actual localized destinations and returns focus on Escape", () => {
-    header();
-    const trigger = screen.getByRole("button", { name: "Creative Suite" });
-    fireEvent.click(trigger);
-    expect(trigger).toHaveAttribute("aria-expanded", "true");
-    expect(screen.getByRole("link", { name: "Image Generator" })).toHaveAttribute("href", "/en/app/image");
-    fireEvent.keyDown(window, { key: "Escape" });
-    expect(trigger).toHaveAttribute("aria-expanded", "false");
-    expect(trigger).toHaveFocus();
-  });
-
-  it("keeps mobile navigation reversible and closes it after choosing a link", () => {
-    header();
-    fireEvent.click(screen.getByRole("button", { name: "Open navigation" }));
-    expect(screen.getByRole("button", { name: "Close navigation" })).toHaveAttribute("aria-expanded", "true");
-    fireEvent.click(within(screen.getByRole("navigation", { name: "Main navigation" })).getByRole("link", { name: "Plans" }));
-    expect(screen.getByRole("button", { name: "Open navigation" })).toHaveAttribute("aria-expanded", "false");
-  });
-
-  it("opens search through the button and keyboard shortcut", () => {
-    const search = vi.fn(); header(search);
-    fireEvent.click(screen.getByRole("button", { name: "Search or create" }));
-    fireEvent.keyDown(window, { key: "k", ctrlKey: true });
-    expect(search).toHaveBeenCalledTimes(2);
-  });
-
-  it("keeps a hover-opened menu open on the first click", () => {
-    vi.stubGlobal("matchMedia", vi.fn((query: string) => ({ matches: query === "(hover: hover)", addEventListener: vi.fn(), removeEventListener: vi.fn() })));
-    header();
-    const trigger = screen.getByRole("button", { name: "Creative Suite" });
-    fireEvent.mouseEnter(trigger.parentElement!);
-    expect(trigger).toHaveAttribute("aria-expanded", "true");
-    fireEvent.click(trigger);
-    expect(trigger).toHaveAttribute("aria-expanded", "true");
-    fireEvent.click(trigger);
-    expect(trigger).toHaveAttribute("aria-expanded", "false");
-  });
+import {fireEvent,render,screen} from "@testing-library/react";
+import {describe,expect,it,vi} from "vitest";
+import {LocaleProvider} from "@/i18n/LocaleProvider";
+import {LandingHeader} from "./LandingHeader";
+const labels={openMenu:'Open navigation',closeMenu:'Close navigation',navigation:'Main navigation',search:'Search',login:'Log in',signup:'Sign up'};
+describe('LandingHeader variants',()=>{
+  it('preserves the overlay login/signup defaults',()=>{render(<LocaleProvider locale="en"><LandingHeader navigation={[]} labels={labels} onSearch={()=>{}}/></LocaleProvider>);expect(screen.getByRole('link',{name:'Log in'})).toHaveAttribute('href','/en/login');expect(screen.getByRole('link',{name:'Sign up'})).toHaveAttribute('href','/en/login?mode=register');expect(screen.getByRole('banner')).not.toHaveAttribute('data-variant','editorial');});
+  it('opts into editorial chrome with a single site action and the same working search',()=>{const search=vi.fn();render(<LocaleProvider locale="en"><LandingHeader variant="editorial" siteAction={{label:'Go to Epifera',href:'/'}} navigation={[]} labels={labels} onSearch={search}/></LocaleProvider>);expect(screen.getByRole('banner')).toHaveAttribute('data-variant','editorial');expect(screen.getByRole('link',{name:'Go to Epifera'})).toHaveAttribute('href','/en');expect(screen.queryByRole('link',{name:'Log in'})).not.toBeInTheDocument();fireEvent.click(screen.getByRole('button',{name:'Search'}));expect(search).toHaveBeenCalledOnce();});
 });

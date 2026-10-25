@@ -303,7 +303,7 @@ pending; фронтенд самостоятельно не включает м�
 
 ### Публичная главная
 
-[PublicHome](../src/features/public-home/PublicHome.tsx) — новая английская главная `/en`, заново собранная по сохранённому английскому HTML и состояниям Magnific. Прежний `MarketingHome`, его компоненты и оба словаря удалены. `/ru` возвращает пустой `main`; перевод не создаётся. Обе версии остаются `draft/noindex` и не входят в sitemap согласно [homePublication](../src/app/(public)/publication.ts). `LocalizedPublicShell` оставляет главной собственное оформление; остальные публичные страницы используют прежний `PublicShell`.
+[PublicHome](../src/features/public-home/PublicHome.tsx) — новая английская главная `/en`, заново собранная по сохранённому английскому HTML и состояниям Magnific. Прежний `MarketingHome`, его компоненты и оба словаря удалены. `/ru` возвращает пустой `main`; перевод не создаётся. Обе версии остаются `draft/noindex` и не входят в sitemap согласно [homePublication](../src/app/(public)/publication.ts). `LocalizedPublicShell` пропускает внешний `PublicShell` для явно перечисленных в коде референсных маршрутов с собственной оболочкой; остальные публичные страницы используют общий `PublicShell`.
 
 Первый экран вместе с верхней строкой занимает высоту окна, с минимальной безопасной высотой для коротких экранов. Секции: hero, вкладки пакета, лента моделей, рабочие сценарии, фильтры инструментов, примеры применения, слайды, команды, карточки вариантов работы, FAQ, завершающий блок и подвал. Цвета и типографика ограничены CSS-модулями; кабинет и вход не переоформляются.
 
@@ -313,17 +313,149 @@ pending; фронтенд самостоятельно не включает м�
 
 `HomeSearch` открывается по кнопке или Ctrl/Cmd+K, использует общий `loadModelCatalog` и `searchModels`, включая русские алиасы и опечатки. Стрелки/Enter управляют результатами. Доступ к провайдерам, генерации и оплате остаётся в существующем приложении; переключения на главной платных действий не вызывают. Предстоящие MCP/API, Agents и Plugins помечены `Coming soon`; цены, рейтинги, лицензии и количество клиентов из референса не выдаются за факты Epifera.
 
-Референсные фото и ролики в `public/assets/images/marketing` и `public/assets/videos/marketing` сохранены также для существующего примера инструмента и входа. Шрифт заголовка локального макета описан в [provenance](../public/assets/fonts/public-home/README.md). Сторонние скрипты, трекеры и авторизация не переносятся. Перед индексируемой публикацией требуется согласовать окончательное содержание и права на финальные медиа/шрифт.
+Референсные фото и ролики в `public/assets/images/marketing` и `public/assets/videos/marketing` сохранены также для входа. Страница генератора использует отдельные изображения референса 03. Шрифт заголовка локального макета описан в [provenance](../public/assets/fonts/public-home/README.md). Сторонние скрипты, трекеры и авторизация не переносятся. Перед индексируемой публикацией требуется согласовать окончательное содержание и права на финальные медиа/шрифт.
+
+<a id="ai-tools-overview"></a>
+
+### Публичный обзор AI-инструментов
+
+[ToolsOverview](../src/features/ai-tools-overview/ToolsOverview.tsx) реализует T02 по сохранённому английскому макету Magnific №02. `/en/ai` показывает страницу, `/ru/ai` возвращает пустой `main`. Обе версии остаются `draft/noindex`, вне sitemap по [toolsOverviewPublication](../src/app/(public)/ai/publication.ts). В общей шапке и подвале есть переход «All AI tools».
+
+Секции: синий hero с пятью ярлыками, восемь категорий и 52 пункта инструментов, 13 плагинов, шесть вкладок стилей моделей, восемь AI-клиентов, четыре фильтра аудитории с пятью карточками сценариев, двенадцать карточек материалов, шестнадцать визуальных инструментов, завершающий блок и центрированный подвал. Английский текст — [ai-tools-en.ts](../src/i18n/public/ai-tools-en.ts), извлечённые данные референса — [ai-tools-reference-en.ts](../src/i18n/public/ai-tools-reference-en.ts). 22 локальных WebP сохраняют исходные размеры; [происхождение и ограничения](../public/assets/images/ai-tools/README.md).
+
+Шапка, умный поиск и модальное окно используют существующие `LandingHeader`, `HomeSearch` и `LandingDialog`. Совпадение оболочки проверено по референсу. Другой подвал включается через `LandingFooter layout="centered"`; прежний вариант остаётся по умолчанию. Для этой страницы `LandingCarousel controls="overlay"` размещает стрелки поверх края карточек; `controls="above"` остаётся по умолчанию. `LandingCarousel bounded` выключает кнопку на соответствующем краю реальной прокрутки; без свойства поведение других страниц сохраняется.
+
+Вкладки поддерживают стрелки, Home/End, видимый фокус и связанные панели. Стили моделей вертикальны на компьютере и горизонтальны на телефоне; длинные ряды прокручиваются внутри блока. Сценарии меняют порядок карточек и сбрасывают свою карусель. Мобильный подвал использует `details`, первая группа Products открыта. Диалоги удерживают и возвращают фокус, Escape закрывает окно; reduced motion отключает движение.
+
+Доступные действия ведут в существующие маршруты и используют существующие ID моделей/реестр значков. Плагины, Flows и другие будущие функции явно помечены Coming soon и открывают поясняющее окно. MCP сохраняет planned-состояние, а OverviewConnections CTA ведёт на новый `/mcp` landing. Поддельных endpoints, команд подключения и операций с буфером обмена нет. Вкладки/карусели не создают Jobs и не обращаются к провайдерам или оплате. Допуск моделей, биллинг и юридические тексты не меняются. Перед индексируемой публикацией нужны окончательное содержание и проверка прав на референсные медиа/шрифт.
 
 <a id="image-tool-preview"></a>
 
-### Пример публичной страницы инструмента
+### Публичная страница генератора изображений
 
-[ImageToolLanding](../src/features/marketing/ImageToolLanding.tsx) показывает структуру T03 по запросу владельца на один наглядный пример. Маршрут `/ru/ai/image-generator` и английская версия используют существующий PublicShell, PageContainer, PrimaryButton, ModelIcon и FAQ. Нового сайта или preview порта нет. Страница исключена из индексации через собственную robots metadata и не включается в sitemap.
+[ImageGeneratorLanding](../src/features/image-generator-landing/ImageGeneratorLanding.tsx) заново реализует T03 по сохранённому английскому макету Magnific. Старые `ImageToolLanding`, его CSS и `Dictionary.imageLanding` удалены для обоих языков. `/en/ai/image-generator` показывает новый макет; `/ru/ai/image-generator` возвращает пустой `main`. Перевод не создаётся. Обе версии сохраняют `draft/noindex` и исключение из sitemap через [imageGeneratorPublication](../src/app/(public)/ai/image-generator/publication.ts).
 
-Публичные данные не вызывают backend: кнопки сюжетов меняют только выбранную иллюстрацию и подпись, якоря ведут по странице, FAQ раскрывается нативно. Основные действия ведут в существующие `/app/image` и `/app/models` с языком URL; посещение, переключение примеров и переход не активируют платную работу. Имена трёх моделей показывают примеры карточек каталога, без обещаний цены, допуска и параметров. Локализация — `Dictionary.imageLanding`, исходные тексты в `src/i18n/image-landing.ts`.
+Секции: hero с prompt-полем, движущаяся галерея, закреплённый указатель разделов/мобильные chips, четыре раскрывающихся режима создания, таблица моделей, лента семейств, шесть сценариев, workflow, условия работы, исследование с восемью сюжетами и графиками, карточки вариантов работы, одиннадцать FAQ, финальный баннер и связанные ссылки. Геометрия, изображения и шрифт взяты из референса; CSS ограничен страницей. Английское содержание — [image-generator-en.ts](../src/i18n/public/image-generator-en.ts); данные визуального исследования — [image-generator-reference-en.ts](../src/i18n/public/image-generator-reference-en.ts).
 
-Иллюстрации переиспользуют уже размещённые в marketing материалы визуального референса; на странице есть явное пояснение, что это не результаты тестирования моделей Epifera. Перед превращением демонстрации в индексируемый выпуск нужны собственное или разрешённое содержание и проверка утверждений из [SEO структуры](../../../docs/superpowers/specs/2026-10-23-epifera-seo-structure-design.md). Robots/canonical и sitemap используют одну запись `imageGeneratorPublication` рядом с маршрутом: сейчас `draft/noindex`; после согласованной публикации она автоматически попадает в карту по [общему контракту](locale-routing.md#публикация-новой-seo-страницы). Эта демонстрация не включает модельный admission, платные вызовы или публикацию приватных файлов.
+`LandingHeader`/`LandingFooter` переиспользуются после сравнения архивов: оболочка в обоих макетах совпадает. Поиск — существующий `HomeSearch`. Галерея использует `ModalBackdrop`/`ModalCloseButton`, удерживает фокус, блокирует фон и возвращает фокус после закрытия; режимы поддерживают стрелки/Home/End. Движение можно поставить на паузу; hover/focus и reduced motion учитываются. FAQ — нативные `details` со стилем референса.
+
+Действие Generate переводит в `/app/image`, не готовит и не отправляет Job. Prompt передаётся через краткоживущую память клиентского модуля, очищается в `ImageGenerationPanel`, истекает через пять минут и теряется при перезагрузке/полной навигации на вход. URL, local/session storage и API для передачи текста не используются. Подтверждение платной операции остаётся в существующем генераторе.
+
+Статистика явно подписана как исследование Magnific. Иностранные цены, бесплатные квоты, сертификаты и условия не выдаются за факты Epifera; MCP/API помечены Coming soon. Фото — локальные референсные примеры, [provenance](../public/assets/images/image-generator/README.md). Перед индексируемой публикацией нужны окончательное содержание и проверка прав на медиа, шрифт и утверждений по [SEO структуре](../../../docs/superpowers/specs/2026-10-23-epifera-seo-structure-design.md). После согласования публикация подключается к карте по [общему контракту](locale-routing.md#публикация-новой-seo-страницы). Приватный генератор, допуск моделей и биллинг не меняются.
+
+<a id="model-family"></a>
+
+### Публичная страница семейства моделей
+
+[KlingFamily](../src/features/model-family/KlingFamily.tsx) реализует T04 на `/en/ai/kling` по сохранённому макету Magnific №04. `/ru/ai/kling` пустая, обе версии draft/noindex и вне sitemap по [klingFamilyPublication](../src/app/(public)/ai/kling/publication.ts). Меню главной и обзора инструментов содержит переход «Kling family».
+
+Секции: hero, три смысловых ярлыка вместо чужих сертификатов/рейтингов, галерея из двенадцати примеров, таблица девяти версий, четыре сценария выбора, история семейства, сравнение трёх роликов, три карточки рабочего процесса, четыре сюжета исследования с тремя графиками, карточки перехода к работе и условиям оплаты, двенадцать FAQ, финальный баннер и связанные ссылки. Копия — [kling-en.ts](../src/i18n/public/kling-en.ts), медиа/исследование — [kling-reference-en.ts](../src/i18n/public/kling-reference-en.ts). 24 WebP и 10 WebM хранятся локально; [происхождение](../public/assets/images/model-family/README.md).
+
+У референсов 03–05 совпадает GeneratorLanding: общий [CSS-модуль](../src/components/public/generator-landing/GeneratorLanding.module.css) перенесён из feature генератора без изменения его правил. Общий [GeneratorSectionNavigation](../src/components/public/generator-landing/GeneratorSectionNavigation.tsx) ведёт боковое оглавление/мобильные chips, отслеживает разделы и сохраняет ссылочные якоря. Модельная геометрия таблицы, timeline, сравнения и hero находится в общем [ModelLanding.module.css](../src/components/public/generator-landing/ModelLanding.module.css). Медиапросмотр — общий [ModelMedia](../src/components/public/generator-landing/ModelMedia.tsx); `FamilyMedia` сохраняет прежние экспорты и значения по умолчанию. Шапка, подвал, поиск, модальные примитивы и `MediaVideo` также переиспользованы после сравнения с архивом.
+
+Снимок [kling-catalog-en.ts](../src/i18n/public/kling-catalog-en.ts) извлечён из уже существующего preview-каталога: только `capabilities.application.video`, без импорта полного JSON в клиент. Пять ID ведут к существующим карточкам моделей; статус «In catalog» не означает допуск в каждом окружении. Четыре отсутствующие версии открывают пояснение, без вымышленных ID и запуска. При изменении исходного каталога снимок нужно сверить заново. Стоимость пользователь проверяет в существующем генераторе, без статических тарифов из референса. Допуск моделей и Jobs не меняются.
+
+Галерея поддерживает ручную прокрутку, паузу анимации, hover/focus и reduced motion. Видео по умолчанию без звука, лениво загружаются и останавливаются вне видимости/при скрытой вкладке; нативные controls доступны в сравнении и просмотрщике. Звук включается отдельным действием. Просмотрщик блокирует фон, удерживает фокус и возвращает его после Escape/закрытия. Таблица прокручивается внутри своего блока, FAQ — нативные `details`. Примеры и цифры обозначены как архивные данные Magnific, а не результаты или статистика Epifera. Платных запросов, внешних скриптов и копирования в буфер обмена нет.
+
+<a id="model-comparison"></a>
+
+### Публичное сравнение моделей / инструментов
+
+[AvatarComparison](../src/features/comparison/AvatarComparison.tsx) реализует T08 на `/en/compare/ai-avatar-models` по сохранённому Magnific №08 — сравнительной статье. Русский маршрут пустой; оба draft/noindex вне sitemap. Структура: светлая закреплённая шапка, split hero с датой черновика и оценкой чтения, крупное введение, desktop-sidebar с текущим разделом и карточкой вдохновения, обычное оглавление внутри текста, восемь моделей, девять глав, шесть постоянно открытых FAQ, CTA, обмен ссылкой, три связанных гайда и центрированный тёмный подвал. На телефоне sidebar скрыт, текстовое оглавление сохраняется. Изображения и обычная проза не наследуют тёмное оформление генераторов.
+
+Тексты — [comparison-en.ts](../src/i18n/public/comparison-en.ts), восемь безопасных записей — [avatar-models-en.ts](../src/i18n/public/avatar-models-en.ts), картинки — [comparison-reference-en.ts](../src/i18n/public/comparison-reference-en.ts). Снимок 2026-10-25 содержит только существующие `capabilities.application.image`: reference support/count/extensions, разрешения, ratios, quality modes, max outputs и combined limit. Значения сверяются тестом с preview-каталогом; неподдерживаемые входы и неизвестные разрешения сохраняются как таковые. Цен, endpoints, полноценного приватного каталога и новых модельных допусков в клиент не добавляется. Методика явно отличает документальное сравнение от испытания качества; чужой рейтинг не копируется. Текущие доступность/стоимость проверяются в кабинете.
+
+Пять референсных растров нормализованы в lossless WebP с проверкой совпадения декодированных пикселей, поскольку у исходников встречаются JPEG внутри PNG и HEIF внутри WebP. [Источник](../public/assets/images/comparison/README.md). Чужие логотип автора, брендированные cereal/stadium изображения, видео и скрипты исключены; оставшиеся примеры и contact sheet подписаны как архивные иллюстрации, а не собственные генерации/бенчмарки Epifera. Права и окончательное содержание проверяются перед индексируемой публикацией.
+
+Общий `LandingHeader` получил opt-in `variant="editorial"` и `siteAction={label,href}`: белая sticky-шапка с одной ссылкой на сайт. Default `overlay`, прежние login/signup и их внешний вид сохранены. Общие меню/фокус/Ctrl-K и `HomeSearch` используются в обоих вариантах; theme/language controls не добавляются. Footer, `LandingDialog`, `Tooltip`, BrandLogo/BrandName переиспользуются после сверки макета. Source-якоря исправлены на существующие уникальные ID; sidebar прокручивает активный пункт в свою видимую область, обратно наверх ведёт кнопка с reduced-motion поведением.
+
+Listen открывает Coming soon, без TTS, Job или списаний. Share открывает общий диалог: только явный Copy пишет `origin + pathname`, исключая query/hash; успех появляется после успешного завершения clipboard Promise, ошибка оставляет выделяемое read-only поле для ручного копирования. Внешних share-запросов/автопостинга нет. Все CTA ведут к существующим инструментам или локальным якорям; авторская ссылка ведёт к методике, без фиктивного профиля автора. Из раздела связанных инструментов image-generator ведёт ссылка на сравнение; из его связанных гайдов — на новую статью о промптах. Backend/auth/billing/storage не меняются. Общая оболочка вынесена в `EditorialPage` при реализации T09, собственные модельные разделы и intro T08 сохранены.
+
+<a id="editorial-article"></a>
+
+### Публичная статья и общая редакционная оболочка
+
+[ArtPromptsArticle](../src/features/editorial-article/ArtPromptsArticle.tsx) реализует T09 на `/en/blog/ai-art-prompts` по сохранённому Magnific №09. Русский маршрут пустой; обе локали draft/noindex вне sitemap. Первый пример — руководство по написанию промптов: пять разделов, три полноширинные иллюстрации, маркированный и нумерованный списки, четыре текстовых примера. Нет большого intro-band, FAQ или мобильного inline-оглавления: в референсе №09 их нет. Обложка, герой, типографика и отступы сверены со снимками desktop/mobile. Чужая авторская личность и старая дата публикации заменены Epifera и явной датой черновика; ссылка автора ведёт к примечанию статьи. Blog/Guides в breadcrumb — подписи, пока нет соответствующих готовых индексов, а не неработающие ссылки.
+
+Совпадающие части №08/09 используют [EditorialPage](../src/components/public/editorial/EditorialPage.tsx), [EditorialControls](../src/components/public/editorial/EditorialControls.tsx), [EditorialPicture](../src/components/public/editorial/EditorialPicture.tsx) и [общие стили](../src/components/public/editorial/Editorial.module.css). `EditorialPageData` принимает id/kind, breadcrumbs, title, author/date, minutes/readTime, controls, onPage/sections, локальные hero/inspiration/related и optional intro. Тексты/число разделов и карточек — данные, не жёсткие восемь моделей или тема аватаров. T08 сохраняет крупное введение, девять разделов, своё inline-оглавление и FAQ; T09 пропускает optional intro. `EditorialOutline` принимает произвольные entries, отслеживает их видимость и прокручивает активный пункт внутри своей области. Header/Footer/Dialog/Search/Tooltip и ограничения темы остаются общими. Default overlay других страниц не меняется.
+
+Текст — [art-prompts-en.ts](../src/i18n/public/art-prompts-en.ts); контракт `ArticleRecord/ArticleBlock/ArticleInline` — [article-types.ts](../src/i18n/public/article-types.ts). [ArticleBody](../src/features/editorial-article/ArticleBody.tsx) выводит paragraphs/lists/images, strong и внутренние ссылки средствами React: нет raw HTML/внешних скриптов. Количество разделов и блоков произвольное; id/imageIndex должны соответствовать данным. Время чтения считается из собственного текста. Примеры — учебные описания, не проверенные генерации; настройки разрешения выбираются в кабинете, слово 8K в тексте их не устанавливает. Четыре растровых иллюстрации референса нормализованы в lossless WebP с проверкой пикселей и SHA; [происхождение](../public/assets/images/art-prompts/README.md). Inspiration/related переиспользуют уже упакованные изображения сравнения без копий файлов.
+
+Share использует собственные подписи страницы и только явный Copy; ожидание, успех после Promise и ручное копирование при отказе проверены на обеих страницах. Listen — доступное объяснение Coming soon, без аудио/Job. Обратный переход наверх учитывает reduced motion. Действия ведут на существующие локальные инструменты, связанные страницы и якоря; промпт не записывается в URL/storage, не подставляется и не отправляется. Новых API, backend/provider/billing/auth изменений нет.
+
+<a id="workflow-template"></a>
+
+### Последовательность действий / workflow
+
+[WorkflowLanding](../src/features/workflow/WorkflowLanding.tsx) реализует T12 на `/en/workflows/product-campaign` по сохранённому Magnific Spaces №12: dark hero с соединёнными узлами, onboarding, два ряда моделей, featured-banner, две карточки процесса, три аудитории, инструментальная полоса, десять сценариев, пять FAQ и centered-footer. Русская страница пустая; оба маршрута draft/noindex вне sitemap. Переходы к этому реальному guide добавлены из Campaign kits обзора инструментов и Quick start справки. Общие шапка, подвал, HomeSearch, LandingDialog/Carousel, FAQ, языковой Link и ModelPicture используются там, где они совпадают с референсом. В AssetBase ModelMedia добавлен `workflows`; прежние defaults и поведение видео не изменены.
+
+[workflow-en.ts](../src/i18n/public/workflow-en.ts) содержит typed `WorkflowRecord` с `executionMode="guide"`, inputs, упорядоченными steps (title/description/checklist/href), outputs и image. Пример product-campaign состоит из четырёх шагов; десять дополнительных сценариев — из трёх каждый. Это оригинальные описания ручного творческого процесса, связанные с существующими `/app`, `/app/image`, `/app/models`, `/app/speech`, `/app/files`; чтение/переключение не создаёт Job и не переносит запрос в URL/storage. Настройки/стоимость/подтверждение остаются в кабинете. Native HTML/SVG hero и checklist показывают этапы, не обещают работающий автоматический canvas или совместное редактирование. Чужие партнёры, клиенты, отзывы, квоты и free-plan claims не перенесены; вместо них — доступные направления работы.
+
+[WorkflowWalkthrough](../src/features/workflow/WorkflowWalkthrough.tsx) открывается из hero-узлов, onboarding, баннера и всех карточек. На странице сохраняется один h1; dialog показывает inputs/outputs, ограниченные шаги, табы со стрелками/Home/End, Previous/Next и реальную ссылку текущего шага в кабинет. Onboarding открывает настоящий guide, не фиктивный видеоплеер. Dialog переиспользует backdrop/scroll lock/focus trap/Escape; адаптер сохраняет opener до установки native inert, снимает inert в layout-effect и восстанавливает фокус после cleanup диалога. Регрессионный тест моделирует blur при native inert. Поиск использует тот же механизм восстановления фокуса; его публичная загрузка каталога остаётся прежней. Карусель ограничена краями; FAQ — нативная exclusive-group. Мобильная схема имеет собственную раскладку, без горизонтального скролла страницы.
+
+Локально упакованы 15 reference-изображений: [происхождение](../public/assets/images/workflows/README.md), [URL/форматы/размеры/SHA/pixel-проверка](../../../docs/research/workflow-reference-media.json). Настоящий WebP сохраняет байты; AVIF/PNG/JPEG преобразованы в lossless WebP с совпадением декодированных RGBA-пикселей. Имена/геометрия — [workflow-reference-en.ts](../src/i18n/public/workflow-reference-en.ts). Они подписаны как reference, не как подтверждённые результаты Epifera. Чужие JS, клиентские логотипы, портреты/курсоры участников, запись интерфейса и tracking не включены. Новых зависимостей, движка workflow, provider/billing/auth/backend или persistence изменений нет.
+
+<a id="documentation-help"></a>
+
+### Документация и помощь
+
+[DocumentationCenter](../src/features/documentation/DocumentationCenter.tsx) реализует T11 по сохранённому Magnific №11: основной пример `/en/ai/docs/account-management`, каталог `/en/ai/docs` и ещё шесть действительных статей. Сверка — desktop 0254, mobile 0278 и меню 0198; геометрия обложки курса здесь не используется. Все восемь маршрутов явно draft/noindex вне sitemap, русские версии пустые, неизвестный slug даёт 404. В AcademyNavigation есть переход к новому Help Center.
+
+Совпадающая оболочка — [HelpCenterFrame](../src/components/public/help-center/HelpCenterFrame.tsx) с `kind="documentation"`, теми же rail, breadcrumbs, auth/utility row, двумя независимыми scroll-panels и [HelpCenterDrawer](../src/components/public/help-center/HelpCenterDrawer.tsx). Изменён только union kind; defaults курса и правовых страниц сохранены. Документация владеет article-specific отступами/типографикой, навигацией и телом. Она не использует шапку/подвал главной; смены темы/языка здесь нет.
+
+[DocumentationNavigation](../src/features/documentation/DocumentationNavigation.tsx) ищет по заголовкам, описанию, названиям секций и тексту всех семи статей: trim, lower-case и все слова запроса. Фильтрация раскрывает группы даже после ручного сворачивания, показывает пустое состояние и восстанавливает активную группу при очистке. Результат — реальный локальный маршрут; текущая статья отмечена aria-current. На мобильном переход закрывает drawer, Escape возвращает фокус; поиск входит в существующий focus trap, фон inert.
+
+[documentation-en.ts](../src/i18n/public/documentation-en.ts) содержит четыре группы, семь статей и оригинальные тексты Epifera. [Контракт](../src/features/documentation/documentation-model.ts): `documentationPath`, `documentationArticlePath`, `findDocumentationArticle`, `searchDocumentation`, `documentationNeighbours`; строгие slugs, ограниченные предыдущая/следующая. Статья имеет title/description/introduction и sections с уникальными id; blocks — paragraph с типизированными ссылками, list, numbered steps, callout и questions. [DocumentationArticle](../src/features/documentation/DocumentationArticle.tsx) рендерит React-текст без raw HTML/JS/CMS. Нативное оглавление прокручивает только readingPanel; начальный hash применяется после сброса readingKey. Внизу — соседние статьи и mailto support, без автоматической отправки.
+
+Тексты сверены с фактическими настройками аккаунта, verified primary/backup email, сессиями и двухмесячным хранением созданных файлов. Не переносятся чужие Google/Apple/Facebook, лимит трёх устройств, автоматическая 2FA, ручной временный пароль, активационные коды или фиктивное самостоятельное удаление аккаунта. Запрос удаления аккаунта — обращение в support; удаление результата и финансовая история описаны отдельно. Статья оплаты ссылается на реальные `paid-access`/`payment-details`, не назначает тарифы и условия. Share переиспользует EditorialShare: явное копирование только origin+pathname с настоящим pending/success/fallback. Нет новых медиа, зависимостей, network search, Jobs, auth/provider/billing/backend изменений.
+
+<a id="academy-course"></a>
+
+### Курс, урок и общая оболочка центра помощи
+
+[AcademyCourse](../src/features/academy/AcademyCourse.tsx) реализует T10: `/en/academy/courses/epifera-essentials` и 14 реальных дочерних маршрутов текстовых уроков. В раннем HTML №10 сохранён loader; макет сверяется с поздними loaded-снимками 0274–0276 desktop и 0279 mobile. Русские страницы пустые; overview и все уроки явно объявлены draft/noindex и исключены из sitemap. Не копируются чужие 28 видео, длительность, инструкторы, сертификаты или completion claims. Формат прямо указан как Text + practice; время чтения рассчитывается из собственного текста, практика в оценку не входит.
+
+Совпадающие с T23 панель значков, верхняя строка, sidebar/reading-area и мобильные меню вынесены в [HelpCenterFrame](../src/components/public/help-center/HelpCenterFrame.tsx), [HelpCenterDrawer](../src/components/public/help-center/HelpCenterDrawer.tsx) и [HelpCenter.module.css](../src/components/public/help-center/HelpCenter.module.css). [Контракт](../src/components/public/help-center/types.ts): kind, labels, rail items, breadcrumbs, readingKey, renderNavigation, children; optional mainClassName, hideMobileBreadcrumb и utilityAction. Default support-action и legal-геометрия сохранены. LegalPageFrame — адаптер своего безопасного словаря/навигации/текущего slug. Callback навигации создаётся внутри client-адаптера; серверные реквизиты не переходят в новый общий контракт. Drawer делает фон inert, удерживает фокус с учётом search input и всех закрытых предков details, закрывается по Escape/фону и возвращает фокус. Desktop media-query закрывает мобильное меню.
+
+Обзор курса повторяет собственную академическую структуру: широкая синяя обложка, See more/less, семь групп программы, Start course, детали и шесть тегов. На телефоне details/tags идут перед описанием и программой; desktop rail/sidebar скрыты, меню сайта и курса доступны отдельно. [CourseCover](../src/features/academy/CourseCover.tsx) создан нативными CSS/SVG с существующим BrandLogo и пятью декоративными панелями, без чужого Magnific-logo растра/скриптов. Course overview открывает реальный текстовый обзор целей/подготовки через LandingDialog, без фиктивного плеера. Share повторно использует EditorialShare: явный Copy, origin+pathname, pending/success/fallback без внешних постов.
+
+Данные — [course-en.ts](../src/i18n/public/course-en.ts): семь модулей по два оригинальных урока. [course-model.ts](../src/features/academy/course-model.ts) даёт courseLessons/findCourseLesson, стабильные пути, текущий порядок и оценки чтения. [AcademyNavigation](../src/features/academy/AcademyNavigation.tsx) ищет только в названиях этого курса, раскрывает результаты, показывает пустое состояние, отмечает текущий урок и открывает его модуль; статьи ведут на существующий T09. Чужие/пустые курсы не добавляются. [CourseLesson](../src/features/academy/CourseLesson.tsx) выводит цель, учебные шаги, упражнение и ожидаемый результат экранированным React-текстом; Previous/Next ограничены порядком, последний урок ведёт назад в курс. Неизвестный slug даёт 404. Кнопки практики ведут к существующим workspace-страницам, ничего не подставляют и не отправляют. Нет автогенераций, POST, оплаты, progress persistence, auth/billing/provider/backend изменений. Из связанных материалов T09 доступен новый курс.
+
+<a id="audience-page"></a>
+
+### Публичная страница профессии или отрасли
+
+[MarketingAudience](../src/features/audience/MarketingAudience.tsx) реализует T07 на `/en/ai/marketing` по сохранённому макету Magnific №07. Русский маршрут пустой; оба остаются draft/noindex вне sitemap. Собственная оболочка: muted video hero, пять ссылок на существующие модели вместо чужих клиентских логотипов, три примера с фильтрами All/Branding/Advertising/Fashion, четыре панели задач, карусель из одиннадцати инструкций, три карточки процесса/стоимости, feedback-callout, шестнадцать карточек инструментов и центрированный подвал. Из обзорного раздела teams ведёт существующая карточка кампаний; количество карточек не меняется. FAQ в этом референсе нет.
+
+Тексты — [marketing-en.ts](../src/i18n/public/marketing-en.ts), медиа — [marketing-reference-en.ts](../src/i18n/public/marketing-reference-en.ts). Локально упакованы 35 изображений и один WebM: PNG/WebP/WebM сохраняют байты, четыре JPEG конвертированы в lossless WebP с проверкой декодированных пикселей. [Происхождение и ограничения](../public/assets/images/marketing-audience/README.md). Чужие JS/трекеры, клиентские SVG, отзывы, числа пользователей, цены/безлимит, гарантии 10K/SVG и бета-программа не выдаются за возможности Epifera.
+
+Примеры и инструкции открывают общий `LandingDialog` с изображением, собственными шагами и переходом к существующим инструментам. Это инструкции, а не исполняемые автоматические цепочки или чужие видеокурсы. Отдельные редакторы/upscaler/Spaces/designer помечены Coming soon и не получают фиктивного запуска. Feedback — только `mailto:support@epifera.com`; письмо автоматически не отправляется. Запусков Jobs, платных вызовов, staging промптов, новых прав, persistence, провайдерских или backend-изменений нет.
+
+Переиспользованы `LandingHeader/Footer/Dialog/Carousel`, `HomeSearch`, `OverviewTabs`, `ModelPicture/ModelVideo`. В `ModelMedia` добавлен assetBase `marketing-audience`; прежние defaults family/version сохранены. Видео приостанавливается по кнопке, вне экрана, при скрытой вкладке, поиске/просмотре и reduced motion. Мобильная лента моделей повторяется декоративными span с `aria-hidden`, без дублирования ссылок; останавливается по кнопке, hover/focus и reduced motion, а фокусные ссылки остаются в видимой области. Клавиатура вкладок — стрелки/Home/End; карусели ограничены реальными краями. Новый общий [LandingPlanCards](../src/components/public/landing/LandingPlanCards.tsx) принимает `id`, `title`, `description`, `items` с `label/title/description/points/action/href`, сохраняет совпадающее оформление и прежние ссылки T06.
+
+<a id="task-solution"></a>
+
+### Публичное решение конкретной задачи
+
+[TattooSolution](../src/features/task-solution/TattooSolution.tsx) реализует T06 на `/en/ai/tattoo-generator` по сохранённому Magnific №06. Русский маршрут пустой; оба draft/noindex, вне sitemap. Страница владеет оболочкой: тёмный split hero, три редактируемых поля, четыре пресета стиля и три места, пять примеров, четыре шага, три чередующихся блока, карусель из семи сценариев, каталог моделей/инструментов, восемь вкладок AI-клиентов, три карточки процесса, восемь визуальных карточек, пятнадцать FAQ и центрированный подвал. К ней ведёт ссылка Tattoo ideas из связанных инструментов генератора изображений.
+
+Тексты — [tattoo-en.ts](../src/i18n/public/tattoo-en.ts), медиа с размерами — [tattoo-reference-en.ts](../src/i18n/public/tattoo-reference-en.ts). Все 24 изображения локальные и подписаны как референс: PNG/WebP сохранены, JPEG упакованы в lossless WebP с проверкой совпадения декодированных пикселей. [Источник и ограничения](../public/assets/images/tattoo-solution/README.md). Чужие клиентские логотипы, отзывы, цены, сертификаты и обещания безлимита не переносятся. Перед публичным запуском нужны собственные/разрешённые медиа и окончательное согласование содержания.
+
+`TattooHero` валидирует непустую идею, пресеты заполняют обычные редактируемые поля. Только явный submit формирует ограниченное по длине описание через [composeTattooPrompt](../src/features/task-solution/tattoo-prompt.ts), передаёт его в существующий временный `stageImagePrompt` и открывает `/app/image` с сохранением языка. Нет Job, платного вызова, URL с описанием, browser storage, загрузки тела/фото или автоматической генерации. Модель, число результатов, поддерживаемые inputs и цена выбираются в существующем генераторе; точное прилегание и готовый трафарет не обещаются. Backend, допуск моделей и биллинг не меняются.
+
+Общие `LandingHeader/Footer/Dialog/Carousel`, `HomeSearch`, `InputSurface`, `Button` и `FAQ` переиспользованы; совпадающие восемь MCP-вкладок берутся из `OverviewConnections`; их CTA ведёт на `/mcp`, сохраняя Coming soon. Три карточки процесса выводит общий `LandingPlanCards`, также используемый T07, с прежними текстами и ссылками T06. Будущие сценарии открывают Coming soon, без внешних endpoint/launcher URL. Просмотр примера удерживает/возвращает фокус, закрывается Escape; шаги инструкции поддерживают стрелки/Home/End, FAQ — нативную эксклюзивную группу. Оформление нового hero/инструкции остаётся отдельным CSS-модулем, поскольку геометрия отличается от предыдущих инструментов.
+
+<a id="model-version"></a>
+
+### Публичная страница версии модели
+
+[Kling30Landing](../src/features/model-version/Kling30Landing.tsx) реализует T05 по сохранённому макету Magnific №05 на `/en/ai/kling/kling-3-0`. Русский маршрут пустой, оба остаются draft/noindex и исключены из sitemap по [kling30Publication](../src/app/(public)/ai/kling/kling-3-0/publication.ts). Название Kling 3.0 в таблице и timeline семейства ведёт на страницу версии; отдельная кнопка View сохраняет переход к существующему `video_kling_v3` в кабинете.
+
+Структура: hero с breadcrumb/status/CTA, три смысловых ярлыка, восемь примеров в смешанной галерее, четыре раздела оглавления, отличия от Kling 2.6, девять характеристик, три сценария с изображениями и блок сравнения, три показателя архивного исследования, пять FAQ, финальный баннер и связанные ссылки. Тексты — [kling30-en.ts](../src/i18n/public/kling30-en.ts), локальные медиа и исследование — [kling30-reference-en.ts](../src/i18n/public/kling30-reference-en.ts). 12 изображений и один ролик сохраняют исходные байты; [происхождение](../public/assets/images/model-version/README.md).
+
+Общие `GeneratorChapter`, `GeneratorSectionNavigation`, `GeneratorLanding.module.css`, `ModelLanding.module.css` и `ModelMedia` используются только для совпадающего оформления референсов. `ModelPicture`/`ModelVideo`/`ModelGallery`/`ModelGalleryDialog` принимают `assetBase="model-family" | "model-version" | "marketing-audience"`, по умолчанию family. Галерея принимает свой title, просмотрщик — title/testId/href; значения по умолчанию семейства сохранены. `FamilyMedia` остаётся совместимым реэкспортом. При `:focus-visible` внутри галереи анимация снимается, чтобы карточка с клавиатурным фокусом находилась в видимой прокручиваемой области; hover/focus/pause и reduced motion также учитываются.
+
+Характеристики используют существующий [kling-catalog-en.ts](../src/i18n/public/kling-catalog-en.ts), извлечённый из application-профиля preview-каталога, включая aspect ratios. Неизвестный FPS не придумывается; референсы и выбор native audio обозначены как неподключённые. Текущую цену и доступность пользователь проверяет в рабочем генераторе. Эта страница не отправляет Job, не сохраняет prompt и не расширяет допуск модели/API. Сертификаты, цены и планы Magnific не выдаются за предложения Epifera. Галерея и исследование явно обозначены как референс Magnific; права и финальные материалы нужно согласовать перед индексируемой публикацией.
 
 <a id="faq"></a>
 
@@ -611,6 +743,607 @@ HTTP-ошибки, неверный формат, отсутствие CSRF и �
 идентичность проверяет backend. Отзыв доступен без принятия новых условий и при
 приостановке публикации. Черновики и preview не создают фиктивных согласий.
 
-Публичные `/legal` и `/legal/[slug]` используют `PageContainer`, общий header/footer
-и экранированный JSX. Подробности runtime и ограничений:
+Публичные `/legal` и `/legal/[slug]` заново собраны по сохранённому референсу Magnific №23.
+Прежняя тестовая вёрстка и её отдельные классы в `Legal.module.css` удалены;
+стили регистрации, оплаты и профиля в этом файле сохранены.
+[LegalPageFrame](../src/features/legal/LegalPageFrame.tsx) адаптирует общий
+[HelpCenterFrame](../src/components/public/help-center/HelpCenterFrame.tsx): узкую панель
+иконок, верхнюю строку с хлебными крошками и независимо прокручиваемые панели.
+[LegalNavigation](../src/features/legal/LegalNavigation.tsx) группирует пять реальных
+документов, раскрывает группу текущего документа и отмечает его `aria-current`.
+[HelpCenterDrawer](../src/components/public/help-center/HelpCenterDrawer.tsx) использует общие `ModalBackdrop`
+и `ModalCloseButton`: на мобильных доступны отдельные меню сайта и документов,
+блокировка фона, удержание фокуса, закрытие по Escape/фону и возврат фокуса.
+
+Серверный [LegalPageContent](../src/features/legal/LegalPageContent.tsx) выводит
+утверждённый русский текст экранированным JSX; таблицы имеют отдельную
+горизонтальную прокрутку. В клиент передаются только названия/slug для навигации
+и уже отрисованные сервером children, а не весь каталог с реквизитами.
+RU/EN подписи оболочки находятся в [legal-page.ts](../src/i18n/public/legal-page.ts);
+английский URL не означает перевод договора. Собственная геометрия и цвета
+ограничены `HelpCenter.module.css`; шапка/подвал главной здесь не повторяются.
+Оба языка, старые URL, noindex и исключение из sitemap сохранены. Новое оформление
+проверено локально; отдельная выкладка этого изменения не выполнялась.
+Подробности runtime и ограничений:
 [WEB_LEGAL](../../../docs/runbooks/WEB_LEGAL.md).
+
+<a id="example-collection"></a>
+
+### Подборка примеров / промптов — T13
+
+[ExampleCollection](../src/features/collection/ExampleCollection.tsx) принимает typed
+`ExampleCollection` из [collection-en](../src/i18n/public/collection-en.ts): id,
+slug, title/description, curator/curatorNote, memberType, selectionRule,
+orderedMemberIds, taxonIds и ordered members (id, локальный src, alt, dimensions,
+tags, suggested prompt). Текущая страница — /en/inspiration/cinematic-scenes;
+русский маршрут пустой, обе декларации draft/noindex и не входят в sitemap.
+
+Reference 13 имеет собственные rail/search/topbar и построчную сетку 1/2/3/4
+колонки. Здесь нет reading sidebar HelpCenterFrame и шапки главной; MasonryGrid
+с CSS-колонками тоже не совпадает. Порядок карточек сохраняется при изменении
+ширины. BrandLogo, HelpIcon, MediaImage и совпадающий LandingFooter переиспользуются.
+48 фото пакованы локально; источники и pixel/hash verification —
+[manifest](../../../docs/research/collection-reference-media.json). Число считается
+по реальному набору, без чужих 64 изображений, followers и Premium entitlement.
+
+[CollectionCard](../src/features/collection/CollectionCard.tsx) использует общий
+PopoverPanel для Use: preview suggested prompt или in-memory handoff в /app/image.
+Optional className/actions позволяют совпадающей карточке T15 задать собственную
+геометрию и download/save slot; без них прежние T13 defaults сохранены.
+[CollectionPreview](../src/features/collection/CollectionPreview.tsx) специализирует
+MediaPreviewDialogTemplate: стрелки, миниатюры, клавиатура, MediaImage, copy prompt
+с честной ошибкой. Промпты — редакционные suggestions к reference, не оригинальные
+метаданные/результаты генерации. Нет provider calls, job submit или URL/storage prompts.
+
+CollectionChrome — адаптер общего ReferenceChrome: matching rail/topbar/mobile navigation,
+с теми же размерами и labels. Локальный поиск по всем 48 members независимо от текущего экрана; мобильный поиск и Tools используют
+LandingDialog. Фон модального окна inert, Escape/backdrop/focus return сохраняются,
+включая открытие viewer из Use menu. Нулевая выдача имеет очистку и пояснение.
+
+Save сохраняет только публичные IDs в epifera.saved-collections (до 100), синхронизирует
+вкладки через общий deviceBookmarks с прежним storage-key и отображает Saved on this device; это не серверная коллекция аккаунта.
+Ошибки доступа к browser storage не превращаются в success. Share копирует текущий
+URL коллекции; при недоступном clipboard показывает выделяемый URL. Никаких
+переключателей темы/языка или новых backend/auth/billing contracts.
+
+<a id="public-example"></a>
+
+### Публичный пример результата — T14
+
+[PublicExamplePage](../src/features/public-example/PublicExamplePage.tsx) получает
+`PublicExampleRecord` из [public-example-en](../src/i18n/public/public-example-en.ts).
+Поля: публичный slug/id, media и publicMediaIds, origin/provenance, modelVersionId,
+consentRef/moderationState, promptPublicationAllowed, taskIds/taxonIds, отдельный
+suggestedPrompt/reproductionNotes, local downloads, series/similar. В текущем
+статическом примере нет private artifact IDs, аккаунта или публичного API загрузки
+пользовательских результатов. Модель/исходный промпт не известны, consentRef=null,
+origin=reference и moderationState=reference-only не означают approval backend.
+
+/en/inspiration/examples/aesthetic-flowers и пустой русский counterpart —
+draft/noindex вне sitemap. Из T13 есть отдельная ссылка на этот образец, без
+приписывания цветочного изображения к cinematic series. Artwork — reference 14
+из сохранённого архива; настоящее превью 606×1060, не объявленные в чужом HTML
+3072×5376. [Манифест](../../../docs/research/public-example-reference-media.json)
+содержит 19 изображений и PNG download, исходники/хеши/decoded-pixel checks.
+Отсутствующий в кешах последний related-файл не заменён пустой карточкой.
+
+Совпадающие T13/T14 панели вынесены в
+[ReferenceChrome](../src/components/public/reference/ReferenceChrome.tsx) и его CSS.
+Контракт: search-slot, current labels (label/mobileLabel/searchLabel/searchButtonLabel),
+onSearch/onTools. ReferenceTools использует тот же LandingDialog/ссылки инструментов.
+Коллекция сохраняет свой локальный поиск; T14 открывает существующий HomeSearch
+по всем моделям. Оба используют BrandLogo/HelpIcon и прежние auth destinations.
+Новых переключателей темы/языка нет; reading-sidebar HelpCenterFrame не добавляется.
+
+ExampleArtwork: крупное изображение и увеличенный viewer, editable variation
+form/presets, hide/reopen с возвратом фокуса. Пресеты только заполняют текст; submit
+передаёт suggested prompt + инструкцию через существующий stageImagePrompt и
+локализованный router в /app/image. Ни URL, ни storage не содержат prompt;
+задания не создаются, исходное фото не объявляется автоматически прикреплённым.
+
+ExampleActions: реальные PNG/WebP preview-downloads с brandFilePrefix; formats
+и More через PopoverPanel. Copy image запрашивает только local PNG, проверяет MIME
+и использует ClipboardItem; недоступный clipboard/network показывает ошибку и
+оставляет скачивание. Save использует общий
+[deviceBookmarks](../src/components/public/reference/device-bookmarks.ts) с
+epifera.saved-examples (только до 100 public IDs), сохранение на устройстве не
+выдаётся за серверную коллекцию. Share копирует чистый current-origin URL, иначе
+показывает выделяемое поле. Информация сообщает источник/размер и неизвестные
+модель/промпт; suggested prompt отделён от source metadata.
+
+ExampleDialogs специализирует существующие LandingDialog/MediaPreviewDialogTemplate,
+с inert, Escape/backdrop, thumbnails/arrows и focus return, включая More → prompt.
+ExampleRelated использует две bounded LandingCarousel с controls="overlay";
+default above и другие потребители сохранены. Tags фильтруют похожие изображения
+в памяти; related-карточки открывают выбранный локальный viewer. Общий LandingFooter
+переиспользуется там, где структура совпадает. Backend/auth/billing/provider
+контракты и публикация чужих пользовательских данных не меняются.
+
+<a id="material-category"></a>
+
+### Категория материалов — T15
+
+[MaterialCategoryPage](../src/features/material-category/MaterialCategoryPage.tsx)
+на /en/photos/nature заново собрана по сохранённому reference 15. Русский counterpart
+пустой, обе декларации draft/noindex и не входят в sitemap. Свой компактный intro,
+related-topic chips, sort, sticky filters, dismissible creative-tools banner, results,
+pagination и related tools; совпадающие ReferenceChrome/Tools/Footer переиспользуются.
+T13 related links ведут в категорию, его 48 members не меняются.
+
+[natureCategory/natureMaterials](../src/i18n/public/material-category-en.ts): typed
+StockCategory (mediaType, taxonId, selectionQuery, sortPolicy, filterDefinitions,
+relatedCategoryIds) и 50 MaterialRecord, совместимых с CollectionMember. Каждый
+содержит actual dimensions, tags, orientation, measured dominant RGB/color bucket,
+explicit source AI label, unspecified license/people, normalized WebP и editorial
+suggested prompt. [Provenance/hash/pixel verification](../../../docs/research/material-category-reference-media.json).
+No AI label не объявляет изображение не-AI; неизвестные лицензия/people остаются
+неизвестными. Нет Premium badges, fake commercial rights, dates/popularity counts
+или неизвестных file formats. Реальная выдача включает только доступные previews.
+
+[category-model](../src/features/material-category/category-model.ts): filterMaterials,
+paginateMaterials и packMaterials — чистые функции. Search/topic/filters/sort сбрасывают
+страницу на 1; layout сохраняет выбор. Relevance = source order, name = localeCompare,
+largest = actual pixel area. 24/24/2 результата без повторов; пустая выдача/reset,
+реальные counters и bounded page buttons. Фильтры хранятся в памяти, не создают
+индексируемые URL-варианты или запросы к provider/backend.
+
+[MaterialFilterBar/Dialog](../src/features/material-category/MaterialFilters.tsx):
+desktop ScrollArea + PopoverPanel с radio choices, ModeSwitchPanel iconOnly для
+Masonry/Square; mobile LandingDialog использует те же definitions/selects, reset
+и Show results. Native Escape/фон, inert и focus return, включая закрытие через
+Apply. React Compiler требует captured stable setOpen в useCallback dependencies;
+линтер не отключён, stable setter dependency допустима.
+
+[MaterialGrid](../src/features/material-category/MaterialGrid.tsx) измеряет контейнер
+через ResizeObserver, использует tested shortest-column geometry и natural ratios.
+Это не CSS-columns MasonryGrid: исходный DOM порядок соответствует source row
+order, каждая следующая карточка занимает кратчайшую колонку. Masonry: 1/2/3/4
+колонки, gap24; Square: 1/2/3/4, gap16. SSR fallback — обычная responsive grid,
+после измерения позиции абсолютные; computed height сохраняет нормальный scroll.
+Shared CollectionCard принимает optional className/actions, default T13 неизменён;
+MediaImage/Use menu/CollectionPreview переиспользуются. Slot добавляет настоящий
+WebP download с brandFilePrefix и deviceBookmarks epifera.saved-materials (public
+ID only, до100). Нет accounts/jobs/private artifacts, auto generation или prompt
+persistence. Native viewer/keyboard/return, device-save restoration и download MIME
+проверены. Смены темы/языка вне аккаунта не добавляется.
+<a id="material-detail"></a>
+
+### Карточка материала — T16
+
+[MaterialDetailPage](../src/features/material-detail/MaterialDetailPage.tsx) на
+/en/stock/items/dried-gypsophila/gypsophila-01 повторяет сохранённый reference 16:
+портретное фото 417×626 на desktop, полноширинное фото на mobile, автор, action
+panel, source/rights dialog, отдельные карусели фото, PSD, vectors и video stills,
+теги и footer. Russian counterpart пустой, оба пути draft/noindex вне sitemap.
+Категория nature содержит отдельную matching featured card; 50 прежних результатов
+и их previews не подменяются другим изображением.
+
+[StockItem/gypsophilaMaterial](../src/i18n/public/material-detail-en.ts) содержит
+mediaType, publicMediaIds, creatorId/source creator, licenseRef, explicit unverified
+rights, actual fileDescriptor/downloadPolicy, categoryIds/taxonIds, local downloads
+и related media. rawpixel.com — автор по metadata источника, не пользователь Epifera.
+Фотография по source metadata не AI-generated. Исходный original 4667×7000 JPEG
+не доступен: downloads предлагают cached 706×1060 WebP/PNG и brand filenames.
+Лицензия источника — ссылка для проверки, не переданные коммерческие права.
+35 local files (24 image references, 10 video posters, 1 PNG), SHA256/actual bytes,
+dimensions и decoded-pixel equality: [manifest](../../../docs/research/material-detail-reference-media.json).
+Видео доступны как stills, MP4 нет; layered PSD/vector originals не предлагаются.
+Нет remote image requests, чужих avatars/scripts/trackers/Premium claims.
+
+Совпадающие T14/T16 элементы переиспользуются, defaults T14 сохранены:
+
+- ExampleArtwork принимает Pick<PublicExampleRecord,"media"|"suggestedPrompt">,
+  optional showBadge (default true), presets и originNote. T16 отключает AI badge,
+  задаёт editorial variation presets и собственную source note. Data attributes
+  reference-stage/artwork/editor позволяют scoped layout без CSS-копии. Изменение
+  только stages prompt в памяти и переходит в /app/image; файл не прикрепляется,
+  генерация не запускается. Hide/reopen возвращает фокус инпуту.
+- ExampleActions принимает Pick<PublicExampleRecord,"id"|"media"|"downloads"|"provenance">,
+  optional ReferenceActionLabels и bookmarkStore (default saved-examples). T16
+  использует saved-materials и Usage/license вместо Suggested prompt. Public-ID
+  bookmarks, PNG ClipboardItem, honest errors, PopoverPanel formats/More сохранены.
+  Share копирует чистую own-detail ссылку или показывает выделяемое поле.
+- RelatedRow принимает kind series/similar/designs/stills; только series добавляет
+  See all. Bounded LandingCarousel и MediaImage одинаковы; T14 defaults не меняются.
+- ReferenceChrome/Tools, HomeSearch, LandingDialog, ExampleViewer и LandingFooter
+  совпадают с референсом. Parent captures trigger до inert; close restores focus,
+  включая More → license. Viewer arrows/thumbnails/Escape работают на desktop/mobile.
+
+Теги фильтруют только фото; PSD/vector/video-still rows сохраняют свои наборы.
+Download, save, share, info, similar, zoom/search/tools реальные; недоступные
+файлы/права/playback не выдаются за доступные. Backend/Jobs/private storage без изменений.
+<a id="integration-template"></a>
+
+### Интеграция / приложение — T17
+
+[IntegrationLanding](../src/features/integration/IntegrationLanding.tsx) на `/en/mcp`
+собрана по сохранённому Magnific reference 17: hero с фоном, восемь client tabs,
+панель подготовки подключения, шесть направлений, видео, пять alternating feature
+rows, comparison, шесть brief cards и одиннадцать FAQ. `/ru/mcp` пустой; оба пути
+явно draft/noindex вне sitemap. Своя геометрия hero/body/CSS, поскольку narrow
+stock rail и HelpCenterFrame не совпадают с этим макетом. Совпадающие
+LandingHeader/Footer(centered), HomeSearch/Dialog, MediaImage/Video, FAQ и
+keyboardTab из HomeSuite переиспользованы без изменения их defaults.
+
+[integration-en](../src/i18n/public/integration-en.ts): typed IntegrationRecord,
+integrationType=mcp, status=planned, восемь platform names, supportedVersion=null,
+endpoint=null, setupSteps/accessConditions/limitations, verifiedDestination=/app,
+verificationRef на локальный план. Это шаблон страницы будущего сервиса; MCP
+сервер, поддержка версий клиентов, launcher URLs, install commands, токены,
+OAuth, directory listings и MCP billing не реализуются и не объявляются доступными.
+Клиентские вкладки переключают подготовительные шаги и guide/status dialogs;
+field не выдаёт фиктивный endpoint. Generic launch не требует useCallback;
+только search callback стабилен относительно dialog для эффекта общего header.
+React Compiler manual-memoization rule сохранён, не отключён.
+
+IntegrationHero: roving Arrow/Home/End, linked tab/panel IDs, внутренний horizontal
+scroll на mobile, управление фокусом. IntegrationClientIcon повторяет path geometry
+существующих Claude/OpenAI/Gemini SVG без белого card background; глобальные model
+icons/реестр не меняются. Оставшиеся client marks — декоративные символы, имена
+клиентов доступны текстом. CTA нижних секций возвращает к выбранной вкладке.
+Диалоги сохраняют opener до native inert и восстанавливают его после cleanup;
+мобильные меню/search используют прежние общие механизмы. Status/guide содержат
+реальные ссылки в workspace/help и mailto без автоматической отправки.
+
+IntegrationBriefs: шесть оригинальных editorial briefs, отдельные Preview и Copy
+buttons, выбранный reference visual/stages, pending/success/error. Clipboard
+пишется только по явному Copy; при отказе доступен выделяемый fallback text.
+Ни prompts, ни account IDs/tokens/files не сохраняются в URL/storage; Jobs,
+provider, connector и payment requests не запускаются. FAQ — native exclusive
+name=integration-faq, светлая scoped presentation с plus/minus; без публичной
+смены темы/языка.
+
+[Медиа manifest](../../../docs/research/integration-reference-media.json): 13 cached
+изображений + один WebM, actual dimensions/bytes/SHA и decoded-pixel/byte equality.
+Реальные AVIF/PNG/WebP сохранены с корректными расширениями. Hero AVIF имеет alpha;
+обычный WebP encoder изменял RGB полностью прозрачных пикселей, поэтому исходный
+AVIF сохранён побайтово вместо такого преобразования. Видео/interface illustrations
+явно подписаны Magnific reference, не запись работающей Epifera integration.
+Видео открывается по Watch reference video в MediaVideo с controls/preload metadata,
+без autoplay; playback/seek/native media state доступны. Перед индексацией нужны
+собственные/лицензированные финальные media, copy и реальная admission интеграции.
+
+Shared OverviewConnections теперь не принимает onPreview: MCP CTA — языковой Link
+в /mcp, существующие Coming soon/client panels сохранены. Обновлены оба потребителя:
+ToolsOverview (T02) и TattooSolution (T06), включая регрессионные тесты; остальные
+planned previews остаются прежними. Backend/auth/billing/Jobs/provider без изменений.
+
+## Pricing template
+
+T18: [PricingLanding](../src/features/pricing/PricingLanding.tsx) на /en/pricing,
+сохранённый референс Magnific 18. Русская версия намеренно пустая; обе explicit
+draft/noindex и вне sitemap. Только локальная разработка, без публикации.
+
+Светлая editorial LandingHeader с собственной scoped статичной presentation,
+HomeSearch, centered LandingFooter, LandingDialog, FAQ, PopoverPanel, ScrollArea,
+CreditAmount и BrandLogo/BrandName переиспользуются там, где совпадают с макетом.
+Нет публичных theme/language switches. Hero, три individual cards, две team cards,
+брендовый banner, сравнение, ссылки инструментов, три editorial workflow cards,
+десять FAQ и support callout. Не выданы за факты иностранные клиенты/отзывы,
+права на контент, безлимит, скидки, тарифные лимиты или коммерческие лицензии.
+
+[subscription-preview.ts](../src/features/pricing/subscription-preview.ts) —
+единый явно названный UI-preview для базовых names/amounts/stars; его также
+использует существующий SubscriptionPlansDialog. Это прежний макет подписок,
+а не authenticated server payment-products catalog: старые discounts/features,
+кнопки и checkout-поведение кабинета не меняются. Start+/Pro/Ultima/Elite показаны
+как предварительные варианты. Lite — отдельный weekly trial concept в справке.
+Финальные product/amount/credits всегда принадлежат серверу. Typed pricingOffer
+явно subscription-preview; annualOffer/teamPrice null, Offer JSON-LD не публикуется.
+
+Period switches синхронны. Yearly estimate = 12 monthly preview amounts, без
+годовой скидки, обещания yearly purchase или годового начисления stars. Месячная
+star allocation при переключении не меняется. Weekly Lite из оценки исключён.
+Capacity select Ultima/Elite обновляет карточку и соответствующий столбец сравнения.
+Individual/Teams используют roving tabs с arrows/Home/End. Team seats — только
+целое 2–100; invalid input отключает обе enquiry buttons. Два quote dialogs
+содержат локальный selectable brief и явный Copy с success/failure fallback;
+нет PII-формы, отправки письма, price-per-seat, покупки или изменения подписки.
+
+Сравнение — semantic table в горизонтальном ScrollArea с keyboard-focusable
+region, sticky feature column, synced period switch, selectable plans в PopoverPanel.
+Минимум один план: последняя remove/checkbox заблокирована. Restore возвращает
+Start+/Pro/Ultima. Table minimum width зависит от числа выбранных plans; горизонтальный
+overflow остаётся внутри region. Source-like сетка: две колонки/max848 ниже1320px,
+три на широкой странице, одна на mobile. Проверены390/820/1280/1600px без page overflow.
+
+Dialogs запоминают opener до native inert; Escape/Close возвращают фокус после
+cleanup. Search использует общий каталог/умный поиск (русские имена тоже), не
+создаёт платных запросов. Enquiry копируется только по явному нажатию. Period,
+audience, capacity, seats и comparison живут в памяти, не в URL/storage. Нет
+изменений auth/backend/provider/Jobs/ledger/payment-intents/private artifacts.
+
+[Media manifest](../../../docs/research/pricing-reference-media.json): один
+cached source background, actual PNG626x86/78269bytes с SHA и pixel equality;
+остальные visuals — native Epifera brand/icons/CSS. Перед indexed launch нужны
+утверждённые реальные предложения и финальные собственные/лицензированные media.
+Существующая Pricing-ссылка ReferenceChrome ведёт на новый маршрут; own header
+тоже содержит Pricing. /en/inspiration/examples/aesthetic-flowers → /en/pricing
+проверен через настоящий браузер.
+
+## Business template
+
+T19: [BusinessLanding](../src/features/business/BusinessLanding.tsx) на /en/business,
+сохранённый Magnific reference19. Русская версия пустая; обе draft/noindex вне
+sitemap. Matching LandingHeader/centered LandingFooter, HomeSearch/LandingDialog,
+MediaVideo, LandingCarousel, FAQ, ScrollArea и BrandLogo переиспользуются без
+изменения defaults. Отдельная scoped dark/pink presentation; публичной смены
+темы/языка нет. For teams в homeEn/aiToolsEn теперь ведёт в /business, включая
+главную, обзор инструментов и тарифы. Остальные nav/CTA поведение сохранены.
+
+[BusinessPlan](../src/i18n/public/business-en.ts) — typed planned concept:
+seatRange2–100, price/sharedCredits null, termsRef /legal/paid-access. Нет
+публикуемого Offer, цены за seat, годовой скидки, чужих клиентов/отзывов,
+сертификации, гарантий SSO/прав/indemnity, общего баланса или командного доступа.
+Реальные инструменты/ссылки описаны отдельно от planned capabilities. Корпоративные
+условия требуют настоящего предложения и реализации, а не открытия этой страницы.
+
+Hero занимает окно с безопасной min-height, имеет собственную CSS sprite-intro
+(36tiles) и атрибутированный reference WebM через MediaVideo, poster/fallback,
+muted/loop/playsInline. Pause/resume явный; reduced motion отключает autoplay и
+intro/cursor motion. Вне viewport, при скрытом документе и открытом dialog видео
+приостанавливается. Cursors — декоративные Create/Review/Concept, не live users.
+Кнопка hero и fixed CTA прокручивают к enquiry и фокусируют team-size input.
+Шапка72px desktop, scoped76px tablet/68px mobile; sticky feature nav учитывает её.
+
+Восемь editorial scenarios заменяют чужие customer claims. LandingCarousel
+bounded/auto, pause on hover/focus/dialog/hidden/reduced-motion/viewport механизмы
+сохраняются. Пять capability anchors — настоящая nav, не fake tab panels: все
+article видимы, JS делает smooth/reduced-motion scroll; IntersectionObserver
+обновляет aria-current. Desktop sticky sidebar, mobile horizontal ScrollArea;
+выбранный link прокручивается в видимую область. Пять trust cards ведут на
+существующие account/privacy/legal страницы; pool diagram явно planned и не
+показывает выдуманного quota. Четыре setup cards переключают aria-pressed,
+активное изображение и реальное follow-up действие. Семь native exclusive FAQ.
+
+BusinessPricing использует существующий parseTeamSeats из pricing-model:
+строго whole integer2–100; invalid input отключает prepare и steppers, min/max
+блокируют соответствующий шаг. Monthly/Annual — preference для brief, не расчёт
+несуществующей цены. View more раскрывает дополнительные requirements; model
+guide описывает фактическую доступность. Quote содержит selectable pre, явный
+Copy и status/failure fallback; mailto только ссылка, без автоматической отправки.
+Нет PII form, subscription activation, payment-intent/provider/Jobs/backend/private
+artifact change. Состояния только в памяти, не в URL/storage. Dialog opener
+сохраняется до native inert и возвращается после Escape/Close cleanup; фоновое
+видео при этом останавливается. Search использует существующий умный каталог.
+
+[Media provenance](../../../docs/research/business-reference-media.json):21 cached
+images +1WebM, побайтово сохранены с SHA/bytes/dimensions. Actual AVIF/WebP,
+не расширения из URL; Sharp decoder format heif с compression av1 и mediaType
+image/avif сохраняется как .avif, без перекодирования. WebM30s/1440x810 подтверждён
+в настоящем браузере. Все22 MIME/bytes/SHA проверены по localhost. Иллюстрации
+подписаны Magnific reference, не демонстрация реализованного Epifera enterprise.
+Перед индексацией требуются собственные/лицензированные media и финальное содержание.
+
+Проверены390/820/1280/1600px, отсутствие page overflow, mobile nav/search,
+feature anchors,4steps,2–100 seats/annual preference, more/model-guide,
+explicit quote copy,7FAQ, native inert/focus, видео pause/resume/offscreen и
+incoming /en/ai → /en/business. Screenshot QA использует обычные viewport shots:
+fullPage capture в этом браузере растягивает svh-hero до размера документа и
+не пригоден для оценки обычной страницы. Нормальное окно остаётся1280x720.
+
+## Customer story template
+
+T20: [CustomerStory](../src/features/customer-story/CustomerStory.tsx) на
+/en/customers/football-campaign по сохранённому Magnific reference20. Русский
+маршрут пустой; обе версии explicit draft/noindex и вне sitemap. Локальная
+верстка без публикации. Своя оболочка/layout: T08/T09 EditorialPage имеет другой
+byline/outline/body contract, поэтому не растягивается на несходный макет.
+Совпадающие light LandingHeader/centered LandingFooter, HomeSearch/LandingDialog,
+LandingCarousel, MediaVideo, MediaImage, MediaPreviewDialogTemplate и ScrollArea
+переиспользованы без изменения shared defaults.
+
+[CaseStudy](../src/i18n/public/customer-story-en.ts) содержит client/industry,
+challenge/solution/results/quote/source. status=reference, isEpiferaCustomer=false,
+results.verifiedByEpifera=false. Магнифик и исходная команда явно названы как
+источник проекта и цифр. Нет выдуманного клиента Epifera, endorsement/ratings,
+новых результатов, гарантий ownership/indemnity/SSO или CaseStudy JSON-LD.
+Единственная короткая цитата Billy Boman атрибутирована; три других pullquotes
+явно являются оригинальными editorial takeaways Epifera. Credits — исходные
+production credits, не сотрудники/партнёры Epifera.
+
+Layout: divided two-column hero, крупный intro, desktop sticky facts/sidebar,
+четыре narrative sections, четыре film cards,3-image carousel/lightbox,3credit
+columns, закрывающая reference media/business карточка. На mobile hero и facts
+идут до narrative, credits становятся одной колонкой. Long facts используют
+focusable region Case study facts в вертикальном ScrollArea с max-height от
+viewport: кнопки не уходят за нижний край sticky panel. На <=1000px max-height
+снимается, facts прокручиваются с документом. Desktop source-details недоступность
+была воспроизведена (826px panel при720px viewport), исправлена, regression и
+настоящий native click прошли. Sign up и mobile Log in имеют scoped тёмную заливку.
+
+Сохранённые четыре campaign films находятся на YouTube, не в архиве. Film cards
+показывают локальные covers и явный Watch original on YouTube; внешние href
+фиксированы из источника, target blank +noopener/noreferrer. Нет iframe, чужих
+scripts или обращений к YouTube при открытии страницы. CSP frame-src none,
+media/img/connect policies сохранены. Cached enterprise WebM открывается только
+по явному Watch platform reference в общем wide LandingDialog: controls,
+playsInline, preload metadata, без autoplay. Он подписан Magnific reference,
+а не live Epifera enterprise demo.
+
+Карусель bounded, стрелки учитывают реальные края. В viewer сохранён существующий
+циклический shared contract: кнопки, ArrowLeft/Right и thumbnail rail; он не
+переопределяется тестами/особым компонентом. Root сохраняет opener до native inert
+и возвращает его после cleanup. Source details и video используют ту же защиту.
+Search ищет по существующему каталогу, включая русские имена. Никаких generation,
+payment/provider/email/Job запросов или URL/storage persistence. Sidebar и closing
+ведут на существующий /business. В BusinessExamples добавлена явно reference
+campaign ссылка; другие8editorial scenarios сохранены.
+
+[Media manifest](../../../docs/research/customer-story-reference-media.json):
+10images+1WebM. Шесть cached source images сохранены побайтово в actual AVIF/WebP.
+Четыре публичные YouTube JPEG covers приведены к lossless WebP по asset policy;
+original JPEG в ignored cache, before/after decoded pixels совпадают, original/
+output SHA/bytes записаны. Все11served MIME/bytes/SHA проверены. Native local
+WebM13.917s/1920x1080 проигран до конца. Галерея исходного кейса626x352; это
+reference-resolution illustrations, не оригиналы производственного проекта.
+Перед indexed launch нужны собственный/разрешённый реальный кейс и media rights.
+
+Native390/820/1280/1600px без page overflow; подтверждены static/sticky sidebar,
+mobile menu/search, source/gallery/video native inert/focus, thumbnail/keyboard/
+cycle и carousel end, реальный incoming /en/business → story. Временный viewport
+сброшен. Browser errors отсутствуют. Backend/auth/billing/private artifacts
+и публикация не меняются.
+
+## About and contacts template
+
+T21: [AboutLanding](../src/features/about/AboutLanding.tsx) на
+/en/company/about-us по сохранённому Magnific reference21. RU пустой, обе
+локали explicit draft/noindex, вне sitemap. Свои overlay hero и тёплая палитра;
+совпадающие LandingHeader/Footer/Dialog/Carousel, FAQ, HomeSearch, MediaVideo и
+ModelIcon переиспользованы без изменения shared defaults. About добавлен в
+меню/подвал homeEn и aiToolsEn; Contact ведёт на существующий #contact.
+
+[CompanyProfile](../src/i18n/public/about-en.ts): фактический бренд и
+support@epifera.com, unknown foundedOn/officeAddress=null, people=[]. Четыре
+показателя описывают пять направлений, единое рабочее пространство, два
+календарных месяца хранения созданных файлов и один адрес поддержки.
+18 focus cards заменяют чужую команду; 8 оригинальных сценариев заменяют
+отзывы; 6 ссылок на аккаунт/условия/помощь, 7 шагов процесса, 4 ценности,
+product illustration/9 ссылок, 14 моделей и 10 FAQ. Business и MCP явно planned.
+Нет выдуманных сотрудников, годов, офиса, рейтингов, вакансий или гарантий.
+
+AboutModels использует существующие ID моделей. Видео монтируется только при
+hover/focus, loading=eager + preload=none; play после явной активации,
+pause при offscreen/hidden, cleanup при blur/unmount и открытом диалоге.
+Reduced motion исключает загрузку клипов. Фокус и hover независимы; shared
+bounded carousel учитывает края. Source/search сохраняют opener до native
+inert и восстанавливают фокус после cleanup.
+
+Три контактные карточки: general и press/partnership mailto на один реальный
+support@epifera.com, поддержка — /ai/docs. Collaboration callout открывает
+такой же mailto. Нет формы, записи PII, API отправки или новой почты.
+[Media provenance](../../../docs/research/about-reference-media.json):
+10 изображений actual AVIF/WebP и 11 маленьких WebM из сохранённого референса.
+Bytes/size/SHA и served MIME проверены. Product visual и model previews
+подписаны Magnific references. Перед индексируемым запуском требуются
+финальное содержание и собственные/разрешённые media.
+
+Native QA: 390/820/1280/1600px без page overflow, мобильное меню и поиск
+«нано банана про», контактный anchor, 10 exclusive FAQ, source/focus,
+реальное воспроизведение/смена клипа при keyboard focus, стрелки карусели.
+Viewport возвращён к 1280x720. 361 public/shared/account/payment тест,
+typecheck, full lint, audit=0, assets/packaging/publication и build прошли.
+Backend, account, Jobs, billing, private artifacts и публикация не меняются.
+
+## Event and project template
+
+T22: [EventLanding](../src/features/event-project/EventLanding.tsx) на
+/en/events/creative-sessions по сохранённому Cannes Lions reference22.
+EN-only; RU пустой, обе локали draft/noindex вне sitemap. Своя overlay hero,
+breadcrumbs, тёплая поверхность и maroon/pink palette. Совпадающие Landing
+header/footer/dialog/arrow/tool icons, FAQ, HomeSearch и MediaVideo сохранены.
+Resources/Company в homeEn/aiToolsEn ведут на проект; другие меню сохранены.
+
+[EventProject](../src/i18n/public/event-project-en.ts) — concept, startsAt,
+endsAt, venue и registrationUrl=null, speakers=[]. Нет выдуманного фестиваля,
+партнёрства, расписания с датами, билетов или состава участников Epifera.
+Три programme cards ведут в существующие #screening/#conversation/#meetup;
+четыре discussion prompts заменяют неизвестных спикеров. Три alternating rows
+сохраняют макет места/встречи/инструментов, но подписаны как reference/concept.
+Журнал ведёт на существующую статью /blog/ai-art-prompts, workflow — на
+/workflows/product-campaign. Пять FAQ используют document-unique group name.
+
+Hero/closing details объясняют статус и дают mailto:support@epifera.com;
+contact actions только открывают mail client по выбору пользователя. Нет
+регистрационной/PII формы, API отправки, checkout или generation submit.
+Source dialog явно разделяет исходный Magnific event и концепт Epifera.
+Opener сохраняется до native inert, фокус возвращается после cleanup.
+
+Трейлер монтируется только после Watch the trailer, с native controls,
+playsInline/preload metadata и без autoplay. Он останавливается при hidden,
+закрытии/unmount. Candela атрибутирована Myriam Mira/Magnific. Файл называется
+15s, но native browser измерил 18.517s/1920x1080: UI использует 18.5-second,
+фактические метаданные записаны в provenance. Пять cached actual AVIF/WebP
+изображений и один MP4 сохранены без перекодирования, проверены HTTP MIME,
+bytes и SHA. [Manifest](../../../docs/research/event-project-reference-media.json).
+Перед indexed launch нужны финальное содержание и права/замена media.
+
+Проверено native390/820/1280/1600px без page overflow, anchors, mobile
+nav/search, пять exclusive FAQ, source/details/film focus, mobile dialogs,
+воспроизведение до конца и удаление video при закрытии. 374 affected
+public/shared/account/payment теста и финальные 40 focused прошли; typecheck,
+full lint, audit=0, assets/packaging/publication и build. HTTP подтверждает
+обе локали, noindex/sitemap, три incoming pages, шесть media, CSP без iframe.
+Backend/auth/billing/provider/Jobs/private artifacts и публикация не меняются.
+
+## Author archive template
+
+T24: [AuthorLanding](../src/features/author/AuthorLanding.tsx) на
+/en/blog/author/epifera по saved Magnific reference24. EN-only; RU пустой,
+оба маршрута draft/noindex вне sitemap. Белая editorial шапка, круглый
+брендовый аватар/имя, три колонки карточек (две на tablet, одна на mobile),
+pagination и centered footer. Общие LandingHeader/Footer/Dialog, BrandLogo,
+InputSurface и ScrollArea переиспользованы. Высота шапки и top/height мобильного
+меню согласованы в scoped Author CSS, defaults других страниц сохранены.
+
+[AuthorProfile](../src/i18n/public/author-en.ts) описывает редакционный бренд
+Epifera, kind=organization, bio=null/socials=[]. Нет чужого автора, биографии,
+аватара или статистики публикаций. [Server-only catalog](../src/features/author/author-catalog.ts)
+проецирует существующие источники: две статьи, workflow, курс/14 уроков и семь
+справочных руководств, всего25. Клиент получает минимальные карточки, без
+полных lesson/doc bodies. Известные даты статей помечены draft; у остальных
+date=null и подпись Draft preview. Стоковые авторы не переименованы в Epifera.
+
+[Author model](../src/features/author/author-model.ts) разбивает архив по12:
+12/12/1, без дублей. Async server searchParams нормализует page, дробные/массивы/
+отрицательные значения дают первую страницу, слишком большие — последнюю.
+Localized Link сохраняет язык, query и #author-materials. First/Previous и
+Next/Last bounded; числа вычисляются из реального объёма. Reload/direct page2,
+back navigation и mobile pagination проверены. Это draft pagination; перед
+индексируемым выпуском требуется отдельная проверка canonical/indexing policy.
+
+Search/Ctrl-K открывает локальный поиск всех25 материалов независимо от
+текущей страницы. Case/whitespace/diacritics normalization и literal token
+matching не исполняют ввод и не делают API-запросы. Results в общем ScrollArea;
+empty state и Clear работают. Потеря фокуса при удалении Clear была воспроизведена
+в браузере, закреплена failing regression и исправлена возвратом в input.
+Opener сохраняется до native inert; Escape/close возвращает фокус. Нет PII
+форм, storage/URL persistence поисковой строки, account/provider/payment/Job
+запросов или автоотправки.
+
+Byline двух текущих editorial consumers теперь ведёт в реальный author route.
+Shared EditorialPage использует локализованный Link вместо plain a; hash-only
+и внешние href сохраняют обычный общий Link contract. Menu/footer homeEn и
+aiToolsEn содержат Editorial library. Структуры двух статей не изменены.
+
+[Cover manifest](../../../docs/research/author-reference-media.json):11 source
+assignments, семь уникальных файлов. Три source JPEG и JPEG responses на PNG
+URLs приведены к lossless WebP с decoded-pixel равенством; AVIF/WebP сохранены
+побайтово. Повторы разделяют файл. Четвёртая карточка в референсе без image:
+её CSS gradient сохранён, ошибки загрузки не имитируются. Source dialog
+подписывает covers; перед indexed launch требуются финальное содержание и
+права/замена иллюстраций. Avatar — текущий Epifera BrandLogo, не чужой растр.
+
+398 affected public/shared/account/payment tests и финальные69 focused tests
+прошли; typecheck, full lint, audit0, assets/packaging/publication и финальный
+build успешны. HTTP проверил EN/RU, страницы1/2/3 и invalid queries, все25
+target routes, bylines/nav, noindex/sitemap, семь media MIME/bytes/SHA и CSP.
+Native390/820/1280/1600px без page overflow, menu/search/focus/source,
+pagination/back/reload и byline navigation прошли. Viewport возвращён1280x720.
+Все24 типа шаблонов готовы локально; это не публикация или наполнение полного
+SEO-каталога. Backend/auth/billing/private artifact boundaries сохранены.
+
+
+## Russian public template copy
+
+All24 reference-based public template types share components at `/ru` and `/en`.
+The source/RU/reverse workflow and stable catalog are documented in
+[public-template-localization.md](public-template-localization.md). Earlier
+English-only/Russian-empty notes describe the initial template builds and are
+superseded by this localization contract. Both locales retain draft/noindex.
+
+Use `usePublicCopy` for trusted public editorial data, explicit
+`localizePublicData(data, locale)` for server metadata/props and locale-aware
+course/docs helpers. Format trusted display cells with `translatePublicText`;
+keep structural `value`/IDs/enums intact. ModelGallery/ModelGalleryDialog resolve
+default titles after selecting locale. Material taxonomy stays canonical while
+labels/search translate; marketing category selection uses stable indices.
+Author search uses existing countLabel plural forms. Approved legal text and
+user-entered prompts are preserved. No backend/provider/billing contract change.
+
+Reference-specific intermediate weights use shared global tokens:
+`--font-weight-strong` (650), `--font-weight-bold` (700),
+`--font-weight-heavy` (750). Existing medium/semibold tokens remain 500/600.
+New template rules preserve their reference weight through these tokens;
+workspace semantic headings and bold text keep the existing semibold role.

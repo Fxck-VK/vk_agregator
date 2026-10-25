@@ -114,6 +114,36 @@ test('CLI includes committed, staged, unstaged, deleted and new paths against th
   assert.deepEqual(JSON.parse(result.stdout).changedFiles, ['committed.txt', 'deleted.txt', 'new file.txt', 'staged.txt', 'unstaged.txt']);
 });
 
+test('CLI rejects whitespace errors in untracked files before selecting long checks', t => {
+  const root = mkdtempSync(join(tmpdir(), 'epifera-source-whitespace-'));
+  t.after(() => {
+    assert(resolve(root).startsWith(resolve(tmpdir()) + sep));
+    rmSync(root, { recursive: true, force: true });
+  });
+  const git = (...args) => {
+    const result = spawnSync('git', args, { cwd: root, encoding: 'utf8' });
+    assert.equal(result.status, 0, result.stderr); return result.stdout.trim();
+  };
+  git('init', '-q'); git('config', 'user.name', 'Whitespace Fixture'); git('config', 'user.email', 'fixture@example.invalid');
+  writeFileSync(join(root, '.gitignore'), '.cache/\n');
+  git('add', '.'); git('commit', '-qm', 'base');
+  const base = git('rev-parse', 'HEAD');
+  const run = () => spawnSync(process.execPath, [resolve(import.meta.dirname, 'release-source-plan.mjs'), '--base', base], { cwd: root, encoding: 'utf8' });
+  for (const content of ['new source\n\n', 'new source  \n']) {
+    writeFileSync(join(root, 'new file.txt'), content);
+    const result = run();
+    assert.notEqual(result.status, 0);
+    assert.match(result.stderr, /whitespace.*new file\.txt/i);
+  }
+  writeFileSync(join(root, 'new file.txt'), 'clean source\r\n');
+  writeFileSync(join(root, 'new.bin'), Buffer.from([0, 1, 10, 10]));
+  mkdirSync(join(root, '.cache'));
+  writeFileSync(join(root, '.cache/ignored.txt'), 'ignored  \n\n');
+  const clean = run();
+  assert.equal(clean.status, 0, clean.stderr);
+  assert.deepEqual(JSON.parse(clean.stdout).changedFiles, ['new file.txt', 'new.bin']);
+});
+
 function preparationFixture(t, checker) {
   const root = mkdtempSync(join(tmpdir(), 'epifera-preparation-'));
   t.after(() => {

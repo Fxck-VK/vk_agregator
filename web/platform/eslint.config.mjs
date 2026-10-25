@@ -12,5 +12,5 @@ export default defineConfig([
   },
   ...nextCoreWebVitals,
   ...nextTypeScript,
-  globalIgnores([".next/**", "node_modules/**", "playwright-report/**", "test-results/**"]),
+  globalIgnores([".next/**", ".cache/**", "node_modules/**", "playwright-report/**", "test-results/**"]),
 ]);

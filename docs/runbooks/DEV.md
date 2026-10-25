@@ -426,6 +426,9 @@ pwsh -NoProfile -File scripts/ci/dev-deploy-preflight.ps1 -Prepare -ManifestPath
 `release-source-plan.mjs` automatically includes committed changes since the
 baseline, staged and unstaged edits, deletions and nonignored untracked files.
 No hand-picked test list is accepted by the preparation entrypoint. For each
+new nonignored file, Git's no-index whitespace check runs before source checks
+are selected; the baseline diff also checks committed, staged and unstaged edits.
+Whitespace errors in new files therefore fail before lint or full suites. For each
 affected web app it runs lint and typecheck. The platform always runs shared
 contract tests and the login-page regression, including the typography and
 server-only import failures found in the previous release, then related tests

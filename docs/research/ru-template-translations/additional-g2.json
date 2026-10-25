@@ -1,0 +1,20 @@
+[
+  {"source":"Remove {plan} from comparison","ru":"Убрать {plan} из сравнения","back":"Remove {plan} from the comparison"},
+  {"source":"View {plan} details","ru":"Посмотреть сведения о {plan}","back":"View details about {plan}"},
+  {"source":"Explore {plan} preview","ru":"Посмотреть предварительный вариант {plan}","back":"View the preview of {plan}"},
+  {"source":"Team enquiry for {brand}","ru":"Запрос для команды в {brand}","back":"Team enquiry in {brand}"},
+  {"source":"Enterprise enquiry for {brand}","ru":"Корпоративный запрос в {brand}","back":"Enterprise enquiry in {brand}"},
+  {"source":"Team size: {seats} people","ru":"Размер команды: {seats} чел.","back":"Team size: {seats} people"},
+  {"source":"Please discuss creative tools, access, capacity and support requirements.","ru":"Пожалуйста, обсудите требования к творческим инструментам, доступу, объёму ресурсов и поддержке.","back":"Please discuss requirements for creative tools, access, resource capacity and support."},
+  {"source":"To be discussed","ru":"Требует обсуждения","back":"Requires discussion"},
+  {"source":"Check workspace","ru":"Проверьте рабочее пространство","back":"Check the workspace"},
+  {"source":"Depends on model","ru":"Зависит от модели","back":"Depends on the model"},
+  {"source":"Shown before creating","ru":"Показывается перед созданием","back":"Shown before creating"},
+  {"source":"Depends on request cost","ru":"Зависит от стоимости запроса","back":"Depends on the request cost"},
+  {"source":"Depends on tool","ru":"Зависит от инструмента","back":"Depends on the tool"},
+  {"source":"Two calendar months","ru":"Два календарных месяца","back":"Two calendar months"},
+  {"source":"Review applicable terms","ru":"Изучите применимые условия","back":"Review the applicable terms"},
+  {"source":"Planned","ru":"Планируется","back":"Planned"},
+  {"source":"Not started by this preview","ru":"Не запускается этим предпросмотром","back":"Not started by this preview"},
+  {"source":"Team plans in preparation","ru":"Тарифы для команд готовятся","back":"Team plans are in preparation"}
+]

@@ -1,0 +1,175 @@
+{
+  "reference": 24,
+  "sourcePage": "https://www.magnific.com/blog/author/magnific/",
+  "notice": "Local noindex layout references. Covers illustrate Epifera guides; no Magnific author/avatar, article claims, statistics or dates transferred. Clear/replace artwork before indexed launch.",
+  "files": [
+    {
+      "file": "/assets/images/author/cover-1.webp",
+      "format": "webp",
+      "width": 880,
+      "height": 495,
+      "bytes": 117648,
+      "sha256": "6048af8dfb7c7f6df51b4b4839e61a7e619f0741f218eff69fafd1130d79ce61"
+    },
+    {
+      "file": "/assets/images/author/cover-2.webp",
+      "format": "webp",
+      "width": 880,
+      "height": 495,
+      "bytes": 349358,
+      "sha256": "5e8afc5f4b86752f5d9f0704d03c4f958d0cec079685233dff1ba39e93a61cfd"
+    },
+    {
+      "file": "/assets/images/author/cover-3.webp",
+      "format": "webp",
+      "width": 880,
+      "height": 495,
+      "bytes": 420954,
+      "sha256": "eb9cd42c04f3926cff22a3ded69691897304afd15095c53539fc6a5f61305711"
+    },
+    {
+      "file": "/assets/images/author/cover-5.png",
+      "format": "png",
+      "width": 880,
+      "height": 491,
+      "bytes": 726837,
+      "sha256": "a18ee6c3c45891ba94964d465eee9e5096b8011480008ecbe8bdb95bafe45331"
+    },
+    {
+      "file": "/assets/images/author/cover-6.png",
+      "format": "png",
+      "width": 880,
+      "height": 491,
+      "bytes": 816468,
+      "sha256": "2341b36432b777889bcbaaf3b1732d34e017567e5c9b79b3a02dda3462c5d590"
+    },
+    {
+      "file": "/assets/images/author/cover-7.webp",
+      "format": "webp",
+      "width": 880,
+      "height": 491,
+      "bytes": 434132,
+      "sha256": "71d302aeb4f720b6c0ccfa7c7c1c7f39002ed7d70b7e800ddfd19167bf92ef29"
+    },
+    {
+      "file": "/assets/images/author/cover-8.webp",
+      "format": "webp",
+      "width": 880,
+      "height": 491,
+      "bytes": 310338,
+      "sha256": "8d7f71e5690392e868f79c9ea52d475a119023122659bc51bb747deab42e952d"
+    }
+  ],
+  "sources": [
+    {
+      "slot": 1,
+      "sourceUrl": "https://mediablog.cdnpk.net/ghost/2026/10/07-video-length-a.jpg?im=Resize%2Cwidth=824%2Cheight=618%2Caspect=fill%2Ctype=downsize",
+      "cachedFile": ".cache/magnific-html-assets/files/04c89d18eee7eb3e9a84.jpg",
+      "originalBytes": 35081,
+      "originalSha256": "edc250660f099b2385c26af656de92f2f7284a703e134e093f29d960840a491c",
+      "file": "/assets/images/author/cover-1.webp",
+      "byteIdentical": false,
+      "pixelIdentical": true
+    },
+    {
+      "slot": 2,
+      "sourceUrl": "https://mediablog.cdnpk.net/ghost/2026/10/06-kept-image-a.jpg?im=Resize%2Cwidth=824%2Cheight=618%2Caspect=fill%2Ctype=downsize",
+      "cachedFile": ".cache/magnific-html-assets/files/79c0fcf05f975d8bb85c.jpg",
+      "originalBytes": 91839,
+      "originalSha256": "862cc8cb813d10b7585a25a4d482307f6410606cac2e491715077645f5c44744",
+      "file": "/assets/images/author/cover-2.webp",
+      "byteIdentical": false,
+      "pixelIdentical": true
+    },
+    {
+      "slot": 3,
+      "sourceUrl": "https://mediablog.cdnpk.net/ghost/2026/10/05-how-people-prompt-b.jpg?im=Resize%2Cwidth=824%2Cheight=618%2Caspect=fill%2Ctype=downsize",
+      "cachedFile": ".cache/magnific-html-assets/files/2d1978df351174409e2b.jpg",
+      "originalBytes": 91139,
+      "originalSha256": "dd571d60678930fc5263a73929d6484a40b201eab8bba0ad8eb10cfa1153457b",
+      "file": "/assets/images/author/cover-3.webp",
+      "byteIdentical": false,
+      "pixelIdentical": true
+    },
+    {
+      "slot": 5,
+      "sourceUrl": "https://mediablog.cdnpk.net/ghost/2026/09/magnific_modifica-el-color-del-fon_J91gmfiOq4-11.png?im=Resize%2Cwidth=824%2Cheight=618%2Caspect=fill%2Ctype=downsize",
+      "cachedFile": ".cache/magnific-html-assets/files/6085d95c7fedf438dec8.png",
+      "originalBytes": 726837,
+      "originalSha256": "a18ee6c3c45891ba94964d465eee9e5096b8011480008ecbe8bdb95bafe45331",
+      "file": "/assets/images/author/cover-5.png",
+      "byteIdentical": true,
+      "pixelIdentical": true
+    },
+    {
+      "slot": 6,
+      "sourceUrl": "https://mediablog.cdnpk.net/ghost/2026/09/magnific_gJqxYNjSXO-6.png?im=Resize%2Cwidth=824%2Cheight=618%2Caspect=fill%2Ctype=downsize",
+      "cachedFile": ".cache/magnific-html-assets/files/95273ca8a77cc7556575.png",
+      "originalBytes": 816468,
+      "originalSha256": "2341b36432b777889bcbaaf3b1732d34e017567e5c9b79b3a02dda3462c5d590",
+      "file": "/assets/images/author/cover-6.png",
+      "byteIdentical": true,
+      "pixelIdentical": true
+    },
+    {
+      "slot": 7,
+      "sourceUrl": "https://mediablog.cdnpk.net/ghost/2026/09/magnific_jSuKTvnLD0-11.png?im=Resize%2Cwidth=824%2Cheight=618%2Caspect=fill%2Ctype=downsize",
+      "cachedFile": ".cache/magnific-html-assets/files/692405372c5fecca1952.png",
+      "originalBytes": 94284,
+      "originalSha256": "5dbb0b630ec8c3645dbb5db74eba92049c7110f04d048478d322d49e2973ff08",
+      "file": "/assets/images/author/cover-7.webp",
+      "byteIdentical": false,
+      "pixelIdentical": true
+    },
+    {
+      "slot": 8,
+      "sourceUrl": "https://mediablog.cdnpk.net/ghost/2026/09/magnific_gJqrUO9SXO-7.png?im=Resize%2Cwidth=824%2Cheight=618%2Caspect=fill%2Ctype=downsize",
+      "cachedFile": ".cache/magnific-html-assets/files/cd80c521a9d6dc15b8d0.png",
+      "originalBytes": 55883,
+      "originalSha256": "ec028a3c9d71a85f7704a0e3975da31bdc948e2ae050faed9614ee2a1c0bbba7",
+      "file": "/assets/images/author/cover-8.webp",
+      "byteIdentical": false,
+      "pixelIdentical": true
+    },
+    {
+      "slot": 9,
+      "sourceUrl": "https://mediablog.cdnpk.net/ghost/2026/09/magnific_modifica-el-color-del-fon_J91gmfiOq4-10.png?im=Resize%2Cwidth=824%2Cheight=618%2Caspect=fill%2Ctype=downsize",
+      "cachedFile": ".cache/magnific-html-assets/files/60b98e1812214d52a033.png",
+      "originalBytes": 726837,
+      "originalSha256": "a18ee6c3c45891ba94964d465eee9e5096b8011480008ecbe8bdb95bafe45331",
+      "file": "/assets/images/author/cover-5.png",
+      "byteIdentical": true,
+      "pixelIdentical": true
+    },
+    {
+      "slot": 10,
+      "sourceUrl": "https://mediablog.cdnpk.net/ghost/2026/09/magnific_gJqxYNjSXO-9.png?im=Resize%2Cwidth=824%2Cheight=618%2Caspect=fill%2Ctype=downsize",
+      "cachedFile": ".cache/magnific-html-assets/files/2bdcb4003814833230ee.png",
+      "originalBytes": 816468,
+      "originalSha256": "2341b36432b777889bcbaaf3b1732d34e017567e5c9b79b3a02dda3462c5d590",
+      "file": "/assets/images/author/cover-6.png",
+      "byteIdentical": true,
+      "pixelIdentical": true
+    },
+    {
+      "slot": 11,
+      "sourceUrl": "https://mediablog.cdnpk.net/ghost/2026/09/magnific_jSuKTvnLD0-10.png?im=Resize%2Cwidth=824%2Cheight=618%2Caspect=fill%2Ctype=downsize",
+      "cachedFile": ".cache/magnific-html-assets/files/424bdc3197234f5db766.png",
+      "originalBytes": 94284,
+      "originalSha256": "5dbb0b630ec8c3645dbb5db74eba92049c7110f04d048478d322d49e2973ff08",
+      "file": "/assets/images/author/cover-7.webp",
+      "byteIdentical": false,
+      "pixelIdentical": true
+    },
+    {
+      "slot": 12,
+      "sourceUrl": "https://mediablog.cdnpk.net/ghost/2026/09/magnific_gJqrUO9SXO-5.png?im=Resize%2Cwidth=824%2Cheight=618%2Caspect=fill%2Ctype=downsize",
+      "cachedFile": ".cache/magnific-html-assets/files/da400aa51982b2b958f5.png",
+      "originalBytes": 55883,
+      "originalSha256": "ec028a3c9d71a85f7704a0e3975da31bdc948e2ae050faed9614ee2a1c0bbba7",
+      "file": "/assets/images/author/cover-8.webp",
+      "byteIdentical": false,
+      "pixelIdentical": true
+    }
+  ]
+}

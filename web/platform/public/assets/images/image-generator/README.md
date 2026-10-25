@@ -1,0 +1,57 @@
+# Image generator reference assets
+
+Local, draft/noindex reconstruction of the user-provided Magnific reference 03 (October 2026). Source: https://www.magnific.com/ai/image-generator. Original public images were rechecked in the rendered page on 2026-10-24 because some archived files were only 256px previews. They are encoded as WebP with a maximum dimension of 1600px; default create-panel images and hero retain their archived files. These are reference examples, not Epifera user results. No foreign scripts, analytics or authentication are used. Review replacement/licensing before public indexing.
+
+- gallery-01.webp: https://media.magnific.com/landings/images-library/magnific_upscale_generations_3z8qjlEREY.png?w=2000&h=1200&q=75
+- gallery-02.webp: https://media.magnific.com/landings/images-library/batch-product-photos.png?w=2000&h=1200&q=75
+- gallery-03.webp: https://media.magnific.com/landings/images-library/magnific_upscale_generations_BhrPZmIoQR.png?w=2000&h=1200&q=75
+- gallery-04.webp: https://media.magnific.com/landings/images-library/magnific_upscale_generations_4ReEMZc9Aa.png?w=2000&h=1200&q=75
+- gallery-05.webp: https://media.magnific.com/landings/images-library/magnific_upscale_generations_jUAdvgVLD0.png?w=2000&h=1200&q=75
+- gallery-06.webp: https://media.magnific.com/landings/images-library/magnific_upscale_generations_4ReEMXv9Aa.png?w=2000&h=1200&q=75
+- gallery-07.webp: https://media.magnific.com/landings/images-library/epic-wide-shot.jpg?w=2000&h=1200&q=75
+- gallery-08.webp: https://media.magnific.com/landings/images-library/magnific_fix-the-details._generations_cpujqHO0eP.jpeg?w=2000&h=1200&q=75
+- gallery-09.webp: https://media.magnific.com/landings/images-library/create-a-hero-shot.jpg?w=2000&h=1200&q=75
+- gallery-10.webp: https://media.magnific.com/landings/images-library/magnific_upscale_generations_gOY8TtQSXO.png?w=2000&h=1200&q=75
+- gallery-11.webp: https://media.magnific.com/landings/images-library/food-photo-composition.jpg?w=2000&h=1200&q=75
+- gallery-12.webp: https://media.magnific.com/landings/images-library/magnific_upscale_generations_lJno6pxgv9.png?w=2000&h=1200&q=75
+- gallery-13.webp: https://media.magnific.com/landings/images-library/magnific_upscale_generations_lJnoZ1Dgv9.png?w=2000&h=1200&q=75
+- gallery-14.webp: https://media.magnific.com/landings/images-library/floral-arrangement.jpg?w=2000&h=1200&q=75
+- gallery-15.webp: https://media.magnific.com/landings/images-library/magnific_upscale_generations_mEli7pchJQ.png?w=2000&h=1200&q=75
+- family-1.webp: https://media.magnific.com/landings/images-library/magnific_upscale_generations_SyWIun0Ub8.png?w=2000&h=1200&q=75
+- family-2.webp: https://media.magnific.com/landings/images-library/editorial-still-life.jpg?w=2000&h=1200&q=75
+- family-3.webp: https://media.magnific.com/landings/images-library/magnific_upscale_generations_P3pCoC042C.png?w=2000&h=1200&q=75
+- family-4.webp: https://media.magnific.com/landings/images-library/backlit-silhouette.jpg?w=2000&h=1200&q=75
+- family-5.webp: https://media.magnific.com/landings/images-library/magnific_upscale_generations_BhrPLMEoQR.png?w=2000&h=1200&q=75
+- family-6.webp: https://media.magnific.com/landings/images-library/apply-color-palette.jpg?w=2000&h=1200&q=75
+- family-7.webp: https://media.magnific.com/landings/images-library/8-mm-memory.jpg?w=2000&h=1200&q=75
+- family-8.webp: https://media.magnific.com/landings/images-library/animal-in-styled-scene.jpg?w=2000&h=1200&q=75
+- family-9.webp: https://media.magnific.com/landings/images-library/magnific_upscale_generations_iGoHx8N3uK.png?w=2000&h=1200&q=75
+- family-10.webp: https://media.magnific.com/landings/images-library/magnific_upscale_generations_JNVveDROq4.png?w=2000&h=1200&q=75
+- family-11.webp: https://media.magnific.com/landings/images-library/magnific_upscale_generations_MBqUuCXDCm.png?w=2000&h=1200&q=75
+- family-12.webp: https://media.magnific.com/landings/images-library/magnific_upscale_generations_LwGXZhzswO.png?w=2000&h=1200&q=75
+- use-case-1.webp: https://media.magnific.com/landings/images-library/branded-packaging-mockup.jpg?w=2000&h=1200&q=75
+- use-case-2.webp: https://media.magnific.com/landings/images-library/create-editorial-fashion-photo.jpg?w=2000&h=1200&q=75
+- use-case-3.webp: https://media.magnific.com/landings/images-library/create-brand-identity.png?w=2000&h=1200&q=75
+- use-case-4.webp: https://media.magnific.com/landings/images-library/create-your-influencer.jpg?w=2000&h=1200&q=75
+- use-case-5.webp: https://media.magnific.com/landings/images-library/magnific_upscale_generations_bxN0OMl5Y2.png?w=2000&h=1200&q=75
+- use-case-6.webp: https://media.magnific.com/landings/images-library/create-social-thumbnails.png?w=2000&h=1200&q=75
+- tutorial-1.webp: https://media.magnific.com/images/ai/ai-hub/v3/videos/covers/product-images@2x.webp?w=2000&h=1200&q=75
+- tutorial-2.webp: https://media.magnific.com/images/ai/ai-hub/v3/videos/covers/influencer@2x.webp?w=2000&h=1200&q=75
+- tutorial-3.webp: https://media.magnific.com/images/ai/ai-hub/v3/videos/covers/thumbnail@2x.webp?w=2000&h=1200&q=75
+- workflow-1.webp: https://media.magnific.com/landings/images-library/change-scene-and-mood.jpg?w=2000&h=1200&q=75
+- workflow-2.webp: https://media.magnific.com/landings/images-library/blend-styles-between-images.jpg?w=2000&h=1200&q=75
+- workflow-3.webp: https://media.magnific.com/landings/images-library/enhance-video-color-and-lighting.png?w=2000&h=1200&q=75
+- closing.webp: https://media.magnific.com/landings/images-library/magnific_upscale_generations_JNVvXiLOq4.png?w=2000&h=1200&q=75
+- reference-1.webp: https://media.magnific.com/landings/images-library/reference-portrait-terracotta.jpg?w=2000&h=1200&q=75
+- reference-2.webp: https://media.magnific.com/landings/images-library/reference-same-composition-bust.jpg?w=2000&h=1200&q=75
+- reference-3.webp: https://media.magnific.com/landings/images-library/reference-same-palette-still-life.jpg?w=2000&h=1200&q=75
+- reference-4.webp: https://media.magnific.com/landings/images-library/reference-same-subject-night-street.jpg?w=2000&h=1200&q=75
+- consistent-1.webp: https://media.magnific.com/landings/images-library/consistent-character-cafe.jpg?w=2000&h=1200&q=75
+- consistent-2.webp: https://media.magnific.com/landings/images-library/consistent-object-studio.jpg?w=2000&h=1200&q=75
+- consistent-3.webp: https://media.magnific.com/landings/images-library/consistent-style-lighthouse.jpg?w=2000&h=1200&q=75
+- consistent-4.webp: https://media.magnific.com/landings/images-library/consistent-character-bridge.jpg?w=2000&h=1200&q=75
+- consistent-5.webp: https://media.magnific.com/landings/images-library/consistent-object-coast.jpg?w=2000&h=1200&q=75
+- consistent-6.webp: https://media.magnific.com/landings/images-library/consistent-style-cyclist.jpg?w=2000&h=1200&q=75
+- edit-1.webp: https://media.magnific.com/landings/images-library/edit-original-red-coat.jpg?w=2000&h=1200&q=75
+- edit-2.webp: https://media.magnific.com/landings/images-library/edit-light-colder.jpg?w=2000&h=1200&q=75
+- edit-3.webp: https://media.magnific.com/landings/images-library/edit-winter.jpg?w=2000&h=1200&q=75

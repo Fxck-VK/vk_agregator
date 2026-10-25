@@ -1,6 +1,6 @@
+import {localizePublicData} from "@/i18n/public/public-copy";
 import type { Metadata } from "next";
 import { connection } from "next/server";
-import { brandName } from "@/config/brand";
 import { PublicHome } from "@/features/public-home/PublicHome";
 import { homeEn } from "@/i18n/public/home-en";
 import { getRequestLocale } from "@/i18n/server";
@@ -9,10 +9,10 @@ import { homePublication } from "./publication";
 
 export async function generateMetadata(): Promise<Metadata> {
   const locale = await getRequestLocale();
-  return { ...publicPageMetadata(locale, homePublication), ...(locale === "en" ? homeEn.metadata : { title: brandName }) };
+  return { ...publicPageMetadata(locale, homePublication), ...localizePublicData(homeEn.metadata,locale) };
 }
 
 export default async function HomePage() {
   await connection();
-  return await getRequestLocale() === "en" ? <PublicHome copy={homeEn} /> : <main id="public-main" />;
+  return <PublicHome copy={localizePublicData(homeEn,await getRequestLocale())} />;
 }

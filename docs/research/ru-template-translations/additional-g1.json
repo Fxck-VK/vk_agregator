@@ -1,0 +1,8 @@
+[
+  {"source":"Text prompt","ru":"Текстовый промпт","back":"Text prompt"},
+  {"source":"Not confirmed","ru":"Не подтверждено","back":"Not confirmed"},
+  {"source":"Not selectable","ru":"Выбор недоступен","back":"Selection unavailable"},
+  {"source":"Not connected","ru":"Не подключено","back":"Not connected"},
+  {"source":"3–15s","ru":"3–15 с","back":"3–15 seconds"},
+  {"source":"Check current availability","ru":"Проверьте текущую доступность","back":"Check current availability"}
+]

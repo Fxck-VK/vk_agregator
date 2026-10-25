@@ -1,0 +1,95 @@
+import type { OverviewAction } from "./ai-tools-en";
+
+export const tattooEn = {
+  metadata: { title: "AI Tattoo Generator — Explore Your Next Tattoo | Epifera", description: "Turn a tattoo idea, style and placement into a creative brief. Explore tattoo concepts with Epifera’s image tools." },
+  skip: "Skip to content", announcement: "Where ideas take shape", close: "Close", home: "Home", tools: "AI tools", breadcrumb: "Breadcrumb", comingSoon: "Coming soon",
+  hero: {
+    title: "Tattoo generator: see your design before it's permanent",
+    description: "That tattoo idea you've been carrying around? Give it a shape. Explore design directions from your concept, style, and placement — before you commit to the ink.",
+    form: "Your tattoo inputs", inputs: "Your inputs", idea: "Your tattoo idea", ideaPlaceholder: "A wolf howling at a crescent moon", ideaHelp: "What should it show?", style: "Tattoo style", stylePlaceholder: "Fine line, blackwork, old school, geometric…", placement: "Where on the body?", placementPlaceholder: "e.g. forearm, spine, ankle",
+    styles: ["Fine line", "Blackwork", "Old school", "Geometric"], placements: ["Forearm", "Spine", "Ankle"],
+    submit: "Design your tattoo", error: "Describe your tattoo idea to continue.",
+    example: "Show example", enlarge: "Enlarge selected example", preview: "Tattoo reference example", attribution: "Magnific reference artwork", note: "Choose a model and review the cost in the image generator before creating.",
+  },
+  prompt: { concept: "Tattoo design concept", style: "Style", placement: "Intended placement", instruction: "Present the design clearly as a concept for discussion with a tattoo artist." },
+  how: {
+    title: "How the Epifera AI tattoo generator works",
+    steps: [
+      { title: "Describe the concept", description: "A wolf, a crescent moon, a name, a botanical motif. Start with the subject and the feeling you want. Plain words are enough to get your idea moving." },
+      { title: "Pick the style", description: "Fine line, blackwork, old school or something of your own. Describe the line weight, colors and shading that make the design feel like you." },
+      { title: "Choose the placement", description: "Tell the generator where you imagine the tattoo: forearm, spine, ankle or another area. This adds direction to the brief; exact fit needs an artist’s judgement." },
+      { title: "Explore your design", description: "Continue to the image generator, choose a model and review its settings and cost. Create a concept, refine the details, and take your favorite direction to a tattoo artist." },
+    ],
+  },
+  features: [
+    { title: "Explore different directions", description: "Sometimes you know the subject, but not the composition. Try a quieter version, a bolder silhouette or a different balance of detail. Each new direction gives you something concrete to compare.", action: "Start with your idea" },
+    { title: "The style stays yours", description: "A fine-line piece and a solid blackwork design tell very different stories. Make the aesthetic part of the brief from the start, then adjust the lines, shading and color as you explore.", action: "Choose your style" },
+    { title: "A design with a place in mind", description: "A forearm, an ankle, a spine — each calls for a different shape. Add the intended placement to your idea so you can explore a direction before discussing size and final positioning with your artist.", action: "Find your direction" },
+  ],
+  flows: {
+    title: "More flows to skyrocket your creativity", label: "Creative workflows", previous: "Previous workflows", next: "Next workflows",
+    items: [
+      { title: "Turn a photo into a new style", description: "Explore another look for an image with the reference tools supported by your model.", href: "/app/image" },
+      { title: "Reimagine a background", description: "Give a scene a new setting with an image brief and a supported reference model.", href: "/app/image" },
+      { title: "Find your logo direction", description: "Explore shapes, colors and visual ideas for your next identity.", href: "/app/image" },
+      { title: "Bring music and video together", description: "A connected music-video workflow is planned for Epifera.", planned: true },
+      { title: "Create an avatar concept", description: "Describe a character and explore a new visual personality.", href: "/app/image" },
+      { title: "Make a card that feels personal", description: "Start with an illustration and bring your message into the design.", href: "/app/image" },
+      { title: "Explore a new hairstyle", description: "Develop a visual concept with a supported image-reference model.", href: "/app/image" },
+    ] satisfies readonly OverviewAction[],
+  },
+  directory: {
+    title: "Models and tools to explore in Epifera", description: "Find another way to bring your idea to life. Model availability and supported settings are shown in the workspace.",
+    items: [
+      { label: "Nano Banana Pro", id: "nano_banana_pro" }, { label: "Nano Banana 2", id: "nano_banana_2" },
+      { label: "Seedream 5.0 Lite", id: "seedream_5_0_lite" }, { label: "Seedream 4.5", id: "seedream_4_5" },
+      { label: "GPT Image 2.5 Flare", id: "gpt_image_2_5_flare" }, { label: "GPT Image 2", id: "gpt_image_2" },
+      { label: "FLUX.2 Pro", id: "flux_2_pro" }, { label: "Imagen 4", id: "imagen_4_0" },
+      { label: "Kling 3.0", id: "video_kling_v3" }, { label: "Kling 3.0 Turbo", id: "video_kling_3_0_turbo" },
+      { label: "Veo 3.1", id: "video_veo_3_1_quality" }, { label: "Seedance 2.0", id: "seedance_2_0" },
+      { label: "Runway Gen-4.5", id: "video_runway_gen4_5" }, { label: "Wan 3.0", id: "wan_3_0" },
+    ],
+    tools: [{ label: "Image generator", href: "/ai/image-generator" }, { label: "Kling models", href: "/ai/kling" }, { label: "AI tools", href: "/ai" }, { label: "Music", href: "/app/music" }, { label: "Speech", href: "/app/speech" }, { label: "All models", href: "/app/models" }],
+  },
+  plans: {
+    title: "A creative process that works for you", description: "Build a brief here. Choose the model, settings and next step in your workspace.",
+    items: [
+      { label: "Shape the idea", title: "Start with a concept", description: "A subject, a style, a placement. You don’t need a finished sketch to begin.", points: ["Editable creative brief", "Style and placement presets", "Examples for inspiration"], action: "Build your brief", href: "#top" },
+      { label: "Explore the options", title: "Choose how to create", description: "Different image models offer different controls. Pick the one that fits your direction.", points: ["One model catalog", "Supported settings in one place", "Review the current cost before creating"], action: "Explore image models", href: "/app/image" },
+      { label: "Keep moving", title: "Make the next version", description: "Refine your direction, save the result and discuss the final design with your artist.", points: ["Create a new variation", "Download your results", "Manage creations in My files"], action: "Open your workspace", href: "/app" },
+    ],
+  },
+  workflow: {
+    title: "Your creative workflow, in one place", description: "From a first thought to a visual direction you can share.",
+    items: [
+      { title: "Give an idea a shape", description: "Turn a few words into a clear starting point for your next image." },
+      { title: "Find your visual language", description: "Explore line, color, texture and mood." },
+      { title: "Choose your tools", description: "Move between models as the idea develops." },
+      { title: "Bring a reference", description: "Use image inputs when your selected model supports them." },
+      { title: "Try another direction", description: "Change the brief and explore a new interpretation." },
+      { title: "Build beyond the image", description: "Discover music, speech and video tools in the workspace." },
+      { title: "Keep what works", description: "Download your favorite result and manage your files." },
+      { title: "Share the concept", description: "Take a visual starting point to your tattoo artist." },
+    ],
+  },
+  faq: {
+    title: "Frequently asked questions",
+    items: [
+      { question: "What is an AI tattoo generator?", answer: "It helps turn a written tattoo idea into visual concepts. On this page you can describe the subject, style and intended placement, then continue to Epifera’s image generator to choose a model and create." },
+      { question: "How does an AI tattoo generator work?", answer: "Your inputs become an editable creative brief. In the image generator you choose a model and its supported settings, review the cost and explicitly start generation. Filling this form does not create or charge for an image." },
+      { question: "What should I include in an AI tattoo prompt?", answer: "Describe the subject, composition, style, colors and level of detail. You can also mention placement and approximate proportions. A clear starting idea is more useful than a long list of unrelated instructions." },
+      { question: "Can I create a tattoo design from a photo, sketch, or reference image?", answer: "You can add an image in the image generator when the selected model supports references. This page prepares a text brief; image upload options and limits are shown in the workspace." },
+      { question: "Can I control the tattoo’s style, colors, line weight, shading, size, and level of detail?", answer: "Include those details in the brief and refine them in later variations. Available settings depend on the selected model, and generated images may not follow every instruction exactly." },
+      { question: "What tattoo styles can AI generate?", answer: "Try fine line, blackwork, old school, geometric, botanical or a style described in your own words. Presets are starting points, and you can edit the style field freely." },
+      { question: "Can I design a tattoo for a specific body placement?", answer: "Add the intended placement to your brief to explore a suitable composition. It is a visual direction rather than a guarantee of anatomical fit, scale or final positioning." },
+      { question: "Can I preview an AI tattoo on my own body?", answer: "An image-reference model may help explore a placement concept, depending on its supported inputs. Epifera does not provide a dedicated body-fitting or tattoo try-on tool on this page." },
+      { question: "Are AI-generated tattoo designs suitable for real tattoos?", answer: "Treat a generated design as a concept. A tattoo artist should review and adapt the detail, line work, scale and placement before it becomes a finished tattoo design." },
+      { question: "Can tattoo artists use the generator to create flash sheets or client concepts?", answer: "It can be used to explore visual ideas and compositions. Review and redraw the result as needed, check the applicable terms, and use only references you are entitled to use." },
+      { question: "How do I refine a tattoo design that is close but not quite right?", answer: "Keep the parts of the brief that work and change the details you want to explore. If the selected model supports image references, you can use the previous result as a starting point for a new variation." },
+      { question: "How do I share an AI-generated tattoo design with my tattoo artist?", answer: "Download a result from the workspace and share it together with your idea, preferred placement and approximate size. Your artist can then develop the final design." },
+      { question: "Is the AI tattoo generator free to use?", answer: "Preparing a brief on this page does not start a paid job. Generation uses the selected model’s current pricing, shown in the workspace before you confirm. This page does not promise free or unlimited generations." },
+      { question: "Who owns an AI-generated tattoo design?", answer: "Use of generated content is subject to Epifera’s terms and any applicable model conditions. This page does not promise exclusivity, copyright protection or that a design is unique. Review the terms before commercial use." },
+      { question: "Are my uploaded photos, sketches, and body images private?", answer: "This page has no upload field. If you add references in the workspace, review Epifera’s data policy and avoid sharing personal or sensitive images unnecessarily. The relevant documents are available from the footer." },
+    ],
+  },
+} as const;

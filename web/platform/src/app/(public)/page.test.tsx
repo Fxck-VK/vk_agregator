@@ -18,16 +18,14 @@ import { publicSitemap } from "@/i18n/seo";
 afterEach(() => { request.locale = "ru"; });
 
 describe("homepage retirement boundary", () => {
-  it("keeps the Russian home empty after retiring its former layout", async () => {
+  it("renders Russian content and localized links", async () => {
     request.locale = "ru";
     const { container } = render(await HomePage());
-    expect(screen.queryByRole("heading", { level: 1 })).not.toBeInTheDocument();
-    expect(container.querySelector("header,footer,video,img")).toBeNull();
-  });
+    expect(container.querySelector('h1')).not.toBeNull();expect(container.querySelector('main')?.textContent).toMatch(/[А-Яа-яЁё]/);expect([...container.querySelectorAll('a[href]')].filter(link=>link.getAttribute('href')?.startsWith('/en/'))).toHaveLength(0);});
 
   it("serves the rebuilt homepage only on the English route", async () => {
     request.locale = "en";
-    render(<LocaleProvider locale="en">{await HomePage()}</LocaleProvider>);
+    render(<LocaleProvider locale={request.locale}>{await HomePage()}</LocaleProvider>);
     expect(screen.getByRole("heading", { level: 1 })).toHaveTextContent("The creative platform to direct your best work");
   });
 

@@ -1,0 +1,66 @@
+import {brandName} from '@/config/brand';
+
+export type BusinessPlan={readonly id:string;readonly status:'planned';readonly seatRange:{readonly min:2;readonly max:100};readonly price:null;readonly sharedCredits:null;readonly termsRef:string};
+export const businessPlan:BusinessPlan={id:'epifera-business',status:'planned',seatRange:{min:2,max:100},price:null,sharedCredits:null,termsRef:'/legal/paid-access'};
+export const businessEn={
+ metadata:{title:`${brandName} for teams — Business preview`,description:'Explore a creative workflow for your team and prepare a business enquiry with Epifera.'},
+ controls:{pricing:'Pricing',previous:'Previous',next:'Next',scenarios:'Creative team scenarios',reference:'Magnific visual reference',illustration:'Magnific reference illustration',preferAnnual:'Prefer annual billing',decrease:'Decrease team size',increase:'Increase team size',catalogNote:'Available catalog · planned team access',preference:'preference',models:'Explore available models',personalPricing:'Individual pricing previews',integration:'Integration status',faq:'FAQs'},
+ skip:'Skip to business',label:'Business · in planning',title:'A creative workspace built for growing teams',
+ description:'For agencies, marketing departments and creative teams with big ideas. Explore the tools for your next project, and help shape the way your team could work with Epifera.',
+ action:`Explore ${brandName} Business`,stickyAction:'Plan your team',referenceNote:'Visual reference: Magnific. Team capabilities shown in the illustrations are concepts for this layout.',
+ pause:'Pause background video',play:'Play background video',
+ storyLink:'Read a reference campaign study',examplesTitle:'A creative direction for every kind of team',examplesDescription:'Editorial scenarios to explore — these are workflow ideas, not customer stories.',
+ examples:[
+ {title:'Campaign direction',description:'Find a visual language for a new brand campaign.',href:'/ai/marketing'},
+ {title:'Product concepts',description:'Explore a fresh setting, material or composition.',href:'/workflows/product-campaign'},
+ {title:'Social storytelling',description:'Develop a sequence of images around one idea.',href:'/inspiration/cinematic-scenes'},
+ {title:'Creative pitches',description:'Build a clear visual direction for the next brief.',href:'/blog/ai-art-prompts'},
+ {title:'Motion studies',description:'Explore available video models and their controls.',href:'/ai/kling'},
+ {title:'Visual research',description:'Collect a direction from public visual references.',href:'/photos/nature'},
+ {title:'Content workflows',description:'Work through the stages of a creative project.',href:'/academy/courses/epifera-essentials'},
+ {title:'Sound and voice',description:'Explore music and speech tools for your concept.',href:'/ai'},
+ ],
+ featuresTitle:`Explore what your team could do with ${brandName}`,featuresDescription:'From an initial idea to a reviewed result: start with the available tools and plan the team workflow around them.',featuresNavigation:'Business capabilities',
+ features:[
+ {id:'create',label:'Create',icon:'image',title:'Choose the right model for the next idea',description:'Explore image, video, text, music and speech tools in one workspace. Available controls and the cost of each task are shown before you create.',status:'Available tools',href:'/app/models',action:'Explore the model catalog'},
+ {id:'collaborate',label:'Collaborate',icon:'text',title:'Build a shared creative direction',description:'Plan how briefs, feedback and approvals should move between people. Shared canvases, comments and approval roles are planned capabilities, not an active team workspace.',status:'Planned',href:'/workflows/product-campaign',action:'Explore a workflow guide'},
+ {id:'automate',label:'Automate',icon:'spark',title:'Turn a useful process into a repeatable brief',description:'Start with the workflow guides and define clear inputs, stages and outputs. Autonomous agents and reusable automated team flows are not enabled by this preview.',status:'Guided workflows',href:'/workflows/product-campaign',action:'Read the campaign workflow'},
+ {id:'connect',label:'Connect',icon:'spark',title:'Plan the connections around your workflow',description:'Explore the MCP integration concept for your existing tools. Live connectors, plugins and client setup remain planned; no credentials or external account access are requested here.',status:'Planned',href:'/mcp',action:'Explore the integration concept'},
+ {id:'manage',label:'Manage',icon:'text',title:'Define how your team should work',description:'Discuss people, access, spending and review responsibilities before choosing a team setup. A company dashboard, seat management and shared balances are not active yet.',status:'Planned',href:'/ai/docs/account-management',action:'Read the account guide'},
+ ],
+ trust:{label:'Trust',title:'Know how your work is handled',description:'Start with the actual account, data and payment terms — and discuss what your organization needs.',cards:[
+ {icon:'lock',title:'Account access',description:'Use the existing sign-in methods for your own account. Team access and shared roles require a separate implementation.',href:'/ai/docs/account-management',action:'Account guide'},
+ {icon:'rights',title:'Review content rights',description:'Check the terms for the tools and content you use before publishing or delivering a result.',href:'/legal/user-agreement',action:'User agreement'},
+ {icon:'shield',title:'Understand data handling',description:'Read the published privacy policy and data-processing terms for the service.',href:'/legal/privacy-policy',action:'Privacy policy'},
+ {icon:'people',title:'Company access, planned',description:'SSO and organization-wide permissions are requirements to discuss. This preview does not enable them.',href:'/ai/docs',action:'Help center'},
+ {icon:'document',title:'Terms before payment',description:'Final prices, payment conditions and refunds are defined in the actual offer and payment terms.',href:'/legal/paid-access',action:'Payment and refunds'},
+ ]},
+ credits:{label:'Team capacity',title:'A clear plan for your creative capacity',description:'Discuss the people, models and volume your team needs. A shared star pool is planned; no allowance is assigned by this preview.',centerLabel:'Shared star pool',amount:'To be agreed',status:'Planned team capacity',roles:['Creative','Review','Design','Brand','Content','Motion'],cards:[{title:'Plan your allowance',description:'Team amounts and rollover rules still need an actual offer.'},{title:'Review each task',description:'The existing workspace shows the cost of available paid tasks.'},{title:'Agree on visibility',description:'Team spending reports and a shared dashboard are planned.'}]},
+ setup:{label:'How to get started',title:'Shape the way your team creates',description:'Prepare a clear brief, explore the available tools, and discuss the team capabilities you need.',steps:[
+ {title:'Shape your brief',description:'Choose the team size and the kind of creative work you want to support.',action:'Plan your team',href:'#business-pricing'},
+ {title:'Define responsibilities',description:'Discuss who creates, reviews and approves. Team invitations and roles are not active in this preview.',action:'Read the account guide',href:'/ai/docs/account-management'},
+ {title:'Explore the workflow',description:'Try the existing guides and tools in your account before agreeing on a team setup.',action:'Explore a workflow',href:'/workflows/product-campaign'},
+ {title:'Review your outputs',description:'Review results in My files and download the available output. Shared client delivery remains a requirement to discuss.',action:'Open My files',href:'/app/files'},
+ ]},
+ pricing:{label:'Business enquiry',title:'Plan your team setup',name:'Business',description:'For creative teams and agencies planning their next way of working.',note:'Business is a planned offering. Prices, shared stars, roles and team access will be agreed separately; this page does not activate a subscription.',price:'Price to be agreed',monthly:'Monthly',annual:'Annual',frequencyLabel:'Billing preference only',seats:'Team size',seatError:'Choose a whole number from 2 to 100.',prepare:'Prepare business enquiry',more:'View more requirements',less:'View fewer requirements',guide:'Review models and availability',requirements:[
+ {title:'Explore image, video, text and audio tools',status:'Available tools'},
+ {title:'Review the cost before starting a task',status:'Existing workspace'},
+ {title:'Shared canvases and team feedback',status:'Planned'},
+ {title:'Shared star pool',status:'Planned'},
+ {title:'Team roles and access',status:'To be discussed'},
+ {title:'Company login and SSO',status:'To be discussed'},
+ {title:'Team usage reports',status:'Planned'},
+ {title:'Support and commercial terms',status:'To be agreed'},
+ ],guideTitle:'Models and team availability',guideNote:'The existing model catalog is available in the workspace. Team model access, parallel limits, shared credits and unlimited offers are not defined by this preview; the business offering remains planned.'},
+ quote:{title:'Your business enquiry',description:'Use this brief to start a discussion. Preparing or copying it does not send a message or purchase anything.',copy:'Copy enquiry brief',copied:'Enquiry brief copied.',copyError:'Select and copy the brief below; clipboard access is unavailable.',contact:'Write to support',terms:'Review payment terms'},
+ faqTitle:'Need more information?',faq:[
+ {question:`What is ${brandName} Business?`,answer:'Business is a planned team offering. This page helps you explore the intended workflow and prepare an enquiry; it does not create a company workspace or activate a subscription.'},
+ {question:'How would shared stars work?',answer:'A shared star pool is a planned capability. The allowance, ownership, usage reports and rollover conditions need an actual offer. Existing personal-account balances are not combined by this page.'},
+ {question:'How do team seats work here?',answer:'Choose 2–100 people for the enquiry brief. This number only records your intended team size; it does not invite members or grant access.'},
+ {question:'Can I purchase additional stars?',answer:'Available personal-account products and their final prices are shown in the existing workspace. Team packages have not been defined by this preview.'},
+ {question:'Can I move from an individual plan?',answer:'Prepare your requirements and contact support to discuss the intended setup. This page does not cancel, replace or transfer an existing subscription.'},
+ {question:'Does Business include API or MCP access?',answer:'No live API or MCP access is enabled here. The integration page describes the planned connection concept and its current limitations.'},
+ {question:'What about enterprise access and security requirements?',answer:'Discuss your requirements with support. SSO, certification, legal indemnification, service levels and corporate controls are not promised by this preview.'},
+ ],
+ closingTitle:"Your team's next idea starts here",closingAction:'Plan your team',close:'Close',
+} as const;

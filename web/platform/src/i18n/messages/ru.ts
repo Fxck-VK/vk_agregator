@@ -4,6 +4,12 @@ import { messagesMusicCatalogRu } from "../music-catalog";
 import { messagesMusicRu } from "../music";
 
 export const messagesRu = {
+  "units.materials.zero": "{count} материалов",
+  "units.materials.one": "{count} материал",
+  "units.materials.two": "{count} материала",
+  "units.materials.few": "{count} материала",
+  "units.materials.many": "{count} материалов",
+  "units.materials.other": "{count} материала",
   ...messagesSpeechRu,
   ...messagesMusicCatalogRu,
   ...messagesMusicRu,
