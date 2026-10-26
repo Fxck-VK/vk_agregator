@@ -554,10 +554,15 @@ default monitor callers retain their existing behavior.
 
 ### Bounded CI dependency setup
 
-Web Platform stays on Ubuntu 24.04. Nginx setup and Chromium/system dependency
-installation use `scripts/ci/retry-network.sh`: at most two attempts, 90 seconds
-per attempt, a five-second delay and a ten-second kill grace. Their CI steps
-have a four-minute outer limit. npm fetches have a 30-second request timeout;
+Web Platform stays on Ubuntu 24.04. Privileged Nginx and Chromium system-package
+setup each use one bounded 300-second transaction through
+`scripts/ci/retry-network.sh`, with a ten-second kill grace. An apt/dpkg child
+can outlive its sudo parent after interruption, so the wrapper must not start
+another package transaction. Their outer limits are seven minutes for Nginx
+including its gateway test, and six minutes for Chromium system dependencies.
+The separate Chromium browser download retains two 90-second attempts, a
+five-second delay, a ten-second kill grace and a four-minute outer limit.
+npm fetches have a 30-second request timeout;
 package installation has a five-minute step limit. Chromium comes from the
 locked local Playwright package (`npx --no-install`). Browser installation and
 the actual browser tests are separate steps, so an installation retry cannot

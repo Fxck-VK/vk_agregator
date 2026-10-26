@@ -213,11 +213,11 @@ jobs:
         run: npm --prefix web/platform run test
 
       - name: Verify DEV access gateway with Nginx
-        timeout-minutes: 4
+        timeout-minutes: 7
         shell: bash
         run: |
           set -euo pipefail
-          bash scripts/ci/retry-network.sh --timeout-seconds 90 -- bash -c \
+          bash scripts/ci/retry-network.sh --attempts 1 --timeout-seconds 300 -- bash -c \
             'sudo apt-get -o Acquire::Retries=2 -o Acquire::http::Timeout=20 update && sudo env DEBIAN_FRONTEND=noninteractive apt-get -o Acquire::Retries=2 -o Acquire::http::Timeout=20 install -y --no-install-recommends nginx'
           cd web/platform
           NGINX_BINARY=/usr/sbin/nginx npx vitest run src/lib/dev-access/gateway.integration.test.ts
@@ -225,13 +225,19 @@ jobs:
       - name: Verify packaging contract
         run: npm --prefix web/platform run test:packaging
 
-      - name: Install Chromium and system dependencies
+      - name: Install Chromium system dependencies
+        timeout-minutes: 6
+        working-directory: web/platform
+        shell: bash
+        run: bash ../../scripts/ci/retry-network.sh --attempts 1 --timeout-seconds 300 -- npx --no-install playwright install-deps chromium
+
+      - name: Install Chromium browser
         timeout-minutes: 4
         working-directory: web/platform
         shell: bash
         env:
           PLAYWRIGHT_DOWNLOAD_CONNECTION_TIMEOUT: "30000"
-        run: bash ../../scripts/ci/retry-network.sh --timeout-seconds 90 -- npx --no-install playwright install --with-deps chromium
+        run: bash ../../scripts/ci/retry-network.sh --attempts 2 --timeout-seconds 90 -- npx --no-install playwright install chromium
 
       - name: Verify session recovery across browser tabs
         timeout-minutes: 3

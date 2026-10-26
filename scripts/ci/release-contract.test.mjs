@@ -69,3 +69,27 @@ test('preparation cannot capture an inventory before early source checks', () =>
 test('CI keeps the early source selector regressions', () => {
   rejects('.github/workflows/ci.yml', ' scripts/ci/release-source-check.test.mjs', '', /early source/i);
 });
+
+test('CI separates privileged package transactions from retryable browser downloads', () => {
+  const source = files.get('.github/workflows/ci.yml').replaceAll('\r\n', '\n');
+  const step = name => {
+    const marker = `      - name: ${name}\n`;
+    const start = source.indexOf(marker);
+    assert(start >= 0, `Missing CI step: ${name}`);
+    return source.slice(start).split('\n      - name: ')[0];
+  };
+  for (const name of ['Verify DEV access gateway with Nginx', 'Install Chromium system dependencies']) {
+    const block = step(name);
+    assert.match(block, /--attempts 1\b/, 'Privileged package setup must not overlap another apt/dpkg attempt');
+    assert.match(block, /--timeout-seconds 300\b/, 'Cold system package setup needs its own bounded transaction');
+    assert(Number(block.match(/timeout-minutes: (\d+)/)?.[1]) >= 6, 'Outer timeout must include transaction cleanup');
+  }
+  assert.match(step('Install Chromium system dependencies'), /playwright install-deps chromium\b/);
+  const download = step('Install Chromium browser');
+  assert.match(download, /--attempts 2\b/);
+  assert.match(download, /--timeout-seconds 90\b/);
+  assert.match(download, /playwright install chromium\b/);
+  assert.doesNotMatch(download, /--with-deps|install-deps|apt-get|sudo/);
+  assert(source.indexOf('name: Install Chromium system dependencies') < source.indexOf('name: Install Chromium browser'));
+  assert(source.indexOf('name: Install Chromium browser') < source.indexOf('name: Verify session recovery across browser tabs'));
+});

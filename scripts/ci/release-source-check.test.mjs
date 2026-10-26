@@ -114,7 +114,7 @@ test('CLI includes committed, staged, unstaged, deleted and new paths against th
   assert.deepEqual(JSON.parse(result.stdout).changedFiles, ['committed.txt', 'deleted.txt', 'new file.txt', 'staged.txt', 'unstaged.txt']);
 });
 
-test('CLI rejects whitespace errors in untracked files before selecting long checks', t => {
+for (const autocrlf of ['false', 'true']) test(`CLI rejects whitespace errors before long checks with core.autocrlf=${autocrlf}`, t => {
   const root = mkdtempSync(join(tmpdir(), 'epifera-source-whitespace-'));
   t.after(() => {
     assert(resolve(root).startsWith(resolve(tmpdir()) + sep));
@@ -125,6 +125,8 @@ test('CLI rejects whitespace errors in untracked files before selecting long che
     assert.equal(result.status, 0, result.stderr); return result.stdout.trim();
   };
   git('init', '-q'); git('config', 'user.name', 'Whitespace Fixture'); git('config', 'user.email', 'fixture@example.invalid');
+  git('config', 'core.autocrlf', autocrlf);
+  git('config', 'core.whitespace', 'blank-at-eol,blank-at-eof,space-before-tab');
   writeFileSync(join(root, '.gitignore'), '.cache/\n');
   git('add', '.'); git('commit', '-qm', 'base');
   const base = git('rev-parse', 'HEAD');
@@ -135,7 +137,7 @@ test('CLI rejects whitespace errors in untracked files before selecting long che
     assert.notEqual(result.status, 0);
     assert.match(result.stderr, /whitespace.*new file\.txt/i);
   }
-  writeFileSync(join(root, 'new file.txt'), 'clean source\r\n');
+  writeFileSync(join(root, 'new file.txt'), autocrlf === 'true' ? 'clean source\r\n' : 'clean source\n');
   writeFileSync(join(root, 'new.bin'), Buffer.from([0, 1, 10, 10]));
   mkdirSync(join(root, '.cache'));
   writeFileSync(join(root, '.cache/ignored.txt'), 'ignored  \n\n');

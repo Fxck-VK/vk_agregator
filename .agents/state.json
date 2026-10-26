@@ -1,6 +1,6 @@
 {
   "schema_version": 5,
-  "updated_at": "2026-10-25T23:11:48.649Z",
+  "updated_at": "2026-10-26T00:39:48.384Z",
   "branch": "codex/vk-profile-name",
   "remote_tracking": "origin/dev-deploy",
   "purpose": "Short machine-readable current context and routing for agents. This file is not project history.",
@@ -59,7 +59,7 @@
     "dev_contour": "DEV uses separate secrets, VPS, tunnel, VK group and payment configuration.",
     "prod_contour": "main deploys through GitHub Actions and immutable GHCR images with mandatory smoke.",
     "loadtest_contour": "Mock providers, payments and delivery only; no production hosts or paid calls.",
-    "release_intent": "User authorized one complete dev-deploy publication on 2026-10-26. Use reviewed ignored .cache/release-2026-10-26/manifest-v3.json and exact-SHA CI/signed-image/rollout receipts; do not infer deployment from earlier local-only template notes."
+    "release_intent": "User authorized one complete dev-deploy publication on 2026-10-26. Final reviewed .cache/release-2026-10-26/manifest-v5.json carries all 834 originally agreed source entries plus CI setup regressions and protects the entire release. Prior SHA03c032f was pushed but CI failed on implicit Git EOL fixture settings and interrupted apt setup; it was not deployed. Follow the corrected final exact SHA through fresh preflight, CI, signed images, rollout and smoke."
   },
   "recent_decisions": [
     "All24 public template types now have RU and EN versions in one shared component/data system (2026-10-26). 3749 source/RU/reverse records plus contextual plural forms, separate reverse passes and semantic corrections are retained in docs/research/ru-template-translations. Locale-scoped immutable projections preserve IDs/routes/prices/flags and raw user input; canonical media tags have translated display/search labels. RU search, filters, metadata, dialogs, course/docs children and author archive are integrated. Approved RU legal texts unchanged; draft/noindex unchanged. Complete DEV publication authorized on 2026-10-26; verify exact-SHA release receipts for live status. Read web/platform/docs/public-template-localization.md for scalable translation workflow and mandatory catalog/source checks.",
