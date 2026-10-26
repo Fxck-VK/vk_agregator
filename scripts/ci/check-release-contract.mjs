@@ -69,6 +69,7 @@ export function validateReleaseContract(read, dockerfiles) {
     return found[1];
   };
   for (const pkg of ['admin', 'platform']) {
+    assert(body(`${pkg}-checks`).includes(`Install-NpmDependenciesIfNeeded -PackagePath "web/${pkg}"`), `${pkg} checks must bootstrap lockfile-scoped dependencies`);
     for (const action of ['test', 'build']) {
       const stage = `${pkg}-${action === 'test' ? 'tests' : 'build'}`;
       const invocation = `Invoke-Native -Command $npmCommand -Arguments @("--prefix", "web/${pkg}", "run", "${action}")`;

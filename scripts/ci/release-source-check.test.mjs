@@ -6,6 +6,13 @@ import { spawnSync } from 'node:child_process';
 import test from 'node:test';
 import './release-source-plan.test.mjs';
 
+test('nightly infrastructure policy accepts the current release preflight', () => {
+  const result = spawnSync('pwsh', ['-NoProfile', '-File', 'scripts/ci/validate-nightly-quality.ps1'], {
+    cwd: resolve(import.meta.dirname, '../..'), encoding: 'utf8', timeout: 30000,
+  });
+  assert.equal(result.status, 0, `${result.stdout ?? ''}${result.stderr ?? ''}`);
+});
+
 function preparationFixture(t, checker) {
   const root = mkdtempSync(join(tmpdir(), 'epifera-preparation-'));
   t.after(() => {

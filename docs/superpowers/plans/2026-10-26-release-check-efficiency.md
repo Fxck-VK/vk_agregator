@@ -43,3 +43,7 @@
 - Shared signature/env/deployment release regressions passed. No provider, billing, authentication, storage or production UI behavior was changed.
 - Independent read-only review found no blocking issues. Its container cancellation note was addressed with --init and an independent workload deadline; a real one-second deadline stopped a twenty-second fixture and removed the owned container in 1880ms.
 - No commit, push, deployment or clean-final-commit full preflight was performed for this local implementation. The next explicitly authorized release still requires the reviewed inventory and complete v7 preflight for its actual final SHA.
+
+## Authorized release verification
+
+The subsequent complete DEV release was authorized on 2026-10-26. Its first local preflight caught a stale nightly-policy assertion expecting the former shared npm bootstrap loop, before full web suites or any push. The validator now checks both explicit app bootstraps; the shared contract rejects either missing bootstrap. Early source/CI regressions execute the real nightly validator so policy/preflight compatibility is checked before inventory capture. The focused correction passed 46 tests after two new regressions failed as expected. The final changed SHA requires a new reviewed inventory and complete v7 preflight; the failed receipt remains retained as evidence.

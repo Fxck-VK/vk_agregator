@@ -20,6 +20,13 @@ function rejects(path, before, after, message) {
 test('current source agrees across publication, verifier, Compose and DEV', () => {
   assert.equal(check().services.length, 7);
 });
+
+test('each web checks stage must bootstrap its own lockfile-scoped dependencies', () => {
+  for (const pkg of ['admin', 'platform']) {
+    rejects('scripts/ci/dev-deploy-preflight.ps1',
+      `Install-NpmDependenciesIfNeeded -PackagePath "web/${pkg}"`, '', /bootstrap/i);
+  }
+});
 test('removing an image from either publication matrix is rejected', () => {
   rejects('.github/workflows/docker-images.yml', '- service: api', '- service: unrelated', /inventory|mapping/i);
 });

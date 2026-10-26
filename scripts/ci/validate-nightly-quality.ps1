@@ -247,7 +247,9 @@ Assert-Contains $nightly './scripts/ci/validate-trivy-filesystem-scope.ps1' 'Nig
 Assert-Contains $nightly '--config trivy-filesystem.yaml' 'Nightly explicit filesystem config'
 Assert-Contains (Get-Content -LiteralPath $preflightScriptPath -Raw) '"status", "--porcelain", "--untracked-files=all"' 'DEV preflight clean commit check'
 Assert-Contains (Get-Content -LiteralPath $preflightScriptPath -Raw) 'scripts/ci/test-wait-for-github-workflow.sh' 'DEV preflight workflow monitor regression test'
-Assert-Contains (Get-Content -LiteralPath $preflightScriptPath -Raw) 'Install-NpmDependenciesIfNeeded -PackagePath $packagePath' 'DEV preflight lockfile-scoped npm bootstrap'
+foreach ($packageName in @("admin", "platform")) {
+    Assert-Contains (Get-Content -LiteralPath $preflightScriptPath -Raw) ('Install-NpmDependenciesIfNeeded -PackagePath "web/' + $packageName + '"') "DEV preflight $packageName lockfile-scoped npm bootstrap"
+}
 Assert-Contains (Get-Content -LiteralPath $preflightScriptPath -Raw) '"--prefix", $PackagePath, "ci"' 'DEV preflight reproducible npm install'
 $preflightModule = Get-Content -LiteralPath $preflightModulePath -Raw
 Assert-Contains $preflightModule 'dev-deploy-preflight-$PolicyVersion-$CommitSha' 'DEV preflight exact-commit cache'
