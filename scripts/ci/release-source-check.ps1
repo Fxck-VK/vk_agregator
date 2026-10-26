@@ -11,6 +11,9 @@ try {
     if ($LASTEXITCODE -ne 0) { throw 'Cannot select early source checks' }
     $plan = ($json | Out-String) | ConvertFrom-Json
     Write-Host "Early source checks: $($plan.changedFiles.Count) changed paths; $($plan.commands.Count) checks"
+    if ($plan.PSObject.Properties.Name -contains 'deferredFullSuites' -and $plan.deferredFullSuites.Count -gt 0) {
+        Write-Host ("Complete web suites run once in final preflight: " + ($plan.deferredFullSuites -join ', '))
+    }
     foreach ($step in $plan.commands) {
         $command = [string]$step.command
         if ($command -eq 'npm' -and $IsWindows) { $command = 'npm.cmd' }

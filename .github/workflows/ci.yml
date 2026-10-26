@@ -319,6 +319,9 @@ jobs:
       - name: Test release inventory and early source checks
         run: node --test scripts/ci/release-manifest.test.mjs scripts/ci/release-source-check.test.mjs
 
+      - name: Test native Linux release contracts
+        run: node scripts/ci/release-linux-check.mjs
+
       - name: Test bounded dependency downloads and DEV source selection
         shell: bash
         run: |

@@ -59,12 +59,31 @@ export function validateReleaseContract(read, dockerfiles) {
   assert(rollout.includes('group: dev-deploy') && rollout.includes('cancel-in-progress: false'), 'Mutating DEV rollout must remain serialized');
   assert(read('.github/workflows/ci.yml').includes('./scripts/ci/validate-release-contract.ps1'), 'CI must execute the same release contract as local preflight');
   const preflight = read('scripts/ci/dev-deploy-preflight.ps1');
+  const stages = [...(preflight.match(/^\$stageNames = @\(([^\r\n]+)\)/m)?.[1] ?? '').matchAll(/"([a-z-]+)"/g)].map(match => match[1]);
+  assert.deepEqual(stages, ['source-fast', 'release-contract', 'audit', 'govulncheck', 'infrastructure', 'trivy',
+    'backend-tests', 'admin-checks', 'admin-tests', 'admin-build', 'platform-checks', 'platform-tests', 'platform-build', 'platform-packaging'],
+  'Preflight stage inventory/order must retain every admission, test and build gate');
+  const body = stage => {
+    const found = preflight.match(new RegExp(`^        "${stage}" \\{([\\s\\S]*?)^        \\}`, 'm'));
+    assert(found, `Missing executable stage body: ${stage}`);
+    return found[1];
+  };
+  for (const pkg of ['admin', 'platform']) {
+    for (const action of ['test', 'build']) {
+      const stage = `${pkg}-${action === 'test' ? 'tests' : 'build'}`;
+      const invocation = `Invoke-Native -Command $npmCommand -Arguments @("--prefix", "web/${pkg}", "run", "${action}")`;
+      assert.equal(preflight.split(invocation).length - 1, 1, `${pkg} ${action} suite/build invocation must occur once`);
+      assert(body(stage).includes(invocation), `Full suite/build invocation must remain inside ${stage}`);
+    }
+  }
+  assert(body('platform-packaging').includes('@("--prefix", "web/platform", "run", "test:packaging")'), 'Platform packaging stage must execute its check');
   assert(/^\$stageNames = @\("source-fast",/m.test(preflight), 'Early source-fast checks must be the first full preflight stage');
   assert(/"source-fast"\s*\{\s*& pwsh -NoProfile -File scripts\/ci\/release-source-check\.ps1/.test(preflight), 'Full preflight must execute early source checks');
   const preparation = preflight.slice(preflight.indexOf('if ($Prepare) {'), preflight.indexOf('$branch = Get-GitOutput'));
   const early = preparation.indexOf('& pwsh -NoProfile -File scripts/ci/release-source-check.ps1 -BaseRef $BaseRef');
   assert(early >= 0 && preparation.indexOf('"--capture"') > early, 'Preparation must execute early source checks before inventory capture');
   assert(read('.github/workflows/ci.yml').includes(' scripts/ci/release-source-check.test.mjs'), 'CI must execute early source selector regressions');
+  assert(read('.github/workflows/ci.yml').includes('node scripts/ci/release-linux-check.mjs'), 'CI must execute the same native Linux release guard');
   return { workflowName, services };
 }
 if (process.argv[1] && import.meta.url === pathToFileURL(resolve(process.argv[1])).href) {

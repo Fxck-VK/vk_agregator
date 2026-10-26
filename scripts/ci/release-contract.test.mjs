@@ -53,9 +53,35 @@ test('security and infrastructure admission precede expensive source tests', () 
   const stages = source.match(/^\$stageNames = @\(([^\n]+)\)/m)?.[1];
   assert(stages, 'Preflight stages must be declared explicitly');
   for (const early of ['audit', 'govulncheck', 'infrastructure', 'trivy']) {
-    assert(stages.includes(`"${early}"`) && stages.includes('"tests"'), 'Required admission stage is missing');
-    assert(stages.indexOf(`"${early}"`) < stages.indexOf('"tests"'), `${early} must fail before lengthy source tests`);
+    for (const final of ['backend-tests', 'admin-tests', 'admin-build', 'platform-tests', 'platform-build']) {
+      assert(stages.includes(`"${early}"`) && stages.includes(`"${final}"`), 'Required admission/final stage is missing');
+      assert(stages.indexOf(`"${early}"`) < stages.indexOf(`"${final}"`), `${early} must fail before ${final}`);
+    }
   }
+});
+
+test('each final web suite has one independently cached invocation', () => {
+  const source = files.get('scripts/ci/dev-deploy-preflight.ps1');
+  for (const pkg of ['admin', 'platform']) {
+    const invocation = `Invoke-Native -Command $npmCommand -Arguments @("--prefix", "web/${pkg}", "run", "test")`;
+    assert.equal(source.split(invocation).length - 1, 1, `Exactly one full ${pkg} suite is required`);
+    assert.match(source, new RegExp(`"${pkg}-tests"\\s*\\{`));
+    assert.match(source, new RegExp(`"${pkg}-build"\\s*\\{`));
+  }
+});
+
+test('removing a split test/build stage cannot produce a complete receipt', () => {
+  rejects('scripts/ci/dev-deploy-preflight.ps1', ', "platform-tests"', '', /stage|inventory/i);
+});
+
+test('a declared test stage cannot silently replace or lose its full suite', () => {
+  rejects('scripts/ci/dev-deploy-preflight.ps1', '@("--prefix", "web/platform", "run", "test")',
+    '@("--prefix", "web/platform", "run", "lint")', /suite|invocation/i);
+  rejects('scripts/ci/dev-deploy-preflight.ps1', '"platform-tests" {', '"unused-platform-tests" {', /stage|suite/i);
+});
+
+test('CI runs the same Linux release guard before publication', () => {
+  rejects('.github/workflows/ci.yml', 'node scripts/ci/release-linux-check.mjs', 'echo parity-removed', /Linux/i);
 });
 
 test('early source checks are the mandatory first full preflight stage', () => {

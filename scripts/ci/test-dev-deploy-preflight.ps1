@@ -160,6 +160,32 @@ try {
         -StageNames $earlyStages -RunStage { param($stage) }
     Assert-Equal ($earlyStages -join ",") ($newSource.StagesRun -join ",") "a different commit never inherits source checks"
 
+    # Use the actual entrypoint's complete stage list; simulate external commands.
+    $entrypoint = Get-Content (Join-Path $PSScriptRoot 'dev-deploy-preflight.ps1') -Raw
+    $declaration = [regex]::Match($entrypoint, '(?m)^\$stageNames = @\(([^\r\n]+)\)')
+    $splitStages = @([regex]::Matches($declaration.Groups[1].Value, '"([a-z-]+)"') | ForEach-Object { $_.Groups[1].Value })
+    if ('platform-tests' -notin $splitStages -or 'backend-tests' -notin $splitStages -or 'platform-build' -notin $splitStages) {
+        throw 'Entrypoint must expose independently cached backend, platform test and build stages'
+    }
+    $splitSha = '7' * 40
+    $splitExecuted = [System.Collections.Generic.List[string]]::new()
+    Assert-ThrowsLike {
+        Invoke-DevDeployPreflight -GitDirectory $tempRoot -CommitSha $splitSha -PolicyVersion v7 `
+            -StageNames $splitStages -RunStage {
+                param($stage)
+                $splitExecuted.Add($stage) | Out-Null
+                if ($stage -eq 'platform-tests') { throw 'platform test fixture failed' }
+            }
+    } '*platform test fixture failed*' 'split platform failure propagation'
+    $splitRetry = [System.Collections.Generic.List[string]]::new()
+    $splitResult = Invoke-DevDeployPreflight -GitDirectory $tempRoot -CommitSha $splitSha -PolicyVersion v7 `
+        -StageNames $splitStages -RunStage { param($stage) $splitRetry.Add($stage) | Out-Null }
+    Assert-Equal 'platform-tests,platform-build,platform-packaging' ($splitRetry -join ',') 'only failed and pending stages resume'
+    Assert-Equal $false $splitResult.Cached 'a failed suite cannot become a cached success'
+    $splitCached = Invoke-DevDeployPreflight -GitDirectory $tempRoot -CommitSha $splitSha -PolicyVersion v7 `
+        -StageNames $splitStages -RunStage { throw 'successful split stages must be reused' }
+    Assert-Equal $true $splitCached.Cached 'unchanged validated split stages reuse receipts'
+
     $lockPath = Join-Path $tempRoot "dev-deploy-preflight.lock"
     $heldLock = [System.IO.File]::Open($lockPath, [System.IO.FileMode]::OpenOrCreate, [System.IO.FileAccess]::ReadWrite, [System.IO.FileShare]::None)
     try {

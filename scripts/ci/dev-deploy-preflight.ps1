@@ -111,9 +111,9 @@ if ($LASTEXITCODE -ne 0 -or [string]::IsNullOrWhiteSpace($dockerVersion)) {
 
 $gitDirectory = Get-GitOutput -Arguments @("rev-parse", "--absolute-git-dir")
 $npmCommand = if ($IsWindows) { "npm.cmd" } else { "npm" }
-$policyVersion = "v6"
+$policyVersion = "v7"
 # Fail on source contracts and fresh advisories before lengthy source builds/tests.
-$stageNames = @("source-fast", "release-contract", "audit", "govulncheck", "infrastructure", "trivy", "tests")
+$stageNames = @("source-fast", "release-contract", "audit", "govulncheck", "infrastructure", "trivy", "backend-tests", "admin-checks", "admin-tests", "admin-build", "platform-checks", "platform-tests", "platform-build", "platform-packaging")
 function Get-RuntimeVersion([string]$Command, [string[]]$Arguments) {
     $version = (& $Command @Arguments | Out-String).Trim()
     if ($LASTEXITCODE -ne 0 -or [string]::IsNullOrWhiteSpace($version)) {
@@ -124,6 +124,7 @@ function Get-RuntimeVersion([string]$Command, [string[]]$Arguments) {
 $runtimeInputs = [ordered]@{
     go = Get-RuntimeVersion "go" @("env", "GOVERSION")
     node = Get-RuntimeVersion "node" @("--version")
+    git = Get-RuntimeVersion "git" @("--version")
     npm = Get-RuntimeVersion $npmCommand @("--version")
     docker = [string]$dockerVersion
     powershell = $PSVersionTable.PSVersion.ToString()
@@ -148,19 +149,36 @@ $runStage = {
             & pwsh -NoProfile -File scripts/ci/validate-release-contract.ps1
             if ($LASTEXITCODE -ne 0) { throw "Shared release contract failed before source tests" }
         }
-        "tests" {
+        "backend-tests" {
             Invoke-Native -Command "git" -Arguments @("diff", "--check", "$commitSha^", $commitSha)
             Invoke-Native -Command "go" -Arguments @("test", "./...")
             Invoke-Native -Command "go" -Arguments @("vet", "./...")
             Invoke-Native -Command "go" -Arguments @("run", "./scripts/models/check")
             Invoke-Native -Command "go" -Arguments @("run", "./scripts/models/preview", "-check")
-            foreach ($packagePath in @("web/admin", "web/platform")) {
-                Install-NpmDependenciesIfNeeded -PackagePath $packagePath
-                Invoke-Native -Command $npmCommand -Arguments @("--prefix", $packagePath, "run", "lint")
-                Invoke-Native -Command $npmCommand -Arguments @("--prefix", $packagePath, "run", "typecheck")
-                Invoke-Native -Command $npmCommand -Arguments @("--prefix", $packagePath, "run", "test")
-                Invoke-Native -Command $npmCommand -Arguments @("--prefix", $packagePath, "run", "build")
-            }
+        }
+        "admin-checks" {
+            Install-NpmDependenciesIfNeeded -PackagePath "web/admin"
+            Invoke-Native -Command $npmCommand -Arguments @("--prefix", "web/admin", "run", "lint")
+            Invoke-Native -Command $npmCommand -Arguments @("--prefix", "web/admin", "run", "typecheck")
+        }
+        "admin-tests" {
+            Invoke-Native -Command $npmCommand -Arguments @("--prefix", "web/admin", "run", "test")
+        }
+        "admin-build" {
+            Invoke-Native -Command $npmCommand -Arguments @("--prefix", "web/admin", "run", "build")
+        }
+        "platform-checks" {
+            Install-NpmDependenciesIfNeeded -PackagePath "web/platform"
+            Invoke-Native -Command $npmCommand -Arguments @("--prefix", "web/platform", "run", "lint")
+            Invoke-Native -Command $npmCommand -Arguments @("--prefix", "web/platform", "run", "typecheck")
+        }
+        "platform-tests" {
+            Invoke-Native -Command $npmCommand -Arguments @("--prefix", "web/platform", "run", "test")
+        }
+        "platform-build" {
+            Invoke-Native -Command $npmCommand -Arguments @("--prefix", "web/platform", "run", "build")
+        }
+        "platform-packaging" {
             Invoke-Native -Command $npmCommand -Arguments @("--prefix", "web/platform", "run", "test:packaging")
         }
         "audit" {

@@ -1,8 +1,9 @@
-import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
+import { act, cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import { fetchImageFileResult, fetchImageFilesPage } from "@/features/files/FilesWorkspace/files-data";
 import { ru } from "@/i18n/ru";
+import type { ImageJobResult } from "@/lib/web-api/contracts";
 
 import { ChatFilePicker } from "./ChatFilePicker";
 
@@ -20,6 +21,27 @@ vi.mock("@/features/files/FilesWorkspace/files-data", async () => {
 
 const jobID = "11111111-1111-4111-8111-111111111111";
 const artifactID = "22222222-2222-4222-8222-222222222222";
+const imageResult: ImageJobResult = {
+  artifacts: [{
+    height: 1024,
+    id: artifactID,
+    mime_type: "image/png",
+    size_bytes: 4096,
+    width: 1024,
+  }],
+  job_id: jobID,
+  status: "succeeded",
+};
+
+function deferredPreview() {
+  let resolve!: (result: ImageJobResult) => void;
+  let reject!: (error: Error) => void;
+  const promise = new Promise<ImageJobResult>((resolvePromise, rejectPromise) => {
+    resolve = resolvePromise;
+    reject = rejectPromise;
+  });
+  return { promise, resolve, reject };
+}
 
 describe("ChatFilePicker", () => {
   beforeEach(() => {
@@ -38,17 +60,7 @@ describe("ChatFilePicker", () => {
       }],
       next_cursor: null,
     });
-    vi.mocked(fetchImageFileResult).mockResolvedValue({
-      artifacts: [{
-        height: 1024,
-        id: artifactID,
-        mime_type: "image/png",
-        size_bytes: 4096,
-        width: 1024,
-      }],
-      job_id: jobID,
-      status: "succeeded",
-    });
+    vi.mocked(fetchImageFileResult).mockResolvedValue(imageResult);
   });
 
   afterEach(() => {
@@ -57,14 +69,26 @@ describe("ChatFilePicker", () => {
   });
 
   it("opens on generated files and returns the selected artifact", async () => {
+    const preview = deferredPreview();
+    vi.mocked(fetchImageFileResult).mockReturnValueOnce(preview.promise);
     const onSelect = vi.fn();
-    render(<ChatFilePicker initialSource="generated" onClose={vi.fn()} onSelect={onSelect} />);
+    await act(async () => {
+      render(<ChatFilePicker initialSource="generated" onClose={vi.fn()} onSelect={onSelect} />);
+    });
 
     expect(screen.getByRole("dialog", { name: "Мои файлы" })).toBeVisible();
     expect(screen.getByRole("tab", { name: "Сгенерированные" })).toHaveAttribute("aria-selected", "true");
+    expect(screen.getByRole("progressbar", { name: ru.files.previewLoading })).toBeVisible();
+    expect(screen.queryByRole("button", { name: /Прикрепить/ })).not.toBeInTheDocument();
+    expect(onSelect).not.toHaveBeenCalled();
 
-    fireEvent.click(await screen.findByRole("button", { name: "Прикрепить «Город после дождя»" }));
+    await act(async () => {
+      preview.resolve(imageResult);
+    });
 
+    fireEvent.click(screen.getByRole("button", { name: "Прикрепить «Город после дождя»" }));
+
+    expect(onSelect).toHaveBeenCalledOnce();
     expect(onSelect).toHaveBeenCalledWith({
       id: artifactID,
       mimeType: "image/png",
@@ -75,15 +99,38 @@ describe("ChatFilePicker", () => {
   });
 
   it("lets the user retry a failed preview before attaching it", async () => {
-    vi.mocked(fetchImageFileResult).mockRejectedValueOnce(new Error("Unavailable"));
+    const preview = deferredPreview();
+    const retriedPreview = deferredPreview();
+    vi.mocked(fetchImageFileResult)
+      .mockReturnValueOnce(preview.promise)
+      .mockReturnValueOnce(retriedPreview.promise);
     const onSelect = vi.fn();
-    render(<ChatFilePicker initialSource="generated" onClose={vi.fn()} onSelect={onSelect} />);
+    await act(async () => {
+      render(<ChatFilePicker initialSource="generated" onClose={vi.fn()} onSelect={onSelect} />);
+    });
 
-    const error = await screen.findByRole("alert");
+    expect(screen.getByRole("progressbar", { name: ru.files.previewLoading })).toBeVisible();
+    expect(screen.queryByRole("button", { name: /Прикрепить/ })).not.toBeInTheDocument();
+    await act(async () => {
+      preview.reject(new Error("Unavailable"));
+    });
+
+    const error = screen.getByRole("alert");
     expect(error).toHaveTextContent(ru.files.previewFailure);
     expect(screen.queryByRole("button", { name: /Прикрепить/ })).not.toBeInTheDocument();
-    fireEvent.click(screen.getByRole("button", { name: /Повторить/ }));
-    fireEvent.click(await screen.findByRole("button", { name: "Прикрепить «Город после дождя»" }));
+    await act(async () => {
+      fireEvent.click(screen.getByRole("button", { name: /Повторить/ }));
+    });
+
+    expect(screen.getByRole("progressbar", { name: ru.files.previewLoading })).toBeVisible();
+    expect(screen.queryByRole("alert")).not.toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: /Прикрепить/ })).not.toBeInTheDocument();
+    expect(onSelect).not.toHaveBeenCalled();
+    await act(async () => {
+      retriedPreview.resolve(imageResult);
+    });
+
+    fireEvent.click(screen.getByRole("button", { name: "Прикрепить «Город после дождя»" }));
 
     expect(fetchImageFileResult).toHaveBeenCalledTimes(2);
     expect(onSelect).toHaveBeenCalledOnce();

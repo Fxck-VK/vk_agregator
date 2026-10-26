@@ -174,8 +174,13 @@ This is required for every agent publishing this project, including small fixes.
    record explicit reasons for any deferral. Preserve secrets/local reference
    exports outside Git. Do not invent a different release path for this task.
 2. Use `scripts/ci/validate-release-contract.ps1` through the existing preflight.
-   The full preflight must start with its mandatory `source-fast` stage. Local
-   and CI must run the same deployment/env/signature regressions. Check
+   The full preflight must start with its mandatory `source-fast` stage. Early
+   web checks contain lint, types, mandatory short guards and assets; complete
+   web suites run once in final stages after security admission. Release-tooling
+   changes must pass the automatic native Linux guard before other source checks.
+   Keep backend/admin/platform tests and builds as separate exact-commit cached
+   stages, so retries preserve successful unrelated work. Local and CI must run
+   the same deployment/env/signature regressions. Check
    image inventories, exact-source certificate identity, exact-SHA quality gates,
    rollback history, serialized rollout and mandatory smoke together.
 3. Check tools, WSL/Bash and Docker engine before expensive stages. Run dependency

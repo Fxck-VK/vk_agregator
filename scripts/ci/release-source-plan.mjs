@@ -13,14 +13,18 @@ export function createSourcePlan(changedFiles, existingFiles) {
   const changed = [...new Set(changedFiles.map(safePath))].sort();
   const existing = new Set(existingFiles);
   const commands = [];
+  const deferredFullSuites = [];
   const add = (command, args, cwd = '.', extra = {}) => {
     const step = { cwd, command, args, ...extra };
     if (!commands.some(other => JSON.stringify(other) === JSON.stringify(step))) commands.push(step);
   };
+  const infrastructureChanged = changed.some(path => /^(?:scripts\/(?:ci|deploy)\/|\.github\/workflows\/|Dockerfile\.|docker-compose|trivy-filesystem)/.test(path));
+  if (infrastructureChanged) add('node', ['scripts/ci/release-linux-check.mjs']);
 
   for (const pkg of ['web/platform', 'web/admin']) {
     const inputs = changed.filter(path => path.startsWith(`${pkg}/`) && !path.startsWith(`${pkg}/docs/`) && !path.endsWith('.md'));
     if (!inputs.length) continue;
+    deferredFullSuites.push(pkg);
     add('npm', ['run', 'lint'], pkg);
     add('npm', ['run', 'typecheck'], pkg);
     if (pkg === 'web/platform') {
@@ -33,25 +37,8 @@ export function createSourcePlan(changedFiles, existingFiles) {
       add('node', ['node_modules/vitest/vitest.mjs', 'run', ...guards], pkg);
       add('npm', ['run', 'validate:assets'], pkg);
     }
-    const broad = inputs.some(path => !existing.has(path) || /^package(?:-lock)?\.json$/.test(path.slice(pkg.length + 1))
-      || /^(?:[^/]*config[^/]*|src\/test\/.*|\.env.*)$/.test(path.slice(pkg.length + 1)));
-    if (broad) {
-      add('npm', ['run', 'test'], pkg);
-      continue;
-    }
-    // Related tests follow static imports. Filesystem-read contracts above are
-    // compulsory even when the changed CSS/content has no static import edge.
-    const related = inputs.filter(path => /\.(?:[cm]?[jt]sx?|css|json)$/.test(path)).map(path => path.slice(pkg.length + 1));
-    let batch = [];
-    const flush = () => {
-      if (batch.length) add('node', ['node_modules/vitest/vitest.mjs', 'related', '--run', ...batch], pkg);
-      batch = [];
-    };
-    for (const path of related) {
-      if (batch.join(' ').length + path.length > 6000) flush();
-      batch.push(path);
-    }
-    flush();
+    // Full web suites belong to the final exact-commit preflight. Even narrow
+    // related-test selection can expand to the full suite during preparation.
   }
 
   const goFiles = changed.filter(path => path.endsWith('.go'));
@@ -63,7 +50,7 @@ export function createSourcePlan(changedFiles, existingFiles) {
     for (const action of ['test', 'vet']) add('go', [action, ...packages]);
   }
 
-  if (changed.some(path => /^(?:scripts\/(?:ci|deploy)\/|\.github\/workflows\/|Dockerfile\.|docker-compose|trivy-filesystem)/.test(path))) {
+  if (infrastructureChanged) {
     const commonTests = ['scripts/ci/release-source-check.test.mjs', 'scripts/ci/release-contract.test.mjs', 'scripts/ci/release-manifest.test.mjs'];
     add('node', ['--test', ...commonTests]);
     add('node', ['scripts/ci/check-release-contract.mjs']);
@@ -78,7 +65,7 @@ export function createSourcePlan(changedFiles, existingFiles) {
   if (changed.some(path => path.endsWith('.md') || path === '.agents/state.json')) {
     add('pwsh', ['-NoProfile', '-File', 'scripts/ci/validate-docs.ps1']);
   }
-  return { changedFiles: changed, commands };
+  return { changedFiles: changed, commands, deferredFullSuites: deferredFullSuites.sort() };
 }
 
 function git(...args) {
