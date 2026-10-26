@@ -125,8 +125,7 @@ describe("Sidebar", () => {
       { href: "/app/chats", icon: "edit", label: ru.navigation.chats, prefetch: true },
       { href: "/app/files", icon: "file", label: ru.navigation.files, prefetch: true },
       { href: "/app/models", icon: "grid", label: ru.navigation.models, prefetch: true },
-      { href: "/app/music", icon: "music", label: ru.navigation.music, prefetch: true },
-      { href: "/app/speech", icon: "edit", label: "Речь", prefetch: true },
+      { href: "/app/music", icon: "music", label: "Аудио", prefetch: true },
       { href: "/app/inspiration", icon: "image", label: ru.navigation.inspiration, prefetch: true },
     ]);
   });
@@ -147,8 +146,7 @@ describe("Sidebar", () => {
       ru.navigation.chats,
       ru.navigation.files,
       ru.navigation.models,
-      ru.navigation.music,
-      "Речь",
+      "Аудио",
       ru.navigation.inspiration,
     ]);
     expect(links.map((link) => link.querySelector("[data-icon]")?.getAttribute("data-icon"))).toEqual([
@@ -156,9 +154,20 @@ describe("Sidebar", () => {
       "file",
       "grid",
       "music",
-      "edit",
       "image",
     ]);
+  });
+
+  it.each(["/app/music", "/app/speech"])("keeps the single Audio entry active on %s", pathname => {
+    vi.mocked(usePathname).mockReturnValue(pathname);
+    mockWideViewport();
+    render(<Sidebar />);
+
+    const audioLink = screen.getByRole("link", { name: "Аудио" });
+    expect(audioLink).toHaveAttribute("href", "/ru/app/music");
+    expect(audioLink).toHaveAttribute("aria-current", "page");
+    expect(screen.queryByRole("link", { name: "Музыка" })).not.toBeInTheDocument();
+    expect(screen.queryByRole("link", { name: "Речь" })).not.toBeInTheDocument();
   });
 
   it("keeps the narrow drawer closed and inaccessible until its trigger opens it", () => {

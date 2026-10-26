@@ -44,6 +44,7 @@ export const en = {
     chats: "New chat",
     files: "My files",
     models: "All AI models",
+    audio: "Audio",
     music: "Music",
     speech: "Speech",
     inspiration: "Inspiration",

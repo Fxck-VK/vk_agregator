@@ -44,6 +44,7 @@ export const ru = {
     chats: "Новый чат",
     files: "Мои файлы",
     models: "Все нейросети",
+    audio: "Аудио",
     music: "Музыка",
     speech: "Речь",
     inspiration: "Вдохновение",

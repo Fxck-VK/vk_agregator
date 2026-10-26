@@ -6,9 +6,10 @@ import { useOptionalWorkspaceAccount } from "@/features/account/WorkspaceAccount
 import { useDictionary } from "@/i18n/LocaleProvider";
 
 
-import { usePathname } from "@/i18n/navigation";
+import { usePathname, useRouter } from "@/i18n/navigation";
 import type { ReactNode } from "react";
 
+import { ModeSwitchPanel } from "@/components/ui/ModeSwitchPanel/ModeSwitchPanel";
 import { WorkspaceModelSelector } from "@/features/models/WorkspaceModelSelector/WorkspaceModelSelector";
 import type { Dictionary } from "@/i18n/dictionary";
 
@@ -34,9 +35,8 @@ function getWorkspaceHeaderTitle(pathname: string | null, t: Dictionary) {
     case "/app/models":
       return t.navigation.models;
     case "/app/music":
-      return t.navigation.music;
     case "/app/speech":
-      return t.navigation.speech;
+      return t.navigation.audio;
     case "/app/profile":
       return t.navigation.profile;
     default:
@@ -49,6 +49,8 @@ export function WorkspaceHeader({ balance, trailingAction }: WorkspaceHeaderProp
   balance = account ? account.balance : balance;
   const t = useDictionary();
   const pathname = usePathname();
+  const router = useRouter();
+  const isAudioWorkspace = pathname === "/app/music" || pathname === "/app/speech";
   const title = getWorkspaceHeaderTitle(pathname, t);
   const isBalanceLoading = balance === null;
 
@@ -56,7 +58,17 @@ export function WorkspaceHeader({ balance, trailingAction }: WorkspaceHeaderProp
     <>
       <header aria-label={title} className={styles.header} data-testid="workspace-header">
         <div className={styles.leading}>
-          {pathname === "/app/music" || pathname === "/app/speech" ? <p className={styles.title}>{title}</p> : <WorkspaceModelSelector />}
+          {isAudioWorkspace ? (
+            <ModeSwitchPanel
+              activeID={pathname === "/app/speech" ? "/app/speech" : "/app/music"}
+              ariaLabel={t.navigation.audio}
+              items={[
+                { id: "/app/music", label: t.navigation.music },
+                { id: "/app/speech", label: t.navigation.speech },
+              ]}
+              onChange={path => { if (path !== pathname) router.push(path); }}
+            />
+          ) : <WorkspaceModelSelector />}
         </div>
         <div className={styles.trailing}>
           {trailingAction ?? (

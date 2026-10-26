@@ -52,8 +52,7 @@ export const getWorkspaceNavigationItems = (t: Dictionary) => [
   { href: "/app/chats", icon: "edit", label: t.navigation.chats, prefetch: true },
   { href: "/app/files", icon: "file", label: t.navigation.files, prefetch: true },
   { href: "/app/models", icon: "grid", label: t.navigation.models, prefetch: true },
-  { href: "/app/music", icon: "music", label: t.navigation.music, prefetch: true },
-  { href: "/app/speech", icon: "edit", label: t.navigation.speech, prefetch: true },
+  { href: "/app/music", icon: "music", label: t.navigation.audio, prefetch: true },
   { href: "/app/inspiration", icon: "image", label: t.navigation.inspiration, prefetch: true },
 ] as const;
 
@@ -446,7 +445,7 @@ export function Sidebar({ account, conversations, isDesktopCollapsed = false, on
                 return (
                   <li key={item.href}>
                     <Link
-                      aria-current={pathname === item.href ? "page" : undefined}
+                      aria-current={pathname === item.href || (item.href === "/app/music" && pathname === "/app/speech") ? "page" : undefined}
                       data-sidebar-tooltip={item.label}
                       href={item.href}
                       id={item.href === "/app/chats" ? "sidebar-new-chat" : undefined}

@@ -4,21 +4,27 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 vi.mock("next/navigation", () => ({
   usePathname: vi.fn(),
+  useRouter: vi.fn(),
 }));
 
 vi.mock("@/features/models/WorkspaceModelSelector/WorkspaceModelSelector", () => ({
   WorkspaceModelSelector: () => <button type="button">Nano Banana 2</button>,
 }));
 
-import { usePathname } from "next/navigation";
+import { usePathname, useRouter } from "next/navigation";
+import { LocaleProvider } from "@/i18n/LocaleProvider";
 
 import { loadPaymentProducts } from "@/features/payments/payments";
 vi.mock("@/features/payments/payments", async (original) => ({ ...await original<typeof import("@/features/payments/payments")>(), loadPaymentProducts: vi.fn() }));
 
 import { WorkspaceHeader } from "./WorkspaceHeader";
 
+const push = vi.fn();
+
 describe("WorkspaceHeader", () => {
   beforeEach(() => {
+    push.mockClear();
+    vi.mocked(useRouter).mockReturnValue({ push } as unknown as ReturnType<typeof useRouter>);
     vi.mocked(usePathname).mockReturnValue("/app/profile");
     sessionStorage.clear();
     vi.mocked(loadPaymentProducts).mockResolvedValue({ checkout_available: true, items: [
@@ -69,13 +75,28 @@ describe("WorkspaceHeader", () => {
     expect(screen.queryByTestId("workspace-balance")).not.toBeInTheDocument();
   });
 
-  it("leaves music model selection in the music workspace", () => {
-    vi.mocked(usePathname).mockReturnValue("/app/music");
-
+  it.each([
+    ["/app/music", "Музыка", "Речь", "/ru/app/speech"],
+    ["/app/speech", "Речь", "Музыка", "/ru/app/music"],
+  ])("switches audio tools from %s", (pathname, active, target, destination) => {
+    vi.mocked(usePathname).mockReturnValue(pathname);
     render(<WorkspaceHeader balance={104} />);
 
-    expect(screen.getByRole("banner", { name: "Музыка" })).toHaveTextContent("Музыка");
+    expect(screen.getByRole("banner", { name: "Аудио" })).toBeInTheDocument();
+    expect(screen.getByRole("toolbar", { name: "Аудио" })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: active })).toHaveAttribute("aria-pressed", "true");
     expect(screen.queryByRole("button", { name: "Nano Banana 2" })).not.toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: target }));
+    expect(push).toHaveBeenCalledWith(destination);
+  });
+
+  it("preserves the English locale when switching audio tools with the keyboard", () => {
+    vi.mocked(usePathname).mockReturnValue("/en/app/speech");
+    render(<LocaleProvider locale="en"><WorkspaceHeader balance={104} /></LocaleProvider>);
+
+    expect(screen.getByRole("banner", { name: "Audio" })).toBeInTheDocument();
+    fireEvent.keyDown(screen.getByRole("button", { name: "Speech" }), { key: "Home" });
+    expect(push).toHaveBeenCalledWith("/en/app/music");
   });
 
   it("renders the shared credit-star artwork instead of a text glyph", () => {

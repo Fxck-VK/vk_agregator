@@ -31,17 +31,6 @@
   gap: var(--space-3);
 }
 
-.title {
-  min-inline-size: 0;
-  margin: 0;
-  overflow: hidden;
-  font-size: var(--font-size-navigation);
-  font-weight: var(--font-weight-medium);
-  line-height: var(--line-height-navigation);
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
 .balance {
   display: inline-flex;
   flex: 0 0 auto;

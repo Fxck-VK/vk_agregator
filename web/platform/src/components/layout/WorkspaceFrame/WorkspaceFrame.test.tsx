@@ -212,7 +212,8 @@ describe("WorkspaceFrame", () => {
     ["/app/models", ru.navigation.models],
     ["/app/inspiration", ru.navigation.inspiration],
     ["/app/image", ru.navigation.workspace],
-    ["/app/music", ru.navigation.music],
+    ["/app/music", "Аудио"],
+    ["/app/speech", "Аудио"],
     ["/app/profile", ru.navigation.profile],
   ])("keeps the persistent header route-based for %s", (pathname, expectedTitle) => {
     vi.mocked(usePathname).mockReturnValue(pathname);
@@ -229,8 +230,8 @@ describe("WorkspaceFrame", () => {
     if (pathname === "/app/inspiration") {
       expect(header).not.toHaveTextContent(expectedTitle);
     }
-    if (pathname === "/app/music") {
-      expect(header).toHaveTextContent(expectedTitle);
+    if (pathname === "/app/music" || pathname === "/app/speech") {
+      expect(within(header).getByRole("toolbar", { name: expectedTitle })).toBeInTheDocument();
       expect(screen.queryByRole("button", { name: "Model selector" })).not.toBeInTheDocument();
     } else {
       expect(screen.getByRole("button", { name: "Model selector" })).toBeInTheDocument();

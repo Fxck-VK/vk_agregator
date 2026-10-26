@@ -158,13 +158,6 @@ describe("workspace control typography", () => {
       "--font-weight-medium",
     ],
     [
-      "src/components/layout/WorkspaceHeader/WorkspaceHeader.module.css",
-      ".title",
-      "--font-size-navigation",
-      "--line-height-navigation",
-      "--font-weight-medium",
-    ],
-    [
       "src/features/models/WorkspaceModelSelector/WorkspaceModelSelector.module.css",
       ".trigger",
       "--font-size-navigation",
