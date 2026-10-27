@@ -7,6 +7,7 @@ $cases = @(
     @{ Path = '.github/workflows/ci.yml'; Key = 'POSTGRES_PASSWORD'; Value = 'session_test_fixture'; Rule = 'project-secret-assignment' },
     @{ Path = 'scripts/deploy/test-dev-email.sh'; Key = 'DEV_ACCOUNT_EMAIL_SMTP_PASSWORD'; Value = 'fixture-smtp-value'; Rule = 'project-secret-assignment' },
     @{ Path = 'scripts/deploy/test-assemble-env-parts.sh'; Key = 'ADMIN_TOKEN'; Value = 'fixture-neiirohub.ru-secret'; Rule = 'project-secret-assignment' },
+    @{ Path = 'scripts/deploy/test-retire-miniapp-env.sh'; Key = 'ACCOUNT_EMAIL_PROOF_SECRET'; Value = 'fixture-dedicated'; Rule = 'project-secret-assignment' },
     @{ Path = 'internal/service/joborchestrator/turbo_h3_test.go'; Key = 'IdempotencyKey'; Value = 'h3-priced-job'; Rule = 'generic-api-key' },
     @{ Path = 'internal/adapter/provider/apimart/kling_veo_test.go'; Key = 'IdempotencyKey'; Value = 'kling-v3-contract'; Rule = 'generic-api-key' },
     @{ Path = 'web/platform/src/features/conversations/pending-conversation-bootstrap.test.ts'; Key = 'messageKey'; Value = 'e7c979f5-24e5-4f88-924b-a592d6e5a906'; Rule = 'generic-api-key' },
@@ -58,7 +59,7 @@ try {
             throw "Exact fixture case $index must allow only its known value and exact path."
         }
     }
-    Write-Output "Eight exact fixture cases passed; changed values and other paths remain detected."
+    Write-Output "$($cases.Count) exact fixture cases passed; changed values and other paths remain detected."
 } finally {
     $resolvedRoot = [IO.Path]::GetFullPath($fixtureRoot)
     $safePrefix = $temporaryBase.TrimEnd([IO.Path]::DirectorySeparatorChar, [IO.Path]::AltDirectorySeparatorChar) + [IO.Path]::DirectorySeparatorChar

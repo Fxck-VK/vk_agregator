@@ -53,6 +53,16 @@ test('missing mandatory regressions fail closed', () => {
   assert.throws(() => createSourcePlan(['web/platform/src/app/login/page.tsx'], []), /mandatory.*guard/i);
 });
 
+test('secret policy changes scan existing repository history before web checks', () => {
+  const plan = createSourcePlan(['.gitleaks.toml', ...guards], guards);
+  const scan = plan.commands.findIndex(c => c.command === 'gitleaks');
+  const lint = plan.commands.findIndex(c => c.command === 'npm');
+  assert(scan >= 0 && scan < lint, 'new rules must check existing committed fixtures before long source checks');
+  assert.deepEqual(plan.commands[scan].args,
+    ['git', '--config', '.gitleaks.toml', '--redact', '--no-banner', '--no-color', '--max-target-megabytes', '5', '.']);
+  assert.equal(createSourcePlan(['docs/README.md'], []).commands.some(c => c.command === 'gitleaks'), false);
+});
+
 for (const pkg of ['web/platform', 'web/admin']) for (const relative of ['package-lock.json', 'vitest.config.ts', 'src/test/setup.ts', 'src/deleted.tsx']) {
   const file = `${pkg}/${relative}`;
   test(`broad or deleted frontend input keeps fast checks and defers the full suite: ${file}`, () => {

@@ -444,6 +444,10 @@ pwsh -NoProfile -File scripts/ci/dev-deploy-preflight.ps1 -Prepare -ManifestPath
 
 `release-source-plan.mjs` automatically includes committed changes since the
 baseline, staged and unstaged edits, deletions and nonignored untracked files.
+When Gitleaks rules or ignores change, preparation first scans the complete Git
+history with the new policy and redacted output. The `gitleaks` executable must
+be available on PATH. This catches untouched historical fixtures before long
+web checks; exact synthetic exceptions require path/value negative controls.
 No hand-picked test list is accepted by the preparation entrypoint. For each
 new nonignored file, Git's no-index whitespace check runs before source checks
 are selected; the baseline diff also checks committed, staged and unstaged edits.

@@ -91,6 +91,13 @@ keywords = [
   regexes = ['''^fixture-neiirohub\.ru-secret$''']
 
   [[rules.allowlists]]
+  description = "Exact non-secret preserved-email-key fixture in retirement regression"
+  condition = "AND"
+  regexTarget = "secret"
+  paths = ['''^scripts/deploy/test-retire-miniapp-env\.sh$''']
+  regexes = ['''^fixture-dedicated$''']
+
+  [[rules.allowlists]]
   description = "Exact non-secret values in committed environment templates"
   condition = "AND"
   regexTarget = "secret"

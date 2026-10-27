@@ -21,6 +21,12 @@ export function createSourcePlan(changedFiles, existingFiles) {
   const infrastructureChanged = changed.some(path => /^(?:scripts\/(?:ci|deploy)\/|\.github\/workflows\/|Dockerfile\.|docker-compose|trivy-filesystem)/.test(path));
   if (infrastructureChanged) add('node', ['scripts/ci/release-linux-check.mjs']);
 
+  // New rules also apply to old commits, including untouched test fixtures.
+  // Check the complete tracked history before expensive source validation.
+  if (changed.some(path => ['.gitleaks.toml', '.gitleaksignore'].includes(path))) {
+    add('gitleaks', ['git', '--config', '.gitleaks.toml', '--redact', '--no-banner', '--no-color', '--max-target-megabytes', '5', '.']);
+  }
+
   for (const pkg of ['web/platform', 'web/admin']) {
     const inputs = changed.filter(path => path.startsWith(`${pkg}/`) && !path.startsWith(`${pkg}/docs/`) && !path.endsWith('.md'));
     if (!inputs.length) continue;
