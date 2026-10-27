@@ -7,17 +7,19 @@ import (
 )
 
 // PasswordSecurityOperation contains only server-captured verification state.
-// Empty ExpectedHash means insert-only setup; Reset deliberately ignores it.
+// Empty ExpectedHash means insert-only setup. Legacy Reset ignores it unless
+// RequireCredentialMatch binds a recovery proof to the captured credential.
 type PasswordSecurityOperation struct {
-	AccountID         uuid.UUID
-	EmailBinding      AccountIdentity
-	ExpectedHash      string
-	Credential        *AccountCredential
-	Session           *AccountSession
-	PreserveSessionID uuid.UUID
-	Reset             bool
-	Audit             AccountLinkAuditEntry
-	At                time.Time
+	AccountID              uuid.UUID
+	EmailBinding           AccountIdentity
+	ExpectedHash           string
+	Credential             *AccountCredential
+	Session                *AccountSession
+	PreserveSessionID      uuid.UUID
+	Reset                  bool
+	RequireCredentialMatch bool
+	Audit                  AccountLinkAuditEntry
+	At                     time.Time
 }
 
 type PasswordEmailGuard interface {

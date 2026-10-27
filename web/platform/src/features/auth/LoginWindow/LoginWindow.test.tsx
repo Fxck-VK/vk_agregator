@@ -8,16 +8,16 @@ import { LoginWindow } from "./LoginWindow";
 
 afterEach(() => { cleanup(); vi.clearAllMocks(); });
 describe("LoginWindow", () => {
-  it("closes to the localized guest workspace using the shared close control", () => {
+  it("uses the selected reference shell by default, with one brand link and no modal close", () => {
     render(<LoginWindow><p>Sign in</p></LoginWindow>);
-    fireEvent.click(screen.getByRole("button", { name: "Закрыть окно входа" }));
-    expect(replace).toHaveBeenCalledWith("/app");
+    expect(screen.getByTestId("login-window")).toHaveAttribute("data-presentation", "reference");
+    expect(screen.getByRole("link", { name: "Epifera" })).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "Закрыть окно входа" })).not.toBeInTheDocument();
   });
-  it("supports Escape and removes the document listener when unmounted", () => {
-    const { unmount } = render(<LoginWindow><p>Sign in</p></LoginWindow>);
+  it("keeps the standalone login open when Escape is pressed", () => {
+    render(<LoginWindow><p>Sign in</p></LoginWindow>);
     fireEvent.keyDown(document, { key: "Escape" });
-    expect(replace).toHaveBeenCalledTimes(1);
-    unmount(); fireEvent.keyDown(document, { key: "Escape" });
-    expect(replace).toHaveBeenCalledTimes(1);
+    expect(replace).not.toHaveBeenCalled();
+    expect(screen.getByText("Sign in")).toBeInTheDocument();
   });
 });

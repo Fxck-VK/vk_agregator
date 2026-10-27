@@ -15,6 +15,32 @@
 ---
 
 # Current implementation addendum: app surfaces and backend core
+Canonical browser authentication uses one localized `/login` UI with child
+register/recover/reset/verify routes; `/login-v2` redirects to it. Shared
+PasswordField/VerificationCodeField/RecoveryFlow implement password-first signup,
+six-digit verification and reset-link navigation without credentials or PII in
+history/localStorage. The selected left-media/right-form layout replaces the
+old page and its presentation-specific code.
+
+The browserauth service coordinates purpose-separated AEAD receipts over
+hash-only Redis challenges. New-browser password login requires email proof;
+30-day browser trust remains bound to credential/binding versions and is
+invalidated by security changes. The existing accountauth transaction rechecks
+those versions before session/password writes. Atomic consumption and bounded
+SET-NX restoration preserve one-use proof and retry behavior. Reset links carry
+an opaque fragment token, exchanged for an HttpOnly proof cookie before status
+checking and reset. Unknown-account reset requests use the same asynchronous
+response. Remembered email/provider hints are presentation only.
+
+Default browser sessions are nonpersistent and capped at 24 hours; explicit
+persistence uses configured lifetime (default 30 days). Refresh preserves stored
+policy and short absolute expiry. API wiring disables the legacy password-only
+`/account/password/login` route so it cannot bypass browser proof. No account,
+billing, provider or deployment boundary moves into the frontend. See
+[browser authentication contract](ACCOUNT_IDENTITY_CONTRACT.md#canonical-browser-authentication).
+The implementation remains local; real mail/OAuth and live PostgreSQL evidence
+are separate from unit/mock validation and have not been established by this work.
+
 Release admission uses the same source-contract and deployment regression runner
 in local preflight and CI. Source inventories, signed image identities and
 exact-SHA quality/rollout gates are checked together. Independent signature

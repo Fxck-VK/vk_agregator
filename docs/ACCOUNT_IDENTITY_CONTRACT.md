@@ -3,7 +3,7 @@
 > VK Mini App was retired on 2026-10-23. The website, browser VK ID and VK bot remain. Old Mini App routes, launch-auth and UI examples below are historical only. Current replacement and migration details: [retirement runbook](../docs/runbooks/VK_MINIAPP_RETIREMENT.md).
 
 Status: active target architecture
-Updated: 2026-10-05
+Updated: 2026-10-27
 
 This document defines the target account identity layer for all current and
 future user surfaces: VK Bot, VK Mini App, Telegram Bot, Web and Mobile.
@@ -13,6 +13,66 @@ future user surfaces: VK Bot, VK Mini App, Telegram Bot, Web and Mobile.
 One human or organization should have one internal `account_id`. Messenger IDs,
 VK Mini App launch identities, email, phone, Google, Apple, Yandex and future login
 methods are only ways to access that account.
+
+## Canonical Browser Authentication
+
+The current implementation has one browser entrypoint, localized `/login`.
+The former `/login-v2` is only a redirect; its chosen layout replaces the old
+login page. Registration, recovery, reset and additional verification have
+`/login/register`, `/login/recover`, `/login/reset` and `/login/verify` URLs.
+Native history stores screen names and a non-secret reset concurrency digest;
+email, password, OTP, proof and return secrets never enter query parameters,
+history state or localStorage. Return
+navigation remains a server-validated local path.
+
+`PasswordField` shares reveal/masking, Caps Lock and accessible descriptions;
+strength guidance appears only when creating a password. `VerificationCodeField`
+provides six digits, paste, keyboard navigation and one delayed automatic submit.
+Email registration collects email/password before verifying the code. A known
+address can return to sign-in without leaking account existence before proof.
+
+`internal/service/browserauth` handles the browser proofs above `accountauth`.
+An untrusted browser must verify an email code after a correct password; a
+30-day trust receipt skips this extra step only while the browser/agent,
+verified email binding and credential version still match. AEAD receipts are
+purpose-separated; Redis stores hashes, account IDs and deadlines. Proof
+consumption is atomic; resend cannot resurrect a consumed proof. Retryable
+downstream failures may restore only the exact consumed proof with SET NX and
+its original remaining lifetime. Final password/session operations independently
+recheck captured binding/credential versions inside the existing transaction.
+Password changes or binding replacement invalidate old trust and reset proofs.
+
+Browser login defaults to a session cookie with a backend lifetime capped at
+24 hours. Explicit persistence uses the configured lifetime (30 days by default).
+Refresh cannot change this choice: stored durations up to 24 hours retain their
+absolute deadline, longer sessions retain their duration capped by current
+configuration. Legacy server callers may retain their configured default through
+nil policy; session credentials and passwords never enter localStorage.
+
+Recovery is a separate 15-minute one-use reset-link proof. The opaque token is
+placed in the email URL fragment, removed from history immediately on opening,
+and exchanged through `prepare-reset` for an HttpOnly cookie. `reset-status`
+validates that cookie before `reset-link` accepts a new password. The SHA-256
+digest returned by preparation is bound to the initiating tab and sent as
+`X-NeiroHub-Reset-Binding`; a different tab replacing the shared HttpOnly cookie
+cannot silently redirect a reset to another account. The digest alone cannot
+authorize a reset. Primary or
+confirmed backup email must still belong to the same account. Successful reset
+changes the credential, revokes sessions and enqueues the security notice
+atomically. Request-link responses are asynchronous and identical for unknown
+addresses and delivery outcomes; rate limits use normalized email and peer host.
+
+Remembered-account presentation is a masked email hint or an available provider
+hint in an encrypted HttpOnly receipt. It never authenticates or merges accounts;
+"Use another account" clears the browser hint/trust state. The production API
+wiring disables legacy `/account/password/login`, preventing password-only token
+issuance from bypassing browser email proof. Browser capabilities fail closed
+when proof/delivery dependencies are absent. Existing Yandex/VK OAuth and
+separate optional marketing consent remain independent of this flow.
+
+This change is local implementation, not a deployment. Unit/mock evidence does
+not establish real-email delivery, OAuth completion or live PostgreSQL behavior;
+those checks must be reported separately before production-readiness claims.
 
 ```text
 VK / Telegram / Web / Mobile / Mini App
@@ -497,8 +557,9 @@ The target migration is additive:
   that exact verifier. Concurrent password changes or recovery invalidate stale
   proof; legacy hash upgrades cannot overwrite a newer credential. The safe
   profile exposes only `password_set`, never credential material.
-- Password reset requires the same verified email code path and revokes active
-  account sessions after the credential is rotated.
+- Canonical browser password reset requires the separate one-use reset-link
+  proof described above and revokes account sessions atomically with credential
+  rotation. Legacy code-based recovery helpers are not browser login proofs.
 - Recovery/link/phone/backup challenge consumption atomically compares the
   exact validated challenge and deletes it once. Invalid proof cannot consume
   a valid challenge; stale readers/delivery cleanup cannot delete a newer one.

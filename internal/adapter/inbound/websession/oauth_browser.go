@@ -168,6 +168,18 @@ func (h *Handler) browserOAuthCallback(w http.ResponseWriter, r *http.Request) {
 		failure(tx.Locale, tx.Intent)
 		return
 	}
+	if h.deps.BrowserAuth != nil {
+		label := ""
+		if h.deps.Account != nil {
+			if profile, err := h.deps.Account.Profile(ctx, resolution.AccountID); err == nil {
+				label = profile.DisplayName
+			}
+		}
+		if hint, err := h.deps.BrowserAuth.ProviderHint(r.PathValue("provider"), label); err == nil {
+			http.SetCookie(w, sessionCookie(browserHintCookie, hint, time.Now().Add(30*24*time.Hour)))
+		}
+		clearAuthCookie(w, browserChallengeCookie)
+	}
 	_ = h.acceptPendingReferral(w, r, resolution.AccountID)
 	http.Redirect(w, r, "/"+tx.Locale+"/app", 303)
 }

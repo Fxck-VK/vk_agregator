@@ -1,84 +1,50 @@
-.form {
-  display: grid;
-  gap: var(--space-4);
-  inline-size: min(100%, 30rem);
-  padding: var(--space-6);
-  border: 0.0625rem solid var(--color-card-border);
-  border-radius: var(--radius-lg);
-  background: var(--color-panel);
-}
-
-.field {
-  display: grid;
-  gap: var(--space-2);
-}
-
-.field input {
-  inline-size: 100%;
-  border: 0;
-  border-radius: inherit;
-  padding: var(--space-3);
-  background: transparent;
-  color: var(--color-text);
-}
-
-.error {
-  margin: 0;
-  color: var(--color-danger);
-}
-
-.fields { display: grid; gap: var(--space-4); }
-.diagnostic { display: block; margin-block-start: var(--space-2); color: var(--color-text-muted); overflow-wrap: anywhere; }
-.heading h1 { margin: 0; font-size: 1.75rem; line-height: 1.2; }
-.heading p, .hint, .field small, .external { margin: 0; color: var(--color-text-muted); line-height: 1.5; }
-.heading p { margin-block-start: var(--space-2); }
-.inputSurface { border-radius: var(--radius-sm); }
-.inputSurface:focus-within { outline: 0.0625rem solid var(--color-accent); outline-offset: 0.125rem; }
-.textAction { border: 0; padding: var(--space-1); background: transparent; color: var(--color-text); cursor: pointer; text-align: center; }
+.form, .choiceEntry { display: grid; gap: var(--auth-section-gap, 1.5rem); inline-size: min(100%, 22.5rem); color: #f5f5f5; }
+.form { padding: 0; border: 0; border-radius: 0; background: transparent; }
+.minimal, .minimalForm { color: #f5f5f5; }
+.choiceCard { display: grid; gap: var(--auth-section-gap, 1.5rem); }
+.choiceCard h1, .heading h1 { margin: 0; font-size: var(--auth-title-size, 1.75rem); line-height: 1.2; text-align: center; }
+.choiceCard h1 { font-family: var(--login-display-font, var(--font-sans)); letter-spacing: -.025em; font-weight: 400; }
+.minimal:lang(ru) .choiceCard h1 { font-family: inherit; font-weight: var(--font-weight-bold); letter-spacing: -.05em; }
+.heading h1 { font-weight: var(--font-weight-bold); }
+.heading p { margin-block-start: .5rem; }
+.heading p, .hint, .field small { margin-block-end: 0; color: var(--color-text-muted); line-height: 1.5; }
+.hint { margin-block-start: 0; }
+.fields, .field { display: grid; }
+.fields { gap: var(--auth-fields-gap, 1rem); }
+.field { gap: .5rem; font-size: .875rem; }
+.field input { inline-size: 100%; block-size: 100%; border: 0; border-radius: inherit; padding: 0 .75rem; background: transparent; color: #e5e5e5; font: inherit; }
+.inputSurface { block-size: 2.5rem; border: 1px solid #333; border-radius: .5rem; background: #1e1e1e; }
+.field input::placeholder { color: #888; opacity: 1; }
+.fields > button[type="submit"] { min-block-size: 2.5rem; block-size: 2.5rem; border-radius: .5rem; background: var(--color-surface-light); color: var(--color-text-on-light); }
+.textAction { border: 0; padding: .25rem; background: transparent; color: var(--color-text); cursor: pointer; text-align: center; }
 .textAction:hover { color: var(--color-accent); }
 .textAction:disabled { color: var(--color-text-muted); cursor: default; opacity: .6; }
-.actions, .providers { display: flex; flex-wrap: wrap; justify-content: center; gap: var(--space-2); }
-.providers > button { flex: 1 1 calc(50% - var(--space-2)); }
-.external { display: grid; gap: var(--space-3); padding-block-start: var(--space-4); border-block-start: 0.0625rem solid var(--color-border); text-align: center; }
-@media (max-width: 36rem) { .form { padding: var(--space-4); } }
-
-.choiceEntry { display: grid; gap: 1.5rem; inline-size: min(100%, 29.5rem); }
-.choiceCard, .windowForm { border: 1px solid var(--color-border); border-radius: 2rem; background: transparent; padding: clamp(1.5rem, 3vw, 2.5rem); }
-.choiceCard { display: grid; gap: 1.25rem; }
-.choiceCard h1 { margin: 0 0 .5rem; font-size: clamp(1.35rem, 2vw, 1.75rem); font-weight: var(--font-weight-semibold); line-height: 1.3; text-align: center; letter-spacing: -.025em; }
-.choiceProviders { display: grid; gap: .75rem; }
-.choiceProviders:empty { display: none; }
-.choiceCard .providerPill, .choiceCard .emailPill { display: flex; align-items: center; justify-content: center; gap: .75rem; min-block-size: 3.25rem; padding: .85rem 1rem; border-radius: var(--radius-pill); font-size: .95rem; font-weight: var(--font-weight-medium); }
-.choiceCard .providerPill { background: var(--color-surface-raised); }
-.choiceCard .emailPill { background: var(--color-surface-light); color: var(--color-text-on-light); }
-.choiceCard .emailPill:hover:not(:disabled) { background: #e2e5eb; }
-.providerMark { display: grid; place-items: center; inline-size: 1.5rem; block-size: 1.5rem; flex: 0 0 auto; font-size: .8rem; font-weight: var(--font-weight-semibold); }
-.divider { display: flex; align-items: center; gap: 1rem; font-size: .85rem; color: var(--color-text-muted); }
-.divider::before, .divider::after { content: ""; flex: 1; block-size: 1px; background: var(--color-border); }
-.choiceNote, .previewNote { margin: 0; text-align: center; font-size: .75rem; color: var(--color-text-muted); line-height: 1.6; }
-.previewNote { font-size: .7rem; }
-.helpCard { display: flex; align-items: flex-start; gap: 1rem; border: 1px solid var(--color-border); border-radius: 1.5rem; padding: 1.5rem; }
-.helpIcon { display: grid; place-items: center; flex: 0 0 2rem; block-size: 2rem; border: 1px solid var(--color-border); border-radius: 50%; color: var(--color-text-muted); }
-.helpCard h2 { margin: .15rem 0 .6rem; font-size: .95rem; font-weight: var(--font-weight-medium); }
-.helpCard summary { color: var(--color-information); font-size: .85rem; cursor: pointer; }
-.helpCard p { margin-block-end: 0; font-size: .8rem; line-height: 1.6; color: var(--color-text-muted); }
-.windowForm { inline-size: min(100%, 29.5rem); }
-.windowForm .backAction { justify-self: start; padding-inline: 0; font-size: .8rem; color: var(--color-text-muted); text-align: start; }
-.windowForm .fields > button[type="submit"] { min-block-size: 3rem; border-radius: var(--radius-pill); background: var(--color-surface-light); color: var(--color-text-on-light); }
-.choiceEntry button:focus-visible, .windowForm button:focus-visible, .helpCard summary:focus-visible { outline: 2px solid var(--color-focus); outline-offset: 4px; }
-@media (max-width: 36rem) {
-  .choiceCard, .windowForm { padding: 1.5rem 1.25rem; border-radius: 1.5rem; }
-  .helpCard { padding: 1.25rem; }
-}
-@media (max-height: 45rem) {
-  .choiceEntry { gap: 1rem; }
-  .choiceCard, .windowForm { gap: .75rem; padding: 1.25rem; }
-  .choiceCard h1 { margin: 0; font-size: 1.25rem; }
-  .choiceProviders { gap: .5rem; }
-  .choiceCard .providerPill, .choiceCard .emailPill { min-block-size: 2.75rem; padding: .65rem 1rem; }
-  .choiceNote { font-size: .7rem; line-height: 1.5; }
-  .previewNote { font-size: .65rem; line-height: 1.5; }
-  .helpCard { gap: .75rem; padding: 1rem; }
-  .helpCard h2 { margin: .1rem 0 .35rem; font-size: .9rem; }
-  .helpCard summary { font-size: .8rem; }
-}
+.backAction { justify-self: start; padding-inline: 0; font-size: .8rem; color: var(--color-text-muted); text-align: start; }
+.actions { display: flex; flex-wrap: wrap; justify-content: center; gap: .5rem; }
+.choiceProviders { display: grid; gap: .5rem; }
+.providerMark { display: grid; place-items: center; inline-size: 1rem; block-size: 1rem; flex: 0 0 1rem; }
+.choiceCard .providerPill { display: flex; align-items: center; justify-content: center; gap: .5rem; min-block-size: 2.5rem; block-size: 2.5rem; padding: 0 1rem; border-radius: .5rem; background: #1e1e1e; color: #f5f5f5; font-size: .875rem; }
+.choiceCard .providerPill:hover:not(:disabled), .continueButton:hover:not(:disabled) { background: #2a2a2a; }
+.divider { display: flex; align-items: center; gap: .5rem; font-size: .75rem; line-height: 1.6; color: #b5b5b5; }
+.divider::before, .divider::after { content: ""; flex: 1; block-size: 1px; background: #1e1e1e; }
+.providerLabel { margin: 0 0 -1rem; color: #b5b5b5; font-size: .75rem; font-weight: var(--font-weight-medium); text-align: center; line-height: 1.6; }
+.emailChoice { display: grid; gap: .75rem; }
+.emailChoice .field > label { position: absolute; inline-size: 1px; block-size: 1px; padding: 0; margin: -1px; overflow: hidden; clip-path: inset(50%); white-space: nowrap; border: 0; }
+.emailChoice .continueButton { block-size: 2.5rem; border-radius: .5rem; background: #1e1e1e; color: #e5e5e5; font: inherit; font-size: .875rem; font-weight: var(--font-weight-medium); }
+.accountPrompt { margin: 0; font-size: .75rem; line-height: 1.6; text-align: center; color: #777; }
+.accountPrompt .textAction { display: inline; margin: 0; padding: 0; color: #b5b5b5; font: inherit; }
+.accountPrompt .textAction:hover { text-decoration: underline; }
+.previewNote { position: fixed; inset-inline-end: 1rem; inset-block-end: .25rem; max-inline-size: calc(50vw - 2rem); margin: 0; color: #777; font-size: .625rem; line-height: 1.6; text-align: end; pointer-events: none; }
+.diagnostic { display: block; margin-block-start: .5rem; color: var(--color-text-muted); overflow-wrap: anywhere; }
+.passwordCreation { display: grid; gap: var(--auth-password-gap, .75rem); }
+.passwordCreation .inputSurface { position: relative; }
+.passwordCreation .field input { padding-inline-end: 3rem; }
+.revealPassword { position: absolute; inset-inline-end: 0; inset-block: 0; display: grid; place-items: center; inline-size: 2.5rem; padding: 0; border: 0; border-radius: .5rem; color: var(--color-text-muted); background: transparent; cursor: pointer; }
+.revealPassword:disabled { cursor: default; }
+.capsLockHint { margin: -.25rem 0 0; color: #f3bd4f; font-size: .75rem; line-height: 1.5; }
+.keepSigned { display: flex; align-items: center; gap: .5rem; color: var(--color-text-muted); font-size: .75rem; cursor: pointer; }
+.keepSigned input { inline-size: 1rem; block-size: 1rem; accent-color: var(--color-accent); }
+.remembered { display: flex; align-items: center; justify-content: center; gap: .75rem; font-size: .875rem; }
+.remembered p { margin: 0; }
+@media (max-width: 36rem) { .choiceCard h1 { font-size: 1.625rem; } }
+@media (max-width: 64rem) { .previewNote { max-inline-size: calc(100vw - 2rem); } }

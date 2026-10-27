@@ -1,7 +1,8 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 
 import { webBrowserFetch, webBrowserMutation } from "./browser";
-import { refreshBrowserSession } from "./browser-session";
+import { accountChangedEvent, refreshBrowserSession } from "./browser-session";
+import { beginBrowserSession, browserSessionSnapshot, endBrowserSession } from "./browser-session-state";
 
 const forbiddenCallerHeaders = [
   ["Authorization", "forged authorization"],
@@ -13,7 +14,7 @@ const forbiddenCallerHeaders = [
 ] as const;
 
 describe("webBrowserFetch", () => {
-  it.each(["/web/v1/auth/password/login", "/web/v1/auth/email/register"] as const)("bounds cookie issuance so it cannot outlive the cross-tab lease: %s", async path => {
+  it.each(["/web/v1/auth/password/login", "/web/v1/auth/password/verify-login", "/web/v1/auth/password/reset-link", "/web/v1/auth/email/register"] as const)("bounds cookie issuance so it cannot outlive the cross-tab lease: %s", async path => {
     const deadline = new AbortController();
     const timeout = vi.spyOn(AbortSignal, "timeout").mockReturnValue(deadline.signal);
     const send = vi.fn((_path: string, init?: RequestInit) => new Promise<Response>((_resolve, reject) => {
@@ -27,7 +28,7 @@ describe("webBrowserFetch", () => {
     await expect(pending).rejects.toMatchObject({ name: "TimeoutError" });
     timeout.mockRestore();
   });
-  it.each(["/web/v1/auth/password/login", "/web/v1/auth/email/register"] as const)("waits for account A refresh before account B can change cookies: %s", async path => {
+  it.each(["/web/v1/auth/password/login", "/web/v1/auth/password/verify-login", "/web/v1/auth/password/reset-link", "/web/v1/auth/email/register"] as const)("waits for account A refresh before account B can change cookies: %s", async path => {
     document.cookie = "nh_csrf=synthetic; Path=/";
     let queue = Promise.resolve();
     const request = (_name: string, _options: unknown, task: () => Promise<Response>) => {
@@ -48,6 +49,66 @@ describe("webBrowserFetch", () => {
     expect(send.mock.calls.some(([sent]) => sent === path)).toBe(false);
     completeRefresh(new Response(null, { status: 200 }));
     await recovery; expect((await login).status).toBe(201);
+  });
+  it.each(["/web/v1/auth/password/login", "/web/v1/auth/password/verify-login"] as const)("does not replace or announce the account while a challenge is still pending: %s", async path => {
+    beginBrowserSession("10000000-0000-4000-8000-000000000001");
+    const previous = browserSessionSnapshot();
+    const dispatch = vi.spyOn(window, "dispatchEvent");
+    const broadcast = vi.fn();
+    vi.stubGlobal("BroadcastChannel", class {
+      postMessage = broadcast;
+      close = vi.fn();
+    });
+    vi.stubGlobal("fetch", vi.fn().mockResolvedValue(Response.json({ status: "verification_required" }, { status: 202 })));
+    expect((await webBrowserFetch(path, { method: "POST" })).status).toBe(202);
+    const current = browserSessionSnapshot();
+    expect(current.accountId).toBe(previous.accountId);
+    expect(current.revision).toBe(previous.revision);
+    expect(current.signal).toBe(previous.signal);
+    expect(previous.signal.aborted).toBe(false);
+    expect(dispatch.mock.calls.some(([event]) => event.type === accountChangedEvent)).toBe(false);
+    expect(broadcast).not.toHaveBeenCalled();
+  });
+  it("ends the previous browser session and announces account change only after verification issues cookies", async () => {
+    beginBrowserSession("10000000-0000-4000-8000-000000000001");
+    const previous = browserSessionSnapshot();
+    const dispatch = vi.spyOn(window, "dispatchEvent");
+    const broadcast = vi.fn();
+    vi.stubGlobal("BroadcastChannel", class {
+      postMessage = broadcast;
+      close = vi.fn();
+    });
+    vi.stubGlobal("fetch", vi.fn().mockResolvedValue(new Response(null, { status: 201 })));
+    expect((await webBrowserFetch("/web/v1/auth/password/verify-login", { method: "POST" })).status).toBe(201);
+    const current = browserSessionSnapshot();
+    expect(current.accountId).toBeNull();
+    expect(current.revision).toBe(previous.revision + 1);
+    expect(previous.signal.aborted).toBe(true);
+    expect(dispatch.mock.calls.filter(([event]) => event.type === accountChangedEvent)).toHaveLength(1);
+    expect(broadcast).toHaveBeenCalledExactlyOnceWith({ type: "account-changed" });
+  });
+  it("rejects a stale account read that completes after verification changes cookies", async () => {
+    beginBrowserSession("10000000-0000-4000-8000-000000000001");
+    let completeRead!: (response: Response) => void;
+    const send = vi.fn((path: string) => path === "/web/v1/conversations"
+      ? new Promise<Response>(resolve => { completeRead = resolve; })
+      : Promise.resolve(new Response(null, { status: 201 })));
+    vi.stubGlobal("fetch", send);
+    const pendingRead = webBrowserFetch("/web/v1/conversations");
+    const rejectedRead = expect(pendingRead).rejects.toMatchObject({ name: "AbortError" });
+    await webBrowserFetch("/web/v1/auth/password/verify-login", { method: "POST" });
+    completeRead(Response.json({ items: [] }, { headers: { "X-NeiroHub-Account-ID": "10000000-0000-4000-8000-000000000001" } }));
+    await rejectedRead;
+  });
+  it("invalidates the previous account lease after password recovery clears auth cookies", async () => {
+    beginBrowserSession("10000000-0000-4000-8000-000000000001");
+    const previous = browserSessionSnapshot();
+    const dispatch = vi.spyOn(window, "dispatchEvent");
+    vi.stubGlobal("fetch", vi.fn().mockResolvedValue(new Response(null, { status: 204 })));
+    expect((await webBrowserFetch("/web/v1/auth/password/reset-link", { method: "POST" })).status).toBe(204);
+    expect(browserSessionSnapshot().accountId).toBeNull();
+    expect(previous.signal.aborted).toBe(true);
+    expect(dispatch.mock.calls.filter(([event]) => event.type === accountChangedEvent)).toHaveLength(1);
   });
   it("recovers an expired read once but never replays a mutation", async () => {
     document.cookie = "nh_csrf=synthetic; Path=/";
@@ -70,7 +131,9 @@ describe("webBrowserFetch", () => {
     expect(send).toHaveBeenCalledTimes(1);
   });
   afterEach(() => {
+    vi.restoreAllMocks();
     vi.unstubAllGlobals();
+    endBrowserSession();
     document.cookie = "nh_csrf=; Max-Age=0; Path=/";
   });
 

@@ -2,6 +2,7 @@ package redis_test
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"os"
 	"testing"
@@ -13,6 +14,77 @@ import (
 	storage "vk-ai-aggregator/internal/adapter/storage/redis"
 	"vk-ai-aggregator/internal/service/accountlink"
 )
+
+type restoredChallenge struct {
+	body    string
+	expires time.Time
+}
+
+// Embed Cmdable so an unexpected operation cannot silently pass this narrow
+// command-contract test. Only SET NX is admitted, without a live Redis service.
+type restoreClient struct {
+	goredis.Cmdable
+	rows  map[string]restoredChallenge
+	calls int
+}
+
+func (c *restoreClient) SetNX(_ context.Context, key string, value interface{}, ttl time.Duration) *goredis.BoolCmd {
+	c.calls++
+	if _, exists := c.rows[key]; exists {
+		return goredis.NewBoolResult(false, nil)
+	}
+	c.rows[key] = restoredChallenge{body: string(value.([]byte)), expires: time.Now().Add(ttl)}
+	return goredis.NewBoolResult(true, nil)
+}
+
+func TestAccountLinkRestoreUsesNXAndNeverExtendsOriginalDeadline(t *testing.T) {
+	ctx := context.Background()
+	client := &restoreClient{rows: map[string]restoredChallenge{}}
+	store := storage.NewAccountLinkStore(client)
+	deadline := time.Now().Add(10 * time.Minute)
+	challenge := accountlink.Challenge{AccountID: uuid.New(), IdentityHash: "synthetic-identity-hash", CodeHash: "synthetic-code-hash", ExpiresAt: deadline}
+	newer := restoredChallenge{body: "newer-state", expires: time.Now().Add(time.Minute)}
+	client.rows["proof"] = newer
+	if err := store.RestoreChallenge(ctx, "proof", challenge, time.Hour); err != nil {
+		t.Fatal(err)
+	}
+	if client.rows["proof"] != newer {
+		t.Fatal("restore replaced a newer row or extended its expiry")
+	}
+	delete(client.rows, "proof")
+	if err := store.RestoreChallenge(ctx, "proof", challenge, time.Hour); err != nil {
+		t.Fatal(err)
+	}
+	stored := client.rows["proof"]
+	if stored.expires.After(deadline.Add(time.Millisecond)) {
+		t.Fatal("restore extended the original challenge deadline")
+	}
+	if !stored.expires.After(time.Now()) {
+		t.Fatal("restored challenge already expired")
+	}
+	var decoded accountlink.Challenge
+	if err := json.Unmarshal([]byte(stored.body), &decoded); err != nil || decoded.AccountID != challenge.AccountID || decoded.CodeHash != challenge.CodeHash {
+		t.Fatal("restore changed the challenge")
+	}
+	if err := store.RestoreChallenge(ctx, "proof", challenge, time.Hour); err != nil {
+		t.Fatal(err)
+	}
+	if client.rows["proof"] != stored {
+		t.Fatal("repeated restore extended the live proof")
+	}
+	before := client.calls
+	challenge.ExpiresAt = time.Now().Add(-time.Second)
+	if err := store.RestoreChallenge(ctx, "expired", challenge, time.Minute); !errors.Is(err, accountlink.ErrExpiredCode) {
+		t.Fatalf("expired restore error = %v", err)
+	}
+	challenge.ExpiresAt = deadline
+	if err := store.RestoreChallenge(ctx, "zero", challenge, 0); !errors.Is(err, accountlink.ErrExpiredCode) {
+		t.Fatalf("zero TTL restore error = %v", err)
+	}
+	if client.calls != before {
+		t.Fatal("expired proof reached Redis")
+	}
+}
 
 func TestRedisAccountLinkConsumptionIsAtomicAndExact(t *testing.T) {
 	endpoint := os.Getenv("TEST_REDIS_URL")

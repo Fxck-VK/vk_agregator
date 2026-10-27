@@ -1,0 +1,62 @@
+[
+  {
+    "source": "Choose Sign up and enter your email address and a new password, or choose an available identity provider.",
+    "ru": "Выберите «Зарегистрироваться» и укажите почту и новый пароль либо воспользуйтесь доступным способом входа через внешний сервис.",
+    "back": "Select Sign up and provide an email address and a new password, or use an available external sign-in service."
+  },
+  {
+    "source": "After email confirmation, finish signing in and check your account in the workspace.",
+    "ru": "После подтверждения почты завершите вход и проверьте свой аккаунт в рабочем пространстве.",
+    "back": "Once the email is confirmed, complete sign-in and check your account in the workspace."
+  },
+  {
+    "source": "Epifera uses confirmation codes for email registration, additional sign-in verification and email linking. Password recovery uses a reset link. Enter a code only into the form you opened yourself. Support does not need your verification code or password.",
+    "ru": "Коды подтверждения Epifera нужны при регистрации по почте, дополнительной проверке входа и привязке почты. Для восстановления пароля используется ссылка на сброс. Вводите код только в форму, которую открыли сами. Службе поддержки не нужны ваш код подтверждения или пароль.",
+    "back": "Epifera confirmation codes are used for email registration, extra sign-in checks and linking an email. A reset link is used to recover a password. Only enter a code in a form that you opened yourself. Support needs neither your confirmation code nor your password."
+  },
+  {
+    "source": "Open the reset link and set a new password",
+    "ru": "Откройте ссылку на сброс и задайте новый пароль",
+    "back": "Open the reset link and choose a new password"
+  },
+  {
+    "source": "Open the link sent to your verified address, then enter and confirm your new password. If the link has expired, request a new one.",
+    "ru": "Откройте ссылку из письма на подтверждённой почте, затем введите новый пароль и повторите его. Если срок действия ссылки истёк, запросите новую.",
+    "back": "Open the link in the email received at your confirmed address, then type your new password twice. Request another link if the previous one has expired."
+  },
+  {
+    "source": "Keep passwords, verification codes and reset links private; a password manager can help.",
+    "ru": "Никому не передавайте пароли, коды подтверждения и ссылки на сброс; для хранения паролей можно использовать менеджер паролей.",
+    "back": "Do not share passwords, confirmation codes or reset links; a password manager can be used to store passwords."
+  },
+  {
+    "source": "Registration, additional sign-in verification or email linking can request a code. If you did not start the action, do not share or enter the code; review account security if you are concerned.",
+    "ru": "Код может понадобиться при регистрации, дополнительной проверке входа или привязке почты. Если вы не начинали это действие, никому не передавайте код и не вводите его; при сомнениях проверьте безопасность аккаунта.",
+    "back": "A code may be needed during registration, an extra sign-in check or email linking. If you did not initiate that action, do not give the code to anyone or enter it; check account security if in doubt."
+  },
+  {
+    "source": "Account emails can contain confirmation codes or password-reset links. Start with the address and inbox before requesting another message.",
+    "ru": "В письмах об аккаунте могут быть коды подтверждения или ссылки на сброс пароля. Прежде чем запрашивать новое письмо, проверьте адрес и входящие сообщения.",
+    "back": "Account-related emails may include confirmation codes or password reset links. Check the address and incoming messages before requesting a new email."
+  },
+  {
+    "source": "Use the newest message for the action you started. Keep verification codes and password-reset links private; do not forward them to anyone.",
+    "ru": "Используйте последнее письмо для действия, которое вы начали. Никому не сообщайте коды подтверждения и ссылки на сброс пароля и не пересылайте их.",
+    "back": "Use the latest email for the action that you initiated. Do not disclose or forward confirmation codes and password reset links to anyone."
+  },
+  {
+    "source": "Before requesting another message",
+    "ru": "Прежде чем запрашивать ещё одно письмо",
+    "back": "Before you request another email"
+  },
+  {
+    "source": "Give the message time to arrive and check that your mailbox can receive other email. Follow any retry timer or rate-limit message shown by the form. Repeated requests can make it harder to identify the message for your current action.",
+    "ru": "Дайте письму время прийти и убедитесь, что другие письма доходят до вашего ящика. Учитывайте таймер повтора и сообщения об ограничениях в форме. Из-за повторных запросов бывает сложнее определить, какое письмо относится к текущему действию.",
+    "back": "Allow time for the email to arrive and ensure that other emails reach your mailbox. Observe the retry countdown and limit messages in the form. Repeated requests can make it harder to determine which email belongs to the current action."
+  },
+  {
+    "source": " with the approximate request time, the type of action and your email provider. Never include a password, verification code or password-reset link.",
+    "ru": " и укажите примерное время запроса, тип действия и свой почтовый сервис. Никогда не присылайте пароль, код подтверждения или ссылку на сброс пароля.",
+    "back": " and state the approximate request time, action type and your email service. Never send a password, confirmation code or password reset link."
+  }
+]

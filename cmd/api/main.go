@@ -44,6 +44,7 @@ import (
 	"vk-ai-aggregator/internal/service/accountregistration"
 	"vk-ai-aggregator/internal/service/artifactdeletion"
 	"vk-ai-aggregator/internal/service/artifactservice"
+	"vk-ai-aggregator/internal/service/browserauth"
 	"vk-ai-aggregator/internal/service/imagegeneration"
 	"vk-ai-aggregator/internal/service/imagepreview"
 	"vk-ai-aggregator/internal/service/joborchestrator"
@@ -328,14 +329,15 @@ func main() {
 		VKIDJWKSURL:       cfg.AccountOAuthVKIDJWKSURL,
 	})
 	account := accountapi.NewHandler(accountapi.Deps{
-		Identity:  core.Identity,
-		Account:   core.Account,
-		Logins:    core.AccountAuth,
-		Sessions:  core.AccountAuth,
-		Passwords: core.AccountAuth,
-		OAuth:     oauthRegistry,
-		Linker:    emailLinker,
-		Logger:    logger,
+		DisablePasswordOnlyLogin: true,
+		Identity:                 core.Identity,
+		Account:                  core.Account,
+		Logins:                   core.AccountAuth,
+		Sessions:                 core.AccountAuth,
+		Passwords:                core.AccountAuth,
+		OAuth:                    oauthRegistry,
+		Linker:                   emailLinker,
+		Logger:                   logger,
 	})
 	webArtifactURLSigner := newWebImageArtifactURLSigner(ctx, cfg, logger)
 	var musicInputs websession.MusicInputArtifactSaver
@@ -377,7 +379,13 @@ func main() {
 		webInputObjects = objects
 	}
 	var emailRegistration websession.EmailRegistrationService
+	var browserAuth *browserauth.Service
 	if strings.EqualFold(cfg.AccountEmailDeliveryProvider, "smtp") {
+		browserAuth, err = browserauth.New(redisstore.NewAccountLinkStore(rdb), accountSender, core.AccountAuth, cfg.WebOrigin, cfg.AccountEmailProofSecret)
+		if err != nil {
+			logger.Error("browser authentication wiring failed")
+			os.Exit(1)
+		}
 		emailRegistration, err = accountregistration.New(redisstore.NewAccountRegistrationStore(rdb), accountSender, core.AccountAuth, cfg.AccountEmailProofSecret)
 		if err != nil {
 			logger.Error("email registration wiring failed", logging.ErrorAttr(err))
@@ -386,6 +394,7 @@ func main() {
 	}
 	legalDocuments := legalcatalog.New(cfg.LegalOperatorName, cfg.LegalOperatorINN, cfg.LegalDocumentsPublished)
 	web := websession.NewHandler(websession.Config{
+		RequireBrowserEmailProof:    true,
 		EmailDeliveryEnabled:        strings.EqualFold(cfg.AccountEmailDeliveryProvider, "smtp"),
 		PhoneDeliveryEnabled:        strings.EqualFold(cfg.AccountPhoneDeliveryProvider, "http"),
 		TestPaymentsEnabled:         apiapp.WebTestPaymentsEnabled(&cfg),
@@ -395,6 +404,7 @@ func main() {
 		ImageModels:                 webImageModelsFromRuntimeCatalog(runtimeCatalog.ImageModels()),
 		ImageArtifactRedirectPolicy: webArtifactRedirectPolicy,
 	}, websession.Deps{
+		BrowserAuth: browserAuth,
 		Legal: legalacceptance.New(postgres.NewLegalConsentRepository(pool), legalacceptance.Metadata{
 			Published: legalDocuments.Published, Version: legalDocuments.Version, Checksum: legalDocuments.Checksum,
 			MarketingVersion: legalDocuments.MarketingVersion, MarketingChecksum: legalDocuments.MarketingChecksum,

@@ -22,26 +22,65 @@ beforeEach(() => {
 afterEach(() => { cleanup(); listeners.clear(); vi.useRealTimers(); vi.unstubAllGlobals(); vi.restoreAllMocks(); });
 
 describe("LoginShowcase", () => {
+  it("shows only images, video and music, rotates in six seconds and keeps keyboard navigation", () => {
+    const { container } = render(<LoginShowcase />);
+    expect(screen.getAllByRole("tab").map(tab => tab.textContent)).toEqual(["Изображения", "Видео", "Музыка"]);
+    expect(container.querySelector("video")).not.toBeInTheDocument();
+    act(() => vi.advanceTimersByTime(6000));
+    expect(screen.getByRole("tab", { name: "Видео" })).toHaveAttribute("aria-selected", "true");
+    expect(container.querySelector("video")).toHaveAttribute("src", "/assets/videos/auth/creative-video.webm");
+    fireEvent.keyDown(screen.getByRole("tab", { name: "Видео" }), { key: "End" });
+    expect(screen.getByRole("tab", { name: "Музыка" })).toHaveFocus();
+    fireEvent.keyDown(screen.getByRole("tab", { name: "Музыка" }), { key: "ArrowRight" });
+    expect(screen.getByRole("tab", { name: "Изображения" })).toHaveAttribute("aria-selected", "true");
+  });
+
+  it.each(["narrow", "reduced", "hidden"])("keeps the reference first slide visible without fetching video when %s", condition => {
+    wide = condition !== "narrow"; reduced = condition === "reduced"; visible = condition !== "hidden";
+    const { container } = render(<LoginShowcase />);
+    expect(container.querySelector("img")).toHaveAttribute("src", "/assets/images/auth/creative-image.webp");
+    expect(container.querySelector("video")).not.toBeInTheDocument();
+    act(() => vi.advanceTimersByTime(12000));
+    expect(screen.getByRole("tab", { name: "Изображения" })).toHaveAttribute("aria-selected", "true");
+  });
+
+  it("keeps a manually chosen reference video playing and advances while it has focus", () => {
+    render(<LoginShowcase />);
+    vi.mocked(HTMLMediaElement.prototype.play).mockClear();
+    const tab = screen.getByRole("tab", { name: "Видео" });
+    fireEvent.focus(tab);
+    fireEvent.click(tab);
+    expect(HTMLMediaElement.prototype.play).toHaveBeenCalled();
+    act(() => vi.advanceTimersByTime(6000));
+    expect(screen.getByRole("tab", { name: "Музыка" })).toHaveAttribute("aria-selected", "true");
+  });
+
+  it.each(["hover", "focus"])("keeps reference slides cycling through every tab during %s", interaction => {
+    render(<LoginShowcase />);
+    if (interaction === "hover") fireEvent.mouseEnter(screen.getByRole("region", { name: "Возможности сервиса" }));
+    else fireEvent.focus(screen.getByRole("tab", { name: "Изображения" }));
+    for (const label of ["Видео", "Музыка", "Изображения"]) {
+      act(() => vi.advanceTimersByTime(6000));
+      expect(screen.getByRole("tab", { name: label })).toHaveAttribute("aria-selected", "true");
+    }
+  });
   it("supports manual tabs and arrow-key navigation with associated content", () => {
     render(<LoginShowcase />);
     fireEvent.click(screen.getByRole("tab", { name: "Музыка" }));
     expect(screen.getByRole("tabpanel", { name: "Музыка" })).toHaveTextContent("Ваши идеи звучат");
     fireEvent.keyDown(screen.getByRole("tab", { name: "Музыка" }), { key: "End" });
-    expect(screen.getByRole("tab", { name: "Текст" })).toHaveFocus();
-    expect(screen.getByRole("tabpanel", { name: "Текст" })).toHaveTextContent("Найдите нужные слова");
-    fireEvent.keyDown(screen.getByRole("tab", { name: "Текст" }), { key: "Home" });
+    expect(screen.getByRole("tab", { name: "Музыка" })).toHaveFocus();
+    expect(screen.queryByRole("tab", { name: "Текст" })).not.toBeInTheDocument();
+    fireEvent.keyDown(screen.getByRole("tab", { name: "Музыка" }), { key: "Home" });
     expect(screen.getByRole("tab", { name: "Изображения" })).toHaveAttribute("aria-selected", "true");
   });
 
-  it("rotates automatically, honors pause, and releases timers when removed", () => {
+  it("rotates automatically without a pause control and releases timers when removed", () => {
     const { unmount } = render(<LoginShowcase />);
-    act(() => vi.advanceTimersByTime(6500));
+    act(() => vi.advanceTimersByTime(6000));
     expect(screen.getByRole("tab", { name: "Видео" })).toHaveAttribute("aria-selected", "true");
-    fireEvent.click(screen.getByRole("button", { name: "Приостановить слайды" }));
-    act(() => vi.advanceTimersByTime(20000));
-    expect(screen.getByRole("tab", { name: "Видео" })).toHaveAttribute("aria-selected", "true");
-    fireEvent.click(screen.getByRole("button", { name: "Продолжить слайды" }));
-    act(() => vi.advanceTimersByTime(6500));
+    expect(screen.queryByRole("button", { name: "Приостановить слайды" })).not.toBeInTheDocument();
+    act(() => vi.advanceTimersByTime(6000));
     expect(screen.getByRole("tab", { name: "Музыка" })).toHaveAttribute("aria-selected", "true");
     unmount(); expect(vi.getTimerCount()).toBe(0);
   });
@@ -52,7 +91,7 @@ describe("LoginShowcase", () => {
     act(() => vi.advanceTimersByTime(10000));
     expect(screen.getByRole("tab", { name: "Изображения" })).toHaveAttribute("aria-selected", "true");
     fireEvent.click(screen.getByRole("tab", { name: "Видео" }));
-    expect(container.querySelector("video")).not.toHaveAttribute("src");
+    expect(container.querySelector("video")).not.toBeInTheDocument();
     expect(HTMLMediaElement.prototype.play).not.toHaveBeenCalled();
   });
 
@@ -62,7 +101,7 @@ describe("LoginShowcase", () => {
     expect(container.querySelector("video")).toHaveAttribute("src");
     expect(HTMLMediaElement.prototype.play).toHaveBeenCalled();
     visible = false; notify();
-    expect(container.querySelector("video")).not.toHaveAttribute("src");
+    expect(container.querySelector("video")).not.toBeInTheDocument();
     expect(HTMLMediaElement.prototype.pause).toHaveBeenCalled();
     act(() => vi.advanceTimersByTime(10000));
     expect(screen.getByRole("tab", { name: "Видео" })).toHaveAttribute("aria-selected", "true");

@@ -6,20 +6,20 @@ vi.mock("@/lib/web-api/browser", () => ({ webBrowserFetch: vi.fn() }));
 vi.mock("@/lib/auth/sign-in-navigation", () => ({ replaceSignInDocument: vi.fn() }));
 import { webBrowserFetch } from "@/lib/web-api/browser";
 import { replaceSignInDocument } from "@/lib/auth/sign-in-navigation";
-import { previewAuthMethods } from "@/lib/auth/methods";
+import { EmailRegistration } from "./EmailRegistration";
 import { LoginForm } from "./LoginForm/LoginForm";
 const replace = vi.mocked(replaceSignInDocument);
-beforeEach(() => { vi.stubGlobal("fetch", vi.fn().mockImplementation(async () => Response.json({ account_id: "10000000-0000-4000-8000-000000000001", identity_refs: [] }))); });
+beforeEach(() => { vi.mocked(webBrowserFetch).mockReset(); vi.stubGlobal("fetch", vi.fn().mockImplementation(async () => Response.json({ account_id: "10000000-0000-4000-8000-000000000001", identity_refs: [] }))); });
 afterEach(() => { cleanup(); vi.clearAllMocks(); vi.unstubAllGlobals(); });
 
 describe("Email registration", () => {
  it("includes the displayed exact legal revision only with final registration", async () => {
   vi.mocked(webBrowserFetch).mockResolvedValue(new Response(null, { status: 204 }));
   const meta = { published: true, version: "v1", checksum: "a".repeat(64), marketing_version: "m1", marketing_checksum: "b".repeat(64) };
-  render(<LoginForm methods={previewAuthMethods} initialMode="register" legalMetadata={meta} />);
+  render(<EmailRegistration preview={false} onBack={vi.fn()} legalMetadata={meta} />);
   fireEvent.change(screen.getByLabelText("Электронная почта"), { target: { value: "new@example.test" } });
   fireEvent.click(screen.getByRole("button", { name: "Отправить код" }));
-  fireEvent.change(await screen.findByLabelText("Код из письма"), { target: { value: "123456" } });
+  fireEvent.change(await screen.findByRole("textbox", { name: "Код из письма: 1" }), { target: { value: "123456" } });
   fireEvent.click(screen.getByRole("button", { name: "Подтвердить почту" }));
   fireEvent.change(await screen.findByLabelText("Пароль"), { target: { value: "strong-password" } });
   fireEvent.change(screen.getByLabelText("Повторите пароль"), { target: { value: "strong-password" } });
@@ -31,11 +31,10 @@ describe("Email registration", () => {
  it("retries cookie confirmation after accepted signup without creating the account again", async () => {
   vi.mocked(webBrowserFetch).mockResolvedValue(new Response(null, { status: 204 }));
   vi.stubGlobal("fetch", vi.fn().mockResolvedValueOnce(new Response(null, { status: 401 })).mockResolvedValueOnce(Response.json({ account_id: "10000000-0000-4000-8000-000000000001", identity_refs: [] })));
-  render(<LoginForm methods={previewAuthMethods} />);
-  fireEvent.click(screen.getByRole("button", { name: "Создать аккаунт" }));
+  render(<EmailRegistration preview={false} onBack={vi.fn()} />);
   fireEvent.change(screen.getByLabelText("Электронная почта"), { target: { value: "new@example.test" } });
   fireEvent.click(screen.getByRole("button", { name: "Отправить код" }));
-  fireEvent.change(await screen.findByLabelText("Код из письма"), { target: { value: "123456" } });
+  fireEvent.change(await screen.findByRole("textbox", { name: "Код из письма: 1" }), { target: { value: "123456" } });
   fireEvent.click(screen.getByRole("button", { name: "Подтвердить почту" }));
   fireEvent.change(await screen.findByLabelText("Пароль"), { target: { value: "strong-password" } });
   fireEvent.change(screen.getByLabelText("Повторите пароль"), { target: { value: "strong-password" } });
@@ -49,11 +48,10 @@ describe("Email registration", () => {
  });
  it("verifies code before asking for password and signs into the safe locale return path", async () => {
   vi.mocked(webBrowserFetch).mockResolvedValue(new Response(null, { status: 204 }));
-  render(<LoginForm methods={previewAuthMethods} returnTo="/app/files" />);
-  fireEvent.click(screen.getByRole("button", { name: "Создать аккаунт" }));
+  render(<EmailRegistration preview={false} onBack={vi.fn()} returnTo="/app/files" />);
   fireEvent.change(screen.getByLabelText("Электронная почта"), { target: { value: "new@example.test" } });
   fireEvent.click(screen.getByRole("button", { name: "Отправить код" }));
-  const code = await screen.findByLabelText("Код из письма");
+  const code = await screen.findByRole("textbox", { name: "Код из письма: 1" });
   expect(screen.queryByLabelText("Пароль")).not.toBeInTheDocument();
   fireEvent.change(code, { target: { value: "123456" } });
   fireEvent.click(screen.getByRole("button", { name: "Подтвердить почту" }));
@@ -67,29 +65,27 @@ describe("Email registration", () => {
  });
  it("does not expose real signup when the backend capability is absent", () => {
   render(<LoginForm />);
-  expect(screen.queryByRole("button", { name: "Создать аккаунт" })).not.toBeInTheDocument();
+  expect(screen.queryByRole("button", { name: "Зарегистрироваться" })).not.toBeInTheDocument();
  });
  it("keeps the code step after a rejected code so it can be corrected", async () => {
   vi.mocked(webBrowserFetch).mockResolvedValueOnce(new Response(null, { status: 202 })).mockResolvedValueOnce(new Response(null, { status: 400 })).mockResolvedValueOnce(new Response(null, { status: 204 }));
-  render(<LoginForm methods={previewAuthMethods} />);
-  fireEvent.click(screen.getByRole("button", { name: "Создать аккаунт" }));
+  render(<EmailRegistration preview={false} onBack={vi.fn()} />);
   fireEvent.change(screen.getByLabelText("Электронная почта"), { target: { value: "new@example.test" } });
   fireEvent.click(screen.getByRole("button", { name: "Отправить код" }));
-  fireEvent.change(await screen.findByLabelText("Код из письма"), { target: { value: "111111" } });
+  fireEvent.change(await screen.findByRole("textbox", { name: "Код из письма: 1" }), { target: { value: "111111" } });
   fireEvent.click(screen.getByRole("button", { name: "Подтвердить почту" }));
   expect(await screen.findByText("Код неверный или срок его действия истёк. Проверьте код или запросите новый.")).toBeInTheDocument();
   expect(screen.queryByLabelText("Пароль")).not.toBeInTheDocument();
-  fireEvent.change(screen.getByLabelText("Код из письма"), { target: { value: "123456" } });
+  fireEvent.change(screen.getByRole("textbox", { name: "Код из письма: 1" }), { target: { value: "123456" } });
   fireEvent.click(screen.getByRole("button", { name: "Подтвердить почту" }));
   expect(await screen.findByLabelText("Пароль")).toBeInTheDocument();
  });
  it("does not submit mismatched passwords and allows restarting an expired confirmation", async () => {
   vi.mocked(webBrowserFetch).mockResolvedValue(new Response(null, { status: 204 }));
-  render(<LoginForm methods={previewAuthMethods} />);
-  fireEvent.click(screen.getByRole("button", { name: "Создать аккаунт" }));
+  render(<EmailRegistration preview={false} onBack={vi.fn()} />);
   fireEvent.change(screen.getByLabelText("Электронная почта"), { target: { value: "new@example.test" } });
   fireEvent.click(screen.getByRole("button", { name: "Отправить код" }));
-  fireEvent.change(await screen.findByLabelText("Код из письма"), { target: { value: "123456" } });
+  fireEvent.change(await screen.findByRole("textbox", { name: "Код из письма: 1" }), { target: { value: "123456" } });
   fireEvent.click(screen.getByRole("button", { name: "Подтвердить почту" }));
   fireEvent.change(await screen.findByLabelText("Пароль"), { target: { value: "strong-password" } });
   fireEvent.change(screen.getByLabelText("Повторите пароль"), { target: { value: "different-password" } });
@@ -106,12 +102,11 @@ describe("Email registration", () => {
   expect(screen.queryByLabelText("Пароль")).not.toBeInTheDocument();
  });
  it("labels preview steps as simulation and makes no backend writes", async () => {
-  render(<LoginForm preview methods={previewAuthMethods} />);
-  fireEvent.click(screen.getByRole("button", { name: "Создать аккаунт" }));
+  render(<EmailRegistration preview onBack={vi.fn()} />);
   fireEvent.change(screen.getByLabelText("Электронная почта"), { target: { value: "new@example.test" } });
   fireEvent.click(screen.getByRole("button", { name: "Отправить код" }));
   expect(await screen.findByText("В предпросмотре введите любой шестизначный код. Письмо не отправляется.")).toBeInTheDocument();
-  fireEvent.change(screen.getByLabelText("Код из письма"), { target: { value: "123456" } });
+  fireEvent.change(screen.getByRole("textbox", { name: "Код из письма: 1" }), { target: { value: "123456" } });
   fireEvent.click(screen.getByRole("button", { name: "Подтвердить почту" }));
   expect(await screen.findByText("Предпросмотр шага установки пароля. Почта не подтверждается.")).toBeInTheDocument();
   fireEvent.change(screen.getByLabelText("Пароль"), { target: { value: "strong-password" } });
@@ -123,11 +118,10 @@ describe("Email registration", () => {
  });
  it.each([503, 502, 504])("retries signup with the original password after HTTP %s", async status => {
   vi.mocked(webBrowserFetch).mockResolvedValue(new Response(null, { status: 204 }));
-  render(<LoginForm methods={previewAuthMethods} />);
-  fireEvent.click(screen.getByRole("button", { name: "Создать аккаунт" }));
+  render(<EmailRegistration preview={false} onBack={vi.fn()} />);
   fireEvent.change(screen.getByLabelText("Электронная почта"), { target: { value: "new@example.test" } });
   fireEvent.click(screen.getByRole("button", { name: "Отправить код" }));
-  fireEvent.change(await screen.findByLabelText("Код из письма"), { target: { value: "123456" } });
+  fireEvent.change(await screen.findByRole("textbox", { name: "Код из письма: 1" }), { target: { value: "123456" } });
   fireEvent.click(screen.getByRole("button", { name: "Подтвердить почту" }));
   fireEvent.change(await screen.findByLabelText("Пароль"), { target: { value: "strong-password" } });
   fireEvent.change(screen.getByLabelText("Повторите пароль"), { target: { value: "strong-password" } });

@@ -11,6 +11,7 @@ const forwardedRequestHeaders = [
   "Content-Type",
   "Origin",
   "X-CSRF-Token",
+  "X-NeiroHub-Reset-Binding",
   "X-Idempotency-Key",
   "User-Agent",
 ] as const;

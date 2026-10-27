@@ -49,6 +49,10 @@ export const assetPaths = {
     notFoundCharacter: "/assets/illustrations/not-found-character.png",
   },
   images: {
+    auth: {
+      creativeImage: "/assets/images/auth/creative-image.webp",
+      creativeAudio: "/assets/images/auth/creative-audio.webp",
+    },
     credits: {
       star: "/assets/images/credits/credit-star.png",
       packages: {
@@ -110,6 +114,11 @@ export const assetPaths = {
     },
   },
   videos: {
+    auth: {
+      creativeSpace: "/assets/videos/auth/creative-space.webm",
+      creativeVideo: "/assets/videos/auth/creative-video.webm",
+      creativeDepth: "/assets/videos/auth/creative-depth.webm",
+    },
     inspiration: {
       videoOne: "/assets/videos/inspiration/video-1.mp4",
       videoTwo: "/assets/videos/inspiration/video-2.mp4",

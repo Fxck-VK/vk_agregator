@@ -19,6 +19,7 @@ const (
 	defaultSessionTTL        = 30 * 24 * time.Hour
 	defaultAccessTokenTTL    = 15 * time.Minute
 	defaultSessionTokenBytes = 32
+	shortSessionTTL          = 24 * time.Hour
 )
 
 // ErrSessionStoreUnavailable is returned when session support is not wired.
@@ -38,6 +39,12 @@ type SessionMetadata struct {
 	DeviceInfo string
 	IP         string
 	UserAgent  string
+	// Persistent is a server-selected login policy. Nil retains legacy callers;
+	// false requests a bounded browser session, true the configured lifetime.
+	Persistent *bool `json:"-"`
+	// Refresh derives these bounds from the persisted session, never a request.
+	sessionTTL time.Duration
+	expiresAt  time.Time
 }
 
 // AccountSessionSafe is safe to return to web/mobile clients. It intentionally
@@ -60,6 +67,7 @@ type SessionTokens struct {
 	AccessExpiresAt string             `json:"access_expires_at"`
 	ExpiresAt       string             `json:"expires_at"`
 	Session         AccountSessionSafe `json:"session"`
+	Persistent      *bool              `json:"-"`
 }
 
 // WithSessionRepository enables Web/Mobile session persistence.
@@ -140,7 +148,17 @@ func (s *Service) prepareSession(accountID uuid.UUID, meta SessionMetadata) (dom
 		return domain.AccountSession{}, SessionTokens{}, err
 	}
 	now := s.currentTime()
-	expiresAt := now.Add(s.effectiveSessionTTL())
+	ttl := s.effectiveSessionTTL()
+	if meta.sessionTTL > 0 && meta.sessionTTL < ttl {
+		ttl = meta.sessionTTL
+	}
+	if meta.Persistent != nil && !*meta.Persistent && ttl > shortSessionTTL {
+		ttl = shortSessionTTL
+	}
+	expiresAt := now.Add(ttl)
+	if !meta.expiresAt.IsZero() && meta.expiresAt.Before(expiresAt) {
+		expiresAt = meta.expiresAt
+	}
 	accessExpiresAt := now.Add(s.effectiveAccessTokenTTL())
 	if accessExpiresAt.After(expiresAt) {
 		accessExpiresAt = expiresAt
@@ -159,12 +177,18 @@ func (s *Service) prepareSession(accountID uuid.UUID, meta SessionMetadata) (dom
 		UpdatedAt:        now,
 		ExpiresAt:        expiresAt,
 	}
+	var persistent *bool
+	if meta.Persistent != nil {
+		policy := *meta.Persistent
+		persistent = &policy
+	}
 	return session, SessionTokens{
 		AccessToken:     accessToken,
 		RefreshToken:    refreshToken,
 		AccessExpiresAt: formatSessionTime(*session.AccessExpiresAt),
 		ExpiresAt:       formatSessionTime(session.ExpiresAt),
 		Session:         SafeSessionDTO(&session),
+		Persistent:      persistent,
 	}, nil
 }
 
@@ -229,6 +253,17 @@ func (s *Service) RefreshSession(ctx context.Context, refreshToken string, meta 
 	}
 	if meta.IdentityID == nil {
 		meta.IdentityID = old.IdentityID
+	}
+	// The existing schema stores duration, not a cookie-policy flag. Treat all
+	// rows of at most 24h (including historical short-config rows) conservatively
+	// as browser sessions. Rotation cannot extend their absolute deadline.
+	lifetime := old.ExpiresAt.Sub(old.CreatedAt)
+	persistent := lifetime > shortSessionTTL
+	meta.Persistent = &persistent
+	meta.sessionTTL = lifetime
+	meta.expiresAt = time.Time{}
+	if !persistent {
+		meta.expiresAt = old.ExpiresAt
 	}
 	return s.issueSession(ctx, old.AccountID, meta, old.RefreshTokenHash)
 }

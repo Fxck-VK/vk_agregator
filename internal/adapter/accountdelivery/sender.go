@@ -117,6 +117,21 @@ func (s *Sender) SendEmailLinkCode(ctx context.Context, email, code string, expi
 	return s.email.SendEmailLinkCode(ctx, email, code, expiresAt)
 }
 
+// SendPasswordResetLink uses an explicit reset template, never a verification
+// code template. The caller supplies the configured-origin one-use URL.
+func (s *Sender) SendPasswordResetLink(ctx context.Context, email, link string, expiresAt time.Time) error {
+	if s == nil || s.email == nil {
+		return accountlink.ErrDeliveryUnavailable
+	}
+	sender, ok := s.email.(interface {
+		SendPasswordResetLink(context.Context, string, string, time.Time) error
+	})
+	if !ok {
+		return accountlink.ErrDeliveryUnavailable
+	}
+	return sender.SendPasswordResetLink(ctx, email, link, expiresAt)
+}
+
 // SendPhoneLinkOTP delivers a phone OTP, or fails closed when disabled.
 func (s *Sender) SendPhoneLinkOTP(ctx context.Context, phone, code string, expiresAt time.Time) error {
 	if s == nil || s.phone == nil {
@@ -167,6 +182,19 @@ func newSMTPSender(cfg SMTPConfig) (*smtpSender, error) {
 func (s *smtpSender) SendEmailLinkCode(ctx context.Context, email, code string, expiresAt time.Time) error {
 	message := buildEmailMessage(s.cfg.From, email, s.cfg.Subject, code, expiresAt)
 	return s.sendMessage(ctx, email, message)
+}
+
+func (s *smtpSender) SendPasswordResetLink(ctx context.Context, email, link string, expiresAt time.Time) error {
+	return s.sendMessage(ctx, email, buildPasswordResetMessage(s.cfg.From, email, link, expiresAt))
+}
+
+func buildPasswordResetMessage(from, to, link string, expiresAt time.Time) []byte {
+	var buf bytes.Buffer
+	for key, value := range map[string]string{"From": sanitizeHeader(from), "To": sanitizeHeader(to), "Subject": mime.QEncoding.Encode("utf-8", "Восстановление пароля "+branding.Name()), "MIME-Version": "1.0", "Content-Type": "text/plain; charset=UTF-8", "Content-Transfer-Encoding": "8bit"} {
+		_, _ = fmt.Fprintf(&buf, "%s: %s\r\n", key, value)
+	}
+	_, _ = fmt.Fprintf(&buf, "\r\nЧтобы установить новый пароль %s, откройте одноразовую ссылку:\r\n%s\r\n\r\nСсылка действует до %s.\r\nЕсли вы не запрашивали восстановление, проигнорируйте это письмо.\r\n", branding.Name(), link, expiresAt.UTC().Format(time.RFC3339))
+	return buf.Bytes()
 }
 
 func (s *smtpSender) sendMessage(ctx context.Context, email string, message []byte) error {

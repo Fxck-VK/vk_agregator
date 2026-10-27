@@ -82,14 +82,15 @@ type IdentityLinker interface {
 
 // Deps are the collaborators needed by the account handler.
 type Deps struct {
-	Identity  domain.IdentityResolver
-	Account   AccountService
-	Logins    LoginService
-	Sessions  SessionService
-	Passwords PasswordService
-	OAuth     OAuthVerifier
-	Linker    IdentityLinker
-	Logger    *slog.Logger
+	DisablePasswordOnlyLogin bool
+	Identity                 domain.IdentityResolver
+	Account                  AccountService
+	Logins                   LoginService
+	Sessions                 SessionService
+	Passwords                PasswordService
+	OAuth                    OAuthVerifier
+	Linker                   IdentityLinker
+	Logger                   *slog.Logger
 }
 
 // Handler serves /account/* endpoints.
@@ -130,7 +131,9 @@ func (h *Handler) Routes() http.Handler {
 	mux.HandleFunc("POST /account/sessions/logout", h.logoutSession)
 	mux.HandleFunc("POST /account/sessions/{id}/revoke", h.auth(h.revokeSession))
 	mux.HandleFunc("POST /account/password/set", h.auth(h.setPassword))
-	mux.HandleFunc("POST /account/password/login", h.passwordLogin)
+	if !h.deps.DisablePasswordOnlyLogin {
+		mux.HandleFunc("POST /account/password/login", h.passwordLogin)
+	}
 	mux.HandleFunc("POST /account/password/request-reset", h.requestPasswordReset)
 	mux.HandleFunc("POST /account/password/reset", h.resetPassword)
 	mux.HandleFunc("POST /account/oauth/login", h.oauthLogin)

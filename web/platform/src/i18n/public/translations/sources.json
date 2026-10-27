@@ -3747,5 +3747,17 @@
   "u3746": "Magnific reference: {title}",
   "u3747": "Team plans in preparation",
   "u3748": "Preview file",
-  "u3749": "KB"
+  "u3749": "KB",
+  "u3750": "Choose Sign up and enter your email address and a new password, or choose an available identity provider.",
+  "u3751": "After email confirmation, finish signing in and check your account in the workspace.",
+  "u3752": "Epifera uses confirmation codes for email registration, additional sign-in verification and email linking. Password recovery uses a reset link. Enter a code only into the form you opened yourself. Support does not need your verification code or password.",
+  "u3753": "Open the reset link and set a new password",
+  "u3754": "Open the link sent to your verified address, then enter and confirm your new password. If the link has expired, request a new one.",
+  "u3755": "Keep passwords, verification codes and reset links private; a password manager can help.",
+  "u3756": "Registration, additional sign-in verification or email linking can request a code. If you did not start the action, do not share or enter the code; review account security if you are concerned.",
+  "u3757": "Account emails can contain confirmation codes or password-reset links. Start with the address and inbox before requesting another message.",
+  "u3758": "Use the newest message for the action you started. Keep verification codes and password-reset links private; do not forward them to anyone.",
+  "u3759": "Before requesting another message",
+  "u3760": "Give the message time to arrive and check that your mailbox can receive other email. Follow any retry timer or rate-limit message shown by the form. Repeated requests can make it harder to identify the message for your current action.",
+  "u3761": " with the approximate request time, the type of action and your email provider. Never include a password, verification code or password-reset link."
 }

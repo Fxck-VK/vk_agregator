@@ -6,10 +6,74 @@ import (
 	"github.com/google/uuid"
 	"sync"
 	"testing"
+	"time"
 	"vk-ai-aggregator/internal/adapter/storage/memory"
 	"vk-ai-aggregator/internal/domain"
 	"vk-ai-aggregator/internal/service/accountauth"
 )
+
+func TestRefreshRetainsStoredPersistenceAndShortAbsoluteDeadline(t *testing.T) {
+	ctx := context.Background()
+	start := time.Date(2026, 10, 27, 12, 0, 0, 0, time.UTC)
+	for _, initial := range []bool{false, true} {
+		t.Run(map[bool]string{false: "short", true: "persistent"}[initial], func(t *testing.T) {
+			now := start
+			repo := memory.NewAccountSessionRepo()
+			service := accountauth.New(nil, accountauth.WithSessionRepository(repo), accountauth.WithClock(func() time.Time { return now }))
+			choice := initial
+			tokens, err := service.IssueSession(ctx, uuid.New(), accountauth.SessionMetadata{Persistent: &choice})
+			if err != nil {
+				t.Fatal(err)
+			}
+			requestChoice := !choice
+			now = start.Add(23*time.Hour + 59*time.Minute)
+			rotated, err := service.RefreshSession(ctx, tokens.RefreshToken, accountauth.SessionMetadata{Persistent: &requestChoice})
+			if err != nil {
+				t.Fatal(err)
+			}
+			if rotated.Persistent == nil || *rotated.Persistent != choice {
+				t.Fatal("refresh accepted a request-supplied persistence change")
+			}
+			want := start.Add(24 * time.Hour)
+			if choice {
+				want = now.Add(30 * 24 * time.Hour)
+			}
+			if rotated.ExpiresAt != want.Format(time.RFC3339) {
+				t.Fatalf("refreshed expiry = %s, want %s", rotated.ExpiresAt, want.Format(time.RFC3339))
+			}
+			if !choice {
+				if rotated.AccessExpiresAt != want.Format(time.RFC3339) {
+					t.Fatal("access token outlives absolute short-session deadline")
+				}
+				now = start.Add(24 * time.Hour)
+				if _, err := service.RefreshSession(ctx, rotated.RefreshToken, accountauth.SessionMetadata{Persistent: &requestChoice}); !errors.Is(err, accountauth.ErrSessionExpired) {
+					t.Fatalf("absolute expiry error = %v", err)
+				}
+			}
+		})
+	}
+}
+
+func TestRefreshCannotExtendStoredLongPolicyAfterConfigurationIncrease(t *testing.T) {
+	ctx := context.Background()
+	start := time.Date(2026, 10, 27, 12, 0, 0, 0, time.UTC)
+	repo := memory.NewAccountSessionRepo()
+	choice := true
+	service := accountauth.New(nil, accountauth.WithSessionRepository(repo), accountauth.WithSessionTTL(7*24*time.Hour), accountauth.WithClock(func() time.Time { return start }))
+	tokens, err := service.IssueSession(ctx, uuid.New(), accountauth.SessionMetadata{Persistent: &choice})
+	if err != nil {
+		t.Fatal(err)
+	}
+	now := start.Add(time.Hour)
+	changed := accountauth.New(nil, accountauth.WithSessionRepository(repo), accountauth.WithSessionTTL(30*24*time.Hour), accountauth.WithClock(func() time.Time { return now }))
+	rotated, err := changed.RefreshSession(ctx, tokens.RefreshToken, accountauth.SessionMetadata{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if rotated.ExpiresAt != now.Add(7*24*time.Hour).Format(time.RFC3339) {
+		t.Fatal("refresh extended the stored session duration")
+	}
+}
 
 type failingSessionWrite struct {
 	*memory.AccountSessionRepo

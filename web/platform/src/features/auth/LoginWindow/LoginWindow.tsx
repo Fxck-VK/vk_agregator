@@ -1,27 +1,16 @@
 "use client";
 
-import { type ReactNode, useEffect } from "react";
-import { ModalCloseButton } from "@/components/ui/ModalCloseButton/ModalCloseButton";
-import { useDictionary } from "@/i18n/LocaleProvider";
-import { useRouter } from "@/i18n/navigation";
+import { type ReactNode } from "react";
+import { BrandLogo } from "@/components/brand/BrandLogo/BrandLogo";
+import { brandName } from "@/config/brand";
+import Link from "@/i18n/Link";
 import { LoginShowcase } from "./LoginShowcase";
 import styles from "./LoginWindow.module.css";
 
 export function LoginWindow({ children }: Readonly<{ children: ReactNode }>) {
-  const t = useDictionary();
-  const router = useRouter();
-  useEffect(() => {
-    const onKeyDown = (event: KeyboardEvent) => {
-      if (event.key === "Escape" && !event.defaultPrevented) router.replace("/app");
-    };
-    document.addEventListener("keydown", onKeyDown);
-    return () => document.removeEventListener("keydown", onKeyDown);
-  }, [router]);
-
-  return <div className={styles.window} data-testid="login-window">
-    <ModalCloseButton className={styles.close} aria-label={t.auth.closeWindow} onClick={() => router.replace("/app")} />
+  return <div className={styles.window} data-testid="login-window" data-presentation="reference">
     <div className={styles.account}>
-      <div className={styles.formArea}>{children}</div>
+      <div className={styles.formArea}><Link className={styles.brand} href="/" aria-label={brandName}><BrandLogo size={44} /></Link>{children}</div>
     </div>
     <LoginShowcase />
   </div>;

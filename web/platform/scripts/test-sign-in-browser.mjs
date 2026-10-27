@@ -28,6 +28,7 @@ test("password sign-in replaces cached guest content and explains failures", { t
     response.setHeader("X-Request-ID", id); response.setHeader("Cache-Control", "no-store");
     const json = (status, payload) => response.writeHead(status, { "Content-Type": "application/json" }).end(JSON.stringify(payload));
     if (path === "/web/v1/auth/methods") return json(200, methods);
+    if (path === "/web/v1/auth/remembered") return json(200, { email_hint: "" });
     if (path === "/web/v1/models") return json(200, models);
     if (path === "/web/v1/me") {
       sessionId = id;
@@ -38,7 +39,7 @@ test("password sign-in replaces cached guest content and explains failures", { t
     if (path === "/web/v1/auth/password/login") {
       loginRequests++; loginId = id;
       let body = ""; for await (const chunk of request) body += chunk;
-      assert.deepEqual(JSON.parse(body), { email: "member@example.test", password: "synthetic-password" });
+      assert.deepEqual(JSON.parse(body), { email: "member@example.test", password: "synthetic-password", persistent: false });
       assert.ok(request.headers.origin);
       if (mode === "unavailable") return json(503, { error: "authentication unavailable" });
       if (mode !== "cookies-rejected") response.setHeader("Set-Cookie", "nh_access=synthetic; Secure; HttpOnly; SameSite=Lax; Path=/");
@@ -82,6 +83,7 @@ test("password sign-in replaces cached guest content and explains failures", { t
           assert.equal(landing.status(), 200);
           await page.getByRole("link", { name: "Войти", exact: true }).first().click();
           await page.getByLabel("Электронная почта", { exact: true }).fill("member@example.test");
+          await page.getByRole("button", { name: "Продолжить", exact: true }).click();
           await page.getByLabel("Пароль", { exact: true }).fill("synthetic-password");
           await page.evaluate(() => { window.signInOldDocument = true; });
           await page.getByRole("button", { name: "Войти", exact: true }).click();

@@ -43,7 +43,7 @@ func (r *AccountSecurityRepo) ExecutePasswordSecurity(ctx context.Context, op do
 			defer audit.mu.Unlock()
 		}
 		stored := r.credentials[accountCredentialKey(op.AccountID, domain.AccountCredentialPassword)]
-		if !op.Reset && ((op.ExpectedHash == "" && stored != nil) || (op.ExpectedHash != "" && (stored == nil || stored.SecretHash != op.ExpectedHash))) {
+		if (!op.Reset || op.RequireCredentialMatch) && ((op.ExpectedHash == "" && stored != nil) || (op.ExpectedHash != "" && (stored == nil || stored.SecretHash != op.ExpectedHash))) {
 			return domain.ErrConflict
 		}
 		if op.PreserveSessionID != uuid.Nil {

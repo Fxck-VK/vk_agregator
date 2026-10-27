@@ -1,0 +1,8 @@
+.recovery { display: grid; gap: var(--auth-recovery-gap, 1.5rem); }
+.message { margin: 0; font-size: .875rem; line-height: 1.6; color: var(--color-text-muted); text-align: center; }
+.address { margin: -.75rem 0 0; font-size: .875rem; line-height: 1.6; text-align: center; overflow-wrap: anywhere; }
+.actions { display: grid; gap: .75rem; }
+.support { display: flex; flex-wrap: wrap; justify-content: center; gap: .5rem 1rem; font-size: .75rem; line-height: 1.6; color: var(--color-text-muted); }
+.support a, .replacement { color: inherit; text-underline-offset: .2em; }
+.replacement { text-align: center; }
+.successIcon { justify-self: center; display: grid; place-items: center; inline-size: 3rem; block-size: 3rem; border: 1px solid var(--color-border); border-radius: 50%; color: #23cc91; }

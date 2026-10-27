@@ -2,6 +2,8 @@
 
 Local platform UI without backend/deploy: [local development scenarios](../web/platform/docs/local-development.md).
 
+Canonical Epifera login and account flows: [implementation and local verification](superpowers/plans/2026-10-27-login-v2.md), [browser identity contract](../docs/ACCOUNT_IDENTITY_CONTRACT.md#canonical-browser-authentication), [shared UI contract](../web/platform/docs/ui-catalog.md#browser-account). Localized `/login` uses the chosen reference layout; `/login-v2` only redirects. Registration, reset-link recovery and conditional email verification share server-owned authentication; all auth routes remain noindex.
+
 Website invitation flow and deferred reward rules: [web referrals](../docs/runbooks/WEB_REFERRALS.md).
 
 This file is the canonical map for repository documentation. It tells agents
@@ -137,7 +139,7 @@ Read only the document that matches the current task:
 | Video providers, routes, model visibility | `docs/VIDEO_GENERATION.md` |
 | VK bot behavior and agent guidance | `docs/VK_BOT_AGENT_GUIDE.md` |
 | Agent workflow and safety policy | `AGENTS.md` |
-| Current explicit merge handoff: workspace UI, localization, preloading and blocked DEV rollout | [Merge handoff](../docs/HANDOFF_CURRENT.md) |
+| Current explicit merge handoff: verified DEV release, RU/EN templates and integration workflow | [Merge handoff](../docs/HANDOFF_CURRENT.md) |
 
 Use local package-level `AGENTS.md` files when touching a package or app surface
 that has its own instructions.
@@ -161,7 +163,7 @@ There must be only one active handoff file:
 
 | File | Status |
 | --- | --- |
-| `docs/HANDOFF_CURRENT.md` | Status: active; October 7 model fixes, DEV live checks, branch merge and verified integrated video/history package |
+| `docs/HANDOFF_CURRENT.md` | Status: active; October 26 verified f842c4e6 DEV release, all24 RU/EN templates, collaborator merge and release v7 workflow |
 
 When a handoff or merge is complete, archive it under `docs/archive/handoffs/`
 and reset `docs/HANDOFF_CURRENT.md` back to `Status: none`.

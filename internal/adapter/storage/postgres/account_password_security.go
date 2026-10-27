@@ -33,7 +33,7 @@ func (r *AccountSecurityRepository) ExecutePasswordSecurity(ctx context.Context,
 		return mapError(err)
 	}
 	security := NewAccountSecurityRepository(tx)
-	if !op.Reset {
+	if !op.Reset || op.RequireCredentialMatch {
 		stored, err := security.FindCredential(ctx, op.AccountID, domain.AccountCredentialPassword)
 		if err != nil && !errors.Is(err, domain.ErrNotFound) {
 			return err

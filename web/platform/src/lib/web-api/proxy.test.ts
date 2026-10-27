@@ -9,6 +9,22 @@ const maxProxyRequestBodyBytes = 64 * 1024;
 type StreamingRequestInit = RequestInit & { duplex: "half" };
 
 describe("proxyWebApiRequest", () => {
+  it("forwards the per-tab reset binding with the server-owned reset cookie", async () => {
+    const upstream = vi.fn<typeof fetch>().mockResolvedValue(new Response(null, { status: 204 }));
+    vi.stubGlobal("fetch", upstream);
+    const path = "/web/v1/auth/password/reset-link";
+    const binding = "a".repeat(64);
+    const request = new Request(`https://platform.example${path}`, {
+      method: "POST", body: "{}", headers: {
+        Origin: "https://platform.example", "Content-Type": "application/json",
+        "X-NeiroHub-Reset-Binding": binding, Cookie: "__Host-nh-reset-proof=synthetic",
+      },
+    });
+    expect((await proxyWebApiRequest(request, path, internalOrigin)).status).toBe(204);
+    const headers = new Headers(upstream.mock.calls[0][1]?.headers);
+    expect(headers.get("X-NeiroHub-Reset-Binding")).toBe(binding);
+    expect(headers.get("Cookie")).toBe("__Host-nh-reset-proof=synthetic");
+  });
   it("passes the Yandex callback session cookies and fixed redirect", async () => {
     vi.stubGlobal("fetch", vi.fn(async () => new Response(null, { status: 303, headers: { Location: "/ru/app", "Set-Cookie": "nh_access=synthetic; HttpOnly; Secure" } })));
     const path = "/web/v1/auth/oauth/yandex/callback?state=synthetic&code=synthetic";

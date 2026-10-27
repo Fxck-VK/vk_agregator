@@ -131,6 +131,44 @@ func TestSessionServiceRequiresRepository(t *testing.T) {
 	}
 }
 
+func TestSessionPersistenceSelectsBoundedLifetime(t *testing.T) {
+	base := time.Date(2026, 10, 27, 12, 0, 0, 0, time.UTC)
+	no, yes := false, true
+	for _, tt := range []struct {
+		name       string
+		choice     *bool
+		configured time.Duration
+		want       time.Duration
+	}{
+		{"legacy", nil, 30 * 24 * time.Hour, 30 * 24 * time.Hour},
+		{"short", &no, 30 * 24 * time.Hour, 24 * time.Hour},
+		{"persistent", &yes, 30 * 24 * time.Hour, 30 * 24 * time.Hour},
+		{"short-respects-tighter-config", &no, time.Hour, time.Hour},
+	} {
+		t.Run(tt.name, func(t *testing.T) {
+			repo := memory.NewAccountSessionRepo()
+			service := accountauth.New(nil, accountauth.WithSessionRepository(repo), accountauth.WithSessionTTL(tt.configured), accountauth.WithClock(func() time.Time { return base }))
+			tokens, err := service.IssueSession(context.Background(), uuid.New(), accountauth.SessionMetadata{Persistent: tt.choice})
+			if err != nil {
+				t.Fatal(err)
+			}
+			if tokens.ExpiresAt != base.Add(tt.want).Format(time.RFC3339) {
+				t.Fatalf("expiry = %s, want duration %s", tokens.ExpiresAt, tt.want)
+			}
+			if (tokens.Persistent == nil) != (tt.choice == nil) || (tt.choice != nil && *tokens.Persistent != *tt.choice) {
+				t.Fatal("returned cookie policy does not match session choice")
+			}
+			body, err := json.Marshal(tokens)
+			if err != nil {
+				t.Fatal(err)
+			}
+			if strings.Contains(string(body), "Persistent") || strings.Contains(string(body), "persistent") {
+				t.Fatal("adapter-only persistence policy leaked into token JSON")
+			}
+		})
+	}
+}
+
 func TestRefreshSessionConsumesRefreshTokenOnlyOnceConcurrently(t *testing.T) {
 	ctx := context.Background()
 	now := time.Date(2026, 7, 30, 12, 0, 0, 0, time.UTC)

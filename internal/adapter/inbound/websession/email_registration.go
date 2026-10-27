@@ -71,7 +71,10 @@ func (h *Handler) emailRegistration(w http.ResponseWriter, r *http.Request) {
 				return
 			}
 		}
-		tokens, err := h.deps.EmailRegistration.Complete(r.Context(), binding, req.Email, req.Password, sessionMetadata(r, ""), func(tokens accountauth.SessionTokens) error {
+		meta := sessionMetadata(r, "")
+		persistent := false
+		meta.Persistent = &persistent
+		tokens, err := h.deps.EmailRegistration.Complete(r.Context(), binding, req.Email, req.Password, meta, func(tokens accountauth.SessionTokens) error {
 			if h.deps.Legal != nil {
 				if err := h.deps.Legal.AcceptRegistration(r.Context(), tokens.Session.AccountID, binding, req.Registration); err != nil {
 					return err
@@ -86,6 +89,14 @@ func (h *Handler) emailRegistration(w http.ResponseWriter, r *http.Request) {
 		cookie := sessionCookie(registrationCookieName, "", time.Unix(1, 0))
 		cookie.MaxAge = -1
 		http.SetCookie(w, cookie)
+		if h.deps.BrowserAuth != nil {
+			if browser, bindingErr := browserBinding(w, r); bindingErr == nil {
+				if remembered, rememberErr := h.deps.BrowserAuth.RememberVerified(r.Context(), req.Email, browser, r.UserAgent()); rememberErr == nil {
+					http.SetCookie(w, sessionCookie(browserTrustCookie, remembered.Trusted, time.Now().Add(30*24*time.Hour)))
+					http.SetCookie(w, sessionCookie(browserHintCookie, remembered.Remembered, time.Now().Add(30*24*time.Hour)))
+				}
+			}
+		}
 		w.Header().Set("X-NeiroHub-Account-ID", tokens.Session.AccountID.String())
 		_ = h.acceptPendingReferral(w, r, tokens.Session.AccountID)
 		writeJSON(w, 201, safeSessionResponse{Session: tokens.Session})

@@ -33,7 +33,7 @@ func (h *Handler) accountMethods(w http.ResponseWriter, r *http.Request) {
 		EmailLink    bool     `json:"email_link"`
 		PhoneLink    bool     `json:"phone_link"`
 		Providers    []string `json:"providers"`
-	}{h.cfg.EmailDeliveryEnabled && h.deps.EmailRegistration != nil, h.deps.Passwords != nil, h.cfg.EmailDeliveryEnabled && h.deps.AccountActions != nil, h.cfg.EmailDeliveryEnabled && h.deps.AccountActions != nil, h.cfg.PhoneDeliveryEnabled && h.deps.AccountActions != nil, providers})
+	}{h.cfg.EmailDeliveryEnabled && h.deps.EmailRegistration != nil, h.deps.Passwords != nil && (!h.cfg.RequireBrowserEmailProof || h.deps.BrowserAuth != nil), h.cfg.EmailDeliveryEnabled && (h.deps.BrowserAuth != nil || (!h.cfg.RequireBrowserEmailProof && h.deps.AccountActions != nil)), h.cfg.EmailDeliveryEnabled && h.deps.AccountActions != nil, h.cfg.PhoneDeliveryEnabled && h.deps.AccountActions != nil, providers})
 }
 
 func (h *Handler) browserPasswordRecovery(w http.ResponseWriter, r *http.Request) {

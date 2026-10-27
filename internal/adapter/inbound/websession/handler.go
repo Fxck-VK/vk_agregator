@@ -23,6 +23,7 @@ import (
 	"vk-ai-aggregator/internal/domain"
 	"vk-ai-aggregator/internal/service/accountauth"
 	"vk-ai-aggregator/internal/service/accountservice"
+	"vk-ai-aggregator/internal/service/browserauth"
 	"vk-ai-aggregator/internal/service/imagegeneration"
 	"vk-ai-aggregator/internal/service/joborchestrator"
 	"vk-ai-aggregator/internal/service/preparedjobexpiry"
@@ -51,6 +52,7 @@ type principalContextKey struct{}
 
 // Config contains browser adapter settings.
 type Config struct {
+	RequireBrowserEmailProof    bool
 	EmailDeliveryEnabled        bool
 	PhoneDeliveryEnabled        bool
 	TestPaymentsEnabled         bool
@@ -318,6 +320,7 @@ type WebChatMessageLimiter interface {
 
 // Deps are services shared with other account adapters.
 type Deps struct {
+	BrowserAuth                *browserauth.Service
 	Legal                      LegalConsentService
 	ArtifactDeletion           ArtifactDeletionService
 	ArtifactDeleteLimiter      WebChatMessageLimiter
@@ -358,18 +361,27 @@ type Deps struct {
 
 // Handler serves the browser-only /web/v1 endpoints.
 type Handler struct {
-	cfg  Config
-	deps Deps
+	cfg           Config
+	deps          Deps
+	recoverySlots chan struct{}
 }
 
 // NewHandler builds a browser session handler.
 func NewHandler(cfg Config, deps Deps) *Handler {
-	return &Handler{cfg: cfg, deps: deps}
+	return &Handler{cfg: cfg, deps: deps, recoverySlots: make(chan struct{}, 16)}
 }
 
 // Routes returns the versioned browser API router.
 func (h *Handler) Routes() http.Handler {
 	mux := http.NewServeMux()
+	mux.HandleFunc("POST /web/v1/auth/password/verify-login", h.browserAuthAction)
+	mux.HandleFunc("POST /web/v1/auth/password/resend-login", h.browserAuthAction)
+	mux.HandleFunc("POST /web/v1/auth/password/request-link", h.browserAuthAction)
+	mux.HandleFunc("POST /web/v1/auth/password/prepare-reset", h.browserAuthAction)
+	mux.HandleFunc("POST /web/v1/auth/password/reset-link", h.browserAuthAction)
+	mux.HandleFunc("GET /web/v1/auth/password/reset-status", h.browserAuthAction)
+	mux.HandleFunc("GET /web/v1/auth/remembered", h.browserAuthAction)
+	mux.HandleFunc("POST /web/v1/auth/forget", h.browserAuthAction)
 	mux.HandleFunc("GET /web/v1/account/legal", h.requirePrincipal(h.legalStatus))
 	mux.HandleFunc("POST /web/v1/account/legal/accept", h.requireUnsafePrincipal(h.legalChoice))
 	mux.HandleFunc("POST /web/v1/account/legal/marketing", h.requireUnsafePrincipal(h.legalChoice))
@@ -455,6 +467,10 @@ func PrincipalFromContext(ctx context.Context) (domain.RequestPrincipal, bool) {
 
 func (h *Handler) passwordLogin(w http.ResponseWriter, r *http.Request) {
 	if !h.requireOrigin(w, r) {
+		return
+	}
+	if h.deps.BrowserAuth != nil || h.cfg.RequireBrowserEmailProof {
+		h.browserPasswordLogin(w, r)
 		return
 	}
 	if h.deps.Passwords == nil || h.deps.Sessions == nil {
@@ -1865,9 +1881,13 @@ func (h *Handler) setSessionCookies(w http.ResponseWriter, tokens accountauth.Se
 	if err != nil {
 		return err
 	}
-	http.SetCookie(w, sessionCookie(accessCookieName, tokens.AccessToken, accessExpiresAt))
-	http.SetCookie(w, sessionCookie(refreshCookieName, tokens.RefreshToken, refreshExpiresAt))
-	http.SetCookie(w, csrfCookie(csrf, refreshExpiresAt))
+	for _, cookie := range []*http.Cookie{sessionCookie(accessCookieName, tokens.AccessToken, accessExpiresAt), sessionCookie(refreshCookieName, tokens.RefreshToken, refreshExpiresAt), csrfCookie(csrf, refreshExpiresAt)} {
+		if tokens.Persistent != nil && !*tokens.Persistent {
+			cookie.Expires = time.Time{}
+			cookie.MaxAge = 0
+		}
+		http.SetCookie(w, cookie)
+	}
 	return nil
 }
 

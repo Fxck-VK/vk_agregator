@@ -1,8 +1,6 @@
 .page {
   display: grid;
   inline-size: 100%;
-  block-size: 100dvh;
-  min-block-size: 0;
-  overflow: clip;
+  min-block-size: 100dvh;
   background: #101114;
 }

@@ -56,6 +56,27 @@ func (s *AccountLinkStore) SaveChallenge(ctx context.Context, key string, challe
 	return s.client.Set(ctx, key, body, ttl).Err()
 }
 
+// RestoreChallenge is optional retry support for a consumed proof whose
+// downstream transaction failed. NX preserves a newer/live challenge, and the
+// original deadline bounds the remaining TTL even if the caller overestimates.
+func (s *AccountLinkStore) RestoreChallenge(ctx context.Context, key string, challenge accountlink.Challenge, ttl time.Duration) error {
+	remaining := time.Until(challenge.ExpiresAt)
+	if ttl <= 0 || remaining <= 0 {
+		return accountlink.ErrExpiredCode
+	}
+	if remaining < ttl {
+		ttl = remaining
+	}
+	if ttl.Milliseconds() <= 0 {
+		return accountlink.ErrExpiredCode
+	}
+	body, err := json.Marshal(challenge)
+	if err != nil {
+		return err
+	}
+	return s.client.SetNX(ctx, key, body, ttl).Err()
+}
+
 func (s *AccountLinkStore) LoadChallenge(ctx context.Context, key string) (accountlink.Challenge, error) {
 	body, err := s.client.Get(ctx, key).Bytes()
 	if err == goredis.Nil {
