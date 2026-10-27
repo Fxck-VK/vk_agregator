@@ -381,7 +381,7 @@ func main() {
 	var emailRegistration websession.EmailRegistrationService
 	var browserAuth *browserauth.Service
 	if strings.EqualFold(cfg.AccountEmailDeliveryProvider, "smtp") {
-		browserAuth, err = browserauth.New(redisstore.NewAccountLinkStore(rdb), accountSender, core.AccountAuth, cfg.WebOrigin, cfg.AccountEmailProofSecret)
+		browserAuth, err = browserauth.New(redisstore.NewAccountLinkStore(rdb), accountSender, core.AccountAuth, cfg.WebOrigin, cfg.AccountBrowserAuthSecret)
 		if err != nil {
 			logger.Error("browser authentication wiring failed")
 			os.Exit(1)

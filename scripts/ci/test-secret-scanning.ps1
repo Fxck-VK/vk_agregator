@@ -111,7 +111,9 @@ try {
         "CLOUDFLARED_TUNNEL_TOKEN=" + $policyCanaryPrefix + "5123456789ABCDEF",
         "ACCOUNT_EMAIL_SMTP_PASSWORD=" + $policyCanaryPrefix + "6123456789ABCDEF",
         "S3_SECRET_KEY=" + $policyCanaryPrefix + "7123456789ABCDEF",
-        "POSTGRES_PASSWORD=" + $policyCanaryPrefix + "8123456789ABCDEF"
+        "POSTGRES_PASSWORD=" + $policyCanaryPrefix + "8123456789ABCDEF",
+        "ACCOUNT_BROWSER_AUTH_SECRET=" + $policyCanaryPrefix + "B123456789ABCDEF",
+        "ACCOUNT_EMAIL_PROOF_SECRET=" + $policyCanaryPrefix + "C123456789ABCDEF"
     ) -Encoding ascii
     Set-Content -LiteralPath (Join-Path $policyCanaryRoot "internal\adapter\inbound\admin\handler_test.go") `
         -Value ("ADMIN_TOKEN=" + $policyCanaryPrefix + "FEDCBA9876543210") -Encoding ascii
@@ -149,8 +151,8 @@ try {
     }
 
     $policyFindings = Get-Content -Raw $policyCanaryReport | ConvertFrom-Json
-    if ($policyFindings.Count -ne 14) {
-        throw "Allowlist policy canary must return exactly fourteen synthetic findings; got $($policyFindings.Count)."
+    if ($policyFindings.Count -ne 16) {
+        throw "Allowlist policy canary must return exactly sixteen synthetic findings; got $($policyFindings.Count)."
     }
     foreach ($finding in $policyFindings) {
         if ($finding.RuleID -ne "project-secret-assignment") {
@@ -191,7 +193,7 @@ try {
         throw "Exact committed environment placeholders must remain clean."
     }
 
-    Write-Output "Allowlist policy canary detected all fourteen synthetic findings; only exact scoped fixtures remained clean."
+    Write-Output "Allowlist policy canary detected all sixteen synthetic findings; only exact scoped fixtures remained clean."
 }
 finally {
     if (Test-Path $policyCanaryRoot) {

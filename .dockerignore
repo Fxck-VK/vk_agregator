@@ -12,6 +12,10 @@ _env
 **/.env*
 **/dev.env*
 **/_env*
+**/*.browser-auth
+**/*.browser-auth.lock
+**/*.browser-auth.tmp.*
+**/*.browser-auth-env.*
 *.log
 *.err
 

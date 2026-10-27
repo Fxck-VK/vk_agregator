@@ -412,6 +412,25 @@ addresses, transport/TLS and security-notice delivery rules are unchanged.
 DEV deploy does not read production env secrets. Run DEV/PROD parity as a
 separate operator check when changing env structure.
 
+### Persistent browser authentication key
+
+SMTP-enabled browser authentication requires `ACCOUNT_BROWSER_AUTH_SECRET`
+with at least 32 bytes, independently of the preserved
+`ACCOUNT_EMAIL_PROOF_SECRET` used for existing identity hashes. Never replace or
+pad the legacy email key as an encryption migration.
+
+Both deployment entrypoints run `scripts/deploy/ensure-browser-auth-secret.sh`
+before env validation and Compose. It creates a cryptographically random key
+once, or adopts an existing valid explicit browser key, in the private adjacent
+`<env-file>.browser-auth` sidecar (mode 600). Subsequent env uploads reuse that
+same key. Deployments require the key even if SMTP is disabled in the base env:
+a retained DEV email overlay can enable SMTP in the effective API environment.
+Preserve the sidecar across releases/rollback and include it in private
+server configuration backups. Conflicts, corrupt sidecars and symlinks fail
+closed; investigate rather than deleting the sidecar or rotating keys blindly.
+No value is printed or committed. The shared release regression runner tests
+bootstrap, reuse, legacy compatibility and failure handling before publication.
+
 ### Commit-scoped preflight before push
 
 Before staging a release, run the preparation mode against the current DEV

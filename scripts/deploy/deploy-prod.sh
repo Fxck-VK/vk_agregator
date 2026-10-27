@@ -123,6 +123,7 @@ fi
 
 echo "==> check Docker"
 check_docker
+run_step bash scripts/deploy/ensure-browser-auth-secret.sh --env-file "${env_file}" --require-key
 
 check_args=(--env-file "${env_file}")
 if [[ "${with_cloudflare}" == "true" ]]; then

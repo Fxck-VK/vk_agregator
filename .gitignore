@@ -33,6 +33,10 @@ dev.env
 dev.env.*
 .dev-web-auth.env
 .dev-web-auth*.next
+*.browser-auth
+*.browser-auth.lock
+*.browser-auth.tmp.*
+*.browser-auth-env.*
 _env
 _env.*
 

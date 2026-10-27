@@ -12,7 +12,7 @@ try {
     & node scripts/ci/check-release-contract.mjs
     if ($LASTEXITCODE -ne 0) { throw "Release source contract failed" }
     foreach ($name in @(
-        "verify-release-images", "dev-web-auth", "retire-miniapp-env",
+        "verify-release-images", "dev-web-auth", "retire-miniapp-env", "browser-auth-secret",
         "title-worker-rollout", "dev-env", "dev-email", "dev-google", "dev-yandex",
         "dev-legal", "prod-env", "env-parity", "assemble-env-parts",
         "docker-login-retry", "compose-pull-retry"

@@ -510,6 +510,9 @@ type Config struct {
 	// AccountEmailProofSecret hashes email verification and recovery proofs.
 	// It is independent of OAuth credentials and application transports.
 	AccountEmailProofSecret string
+	// AccountBrowserAuthSecret encrypts browser auth receipts independently of
+	// the preserved email identity/proof key. At least 32 bytes when SMTP is on.
+	AccountBrowserAuthSecret string
 
 	// ArtifactURLTTL is how long signed artifact delivery URLs stay valid.
 	ArtifactURLTTL time.Duration
@@ -1569,6 +1572,7 @@ func Load() Config {
 		AccountOAuthVKIDIssuer:              env("ACCOUNT_OAUTH_VK_ID_ISSUER", ""),
 		AccountOAuthVKIDJWKSURL:             env("ACCOUNT_OAUTH_VK_ID_JWKS_URL", ""),
 		AccountEmailProofSecret:             env("ACCOUNT_EMAIL_PROOF_SECRET", ""),
+		AccountBrowserAuthSecret:            env("ACCOUNT_BROWSER_AUTH_SECRET", ""),
 
 		ArtifactURLTTL:                 envDuration("ARTIFACT_URL_TTL", time.Hour),
 		SignedDelivery:                 envBool("SIGNED_DELIVERY", false),
@@ -1704,6 +1708,9 @@ func (c Config) validateAccountDeliveryConfig() error {
 		}
 		if (strings.TrimSpace(c.AccountEmailSMTPUsername) == "") != (strings.TrimSpace(c.AccountEmailSMTPPassword) == "") {
 			return fmt.Errorf("config: ACCOUNT_EMAIL_SMTP_USERNAME and ACCOUNT_EMAIL_SMTP_PASSWORD must be set together")
+		}
+		if len(c.AccountBrowserAuthSecret) < 32 {
+			return fmt.Errorf("config: ACCOUNT_BROWSER_AUTH_SECRET must contain at least 32 bytes when ACCOUNT_EMAIL_DELIVERY_PROVIDER=smtp")
 		}
 	default:
 		return fmt.Errorf("config: ACCOUNT_EMAIL_DELIVERY_PROVIDER must be disabled or smtp")

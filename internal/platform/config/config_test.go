@@ -70,6 +70,7 @@ func TestValidateAccountEmailDeliverySMTPConfig(t *testing.T) {
 		AccountEmailDeliveryProvider: "smtp",
 		AccountEmailSMTPPort:         587,
 		AccountEmailSMTPTLSMode:      "starttls",
+		AccountBrowserAuthSecret:     strings.Repeat("b", 64),
 	}
 	err := cfg.Validate()
 	if err == nil || !strings.Contains(err.Error(), "ACCOUNT_EMAIL_SMTP_HOST") {
@@ -322,6 +323,41 @@ func TestLoadAccountEmailProofSecret(t *testing.T) {
 	cfg := config.Load()
 	if cfg.AccountEmailProofSecret != "test-proof-secret" {
 		t.Fatal("Dedicated account proof secret not loaded")
+	}
+}
+
+func TestBrowserAuthSecretAdmissionPreservesLegacyEmailKey(t *testing.T) {
+	t.Setenv("APP_ENV", "development")
+	t.Setenv("ACCOUNT_EMAIL_DELIVERY_PROVIDER", "smtp")
+	t.Setenv("ACCOUNT_EMAIL_SMTP_HOST", "smtp.example.test")
+	t.Setenv("ACCOUNT_EMAIL_SMTP_FROM", "noreply@example.test")
+	t.Setenv("ACCOUNT_EMAIL_PROOF_SECRET", "legacy-key")
+	for _, test := range []struct {
+		name, browserKey string
+		wantError        bool
+	}{
+		{"missing", "", true},
+		{"short", strings.Repeat("b", 31), true},
+		{"independent-strong-key", strings.Repeat("b", 64), false},
+	} {
+		t.Run(test.name, func(t *testing.T) {
+			t.Setenv("ACCOUNT_BROWSER_AUTH_SECRET", test.browserKey)
+			cfg := config.Load()
+			if cfg.AccountBrowserAuthSecret != test.browserKey {
+				t.Fatal("dedicated browser key was not loaded independently")
+			}
+			if cfg.AccountEmailProofSecret != "legacy-key" {
+				t.Fatal("legacy email identity/proof key was changed")
+			}
+			err := cfg.Validate()
+			if test.wantError {
+				if err == nil || !strings.Contains(err.Error(), "ACCOUNT_BROWSER_AUTH_SECRET") {
+					t.Fatalf("expected dedicated browser key rejection, got %v", err)
+				}
+			} else if err != nil {
+				t.Fatalf("strong independent browser key and short legacy key must remain compatible: %v", err)
+			}
+		})
 	}
 }
 

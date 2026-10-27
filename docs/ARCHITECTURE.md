@@ -22,6 +22,12 @@ six-digit verification and reset-link navigation without credentials or PII in
 history/localStorage. The selected left-media/right-form layout replaces the
 old page and its presentation-specific code.
 
+Browser receipts use a dedicated ACCOUNT_BROWSER_AUTH_SECRET of at least 32
+bytes when SMTP is enabled. Deployment preserves it in a private adjacent
+<env-file>.browser-auth sidecar and reinjects it after every env upload. The
+legacy ACCOUNT_EMAIL_PROOF_SECRET remains unchanged for stored email identity
+hashes and proof compatibility; never rotate it to satisfy the AEAD guard.
+
 The browserauth service coordinates purpose-separated AEAD receipts over
 hash-only Redis challenges. New-browser password login requires email proof;
 30-day browser trust remains bound to credential/binding versions and is

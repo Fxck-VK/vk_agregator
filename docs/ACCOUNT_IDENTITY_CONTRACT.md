@@ -32,6 +32,13 @@ Email registration collects email/password before verifying the code. A known
 address can return to sign-in without leaking account existence before proof.
 
 `internal/service/browserauth` handles the browser proofs above `accountauth`.
+Its AEAD key is `ACCOUNT_BROWSER_AUTH_SECRET` (at least 32 bytes when SMTP is
+enabled), separate from `ACCOUNT_EMAIL_PROOF_SECRET`. Preserve the legacy email
+key: it also hashes persisted identity bindings and must not be rotated to
+satisfy the new encryption requirement. Deployment persists the independent key
+in the private adjacent `<env-file>.browser-auth` sidecar and reinjects it into
+each rendered runtime env. Keep that sidecar in protected configuration backups;
+changing it invalidates browser receipts, not account identity hashes.
 An untrusted browser must verify an email code after a correct password; a
 30-day trust receipt skips this extra step only while the browser/agent,
 verified email binding and credential version still match. AEAD receipts are

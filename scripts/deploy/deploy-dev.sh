@@ -324,6 +324,7 @@ fi
 
 echo "==> check Docker"
 check_docker
+run_step bash scripts/deploy/ensure-browser-auth-secret.sh --env-file "${env_file}" --require-key
 run_step bash scripts/deploy/check-dev-env.sh --env-file "${env_file}"
 validate_dev_env
 
