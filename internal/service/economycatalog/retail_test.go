@@ -1,11 +1,30 @@
 package economycatalog
 
 import (
+	"bytes"
 	"crypto/sha256"
 	"fmt"
 	"os"
+	"strings"
 	"testing"
 )
+
+func TestRetailResearchHashInputIsPinnedToLFCheckout(t *testing.T) {
+	raw, err := os.ReadFile("../../../" + retail.ResearchPath)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if bytes.ContainsRune(raw, '\r') {
+		t.Fatal("byte-hashed research must use canonical LF on every platform")
+	}
+	attributes, err := os.ReadFile("../../../.gitattributes")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains("\n"+string(attributes), "\n"+retail.ResearchPath+" text eol=lf\n") {
+		t.Fatal("research checkout must pin LF instead of inheriting core.autocrlf")
+	}
+}
 
 func TestRetailPolicyBindsCompleteResearchAndDefendsCoverage(t *testing.T) {
 	raw, err := os.ReadFile("../../../" + retail.ResearchPath)
