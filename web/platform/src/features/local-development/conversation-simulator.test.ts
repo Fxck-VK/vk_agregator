@@ -3,6 +3,8 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 import { parseConversationMessageList, parseWebChatJob, parseConversationItem } from "@/lib/web-api/contracts";
 import { createConversationSimulator } from "./conversation-simulator";
 import { decodePreviewImageID } from "./preview-image";
+import catalog from "@/features/session/model-catalog.preview.json";
+import { parseModelCatalog, projectImageModelCatalog } from "@/features/models/model-catalog-contract";
 
 const conversationID = "20000000-0000-4000-8000-000000000001";
 const artifactID = "f0000000-0000-4000-8000-000000000001";
@@ -10,6 +12,8 @@ const now = "2026-09-17T00:00:00.000Z";
 const seed = {
   conversations: [{ id: conversationID, title: "Sample", created_at: now, updated_at: now }],
   messages: { [conversationID]: { items: [{ id: "21000000-0000-4000-8000-000000000001", seq: 1, role: "assistant" as const, text: "Sample", rating: null, created_at: now }], has_more_before: false } },
+  imageModels: [{ id: "sample", name: "Sample", quality_options: ["2K"], default_quality: "2K", supports_reference_image: true,
+    max_reference_images: 1, max_output_count: 15, allowed_aspect_ratios: ["1:1", "9:16"], price_by_quality: { "2K": 20 } }],
 };
 const messagePath = `/web/v1/conversations/${conversationID}/messages` as const;
 const request = { method: "POST", headers: { "X-Idempotency-Key": "message-1" }, body: JSON.stringify({ prompt: "Photo message", model_id: "sample", reference_artifact_ids: [artifactID] }) };
@@ -19,6 +23,39 @@ function simulator(scenario: () => "success" | "error" | "slow" = () => "success
 afterEach(() => vi.useRealTimers());
 
 describe("local conversation simulation", () => {
+  it("renames a preview conversation and keeps the new title in subsequent reads", async () => {
+    const local = simulator();
+    const path = `/web/v1/conversations/${conversationID}` as const;
+    const response = local.handle(path, { method: "PATCH", body: JSON.stringify({ title: "  Длинное название для проверки многоточия  " }) });
+    expect(response?.status).toBe(200);
+    const renamed = parseConversationItem(await response!.json());
+    expect(renamed).toMatchObject({ id: conversationID, title: "Длинное название для проверки многоточия", created_at: now });
+    expect(parseConversationItem(await local.handle(path)!.json())).toEqual(renamed);
+    expect((await local.handle("/web/v1/conversations?limit=20")!.json()).items).toContainEqual(renamed);
+    expect(parseConversationMessageList(await local.handle(messagePath)!.json()).items).toEqual(seed.messages[conversationID].items);
+    expect(seed.conversations[0].title).toBe("Sample");
+  });
+
+  it.each(["not json", "{}", JSON.stringify({ title: " " }), JSON.stringify({ title: "x".repeat(121) }), JSON.stringify({ title: "Valid", account_id: conversationID })])("rejects an invalid preview rename: %s", async body => {
+    const local = simulator();
+    const path = `/web/v1/conversations/${conversationID}` as const;
+    expect(local.handle(path, { method: "PATCH", body })?.status).toBe(400);
+    expect(parseConversationItem(await local.handle(path)!.json()).title).toBe("Sample");
+  });
+
+  it("freezes the catalogue batch price in generated image history", async () => {
+    vi.useFakeTimers();
+    const model = projectImageModelCatalog(parseModelCatalog(catalog)).items.find(item => item.id === "gpt_image_2_5_sunburst")!;
+    const local = createConversationSimulator({ seed: { ...seed, imageModels: [model] }, scenario: () => "success", hasArtifact: () => false, reply: () => "Local reply" });
+    const input = { ...request, body: JSON.stringify({ prompt: "Four photos", model_id: model.id, image_quality: "1K-medium", aspect_ratio: "16:9", output_count: 4 }) };
+    expect(local.handle(messagePath, input)!.status).toBe(201);
+    // An already accepted job keeps its original quote even if the source object changes.
+    model.price_by_count!["1K-medium:16:9:4"] = 999;
+    vi.advanceTimersByTime(1500);
+    const history = parseConversationMessageList(await local.handle(messagePath)!.json());
+    expect(history.items.at(-1)!.images).toHaveLength(4);
+    expect(history.items.at(-1)!.images!.map(image => image.job.cost_estimate)).toEqual([30, 30, 30, 30]);
+  });
   it("pins the first accepted model and ignores subsequent model switches and rejected sends", async () => {
     let scenario: "success" | "error" = "error";
     const local = simulator(() => scenario);
@@ -29,6 +66,16 @@ describe("local conversation simulation", () => {
     local.handle(messagePath, { ...request, headers: { "X-Idempotency-Key": "message-2" }, body: JSON.stringify({ prompt: "Next", model_id: "gpt_5" }) });
     expect(await local.handle(`/web/v1/conversations/${conversationID}`)!.json()).toMatchObject({ first_model_id: "sample" });
     expect(await local.handle("/web/v1/conversations")!.json()).toMatchObject({ items: [{ first_model_id: "sample" }] });
+  });
+  it("uses the same generated reference quote in image history", async () => {
+    vi.useFakeTimers();
+    const model = projectImageModelCatalog(parseModelCatalog(catalog)).items.find(item => item.id === "seedream_4_5")!;
+    const local = createConversationSimulator({ seed: { ...seed, imageModels: [model] }, scenario: () => "success", hasArtifact: id => id === artifactID, reply: () => "Local reply" });
+    const input = { ...request, body: JSON.stringify({ prompt: "Four edited photos", model_id: model.id, image_quality: "4K", aspect_ratio: "1:1", output_count: 4, reference_artifact_ids: [artifactID] }) };
+    expect(local.handle(messagePath, input)!.status).toBe(201);
+    vi.advanceTimersByTime(1500);
+    const images = parseConversationMessageList(await local.handle(messagePath)!.json()).items.at(-1)!.images!;
+    expect(images.map(image => image.job.cost_estimate)).toEqual([180, 180, 180, 180]);
   });
   it("rejects unavailable image options without adding a turn", async () => {
     const local = createConversationSimulator({ seed: { ...seed, imageModels: [{ id: "sample", name: "Sample", quality_options: ["2K"],

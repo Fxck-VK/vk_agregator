@@ -12,7 +12,7 @@ import {usePublicCopy} from "@/i18n/public/use-public-copy";
 
 
 export function ImageGeneratorGallery({ onOpen, paused }: { onOpen: (image: ReferenceImage) => void; paused: boolean }) {
-  const {copy,reference} = usePublicCopy(publicCopySourcesForLocale);
+  const {copy,reference} = usePublicCopy(publicCopySourcesForLocale,{"copy":"imageGeneratorEn","reference":"imageGeneratorReferenceEn"});
 
   return <section id="examples" className={styles.galleryStrip} aria-labelledby="gallery-title"><h2 id="gallery-title" className={styles.galleryTitle}>{copy.galleryTitle}</h2><div className={styles.marquee} data-paused={paused || undefined}>
     {[0, 1].map(track => <div className={styles.marqueeTrack} key={track} aria-hidden={track === 1 || undefined}>{reference.gallery.map(image => <button key={image.file} type="button" tabIndex={track ? -1 : 0} className={styles.galleryCard} aria-label={`${image.alt}. ${copy.controls.openDetails}`} onClick={() => onOpen(image)}><GeneratorPicture image={image} className={styles.galleryImg} sizes="(max-width: 600px) 180px, 210px" decorative={track === 1} /><span className={styles.galleryZoom} aria-hidden="true"><span className={styles.galleryZoomBadge}>+</span></span></button>)}</div>)}
@@ -20,7 +20,7 @@ export function ImageGeneratorGallery({ onOpen, paused }: { onOpen: (image: Refe
 }
 
 function GallerySurface({ image, close }: { image: ReferenceImage; close: () => void }) {
-  const {copy} = usePublicCopy(publicCopySourcesForLocale);
+  const {copy} = usePublicCopy(publicCopySourcesForLocale,{"copy":"imageGeneratorEn","reference":"imageGeneratorReferenceEn"});
 
   const ref = useRef<HTMLElement>(null); const title = useId();
   useEffect(() => {

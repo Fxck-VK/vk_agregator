@@ -18,7 +18,7 @@ describe("rebuilt English public home", () => {
     home();
     expect(screen.getAllByRole("heading", { level: 1 })).toHaveLength(1);
     expect(screen.getByRole("heading", { level: 1 })).toHaveTextContent(homeEn.hero.title);
-    expect(screen.getAllByRole("link", { name: homeEn.start })[0]).toHaveAttribute("href", "/en/app");
+    expect(screen.getAllByRole("link", { name: homeEn.start })[0]).toHaveAttribute("href", "/ru/app");
     expect(screen.getByRole("contentinfo")).toBeInTheDocument();
   });
 
@@ -36,7 +36,7 @@ describe("rebuilt English public home", () => {
     home();
     fireEvent.click(within(screen.getByRole("tablist", { name: homeEn.tools.filtersLabel })).getByRole("tab", { name: "Audio" }));
     const panel = screen.getByRole("tabpanel", { name: "Audio" });
-    expect(within(panel).getByRole("link", { name: /Music Generator/ })).toHaveAttribute("href", "/en/app/music");
+    expect(within(panel).getByRole("link", { name: /Music Generator/ })).toHaveAttribute("href", "/ru/app/music");
     expect(within(panel).queryByRole("link", { name: /AI Image Generator/ })).not.toBeInTheDocument();
   });
 
@@ -56,7 +56,7 @@ describe("rebuilt English public home", () => {
     expect(input).toHaveFocus();
     fireEvent.change(input, { target: { value: "нана банана про" } });
     const result = await within(dialog).findByRole("link", { name: /Nano Banana Pro/ });
-    expect(result).toHaveAttribute("href", "/en/app?model=nano_banana_pro");
+    expect(result).toHaveAttribute("href", "/ru/app?model=nano_banana_pro");
     fireEvent.keyDown(input, { key: "ArrowDown" });
     expect(result).toHaveFocus();
   });

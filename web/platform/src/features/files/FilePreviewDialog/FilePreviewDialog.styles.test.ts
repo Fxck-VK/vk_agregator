@@ -72,9 +72,9 @@ describe("FilePreviewDialog shared-template composition", () => {
   it("composes the file toolbar from the reusable mode-switch panel", () => {
     const previewFooterRule = templateStylesheet.match(/\.previewFooter\s*\{([^}]*)\}/s)?.[1] ?? "";
     const toolRailRule = fileStylesheet.match(/\.toolRail\s*\{([^}]*)\}/s)?.[1] ?? "";
-    const panelRootRule = modeSwitchPanelStylesheet.match(/\.root\s*\{([^}]*)\}/s)?.[1] ?? "";
-    const panelViewportRule = modeSwitchPanelStylesheet.match(/\.viewport\s*\{([^}]*)\}/s)?.[1] ?? "";
-    const panelButtonRule = modeSwitchPanelStylesheet.match(/\.viewport button\s*\{([^}]*)\}/s)?.[1] ?? "";
+    const panelRootRule = modeSwitchPanelStylesheet.match(/^\s*\.root\s*\{([^}]*)\}/ms)?.[1] ?? "";
+    const panelViewportRule = modeSwitchPanelStylesheet.match(/^\s*\.viewport\s*\{([^}]*)\}/ms)?.[1] ?? "";
+    const panelButtonRule = modeSwitchPanelStylesheet.match(/^\s*\.viewport button\s*\{([^}]*)\}/ms)?.[1] ?? "";
 
     expect(templateStylesheet).toMatch(
       /\.previewWithFooter\s*\{[^}]*--preview-stage-bottom:\s*5\.25rem;/s,
@@ -105,7 +105,7 @@ describe("FilePreviewDialog shared-template composition", () => {
     expect(fileStylesheet).not.toContain("scrollbar-width:");
     expect(fileStylesheet).not.toContain("::-webkit-scrollbar");
     expect(fileStylesheet).not.toMatch(/\.(?:toolRailViewport|toolIndicator|activeTool|toolIcon)\b/);
-    const toolIndicatorRule = modeSwitchPanelStylesheet.match(/\.indicator\s*\{([^}]*)\}/s)?.[1] ?? "";
+    const toolIndicatorRule = modeSwitchPanelStylesheet.match(/^\s*\.indicator\s*\{([^}]*)\}/ms)?.[1] ?? "";
     const inactiveHoverRule = selectableStylesheet.match(
       /\.control:where\([^}]*?\)\s*\{([^}]*)\}/s,
     )?.[1] ?? "";

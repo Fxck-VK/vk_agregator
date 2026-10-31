@@ -2,7 +2,7 @@
 import {Fragment} from "react";
 import Link from "@/i18n/Link";
 import {useLocale} from "@/i18n/LocaleProvider";
-import {documentationEn as copy,type DocumentationArticle as Article,type DocumentationBlock,type DocumentationInline} from "@/i18n/public/documentation-en";
+import {documentationArticles,documentationEn as copy,type DocumentationArticle as Article,type DocumentationBlock,type DocumentationInline} from "@/i18n/public/documentation-en";
 import {documentationArticlePath,documentationNeighbours} from "./documentation-model";
 import styles from "./Documentation.module.css";
 import {usePublicCopy} from "@/i18n/public/use-public-copy";
@@ -21,25 +21,25 @@ function Blocks({blocks}:{blocks:readonly DocumentationBlock[]}){
   });
 }
 export function DocumentationArticle({article:sourceArticle}:{article:Article}){
-  const {copy} = usePublicCopy(publicCopySourcesForLocale);
+  const {copy,documentationArticles,documentationPath} = usePublicCopy(publicCopySourcesForLocale,{"copy":"documentationEn","documentationArticles":"documentationArticles","documentationPath":"__route.basePath"});
   const locale=useLocale(),article=usePublicCopy(sourceArticle);
 
-  const {previous,next}=documentationNeighbours(article.slug,locale);
+  const {previous,next}=documentationNeighbours(article.slug,locale,documentationArticles);
   return <article className={styles.article} aria-labelledby="help-article-title">
     <div className={styles.hero}><h1 id="help-article-title">{article.title}</h1><p>{article.description}</p></div>
     <p className={styles.introduction}>{article.introduction}</p>
     <nav className={styles.toc} aria-labelledby="help-article-contents"><h2 id="help-article-contents">{copy.labels.toc}</h2><ul>{article.sections.map(section=><li key={section.id}><a href={`#${section.id}`}>{section.title}</a></li>)}</ul></nav>
     {article.sections.map(section=><section className={styles.section} key={section.id} id={section.id} data-help-section><h2>{section.title}</h2><Blocks blocks={section.blocks}/></section>)}
     <nav className={styles.neighbours} aria-label={copy.labels.articles}>
-      {previous?<Link href={documentationArticlePath(previous.slug)} aria-label={`${copy.labels.previous}: ${previous.title}`}><small>← {copy.labels.previous}</small><span>{previous.title}</span></Link>:<span/>}
-      {next?<Link href={documentationArticlePath(next.slug)} aria-label={`${copy.labels.next}: ${next.title}`}><small>{copy.labels.next} →</small><span>{next.title}</span></Link>:<span/>}
+      {previous?<Link href={documentationArticlePath(previous.slug,documentationPath)} aria-label={`${copy.labels.previous}: ${previous.title}`}><small>← {copy.labels.previous}</small><span>{previous.title}</span></Link>:<span/>}
+      {next?<Link href={documentationArticlePath(next.slug,documentationPath)} aria-label={`${copy.labels.next}: ${next.title}`}><small>{copy.labels.next} →</small><span>{next.title}</span></Link>:<span/>}
     </nav>
     <HelpSupport/>
   </article>;
 }
 export function HelpSupport(){
-  const {copy} = usePublicCopy(publicCopySourcesForLocale);
+  const {copy} = usePublicCopy(publicCopySourcesForLocale,{"copy":"documentationEn","documentationArticles":"documentationArticles","documentationPath":"__route.basePath"});
 return <aside className={styles.support}><h2>{copy.labels.supportTitle}</h2><p>{copy.labels.supportDescription}</p><a href="mailto:support@epifera.com">{copy.labels.supportAction}<span aria-hidden="true">↗</span></a></aside>;}
 
 
-const publicCopySourcesForLocale={copy};
+const publicCopySourcesForLocale={copy,documentationArticles,documentationPath:"/ai/docs"};

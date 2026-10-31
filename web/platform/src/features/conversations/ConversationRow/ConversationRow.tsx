@@ -493,7 +493,7 @@ export function ConversationRow({
       )}
       {panelIsVisible && panel === "rename" && hasError ? (
         <div className={styles.inlineRenameFeedback} data-conversation-rename-control="true">
-          <StateNotice inline kind="error">{t.conversations.renameFailure}</StateNotice>
+          <StateNotice className={styles.errorNotice} inline kind="error">{t.conversations.renameFailure}</StateNotice>
           <RetryAction label={t.conversations.renameRetryLabel} disabled={isPending} onClick={() => void renameConversation()} />
         </div>
       ) : null}
@@ -507,7 +507,7 @@ export function ConversationRow({
           onConfirm={() => void archiveConversation()}
         />
       ) : null}
-      {hasHiddenFailure ? <StateNotice inline kind="error">{panel === "archive" ? t.conversations.archiveFailure : t.conversations.renameFailure}</StateNotice> : null}
+      {hasHiddenFailure ? <StateNotice className={`${styles.errorNotice} ${styles.hiddenFailure}`} inline kind="error">{panel === "archive" ? t.conversations.archiveFailure : t.conversations.renameFailure}</StateNotice> : null}
     </article>
   );
 }

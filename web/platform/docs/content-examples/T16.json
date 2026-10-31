@@ -1,0 +1,640 @@
+{
+  "id": "page-t16",
+  "template": "T16",
+  "path": "/stock/items/dried-gypsophila/gypsophila-01",
+  "locale": "ru",
+  "status": "draft",
+  "indexing": "noindex",
+  "seo": {
+    "title": "Фото сухой гипсофилы — ботанический референс | Epifera",
+    "description": "Изучите минималистичную фотографию сухой гипсофилы, её источник, доступные для скачивания превью и связанные ботанические референсы."
+  },
+  "relatedIds": [],
+  "content": {
+    "materialDetailEn": {
+      "metadata": {
+        "title": "Фото сухой гипсофилы — ботанический референс | Epifera",
+        "description": "Изучите минималистичную фотографию сухой гипсофилы, её источник, доступные для скачивания превью и связанные ботанические референсы."
+      },
+      "current": "Фотореференс",
+      "currentShort": "Фотография",
+      "skip": "Перейти к фотографии",
+      "about": "Об этой фотографии",
+      "source": "Автор источника",
+      "license": "Usage and license",
+      "dimensions": "Размеры превью",
+      "format": "Файл предпросмотра",
+      "rights": "Это превью не предоставляет коммерческих прав.",
+      "original": "Здесь доступно только кешированное превью. В источнике указан оригинал JPEG размером 4667 × 7000; он не входит в доступные здесь файлы для скачивания.",
+      "originNote": "Создавайте собственные изображения — используйте",
+      "generator": "ИИ-генератор изображений",
+      "hint": "Начните работу над новым изображением на основе этого визуального замысла.",
+      "hintDetail": "Фотореференс не прикрепляется автоматически.",
+      "photos": "Вам также могут понравиться эти фотографии",
+      "designs": "Похожие векторные изображения",
+      "psd": "Похожие PSD",
+      "videos": "Похожие кадры видео",
+      "videoNote": "Это статичные превью. Воспроизведение видео в этом архиве референсов недоступно.",
+      "designNote": "Только растровые превью; многослойные PSD и исходные векторные файлы здесь недоступны.",
+      "category": "Посмотреть фотографии природы",
+      "filter": "Изучить связанные теги",
+      "all": "Показать все связанные изображения",
+      "presets": [
+        {
+          "label": "Более тёплый свет",
+          "instruction": "Используйте тёплый солнечный свет золотого часа и более мягкие тени от окна."
+        },
+        {
+          "label": "Минимализм",
+          "instruction": "Используйте меньше веток, больше свободного пространства и чистую минималистичную композицию."
+        },
+        {
+          "label": "Варианты",
+          "instruction": "Попробуйте новую композицию сухоцветов и другие тени от окна."
+        }
+      ]
+    },
+    "publicExampleEn": {
+      "metadata": {
+        "title": "Эстетичные обои с цветами — общедоступный пример | Epifera",
+        "description": "Изучите цветочный референс в мягком фокусе, предложенный промпт и связанные визуальные идеи. Создайте собственную вариацию с Epifera."
+      },
+      "skip": "Перейти к примеру",
+      "current": "Общедоступный пример",
+      "currentShort": "Пример",
+      "search": "Поиск инструментов и моделей",
+      "searchButton": "Открыть поиск",
+      "searchPlaceholder": "Ищите, переходите или создавайте что угодно",
+      "close": "Закрыть",
+      "curator": "Epifera",
+      "curatorNote": "Подобранный референс",
+      "badge": "Референс, созданный ИИ",
+      "enlarge": "Увеличить изображение",
+      "title": "Эстетичные обои с цветами",
+      "download": "Скачать превью",
+      "formats": "Download formats",
+      "formatsTitle": "Форматы загрузки превью",
+      "information": "Информация",
+      "about": "Об этом примере",
+      "copyImage": "Скопировать изображение",
+      "imageCopied": "Изображение скопировано.",
+      "imageCopyError": "Не удалось скопировать изображение. Вместо этого скачайте превью.",
+      "similar": "Найти похожее",
+      "save": "Сохранить пример",
+      "saved": "Сохранённый пример",
+      "savedNotice": "Сохранено на этом устройстве.",
+      "removedNotice": "Удалено из сохранённых примеров на этом устройстве.",
+      "saveError": "Не удалось сохранить на этом устройстве.",
+      "share": "Поделиться примером",
+      "shared": "Ссылка на пример скопирована.",
+      "shareError": "Не удалось скопировать ссылку. Скопируйте её ниже.",
+      "link": "Ссылка на пример",
+      "more": "Дополнительные варианты",
+      "moreTitle": "Дополнительные действия с примером",
+      "contact": "Связаться с поддержкой",
+      "source": "Источник",
+      "sourceLink": "Посмотреть источник в Magnific",
+      "dimensions": "Размеры превью",
+      "model": "Модель",
+      "unknownModel": "Модель не указана",
+      "originalPrompt": "Исходный промпт",
+      "unknownPrompt": "Исходный промпт не предоставлен",
+      "reproduction": "Создайте собственную версию",
+      "originNote": "Magnific опубликовал этот референс с пометкой о создании ИИ. Создайте собственное изображение — используйте наш",
+      "generator": "ИИ-генератор изображений",
+      "promptTitle": "Предложенный промпт",
+      "viewPrompt": "Посмотреть предложенный промпт",
+      "copyPrompt": "Скопировать промпт",
+      "copied": "Скопировано",
+      "promptError": "Не удалось скопировать. Выделите и скопируйте промпт ниже.",
+      "promptNote": "Редакционное предложение, вдохновлённое референсом, а не его исходный промпт.",
+      "usePrompt": "Использовать этот промпт",
+      "variation": "Создать вариацию",
+      "variationLabel": "Опишите новую вариацию",
+      "variationPlaceholder": "сделай цвета теплее",
+      "variationSubmit": "Использовать промпт вариации",
+      "hideVariation": "Скрыть промпт вариации",
+      "variationHint": "Начните работу над новым изображением на основе этого визуального замысла.",
+      "presets": [
+        {
+          "label": "Более тёплые цвета",
+          "instruction": "Используйте более тёплый янтарный свет и золотистые блики."
+        },
+        {
+          "label": "Мягкий фокус",
+          "instruction": "Сделайте сцену мягче с мечтательной малой глубиной резкости."
+        },
+        {
+          "label": "Варианты",
+          "instruction": "Попробуйте новую композицию цветов и новую цветовую палитру."
+        }
+      ],
+      "series": "Другие ИИ-референсы этой серии",
+      "similarTitle": "Вам также могут понравиться эти изображения",
+      "seeAll": "Посмотреть все",
+      "previous": "Назад",
+      "next": "Далее",
+      "viewRelated": "Посмотреть связанное изображение:",
+      "viewer": "Предпросмотр изображения",
+      "thumbnails": "Изображения примера",
+      "filterLabel": "Изучить связанные теги",
+      "filterPrefix": "Фильтр по",
+      "filtered": "Подходящие референсы",
+      "all": "Показать все связанные изображения"
+    },
+    "gypsophilaMaterial": {
+      "id": "gypsophila-01",
+      "slug": "dried-gypsophila",
+      "path": "/stock/items/dried-gypsophila/gypsophila-01",
+      "title": "Сухая гипсофила с тенью от окна на бежевой стене",
+      "mediaType": "photo",
+      "media": {
+        "id": "gypsophila-01",
+        "src": "/assets/images/material-detail/gypsophila-01.webp",
+        "alt": "Сухая гипсофила с тенью от окна на бежевой стене",
+        "width": 706,
+        "height": 1060,
+        "tags": [
+          "botanical",
+          "shadow",
+          "beige"
+        ]
+      },
+      "publicMediaIds": [
+        "gypsophila-01",
+        "botanical-01",
+        "botanical-02",
+        "botanical-03",
+        "botanical-04",
+        "botanical-05",
+        "botanical-06",
+        "botanical-07",
+        "botanical-08",
+        "botanical-09",
+        "botanical-10",
+        "botanical-11",
+        "botanical-12",
+        "botanical-13",
+        "botanical-14",
+        "botanical-15",
+        "botanical-16",
+        "botanical-17",
+        "botanical-18",
+        "botanical-19",
+        "botanical-20",
+        "botanical-21",
+        "botanical-22",
+        "botanical-23",
+        "botanical-still-01",
+        "botanical-still-02",
+        "botanical-still-03",
+        "botanical-still-04",
+        "botanical-still-05",
+        "botanical-still-06",
+        "botanical-still-07",
+        "botanical-still-08",
+        "botanical-still-09",
+        "botanical-still-10"
+      ],
+      "creatorId": "rawpixel-com",
+      "creator": {
+        "name": "rawpixel.com",
+        "url": "https://www.magnific.com/author/rawpixel-com"
+      },
+      "provenance": {
+        "source": "Magnific",
+        "url": "https://www.magnific.com/free-photo/dried-gypsophila-with-window-shadow-beige-wall_19134237.htm"
+      },
+      "licenseRef": "https://www.magnific.com/profile/license/pdf/19134237?lang=en",
+      "rights": {
+        "status": "source-terms-unverified",
+        "note": "Это превью не предоставляет коммерческих прав. Перед повторным использованием фотографии проверьте лицензию источника."
+      },
+      "fileDescriptor": {
+        "width": 706,
+        "height": 1060,
+        "format": "webp",
+        "bytes": 651014
+      },
+      "downloadPolicy": "reference-preview-only",
+      "categoryIds": [
+        "nature"
+      ],
+      "taxonIds": [
+        "botanical",
+        "shadow",
+        "flower",
+        "beige",
+        "wallpaper",
+        "white"
+      ],
+      "sourceAI": false,
+      "suggestedPrompt": "Минималистичная ботаническая фотография нежных веток сухой гипсофилы на фоне тёплой бежевой оштукатуренной стены. Мягкий естественный солнечный свет из окна отбрасывает длинные геометричные тени. Воздушная композиция, мелкие кремовые цветы, тонкая фактура стены, мягкая глубина резкости и спокойная нейтральная палитра. Без текста и водяных знаков.",
+      "photos": [
+        {
+          "id": "botanical-01",
+          "src": "/assets/images/material-detail/botanical-01.webp",
+          "alt": "Эстетичные бежевые обои для рабочего стола: сухоцвет с тенью и мерцающим оформлением",
+          "width": 626,
+          "height": 352,
+          "tags": [
+            "botanical",
+            "shadow",
+            "flower",
+            "beige",
+            "wallpaper"
+          ]
+        },
+        {
+          "id": "botanical-02",
+          "src": "/assets/images/material-detail/botanical-02.webp",
+          "alt": "Сухие белые цветы статицы с тенью от окна на белой стене",
+          "width": 417,
+          "height": 626,
+          "tags": [
+            "botanical",
+            "flower",
+            "white"
+          ]
+        },
+        {
+          "id": "botanical-03",
+          "src": "/assets/images/material-detail/botanical-03.webp",
+          "alt": "Сухая гипсофила с тенью от окна на бежевой стене",
+          "width": 417,
+          "height": 626,
+          "tags": [
+            "botanical",
+            "shadow",
+            "beige"
+          ]
+        },
+        {
+          "id": "botanical-04",
+          "src": "/assets/images/material-detail/botanical-04.webp",
+          "alt": "Сухая гипсофила на сером фоне",
+          "width": 626,
+          "height": 417,
+          "tags": [
+            "botanical"
+          ]
+        },
+        {
+          "id": "botanical-05",
+          "src": "/assets/images/material-detail/botanical-05.webp",
+          "alt": "Цветочная рамка на прозрачном фоне PNG, эстетичный дизайн стикера",
+          "width": 417,
+          "height": 626,
+          "tags": [
+            "botanical",
+            "flower"
+          ]
+        },
+        {
+          "id": "botanical-06",
+          "src": "/assets/images/material-detail/botanical-06.webp",
+          "alt": "Цветочная рамка PNG: сухая белая статица с тенью от окна на прозрачном фоне",
+          "width": 626,
+          "height": 418,
+          "tags": [
+            "botanical",
+            "shadow",
+            "flower",
+            "white"
+          ]
+        },
+        {
+          "id": "botanical-07",
+          "src": "/assets/images/material-detail/botanical-07.webp",
+          "alt": "Эстетичный фон: сухоцвет с тенью и мерцающим оформлением",
+          "width": 417,
+          "height": 626,
+          "tags": [
+            "botanical",
+            "shadow",
+            "flower"
+          ]
+        },
+        {
+          "id": "botanical-08",
+          "src": "/assets/images/material-detail/botanical-08.webp",
+          "alt": "Сухие цветы в стеклянной вазе отбрасывают тень на светло-фиолетовую стену",
+          "width": 626,
+          "height": 351,
+          "tags": [
+            "botanical",
+            "shadow",
+            "flower"
+          ]
+        },
+        {
+          "id": "botanical-09",
+          "src": "/assets/images/material-detail/botanical-09.webp",
+          "alt": "Элегантный букет сухоцветов: натюрморт из нежных кремовых и бежевых цветов",
+          "width": 626,
+          "height": 626,
+          "tags": [
+            "botanical",
+            "flower",
+            "beige"
+          ]
+        },
+        {
+          "id": "botanical-10",
+          "src": "/assets/images/material-detail/botanical-10.webp",
+          "alt": "Тень экзотического растения на белой стене.",
+          "width": 626,
+          "height": 438,
+          "tags": [
+            "botanical",
+            "shadow",
+            "white"
+          ]
+        },
+        {
+          "id": "botanical-11",
+          "src": "/assets/images/material-detail/botanical-11.webp",
+          "alt": "Элегантные белые цветы, нежный букет",
+          "width": 626,
+          "height": 626,
+          "tags": [
+            "botanical",
+            "flower",
+            "white"
+          ]
+        },
+        {
+          "id": "botanical-12",
+          "src": "/assets/images/material-detail/botanical-12.webp",
+          "alt": "Тень дерева на белой стене.",
+          "width": 626,
+          "height": 438,
+          "tags": [
+            "botanical",
+            "shadow",
+            "white"
+          ]
+        }
+      ],
+      "designs": [
+        {
+          "id": "botanical-13",
+          "src": "/assets/images/material-detail/botanical-13.webp",
+          "alt": "Фон PSD с тенью тропического листа",
+          "width": 626,
+          "height": 418,
+          "tags": [
+            "botanical",
+            "shadow",
+            "leaf"
+          ]
+        },
+        {
+          "id": "botanical-14",
+          "src": "/assets/images/material-detail/botanical-14.webp",
+          "alt": "Эстетичный векторный фон: сухоцвет с тенью, мерцающее оформление",
+          "width": 626,
+          "height": 626,
+          "tags": [
+            "botanical",
+            "shadow",
+            "flower"
+          ]
+        },
+        {
+          "id": "botanical-15",
+          "src": "/assets/images/material-detail/botanical-15.webp",
+          "alt": "Эстетичный векторный фон: сухоцвет с тенью, мерцающее оформление",
+          "width": 626,
+          "height": 418,
+          "tags": [
+            "botanical",
+            "shadow",
+            "flower"
+          ]
+        },
+        {
+          "id": "botanical-16",
+          "src": "/assets/images/material-detail/botanical-16.webp",
+          "alt": "Ботанические векторные обои для мобильного телефона",
+          "width": 352,
+          "height": 626,
+          "tags": [
+            "botanical",
+            "wallpaper"
+          ]
+        },
+        {
+          "id": "botanical-17",
+          "src": "/assets/images/material-detail/botanical-17.webp",
+          "alt": "Вертикальный абстрактный бежевый фон без текста с акварельными ветками, пампасной травой и сухими травами",
+          "width": 443,
+          "height": 626,
+          "tags": [
+            "botanical",
+            "beige"
+          ]
+        },
+        {
+          "id": "botanical-18",
+          "src": "/assets/images/material-detail/botanical-18.webp",
+          "alt": "Эстетичные векторные обои для телефона: тень листа в естественном свете",
+          "width": 352,
+          "height": 626,
+          "tags": [
+            "botanical",
+            "shadow",
+            "wallpaper",
+            "leaf"
+          ]
+        },
+        {
+          "id": "botanical-19",
+          "src": "/assets/images/material-detail/botanical-19.webp",
+          "alt": "Узор из листьев Philodendron radiatum на бежевом фоне",
+          "width": 417,
+          "height": 626,
+          "tags": [
+            "botanical",
+            "beige",
+            "leaf"
+          ]
+        },
+        {
+          "id": "botanical-20",
+          "src": "/assets/images/material-detail/botanical-20.webp",
+          "alt": "Эстетичные векторные обои для телефона: тень листа в естественном свете",
+          "width": 352,
+          "height": 626,
+          "tags": [
+            "botanical",
+            "shadow",
+            "wallpaper",
+            "leaf"
+          ]
+        },
+        {
+          "id": "botanical-21",
+          "src": "/assets/images/material-detail/botanical-21.webp",
+          "alt": "Эстетичные векторные обои с цветами",
+          "width": 352,
+          "height": 626,
+          "tags": [
+            "botanical",
+            "flower",
+            "wallpaper"
+          ]
+        },
+        {
+          "id": "botanical-22",
+          "src": "/assets/images/material-detail/botanical-22.webp",
+          "alt": "Цветочная тень на белом мраморном фоне",
+          "width": 417,
+          "height": 626,
+          "tags": [
+            "botanical",
+            "shadow",
+            "white"
+          ]
+        },
+        {
+          "id": "botanical-23",
+          "src": "/assets/images/material-detail/botanical-23.webp",
+          "alt": "Векторная иллюстрация пампасной травы, нарисованная от руки, на белом фоне",
+          "width": 626,
+          "height": 626,
+          "tags": [
+            "botanical",
+            "white"
+          ]
+        }
+      ],
+      "videoStills": [
+        {
+          "id": "botanical-still-01",
+          "src": "/assets/images/material-detail/botanical-still-01.webp",
+          "alt": "Кадр видео: вид сверху на сухие цветы, отбрасывающие тени на бежевый фон, создавая минималистичное настроение",
+          "width": 264,
+          "height": 468,
+          "tags": [
+            "botanical",
+            "video-still"
+          ]
+        },
+        {
+          "id": "botanical-still-02",
+          "src": "/assets/images/material-detail/botanical-still-02.webp",
+          "alt": "Кадр видео: камера приближается к ветке с листьями, смещающейся в центр на фактурной стене; солнечный свет проявляет листовые почки",
+          "width": 468,
+          "height": 264,
+          "tags": [
+            "botanical",
+            "video-still"
+          ]
+        },
+        {
+          "id": "botanical-still-03",
+          "src": "/assets/images/material-detail/botanical-still-03.webp",
+          "alt": "Кадр видео: колышущийся сухой султан пампасной травы слегка меняет форму в нейтральной комнате, пятно солнечного света скользит вверх",
+          "width": 568,
+          "height": 320,
+          "tags": [
+            "botanical",
+            "video-still"
+          ]
+        },
+        {
+          "id": "botanical-still-04",
+          "src": "/assets/images/material-detail/botanical-still-04.webp",
+          "alt": "Кадр видео: вертикальное видео: свет меняется, тонкая ветка отбрасывает тени на бледную стену, диагональная полоса, место для текста",
+          "width": 264,
+          "height": 470,
+          "tags": [
+            "botanical",
+            "video-still"
+          ]
+        },
+        {
+          "id": "botanical-still-05",
+          "src": "/assets/images/material-detail/botanical-still-05.webp",
+          "alt": "Кадр видео: вертикальное видео: движущаяся листва снаружи отбрасывает тени листьев на штукатурную стену с цветочным оформлением в комнате",
+          "width": 264,
+          "height": 468,
+          "tags": [
+            "botanical",
+            "video-still"
+          ]
+        },
+        {
+          "id": "botanical-still-06",
+          "src": "/assets/images/material-detail/botanical-still-06.webp",
+          "alt": "Кадр видео: вертикальное видео: группа полевых цветов качается на ветру на низком лугу, с бутонами и солнечным ореолом",
+          "width": 264,
+          "height": 468,
+          "tags": [
+            "botanical",
+            "video-still"
+          ]
+        },
+        {
+          "id": "botanical-still-07",
+          "src": "/assets/images/material-detail/botanical-still-07.webp",
+          "alt": "Кадр видео: макросъёмка крупным планом созревающих злаковых колосьев, колышущихся на ветру",
+          "width": 468,
+          "height": 264,
+          "tags": [
+            "botanical",
+            "video-still"
+          ]
+        },
+        {
+          "id": "botanical-still-08",
+          "src": "/assets/images/material-detail/botanical-still-08.webp",
+          "alt": "Кадр видео: семена травы колышутся на ветру",
+          "width": 468,
+          "height": 264,
+          "tags": [
+            "botanical",
+            "video-still"
+          ]
+        },
+        {
+          "id": "botanical-still-09",
+          "src": "/assets/images/material-detail/botanical-still-09.webp",
+          "alt": "Кадр видео: вертикальное видео: одиночный султан пампасной травы покачивается от лёгкого ветерка у бледной стены, диагональная тень",
+          "width": 320,
+          "height": 568,
+          "tags": [
+            "botanical",
+            "video-still"
+          ]
+        },
+        {
+          "id": "botanical-still-10",
+          "src": "/assets/images/material-detail/botanical-still-10.webp",
+          "alt": "Кадр видео: минималистичная видеоконцепция с сухими цветами, отбрасывающими тени на бежевую стену",
+          "width": 264,
+          "height": 468,
+          "tags": [
+            "botanical",
+            "video-still"
+          ]
+        }
+      ],
+      "downloads": [
+        {
+          "label": "Превью WebP",
+          "src": "/assets/images/material-detail/gypsophila-01.webp",
+          "filename": "epifera-dried-gypsophila-preview.webp",
+          "mime": "image/webp"
+        },
+        {
+          "label": "Превью PNG",
+          "src": "/assets/images/material-detail/gypsophila-01-preview.png",
+          "filename": "epifera-dried-gypsophila-preview.png",
+          "mime": "image/png"
+        }
+      ]
+    }
+  }
+}

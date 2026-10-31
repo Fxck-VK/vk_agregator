@@ -171,6 +171,7 @@ function operationDetails(operation: PublicOperation, msg: Translator): string[]
   if (music === undefined) return [];
 
   const details = [msg("musicCatalog.result", { kind: outputKindLabel(music.output_kind, msg) })];
+  if (music.pricing_unit === "track_request") details.push(msg("musicCatalog.paidTrackRequest"));
   if (music.max_sources > 0) details.push(msg("musicCatalog.sourceTracks", { range: formatRange(music.min_sources, music.max_sources) }));
   if (music.max_uploads > 0) details.push(msg("musicCatalog.uploads", { range: formatRange(music.min_uploads, music.max_uploads) }));
   if (music.supports_max) details.push(msg("musicCatalog.maxMode"));

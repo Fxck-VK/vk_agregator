@@ -8,6 +8,23 @@
   inline-size: 100%;
 }
 
+.root[data-density="compact"] .viewport {
+  block-size: 2.75rem;
+  border: 0;
+  border-radius: var(--radius-sm);
+  padding: 0;
+  box-shadow: inset 0 0 0 0.0625rem var(--color-border);
+}
+
+.root[data-density="compact"] .viewport button {
+  block-size: 2.75rem;
+  padding-block: 0;
+}
+
+.root[data-density="compact"] .indicator {
+  inset-block: 0;
+}
+
 .viewport {
   position: relative;
   display: flex;

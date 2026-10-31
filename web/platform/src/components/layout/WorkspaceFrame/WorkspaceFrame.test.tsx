@@ -18,6 +18,11 @@ import { useWorkspaceAccountSnapshot } from "@/features/account/WorkspaceAccount
 import { useWorkspaceConversationList } from "@/features/conversations/WorkspaceConversationList/WorkspaceConversationList";
 import { useWorkspaceDataCache, type WorkspaceDataCache } from "@/features/workspace/WorkspaceDataCache/WorkspaceDataCache";
 import type { AccountProfile, ConversationItem } from "@/lib/web-api/contracts";
+import { webBrowserMutation } from "@/lib/web-api/browser";
+import { registerDevelopmentTransport } from "@/lib/web-api/development-transport";
+import { createLocalSimulator } from "@/features/local-development/simulator";
+import { defaultScenarios } from "@/features/local-development/scenarios";
+import { clearConversationCache } from "@/features/conversations/conversation-list-cache";
 
 import { GuestWorkspaceFrame, WorkspaceFrame } from "./WorkspaceFrame";
 
@@ -70,6 +75,33 @@ function mockWideViewport() {
 }
 
 describe("WorkspaceFrame", () => {
+  it("keeps a local rename after a server refresh without deferring the account balance", async () => {
+    mockWideViewport();
+    vi.stubEnv("NODE_ENV", "development");
+    clearConversationCache();
+    const fetch = vi.fn();
+    vi.stubGlobal("fetch", fetch);
+    const simulator = createLocalSimulator(() => defaultScenarios, { seed: { conversations: [workspaceConversation], messages: {} } });
+    const unregister = registerDevelopmentTransport(simulator.handle);
+    const children = <><WorkspaceConversationListProbe /><WorkspaceAccountProbe /></>;
+    try {
+      const view = render(<WorkspaceFrame {...workspaceProps} balance={42} conversations={[workspaceConversation]} deferConversations>{children}</WorkspaceFrame>);
+      await waitFor(() => expect(screen.getAllByRole("status")[0]).toHaveTextContent(workspaceConversation.title));
+      const response = await webBrowserMutation(`/web/v1/conversations/${workspaceConversation.id}`, { method: "PATCH", body: JSON.stringify({ title: "Сохранённое длинное название для проверки" }) });
+      expect(response.status).toBe(200);
+      view.rerender(<WorkspaceFrame {...workspaceProps} balance={42} conversations={[{ ...workspaceConversation }]} deferConversations>{children}</WorkspaceFrame>);
+      await waitFor(() => expect(screen.getAllByRole("status")[0]).toHaveTextContent("Сохранённое длинное название для проверки"));
+      expect(screen.getAllByRole("status")[1]).toHaveTextContent(`${workspaceProfile.account_id}:42`);
+      expect(fetch.mock.calls.some(([path]) => String(path).startsWith("/web/v1/conversations"))).toBe(false);
+    } finally {
+      cleanup();
+      unregister();
+      simulator.dispose();
+      clearConversationCache();
+      vi.unstubAllEnvs();
+    }
+  });
+
   afterEach(() => {
     cleanup();
     localStorage.clear();
@@ -232,10 +264,8 @@ describe("WorkspaceFrame", () => {
     }
     if (pathname === "/app/music" || pathname === "/app/speech") {
       expect(within(header).getByRole("toolbar", { name: expectedTitle })).toBeInTheDocument();
-      expect(screen.queryByRole("button", { name: "Model selector" })).not.toBeInTheDocument();
-    } else {
-      expect(screen.getByRole("button", { name: "Model selector" })).toBeInTheDocument();
     }
+    expect(within(header).getByRole("button", { name: "Model selector" })).toBeInTheDocument();
     expect(within(header).getByLabelText("42 звезды")).toBeInTheDocument();
     expect(within(header).getByRole("button", { name: "Выбрать тариф" })).toHaveAttribute("type", "button");
   });

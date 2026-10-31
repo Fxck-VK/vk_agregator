@@ -21,12 +21,12 @@ import {publicTagLabel} from "@/features/collection/tag-labels";
 
 
 function CategorySearch({query,onQuery,inputRef}:{query:string;onQuery:(query:string)=>void;inputRef?:React.RefObject<HTMLInputElement|null>}){
-  const {t} = usePublicCopy(publicCopySourcesForLocale);
+  const {t} = usePublicCopy(publicCopySourcesForLocale,{"t":"materialCategoryEn","initialMaterialFilters":"initialMaterialFilters","natureCategory":"natureCategory","natureMaterials":"natureMaterials","gypsophilaMaterial":"gypsophilaMaterial"});
 
   return <form className={styles.search} role="search" onSubmit={event=>event.preventDefault()}><HelpIcon kind="search"/><input ref={inputRef} type="search" aria-label={t.search} value={query} placeholder={t.searchPlaceholder} onChange={event=>onQuery(event.target.value)}/>{query?<button type="button" aria-label={t.clearSearch} onClick={()=>{onQuery("");inputRef?.current?.focus();}}>×</button>:null}</form>;
 }
 export function MaterialCategoryPage(){
-  const {natureCategory,t,gypsophilaMaterial,aiToolsEn} = usePublicCopy(publicCopySourcesForLocale);
+  const {natureCategory,t,gypsophilaMaterial,aiToolsEn,natureMaterials,initialMaterialFilters} = usePublicCopy(publicCopySourcesForLocale,{"t":"materialCategoryEn","initialMaterialFilters":"initialMaterialFilters","natureCategory":"natureCategory","natureMaterials":"natureMaterials","gypsophilaMaterial":"gypsophilaMaterial"});
   const locale=useLocale(),localizedMaterials=usePublicCopy(natureMaterials),initialFilters={...initialMaterialFilters,query:usePublicCopy(initialMaterialFilters.query)},text=(source:string)=>translatePublicText(source,locale);
 
   const [filters,setFilters]=useState({...initialFilters}),[layout,setLayout]=useState<MaterialLayout>("masonry"),[page,setPage]=useState(1),[overlay,setOverlay]=useState<"search"|"filters"|"tools"|null>(null),[preview,setPreview]=useState<number|null>(null),[notice,setNotice]=useState(""),[banner,setBanner]=useState(true),root=useRef<HTMLDivElement>(null),opener=useRef<HTMLElement|null>(null),input=useRef<HTMLInputElement>(null),dialogInput=useRef<HTMLInputElement>(null),resultsRef=useRef<HTMLDivElement>(null),open=overlay!==null||preview!==null;

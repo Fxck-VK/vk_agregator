@@ -12,3 +12,10 @@ scan:
     - web/admin/coverage
     - web/platform/playwright-report
     - web/platform/test-results
+    - references/magnific-html
+    - references/magnific-html-js
+    - references/magnific-login-ru
+    - references/magnific-reference-assets
+    - references/magnific-states
+  skip-files:
+    - "references/*.zip"

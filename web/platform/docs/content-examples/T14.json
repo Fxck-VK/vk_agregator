@@ -1,0 +1,411 @@
+{
+  "id": "page-t14",
+  "template": "T14",
+  "path": "/inspiration/examples/aesthetic-flowers",
+  "locale": "ru",
+  "status": "draft",
+  "indexing": "noindex",
+  "seo": {
+    "title": "Эстетичные обои с цветами — общедоступный пример | Epifera",
+    "description": "Изучите цветочный референс в мягком фокусе, предложенный промпт и связанные визуальные идеи. Создайте собственную вариацию с Epifera."
+  },
+  "relatedIds": [],
+  "content": {
+    "publicExampleEn": {
+      "metadata": {
+        "title": "Эстетичные обои с цветами — общедоступный пример | Epifera",
+        "description": "Изучите цветочный референс в мягком фокусе, предложенный промпт и связанные визуальные идеи. Создайте собственную вариацию с Epifera."
+      },
+      "skip": "Перейти к примеру",
+      "current": "Общедоступный пример",
+      "currentShort": "Пример",
+      "search": "Поиск инструментов и моделей",
+      "searchButton": "Открыть поиск",
+      "searchPlaceholder": "Ищите, переходите или создавайте что угодно",
+      "close": "Закрыть",
+      "curator": "Epifera",
+      "curatorNote": "Подобранный референс",
+      "badge": "Референс, созданный ИИ",
+      "enlarge": "Увеличить изображение",
+      "title": "Эстетичные обои с цветами",
+      "download": "Скачать превью",
+      "formats": "Download formats",
+      "formatsTitle": "Форматы загрузки превью",
+      "information": "Информация",
+      "about": "Об этом примере",
+      "copyImage": "Скопировать изображение",
+      "imageCopied": "Изображение скопировано.",
+      "imageCopyError": "Не удалось скопировать изображение. Вместо этого скачайте превью.",
+      "similar": "Найти похожее",
+      "save": "Сохранить пример",
+      "saved": "Сохранённый пример",
+      "savedNotice": "Сохранено на этом устройстве.",
+      "removedNotice": "Удалено из сохранённых примеров на этом устройстве.",
+      "saveError": "Не удалось сохранить на этом устройстве.",
+      "share": "Поделиться примером",
+      "shared": "Ссылка на пример скопирована.",
+      "shareError": "Не удалось скопировать ссылку. Скопируйте её ниже.",
+      "link": "Ссылка на пример",
+      "more": "Дополнительные варианты",
+      "moreTitle": "Дополнительные действия с примером",
+      "contact": "Связаться с поддержкой",
+      "source": "Источник",
+      "sourceLink": "Посмотреть источник в Magnific",
+      "dimensions": "Размеры превью",
+      "model": "Модель",
+      "unknownModel": "Модель не указана",
+      "originalPrompt": "Исходный промпт",
+      "unknownPrompt": "Исходный промпт не предоставлен",
+      "reproduction": "Создайте собственную версию",
+      "originNote": "Magnific опубликовал этот референс с пометкой о создании ИИ. Создайте собственное изображение — используйте наш",
+      "generator": "ИИ-генератор изображений",
+      "promptTitle": "Предложенный промпт",
+      "viewPrompt": "Посмотреть предложенный промпт",
+      "copyPrompt": "Скопировать промпт",
+      "copied": "Скопировано",
+      "promptError": "Не удалось скопировать. Выделите и скопируйте промпт ниже.",
+      "promptNote": "Редакционное предложение, вдохновлённое референсом, а не его исходный промпт.",
+      "usePrompt": "Использовать этот промпт",
+      "variation": "Создать вариацию",
+      "variationLabel": "Опишите новую вариацию",
+      "variationPlaceholder": "сделай цвета теплее",
+      "variationSubmit": "Использовать промпт вариации",
+      "hideVariation": "Скрыть промпт вариации",
+      "variationHint": "Начните работу над новым изображением на основе этого визуального замысла.",
+      "presets": [
+        {
+          "label": "Более тёплые цвета",
+          "instruction": "Используйте более тёплый янтарный свет и золотистые блики."
+        },
+        {
+          "label": "Мягкий фокус",
+          "instruction": "Сделайте сцену мягче с мечтательной малой глубиной резкости."
+        },
+        {
+          "label": "Варианты",
+          "instruction": "Попробуйте новую композицию цветов и новую цветовую палитру."
+        }
+      ],
+      "series": "Другие ИИ-референсы этой серии",
+      "similarTitle": "Вам также могут понравиться эти изображения",
+      "seeAll": "Посмотреть все",
+      "previous": "Назад",
+      "next": "Далее",
+      "viewRelated": "Посмотреть связанное изображение:",
+      "viewer": "Предпросмотр изображения",
+      "thumbnails": "Изображения примера",
+      "filterLabel": "Изучить связанные теги",
+      "filterPrefix": "Фильтр по",
+      "filtered": "Подходящие референсы",
+      "all": "Показать все связанные изображения"
+    },
+    "flowerExample": {
+      "id": "aesthetic-flowers",
+      "slug": "aesthetic-flowers",
+      "title": "Эстетичные обои с цветами",
+      "origin": "reference",
+      "media": {
+        "id": "aesthetic-flowers",
+        "src": "/assets/images/public-examples/aesthetic-flowers.webp",
+        "alt": "Эстетичные обои с цветами",
+        "width": 606,
+        "height": 1060,
+        "tags": [
+          "flowers",
+          "aesthetic",
+          "wallpaper",
+          "pastel"
+        ]
+      },
+      "publicMediaIds": [
+        "aesthetic-flowers",
+        "flower-reference-01",
+        "flower-reference-02",
+        "flower-reference-03",
+        "flower-reference-04",
+        "flower-reference-05",
+        "flower-reference-06",
+        "flower-reference-07",
+        "flower-reference-08",
+        "flower-reference-09",
+        "flower-reference-10",
+        "flower-reference-11",
+        "flower-reference-12",
+        "flower-reference-13",
+        "flower-reference-14",
+        "flower-reference-15",
+        "flower-reference-16",
+        "flower-reference-17",
+        "flower-reference-18"
+      ],
+      "modelVersionId": null,
+      "consentRef": null,
+      "moderationState": "reference-only",
+      "promptPublicationAllowed": false,
+      "provenance": {
+        "source": "Magnific",
+        "url": "https://www.magnific.com/free-ai-image/aesthetic-wallpaper-with-flowers_394975120.htm"
+      },
+      "taskIds": [
+        "image-generation"
+      ],
+      "taxonIds": [
+        "aesthetic",
+        "flowers",
+        "pastel",
+        "pattern",
+        "wallpaper"
+      ],
+      "suggestedPrompt": "Мечтательные вертикальные обои с цветами: розовые и коралловые герберы в мягком фокусе, бледный кремовый фон, тёплый солнечный свет сквозь полупрозрачные лепестки, лёгкое плёночное зерно и воздушное настроение винтажной фотографии. Нежные пересекающиеся стебли, мягкая глубина резкости, несколько жёлтых цветов у края. Без текста и водяных знаков.",
+      "reproductionNotes": "Используйте предложенный промпт как отправную точку. Исходная модель и первоначальные настройки генерации не предоставлены, поэтому новый результат будет отличаться. Размеры загрузок описывают доступное превью, а не недоступный оригинал в полном разрешении.",
+      "series": [
+        {
+          "id": "flower-reference-01",
+          "src": "/assets/images/public-examples/flower-reference-01.webp",
+          "alt": "Этюд цветочных обоев 1",
+          "width": 358,
+          "height": 626,
+          "tags": [
+            "flowers",
+            "aesthetic",
+            "wallpaper",
+            "pastel"
+          ]
+        },
+        {
+          "id": "flower-reference-02",
+          "src": "/assets/images/public-examples/flower-reference-02.webp",
+          "alt": "Этюд цветочных обоев 2",
+          "width": 358,
+          "height": 626,
+          "tags": [
+            "flowers",
+            "aesthetic",
+            "wallpaper",
+            "pastel"
+          ]
+        },
+        {
+          "id": "flower-reference-03",
+          "src": "/assets/images/public-examples/flower-reference-03.webp",
+          "alt": "Этюд цветочных обоев 3",
+          "width": 358,
+          "height": 626,
+          "tags": [
+            "flowers",
+            "aesthetic",
+            "wallpaper",
+            "pastel"
+          ]
+        },
+        {
+          "id": "flower-reference-04",
+          "src": "/assets/images/public-examples/flower-reference-04.webp",
+          "alt": "Этюд цветочных обоев 4",
+          "width": 428,
+          "height": 626,
+          "tags": [
+            "flowers",
+            "aesthetic",
+            "wallpaper",
+            "pastel"
+          ]
+        },
+        {
+          "id": "flower-reference-05",
+          "src": "/assets/images/public-examples/flower-reference-05.webp",
+          "alt": "Этюд цветочных обоев 5",
+          "width": 626,
+          "height": 358,
+          "tags": [
+            "flowers",
+            "aesthetic",
+            "wallpaper",
+            "pattern"
+          ]
+        },
+        {
+          "id": "flower-reference-06",
+          "src": "/assets/images/public-examples/flower-reference-06.webp",
+          "alt": "Этюд цветочных обоев 6",
+          "width": 626,
+          "height": 358,
+          "tags": [
+            "flowers",
+            "aesthetic",
+            "wallpaper",
+            "pattern"
+          ]
+        },
+        {
+          "id": "flower-reference-07",
+          "src": "/assets/images/public-examples/flower-reference-07.webp",
+          "alt": "Этюд цветочных обоев 7",
+          "width": 358,
+          "height": 626,
+          "tags": [
+            "flowers",
+            "aesthetic",
+            "wallpaper",
+            "pattern"
+          ]
+        },
+        {
+          "id": "flower-reference-08",
+          "src": "/assets/images/public-examples/flower-reference-08.webp",
+          "alt": "Этюд цветочных обоев 8",
+          "width": 358,
+          "height": 626,
+          "tags": [
+            "flowers",
+            "aesthetic",
+            "wallpaper",
+            "pattern"
+          ]
+        },
+        {
+          "id": "flower-reference-09",
+          "src": "/assets/images/public-examples/flower-reference-09.webp",
+          "alt": "Этюд цветочных обоев 9",
+          "width": 358,
+          "height": 626,
+          "tags": [
+            "flowers",
+            "aesthetic",
+            "wallpaper",
+            "pattern"
+          ]
+        }
+      ],
+      "similar": [
+        {
+          "id": "flower-reference-10",
+          "src": "/assets/images/public-examples/flower-reference-10.webp",
+          "alt": "Много жёлтых цветов",
+          "width": 417,
+          "height": 626,
+          "tags": [
+            "flowers",
+            "aesthetic",
+            "wallpaper"
+          ]
+        },
+        {
+          "id": "flower-reference-11",
+          "src": "/assets/images/public-examples/flower-reference-11.webp",
+          "alt": "Яркие акварельные обои с цветами для телефона",
+          "width": 352,
+          "height": 626,
+          "tags": [
+            "flowers",
+            "aesthetic",
+            "watercolor",
+            "wallpaper"
+          ]
+        },
+        {
+          "id": "flower-reference-12",
+          "src": "/assets/images/public-examples/flower-reference-12.webp",
+          "alt": "Нежный пастельный цветочный мир грёз",
+          "width": 352,
+          "height": 626,
+          "tags": [
+            "flowers",
+            "aesthetic",
+            "pastel",
+            "wallpaper"
+          ]
+        },
+        {
+          "id": "flower-reference-13",
+          "src": "/assets/images/public-examples/flower-reference-13.webp",
+          "alt": "Цветное запотевшее стекло",
+          "width": 417,
+          "height": 626,
+          "tags": [
+            "flowers",
+            "aesthetic",
+            "wallpaper"
+          ]
+        },
+        {
+          "id": "flower-reference-14",
+          "src": "/assets/images/public-examples/flower-reference-14.webp",
+          "alt": "Цветы на розовой стене. Минималистичное искусство",
+          "width": 626,
+          "height": 626,
+          "tags": [
+            "flowers",
+            "aesthetic",
+            "minimal",
+            "wallpaper"
+          ]
+        },
+        {
+          "id": "flower-reference-15",
+          "src": "/assets/images/public-examples/flower-reference-15.webp",
+          "alt": "Винтажные обои для телефона с цветами и небом",
+          "width": 352,
+          "height": 626,
+          "tags": [
+            "flowers",
+            "aesthetic",
+            "vintage",
+            "wallpaper"
+          ]
+        },
+        {
+          "id": "flower-reference-16",
+          "src": "/assets/images/public-examples/flower-reference-16.webp",
+          "alt": "Узор из оранжевых бумажных ромашек на бежевом фоне",
+          "width": 417,
+          "height": 626,
+          "tags": [
+            "flowers",
+            "aesthetic",
+            "pattern",
+            "wallpaper"
+          ]
+        },
+        {
+          "id": "flower-reference-17",
+          "src": "/assets/images/public-examples/flower-reference-17.webp",
+          "alt": "Цветное запотевшее стекло",
+          "width": 417,
+          "height": 626,
+          "tags": [
+            "flowers",
+            "aesthetic",
+            "wallpaper"
+          ]
+        },
+        {
+          "id": "flower-reference-18",
+          "src": "/assets/images/public-examples/flower-reference-18.webp",
+          "alt": "Эстетичный мудборд с цветами. Фон с цветущим оранжевым тюльпаном. Идеально для открытки",
+          "width": 417,
+          "height": 626,
+          "tags": [
+            "flowers",
+            "aesthetic",
+            "wallpaper"
+          ]
+        }
+      ],
+      "downloads": [
+        {
+          "label": "Превью PNG",
+          "src": "/assets/images/public-examples/aesthetic-flowers-preview.png",
+          "filename": "epifera-aesthetic-flowers-preview.png",
+          "mime": "image/png"
+        },
+        {
+          "label": "Превью WebP",
+          "src": "/assets/images/public-examples/aesthetic-flowers.webp",
+          "filename": "epifera-aesthetic-flowers-preview.webp",
+          "mime": "image/webp"
+        }
+      ]
+    }
+  }
+}

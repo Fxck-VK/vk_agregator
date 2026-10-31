@@ -1,6 +1,9 @@
 package pricingcatalog
 
-import "vk-ai-aggregator/internal/domain"
+import (
+	"math/big"
+	"vk-ai-aggregator/internal/domain"
+)
 
 const (
 	StaticCatalogVersion = 15
@@ -144,7 +147,11 @@ func StaticProductPrices() []ProductPrice {
 	prices = append(prices, omniVideoTariffs()...)
 	prices = append(prices, klingVeoTariffs()...)
 	prices = append(prices, turboH3Tariffs()...)
-	return append(prices, textTariffs()...)
+	prices = append(prices, textTariffs()...)
+	for i := range prices {
+		prices[i] = applyEconomicRetailPolicy(prices[i])
+	}
+	return prices
 }
 
 // DisabledStaticProductPrices returns approved tariffs kept fail-closed because
@@ -245,10 +252,22 @@ func videoTariff(alias domain.VideoRouteAlias, resolution string, duration int, 
 }
 
 func exactRetailMultiplier(floorAmount int64, conversion UnitConversion, retailCredits int64) Multiplier {
-	return Multiplier{
-		Numerator:   retailCredits * conversion.FloorUnits * MinorUnitsPerCredit,
-		Denominator: floorAmount * conversion.InternalCreditUnits,
+	if floorAmount <= 0 || retailCredits <= 0 || !conversion.Valid() {
+		return Multiplier{}
 	}
+	n := new(big.Int).Mul(big.NewInt(retailCredits), big.NewInt(conversion.FloorUnits))
+	n.Mul(n, big.NewInt(MinorUnitsPerCredit))
+	d := new(big.Int).Mul(big.NewInt(floorAmount), big.NewInt(conversion.InternalCreditUnits))
+	// Preserve already-persisted bounded representations. Larger exact values
+	// must reduce safely, never wrap into a different positive multiplier.
+	if n.IsInt64() && d.IsInt64() {
+		return Multiplier{Numerator: n.Int64(), Denominator: d.Int64()}
+	}
+	r := new(big.Rat).SetFrac(n, d)
+	if !r.Num().IsInt64() || !r.Denom().IsInt64() {
+		return Multiplier{}
+	}
+	return Multiplier{Numerator: r.Num().Int64(), Denominator: r.Denom().Int64()}
 }
 
 func disabledVideoTariff(alias domain.VideoRouteAlias, resolution string, duration int, floorAmount int64, unit FloorUnit, conversion UnitConversion, reason, target string) DisabledProductPrice {

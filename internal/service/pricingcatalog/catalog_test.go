@@ -169,8 +169,8 @@ func TestCatalogLookupCostEstimateDisplayHintAndSnapshot(t *testing.T) {
 	if err != nil {
 		t.Fatalf("display estimate: %v", err)
 	}
-	if display != 11 {
-		t.Fatalf("display estimate = %d, want backend display hint 11", display)
+	if display != 15 {
+		t.Fatalf("display estimate = %d, want canonical exact price 15", display)
 	}
 
 	firstSnapshot, err := catalog.Snapshot(key)

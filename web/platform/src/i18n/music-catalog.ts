@@ -1,4 +1,5 @@
 export const messagesMusicCatalogRu = {
+  "musicCatalog.paidTrackRequest": "Цена обычного режима — за запрос с одним гарантированным треком. Дополнительные варианты сохраняются бесплатно.",
   "musicCatalog.modelPending": "Модель ждёт отдельной проверки перед запуском.",
   "musicCatalog.modelDisabled": "Сервер не включил музыкальные операции для этой модели.",
   "musicCatalog.operationPending": "Операция ожидает проверки перед запуском.",
@@ -61,6 +62,7 @@ export const messagesMusicCatalogRu = {
 } as const;
 
 export const messagesMusicCatalogEn: Record<keyof typeof messagesMusicCatalogRu, string> = {
+  "musicCatalog.paidTrackRequest": "Standard mode is priced per request with at least one track. Extra alternatives are kept at no additional charge.",
   "musicCatalog.modelPending": "The model is awaiting verification before launch.",
   "musicCatalog.modelDisabled": "Music operations are not enabled for this model.",
   "musicCatalog.operationPending": "This operation is awaiting verification before launch.",

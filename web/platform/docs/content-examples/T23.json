@@ -1,0 +1,14 @@
+{
+  "id": "page-t23",
+  "template": "T23",
+  "path": "/legal",
+  "locale": "ru",
+  "status": "draft",
+  "indexing": "noindex",
+  "seo": {
+    "title": "Правовые документы",
+    "description": "Правовые документы Epifera"
+  },
+  "relatedIds": [],
+  "content": {}
+}

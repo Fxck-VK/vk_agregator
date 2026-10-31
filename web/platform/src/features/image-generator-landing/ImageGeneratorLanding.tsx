@@ -22,7 +22,7 @@ import {usePublicCopy} from "@/i18n/public/use-public-copy";
 
 
 export function ImageGeneratorLanding() {
-  const {copy,homeEn,reference} = usePublicCopy(publicCopySourcesForLocale);
+  const {copy,homeEn,reference} = usePublicCopy(publicCopySourcesForLocale,{"copy":"imageGeneratorEn","reference":"imageGeneratorReferenceEn"});
 
   const [prompt, setPrompt] = useState(""); const [search, setSearch] = useState(false); const [gallery, setGallery] = useState<ReferenceImage | null>(null); const [paused, setPaused] = useState(false);
   const router = useRouter(); const openSearch = useCallback(() => { if (gallery === null) setSearch(true); }, [gallery]);

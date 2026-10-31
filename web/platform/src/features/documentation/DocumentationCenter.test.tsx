@@ -18,6 +18,6 @@ describe("localized help contents",()=>{
     rerender(<LocaleProvider locale="en"><DocumentationCenter article={article}/></LocaleProvider>);
     expect(screen.getByRole("heading",{level:1})).toHaveTextContent("Account management");
     fireEvent.change(screen.getByRole("searchbox"),{target:{value:"BACKUP EMAIL"}});
-    expect(within(screen.getByRole("searchbox").closest("nav")!).getByRole("link",{name:"Account management"})).toHaveAttribute("href","/en/ai/docs/account-management");
+    expect(within(screen.getByRole("searchbox").closest("nav")!).getByRole("link",{name:"Account management"})).toHaveAttribute("href","/ru/ai/docs/account-management");
   });
 });

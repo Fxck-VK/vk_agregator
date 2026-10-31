@@ -21,7 +21,7 @@ func TestNewAPIMartImagesCreateReservedVKJobs(t *testing.T) {
 		id, quality string
 		credits     int64
 	}{
-		{"gpt_image_2_5_flare", "1K-medium", 20}, {"gpt_image_2_5_sunburst", "2K-medium", 25}, {"seedream_5_0_lite", "3K", 20}, {"seedream_5_0_pro", "1.5K", 20},
+		{"gpt_image_2_5_flare", "1K-medium", 52}, {"gpt_image_2_5_sunburst", "2K-medium", 25}, {"seedream_5_0_lite", "3K", 30}, {"seedream_5_0_pro", "1.5K", 35},
 	} {
 		t.Run(tc.id, func(t *testing.T) {
 			control := vkdelivery.NewMockClient()

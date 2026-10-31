@@ -32,6 +32,7 @@ function pendingMusicCatalog() {
         },
         music: {
           estimate_credits: 25,
+          pricing_unit: "track_request",
           group: "create",
           max_estimate_credits: 40,
           max_sources: 0,
@@ -106,6 +107,9 @@ describe("music model catalog projection", () => {
     const catalog = parseModelCatalog(pendingMusicCatalog());
 
     const music = projectMusicModelCatalog(catalog);
+
+    expect(music.models[0].operations.find(operation => operation.id === "generate")?.details)
+      .toContain("Цена обычного режима — за запрос с одним гарантированным треком. Дополнительные варианты сохраняются бесплатно.");
 
     expect(music.defaultModelId).toBe("suno_v6");
     expect(music.models).toHaveLength(1);

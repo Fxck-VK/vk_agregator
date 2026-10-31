@@ -209,7 +209,7 @@ func (p *WebhookProcessor) ProcessEvent(ctx context.Context, event *domain.Payme
 		return fmt.Errorf("%w: event provider %s", ErrWebhookInvalid, event.Provider)
 	}
 	if isRefundWebhookEvent(event.EventType) {
-		return p.ackInboxEvent(ctx, event.ID)
+		return p.processSubscriptionRefund(ctx, event)
 	}
 	if strings.TrimSpace(event.ProviderPaymentID) == "" {
 		return p.ackInboxEvent(ctx, event.ID)
@@ -231,6 +231,9 @@ func (p *WebhookProcessor) ProcessEvent(ctx context.Context, event *domain.Payme
 			return nil
 		}
 		intent, err := payments.GetIntentByProviderPaymentID(ctx, event.Provider, event.ProviderPaymentID)
+		if errors.Is(err, domain.ErrNotFound) && providerPayment.VerifiedIntentID != uuid.Nil && providerPayment.VerifiedAccountID != uuid.Nil {
+			intent, err = p.recoverSubscriptionPaymentBinding(ctx, payments, billingRepo, providerPayment)
+		}
 		if err != nil {
 			return err
 		}
@@ -459,6 +462,13 @@ func (p *WebhookProcessor) ensureRefundIntentRecord(ctx context.Context, in Refu
 		if err != nil {
 			return err
 		}
+		if err := lockTopupRefundOwner(ctx, billingRepo, intent); err != nil {
+			return err
+		}
+		intent, err = payments.GetIntentByID(ctx, in.IntentID)
+		if err != nil {
+			return err
+		}
 		if intent.Status != domain.PaymentIntentSucceeded {
 			return ErrRefundNotAllowed
 		}
@@ -646,8 +656,15 @@ func (p *WebhookProcessor) compensateRefundDebit(ctx context.Context, intent *do
 }
 
 func ensureTopupCreditsRefundable(ctx context.Context, repo domain.BillingRepository, accountID uuid.UUID, intent *domain.PaymentIntent) error {
+	// The legacy top-up refund cannot reverse subscription access and exact lots.
+	if purchase, err := subscriptionPurchaseFrom(intent); err != nil || purchase != nil {
+		return ErrRefundNotAllowed
+	}
 	if intent == nil || strings.TrimSpace(intent.ProviderPaymentID) == "" || intent.Credits <= 0 {
 		return ErrRefundNotAllowed
+	}
+	if err := requireNonExpiringRefundBalance(ctx, repo, accountID); err != nil {
+		return err
 	}
 	currentCredits, err := currentIntentCredits(intent)
 	if err != nil {
@@ -684,6 +701,16 @@ func ensureTopupCreditsRefundable(ctx context.Context, repo domain.BillingReposi
 				return nil
 			}
 			if entry.Amount < 0 && (entry.Status == domain.LedgerStatusCommitted || entry.Status == domain.LedgerStatusPending) {
+				if proof, ok := repo.(domain.SubscriptionRefundReversalReader); ok &&
+					entry.Type == domain.LedgerAdjustment && entry.Status == domain.LedgerStatusCommitted {
+					unrelated, err := proof.IsUnusedSubscriptionRefundReversal(ctx, accountID, entry.ID)
+					if err != nil {
+						return err
+					}
+					if unrelated {
+						continue
+					}
+				}
 				return ErrRefundCreditsSpent
 			}
 		}
@@ -804,6 +831,20 @@ type applyResult struct {
 }
 
 func (p *WebhookProcessor) applyProviderPayment(ctx context.Context, payments domain.PaymentRepository, billingRepo domain.BillingRepository, intent *domain.PaymentIntent, providerPayment domain.ProviderPayment) (applyResult, error) {
+	wasSucceeded := intent.Status == domain.PaymentIntentSucceeded
+	purchase, err := subscriptionPurchaseFrom(intent)
+	if err != nil {
+		return applyResult{}, err
+	}
+	if purchase != nil {
+		store, ok := billingRepo.(domain.SubscriptionRepository)
+		if !ok {
+			return applyResult{}, ErrSubscriptionUnavailable
+		}
+		if _, err := store.LockSubscription(ctx, intent.AccountID); err != nil {
+			return applyResult{}, err
+		}
+	}
 	target := providerPayment.Status
 	transitionAllowed := intent.Status == target || intent.Status.CanTransitionTo(target)
 	if !transitionAllowed {
@@ -818,6 +859,9 @@ func (p *WebhookProcessor) applyProviderPayment(ctx context.Context, payments do
 		}
 		if providerPayment.Amount != intent.Amount || providerPayment.Currency != intent.Currency {
 			return applyResult{}, fmt.Errorf("%w: amount/currency", ErrWebhookMismatch)
+		}
+		if purchase != nil && wasSucceeded {
+			return applyResult{}, nil
 		}
 	}
 	var result applyResult
@@ -836,13 +880,20 @@ func (p *WebhookProcessor) applyProviderPayment(ctx context.Context, payments do
 			metrics.PaymentsCanceled.WithLabelValues(string(intent.Provider)).Inc()
 		}
 	}
+	if purchase != nil && (target == domain.PaymentIntentCanceled || target == domain.PaymentIntentFailed || target == domain.PaymentIntentExpired) {
+		if err := p.stopFailedRenewal(ctx, billingRepo, intent, providerPayment, purchase); err != nil {
+			return result, err
+		}
+	}
 	if target == domain.PaymentIntentSucceeded {
 		currentCredits, err := currentIntentCredits(intent)
 		if err != nil {
 			return result, err
 		}
 		var grantErr error
-		if intent.AccountID != uuid.Nil {
+		if purchase != nil {
+			grantErr = p.settleSubscription(ctx, billingRepo, intent, providerPayment, purchase)
+		} else if intent.AccountID != uuid.Nil {
 			grantErr = p.billing.GrantWithAccount(
 				ctx,
 				billingRepo,

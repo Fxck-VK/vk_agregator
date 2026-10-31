@@ -1,0 +1,1024 @@
+<!doctype html><html lang="ru"><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><meta name="robots" content="noindex,nofollow"><title>Study24 — все 94 цены и правила расчёта · 28.10.2026</title>
+<style>:root{color-scheme:dark;font:15px/1.5 system-ui,sans-serif;background:#0c1016;color:#eaf0f8}body{max-width:1440px;margin:auto;padding:36px 26px 80px}h1{font-size:clamp(28px,4vw,42px);line-height:1.12;margin:12px 0 18px}h2{margin:42px 0 14px;font-size:25px}a{color:#bc9fff}p{max-width:1050px}small{display:block;color:#9eacbf;margin-top:7px}code{font-size:12px;color:#b4bfd0;overflow-wrap:anywhere}pre{white-space:pre-wrap;overflow-wrap:anywhere;background:#0c1016;border-radius:8px;padding:14px;font-size:12px;max-height:420px;overflow:auto}.eyebrow{color:#b99bff;letter-spacing:.1em;text-transform:uppercase;font-size:12px}.cards{display:grid;grid-template-columns:repeat(auto-fit,minmax(140px,1fr));gap:12px;margin:25px 0}.card{background:#171e28;border:1px solid #293342;border-radius:12px;padding:18px}.card b{display:block;font-size:30px}.card span{color:#a9b7cb}.note{border-left:3px solid #a782fa;background:#151b26;padding:18px 22px;border-radius:0 8px 8px 0}.toolbar{display:flex;flex-wrap:wrap;gap:12px;margin:24px 0}input,select{background:#171e28;border:1px solid #394454;border-radius:8px;color:inherit;padding:12px;font:inherit}input{flex:1;min-width:240px}input:focus,select:focus{outline:2px solid #a782fa;outline-offset:2px}.table-wrap{overflow:auto;border:1px solid #293342;border-radius:12px}table{border-collapse:collapse;width:100%;min-width:850px;font-size:14px}th,td{padding:17px 16px;text-align:left;vertical-align:top;border-bottom:1px solid #293342}th{background:#1c2431;color:#becbe0;white-space:nowrap}td:nth-child(2){min-width:210px}td:nth-child(3){min-width:215px}td:last-child{min-width:265px}tr:last-child td{border-bottom:0}tr:hover{background:#141b26}summary{color:#bca5f5;cursor:pointer;margin-top:14px}details[open]{max-width:600px}details ul{padding-left:20px}.status{color:#b5d7c0}.muted{color:#9eacbf}.conflict{display:block;color:#f0bf83;margin-top:8px;font-size:12px}.downloads{display:flex;gap:20px;flex-wrap:wrap}.counter{color:#9eacbf;margin:0 0 10px}[hidden]{display:none!important}</style>
+<body><div class="eyebrow">Epifera · исследование экономики · 28 октября 2026</div><h1>Study24: цены всех 94 позиций<br>и правила расчёта</h1><p>Проверены раскрытый каталог, все страницы моделей, полная таблица тарифов, опубликованные настройки стоимости и шесть приложений. Цены ниже — в токенах Study24.</p>
+<div class="cards"><div class="card"><b>94 / 94</b><span>позиции исследованы</span></div><div class="card"><b>43</b><span>опубликованные формулы медиа</span></div><div class="card"><b>35</b><span>текстовые диапазоны</span></div><div class="card"><b>8</b><span>бесплатные модели</span></div><div class="card"><b>5 + Studio</b><span>отдельные интерфейсы</span></div></div>
+<p class="note"><b>Публичная цена и фактическое списание различаются по уровню проверки.</b> Генерации, покупки и загрузки файлов не запускались. Для 35 текстовых моделей и приложения кода известны диапазоны/минимумы, но серверные коэффициенты input/output/context не опубликованы. Публичный поясняющий пример «1 240 + 600 токенов» не является тарифной формулой.</p>
+<div class="downloads"><a href="study24-pricing-2026-10-28.json">Данные JSON: параметры, формулы и источники</a><a href="study24-pricing-2026-10-28.csv">Все 94 позиции CSV</a><a href="study24-pricing-2026-10-28-rates.csv">Условные ветки стоимости CSV</a></div>
+<h2>Главные уточнения</h2><ul><li>Встроенные приложения уже расходятся с общей таблицей: фотосессия 25/35 вместо 55; презентации 450/800 вместо 420; код — минимум 30 вместо 5; карточка товара 120 вместо 55.</li><li>Grok Imagine в Image Studio: 20 за задачу, которая возвращает два изображения; четыре изображения — две задачи, 40. Подпись «за картинку» в другом интерфейсе не описывает эту пакетную единицу.</li><li>GPT Image 2.5 в Image Studio уточнён до <b>Flare: 52 за изображение</b>. Четыре результата 4K — 208. Фотосессия с подписью Sunburst — отдельный сценарий, а не универсальная цена для всех Sunburst.</li><li>Видео округляется после умножения исходной ставки на длительность и коэффициенты. Seedance 2.0, 720p, референсное видео, 5 секунд: <b>312</b>, хотя показанная округлённая ставка — 63/сек, и 63 × 5 дало бы 315.</li><li>В коде Studio найдены старые цены отключённых Flux, Midjourney и Topaz. Они сохранены как источник, но не представлены как действующие предложения.</li></ul>
+<h2>Все позиции</h2><div class="toolbar"><input id="search" type="search" placeholder="Поиск модели, ID или категории" aria-label="Поиск по всем моделям"><select id="status" aria-label="Статус цены"><option value="">Все статусы</option><option value="dynamic_text_range">Зависит от расхода</option><option value="published_media_formula">Формула опубликована</option><option value="embedded_app">Отдельное приложение</option><option value="published_fixed_legacy">Фиксированная цена</option><option value="published_rate_only">Тариф за секунду</option><option value="free">Бесплатно</option></select></div><p class="counter" id="counter">94 из 94</p><div class="table-wrap"><table><thead><tr><th>№</th><th>Модель</th><th>Опубликованная цена</th><th>Полнота данных</th><th>Источник и детали</th></tr></thead><tbody id="models"><tr data-status="dynamic_text_range" data-search="studyai plus sai_plus популярные"><td>1</td><td><b>StudyAI Plus</b><small>Популярные</small><code>sai_plus</code></td><td><strong>5–551 / сообщение</strong></td><td><span class="status">Зависит от расхода</span><small>В сравнении: 5 запрос</small></td><td><a href="https://study24.ai/chat/sai_plus" target="_blank" rel="noopener noreferrer">Открыть источник ↗</a><details><summary>Настройки и основания</summary><p>Диапазон подтверждён. Цена зависит от запроса, истории, файлов и ответа. Числовые коэффициенты input/output/context публично не раскрыты. Нельзя назначать фиксированные 5 токенов.</p><p>Сопоставление Epifera до исследования: <code>missing</code>; соответствие не установлено.</p><p class="muted">Источник сохранён 2026-10-28T06:03:00.102106+00:00; SHA-256 <code>348195d46a11b12fa39be3ab9150611990c89745e3be2e2d0bdeadc26967fea1</code>.</p></details></td></tr><tr data-status="published_media_formula" data-search="генератор изображений open_ai_image_bot популярные"><td>2</td><td><b>Генератор изображений</b><small>Популярные</small><code>open_ai_image_bot</code></td><td><strong>55 / результат</strong></td><td><span class="status">Формула опубликована</span><small>В сравнении: 55 генерация</small></td><td><a href="https://study24.ai/chat/open_ai_image_bot" target="_blank" rel="noopener noreferrer">Открыть источник ↗</a><details><summary>Настройки и основания</summary><ul><li><code>resolution</code>: 1K, 2K, 4K · по умолчанию 1K</li><li><code>prompt</code>: 20000</li><li><code>aspect_ratio</code>: 16:9, 1:1, 1:4, 1:8, 21:9, 2:3, 3:2, 3:4, 4:1, 4:3, 4:5, 5:4, 8:1, 9:16, auto · по умолчанию auto</li></ul><p>Опубликованные ветки стоимости; required/accepted params и зависимости сохранены в JSON. Это публичный расчёт, а не проверка фактического списания.</p><pre>[
+  {
+    &quot;acceptedParams&quot;: [
+      &quot;aspect_ratio&quot;,
+      &quot;media&quot;,
+      &quot;prompt&quot;,
+      &quot;resolution&quot;
+    ],
+    &quot;baseCost&quot;: 55,
+    &quot;contentType&quot;: &quot;image&quot;,
+    &quot;costUnit&quot;: &quot;per_result&quot;,
+    &quot;requiredParams&quot;: [
+      &quot;media&quot;,
+      &quot;prompt&quot;
+    ]
+  },
+  {
+    &quot;acceptedParams&quot;: [
+      &quot;aspect_ratio&quot;,
+      &quot;prompt&quot;,
+      &quot;resolution&quot;
+    ],
+    &quot;baseCost&quot;: 55,
+    &quot;contentType&quot;: &quot;image&quot;,
+    &quot;costUnit&quot;: &quot;per_result&quot;,
+    &quot;requiredParams&quot;: [
+      &quot;prompt&quot;
+    ]
+  }
+]</pre><p>Сопоставление Epifera до исследования: <code>missing</code>; соответствие не установлено.</p><p class="muted">Источник сохранён 2026-10-28T06:03:00.063241+00:00; SHA-256 <code>a4d56ad969889004256d0f7d1b0a45f3d1d2f3138fd2f2b71f6460e0277912d0</code>.</p></details></td></tr><tr data-status="dynamic_text_range" data-search="claude opus 5.5 claude-opus-5-5 популярные"><td>3</td><td><b>Claude Opus 5.5</b><small>Популярные</small><code>claude-opus-5-5</code></td><td><strong>5–2187 / сообщение</strong></td><td><span class="status">Зависит от расхода</span><small>В сравнении: 5 запрос</small></td><td><a href="https://study24.ai/chat/claude-opus-5-5" target="_blank" rel="noopener noreferrer">Открыть источник ↗</a><details><summary>Настройки и основания</summary><p>Диапазон подтверждён. Цена зависит от запроса, истории, файлов и ответа. Числовые коэффициенты input/output/context публично не раскрыты. Нельзя назначать фиксированные 5 токенов.</p><p>Сопоставление Epifera до исследования: <code>formula_unverified</code>; claude_opus_5_5.</p><p class="muted">Источник сохранён 2026-10-28T06:03:00.089743+00:00; SHA-256 <code>22821e174ccd0bb721b4c75e874e4e97110fb0a3043d2466617213dccf1cfc72</code>.</p></details></td></tr><tr data-status="published_media_formula" data-search="nano banana 2.1 nano_banana_2 популярные"><td>4</td><td><b>Nano Banana 2.1</b><small>Популярные</small><code>nano_banana_2</code></td><td><strong>55 / результат</strong></td><td><span class="status">Формула опубликована</span><small>В сравнении: 55 генерация</small></td><td><a href="https://study24.ai/chat/nano_banana_2" target="_blank" rel="noopener noreferrer">Открыть источник ↗</a><details><summary>Настройки и основания</summary><ul><li><code>aspect_ratio</code>: 16:9, 1:1, 1:4, 1:8, 21:9, 2:3, 3:2, 3:4, 4:1, 4:3, 4:5, 5:4, 8:1, 9:16, auto · по умолчанию auto</li><li><code>resolution</code>: 1K, 2K, 4K · по умолчанию 1K</li><li><code>prompt</code>: 20000</li><li><code>generations_count</code>: 1 … 4 · по умолчанию 1</li></ul><p>Опубликованные ветки стоимости; required/accepted params и зависимости сохранены в JSON. Это публичный расчёт, а не проверка фактического списания.</p><pre>[
+  {
+    &quot;acceptedParams&quot;: [
+      &quot;aspect_ratio&quot;,
+      &quot;media&quot;,
+      &quot;prompt&quot;,
+      &quot;resolution&quot;
+    ],
+    &quot;baseCost&quot;: 55,
+    &quot;contentType&quot;: &quot;image&quot;,
+    &quot;costUnit&quot;: &quot;per_result&quot;,
+    &quot;requiredParams&quot;: [
+      &quot;media&quot;,
+      &quot;prompt&quot;
+    ]
+  },
+  {
+    &quot;acceptedParams&quot;: [
+      &quot;aspect_ratio&quot;,
+      &quot;prompt&quot;,
+      &quot;resolution&quot;
+    ],
+    &quot;baseCost&quot;: 55,
+    &quot;contentType&quot;: &quot;image&quot;,
+    &quot;costUnit&quot;: &quot;per_result&quot;,
+    &quot;requiredParams&quot;: [
+      &quot;prompt&quot;
+    ]
+  }
+]</pre><p>Сопоставление Epifera до исследования: <code>version_ambiguous</code>; nano_banana_2.</p><p class="muted">Источник сохранён 2026-10-28T06:03:00.315696+00:00; SHA-256 <code>a77a38b44d843032c59e3c5540f07efdee2807add5edb755e983f04717b9c135</code>.</p></details></td></tr><tr data-status="published_media_formula" data-search="seedance 2.5 max seedance-25-max популярные"><td>5</td><td><b>Seedance 2.5 Max</b><small>Популярные</small><code>seedance-25-max</code></td><td><strong>50–553 / сек</strong></td><td><span class="status">Формула опубликована</span><small>В сравнении: 50 секунда</small></td><td><a href="https://study24.ai/chat/seedance-25-max" target="_blank" rel="noopener noreferrer">Открыть источник ↗</a><details><summary>Настройки и основания</summary><ul><li><code>aspect_ratio</code>: 16:9, 1:1, 21:9, 3:4, 4:3, 9:16, adaptive · по умолчанию adaptive</li><li><code>mode</code>: edit, reference · по умолчанию reference</li><li><code>duration</code>: 4 … 30 · по умолчанию 5</li><li><code>resolution</code>: 1080p, 480p, 720p · по умолчанию 480p</li><li><code>generate_audio</code>: false, true · по умолчанию true</li><li><code>prompt</code>: 3 … 10000</li></ul><p>Опубликованные ветки стоимости; required/accepted params и зависимости сохранены в JSON. Это публичный расчёт, а не проверка фактического списания.</p><pre>[
+  {
+    &quot;acceptedParams&quot;: [
+      &quot;aspect_ratio&quot;,
+      &quot;audio_urls&quot;,
+      &quot;duration&quot;,
+      &quot;start_frame&quot;,
+      &quot;with_sound&quot;,
+      &quot;media&quot;,
+      &quot;end_frame&quot;,
+      &quot;mode&quot;,
+      &quot;prompt&quot;,
+      &quot;resolution&quot;,
+      &quot;video_urls&quot;
+    ],
+    &quot;baseCost&quot;: 50,
+    &quot;contentType&quot;: &quot;video&quot;,
+    &quot;costConfig&quot;: {
+      &quot;duration&quot;: {
+        &quot;sources&quot;: [
+          {
+            &quot;param&quot;: &quot;duration&quot;,
+            &quot;type&quot;: &quot;value&quot;
+          },
+          {
+            &quot;param&quot;: &quot;video_urls&quot;,
+            &quot;type&quot;: &quot;file_duration&quot;
+          }
+        ]
+      }
+    },
+    &quot;costUnit&quot;: &quot;per_second&quot;,
+    &quot;multipliers&quot;: {
+      &quot;mode&quot;: {
+        &quot;edit&quot;: 1.6564,
+        &quot;reference&quot;: 1
+      },
+      &quot;resolution&quot;: {
+        &quot;1080p&quot;: 4.0294,
+        &quot;480p&quot;: 1,
+        &quot;720p&quot;: 1.915
+      },
+      &quot;video_urls&quot;: {
+        &quot;__missing__&quot;: 1.6564,
+        &quot;__present__&quot;: 1
+      }
+    },
+    &quot;requiredParams&quot;: [
+      &quot;prompt&quot;,
+      &quot;duration&quot;
+    ]
+  }
+]</pre><p>Сопоставление Epifera до исследования: <code>version_ambiguous</code>; video_seedance_2_5.</p><p class="muted">Источник сохранён 2026-10-28T06:03:00.792508+00:00; SHA-256 <code>b9e0ccd76f2e564092bf3d7d675235dd052d0a2a2e7f15e3f8da179d0a3cde6d</code>.</p></details></td></tr><tr data-status="published_media_formula" data-search="nano banana pro nano_banana_pro изображения"><td>6</td><td><b>Nano Banana Pro</b><small>Изображения</small><code>nano_banana_pro</code></td><td><strong>55 / результат</strong></td><td><span class="status">Формула опубликована</span><small>В сравнении: 55 генерация</small></td><td><a href="https://study24.ai/chat/nano_banana_pro" target="_blank" rel="noopener noreferrer">Открыть источник ↗</a><details><summary>Настройки и основания</summary><ul><li><code>prompt</code>: 20000</li><li><code>aspect_ratio</code>: 16:9, 1:1, 1:4, 1:8, 21:9, 2:3, 3:2, 3:4, 4:1, 4:3, 4:5, 5:4, 8:1, 9:16, auto · по умолчанию auto</li><li><code>resolution</code>: 1K, 2K, 4K · по умолчанию 1K</li><li><code>generations_count</code>: 1 … 4 · по умолчанию 1</li></ul><p>Опубликованные ветки стоимости; required/accepted params и зависимости сохранены в JSON. Это публичный расчёт, а не проверка фактического списания.</p><pre>[
+  {
+    &quot;acceptedParams&quot;: [
+      &quot;aspect_ratio&quot;,
+      &quot;media&quot;,
+      &quot;prompt&quot;,
+      &quot;resolution&quot;
+    ],
+    &quot;baseCost&quot;: 55,
+    &quot;contentType&quot;: &quot;image&quot;,
+    &quot;costUnit&quot;: &quot;per_result&quot;,
+    &quot;requiredParams&quot;: [
+      &quot;media&quot;,
+      &quot;prompt&quot;
+    ]
+  },
+  {
+    &quot;acceptedParams&quot;: [
+      &quot;aspect_ratio&quot;,
+      &quot;prompt&quot;,
+      &quot;resolution&quot;
+    ],
+    &quot;baseCost&quot;: 55,
+    &quot;contentType&quot;: &quot;image&quot;,
+    &quot;costUnit&quot;: &quot;per_result&quot;,
+    &quot;requiredParams&quot;: [
+      &quot;prompt&quot;
+    ]
+  }
+]</pre><p>Сопоставление Epifera до исследования: <code>exact</code>; nano_banana_pro.</p><p class="muted">Источник сохранён 2026-10-28T06:03:01.428569+00:00; SHA-256 <code>49fa9cd306cd56503c1b08794842076bd5e6218b6c535a6d2a361164dd65f372</code>.</p></details></td></tr><tr data-status="published_media_formula" data-search="seedream 5.0 pro seedream5 изображения"><td>7</td><td><b>Seedream 5.0 Pro</b><small>Изображения</small><code>seedream5</code></td><td><strong>35 / результат</strong></td><td><span class="status">Формула опубликована</span><small>В сравнении: 35 генерация</small></td><td><a href="https://study24.ai/chat/seedream5" target="_blank" rel="noopener noreferrer">Открыть источник ↗</a><details><summary>Настройки и основания</summary><ul><li><code>quality</code>: 1K, 2K · по умолчанию 1K</li><li><code>aspect_ratio</code>: 16:9, 1:1, 2:3, 3:2, 3:4, 4:3, 9:16 · по умолчанию 1:1</li><li><code>generations_count</code>: 1 … 4</li></ul><p>Опубликованные ветки стоимости; required/accepted params и зависимости сохранены в JSON. Это публичный расчёт, а не проверка фактического списания.</p><pre>[
+  {
+    &quot;acceptedParams&quot;: [
+      &quot;aspect_ratio&quot;,
+      &quot;media&quot;,
+      &quot;prompt&quot;,
+      &quot;quality&quot;
+    ],
+    &quot;baseCost&quot;: 35,
+    &quot;contentType&quot;: &quot;image&quot;,
+    &quot;costUnit&quot;: &quot;per_result&quot;,
+    &quot;requiredParams&quot;: [
+      &quot;media&quot;,
+      &quot;prompt&quot;
+    ]
+  },
+  {
+    &quot;acceptedParams&quot;: [
+      &quot;aspect_ratio&quot;,
+      &quot;prompt&quot;,
+      &quot;quality&quot;
+    ],
+    &quot;baseCost&quot;: 35,
+    &quot;contentType&quot;: &quot;image&quot;,
+    &quot;costUnit&quot;: &quot;per_result&quot;,
+    &quot;requiredParams&quot;: [
+      &quot;prompt&quot;
+    ]
+  }
+]</pre><p>Сопоставление Epifera до исследования: <code>variant_unverified</code>; seedream_5_0_pro.</p><p class="muted">Источник сохранён 2026-10-28T06:03:00.769501+00:00; SHA-256 <code>048b587500cd32bd58405a56ba96259cdfd0905b45a779d7cda2dd49b1020a4d</code>.</p></details></td></tr><tr data-status="published_media_formula" data-search="midjourney midjourney_toe_bot изображения"><td>8</td><td><b>Midjourney</b><small>Изображения</small><code>midjourney_toe_bot</code></td><td><strong>55 / результат</strong></td><td><span class="status">Формула опубликована</span><small>В сравнении: 55 генерация</small></td><td><a href="https://study24.ai/chat/midjourney_toe_bot" target="_blank" rel="noopener noreferrer">Открыть источник ↗</a><details><summary>Настройки и основания</summary><ul><li><code>resolution</code>: 1K, 2K, 4K · по умолчанию 1K</li><li><code>aspect_ratio</code>: 16:9, 1:1, 1:4, 1:8, 21:9, 2:3, 3:2, 3:4, 4:1, 4:3, 4:5, 5:4, 8:1, 9:16, auto · по умолчанию auto</li><li><code>prompt</code>: 20000</li><li><code>generations_count</code>: 1 … 4 · по умолчанию 1</li></ul><p>Опубликованные ветки стоимости; required/accepted params и зависимости сохранены в JSON. Это публичный расчёт, а не проверка фактического списания.</p><pre>[
+  {
+    &quot;acceptedParams&quot;: [
+      &quot;aspect_ratio&quot;,
+      &quot;media&quot;,
+      &quot;prompt&quot;,
+      &quot;resolution&quot;
+    ],
+    &quot;baseCost&quot;: 55,
+    &quot;contentType&quot;: &quot;image&quot;,
+    &quot;costUnit&quot;: &quot;per_result&quot;,
+    &quot;requiredParams&quot;: [
+      &quot;media&quot;,
+      &quot;prompt&quot;
+    ]
+  },
+  {
+    &quot;acceptedParams&quot;: [
+      &quot;aspect_ratio&quot;,
+      &quot;prompt&quot;,
+      &quot;resolution&quot;
+    ],
+    &quot;baseCost&quot;: 55,
+    &quot;contentType&quot;: &quot;image&quot;,
+    &quot;costUnit&quot;: &quot;per_result&quot;,
+    &quot;requiredParams&quot;: [
+      &quot;prompt&quot;
+    ]
+  }
+]</pre><p>Сопоставление Epifera до исследования: <code>variant_unverified</code>; midjourney_v7.</p><p class="muted">Источник сохранён 2026-10-28T06:03:01.520154+00:00; SHA-256 <code>b31400b8a2b7ae7c4609fe65c89571acdca8815f6db4c7d89db5c9c15e328fe1</code>.</p></details></td></tr><tr data-status="published_media_formula" data-search="gpt image 2 gpt_image изображения"><td>9</td><td><b>GPT Image 2</b><small>Изображения</small><code>gpt_image</code></td><td><strong>51 / результат</strong></td><td><span class="status">Формула опубликована</span><small>В сравнении: 51 генерация</small></td><td><a href="https://study24.ai/chat/gpt_image" target="_blank" rel="noopener noreferrer">Открыть источник ↗</a><details><summary>Настройки и основания</summary><ul><li><code>aspect_ratio</code>: 16:9, 1:1, 21:9, 2:3, 3:2, 3:4, 4:5, 5:4, 9:16 · по умолчанию 16:9</li><li><code>resolution</code>: 1K, 2K, 4K · по умолчанию 2K</li><li><code>generations_count</code>: 1 … 4</li></ul><p>Опубликованные ветки стоимости; required/accepted params и зависимости сохранены в JSON. Это публичный расчёт, а не проверка фактического списания.</p><pre>[
+  {
+    &quot;acceptedParams&quot;: [
+      &quot;aspect_ratio&quot;,
+      &quot;media&quot;,
+      &quot;prompt&quot;,
+      &quot;resolution&quot;
+    ],
+    &quot;baseCost&quot;: 51,
+    &quot;contentType&quot;: &quot;image&quot;,
+    &quot;costUnit&quot;: &quot;per_result&quot;,
+    &quot;requiredParams&quot;: [
+      &quot;media&quot;,
+      &quot;prompt&quot;
+    ]
+  },
+  {
+    &quot;acceptedParams&quot;: [
+      &quot;aspect_ratio&quot;,
+      &quot;prompt&quot;,
+      &quot;resolution&quot;
+    ],
+    &quot;baseCost&quot;: 51,
+    &quot;contentType&quot;: &quot;image&quot;,
+    &quot;costUnit&quot;: &quot;per_result&quot;,
+    &quot;requiredParams&quot;: [
+      &quot;prompt&quot;
+    ]
+  }
+]</pre><p>Сопоставление Epifera до исследования: <code>variant_unverified</code>; gpt_image_2.</p><p class="muted">Источник сохранён 2026-10-28T06:03:02.129838+00:00; SHA-256 <code>a29bb38636f918eeffa175a9f0c086e8a745fa8536428d4fc6d68e7717bf3d68</code>.</p></details></td></tr><tr data-status="published_media_formula" data-search="gpt image 2.5 gpt-image-25 изображения"><td>10</td><td><b>GPT Image 2.5</b><small>Изображения</small><code>gpt-image-25</code></td><td><strong>52 / результат</strong></td><td><span class="status">Формула опубликована</span><small>В сравнении: 52 генерация</small></td><td><a href="https://study24.ai/chat/gpt-image-25" target="_blank" rel="noopener noreferrer">Открыть источник ↗</a><details><summary>Настройки и основания</summary><ul><li><code>aspect_ratio</code>: 16:27, 16:9, 1:1, 21:9, 27:16, 2:3, 3:2, 3:4, 4:3, 8:9, 9:16, 9:8, auto · по умолчанию 1:1</li><li><code>resolution</code>: 1K, 2K, 4K · по умолчанию 2K</li><li><code>prompt</code>: 4 … 20000</li></ul><p>Опубликованные ветки стоимости; required/accepted params и зависимости сохранены в JSON. Это публичный расчёт, а не проверка фактического списания.</p><pre>[
+  {
+    &quot;acceptedParams&quot;: [
+      &quot;aspect_ratio&quot;,
+      &quot;media&quot;,
+      &quot;prompt&quot;,
+      &quot;resolution&quot;
+    ],
+    &quot;baseCost&quot;: 52,
+    &quot;contentType&quot;: &quot;image&quot;,
+    &quot;costUnit&quot;: &quot;per_result&quot;,
+    &quot;requiredParams&quot;: [
+      &quot;prompt&quot;
+    ]
+  }
+]</pre><p>Сопоставление Epifera до исследования: <code>variant_unverified</code>; gpt_image_2_5_flare, gpt_image_2_5_sunburst.</p><p class="muted">Источник сохранён 2026-10-28T06:03:01.357111+00:00; SHA-256 <code>71c84f55117a09aa8e32d66da10dce0f690637771e30737a225d0a34afd82b1b</code>.</p></details></td></tr><tr data-status="published_media_formula" data-search="microsoft: mai-image-2.5 mai_image_2_5 изображения"><td>11</td><td><b>Microsoft: MAI-Image-2.5</b><small>Изображения</small><code>mai_image_2_5</code></td><td><strong>55 / результат</strong></td><td><span class="status">Формула опубликована</span><small>В сравнении: 55 генерация</small></td><td><a href="https://study24.ai/chat/mai_image_2_5" target="_blank" rel="noopener noreferrer">Открыть источник ↗</a><details><summary>Настройки и основания</summary><ul><li><code>aspect_ratio</code>: 16:9, 1:1, 2:3, 3:2, 3:4, 4:3, 9:16, auto · по умолчанию 1:1</li><li><code>image_size</code>: 1K, 2K, 4K · по умолчанию 1K</li><li><code>generations_count</code>: 1 … 4 · по умолчанию 1</li></ul><p>Опубликованные ветки стоимости; required/accepted params и зависимости сохранены в JSON. Это публичный расчёт, а не проверка фактического списания.</p><pre>[
+  {
+    &quot;acceptedParams&quot;: [
+      &quot;aspect_ratio&quot;,
+      &quot;image_size&quot;,
+      &quot;media&quot;,
+      &quot;prompt&quot;
+    ],
+    &quot;baseCost&quot;: 55,
+    &quot;contentType&quot;: &quot;image&quot;,
+    &quot;costUnit&quot;: &quot;per_result&quot;,
+    &quot;requiredParams&quot;: [
+      &quot;prompt&quot;
+    ]
+  }
+]</pre><p>Сопоставление Epifera до исследования: <code>missing</code>; соответствие не установлено.</p><p class="muted">Источник сохранён 2026-10-28T06:03:02.182339+00:00; SHA-256 <code>63b4f1922a79c3aa56c9c7aa6b34d014f7dcae1663d33927d465b87e8e45092a</code>.</p></details></td></tr><tr data-status="published_media_formula" data-search="grok image grok_image изображения"><td>12</td><td><b>Grok Image</b><small>Изображения</small><code>grok_image</code></td><td><strong>20 / результат</strong></td><td><span class="status">Формула опубликована</span><small>В сравнении: 20 генерация</small></td><td><a href="https://study24.ai/chat/grok_image" target="_blank" rel="noopener noreferrer">Открыть источник ↗</a><details><summary>Настройки и основания</summary><ul><li><code>aspect_ratio</code>: 16:9, 1:1, 2:3, 3:2, 9:16 · по умолчанию 1:1</li></ul><p>Опубликованные ветки стоимости; required/accepted params и зависимости сохранены в JSON. Это публичный расчёт, а не проверка фактического списания.</p><pre>[
+  {
+    &quot;acceptedParams&quot;: [
+      &quot;aspect_ratio&quot;,
+      &quot;media&quot;,
+      &quot;prompt&quot;
+    ],
+    &quot;baseCost&quot;: 20,
+    &quot;contentType&quot;: &quot;image&quot;,
+    &quot;costUnit&quot;: &quot;per_result&quot;,
+    &quot;requiredParams&quot;: [
+      &quot;prompt&quot;
+    ]
+  }
+]</pre><p>Сопоставление Epifera до исследования: <code>variant_unverified</code>; grok_image_1_5.</p><p class="muted">Источник сохранён 2026-10-28T06:03:02.221338+00:00; SHA-256 <code>36c1bb1ae8b8e05f0c15d22f207dcc5fef8c6120ce814945ebd882aba887220e</code>.</p></details></td></tr><tr data-status="published_media_formula" data-search="grok image 2.0 grok_image2 изображения"><td>13</td><td><b>Grok Image 2.0</b><small>Изображения</small><code>grok_image2</code></td><td><strong>25 / результат</strong></td><td><span class="status">Формула опубликована</span><small>В сравнении: 25 генерация</small></td><td><a href="https://study24.ai/chat/grok_image2" target="_blank" rel="noopener noreferrer">Открыть источник ↗</a><details><summary>Настройки и основания</summary><ul><li><code>aspect_ratio</code>: 16:9, 1:1, 2:3, 3:2, 9:16, auto · по умолчанию 1:1</li></ul><p>Опубликованные ветки стоимости; required/accepted params и зависимости сохранены в JSON. Это публичный расчёт, а не проверка фактического списания.</p><pre>[
+  {
+    &quot;acceptedParams&quot;: [
+      &quot;aspect_ratio&quot;,
+      &quot;media&quot;,
+      &quot;prompt&quot;
+    ],
+    &quot;baseCost&quot;: 25,
+    &quot;contentType&quot;: &quot;image&quot;,
+    &quot;costUnit&quot;: &quot;per_result&quot;,
+    &quot;requiredParams&quot;: [
+      &quot;prompt&quot;
+    ]
+  }
+]</pre><p>Сопоставление Epifera до исследования: <code>variant_unverified</code>; grok_image_2_0.</p><p class="muted">Источник сохранён 2026-10-28T06:03:02.546505+00:00; SHA-256 <code>78c0923f3afd8ad2e8bf21d3fb5bf088516da792e3a04ae32c4f2a12528a4aa6</code>.</p></details></td></tr><tr data-status="published_media_formula" data-search="flux 2 pro flux_2 изображения"><td>14</td><td><b>Flux 2 Pro</b><small>Изображения</small><code>flux_2</code></td><td><strong>55 / результат</strong></td><td><span class="status">Формула опубликована</span><small>В сравнении: 55 генерация</small></td><td><a href="https://study24.ai/chat/flux_2" target="_blank" rel="noopener noreferrer">Открыть источник ↗</a><details><summary>Настройки и основания</summary><ul><li><code>resolution</code>: 1K, 2K, 4K · по умолчанию 1K</li><li><code>aspect_ratio</code>: 16:9, 1:1, 1:4, 1:8, 21:9, 2:3, 3:2, 3:4, 4:1, 4:3, 4:5, 5:4, 8:1, 9:16, auto · по умолчанию auto</li><li><code>prompt</code>: 20000</li><li><code>generations_count</code>: 1 … 4 · по умолчанию 1</li></ul><p>Опубликованные ветки стоимости; required/accepted params и зависимости сохранены в JSON. Это публичный расчёт, а не проверка фактического списания.</p><pre>[
+  {
+    &quot;acceptedParams&quot;: [
+      &quot;aspect_ratio&quot;,
+      &quot;media&quot;,
+      &quot;prompt&quot;,
+      &quot;resolution&quot;
+    ],
+    &quot;baseCost&quot;: 55,
+    &quot;contentType&quot;: &quot;image&quot;,
+    &quot;costUnit&quot;: &quot;per_result&quot;,
+    &quot;requiredParams&quot;: [
+      &quot;media&quot;,
+      &quot;prompt&quot;
+    ]
+  },
+  {
+    &quot;acceptedParams&quot;: [
+      &quot;aspect_ratio&quot;,
+      &quot;prompt&quot;,
+      &quot;resolution&quot;
+    ],
+    &quot;baseCost&quot;: 55,
+    &quot;contentType&quot;: &quot;image&quot;,
+    &quot;costUnit&quot;: &quot;per_result&quot;,
+    &quot;requiredParams&quot;: [
+      &quot;prompt&quot;
+    ]
+  }
+]</pre><p>Сопоставление Epifera до исследования: <code>variant_unverified</code>; flux_2_pro.</p><p class="muted">Источник сохранён 2026-10-28T06:03:03.185747+00:00; SHA-256 <code>b729b9c46fd1c166fbe160cec866f10858b586c7aaa7f748ec6f5d3f94bf8f65</code>.</p></details></td></tr><tr data-status="published_media_formula" data-search="qwen image 3 qwen-image изображения"><td>15</td><td><b>Qwen Image 3</b><small>Изображения</small><code>qwen-image</code></td><td><strong>30 / результат</strong></td><td><span class="status">Формула опубликована</span><small>В сравнении: 30 генерация</small></td><td><a href="https://study24.ai/chat/qwen-image" target="_blank" rel="noopener noreferrer">Открыть источник ↗</a><details><summary>Настройки и основания</summary><ul><li><code>aspect_ratio</code>: 16:9, 1:1, 21:9, 2:3, 3:2, 3:4, 4:3, 9:16 · по умолчанию 16:9</li><li><code>resolution</code>: 1K, 2K · по умолчанию 2K</li><li><code>negative_prompt</code>: 0 … 5000</li><li><code>prompt</code>: 0 … 800</li><li><code>generations_count</code>: 1 … 4 · по умолчанию 1</li></ul><p>Опубликованные ветки стоимости; required/accepted params и зависимости сохранены в JSON. Это публичный расчёт, а не проверка фактического списания.</p><pre>[
+  {
+    &quot;acceptedParams&quot;: [
+      &quot;aspect_ratio&quot;,
+      &quot;media&quot;,
+      &quot;negative_prompt&quot;,
+      &quot;prompt&quot;,
+      &quot;resolution&quot;
+    ],
+    &quot;baseCost&quot;: 30,
+    &quot;contentType&quot;: &quot;image&quot;,
+    &quot;costUnit&quot;: &quot;per_result&quot;,
+    &quot;requiredParams&quot;: [
+      &quot;media&quot;,
+      &quot;prompt&quot;
+    ]
+  },
+  {
+    &quot;acceptedParams&quot;: [
+      &quot;aspect_ratio&quot;,
+      &quot;negative_prompt&quot;,
+      &quot;prompt&quot;,
+      &quot;resolution&quot;
+    ],
+    &quot;baseCost&quot;: 30,
+    &quot;contentType&quot;: &quot;image&quot;,
+    &quot;costUnit&quot;: &quot;per_result&quot;,
+    &quot;requiredParams&quot;: [
+      &quot;prompt&quot;
+    ]
+  }
+]</pre><p>Сопоставление Epifera до исследования: <code>variant_unverified</code>; qwen_image_3.</p><p class="muted">Источник сохранён 2026-10-28T06:03:03.535838+00:00; SHA-256 <code>654c5473265e4fa492383a05a385c1b914d3ce00d61bfa690db24fc622425b3f</code>.</p></details></td></tr><tr data-status="published_media_formula" data-search="recraft ai recraft_ai изображения"><td>16</td><td><b>Recraft AI</b><small>Изображения</small><code>recraft_ai</code></td><td><strong>5 / результат</strong></td><td><span class="status">Формула опубликована</span><small>В сравнении: 5 генерация</small></td><td><a href="https://study24.ai/chat/recraft_ai" target="_blank" rel="noopener noreferrer">Открыть источник ↗</a><details><summary>Настройки и основания</summary><ul><li><code>generations_count</code>: 1 … 4 · по умолчанию 1</li></ul><p>Опубликованные ветки стоимости; required/accepted params и зависимости сохранены в JSON. Это публичный расчёт, а не проверка фактического списания.</p><pre>[
+  {
+    &quot;acceptedParams&quot;: [
+      &quot;media&quot;
+    ],
+    &quot;baseCost&quot;: 5,
+    &quot;contentType&quot;: &quot;image&quot;,
+    &quot;costUnit&quot;: &quot;per_result&quot;,
+    &quot;requiredParams&quot;: [
+      &quot;media&quot;
+    ]
+  }
+]</pre><p>Сопоставление Epifera до исследования: <code>missing</code>; соответствие не установлено.</p><p class="muted">Источник сохранён 2026-10-28T06:03:02.796284+00:00; SHA-256 <code>39f65782c4f07872e10dab7e475e5c967c68facc9d6c7ea2c62fc352427de6fb</code>.</p></details></td></tr><tr data-status="published_media_formula" data-search="krea 2 krea_2 изображения"><td>17</td><td><b>Krea 2</b><small>Изображения</small><code>krea_2</code></td><td><strong>35 / результат</strong></td><td><span class="status">Формула опубликована</span><small>В сравнении: 35 генерация</small></td><td><a href="https://study24.ai/chat/krea_2" target="_blank" rel="noopener noreferrer">Открыть источник ↗</a><details><summary>Настройки и основания</summary><ul><li><code>creativity</code>: high, low, medium, raw · по умолчанию medium</li><li><code>aspect_ratio</code>: 16:9, 1:1, 2.35:1, 2:3, 3:2, 4:3, 4:5, 9:16 · по умолчанию 1:1</li><li><code>generations_count</code>: 1 … 4 · по умолчанию 1</li></ul><p>Опубликованные ветки стоимости; required/accepted params и зависимости сохранены в JSON. Это публичный расчёт, а не проверка фактического списания.</p><pre>[
+  {
+    &quot;acceptedParams&quot;: [
+      &quot;aspect_ratio&quot;,
+      &quot;creativity&quot;,
+      &quot;media&quot;,
+      &quot;prompt&quot;
+    ],
+    &quot;baseCost&quot;: 35,
+    &quot;contentType&quot;: &quot;image&quot;,
+    &quot;costUnit&quot;: &quot;per_result&quot;,
+    &quot;requiredParams&quot;: [
+      &quot;prompt&quot;
+    ]
+  }
+]</pre><p>Сопоставление Epifera до исследования: <code>missing</code>; соответствие не установлено.</p><p class="muted">Источник сохранён 2026-10-28T06:03:03.831958+00:00; SHA-256 <code>383ef8f197719de196a909c8ee18a738b385b015cf79f831e54a45081124670d</code>.</p></details></td></tr><tr data-status="published_media_formula" data-search="nano banana google_image изображения"><td>18</td><td><b>Nano Banana</b><small>Изображения</small><code>google_image</code></td><td><strong>30 / результат</strong></td><td><span class="status">Формула опубликована</span><small>В сравнении: 30 генерация</small></td><td><a href="https://study24.ai/chat/google_image" target="_blank" rel="noopener noreferrer">Открыть источник ↗</a><details><summary>Настройки и основания</summary><ul><li><code>aspect_ratio</code>: 16:9, 1:1, 21:9, 2:3, 3:2, 3:4, 4:3, 4:5, 5:4, 9:16 · по умолчанию 16:9</li><li><code>generations_count</code>: 1 … 4 · по умолчанию 1</li></ul><p>Опубликованные ветки стоимости; required/accepted params и зависимости сохранены в JSON. Это публичный расчёт, а не проверка фактического списания.</p><pre>[
+  {
+    &quot;acceptedParams&quot;: [
+      &quot;aspect_ratio&quot;,
+      &quot;media&quot;,
+      &quot;prompt&quot;
+    ],
+    &quot;baseCost&quot;: 30,
+    &quot;contentType&quot;: &quot;image&quot;,
+    &quot;costUnit&quot;: &quot;per_result&quot;,
+    &quot;requiredParams&quot;: [
+      &quot;media&quot;,
+      &quot;prompt&quot;
+    ]
+  },
+  {
+    &quot;acceptedParams&quot;: [
+      &quot;aspect_ratio&quot;,
+      &quot;prompt&quot;
+    ],
+    &quot;baseCost&quot;: 30,
+    &quot;contentType&quot;: &quot;image&quot;,
+    &quot;costUnit&quot;: &quot;per_result&quot;,
+    &quot;requiredParams&quot;: [
+      &quot;prompt&quot;
+    ]
+  }
+]</pre><p>Сопоставление Epifera до исследования: <code>variant_unverified</code>; nano_banana.</p><p class="muted">Источник сохранён 2026-10-28T06:03:03.368320+00:00; SHA-256 <code>fce53c83bb8ae01ff53be3061a2dcaefc2f6195e22e2304e593215bc4d01b017</code>.</p></details></td></tr><tr data-status="published_media_formula" data-search="seedream 5.0 lite seedream_5 изображения"><td>19</td><td><b>Seedream 5.0 Lite</b><small>Изображения</small><code>seedream_5</code></td><td><strong>30 / результат</strong></td><td><span class="status">Формула опубликована</span><small>В сравнении: 30 генерация</small></td><td><a href="https://study24.ai/chat/seedream_5" target="_blank" rel="noopener noreferrer">Открыть источник ↗</a><details><summary>Настройки и основания</summary><ul><li><code>aspect_ratio</code>: 16:9, 1:1, 21:9, 2:3, 3:2, 3:4, 4:3, 9:16 · по умолчанию 1:1</li><li><code>generations_count</code>: 1 … 4 · по умолчанию 1</li></ul><p>Опубликованные ветки стоимости; required/accepted params и зависимости сохранены в JSON. Это публичный расчёт, а не проверка фактического списания.</p><pre>[
+  {
+    &quot;acceptedParams&quot;: [
+      &quot;aspect_ratio&quot;,
+      &quot;media&quot;,
+      &quot;prompt&quot;
+    ],
+    &quot;baseCost&quot;: 30,
+    &quot;contentType&quot;: &quot;image&quot;,
+    &quot;costUnit&quot;: &quot;per_result&quot;,
+    &quot;requiredParams&quot;: [
+      &quot;media&quot;,
+      &quot;prompt&quot;
+    ]
+  },
+  {
+    &quot;acceptedParams&quot;: [
+      &quot;aspect_ratio&quot;,
+      &quot;prompt&quot;
+    ],
+    &quot;baseCost&quot;: 30,
+    &quot;contentType&quot;: &quot;image&quot;,
+    &quot;costUnit&quot;: &quot;per_result&quot;,
+    &quot;requiredParams&quot;: [
+      &quot;prompt&quot;
+    ]
+  }
+]</pre><p>Сопоставление Epifera до исследования: <code>variant_unverified</code>; seedream_5_0_lite.</p><p class="muted">Источник сохранён 2026-10-28T06:03:04.492877+00:00; SHA-256 <code>d296e3fb89aff615ff62f8cd460ce858edfbeb3430c1c6a6521bc2230ee26b03</code>.</p></details></td></tr><tr data-status="published_media_formula" data-search="nano banana 2 lite banana_2lite изображения"><td>20</td><td><b>Nano Banana 2 Lite</b><small>Изображения</small><code>banana_2lite</code></td><td><strong>15 / результат</strong></td><td><span class="status">Формула опубликована</span><small>В сравнении: 15 генерация</small></td><td><a href="https://study24.ai/chat/banana_2lite" target="_blank" rel="noopener noreferrer">Открыть источник ↗</a><details><summary>Настройки и основания</summary><ul><li><code>aspect_ratio</code>: 16:9, 1:1, 1:4, 1:8, 21:9, 2:3, 3:2, 3:4, 4:1, 4:3, 4:5, 5:4, 8:1, 9:16, auto · по умолчанию auto</li><li><code>generations_count</code>: 1 … 4 · по умолчанию 1</li></ul><p>Опубликованные ветки стоимости; required/accepted params и зависимости сохранены в JSON. Это публичный расчёт, а не проверка фактического списания.</p><pre>[
+  {
+    &quot;acceptedParams&quot;: [
+      &quot;aspect_ratio&quot;,
+      &quot;media&quot;,
+      &quot;prompt&quot;
+    ],
+    &quot;baseCost&quot;: 15,
+    &quot;contentType&quot;: &quot;image&quot;,
+    &quot;costUnit&quot;: &quot;per_result&quot;,
+    &quot;requiredParams&quot;: [
+      &quot;media&quot;,
+      &quot;prompt&quot;
+    ]
+  },
+  {
+    &quot;acceptedParams&quot;: [
+      &quot;aspect_ratio&quot;,
+      &quot;prompt&quot;
+    ],
+    &quot;baseCost&quot;: 15,
+    &quot;contentType&quot;: &quot;image&quot;,
+    &quot;costUnit&quot;: &quot;per_result&quot;,
+    &quot;requiredParams&quot;: [
+      &quot;prompt&quot;
+    ]
+  }
+]</pre><p>Сопоставление Epifera до исследования: <code>missing</code>; соответствие не установлено.</p><p class="muted">Источник сохранён 2026-10-28T06:03:04.457859+00:00; SHA-256 <code>c22ad374d1e0379a6f8a29110fd146072ab2cb9010cebafbcbd57a8f92fd6892</code>.</p></details></td></tr><tr data-status="published_media_formula" data-search="topaz topaz изображения"><td>21</td><td><b>Topaz</b><small>Изображения</small><code>topaz</code></td><td><strong>55 / результат</strong></td><td><span class="status">Формула опубликована</span><small>В сравнении: 55 генерация</small></td><td><a href="https://study24.ai/chat/topaz" target="_blank" rel="noopener noreferrer">Открыть источник ↗</a><details><summary>Настройки и основания</summary><ul><li><code>aspect_ratio</code>: 16:9, 1:1, 1:4, 1:8, 21:9, 2:3, 3:2, 3:4, 4:1, 4:3, 4:5, 5:4, 8:1, 9:16, auto · по умолчанию auto</li><li><code>resolution</code>: 1K, 2K, 4K · по умолчанию 2K</li></ul><p>Опубликованные ветки стоимости; required/accepted params и зависимости сохранены в JSON. Это публичный расчёт, а не проверка фактического списания.</p><pre>[
+  {
+    &quot;acceptedParams&quot;: [
+      &quot;aspect_ratio&quot;,
+      &quot;media&quot;,
+      &quot;prompt&quot;,
+      &quot;resolution&quot;
+    ],
+    &quot;baseCost&quot;: 55,
+    &quot;contentType&quot;: &quot;image&quot;,
+    &quot;costUnit&quot;: &quot;per_result&quot;,
+    &quot;requiredParams&quot;: [
+      &quot;media&quot;,
+      &quot;prompt&quot;
+    ]
+  }
+]</pre><p>Сопоставление Epifera до исследования: <code>missing</code>; соответствие не установлено.</p><p class="muted">Источник сохранён 2026-10-28T06:03:04.769123+00:00; SHA-256 <code>0cac725f6e7631def098bc239c1f40ad73abf9196ab8e660a6221b1c29fbd616</code>.</p></details></td></tr><tr data-status="embedded_app" data-search="ии-фотосессия ai_photo изображения"><td>22</td><td><b>ИИ-фотосессия</b><small>Изображения</small><code>ai_photo</code></td><td><strong>25 / кадр; 4K — 35</strong><span class="conflict">Таблица и приложение расходятся</span></td><td><span class="status">Отдельное приложение</span><small>В сравнении: 55 генерация</small></td><td><a href="https://study24.ai/chat/ai_photo" target="_blank" rel="noopener noreferrer">Открыть источник ↗</a><details><summary>Настройки и основания</summary><p>4K controls are disabled for Qwen 2.1 Image and Grok Imagine 2.0. Catalogue price 55 is not the current photoshoot price.</p><pre>count * (quality == hd ? 35 : 25)</pre><p>Сопоставление Epifera до исследования: <code>missing</code>; соответствие не установлено.</p><p class="muted">Источник сохранён 2026-10-28T06:03:04.551897+00:00; SHA-256 <code>b7e2f69e985d3a5d6482e507aa34145edd385f8308e6bd227638aa1fd9612848</code>.</p></details></td></tr><tr data-status="published_media_formula" data-search="генерация фотографий higgsfield_soul изображения"><td>23</td><td><b>Генерация фотографий</b><small>Изображения</small><code>higgsfield_soul</code></td><td><strong>30 / результат</strong></td><td><span class="status">Формула опубликована</span><small>В сравнении: 30 генерация</small></td><td><a href="https://study24.ai/chat/higgsfield_soul" target="_blank" rel="noopener noreferrer">Открыть источник ↗</a><details><summary>Настройки и основания</summary><p>Опубликованные ветки стоимости; required/accepted params и зависимости сохранены в JSON. Это публичный расчёт, а не проверка фактического списания.</p><pre>[
+  {
+    &quot;acceptedParams&quot;: [
+      &quot;prompt&quot;
+    ],
+    &quot;baseCost&quot;: 30,
+    &quot;contentType&quot;: &quot;image&quot;,
+    &quot;costUnit&quot;: &quot;per_result&quot;,
+    &quot;requiredParams&quot;: [
+      &quot;prompt&quot;
+    ]
+  }
+]</pre><p>Сопоставление Epifera до исследования: <code>missing</code>; соответствие не установлено.</p><p class="muted">Источник сохранён 2026-10-28T06:03:05.683915+00:00; SHA-256 <code>6d0eb0b738a1918c08196626230b6591b79c5706ad55c3a77285f00bb9b6ee16</code>.</p></details></td></tr><tr data-status="published_media_formula" data-search="улучшение качества фото improve_photo изображения"><td>24</td><td><b>Улучшение качества фото</b><small>Изображения</small><code>improve_photo</code></td><td><strong>55 / результат</strong></td><td><span class="status">Формула опубликована</span><small>В сравнении: 55 генерация</small></td><td><a href="https://study24.ai/chat/improve_photo" target="_blank" rel="noopener noreferrer">Открыть источник ↗</a><details><summary>Настройки и основания</summary><ul><li><code>aspect_ratio</code>: 16:9, 1:1, 21:9, 2:3, 3:2, 3:4, 4:3, 4:5, 5:4, 9:16</li><li><code>resolution</code>: 1K, 2K, 4K</li></ul><p>Опубликованные ветки стоимости; required/accepted params и зависимости сохранены в JSON. Это публичный расчёт, а не проверка фактического списания.</p><pre>[
+  {
+    &quot;acceptedParams&quot;: [
+      &quot;aspect_ratio&quot;,
+      &quot;media&quot;,
+      &quot;prompt&quot;,
+      &quot;resolution&quot;
+    ],
+    &quot;baseCost&quot;: 55,
+    &quot;contentType&quot;: &quot;image&quot;,
+    &quot;costUnit&quot;: &quot;per_result&quot;,
+    &quot;requiredParams&quot;: [
+      &quot;media&quot;,
+      &quot;prompt&quot;
+    ]
+  }
+]</pre><p>Сопоставление Epifera до исследования: <code>missing</code>; соответствие не установлено.</p><p class="muted">Источник сохранён 2026-10-28T06:03:05.169633+00:00; SHA-256 <code>ae930f812aaceb9c929a78818570eb56b5a6d4b4c1b18e20d4ad256a938f4bce</code>.</p></details></td></tr><tr data-status="published_fixed_legacy" data-search="открытка 1 сентября september изображения"><td>25</td><td><b>Открытка 1 сентября</b><small>Изображения</small><code>september</code></td><td><strong>55 / изображение</strong></td><td><span class="status">Фиксированная цена</span><small>В сравнении: 55 генерация</small></td><td><a href="https://study24.ai/chat/september" target="_blank" rel="noopener noreferrer">Открыть источник ↗</a><details><summary>Настройки и основания</summary><p>Сопоставление Epifera до исследования: <code>missing</code>; соответствие не установлено.</p><p class="muted">Источник сохранён 2026-10-28T06:03:05.831418+00:00; SHA-256 <code>c440662a5b23bc8383a837bdf57c3d6e2eb3144c09096ff5342691cfb8c1168c</code>.</p></details></td></tr><tr data-status="published_fixed_legacy" data-search="открытка в стиле love is... photo_love_is изображения"><td>26</td><td><b>Открытка в стиле Love is...</b><small>Изображения</small><code>photo_love_is</code></td><td><strong>55 / изображение</strong></td><td><span class="status">Фиксированная цена</span><small>В сравнении: 55 генерация</small></td><td><a href="https://study24.ai/chat/photo_love_is" target="_blank" rel="noopener noreferrer">Открыть источник ↗</a><details><summary>Настройки и основания</summary><p>Сопоставление Epifera до исследования: <code>missing</code>; соответствие не установлено.</p><p class="muted">Источник сохранён 2026-10-28T06:03:05.973149+00:00; SHA-256 <code>4d7974ce65411ff18b8a0bd5ea5b7378e214f8637d046224ab32c12f142f8807</code>.</p></details></td></tr><tr data-status="dynamic_text_range" data-search="gpt 6.1 sol gpt-sol текст"><td>27</td><td><b>GPT 6.1 Sol</b><small>Текст</small><code>gpt-sol</code></td><td><strong>5–1012 / сообщение</strong></td><td><span class="status">Зависит от расхода</span><small>В сравнении: 5 запрос</small></td><td><a href="https://study24.ai/chat/gpt-sol" target="_blank" rel="noopener noreferrer">Открыть источник ↗</a><details><summary>Настройки и основания</summary><p>Диапазон подтверждён. Цена зависит от запроса, истории, файлов и ответа. Числовые коэффициенты input/output/context публично не раскрыты. Нельзя назначать фиксированные 5 токенов.</p><p>Сопоставление Epifera до исследования: <code>version_ambiguous</code>; gpt_6_sol.</p><p class="muted">Источник сохранён 2026-10-28T06:03:06.288754+00:00; SHA-256 <code>d3c8ac7be462b44b380607638477d6fc7688cc36a76af544bd78dca3df76362c</code>.</p></details></td></tr><tr data-status="dynamic_text_range" data-search="gemini 4 argon gemini-4 текст"><td>28</td><td><b>Gemini 4 Argon</b><small>Текст</small><code>gemini-4</code></td><td><strong>5–2366 / сообщение</strong></td><td><span class="status">Зависит от расхода</span><small>В сравнении: 5 запрос</small></td><td><a href="https://study24.ai/chat/gemini-4" target="_blank" rel="noopener noreferrer">Открыть источник ↗</a><details><summary>Настройки и основания</summary><p>Диапазон подтверждён. Цена зависит от запроса, истории, файлов и ответа. Числовые коэффициенты input/output/context публично не раскрыты. Нельзя назначать фиксированные 5 токенов.</p><p>Сопоставление Epifera до исследования: <code>missing</code>; соответствие не установлено.</p><p class="muted">Источник сохранён 2026-10-28T06:03:06.252738+00:00; SHA-256 <code>5b01601b3e050f191700a75b0c1b7c25fa9f58bb52963c7759d9b0d5be03d052</code>.</p></details></td></tr><tr data-status="dynamic_text_range" data-search="claude fable 5.1 fable_51 текст"><td>29</td><td><b>Claude Fable 5.1</b><small>Текст</small><code>fable_51</code></td><td><strong>5–5000 / сообщение</strong></td><td><span class="status">Зависит от расхода</span><small>В сравнении: 5 запрос</small></td><td><a href="https://study24.ai/chat/fable_51" target="_blank" rel="noopener noreferrer">Открыть источник ↗</a><details><summary>Настройки и основания</summary><p>Диапазон подтверждён. Цена зависит от запроса, истории, файлов и ответа. Числовые коэффициенты input/output/context публично не раскрыты. Нельзя назначать фиксированные 5 токенов.</p><p>Сопоставление Epifera до исследования: <code>formula_unverified</code>; claude_fable_5_1.</p><p class="muted">Источник сохранён 2026-10-28T06:03:06.491875+00:00; SHA-256 <code>3b7d767db92b32a9abf323d149242352c3b378a15a8457e7b1bbf43ad834686f</code>.</p></details></td></tr><tr data-status="dynamic_text_range" data-search="claude opus 5 claude_5 текст"><td>30</td><td><b>Claude Opus 5</b><small>Текст</small><code>claude_5</code></td><td><strong>5–1833 / сообщение</strong></td><td><span class="status">Зависит от расхода</span><small>В сравнении: 5 запрос</small></td><td><a href="https://study24.ai/chat/claude_5" target="_blank" rel="noopener noreferrer">Открыть источник ↗</a><details><summary>Настройки и основания</summary><p>Диапазон подтверждён. Цена зависит от запроса, истории, файлов и ответа. Числовые коэффициенты input/output/context публично не раскрыты. Нельзя назначать фиксированные 5 токенов.</p><p>Сопоставление Epifera до исследования: <code>formula_unverified</code>; claude_opus_5.</p><p class="muted">Источник сохранён 2026-10-28T06:03:07.222225+00:00; SHA-256 <code>513d64abd39efef4a515d91f62f01b13cfc68b40bed8716fe783500c25a4b236</code>.</p></details></td></tr><tr data-status="dynamic_text_range" data-search="gemini 3.7 flash gemini-flash-37 текст"><td>31</td><td><b>Gemini 3.7 Flash</b><small>Текст</small><code>gemini-flash-37</code></td><td><strong>5–515 / сообщение</strong></td><td><span class="status">Зависит от расхода</span><small>В сравнении: 5 запрос</small></td><td><a href="https://study24.ai/chat/gemini-flash-37" target="_blank" rel="noopener noreferrer">Открыть источник ↗</a><details><summary>Настройки и основания</summary><p>Диапазон подтверждён. Цена зависит от запроса, истории, файлов и ответа. Числовые коэффициенты input/output/context публично не раскрыты. Нельзя назначать фиксированные 5 токенов.</p><p>Сопоставление Epifera до исследования: <code>formula_unverified</code>; gemini_3_7_flash.</p><p class="muted">Источник сохранён 2026-10-28T06:03:07.086598+00:00; SHA-256 <code>e816eb1f7d1f729c242495923bf902bd00ad3d7c747a75a3a541352925ae1caf</code>.</p></details></td></tr><tr data-status="dynamic_text_range" data-search="claude fable 5 claude_fable текст"><td>32</td><td><b>Claude Fable 5</b><small>Текст</small><code>claude_fable</code></td><td><strong>5–5000 / сообщение</strong></td><td><span class="status">Зависит от расхода</span><small>В сравнении: 5 запрос</small></td><td><a href="https://study24.ai/chat/claude_fable" target="_blank" rel="noopener noreferrer">Открыть источник ↗</a><details><summary>Настройки и основания</summary><p>Диапазон подтверждён. Цена зависит от запроса, истории, файлов и ответа. Числовые коэффициенты input/output/context публично не раскрыты. Нельзя назначать фиксированные 5 токенов.</p><p>Сопоставление Epifera до исследования: <code>formula_unverified</code>; claude_fable_5.</p><p class="muted">Источник сохранён 2026-10-28T06:03:07.705677+00:00; SHA-256 <code>6d0d9bccb9b6813560b22ffec3969603a07f1e1d33ed7564f0cb198ea8626f47</code>.</p></details></td></tr><tr data-status="dynamic_text_range" data-search="claude opus 4.8 claude_opus_48 текст"><td>33</td><td><b>Claude Opus 4.8</b><small>Текст</small><code>claude_opus_48</code></td><td><strong>5–1917 / сообщение</strong></td><td><span class="status">Зависит от расхода</span><small>В сравнении: 5 запрос</small></td><td><a href="https://study24.ai/chat/claude_opus_48" target="_blank" rel="noopener noreferrer">Открыть источник ↗</a><details><summary>Настройки и основания</summary><p>Диапазон подтверждён. Цена зависит от запроса, истории, файлов и ответа. Числовые коэффициенты input/output/context публично не раскрыты. Нельзя назначать фиксированные 5 токенов.</p><p>Сопоставление Epifera до исследования: <code>formula_unverified</code>; claude_opus_4_8.</p><p class="muted">Источник сохранён 2026-10-28T06:03:07.302170+00:00; SHA-256 <code>2301d26030ee843d8e042314cfb9d0638f7bee0cbf58f1374a0ea6844a741cf1</code>.</p></details></td></tr><tr data-status="dynamic_text_range" data-search="gpt 5.6 terra gpt_56 текст"><td>34</td><td><b>GPT 5.6 Terra</b><small>Текст</small><code>gpt_56</code></td><td><strong>5–512 / сообщение</strong></td><td><span class="status">Зависит от расхода</span><small>В сравнении: 5 запрос</small></td><td><a href="https://study24.ai/chat/gpt_56" target="_blank" rel="noopener noreferrer">Открыть источник ↗</a><details><summary>Настройки и основания</summary><p>Диапазон подтверждён. Цена зависит от запроса, истории, файлов и ответа. Числовые коэффициенты input/output/context публично не раскрыты. Нельзя назначать фиксированные 5 токенов.</p><p>Сопоставление Epifera до исследования: <code>formula_unverified</code>; gpt_5_6_terra.</p><p class="muted">Источник сохранён 2026-10-28T06:03:07.675155+00:00; SHA-256 <code>5fdd98bcded3a6900f3f0a6b7a9516bec65f4ac7ab00aa7bbc492279839173af</code>.</p></details></td></tr><tr data-status="dynamic_text_range" data-search="gemini 3.6 flash gemini_36_flash текст"><td>35</td><td><b>Gemini 3.6 Flash</b><small>Текст</small><code>gemini_36_flash</code></td><td><strong>5–515 / сообщение</strong></td><td><span class="status">Зависит от расхода</span><small>В сравнении: 5 запрос</small></td><td><a href="https://study24.ai/chat/gemini_36_flash" target="_blank" rel="noopener noreferrer">Открыть источник ↗</a><details><summary>Настройки и основания</summary><p>Диапазон подтверждён. Цена зависит от запроса, истории, файлов и ответа. Числовые коэффициенты input/output/context публично не раскрыты. Нельзя назначать фиксированные 5 токенов.</p><p>Сопоставление Epifera до исследования: <code>formula_unverified</code>; gemini_3_6_flash.</p><p class="muted">Источник сохранён 2026-10-28T06:03:08.676802+00:00; SHA-256 <code>81546c22a37a152dced7c9efe44d5acaabdc23898cc6632e342c5ad20b8e9a76</code>.</p></details></td></tr><tr data-status="dynamic_text_range" data-search="chatgpt 5 chat_gpt5 текст"><td>36</td><td><b>ChatGPT 5</b><small>Текст</small><code>chat_gpt5</code></td><td><strong>5–99 / сообщение</strong></td><td><span class="status">Зависит от расхода</span><small>В сравнении: 5 запрос</small></td><td><a href="https://study24.ai/chat/chat_gpt5" target="_blank" rel="noopener noreferrer">Открыть источник ↗</a><details><summary>Настройки и основания</summary><p>Диапазон подтверждён. Цена зависит от запроса, истории, файлов и ответа. Числовые коэффициенты input/output/context публично не раскрыты. Нельзя назначать фиксированные 5 токенов.</p><p>Сопоставление Epifera до исследования: <code>formula_unverified</code>; gpt_5.</p><p class="muted">Источник сохранён 2026-10-28T06:03:09.025084+00:00; SHA-256 <code>401f80199de2ca0f04c5a09ebe465bd5dbacbbc74b2e07756f0ba14cfe5007b5</code>.</p></details></td></tr><tr data-status="dynamic_text_range" data-search="gpt 6 luna gpt-luna текст"><td>37</td><td><b>GPT 6 Luna</b><small>Текст</small><code>gpt-luna</code></td><td><strong>5–99 / сообщение</strong></td><td><span class="status">Зависит от расхода</span><small>В сравнении: 5 запрос</small></td><td><a href="https://study24.ai/chat/gpt-luna" target="_blank" rel="noopener noreferrer">Открыть источник ↗</a><details><summary>Настройки и основания</summary><p>Диапазон подтверждён. Цена зависит от запроса, истории, файлов и ответа. Числовые коэффициенты input/output/context публично не раскрыты. Нельзя назначать фиксированные 5 токенов.</p><p>Сопоставление Epifera до исследования: <code>formula_unverified</code>; gpt_6_luna.</p><p class="muted">Источник сохранён 2026-10-28T06:03:08.301969+00:00; SHA-256 <code>2cdea6c6f806f262b3e0d65c2cd73c6561ef0cb8cbfa5c04d4d90903837c0550</code>.</p></details></td></tr><tr data-status="dynamic_text_range" data-search="gemini 3.1 pro gemini3_pro текст"><td>38</td><td><b>Gemini 3.1 Pro</b><small>Текст</small><code>gemini3_pro</code></td><td><strong>5–984 / сообщение</strong></td><td><span class="status">Зависит от расхода</span><small>В сравнении: 5 запрос</small></td><td><a href="https://study24.ai/chat/gemini3_pro" target="_blank" rel="noopener noreferrer">Открыть источник ↗</a><details><summary>Настройки и основания</summary><p>Диапазон подтверждён. Цена зависит от запроса, истории, файлов и ответа. Числовые коэффициенты input/output/context публично не раскрыты. Нельзя назначать фиксированные 5 токенов.</p><p>Сопоставление Epifera до исследования: <code>formula_unverified</code>; gemini_3_1_pro.</p><p class="muted">Источник сохранён 2026-10-28T06:03:08.991541+00:00; SHA-256 <code>e3183481b754235ebe8961a9e3c5c7bb68791db8cf78f867461702d5569b5192</code>.</p></details></td></tr><tr data-status="dynamic_text_range" data-search="claude haiku 5.5 claude_haiku текст"><td>39</td><td><b>Claude Haiku 5.5</b><small>Текст</small><code>claude_haiku</code></td><td><strong>5–99 / сообщение</strong></td><td><span class="status">Зависит от расхода</span><small>В сравнении: 5 запрос</small></td><td><a href="https://study24.ai/chat/claude_haiku" target="_blank" rel="noopener noreferrer">Открыть источник ↗</a><details><summary>Настройки и основания</summary><p>Диапазон подтверждён. Цена зависит от запроса, истории, файлов и ответа. Числовые коэффициенты input/output/context публично не раскрыты. Нельзя назначать фиксированные 5 токенов.</p><p>Сопоставление Epifera до исследования: <code>version_ambiguous</code>; claude_haiku_4_5_20251001.</p><p class="muted">Источник сохранён 2026-10-28T06:03:08.919488+00:00; SHA-256 <code>3cdad93d2bbf004741a7c34098f9ca4805c64c02a6a714437c2d609b2c6eab81</code>.</p></details></td></tr><tr data-status="dynamic_text_range" data-search="deepseek v4 pro deepseek_v4 текст"><td>40</td><td><b>DeepSeek V4 Pro</b><small>Текст</small><code>deepseek_v4</code></td><td><strong>5–139 / сообщение</strong></td><td><span class="status">Зависит от расхода</span><small>В сравнении: 5 запрос</small></td><td><a href="https://study24.ai/chat/deepseek_v4" target="_blank" rel="noopener noreferrer">Открыть источник ↗</a><details><summary>Настройки и основания</summary><p>Диапазон подтверждён. Цена зависит от запроса, истории, файлов и ответа. Числовые коэффициенты input/output/context публично не раскрыты. Нельзя назначать фиксированные 5 токенов.</p><p>Сопоставление Epifera до исследования: <code>formula_unverified</code>; deepseek_v4_pro.</p><p class="muted">Источник сохранён 2026-10-28T06:03:09.495883+00:00; SHA-256 <code>d42fd81cbe1e23e0dfd0d4b37eead235809891c6f81b1fcd5b1cbca8ec9e7324</code>.</p></details></td></tr><tr data-status="dynamic_text_range" data-search="claude opus 4.7 claude_opus_47 текст"><td>41</td><td><b>Claude Opus 4.7</b><small>Текст</small><code>claude_opus_47</code></td><td><strong>5–1917 / сообщение</strong></td><td><span class="status">Зависит от расхода</span><small>В сравнении: 5 запрос</small></td><td><a href="https://study24.ai/chat/claude_opus_47" target="_blank" rel="noopener noreferrer">Открыть источник ↗</a><details><summary>Настройки и основания</summary><p>Диапазон подтверждён. Цена зависит от запроса, истории, файлов и ответа. Числовые коэффициенты input/output/context публично не раскрыты. Нельзя назначать фиксированные 5 токенов.</p><p>Сопоставление Epifera до исследования: <code>formula_unverified</code>; claude_opus_4_7.</p><p class="muted">Источник сохранён 2026-10-28T06:03:10.272421+00:00; SHA-256 <code>0424f4fcbbcb6f82199e8e06384e79a541331e0e99148842bb7a4988f3c56c1d</code>.</p></details></td></tr><tr data-status="dynamic_text_range" data-search="gemini 3.5 flash gemini_3_5_flash текст"><td>42</td><td><b>Gemini 3.5 Flash</b><small>Текст</small><code>gemini_3_5_flash</code></td><td><strong>5–825 / сообщение</strong></td><td><span class="status">Зависит от расхода</span><small>В сравнении: 5 запрос</small></td><td><a href="https://study24.ai/chat/gemini_3_5_flash" target="_blank" rel="noopener noreferrer">Открыть источник ↗</a><details><summary>Настройки и основания</summary><p>Диапазон подтверждён. Цена зависит от запроса, истории, файлов и ответа. Числовые коэффициенты input/output/context публично не раскрыты. Нельзя назначать фиксированные 5 токенов.</p><p>Сопоставление Epifera до исследования: <code>formula_unverified</code>; gemini_3_5_flash.</p><p class="muted">Источник сохранён 2026-10-28T06:03:10.472636+00:00; SHA-256 <code>20c16a951edfc159d5dab38744e102e4896aa42198f00b875629114ad70dc5ba</code>.</p></details></td></tr><tr data-status="dynamic_text_range" data-search="kimi k3 kimi_k3 текст"><td>43</td><td><b>Kimi K3</b><small>Текст</small><code>kimi_k3</code></td><td><strong>5–216 / сообщение</strong></td><td><span class="status">Зависит от расхода</span><small>В сравнении: 5 запрос</small></td><td><a href="https://study24.ai/chat/kimi_k3" target="_blank" rel="noopener noreferrer">Открыть источник ↗</a><details><summary>Настройки и основания</summary><p>Диапазон подтверждён. Цена зависит от запроса, истории, файлов и ответа. Числовые коэффициенты input/output/context публично не раскрыты. Нельзя назначать фиксированные 5 токенов.</p><p>Сопоставление Epifera до исследования: <code>formula_unverified</code>; kimi_k3.</p><p class="muted">Источник сохранён 2026-10-28T06:03:09.717368+00:00; SHA-256 <code>ca7f31b37529b30ea079e23ccf4166374ffe3f6defe03290b7a62db5809ccad9</code>.</p></details></td></tr><tr data-status="dynamic_text_range" data-search="qwen 3.8 max qwen_max текст"><td>44</td><td><b>Qwen 3.8 Max</b><small>Текст</small><code>qwen_max</code></td><td><strong>5–920 / сообщение</strong></td><td><span class="status">Зависит от расхода</span><small>В сравнении: 5 запрос</small></td><td><a href="https://study24.ai/chat/qwen_max" target="_blank" rel="noopener noreferrer">Открыть источник ↗</a><details><summary>Настройки и основания</summary><p>Диапазон подтверждён. Цена зависит от запроса, истории, файлов и ответа. Числовые коэффициенты input/output/context публично не раскрыты. Нельзя назначать фиксированные 5 токенов.</p><p>Сопоставление Epifera до исследования: <code>formula_unverified</code>; qwen_3_8_max.</p><p class="muted">Источник сохранён 2026-10-28T06:03:11.850512+00:00; SHA-256 <code>ca216ad12c1b655ea2ab671c305ab6e9aa1587f778af584a580a1c2a21898f54</code>.</p></details></td></tr><tr data-status="dynamic_text_range" data-search="claude sonnet 5.5 claude_sonnet текст"><td>45</td><td><b>Claude Sonnet 5.5</b><small>Текст</small><code>claude_sonnet</code></td><td><strong>5–1012 / сообщение</strong></td><td><span class="status">Зависит от расхода</span><small>В сравнении: 5 запрос</small></td><td><a href="https://study24.ai/chat/claude_sonnet" target="_blank" rel="noopener noreferrer">Открыть источник ↗</a><details><summary>Настройки и основания</summary><p>Диапазон подтверждён. Цена зависит от запроса, истории, файлов и ответа. Числовые коэффициенты input/output/context публично не раскрыты. Нельзя назначать фиксированные 5 токенов.</p><p>Сопоставление Epifera до исследования: <code>missing</code>; соответствие не установлено.</p><p class="muted">Источник сохранён 2026-10-28T06:03:10.380725+00:00; SHA-256 <code>c11de7a9b62689ec87ae77f6d44ff16d8a932b0c069bccc04455fcddb78571f5</code>.</p></details></td></tr><tr data-status="dynamic_text_range" data-search="chatgpt 5.4 chat_gpt5_4 текст"><td>46</td><td><b>ChatGPT 5.4</b><small>Текст</small><code>chat_gpt5_4</code></td><td><strong>5–551 / сообщение</strong></td><td><span class="status">Зависит от расхода</span><small>В сравнении: 5 запрос</small></td><td><a href="https://study24.ai/chat/chat_gpt5_4" target="_blank" rel="noopener noreferrer">Открыть источник ↗</a><details><summary>Настройки и основания</summary><p>Диапазон подтверждён. Цена зависит от запроса, истории, файлов и ответа. Числовые коэффициенты input/output/context публично не раскрыты. Нельзя назначать фиксированные 5 токенов.</p><p>Сопоставление Epifera до исследования: <code>formula_unverified</code>; gpt_5_4.</p><p class="muted">Источник сохранён 2026-10-28T06:03:10.999550+00:00; SHA-256 <code>9cc183b2153c849e5dce558c44dde115fa233b87f71d394727362b666758c921</code>.</p></details></td></tr><tr data-status="dynamic_text_range" data-search="chatgpt 5.5 chat_gpt5_5 текст"><td>47</td><td><b>ChatGPT 5.5</b><small>Текст</small><code>chat_gpt5_5</code></td><td><strong>5–551 / сообщение</strong></td><td><span class="status">Зависит от расхода</span><small>В сравнении: 5 запрос</small></td><td><a href="https://study24.ai/chat/chat_gpt5_5" target="_blank" rel="noopener noreferrer">Открыть источник ↗</a><details><summary>Настройки и основания</summary><p>Диапазон подтверждён. Цена зависит от запроса, истории, файлов и ответа. Числовые коэффициенты input/output/context публично не раскрыты. Нельзя назначать фиксированные 5 токенов.</p><p>Сопоставление Epifera до исследования: <code>formula_unverified</code>; gpt_5_5.</p><p class="muted">Источник сохранён 2026-10-28T06:03:11.710932+00:00; SHA-256 <code>8ae4ab23bd69378ed6cf1a0825f8b5fa83b8a72f1387b856c14d352988fcf346</code>.</p></details></td></tr><tr data-status="dynamic_text_range" data-search="chatgpt 5.3 codex chatgpt_codex текст"><td>48</td><td><b>ChatGPT 5.3 Codex</b><small>Текст</small><code>chatgpt_codex</code></td><td><strong>5–378 / сообщение</strong></td><td><span class="status">Зависит от расхода</span><small>В сравнении: 5 запрос</small></td><td><a href="https://study24.ai/chat/chatgpt_codex" target="_blank" rel="noopener noreferrer">Открыть источник ↗</a><details><summary>Настройки и основания</summary><p>Диапазон подтверждён. Цена зависит от запроса, истории, файлов и ответа. Числовые коэффициенты input/output/context публично не раскрыты. Нельзя назначать фиксированные 5 токенов.</p><p>Сопоставление Epifera до исследования: <code>formula_unverified</code>; gpt_5_3_codex.</p><p class="muted">Источник сохранён 2026-10-28T06:03:11.941507+00:00; SHA-256 <code>7f94c8473a830549830e025edd82c879ea8db2020e8b9479310aa1d9f36c07af</code>.</p></details></td></tr><tr data-status="dynamic_text_range" data-search="grok 4.7 grok-4-7 текст"><td>49</td><td><b>Grok 4.7</b><small>Текст</small><code>grok-4-7</code></td><td><strong>5–529 / сообщение</strong></td><td><span class="status">Зависит от расхода</span><small>В сравнении: 5 запрос</small></td><td><a href="https://study24.ai/chat/grok-4-7" target="_blank" rel="noopener noreferrer">Открыть источник ↗</a><details><summary>Настройки и основания</summary><p>Диапазон подтверждён. Цена зависит от запроса, истории, файлов и ответа. Числовые коэффициенты input/output/context публично не раскрыты. Нельзя назначать фиксированные 5 токенов.</p><p>Сопоставление Epifera до исследования: <code>formula_unverified</code>; grok_4_7.</p><p class="muted">Источник сохранён 2026-10-28T06:03:12.396410+00:00; SHA-256 <code>36bd16a8b552d9f659b9028dadfc45f45b1a104055ea7c231871a6a74cd17834</code>.</p></details></td></tr><tr data-status="dynamic_text_range" data-search="grok 4.5 grok_45 текст"><td>50</td><td><b>Grok 4.5</b><small>Текст</small><code>grok_45</code></td><td><strong>5–544 / сообщение</strong></td><td><span class="status">Зависит от расхода</span><small>В сравнении: 5 запрос</small></td><td><a href="https://study24.ai/chat/grok_45" target="_blank" rel="noopener noreferrer">Открыть источник ↗</a><details><summary>Настройки и основания</summary><p>Диапазон подтверждён. Цена зависит от запроса, истории, файлов и ответа. Числовые коэффициенты input/output/context публично не раскрыты. Нельзя назначать фиксированные 5 токенов.</p><p>Сопоставление Epifera до исследования: <code>formula_unverified</code>; grok_4_5.</p><p class="muted">Источник сохранён 2026-10-28T06:03:12.817664+00:00; SHA-256 <code>e94e1e047d43a605d0ae687a001c0f81bc067c8be676fdca0bd1119d6e9f4f6c</code>.</p></details></td></tr><tr data-status="dynamic_text_range" data-search="grok 4.6 grok-46 текст"><td>51</td><td><b>Grok 4.6</b><small>Текст</small><code>grok-46</code></td><td><strong>5–544 / сообщение</strong></td><td><span class="status">Зависит от расхода</span><small>В сравнении: 5 запрос</small></td><td><a href="https://study24.ai/chat/grok-46" target="_blank" rel="noopener noreferrer">Открыть источник ↗</a><details><summary>Настройки и основания</summary><p>Диапазон подтверждён. Цена зависит от запроса, истории, файлов и ответа. Числовые коэффициенты input/output/context публично не раскрыты. Нельзя назначать фиксированные 5 токенов.</p><p>Сопоставление Epifera до исследования: <code>formula_unverified</code>; grok_4_6.</p><p class="muted">Источник сохранён 2026-10-28T06:03:12.587877+00:00; SHA-256 <code>231190467343b864a9f081fff013c6ad7d13afa70c7ff67d52927a47b9ba4667</code>.</p></details></td></tr><tr data-status="dynamic_text_range" data-search="chatgpt 5.2 chat_gpt5_2 текст"><td>52</td><td><b>ChatGPT 5.2</b><small>Текст</small><code>chat_gpt5_2</code></td><td><strong>5–574 / сообщение</strong></td><td><span class="status">Зависит от расхода</span><small>В сравнении: 5 запрос</small></td><td><a href="https://study24.ai/chat/chat_gpt5_2" target="_blank" rel="noopener noreferrer">Открыть источник ↗</a><details><summary>Настройки и основания</summary><p>Диапазон подтверждён. Цена зависит от запроса, истории, файлов и ответа. Числовые коэффициенты input/output/context публично не раскрыты. Нельзя назначать фиксированные 5 токенов.</p><p>Сопоставление Epifera до исследования: <code>formula_unverified</code>; gpt_5_2.</p><p class="muted">Источник сохранён 2026-10-28T06:03:13.258236+00:00; SHA-256 <code>074a2fafcdb9811fb81215748699ba0b44a2068af9db1ff1ee8674a937f4d777</code>.</p></details></td></tr><tr data-status="dynamic_text_range" data-search="claude opus 4.6 claude_opus текст"><td>53</td><td><b>Claude Opus 4.6</b><small>Текст</small><code>claude_opus</code></td><td><strong>5–1750 / сообщение</strong></td><td><span class="status">Зависит от расхода</span><small>В сравнении: 5 запрос</small></td><td><a href="https://study24.ai/chat/claude_opus" target="_blank" rel="noopener noreferrer">Открыть источник ↗</a><details><summary>Настройки и основания</summary><p>Диапазон подтверждён. Цена зависит от запроса, истории, файлов и ответа. Числовые коэффициенты input/output/context публично не раскрыты. Нельзя назначать фиксированные 5 токенов.</p><p>Сопоставление Epifera до исследования: <code>formula_unverified</code>; claude_opus_4_6.</p><p class="muted">Источник сохранён 2026-10-28T06:03:13.389234+00:00; SHA-256 <code>e4801e25ce9dc0bd56ecd9a575f0aafac89dd830408a9bafde4b1f804579dc2c</code>.</p></details></td></tr><tr data-status="dynamic_text_range" data-search="perplexity perplexity_plus_bot текст"><td>54</td><td><b>Perplexity</b><small>Текст</small><code>perplexity_plus_bot</code></td><td><strong>5–405 / сообщение</strong></td><td><span class="status">Зависит от расхода</span><small>В сравнении: 5 запрос</small></td><td><a href="https://study24.ai/chat/perplexity_plus_bot" target="_blank" rel="noopener noreferrer">Открыть источник ↗</a><details><summary>Настройки и основания</summary><p>Диапазон подтверждён. Цена зависит от запроса, истории, файлов и ответа. Числовые коэффициенты input/output/context публично не раскрыты. Нельзя назначать фиксированные 5 токенов.</p><p>Сопоставление Epifera до исследования: <code>missing</code>; соответствие не установлено.</p><p class="muted">Источник сохранён 2026-10-28T06:03:13.225234+00:00; SHA-256 <code>db78561c3b6b5d7d95ee1a310acfcd88632ce98ff619b40ea7001e76902097ea</code>.</p></details></td></tr><tr data-status="dynamic_text_range" data-search="gpt 6 astra gpt-6 текст"><td>55</td><td><b>GPT 6 Astra</b><small>Текст</small><code>gpt-6</code></td><td><strong>5–1567 / сообщение</strong></td><td><span class="status">Зависит от расхода</span><small>В сравнении: 5 запрос</small></td><td><a href="https://study24.ai/chat/gpt-6" target="_blank" rel="noopener noreferrer">Открыть источник ↗</a><details><summary>Настройки и основания</summary><p>Диапазон подтверждён. Цена зависит от запроса, истории, файлов и ответа. Числовые коэффициенты input/output/context публично не раскрыты. Нельзя назначать фиксированные 5 токенов.</p><p>Сопоставление Epifera до исследования: <code>formula_unverified</code>; gpt_6_astra.</p><p class="muted">Источник сохранён 2026-10-28T06:03:13.469487+00:00; SHA-256 <code>294da964377e9db28b0e84b7d5ff52db4e9eb3ddf20b76c52b32043f9fdf7473</code>.</p></details></td></tr><tr data-status="published_media_formula" data-search="seedance 2.5 lite seedance25 видео и аудио"><td>56</td><td><b>Seedance 2.5 Lite</b><small>Видео и аудио</small><code>seedance25</code></td><td><strong>50–200 / сек</strong></td><td><span class="status">Формула опубликована</span><small>В сравнении: 50 секунда</small></td><td><a href="https://study24.ai/chat/seedance25" target="_blank" rel="noopener noreferrer">Открыть источник ↗</a><details><summary>Настройки и основания</summary><ul><li><code>aspect_ratio</code>: 16:9, 1:1, 3:4, 4:3, 9:16, adaptive · по умолчанию 16:9</li><li><code>resolution</code>: 1080P, 480P, 720P · по умолчанию 720P</li><li><code>duration</code>: 2 … 30 · по умолчанию 5</li><li><code>prompt</code>: 1 … 20000</li></ul><p>Опубликованные ветки стоимости; required/accepted params и зависимости сохранены в JSON. Это публичный расчёт, а не проверка фактического списания.</p><pre>[
+  {
+    &quot;acceptedParams&quot;: [
+      &quot;aspect_ratio&quot;,
+      &quot;duration&quot;,
+      &quot;start_frame&quot;,
+      &quot;end_frame&quot;,
+      &quot;prompt&quot;,
+      &quot;reference_audio_urls&quot;,
+      &quot;reference_image_urls&quot;,
+      &quot;reference_video_urls&quot;,
+      &quot;resolution&quot;
+    ],
+    &quot;baseCost&quot;: 50,
+    &quot;contentType&quot;: &quot;video&quot;,
+    &quot;costUnit&quot;: &quot;per_second&quot;,
+    &quot;multipliers&quot;: {
+      &quot;resolution&quot;: {
+        &quot;480P&quot;: 1,
+        &quot;720P&quot;: 2,
+        &quot;1080P&quot;: 4
+      }
+    },
+    &quot;requiredParams&quot;: [
+      &quot;prompt&quot;,
+      &quot;duration&quot;
+    ]
+  }
+]</pre><p>Сопоставление Epifera до исследования: <code>version_ambiguous</code>; video_seedance_2_5.</p><p class="muted">Источник сохранён 2026-10-28T06:03:13.905659+00:00; SHA-256 <code>05224741721cba4a0aece29a6d64ec06325c96356081c349f6b0eed456a65fcd</code>.</p></details></td></tr><tr data-status="published_media_formula" data-search="seedance 2.0 seedance видео и аудио"><td>57</td><td><b>Seedance 2.0</b><small>Видео и аудио</small><code>seedance</code></td><td><strong>28–105 / сек</strong></td><td><span class="status">Формула опубликована</span><small>В сравнении: 28 секунда</small></td><td><a href="https://study24.ai/chat/seedance" target="_blank" rel="noopener noreferrer">Открыть источник ↗</a><details><summary>Настройки и основания</summary><ul><li><code>aspect_ratio</code>: 16:9, 1:1, 21:9, 3:4, 4:3, 9:16, adaptive · по умолчанию adaptive</li><li><code>duration</code>: 4 … 15 · по умолчанию 5</li><li><code>resolution</code>: 480p, 720p · по умолчанию 720p</li></ul><p>Опубликованные ветки стоимости; required/accepted params и зависимости сохранены в JSON. Это публичный расчёт, а не проверка фактического списания.</p><pre>[
+  {
+    &quot;acceptedParams&quot;: [
+      &quot;aspect_ratio&quot;,
+      &quot;audio_urls&quot;,
+      &quot;duration&quot;,
+      &quot;start_frame&quot;,
+      &quot;media&quot;,
+      &quot;end_frame&quot;,
+      &quot;prompt&quot;,
+      &quot;resolution&quot;,
+      &quot;video_urls&quot;
+    ],
+    &quot;baseCost&quot;: 28,
+    &quot;contentType&quot;: &quot;video&quot;,
+    &quot;costUnit&quot;: &quot;per_second&quot;,
+    &quot;multipliers&quot;: {
+      &quot;resolution&quot;: {
+        &quot;720p&quot;: 2.2222,
+        &quot;480p&quot;: 1
+      },
+      &quot;video_urls&quot;: {
+        &quot;__present__&quot;: 1,
+        &quot;__missing__&quot;: 1.6861
+      }
+    },
+    &quot;requiredParams&quot;: [
+      &quot;prompt&quot;,
+      &quot;duration&quot;
+    ]
+  }
+]</pre><p>Сопоставление Epifera до исследования: <code>variant_unverified</code>; seedance_2_0.</p><p class="muted">Источник сохранён 2026-10-28T06:03:14.432598+00:00; SHA-256 <code>3ecc9912257a63d6069a6d674228d541ae60f7baeae5434e46c5282091dd687e</code>.</p></details></td></tr><tr data-status="published_media_formula" data-search="kling 4.0 kling видео и аудио"><td>58</td><td><b>Kling 4.0</b><small>Видео и аудио</small><code>kling</code></td><td><strong>55–138 / сек</strong></td><td><span class="status">Формула опубликована</span><small>В сравнении: 55 секунда</small></td><td><a href="https://study24.ai/chat/kling" target="_blank" rel="noopener noreferrer">Открыть источник ↗</a><details><summary>Настройки и основания</summary><ul><li><code>duration</code>: 3 … 30 · по умолчанию 5</li><li><code>prompt</code>: 1 … 8000</li><li><code>aspect_ratio</code>: 16:9, 1:1, 21:9, 9:16, auto · по умолчанию auto</li><li><code>resolution</code>: 1080p, 720p · по умолчанию 720p</li><li><code>keep_original_sound</code>: false, true · по умолчанию false</li><li><code>mode</code>: keyframe, reference · по умолчанию reference</li></ul><p>Опубликованные ветки стоимости; required/accepted params и зависимости сохранены в JSON. Это публичный расчёт, а не проверка фактического списания.</p><pre>[
+  {
+    &quot;acceptedParams&quot;: [
+      &quot;aspect_ratio&quot;,
+      &quot;duration&quot;,
+      &quot;start_frame&quot;,
+      &quot;media&quot;,
+      &quot;keep_original_sound&quot;,
+      &quot;keyframes&quot;,
+      &quot;end_frame&quot;,
+      &quot;mode&quot;,
+      &quot;prompt&quot;,
+      &quot;resolution&quot;,
+      &quot;video_urls&quot;
+    ],
+    &quot;baseCost&quot;: 55,
+    &quot;contentType&quot;: &quot;video&quot;,
+    &quot;costUnit&quot;: &quot;per_second&quot;,
+    &quot;multipliers&quot;: {
+      &quot;resolution&quot;: {
+        &quot;1080p&quot;: 1.5,
+        &quot;720p&quot;: 1
+      },
+      &quot;video_urls&quot;: {
+        &quot;__missing__&quot;: 1.6716,
+        &quot;__present__&quot;: 1
+      }
+    },
+    &quot;requiredParams&quot;: [
+      &quot;mode&quot;,
+      &quot;prompt&quot;,
+      &quot;duration&quot;
+    ]
+  }
+]</pre><p>Сопоставление Epifera до исследования: <code>missing</code>; соответствие не установлено.</p><p class="muted">Источник сохранён 2026-10-28T06:03:14.198246+00:00; SHA-256 <code>5b8cfcf5acfc2aefb010b38f2a17561e7b97c772179dd61ca0925bf0f5610a9e</code>.</p></details></td></tr><tr data-status="published_media_formula" data-search="генератор видео videogen видео и аудио"><td>59</td><td><b>Генератор видео</b><small>Видео и аудио</small><code>videogen</code></td><td><strong>25 / сек</strong></td><td><span class="status">Формула опубликована</span><small>В сравнении: 25 секунда</small></td><td><a href="https://study24.ai/chat/videogen" target="_blank" rel="noopener noreferrer">Открыть источник ↗</a><details><summary>Настройки и основания</summary><ul><li><code>aspect_ratio</code>: 16:9, 1:1, 2:3, 3:2, 9:16 · по умолчанию 1:1</li><li><code>duration</code>: 6 … 30 · по умолчанию 10</li></ul><p>Опубликованные ветки стоимости; required/accepted params и зависимости сохранены в JSON. Это публичный расчёт, а не проверка фактического списания.</p><pre>[
+  {
+    &quot;acceptedParams&quot;: [
+      &quot;aspect_ratio&quot;,
+      &quot;duration&quot;,
+      &quot;media&quot;,
+      &quot;prompt&quot;
+    ],
+    &quot;baseCost&quot;: 25,
+    &quot;contentType&quot;: &quot;video&quot;,
+    &quot;costUnit&quot;: &quot;per_second&quot;,
+    &quot;requiredParams&quot;: [
+      &quot;prompt&quot;
+    ]
+  }
+]</pre><p>Сопоставление Epifera до исследования: <code>missing</code>; соответствие не установлено.</p><p class="muted">Источник сохранён 2026-10-28T06:03:14.169747+00:00; SHA-256 <code>72d2144aa75a02b72656db71dec1ff79754dbc4d6f774026cb3ac063bf8e23c2</code>.</p></details></td></tr><tr data-status="embedded_app" data-search="suno suno видео и аудио"><td>60</td><td><b>Suno</b><small>Видео и аудио</small><code>suno</code></td><td><strong>Песня — 60 / трек; операции — 20–100</strong><span class="conflict">Таблица и приложение расходятся</span></td><td><span class="status">Отдельное приложение</span><small>В сравнении: 60 генерация</small></td><td><a href="https://study24.ai/chat/suno" target="_blank" rel="noopener noreferrer">Открыть источник ↗</a><details><summary>Настройки и основания</summary><p>Custom song default is two tracks = 120; one = 60, four = 240. Choosing maximum song length did not change the displayed price. Four source-only operations require a prior track/context and were not invoked.</p><pre>Eight multi-track operations multiply their base price by count clamped/rounded to 1..4; other operations use a fixed operation price.</pre><p>Сопоставление Epifera до исследования: <code>variant_unverified</code>; suno_v6, suno_v6_wild, suno_v6_mini.</p><p class="muted">Источник сохранён 2026-10-28T06:03:14.786717+00:00; SHA-256 <code>f0c0ae5914b33ae49aaee2b268f079281a937916a2d164e3b260931bf4abdd97</code>.</p></details></td></tr><tr data-status="published_media_formula" data-search="gemini omni 1.1 gemini_omni1 видео и аудио"><td>61</td><td><b>Gemini Omni 1.1</b><small>Видео и аудио</small><code>gemini_omni1</code></td><td><strong>от 384 / видео; от 36 / сек</strong></td><td><span class="status">Формула опубликована</span><small>В сравнении: 36 секунда</small></td><td><a href="https://study24.ai/chat/gemini_omni1" target="_blank" rel="noopener noreferrer">Открыть источник ↗</a><details><summary>Настройки и основания</summary><ul><li><code>video_start</code>: 0 · по умолчанию 0</li><li><code>duration</code>: 10, 4, 6, 8 · по умолчанию 8</li><li><code>resolution</code>: 1080p, 360p, 4k, 720p · по умолчанию 720p</li><li><code>aspect_ratio</code>: 16:9, 9:16 · по умолчанию 16:9</li></ul><p>Опубликованные ветки стоимости; required/accepted params и зависимости сохранены в JSON. Это публичный расчёт, а не проверка фактического списания.</p><pre>[
+  {
+    &quot;acceptedParams&quot;: [
+      &quot;aspect_ratio&quot;,
+      &quot;media&quot;,
+      &quot;prompt&quot;,
+      &quot;resolution&quot;,
+      &quot;video_end&quot;,
+      &quot;video_start&quot;,
+      &quot;video_url&quot;
+    ],
+    &quot;baseCost&quot;: 426,
+    &quot;contentType&quot;: &quot;video&quot;,
+    &quot;costUnit&quot;: &quot;per_result&quot;,
+    &quot;multipliers&quot;: {
+      &quot;resolution&quot;: {
+        &quot;4k&quot;: 2.125,
+        &quot;360p&quot;: 0.9,
+        &quot;720p&quot;: 1,
+        &quot;1080p&quot;: 1.345
+      }
+    },
+    &quot;requiredParams&quot;: [
+      &quot;prompt&quot;,
+      &quot;video_url&quot;
+    ]
+  },
+  {
+    &quot;acceptedParams&quot;: [
+      &quot;aspect_ratio&quot;,
+      &quot;duration&quot;,
+      &quot;start_frame&quot;,
+      &quot;media&quot;,
+      &quot;end_frame&quot;,
+      &quot;prompt&quot;,
+      &quot;resolution&quot;
+    ],
+    &quot;baseCost&quot;: 40,
+    &quot;contentType&quot;: &quot;video&quot;,
+    &quot;costUnit&quot;: &quot;per_second&quot;,
+    &quot;multipliers&quot;: {
+      &quot;resolution&quot;: {
+        &quot;360p&quot;: 0.9,
+        &quot;720p&quot;: 1,
+        &quot;1080p&quot;: 1.345,
+        &quot;4k&quot;: 2.125
+      }
+    },
+    &quot;requiredParams&quot;: [
+      &quot;prompt&quot;,
+      &quot;duration&quot;
+    ]
+  }
+]</pre><p>Сопоставление Epifera до исследования: <code>version_ambiguous</code>; video_gemini_omni_1_1_flash.</p><p class="muted">Источник сохранён 2026-10-28T06:03:15.560183+00:00; SHA-256 <code>73fe32bcb0fcc1dfd003a5118eba340338e9c92a8e9fecbb77d7a9608e4fdfc6</code>.</p></details></td></tr><tr data-status="published_media_formula" data-search="wan 3.0 wan_3 видео и аудио"><td>62</td><td><b>Wan 3.0</b><small>Видео и аудио</small><code>wan_3</code></td><td><strong>50–200 / сек</strong></td><td><span class="status">Формула опубликована</span><small>В сравнении: 50 секунда</small></td><td><a href="https://study24.ai/chat/wan_3" target="_blank" rel="noopener noreferrer">Открыть источник ↗</a><details><summary>Настройки и основания</summary><ul><li><code>aspect_ratio</code>: 16:9, 1:1, 3:4, 4:3, 9:16, adaptive · по умолчанию 16:9</li><li><code>resolution</code>: 1080P, 480P, 720P · по умолчанию 720P</li><li><code>duration</code>: 2 … 30 · по умолчанию 5</li><li><code>prompt</code>: 1 … 20000</li></ul><p>Опубликованные ветки стоимости; required/accepted params и зависимости сохранены в JSON. Это публичный расчёт, а не проверка фактического списания.</p><pre>[
+  {
+    &quot;acceptedParams&quot;: [
+      &quot;aspect_ratio&quot;,
+      &quot;duration&quot;,
+      &quot;start_frame&quot;,
+      &quot;end_frame&quot;,
+      &quot;prompt&quot;,
+      &quot;reference_audio_urls&quot;,
+      &quot;reference_image_urls&quot;,
+      &quot;reference_video_urls&quot;,
+      &quot;resolution&quot;
+    ],
+    &quot;baseCost&quot;: 50,
+    &quot;contentType&quot;: &quot;video&quot;,
+    &quot;costUnit&quot;: &quot;per_second&quot;,
+    &quot;multipliers&quot;: {
+      &quot;resolution&quot;: {
+        &quot;480P&quot;: 1,
+        &quot;720P&quot;: 2,
+        &quot;1080P&quot;: 4
+      }
+    },
+    &quot;requiredParams&quot;: [
+      &quot;prompt&quot;,
+      &quot;duration&quot;
+    ]
+  }
+]</pre><p>Сопоставление Epifera до исследования: <code>variant_unverified</code>; wan_3_0.</p><p class="muted">Источник сохранён 2026-10-28T06:03:15.487638+00:00; SHA-256 <code>f45450e0dd41534fd8decbeeb7a46f2dec9815285a4a8b52e329e7ab7365c340</code>.</p></details></td></tr><tr data-status="published_media_formula" data-search="google veo 3.1 google_veo3 видео и аудио"><td>63</td><td><b>Google Veo 3.1</b><small>Видео и аудио</small><code>google_veo3</code></td><td><strong>264–1298 / результат</strong></td><td><span class="status">Формула опубликована</span><small>В сравнении: 264 генерация</small></td><td><a href="https://study24.ai/chat/google_veo3" target="_blank" rel="noopener noreferrer">Открыть источник ↗</a><details><summary>Настройки и основания</summary><ul><li><code>resolution</code>: 1080p, 4k, 720p · по умолчанию 720p</li><li><code>duration</code>: 4, 6, 8 · по умолчанию 8</li><li><code>aspect_ratio</code>: 16:9, 9:16, Auto · по умолчанию 16:9</li></ul><p>Опубликованные ветки стоимости; required/accepted params и зависимости сохранены в JSON. Это публичный расчёт, а не проверка фактического списания.</p><pre>[
+  {
+    &quot;acceptedParams&quot;: [
+      &quot;aspect_ratio&quot;,
+      &quot;duration&quot;,
+      &quot;start_frame&quot;,
+      &quot;end_frame&quot;,
+      &quot;prompt&quot;,
+      &quot;resolution&quot;
+    ],
+    &quot;baseCost&quot;: 264,
+    &quot;contentType&quot;: &quot;video&quot;,
+    &quot;costUnit&quot;: &quot;per_result&quot;,
+    &quot;multipliers&quot;: {
+      &quot;resolution&quot;: {
+        &quot;4k&quot;: 2.9962,
+        &quot;720p&quot;: 1,
+        &quot;1080p&quot;: 1.0833
+      }
+    },
+    &quot;requiredParams&quot;: [
+      &quot;prompt&quot;
+    ]
+  },
+  {
+    &quot;acceptedParams&quot;: [
+      &quot;duration&quot;,
+      &quot;media&quot;,
+      &quot;prompt&quot;,
+      &quot;resolution&quot;
+    ],
+    &quot;baseCost&quot;: 433,
+    &quot;contentType&quot;: &quot;video&quot;,
+    &quot;costUnit&quot;: &quot;per_result&quot;,
+    &quot;multipliers&quot;: {
+      &quot;resolution&quot;: {
+        &quot;4k&quot;: 2.9962,
+        &quot;720p&quot;: 1,
+        &quot;1080p&quot;: 1.0833
+      }
+    },
+    &quot;requiredParams&quot;: [
+      &quot;prompt&quot;,
+      &quot;media&quot;
+    ]
+  }
+]</pre><p>Сопоставление Epifera до исследования: <code>variant_unverified</code>; video_veo_3_1_fast, video_veo_3_1_quality, video_veo_3_1_lite.</p><p class="muted">Источник сохранён 2026-10-28T06:03:15.794778+00:00; SHA-256 <code>6b11b14356ef89a17b65f0541629a071d75ec13ce00e42a3b67822c16f8efe95</code>.</p></details></td></tr><tr data-status="published_media_formula" data-search="seedance 2.0 mini seedance_mini видео и аудио"><td>64</td><td><b>Seedance 2.0 Mini</b><small>Видео и аудио</small><code>seedance_mini</code></td><td><strong>25 / сек</strong></td><td><span class="status">Формула опубликована</span><small>В сравнении: 25 секунда</small></td><td><a href="https://study24.ai/chat/seedance_mini" target="_blank" rel="noopener noreferrer">Открыть источник ↗</a><details><summary>Настройки и основания</summary><ul><li><code>aspect_ratio</code>: 16:9, 1:1, 21:9, 3:4, 4:3, 9:16, adaptive · по умолчанию adaptive</li><li><code>duration</code>: 4 … 15 · по умолчанию 5</li><li><code>generate_audio</code>: false, true · по умолчанию true</li></ul><p>Опубликованные ветки стоимости; required/accepted params и зависимости сохранены в JSON. Это публичный расчёт, а не проверка фактического списания.</p><pre>[
+  {
+    &quot;acceptedParams&quot;: [
+      &quot;aspect_ratio&quot;,
+      &quot;audio_urls&quot;,
+      &quot;duration&quot;,
+      &quot;start_frame&quot;,
+      &quot;with_sound&quot;,
+      &quot;media&quot;,
+      &quot;end_frame&quot;,
+      &quot;prompt&quot;,
+      &quot;video_urls&quot;
+    ],
+    &quot;baseCost&quot;: 25,
+    &quot;contentType&quot;: &quot;video&quot;,
+    &quot;costUnit&quot;: &quot;per_second&quot;,
+    &quot;requiredParams&quot;: [
+      &quot;prompt&quot;,
+      &quot;duration&quot;
+    ]
+  }
+]</pre><p>Сопоставление Epifera до исследования: <code>variant_unverified</code>; seedance_2_0_mini.</p><p class="muted">Источник сохранён 2026-10-28T06:03:15.391141+00:00; SHA-256 <code>c33279dbac99c9c95fd3514e2f3f1c9658d852ecb50950d936de26100ff17f45</code>.</p></details></td></tr><tr data-status="published_media_formula" data-search="seedance 2.0 pro seedance_20_pro видео и аудио"><td>65</td><td><b>Seedance 2.0 Pro</b><small>Видео и аудио</small><code>seedance_20_pro</code></td><td><strong>190 / сек</strong></td><td><span class="status">Формула опубликована</span><small>В сравнении: 190 секунда</small></td><td><a href="https://study24.ai/chat/seedance_20_pro" target="_blank" rel="noopener noreferrer">Открыть источник ↗</a><details><summary>Настройки и основания</summary><ul><li><code>aspect_ratio</code>: 16:9, 1:1, 21:9, 3:4, 4:3, 9:16, adaptive · по умолчанию adaptive</li><li><code>resolution</code>: 1080p, 720p · по умолчанию 720p</li><li><code>duration</code>: 4 … 15 · по умолчанию 5</li></ul><p>Опубликованные ветки стоимости; required/accepted params и зависимости сохранены в JSON. Это публичный расчёт, а не проверка фактического списания.</p><pre>[
+  {
+    &quot;acceptedParams&quot;: [
+      &quot;aspect_ratio&quot;,
+      &quot;audio_urls&quot;,
+      &quot;duration&quot;,
+      &quot;start_frame&quot;,
+      &quot;media&quot;,
+      &quot;end_frame&quot;,
+      &quot;prompt&quot;,
+      &quot;resolution&quot;,
+      &quot;video_urls&quot;
+    ],
+    &quot;baseCost&quot;: 190,
+    &quot;contentType&quot;: &quot;video&quot;,
+    &quot;costUnit&quot;: &quot;per_second&quot;,
+    &quot;requiredParams&quot;: [
+      &quot;prompt&quot;,
+      &quot;duration&quot;
+    ]
+  }
+]</pre><p>Сопоставление Epifera до исследования: <code>missing</code>; соответствие не установлено.</p><p class="muted">Источник сохранён 2026-10-28T06:03:16.957596+00:00; SHA-256 <code>8fb270b08d5fa17ed85b8a05eab5b224422a7b810375896e77989b38dff09215</code>.</p></details></td></tr><tr data-status="published_media_formula" data-search="minimax h3 minimax-h3 видео и аудио"><td>66</td><td><b>Minimax H3</b><small>Видео и аудио</small><code>minimax-h3</code></td><td><strong>75 / сек</strong></td><td><span class="status">Формула опубликована</span><small>В сравнении: 75 секунда</small></td><td><a href="https://study24.ai/chat/minimax-h3" target="_blank" rel="noopener noreferrer">Открыть источник ↗</a><details><summary>Настройки и основания</summary><ul><li><code>aspect_ratio</code>: 16:9, 1:1, 21:9, 3:4, 4:3, 9:16, adaptive · по умолчанию adaptive</li><li><code>duration</code>: 4 … 15 · по умолчанию 6</li><li><code>resolution</code>: 2K, 768P · по умолчанию 2K</li></ul><p>Опубликованные ветки стоимости; required/accepted params и зависимости сохранены в JSON. Это публичный расчёт, а не проверка фактического списания.</p><pre>[
+  {
+    &quot;acceptedParams&quot;: [
+      &quot;aspect_ratio&quot;,
+      &quot;audio_urls&quot;,
+      &quot;duration&quot;,
+      &quot;start_frame&quot;,
+      &quot;media&quot;,
+      &quot;end_frame&quot;,
+      &quot;prompt&quot;,
+      &quot;resolution&quot;,
+      &quot;video_urls&quot;
+    ],
+    &quot;baseCost&quot;: 75,
+    &quot;contentType&quot;: &quot;video&quot;,
+    &quot;costUnit&quot;: &quot;per_second&quot;,
+    &quot;requiredParams&quot;: [
+      &quot;prompt&quot;,
+      &quot;duration&quot;
+    ]
+  }
+]</pre><p>Сопоставление Epifera до исследования: <code>variant_unverified</code>; video_minimax_h3.</p><p class="muted">Источник сохранён 2026-10-28T06:03:16.201188+00:00; SHA-256 <code>d9cbb6385c06b4e6f4ce656e23435a1162a586d28b029ee3e9646fb6efddf0e0</code>.</p></details></td></tr><tr data-status="published_media_formula" data-search="kling 3.0 kling_3 видео и аудио"><td>67</td><td><b>Kling 3.0</b><small>Видео и аудио</small><code>kling_3</code></td><td><strong>500 / результат</strong></td><td><span class="status">Формула опубликована</span><small>В сравнении: 500 генерация</small></td><td><a href="https://study24.ai/chat/kling_3" target="_blank" rel="noopener noreferrer">Открыть источник ↗</a><details><summary>Настройки и основания</summary><ul><li><code>aspect_ratio</code>: 16:9, 1:1, 9:16</li><li><code>duration</code>: 3 … 15 · по умолчанию 5</li><li><code>multi_shots</code>: false, true · по умолчанию false</li><li><code>generate_audio</code>: false, true · по умолчанию true</li><li><code>mode</code>: pro, std · по умолчанию pro</li></ul><p>Опубликованные ветки стоимости; required/accepted params и зависимости сохранены в JSON. Это публичный расчёт, а не проверка фактического списания.</p><pre>[
+  {
+    &quot;acceptedParams&quot;: [
+      &quot;aspect_ratio&quot;,
+      &quot;duration&quot;,
+      &quot;with_sound&quot;,
+      &quot;media&quot;,
+      &quot;mode&quot;,
+      &quot;multi_prompt&quot;,
+      &quot;multi_shots&quot;,
+      &quot;prompt&quot;
+    ],
+    &quot;baseCost&quot;: 500,
+    &quot;contentType&quot;: &quot;video&quot;,
+    &quot;costUnit&quot;: &quot;per_result&quot;,
+    &quot;requiredParams&quot;: [
+      &quot;prompt&quot;,
+      &quot;with_sound&quot;,
+      &quot;duration&quot;,
+      &quot;aspect_ratio&quot;
+    ]
+  }
+]</pre><p>Сопоставление Epifera до исследования: <code>variant_unverified</code>; video_kling_v3.</p><p class="muted">Источник сохранён 2026-10-28T06:03:16.261737+00:00; SHA-256 <code>3d8a9684b50283d7e80544bcf41e96efcf306102c918385a58d05b459469e5ee</code>.</p></details></td></tr><tr data-status="published_media_formula" data-search="kling 3.0 turbo kling_3_turbo видео и аудио"><td>68</td><td><b>Kling 3.0 Turbo</b><small>Видео и аудио</small><code>kling_3_turbo</code></td><td><strong>50 / сек</strong></td><td><span class="status">Формула опубликована</span><small>В сравнении: 50 секунда</small></td><td><a href="https://study24.ai/chat/kling_3_turbo" target="_blank" rel="noopener noreferrer">Открыть источник ↗</a><details><summary>Настройки и основания</summary><ul><li><code>duration</code>: 3 … 15 · по умолчанию 5</li><li><code>aspect_ratio</code>: 16:9, 1:1, 9:16</li></ul><p>Опубликованные ветки стоимости; required/accepted params и зависимости сохранены в JSON. Это публичный расчёт, а не проверка фактического списания.</p><pre>[
+  {
+    &quot;acceptedParams&quot;: [
+      &quot;aspect_ratio&quot;,
+      &quot;duration&quot;,
+      &quot;media&quot;,
+      &quot;prompt&quot;
+    ],
+    &quot;baseCost&quot;: 50,
+    &quot;contentType&quot;: &quot;video&quot;,
+    &quot;costUnit&quot;: &quot;per_second&quot;,
+    &quot;requiredParams&quot;: [
+      &quot;prompt&quot;,
+      &quot;duration&quot;,
+      &quot;aspect_ratio&quot;
+    ]
+  }
+]</pre><p>Сопоставление Epifera до исследования: <code>variant_unverified</code>; video_kling_3_0_turbo.</p><p class="muted">Источник сохранён 2026-10-28T06:03:17.321772+00:00; SHA-256 <code>f81bd86328581857ac3b6b59e0c22293e58873558fb623753ec54a9f2bb24e23</code>.</p></details></td></tr><tr data-status="published_media_formula" data-search="kling 2.6 kling_2_6 видео и аудио"><td>69</td><td><b>Kling 2.6</b><small>Видео и аудио</small><code>kling_2_6</code></td><td><strong>300 / результат</strong></td><td><span class="status">Формула опубликована</span><small>В сравнении: 300 генерация</small></td><td><a href="https://study24.ai/chat/kling_2_6" target="_blank" rel="noopener noreferrer">Открыть источник ↗</a><details><summary>Настройки и основания</summary><ul><li><code>generate_audio</code>: false, true · по умолчанию false</li><li><code>aspect_ratio</code>: 16:9, 1:1, 9:16</li><li><code>duration</code>: 5 … 10 · по умолчанию 5</li></ul><p>Опубликованные ветки стоимости; required/accepted params и зависимости сохранены в JSON. Это публичный расчёт, а не проверка фактического списания.</p><pre>[
+  {
+    &quot;acceptedParams&quot;: [
+      &quot;aspect_ratio&quot;,
+      &quot;duration&quot;,
+      &quot;with_sound&quot;,
+      &quot;media&quot;,
+      &quot;prompt&quot;
+    ],
+    &quot;baseCost&quot;: 300,
+    &quot;contentType&quot;: &quot;video&quot;,
+    &quot;costUnit&quot;: &quot;per_result&quot;,
+    &quot;requiredParams&quot;: [
+      &quot;prompt&quot;,
+      &quot;duration&quot;
+    ]
+  }
+]</pre><p>Сопоставление Epifera до исследования: <code>variant_unverified</code>; kling_2_6.</p><p class="muted">Источник сохранён 2026-10-28T06:03:16.824574+00:00; SHA-256 <code>7dd69449fc6bea6d9a5704471e8246ed00b3b34da6887d699799e1fc57e432fb</code>.</p></details></td></tr><tr data-status="published_media_formula" data-search="kling 2.5 turbo kling_2_1_master видео и аудио"><td>70</td><td><b>Kling 2.5 Turbo</b><small>Видео и аудио</small><code>kling_2_1_master</code></td><td><strong>200 / результат</strong></td><td><span class="status">Формула опубликована</span><small>В сравнении: 200 генерация</small></td><td><a href="https://study24.ai/chat/kling_2_1_master" target="_blank" rel="noopener noreferrer">Открыть источник ↗</a><details><summary>Настройки и основания</summary><ul><li><code>aspect_ratio</code>: 16:9, 1:1, 9:16 · по умолчанию 16:9</li><li><code>duration</code>: 5 … 10 · по умолчанию 5</li></ul><p>Опубликованные ветки стоимости; required/accepted params и зависимости сохранены в JSON. Это публичный расчёт, а не проверка фактического списания.</p><pre>[
+  {
+    &quot;acceptedParams&quot;: [
+      &quot;aspect_ratio&quot;,
+      &quot;duration&quot;,
+      &quot;media&quot;,
+      &quot;negative_prompt&quot;,
+      &quot;prompt&quot;
+    ],
+    &quot;baseCost&quot;: 200,
+    &quot;contentType&quot;: &quot;video&quot;,
+    &quot;costUnit&quot;: &quot;per_result&quot;,
+    &quot;requiredParams&quot;: [
+      &quot;prompt&quot;,
+      &quot;duration&quot;
+    ]
+  }
+]</pre><p>Сопоставление Epifera до исследования: <code>version_ambiguous</code>; соответствие не установлено.</p><p class="muted">Источник сохранён 2026-10-28T06:03:17.213754+00:00; SHA-256 <code>ab5f0bb83ee0c41a1787c44213e56690d1c5019488729bf5f4adb7041135620f</code>.</p></details></td></tr><tr data-status="published_media_formula" data-search="kling motion control kling_mc видео и аудио"><td>71</td><td><b>Kling Motion Control</b><small>Видео и аудио</small><code>kling_mc</code></td><td><strong>400 / результат</strong></td><td><span class="status">Формула опубликована</span><small>В сравнении: 400 генерация</small></td><td><a href="https://study24.ai/chat/kling_mc" target="_blank" rel="noopener noreferrer">Открыть источник ↗</a><details><summary>Настройки и основания</summary><p>Опубликованные ветки стоимости; required/accepted params и зависимости сохранены в JSON. Это публичный расчёт, а не проверка фактического списания.</p><pre>[
+  {
+    &quot;acceptedParams&quot;: [
+      &quot;media&quot;,
+      &quot;video_url&quot;
+    ],
+    &quot;baseCost&quot;: 400,
+    &quot;contentType&quot;: &quot;video&quot;,
+    &quot;costUnit&quot;: &quot;per_result&quot;,
+    &quot;requiredParams&quot;: [
+      &quot;media&quot;,
+      &quot;video_url&quot;
+    ]
+  }
+]</pre><p>Сопоставление Epifera до исследования: <code>variant_unverified</code>; video_kling_2_6_motion_control.</p><p class="muted">Источник сохранён 2026-10-28T06:03:18.407706+00:00; SHA-256 <code>5eddc2886bc35711d3c87b042dab5ca0f1bedad24883103fce21632267c2cca5</code>.</p></details></td></tr><tr data-status="published_media_formula" data-search="kling motion control pro kmc_pro видео и аудио"><td>72</td><td><b>Kling Motion Control Pro</b><small>Видео и аудио</small><code>kmc_pro</code></td><td><strong>550 / результат</strong></td><td><span class="status">Формула опубликована</span><small>В сравнении: 550 генерация</small></td><td><a href="https://study24.ai/chat/kmc_pro" target="_blank" rel="noopener noreferrer">Открыть источник ↗</a><details><summary>Настройки и основания</summary><p>Опубликованные ветки стоимости; required/accepted params и зависимости сохранены в JSON. Это публичный расчёт, а не проверка фактического списания.</p><pre>[
+  {
+    &quot;acceptedParams&quot;: [
+      &quot;media&quot;,
+      &quot;prompt&quot;,
+      &quot;video_url&quot;
+    ],
+    &quot;baseCost&quot;: 550,
+    &quot;contentType&quot;: &quot;video&quot;,
+    &quot;costUnit&quot;: &quot;per_result&quot;,
+    &quot;requiredParams&quot;: [
+      &quot;media&quot;,
+      &quot;video_url&quot;
+    ]
+  }
+]</pre><p>Сопоставление Epifera до исследования: <code>version_ambiguous</code>; video_kling_2_6_motion_control.</p><p class="muted">Источник сохранён 2026-10-28T06:03:17.658310+00:00; SHA-256 <code>a4a526234adb76fe14c7751270cc0033a2206ea8b00bb6319906693c975702a5</code>.</p></details></td></tr><tr data-status="published_media_formula" data-search="генерация озвучки sound_generation видео и аудио"><td>73</td><td><b>Генерация озвучки</b><small>Видео и аудио</small><code>sound_generation</code></td><td><strong>100 / результат</strong></td><td><span class="status">Формула опубликована</span><small>В сравнении: 100 генерация</small></td><td><a href="https://study24.ai/chat/sound_generation" target="_blank" rel="noopener noreferrer">Открыть источник ↗</a><details><summary>Настройки и основания</summary><ul><li><code>scene</code>: 900</li><li><code>voice_google</code>: Achernar, Achird, Algenib, Algieba, Alnilam, Aoede, Autonoe, Callirrhoe, Charon, Despina, Enceladus, Erinome, Fenrir, Gacrux, Iapetus, Kore, Laomedeia, Leda, Orus, Puck, Pulcherrima, Rasalgethi, Sadachbia, Sadaltager, Schedar, Sulafat, Umbriel, Vindemiatrix, Zephyr, Zubenelgenubi</li><li><code>prompt</code>: 1050</li></ul><p>Опубликованные ветки стоимости; required/accepted params и зависимости сохранены в JSON. Это публичный расчёт, а не проверка фактического списания.</p><pre>[
+  {
+    &quot;acceptedParams&quot;: [
+      &quot;prompt&quot;,
+      &quot;scene&quot;,
+      &quot;voice&quot;
+    ],
+    &quot;baseCost&quot;: 100,
+    &quot;contentType&quot;: &quot;audio&quot;,
+    &quot;costUnit&quot;: &quot;per_result&quot;,
+    &quot;requiredParams&quot;: [
+      &quot;prompt&quot;,
+      &quot;voice&quot;
+    ]
+  }
+]</pre><p>Сопоставление Epifera до исследования: <code>missing</code>; соответствие не установлено.</p><p class="muted">Источник сохранён 2026-10-28T06:03:17.867376+00:00; SHA-256 <code>45330ef6f390fdac0c62bfad0f7fd538748118ac86b496dd6f3fed8d0e3f0bf8</code>.</p></details></td></tr><tr data-status="published_media_formula" data-search="grok imagine 1.5 grok_imagine_1_5 видео и аудио"><td>74</td><td><b>Grok Imagine 1.5</b><small>Видео и аудио</small><code>grok_imagine_1_5</code></td><td><strong>25 / сек</strong></td><td><span class="status">Формула опубликована</span><small>В сравнении: 25 секунда</small></td><td><a href="https://study24.ai/chat/grok_imagine_1_5" target="_blank" rel="noopener noreferrer">Открыть источник ↗</a><details><summary>Настройки и основания</summary><ul><li><code>aspect_ratio</code>: 16:9, 1:1, 2:3, 3:2, 9:16 · по умолчанию 1:1</li><li><code>duration</code>: 6 … 30 · по умолчанию 10</li></ul><p>Опубликованные ветки стоимости; required/accepted params и зависимости сохранены в JSON. Это публичный расчёт, а не проверка фактического списания.</p><pre>[
+  {
+    &quot;acceptedParams&quot;: [
+      &quot;aspect_ratio&quot;,
+      &quot;duration&quot;,
+      &quot;media&quot;,
+      &quot;prompt&quot;
+    ],
+    &quot;baseCost&quot;: 25,
+    &quot;contentType&quot;: &quot;video&quot;,
+    &quot;costUnit&quot;: &quot;per_second&quot;,
+    &quot;requiredParams&quot;: [
+      &quot;prompt&quot;
+    ]
+  }
+]</pre><p>Сопоставление Epifera до исследования: <code>variant_unverified</code>; grok_imagine_1_5_video.</p><p class="muted">Источник сохранён 2026-10-28T06:03:18.903685+00:00; SHA-256 <code>595e153840cc2a881daf1f5a203ee35568cffc4b9f518905b443a26330a837b9</code>.</p></details></td></tr><tr data-status="published_media_formula" data-search="eleven labs (озвучка текста) eleven_labs видео и аудио"><td>75</td><td><b>Eleven Labs (озвучка текста)</b><small>Видео и аудио</small><code>eleven_labs</code></td><td><strong>120 / результат</strong></td><td><span class="status">Формула опубликована</span><small>В сравнении: 120 генерация</small></td><td><a href="https://study24.ai/chat/eleven_labs" target="_blank" rel="noopener noreferrer">Открыть источник ↗</a><details><summary>Настройки и основания</summary><ul><li><code>language_code</code>: 2 … 2 · по умолчанию ru</li><li><code>voice_elevenlabs</code>: Alexandra, Arabella, Aria, Austin, Blondie, Bradford, Clyde, Dave, Domi, Drew, Fin, Gaming, Grimblewood, Hope, James, Jane, Juniper, Kuon, Mark, Monika, Paul, Priyanka, Rachel, Reginald, Roger, Sarah</li></ul><p>Опубликованные ветки стоимости; required/accepted params и зависимости сохранены в JSON. Это публичный расчёт, а не проверка фактического списания.</p><pre>[
+  {
+    &quot;acceptedParams&quot;: [
+      &quot;language_code&quot;,
+      &quot;prompt&quot;,
+      &quot;similarity&quot;,
+      &quot;speed&quot;,
+      &quot;stability&quot;,
+      &quot;style&quot;,
+      &quot;voice&quot;
+    ],
+    &quot;baseCost&quot;: 120,
+    &quot;contentType&quot;: &quot;audio&quot;,
+    &quot;costUnit&quot;: &quot;per_result&quot;,
+    &quot;requiredParams&quot;: [
+      &quot;prompt&quot;,
+      &quot;voice&quot;
+    ]
+  }
+]</pre><p>Сопоставление Epifera до исследования: <code>missing</code>; соответствие не установлено.</p><p class="muted">Источник сохранён 2026-10-28T06:03:18.216158+00:00; SHA-256 <code>756dd90ae542845263769c6f4d73c2477c70bc365aea2f433352aa392a9b2590</code>.</p></details></td></tr><tr data-status="published_rate_only" data-search="оживить фото или картинку animating_image видео и аудио"><td>76</td><td><b>Оживить фото или картинку</b><small>Видео и аудио</small><code>animating_image</code></td><td><strong>25 / сек; расчёт длительности не раскрыт</strong></td><td><span class="status">Тариф за секунду</span><small>В сравнении: 25 секунда</small></td><td><a href="https://study24.ai/chat/animating_image" target="_blank" rel="noopener noreferrer">Открыть источник ↗</a><details><summary>Настройки и основания</summary><p>Сопоставление Epifera до исследования: <code>missing</code>; соответствие не установлено.</p><p class="muted">Источник сохранён 2026-10-28T06:03:19.197296+00:00; SHA-256 <code>62a7a40c1ac09e6b785d23c3775f1de30cd5b6af8e31b31f320a8a2f4bd870eb</code>.</p></details></td></tr><tr data-status="published_media_formula" data-search="happy horse happy_horse видео и аудио"><td>77</td><td><b>Happy Horse</b><small>Видео и аудио</small><code>happy_horse</code></td><td><strong>80 / сек</strong></td><td><span class="status">Формула опубликована</span><small>В сравнении: 80 секунда</small></td><td><a href="https://study24.ai/chat/happy_horse" target="_blank" rel="noopener noreferrer">Открыть источник ↗</a><details><summary>Настройки и основания</summary><ul><li><code>resolution</code>: 1080p, 720p · по умолчанию 720p</li><li><code>aspect_ratio</code>: 16:9, 1:1, 21:9, 3:4, 4:3, 4:5, 5:4, 9:16, 9:21 · по умолчанию 16:9</li><li><code>duration</code>: 3 … 15 · по умолчанию 5</li></ul><p>Опубликованные ветки стоимости; required/accepted params и зависимости сохранены в JSON. Это публичный расчёт, а не проверка фактического списания.</p><pre>[
+  {
+    &quot;acceptedParams&quot;: [
+      &quot;aspect_ratio&quot;,
+      &quot;duration&quot;,
+      &quot;media&quot;,
+      &quot;prompt&quot;,
+      &quot;resolution&quot;
+    ],
+    &quot;baseCost&quot;: 80,
+    &quot;contentType&quot;: &quot;video&quot;,
+    &quot;costUnit&quot;: &quot;per_second&quot;,
+    &quot;requiredParams&quot;: [
+      &quot;prompt&quot;
+    ]
+  }
+]</pre><p>Сопоставление Epifera до исследования: <code>version_ambiguous</code>; happyhorse_1_0, happyhorse_1_1.</p><p class="muted">Источник сохранён 2026-10-28T06:03:19.463872+00:00; SHA-256 <code>131a2015f418b1ef7b021bb5f2d590863d76057f411fe2a603ec3c83772f9157</code>.</p></details></td></tr><tr data-status="published_media_formula" data-search="редактор видео video_edit видео и аудио"><td>78</td><td><b>Редактор видео</b><small>Видео и аудио</small><code>video_edit</code></td><td><strong>2300 / результат</strong></td><td><span class="status">Формула опубликована</span><small>В сравнении: 2300 генерация</small></td><td><a href="https://study24.ai/chat/video_edit" target="_blank" rel="noopener noreferrer">Открыть источник ↗</a><details><summary>Настройки и основания</summary><p>Опубликованные ветки стоимости; required/accepted params и зависимости сохранены в JSON. Это публичный расчёт, а не проверка фактического списания.</p><pre>[
+  {
+    &quot;acceptedParams&quot;: [
+      &quot;media&quot;,
+      &quot;prompt&quot;,
+      &quot;video_url&quot;
+    ],
+    &quot;baseCost&quot;: 2300,
+    &quot;contentType&quot;: &quot;video&quot;,
+    &quot;costUnit&quot;: &quot;per_result&quot;,
+    &quot;requiredParams&quot;: [
+      &quot;prompt&quot;,
+      &quot;video_url&quot;
+    ]
+  }
+]</pre><p>Сопоставление Epifera до исследования: <code>missing</code>; соответствие не установлено.</p><p class="muted">Источник сохранён 2026-10-28T06:03:18.977292+00:00; SHA-256 <code>4260ecd90c9125ee5b63b2c3bd9a9566de6a9aa0ac225cd1d444cb7388e0364b</code>.</p></details></td></tr><tr data-status="published_media_formula" data-search="gemini omni flash gemini_omni_flash видео и аудио"><td>79</td><td><b>Gemini Omni Flash</b><small>Видео и аудио</small><code>gemini_omni_flash</code></td><td><strong>45 / сек</strong></td><td><span class="status">Формула опубликована</span><small>В сравнении: 45 секунда</small></td><td><a href="https://study24.ai/chat/gemini_omni_flash" target="_blank" rel="noopener noreferrer">Открыть источник ↗</a><details><summary>Настройки и основания</summary><ul><li><code>aspect_ratio</code>: 16:9, 9:16 · по умолчанию 16:9</li><li><code>video_start</code>: 0 · по умолчанию 0</li><li><code>duration</code>: 4 … 10 · по умолчанию 4</li><li><code>resolution</code>: 1080p, 4k · по умолчанию 1080p</li></ul><p>Опубликованные ветки стоимости; required/accepted params и зависимости сохранены в JSON. Это публичный расчёт, а не проверка фактического списания.</p><pre>[
+  {
+    &quot;acceptedParams&quot;: [
+      &quot;aspect_ratio&quot;,
+      &quot;duration&quot;,
+      &quot;media&quot;,
+      &quot;prompt&quot;,
+      &quot;resolution&quot;,
+      &quot;video_end&quot;,
+      &quot;video_start&quot;,
+      &quot;video_url&quot;
+    ],
+    &quot;baseCost&quot;: 45,
+    &quot;contentType&quot;: &quot;video&quot;,
+    &quot;costUnit&quot;: &quot;per_second&quot;,
+    &quot;requiredParams&quot;: [
+      &quot;prompt&quot;,
+      &quot;video_url&quot;
+    ]
+  },
+  {
+    &quot;acceptedParams&quot;: [
+      &quot;aspect_ratio&quot;,
+      &quot;duration&quot;,
+      &quot;media&quot;,
+      &quot;prompt&quot;,
+      &quot;resolution&quot;
+    ],
+    &quot;baseCost&quot;: 45,
+    &quot;contentType&quot;: &quot;video&quot;,
+    &quot;costUnit&quot;: &quot;per_second&quot;,
+    &quot;requiredParams&quot;: [
+      &quot;prompt&quot;,
+      &quot;duration&quot;
+    ]
+  }
+]</pre><p>Сопоставление Epifera до исследования: <code>version_ambiguous</code>; gemini_omni_flash_preview.</p><p class="muted">Источник сохранён 2026-10-28T06:03:20.322706+00:00; SHA-256 <code>7af7806a308d7ec5a318966e803dcead42e6402e302a1211121af77b1b09fea0</code>.</p></details></td></tr><tr data-status="free" data-search="gemini 3.1 flash gemini3_flash бесплатные"><td>80</td><td><b>Gemini 3.1 Flash</b><small>Бесплатные</small><code>gemini3_flash</code></td><td><strong>Бесплатно</strong></td><td><span class="status">Бесплатно</span><small>В сравнении: бесплатно </small></td><td><a href="https://study24.ai/chat/gemini3_flash" target="_blank" rel="noopener noreferrer">Открыть источник ↗</a><details><summary>Настройки и основания</summary><p>Сопоставление Epifera до исследования: <code>free_unverified</code>; соответствие не установлено.</p><p class="muted">Источник сохранён 2026-10-28T06:03:19.569889+00:00; SHA-256 <code>7c8bb3dd3b89b383b534076ade29fce65a8018ce31816c34cf8b7df0296c2d7d</code>.</p></details></td></tr><tr data-status="free" data-search="deepseek v4 deepseek_v4_lite бесплатные"><td>81</td><td><b>DeepSeek V4</b><small>Бесплатные</small><code>deepseek_v4_lite</code></td><td><strong>Бесплатно</strong></td><td><span class="status">Бесплатно</span><small>В сравнении: бесплатно </small></td><td><a href="https://study24.ai/chat/deepseek_v4_lite" target="_blank" rel="noopener noreferrer">Открыть источник ↗</a><details><summary>Настройки и основания</summary><p>Сопоставление Epifera до исследования: <code>free_unverified</code>; соответствие не установлено.</p><p class="muted">Источник сохранён 2026-10-28T06:03:19.958075+00:00; SHA-256 <code>79bd047b1e731338a64af97471189aeee26d42e7ebbde4adbffa4332fd2dfc1c</code>.</p></details></td></tr><tr data-status="free" data-search="генератор промпта generator_prompta бесплатные"><td>82</td><td><b>Генератор промпта</b><small>Бесплатные</small><code>generator_prompta</code></td><td><strong>Бесплатно</strong></td><td><span class="status">Бесплатно</span><small>В сравнении: бесплатно </small></td><td><a href="https://study24.ai/chat/generator_prompta" target="_blank" rel="noopener noreferrer">Открыть источник ↗</a><details><summary>Настройки и основания</summary><p>Сопоставление Epifera до исследования: <code>free_unverified</code>; соответствие не установлено.</p><p class="muted">Источник сохранён 2026-10-28T06:03:19.999633+00:00; SHA-256 <code>f764cd7b5b0dd642b428ef40ebe1447aee70fe54ea6208674070d872279bedce</code>.</p></details></td></tr><tr data-status="free" data-search="gemini 2.5 pro gemini_pro_plus_bot бесплатные"><td>83</td><td><b>Gemini 2.5 Pro</b><small>Бесплатные</small><code>gemini_pro_plus_bot</code></td><td><strong>Бесплатно</strong></td><td><span class="status">Бесплатно</span><small>В сравнении: бесплатно </small></td><td><a href="https://study24.ai/chat/gemini_pro_plus_bot" target="_blank" rel="noopener noreferrer">Открыть источник ↗</a><details><summary>Настройки и основания</summary><p>Сопоставление Epifera до исследования: <code>free_unverified</code>; соответствие не установлено.</p><p class="muted">Источник сохранён 2026-10-28T06:03:20.978841+00:00; SHA-256 <code>242d28809ed15a0f11547208158da6d9deb214a6cfc17065e0ae209557723570</code>.</p></details></td></tr><tr data-status="free" data-search="qwen 3.7 flash qwen бесплатные"><td>84</td><td><b>Qwen 3.7 Flash</b><small>Бесплатные</small><code>qwen</code></td><td><strong>Бесплатно</strong></td><td><span class="status">Бесплатно</span><small>В сравнении: бесплатно </small></td><td><a href="https://study24.ai/chat/qwen" target="_blank" rel="noopener noreferrer">Открыть источник ↗</a><details><summary>Настройки и основания</summary><p>Сопоставление Epifera до исследования: <code>free_unverified</code>; соответствие не установлено.</p><p class="muted">Источник сохранён 2026-10-28T06:03:21.128606+00:00; SHA-256 <code>1f12dffdfe7a2e42d8c6e72c319864c7756092668e8b58ba256b38d4e7035c23</code>.</p></details></td></tr><tr data-status="free" data-search="deepseek r1 a24_deepseek_r1 бесплатные"><td>85</td><td><b>Deepseek R1</b><small>Бесплатные</small><code>a24_deepseek_r1</code></td><td><strong>Бесплатно</strong></td><td><span class="status">Бесплатно</span><small>В сравнении: бесплатно </small></td><td><a href="https://study24.ai/chat/a24_deepseek_r1" target="_blank" rel="noopener noreferrer">Открыть источник ↗</a><details><summary>Настройки и основания</summary><p>Сопоставление Epifera до исследования: <code>free_unverified</code>; соответствие не установлено.</p><p class="muted">Источник сохранён 2026-10-28T06:03:20.648071+00:00; SHA-256 <code>454cabe95d0f72054e190f2d64e3316667bfd64cdb061d29551f59ed5fcae3d7</code>.</p></details></td></tr><tr data-status="free" data-search="gemini 2.5 flash lite gemini25_flash_lite бесплатные"><td>86</td><td><b>Gemini 2.5 Flash Lite</b><small>Бесплатные</small><code>gemini25_flash_lite</code></td><td><strong>Бесплатно</strong></td><td><span class="status">Бесплатно</span><small>В сравнении: бесплатно </small></td><td><a href="https://study24.ai/chat/gemini25_flash_lite" target="_blank" rel="noopener noreferrer">Открыть источник ↗</a><details><summary>Настройки и основания</summary><p>Сопоставление Epifera до исследования: <code>free_unverified</code>; соответствие не установлено.</p><p class="muted">Источник сохранён 2026-10-28T06:03:21.624229+00:00; SHA-256 <code>31a5bff1d71fda9ef777c18b71bb0a539e76e3e16f5bd53045a4a928ad118bd6</code>.</p></details></td></tr><tr data-status="free" data-search="chatgpt mini gpt_mini бесплатные"><td>87</td><td><b>ChatGPT Mini</b><small>Бесплатные</small><code>gpt_mini</code></td><td><strong>Бесплатно</strong></td><td><span class="status">Бесплатно</span><small>В сравнении: бесплатно </small></td><td><a href="https://study24.ai/chat/gpt_mini" target="_blank" rel="noopener noreferrer">Открыть источник ↗</a><details><summary>Настройки и основания</summary><p>Сопоставление Epifera до исследования: <code>free_unverified</code>; соответствие не установлено.</p><p class="muted">Источник сохранён 2026-10-28T06:03:21.236668+00:00; SHA-256 <code>256d049f6b2ff80b51741a0870a08aac90a4e96e85496e972bd330eca67c251f</code>.</p></details></td></tr><tr data-status="embedded_app" data-search="генератор презентаций generate_presentation_plus_bot учеба и работа"><td>88</td><td><b>Генератор презентаций</b><small>Учеба и работа</small><code>generate_presentation_plus_bot</code></td><td><strong>Графическая 450; редактируемая 800; свой стиль +60</strong><span class="conflict">Таблица и приложение расходятся</span></td><td><span class="status">Отдельное приложение</span><small>В сравнении: 420 генерация</small></td><td><a href="https://study24.ai/chat/generate_presentation_plus_bot" target="_blank" rel="noopener noreferrer">Открыть источник ↗</a><details><summary>Настройки и основания</summary><p>The live UI showed 450, 800 and 860. The pricing comparison still advertises from 420. No generation was started.</p><pre>(format == editable ? 800 : 450) + (custom_style_text.trim().length &gt; 3 ? 60 : 0)</pre><p>Сопоставление Epifera до исследования: <code>missing</code>; соответствие не установлено.</p><p class="muted">Источник сохранён 2026-10-28T06:03:22.415407+00:00; SHA-256 <code>03fe4e0351968b7171db843e5570f3bb5b50dcd4dd5362a4e2c2fd00dbe4d0a8</code>.</p></details></td></tr><tr data-status="dynamic_text_range" data-search="генератор текста text_generator учеба и работа"><td>89</td><td><b>Генератор текста</b><small>Учеба и работа</small><code>text_generator</code></td><td><strong>5–358 / сообщение</strong></td><td><span class="status">Зависит от расхода</span><small>В сравнении: 5 запрос</small></td><td><a href="https://study24.ai/chat/text_generator" target="_blank" rel="noopener noreferrer">Открыть источник ↗</a><details><summary>Настройки и основания</summary><p>Диапазон подтверждён. Цена зависит от запроса, истории, файлов и ответа. Числовые коэффициенты input/output/context публично не раскрыты. Нельзя назначать фиксированные 5 токенов.</p><p>Сопоставление Epifera до исследования: <code>missing</code>; соответствие не установлено.</p><p class="muted">Источник сохранён 2026-10-28T06:03:21.827223+00:00; SHA-256 <code>277e3cf6d5a4d39407868d2cce010546732ba4844fa85b9b7d6109602a92c12d</code>.</p></details></td></tr><tr data-status="dynamic_text_range" data-search="ai-друг настя ai_friend учеба и работа"><td>90</td><td><b>AI-друг Настя</b><small>Учеба и работа</small><code>ai_friend</code></td><td><strong>5–214 / сообщение</strong></td><td><span class="status">Зависит от расхода</span><small>В сравнении: 5 запрос</small></td><td><a href="https://study24.ai/chat/ai_friend" target="_blank" rel="noopener noreferrer">Открыть источник ↗</a><details><summary>Настройки и основания</summary><p>Диапазон подтверждён. Цена зависит от запроса, истории, файлов и ответа. Числовые коэффициенты input/output/context публично не раскрыты. Нельзя назначать фиксированные 5 токенов.</p><p>Сопоставление Epifera до исследования: <code>missing</code>; соответствие не установлено.</p><p class="muted">Источник сохранён 2026-10-28T06:03:22.529021+00:00; SHA-256 <code>7eb0e55ff6a0da5399d1c1d31c59b876d50b7ae71c7b22a80c8a89840a5dc87c</code>.</p></details></td></tr><tr data-status="embedded_app" data-search="генератор кода code_generator учеба и работа"><td>91</td><td><b>Генератор кода</b><small>Учеба и работа</small><code>code_generator</code></td><td><strong>От 30 / запрос, по фактическому расходу</strong><span class="conflict">Таблица и приложение расходятся</span></td><td><span class="status">Отдельное приложение</span><small>В сравнении: 5 запрос</small></td><td><a href="https://study24.ai/chat/code_generator" target="_blank" rel="noopener noreferrer">Открыть источник ↗</a><details><summary>Настройки и основания</summary><p>The current application explicitly says actual model usage, minimum 30. The input/output/context coefficients and maximum are not public. Do not implement a fixed price of 30 or the old catalogue minimum of 5.</p><pre>Точная серверная формула не опубликована</pre><p>Сопоставление Epifera до исследования: <code>missing</code>; соответствие не установлено.</p><p class="muted">Источник сохранён 2026-10-28T06:03:22.995881+00:00; SHA-256 <code>b5f419d763641e067023a81c55ebf5583583bb27d6f9b608c3a4a0bd823039ed</code>.</p></details></td></tr><tr data-status="embedded_app" data-search="карточка для маркетплейсов card_marketplaces учеба и работа"><td>92</td><td><b>Карточка для маркетплейсов</b><small>Учеба и работа</small><code>card_marketplaces</code></td><td><strong>120 за 1/2/4 картинки; 180 за 6; 240 за 8</strong><span class="conflict">Таблица и приложение расходятся</span></td><td><span class="status">Отдельное приложение</span><small>В сравнении: 55 генерация</small></td><td><a href="https://study24.ai/chat/card_marketplaces" target="_blank" rel="noopener noreferrer">Открыть источник ↗</a><details><summary>Настройки и основания</summary><p>Package includes texts/SEO and up to four pictures. The old comparison minimum of 55 refers to the retired catalogue entry.</p><pre>120 + max(0, count - 4) * 30</pre><p>Сопоставление Epifera до исследования: <code>missing</code>; соответствие не установлено.</p><p class="muted">Источник сохранён 2026-10-28T06:03:22.605599+00:00; SHA-256 <code>08d80ba71d94d5bfa240209b155111496757d04009e1a20c94b79416385a9427</code>.</p></details></td></tr><tr data-status="dynamic_text_range" data-search="smm ai_smm учеба и работа"><td>93</td><td><b>SMM</b><small>Учеба и работа</small><code>ai_smm</code></td><td><strong>5–292 / сообщение</strong></td><td><span class="status">Зависит от расхода</span><small>В сравнении: 5 запрос</small></td><td><a href="https://study24.ai/chat/ai_smm" target="_blank" rel="noopener noreferrer">Открыть источник ↗</a><details><summary>Настройки и основания</summary><p>Диапазон подтверждён. Цена зависит от запроса, истории, файлов и ответа. Числовые коэффициенты input/output/context публично не раскрыты. Нельзя назначать фиксированные 5 токенов.</p><p>Сопоставление Epifera до исследования: <code>missing</code>; соответствие не установлено.</p><p class="muted">Источник сохранён 2026-10-28T06:03:23.303164+00:00; SHA-256 <code>a68825697eb5533d40c1636fa4f703cba1d3bdacac283801403a947964d78610</code>.</p></details></td></tr><tr data-status="dynamic_text_range" data-search="генератор натальной карты natal_chart учеба и работа"><td>94</td><td><b>Генератор натальной карты</b><small>Учеба и работа</small><code>natal_chart</code></td><td><strong>5–129 / сообщение</strong></td><td><span class="status">Зависит от расхода</span><small>В сравнении: 5 запрос</small></td><td><a href="https://study24.ai/chat/natal_chart" target="_blank" rel="noopener noreferrer">Открыть источник ↗</a><details><summary>Настройки и основания</summary><p>Диапазон подтверждён. Цена зависит от запроса, истории, файлов и ответа. Числовые коэффициенты input/output/context публично не раскрыты. Нельзя назначать фиксированные 5 токенов.</p><p>Сопоставление Epifera до исследования: <code>missing</code>; соответствие не установлено.</p><p class="muted">Источник сохранён 2026-10-28T06:03:23.883497+00:00; SHA-256 <code>ce026ea513736a62a5372e8e6431c4afb14522c319a80d9ab44877ec7f245c3e</code>.</p></details></td></tr></tbody></table></div>
+<h2>Image Studio: отдельный актуальный прайс</h2><p>В выборе видны 11 моделей; ещё две служебные операции присутствуют в активном реестре кода. Цена за задачу; количество выходных изображений учитывается отдельно. Отключённые записи исключены из этой таблицы.</p><div class="table-wrap"><table><thead><tr><th>Модель / операция</th><th>Токенов за задачу</th><th>Результатов за задачу</th><th>Основание</th></tr></thead><tbody><tr><td>Nano Banana 2.1</td><td>55</td><td>1</td><td>Модель в выборе</td></tr><tr><td>Nano Banana 2 Lite</td><td>15</td><td>1</td><td>Модель в выборе</td></tr><tr><td>Nano Banana Pro</td><td>55</td><td>1</td><td>Модель в выборе</td></tr><tr><td>Nano Banana</td><td>30</td><td>1</td><td>Модель в выборе</td></tr><tr><td>GPT Image 2</td><td>51</td><td>1</td><td>Модель в выборе</td></tr><tr><td>GPT Image 2.5 Flare</td><td>52</td><td>1</td><td>Модель в выборе</td></tr><tr><td>GPT Image 1.5</td><td>50</td><td>1</td><td>Модель в выборе</td></tr><tr><td>Seedream 5 Pro</td><td>35</td><td>1</td><td>Модель в выборе</td></tr><tr><td>Seedream 5 Lite</td><td>30</td><td>1</td><td>Модель в выборе</td></tr><tr><td>Qwen3 Pro</td><td>30</td><td>1</td><td>Модель в выборе</td></tr><tr><td>Grok Imagine</td><td>20</td><td>2</td><td>Модель в выборе</td></tr><tr><td>Recraft Remove Background</td><td>5</td><td>1</td><td>Служебная операция; только данные кода</td></tr><tr><td>Recraft Crisp Upscale</td><td>5</td><td>1</td><td>Служебная операция; только данные кода</td></tr></tbody></table></div>
+<h2>Suno: цены отдельных операций</h2><p>Для операций с количеством треков цена умножается на 1–4. В форме песни по умолчанию два трека: 120, один: 60, четыре: 240. Максимальная выбранная длительность не увеличила цену. Скрытые операции из кода не проверялись платным запуском.</p><div class="table-wrap"><table><thead><tr><th>Операция</th><th>База</th><th>Единица</th><th>Проверка доступности</th></tr></thead><tbody><tr><td>Песня по своему тексту</td><td>60</td><td>за трек, 1–4</td><td>Карточка инструмента</td></tr><tr><td>Инструментал</td><td>60</td><td>за трек, 1–4</td><td>Карточка инструмента</td></tr><tr><td>Текст песни</td><td>20</td><td>за операцию</td><td>Карточка инструмента</td></tr><tr><td>Фон и звуки</td><td>60</td><td>за операцию</td><td>Карточка инструмента</td></tr><tr><td>Кавер</td><td>55</td><td>за трек, 1–4</td><td>Карточка инструмента</td></tr><tr><td>Смешать песни</td><td>60</td><td>за трек, 1–4</td><td>Карточка инструмента</td></tr><tr><td>Продолжить трек</td><td>60</td><td>за трек, 1–4</td><td>Только опубликованный код; нужен готовый трек</td></tr><tr><td>Изменить фрагмент</td><td>60</td><td>за операцию</td><td>Только опубликованный код; нужен готовый трек</td></tr><tr><td>Убрать вокал</td><td>100</td><td>за операцию</td><td>Карточка инструмента</td></tr><tr><td>Разделить на дорожки</td><td>100</td><td>за операцию</td><td>Карточка инструмента</td></tr><tr><td>Добавить вокал</td><td>60</td><td>за трек, 1–4</td><td>Карточка инструмента</td></tr><tr><td>Добавить музыку</td><td>60</td><td>за трек, 1–4</td><td>Карточка инструмента</td></tr><tr><td>Создать клип</td><td>60</td><td>за операцию</td><td>Только опубликованный код; нужен готовый трек</td></tr><tr><td>Песня по референсу</td><td>60</td><td>за трек, 1–4</td><td>Только опубликованный код; нужен готовый трек</td></tr></tbody></table></div>
+<h2>Как использовать для Epifera</h2><p>Этот реестр — исследование, отдельное от действующего биллинга. Перед переносом сопоставить точную версию и операцию, единицу оплаты, число результатов, зависимости настроек и округление. Наличие цены не добавляет поддержку модели. Цены, тарифная вёрстка и серверные настройки Epifera этой работой не менялись.</p><p class="muted">Подробные исходные настройки, даты, SHA-256 и прежние соответствия Epifera сохранены в JSON; публичные HTML/JS и снимки проверки — в локальном .cache/study24-prices-2026-10-28/.</p>
+<script>const input=document.getElementById('search'),status=document.getElementById('status'),rows=[...document.querySelectorAll('#models>tr')];function filter(){let count=0;const q=input.value.toLocaleLowerCase('ru').trim();for(const row of rows){const show=(!q||row.dataset.search.includes(q))&&(!status.value||row.dataset.status===status.value);row.hidden=!show;if(show)count++;}document.getElementById('counter').textContent=count+' из '+rows.length;}input.addEventListener('input',filter);status.addEventListener('change',filter);</script></body></html>

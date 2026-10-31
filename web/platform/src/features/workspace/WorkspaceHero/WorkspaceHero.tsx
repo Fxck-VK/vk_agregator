@@ -2,12 +2,13 @@
 
 import { useMessages, useDictionary } from "@/i18n/LocaleProvider";
 
-import { useCallback, useRef, useState, type ReactNode } from "react";
+import { useCallback, useEffect, useRef, useState, type ReactNode } from "react";
 
 import { ImageGenerationControls } from "@/features/image-generation/ImageGenerationComposer/ImageGenerationControls";
 import { ImageGenerationFeedback } from "@/features/image-generation/ImageGenerationPanel/ImageGenerationFeedback";
 import { useImageGeneration } from "@/features/image-generation/ImageGenerationPanel/useImageGeneration";
 import type { GenerationModel } from "@/features/models/generation-model-catalog";
+import { useWorkspaceModelSelection } from "@/features/models/WorkspaceModelSelection/WorkspaceModelSelection";
 
 import { FeaturedModelShortcuts } from "../FeaturedModelShortcuts/FeaturedModelShortcuts";
 import { WorkspacePrompt } from "../WorkspacePrompt/WorkspacePrompt";
@@ -25,6 +26,11 @@ export function WorkspaceHero({ access, allModelsLink, modelLinksClassName }: Wo
   const msg = useMessages();
   const t = useDictionary();
   const [selectedModel, setSelectedModel] = useState<GenerationModel | null>(null);
+  const selectedModelId = selectedModel?.id ?? null;
+  const setWorkspaceModelId = useWorkspaceModelSelection()?.setSelectedModelId;
+  useEffect(() => {
+    if (selectedModelId !== null) setWorkspaceModelId?.(selectedModelId);
+  }, [selectedModelId, setWorkspaceModelId]);
   const selectedImageModel = selectedModel?.category === "images" ? selectedModel : null;
   const [prompt, setPrompt] = useState("");
   const controlsRef = useRef<HTMLDivElement>(null);
@@ -57,6 +63,7 @@ export function WorkspaceHero({ access, allModelsLink, modelLinksClassName }: Wo
             canSubmit: generation.canPrepare,
             disabled: generation.busy,
             label: generation.stage === "preparing" ? t.imageGeneration.preparing : t.imageGeneration.generate,
+            price: generation.composerProps.price,
             onSubmit: () => void generation.prepareImage(),
           }}
           variant="hero"

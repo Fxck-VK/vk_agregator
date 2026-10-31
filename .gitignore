@@ -70,3 +70,6 @@ deployments/mail/ops/
 deployments/mail/ui-current
 deployments/mail/ui-releases/
 deployments/mail/incoming/
+
+# Build-generated content JSON import manifest
+web/platform/src/content/pages/generated.ts

@@ -1,6 +1,7 @@
 import { getTranslator, type Translator } from "@/i18n/messages";
 
 import { assetPaths } from "@/assets/asset-paths";
+import { subscriptionCopy } from "@/features/subscriptions/copy";
 
 export type WorkspaceHomeFaq = {
   answer: string;
@@ -42,7 +43,7 @@ export function getFrequentlyAskedQuestions(msg: Translator = getTranslator("ru"
     {
       question: msg("workspaceHomeContent.howDoIBuyASubscription"),
       answer:
-        msg("workspaceHomeContent.subscriptionsAreNotCurrentlySoldToRun"),
+        subscriptionCopy[msg.locale].checkoutHelp,
     },
     {
       question: msg("workspaceHomeContent.isThereFreeAccess"),

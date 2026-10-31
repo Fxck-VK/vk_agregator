@@ -17,7 +17,7 @@ import {usePublicCopy} from "@/i18n/public/use-public-copy";
 
 
 export function WorkflowLanding({workflow:sourceWorkflow}:{workflow:WorkflowRecord}){
-  const {copy,aiToolsEn,homeEn} = usePublicCopy(publicCopySourcesForLocale);
+  const {copy,aiToolsEn,homeEn} = usePublicCopy(publicCopySourcesForLocale,{"copy":"workflowEn"});
   const workflow=usePublicCopy(sourceWorkflow);
 
   const [search,setSearch]=useState(false),[preview,setPreview]=useState<{workflow:WorkflowRecord;step:number}|null>(null),root=useRef<HTMLDivElement>(null),opener=useRef<HTMLElement|null>(null);

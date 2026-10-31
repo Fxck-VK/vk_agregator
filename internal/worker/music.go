@@ -15,6 +15,7 @@ import (
 	"vk-ai-aggregator/internal/domain"
 	"vk-ai-aggregator/internal/service/mediaprobe"
 	"vk-ai-aggregator/internal/service/musicgeneration"
+	"vk-ai-aggregator/internal/service/pricingcatalog"
 	"vk-ai-aggregator/internal/service/providermodels"
 )
 
@@ -376,6 +377,22 @@ func (p *processor) saveMusicOutputs(ctx context.Context, job *domain.Job, res d
 	}
 	if res.Music == nil {
 		return errors.New("worker: music provider output is unavailable")
+	}
+	var quote pricingcatalog.PricingSnapshot
+	if err := json.Unmarshal(job.PricingSnapshot, &quote); err != nil {
+		return errors.New("worker: music pricing snapshot is unavailable")
+	}
+	if quote.MusicPaidTrackCount > 0 {
+		playable := false
+		for _, track := range res.Music.Tracks {
+			if strings.TrimSpace(track.AudioURL) != "" {
+				playable = true
+				break
+			}
+		}
+		if !playable {
+			return errors.New("worker: paid music track output is unavailable")
+		}
 	}
 	ownerID, err := workerOutputOwnerID(job)
 	if err != nil {

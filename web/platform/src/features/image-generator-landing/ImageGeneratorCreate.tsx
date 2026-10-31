@@ -10,7 +10,7 @@ import {usePublicCopy} from "@/i18n/public/use-public-copy";
 
 
 export function ImageGeneratorCreate() {
-  const {copy} = usePublicCopy(publicCopySourcesForLocale);
+  const {copy} = usePublicCopy(publicCopySourcesForLocale,{"copy":"imageGeneratorEn","reference":"imageGeneratorReferenceEn"});
 
   const [selected, setSelected] = useState(0);
   const buttons = useRef<(HTMLButtonElement | null)[]>([]);
@@ -29,7 +29,7 @@ export function ImageGeneratorCreate() {
 }
 
 function CreationVisual({ mode }: { mode: number }) {
-  const {reference,copy} = usePublicCopy(publicCopySourcesForLocale);
+  const {reference,copy} = usePublicCopy(publicCopySourcesForLocale,{"copy":"imageGeneratorEn","reference":"imageGeneratorReferenceEn"});
 
   const images = [reference.createImages, reference.referenceImages, reference.consistentImages, reference.editImages][mode];
   const tile = (image: { readonly file: string; readonly alt: string }) => <div className={styles.createTile} key={image.file}><GeneratorPicture image={image} sizes="(max-width: 820px) 45vw, 22vw" /></div>;

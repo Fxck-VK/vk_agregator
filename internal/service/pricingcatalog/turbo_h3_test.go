@@ -17,10 +17,10 @@ func TestTurboH3TariffsQuoteAllDurationsAtX3(t *testing.T) {
 		minimum           int
 		rate, fiveSeconds int64
 	}{
-		{"video_kling_3_0_turbo", "720p", 3, 1144000, 345},
-		{"video_kling_3_0_turbo", "1080p", 3, 1432000, 430},
-		{"video_minimax_h3", "768p", 4, 571200, 175},
-		{"video_minimax_h3", "2k", 4, 914400, 275},
+		{"video_kling_3_0_turbo", "720p", 3, 1144000, 250},
+		{"video_kling_3_0_turbo", "1080p", 3, 1432000, 250},
+		{"video_minimax_h3", "768p", 4, 571200, 375},
+		{"video_minimax_h3", "2k", 4, 914400, 375},
 	} {
 		for duration := tc.minimum; duration <= 15; duration++ {
 			key := ProductKey{Operation: domain.OperationVideoGenerate, Modality: domain.ModalityVideo, VideoRouteAlias: tc.alias, Resolution: tc.res, DurationSec: duration}

@@ -12,8 +12,8 @@ func TestNextVideoCandidateQuotes(t *testing.T) {
 		duration          int
 		floor, credits    int64
 	}{
-		{"wan_3_0", "480p", 2, 65760, 40},
-		{"wan_3_0", "1080p", 30, 3945120, 2370},
+		{"wan_3_0", "480p", 2, 65760, 100},
+		{"wan_3_0", "1080p", 30, 3945120, 6000},
 		{"vidu_q3_pro", "540p", 1, 56000, 35},
 		{"vidu_q3_pro", "720p", 16, 1920000, 1155},
 	} {

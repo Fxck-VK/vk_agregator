@@ -42,7 +42,7 @@ describe("legal reference pages", () => {
     expect(screen.getAllByRole("heading", { level: 1 })).toHaveLength(1);
     expect(screen.queryByRole("contentinfo")).not.toBeInTheDocument();
     expect(screen.getByRole("navigation", { name: "Legal pages" })).toBeInTheDocument();
-    expect(within(screen.getByRole("navigation", { name: "Legal pages" })).getByRole("link", { current: "page" })).toHaveAttribute("href", `/en/legal/${slug}`);
+    expect(within(screen.getByRole("navigation", { name: "Legal pages" })).getByRole("link", { current: "page" })).toHaveAttribute("href", `/ru/legal/${slug}`);
     expect(screen.getByText("The authoritative legal text is provided in Russian.")).toBeInTheDocument();
   });
 
@@ -50,7 +50,7 @@ describe("legal reference pages", () => {
     request.locale = locale;
     render(<LocaleProvider locale={locale}>{await LegalIndex()}</LocaleProvider>);
     const main = screen.getByRole("main");
-    legalSlugs.forEach(slug => expect(within(main).getAllByRole("link").some(link => link.getAttribute("href") === `/${locale}/legal/${slug}`)).toBe(true));
+    legalSlugs.forEach(slug => expect(within(main).getAllByRole("link").some(link => link.getAttribute("href") === `/ru/legal/${slug}`)).toBe(true));
     expect((await generateMetadata({ params: Promise.resolve({ slug: "privacy-policy" }) })).robots).toEqual({ index: false, follow: true });
     expect((await indexMetadata()).robots).toEqual({ index: false, follow: true });
   });

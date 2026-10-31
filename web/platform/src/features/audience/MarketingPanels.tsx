@@ -15,7 +15,7 @@ import {usePublicCopy} from "@/i18n/public/use-public-copy";
 export type MarketingPreview = MarketingGuide & { readonly image?: ModelImage };
 
 export function MarketingExamples({onOpen}:{onOpen:(item:MarketingPreview)=>void}) {
-  const {copy,media} = usePublicCopy(publicCopySourcesForLocale);
+  const {copy,media} = usePublicCopy(publicCopySourcesForLocale,{"copy":"marketingEn","media":"marketingReferenceEn"});
 
   const [category,setCategory]=useState(0);
   return <section id="workflows" className={styles.workflows}><div className={styles.heading}><h2>{copy.workflows.title}</h2><p>{copy.workflows.description}</p></div><div className={styles.filterBar}><div role="group" aria-label={copy.workflows.filters} className={styles.filters}>{copy.workflows.categories.map((item,index)=><button key={item} type="button" aria-pressed={category===index} onClick={()=>setCategory(index)}>{item}</button>)}</div><Link href="/app/inspiration" className={styles.viewAll}>{copy.workflows.viewAll}<LandingArrow/></Link></div>
@@ -24,7 +24,7 @@ export function MarketingExamples({onOpen}:{onOpen:(item:MarketingPreview)=>void
 }
 
 export function MarketingNeeds() {
-  const {copy,media} = usePublicCopy(publicCopySourcesForLocale);
+  const {copy,media} = usePublicCopy(publicCopySourcesForLocale,{"copy":"marketingEn","media":"marketingReferenceEn"});
 
   const [selected,setSelected]=useState<string>(copy.needs.items[0].id);
   return <section id="marketing-needs" className={styles.needs}><h2>{copy.needs.title}</h2><OverviewTabs prefix="marketing-need" label={copy.needs.label} items={copy.needs.items} selected={selected} onChange={setSelected} className={styles.tabs}/>
@@ -33,13 +33,13 @@ export function MarketingNeeds() {
 }
 
 export function MarketingGuides({onOpen}:{onOpen:(item:MarketingPreview)=>void}) {
-  const {copy,media} = usePublicCopy(publicCopySourcesForLocale);
+  const {copy,media} = usePublicCopy(publicCopySourcesForLocale,{"copy":"marketingEn","media":"marketingReferenceEn"});
 
   return <section id="marketing-guides" className={styles.guides}><div className={styles.heading}><h2>{copy.guides.title}</h2><p>{copy.guides.description}</p></div><LandingCarousel label={copy.guides.label} previous={copy.guides.previous} next={copy.guides.next} bounded className={styles.cardViewport}>{copy.guides.items.map((item,index)=><button type="button" key={item.title} className={styles.guide} onClick={()=>onOpen({...item,image:media.guides[index]})} data-marketing-guide><span className={styles.guideImage}><ModelPicture image={media.guides[index]} assetBase="marketing-audience" sizes="(max-width:767px) 80vw,300px" decorative/><span className={styles.guideOpen} aria-hidden="true">↗</span></span><h3>{item.title}</h3></button>)}</LandingCarousel></section>;
 }
 
 export function MarketingTools({onOpen}:{onOpen:(item:MarketingPreview)=>void}) {
-  const {copy,media} = usePublicCopy(publicCopySourcesForLocale);
+  const {copy,media} = usePublicCopy(publicCopySourcesForLocale,{"copy":"marketingEn","media":"marketingReferenceEn"});
 
   return <section id="marketing-tools" className={styles.tools}><div className={styles.heading}><h2>{copy.tools.title}</h2><p>{copy.tools.description}</p></div><LandingCarousel label={copy.tools.label} previous={copy.tools.previous} next={copy.tools.next} bounded className={styles.cardViewport}>{copy.tools.items.map((item,index)=>{
     const content=<><ModelPicture image={media.tools[index]} assetBase="marketing-audience" sizes="(max-width:767px) 80vw,300px" decorative/><div className={styles.toolText}><h3>{item.title}</h3><p>{item.description}</p>{"planned"in item&&item.planned?<span>{copy.comingSoon}</span>:null}</div></>;

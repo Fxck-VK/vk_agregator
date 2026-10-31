@@ -1,0 +1,338 @@
+[
+  {
+    "id": "page-t01",
+    "template": "T01",
+    "path": "/",
+    "locale": "ru",
+    "status": "draft",
+    "indexing": "noindex",
+    "seo": {
+      "title": "Epifera — творческая платформа для ваших лучших работ",
+      "description": "Создавайте изображения, видео, музыку и многое другое. Изучайте ИИ-модели и воплощайте следующую идею в одном творческом рабочем пространстве."
+    },
+    "relatedIds": [],
+    "content": {}
+  },
+  {
+    "id": "page-t02",
+    "template": "T02",
+    "path": "/ai",
+    "locale": "ru",
+    "status": "draft",
+    "indexing": "noindex",
+    "seo": {
+      "title": "ИИ-инструменты Epifera — всё необходимое для творчества",
+      "description": "Изучите ИИ-инструменты для изображений, видео, музыки, речи и текста. Найдите подходящую модель и творческий рабочий процесс в Epifera."
+    },
+    "relatedIds": [],
+    "content": {}
+  },
+  {
+    "id": "page-t03",
+    "template": "T03",
+    "path": "/ai/image-generator",
+    "locale": "ru",
+    "status": "draft",
+    "indexing": "noindex",
+    "seo": {
+      "title": "ИИ-генератор изображений — Epifera",
+      "description": "Превращайте слова и референсы в изображения. Изучайте ИИ-модели, сравнивайте творческие направления и приступайте к созданию следующего изображения в Epifera."
+    },
+    "relatedIds": [],
+    "content": {}
+  },
+  {
+    "id": "page-t04",
+    "template": "T04",
+    "path": "/ai/kling",
+    "locale": "ru",
+    "status": "draft",
+    "indexing": "noindex",
+    "seo": {
+      "title": "ИИ-видеомодели Kling — Epifera",
+      "description": "Изучите семейство Kling в Epifera. Сравните версии каталога, посмотрите визуальные примеры и выберите отправную точку для следующего видео."
+    },
+    "relatedIds": [],
+    "content": {}
+  },
+  {
+    "id": "page-t05",
+    "template": "T05",
+    "path": "/ai/kling/kling-3-0",
+    "locale": "ru",
+    "status": "draft",
+    "indexing": "noindex",
+    "seo": {
+      "title": "ИИ-видеомодель Kling 3.0 — Epifera",
+      "description": "Изучите Kling 3.0 в Epifera. Проверьте настройки приложения, посмотрите референсные примеры, сравните версии Kling и подготовьте следующий видеобриф."
+    },
+    "relatedIds": [],
+    "content": {}
+  },
+  {
+    "id": "page-t06",
+    "template": "T06",
+    "path": "/ai/tattoo-generator",
+    "locale": "ru",
+    "status": "draft",
+    "indexing": "noindex",
+    "seo": {
+      "title": "ИИ-генератор татуировок — найдите свою следующую татуировку | Epifera",
+      "description": "Превратите идею татуировки, стиль и размещение в творческий бриф. Исследуйте концепции татуировок с инструментами изображений Epifera."
+    },
+    "relatedIds": [],
+    "content": {}
+  },
+  {
+    "id": "page-t07",
+    "template": "T07",
+    "path": "/ai/marketing",
+    "locale": "ru",
+    "status": "draft",
+    "indexing": "noindex",
+    "seo": {
+      "title": "ИИ-инструменты маркетинга для творческих команд | Epifera",
+      "description": "Изучите ИИ-инструменты для маркетинговых кампаний, контента соцсетей и концепций брендов. Найдите творческое направление с инструментами Epifera для изображений, видео и аудио."
+    },
+    "relatedIds": [],
+    "content": {}
+  },
+  {
+    "id": "page-t08",
+    "template": "T08",
+    "path": "/compare/ai-avatar-models",
+    "locale": "ru",
+    "status": "draft",
+    "indexing": "noindex",
+    "seo": {
+      "title": "Сравнение 8 ИИ-моделей для создания изображений аватаров | Epifera",
+      "description": "Сравните настройки восьми моделей изображений в предварительном каталоге Epifera: референсы, обозначения разрешения, соотношения сторон и ограничения числа результатов. Составьте список кандидатов для концепции аватара."
+    },
+    "relatedIds": [],
+    "content": {}
+  },
+  {
+    "id": "page-t09",
+    "template": "T09",
+    "path": "/blog/ai-art-prompts",
+    "locale": "ru",
+    "status": "draft",
+    "indexing": "noindex",
+    "seo": {
+      "title": "Как писать промпты для ИИ-изображений | Epifera",
+      "description": "Узнайте, как описывать объект, окружение, стиль, свет и кадрирование для ИИ-изображений. Изучите практические советы и четыре примера брифов с Epifera."
+    },
+    "relatedIds": [],
+    "content": {}
+  },
+  {
+    "id": "page-t10",
+    "template": "T10",
+    "path": "/academy/courses/epifera-essentials",
+    "locale": "ru",
+    "status": "draft",
+    "indexing": "noindex",
+    "seo": {
+      "title": "Основы Epifera — практический курс для начинающих",
+      "description": "Изучите Epifera с помощью четырнадцати коротких текстовых уроков и практических упражнений. Научитесь выбирать модели, писать брифы, оценивать медиа и сохранять результаты."
+    },
+    "relatedIds": [],
+    "content": {}
+  },
+  {
+    "id": "page-t11",
+    "template": "T11",
+    "path": "/ai/docs",
+    "locale": "ru",
+    "status": "draft",
+    "indexing": "noindex",
+    "seo": {
+      "title": "Справочный центр",
+      "description": "Руководства по аккаунту Epifera, творческим инструментам, файлам и кредитам."
+    },
+    "relatedIds": [],
+    "content": {}
+  },
+  {
+    "id": "page-t12",
+    "template": "T12",
+    "path": "/workflows/product-campaign",
+    "locale": "ru",
+    "status": "draft",
+    "indexing": "noindex",
+    "seo": {
+      "title": "Процесс работы над продуктовой кампанией — от брифа к визуальным материалам | Epifera",
+      "description": "Изучите процесс работы над продуктовой кампанией с инструкциями: от творческого брифа к направлениям для изображений и списку проверок. Продолжите в доступных инструментах Epifera."
+    },
+    "relatedIds": [],
+    "content": {}
+  },
+  {
+    "id": "page-t13",
+    "template": "T13",
+    "path": "/inspiration/cinematic-scenes",
+    "locale": "ru",
+    "status": "draft",
+    "indexing": "noindex",
+    "seo": {
+      "title": "Кинематографичные сцены — примеры и промпты | Epifera",
+      "description": "Захватывающие пейзажи, атмосферные городские сцены и моменты, рассказывающие историю. Найдите визуальное направление для следующей работы."
+    },
+    "relatedIds": [],
+    "content": {}
+  },
+  {
+    "id": "page-t14",
+    "template": "T14",
+    "path": "/inspiration/examples/aesthetic-flowers",
+    "locale": "ru",
+    "status": "draft",
+    "indexing": "noindex",
+    "seo": {
+      "title": "Эстетичные обои с цветами — общедоступный пример | Epifera",
+      "description": "Изучите цветочный референс в мягком фокусе, предложенный промпт и связанные визуальные идеи. Создайте собственную вариацию с Epifera."
+    },
+    "relatedIds": [],
+    "content": {}
+  },
+  {
+    "id": "page-t15",
+    "template": "T15",
+    "path": "/photos/nature",
+    "locale": "ru",
+    "status": "draft",
+    "indexing": "noindex",
+    "seo": {
+      "title": "Фотографии природы — визуальные референсы | Epifera",
+      "description": "Изучайте фотографии природы, пейзажи и визуальные референсы. Фильтруйте по ориентации, цвету и пометкам источника, чтобы найти новое направление для работы в Epifera."
+    },
+    "relatedIds": [],
+    "content": {}
+  },
+  {
+    "id": "page-t16",
+    "template": "T16",
+    "path": "/stock/items/dried-gypsophila/gypsophila-01",
+    "locale": "ru",
+    "status": "draft",
+    "indexing": "noindex",
+    "seo": {
+      "title": "Фото сухой гипсофилы — ботанический референс | Epifera",
+      "description": "Изучите минималистичную фотографию сухой гипсофилы, её источник, доступные для скачивания превью и связанные ботанические референсы."
+    },
+    "relatedIds": [],
+    "content": {}
+  },
+  {
+    "id": "page-t17",
+    "template": "T17",
+    "path": "/mcp",
+    "locale": "ru",
+    "status": "draft",
+    "indexing": "noindex",
+    "seo": {
+      "title": "Epifera MCP — творческие инструменты для вашего рабочего пространства с ИИ",
+      "description": "Изучите планируемую интеграцию Epifera MCP, руководства по подготовке клиентов, творческие брифы и инструменты, уже доступные в рабочем пространстве."
+    },
+    "relatedIds": [],
+    "content": {}
+  },
+  {
+    "id": "page-t18",
+    "template": "T18",
+    "path": "/pricing",
+    "locale": "ru",
+    "status": "draft",
+    "indexing": "noindex",
+    "seo": {
+      "title": "Тарифы Epifera — планы, звёзды и творческие инструменты",
+      "description": "Изучите предварительные тарифы Epifera и оценки месячного и годового бюджета. Узнайте о звёздах как единице расчёта и подготовке запросов для команд. Окончательные варианты оплаты смотрите в рабочем пространстве."
+    },
+    "relatedIds": [],
+    "content": {}
+  },
+  {
+    "id": "page-t19",
+    "template": "T19",
+    "path": "/business",
+    "locale": "ru",
+    "status": "draft",
+    "indexing": "noindex",
+    "seo": {
+      "title": "Epifera для команд — предварительный обзор Business",
+      "description": "Познакомьтесь с творческим процессом для вашей команды и подготовьте запрос для бизнеса в Epifera."
+    },
+    "relatedIds": [],
+    "content": {}
+  },
+  {
+    "id": "page-t20",
+    "template": "T20",
+    "path": "/customers/football-campaign",
+    "locale": "ru",
+    "status": "draft",
+    "indexing": "noindex",
+    "seo": {
+      "title": "Разбор стороннего клиентского кейса об ИИ-продакшене от Epifera",
+      "description": "Изучите структуру истории кампании из референса: задачу, творческий процесс, результаты по данным источника и участников производства."
+    },
+    "relatedIds": [],
+    "content": {}
+  },
+  {
+    "id": "page-t21",
+    "template": "T21",
+    "path": "/company/about-us",
+    "locale": "ru",
+    "status": "draft",
+    "indexing": "noindex",
+    "seo": {
+      "title": "Об Epifera — творческие инструменты и контакты",
+      "description": "Познакомьтесь с Epifera: рабочим пространством для изображений, видео, музыки, речи и чата. Изучите инструменты и свяжитесь с поддержкой."
+    },
+    "relatedIds": [],
+    "content": {}
+  },
+  {
+    "id": "page-t22",
+    "template": "T22",
+    "path": "/events/creative-sessions",
+    "locale": "ru",
+    "status": "draft",
+    "indexing": "noindex",
+    "seo": {
+      "title": "Creative Sessions — проект Epifera",
+      "description": "Концепция проекта, объединяющая кино, творческие беседы и инструменты, стоящие за работой. Изучите программу, референсный трейлер и практические материалы."
+    },
+    "relatedIds": [],
+    "content": {}
+  },
+  {
+    "id": "page-t23",
+    "template": "T23",
+    "path": "/legal",
+    "locale": "ru",
+    "status": "draft",
+    "indexing": "noindex",
+    "seo": {
+      "title": "Правовые документы",
+      "description": "Правовые документы Epifera"
+    },
+    "relatedIds": [],
+    "content": {}
+  },
+  {
+    "id": "page-t24",
+    "template": "T24",
+    "path": "/blog/author/epifera",
+    "locale": "ru",
+    "status": "draft",
+    "indexing": "noindex",
+    "seo": {
+      "title": "Epifera — редакционные руководства и обучение",
+      "description": "Изучите статьи, уроки и практические руководства Epifera. Просмотрите архив и найдите полезную отправную точку для следующего творческого проекта."
+    },
+    "relatedIds": [],
+    "content": {}
+  }
+]

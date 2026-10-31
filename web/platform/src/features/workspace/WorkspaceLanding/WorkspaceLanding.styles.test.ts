@@ -173,7 +173,7 @@ describe("WorkspaceLanding hero", () => {
     expect(offerRule).toContain("background-size: cover");
     expect(priceRule).toContain("font-size: clamp(2.75rem, 6vw, 4rem)");
     expect(componentSource).toContain("styles.planBalance");
-    expect(componentSource).toContain('<CreditAmount className={styles.planBalance} value={400} />');
+    expect(componentSource).toContain('<CreditAmount className={styles.planBalance} value={trial.stars} />');
     expect(componentSource.match(/styles\.planBenefitIcon/g)).toHaveLength(3);
   });
 

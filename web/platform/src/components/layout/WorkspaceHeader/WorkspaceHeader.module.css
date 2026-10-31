@@ -19,8 +19,19 @@
   pointer-events: auto;
 }
 
+.sectionNavigation {
+  flex: 0 0 auto;
+  max-inline-size: 100%;
+  pointer-events: auto;
+}
+
 .leading {
+  display: flex;
   flex: 0 1 auto;
+  flex-direction: row;
+  flex-wrap: nowrap;
+  align-items: flex-start;
+  gap: var(--space-3);
   min-inline-size: 0;
 }
 
@@ -96,6 +107,10 @@
 }
 
 @media (width < 36rem) {
+  .leading {
+    flex-wrap: wrap;
+  }
+
   .tariffButton {
     display: none;
   }

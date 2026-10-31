@@ -140,6 +140,7 @@ func testAPIMartVideoLifecycle(t *testing.T, alias domain.VideoRouteAlias, model
 			if err != nil {
 				t.Fatal(err)
 			}
+			credits = price.InternalCredits
 			raw, err := json.Marshal(price)
 			if err != nil {
 				t.Fatal(err)

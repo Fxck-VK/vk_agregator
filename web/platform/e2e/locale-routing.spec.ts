@@ -2,15 +2,18 @@ import { expect, test } from "@playwright/test";
 
 test.skip(process.env.NEIROHUB_LOCAL_WORKSPACE_PREVIEW !== "1", "Requires the read-only local workspace fixture.");
 
-test("URL language wins over cookies on every existing page; service routes and missing pages keep their boundaries", async ({ context, baseURL }) => {
+test("legacy English addresses redirect to Russian; service and missing-page boundaries remain", async ({ context, baseURL }) => {
   const request = context.request;
   await context.addCookies([{ name: "neirohub-locale", value: "ru", url: baseURL! }]);
   for (const locale of ["en", "ru"]) {
     for (const path of ["", "/login", "/app", "/app/models", "/app/files", "/app/profile", "/app/inspiration", "/app/image", "/app/chats", "/app/payment-return"]) {
+      const legacy = await request.get(`/en${path}`, { maxRedirects: 0 });
+      expect(legacy.status()).toBe(308);
+      expect(new URL(legacy.headers().location, baseURL).pathname).toBe(`/ru${path}`);
       const response = await request.get(`/${locale}${path}`);
       expect(response.status(), `${locale}${path}`).toBe(200);
       const html = await response.text();
-      expect(html).toMatch(new RegExp(`<html[^>]*lang="${locale}"`));
+      expect(html).toMatch(/<html[^>]*lang="ru"/);
       if (path) expect(html).toMatch(/name="robots" content="noindex, nofollow"/);
     }
   }
@@ -20,32 +23,24 @@ test("URL language wins over cookies on every existing page; service routes and 
   expect((await request.get("/health")).status()).toBe(200);
   const api = await request.get("/web/v1/models");
   expect(api.headers()["content-type"]).toContain("application/json");
-  const prefetch = await request.get("/en/app/files?_rsc=test", { headers: { rsc: "1", "next-router-prefetch": "1" } });
+  const prefetch = await request.get("/ru/app/files?_rsc=test", { headers: { rsc: "1", "next-router-prefetch": "1" } });
   expect(prefetch.headers()["set-cookie"]).toBeUndefined();
 });
 
-test("the English home replaces the retired layout while the Russian home and sitemap stay empty", async ({ page, request }) => {
-  await page.goto("/ru");
-  const errors: string[] = [];
-  page.on("pageerror", error => errors.push(error.message));
-  await expect(page.locator("h1,header,footer")).toHaveCount(0);
-  await expect(page.locator('head meta[name="robots"]')).toHaveAttribute("content", "noindex, nofollow");
+test("the Russian home owns its canonical while legacy English redirects and drafts stay outside sitemap", async ({ page, request }) => {
   await page.goto("/en");
-  await expect(page.locator("html")).toHaveAttribute("lang", "en");
-  await expect(page.getByRole("heading", { level: 1 })).toHaveText("The creative platform to direct your best work");
-  await expect(page.locator("head link[rel=canonical]")).toHaveAttribute("href", "http://localhost:7159/en");
-  await expect(page.locator('head meta[name="robots"]')).toHaveAttribute("content", "noindex, nofollow");
-  await expect(page.locator('head link[hreflang]')).toHaveCount(0);
-  await page.goBack();
+  await expect(page).toHaveURL(/\/ru$/);
   await expect(page.locator("html")).toHaveAttribute("lang", "ru");
-  await expect(page.locator("h1,header,footer")).toHaveCount(0);
-  expect(errors).toEqual([]);
+  await expect(page.getByRole("heading", { level: 1 })).toContainText("Творческая платформа");
+  await expect(page.locator("head link[rel=canonical]")).toHaveAttribute("href", "http://localhost:7159/ru");
+  await expect(page.locator('head meta[name="robots"]')).toHaveAttribute("content", "noindex, nofollow");
+  await expect(page.locator('head link[hreflang="en"]')).toHaveCount(0);
   const sitemap = await (await request.get("/sitemap.xml")).text();
   expect(sitemap).not.toContain("<loc>");
-  expect(sitemap).not.toMatch(/\/app|\/login/);
+  expect(sitemap).not.toMatch(/\/en|\/app|\/login/);
 });
 
-test("switching a real chat preserves uploaded attachment, draft, model and URL suffix through history navigation", async ({ page, context, baseURL }) => {
+test("the account menu preserves a real chat attachment, draft, model and URL suffix without language controls", async ({ page, context, baseURL }) => {
   await context.addCookies([{ name: "nh_csrf", value: "local-test-only", url: baseURL! }]);
   let uploads = 0;
   await page.route("**/web/v1/input-artifacts?*", async route => {
@@ -76,33 +71,24 @@ test("switching a real chat preserves uploaded attachment, draft, model and URL 
   await expect(image).toBeVisible();
   const previewURL = await image.getAttribute("src");
   await page.locator("[data-sidebar-account-trigger]").click();
-  await page.getByRole("button", { name: "English", exact: true }).click();
-  await expect(page).toHaveURL(new URL(`/en${path}`, baseURL).href);
+  await expect(page.getByRole("button", { name: "English", exact: true })).toHaveCount(0);
+  await page.locator("[data-sidebar-account-trigger]").click();
+  await expect(page).toHaveURL(new URL(`/ru${path}`, baseURL).href);
   await expect(input).toHaveValue("Сохранить черновик / keep this draft");
   await expect(header).toHaveText(model);
-  await expect(image).toHaveAttribute("src", previewURL!);
-  await page.goBack();
-  await expect(page.locator("html")).toHaveAttribute("lang", "ru");
-  await expect(input).toHaveValue("Сохранить черновик / keep this draft");
-  await expect(image).toHaveAttribute("src", previewURL!);
-  await page.goForward();
-  await expect(page.locator("html")).toHaveAttribute("lang", "en");
   await expect(image).toHaveAttribute("src", previewURL!);
   expect(uploads).toBe(1);
 });
 
-test("legacy payment and login URLs keep their language and navigation identifiers", async ({ page, context, baseURL }) => {
+test("legacy payment and login URLs resolve to Russian and preserve navigation identifiers", async ({ page, context, baseURL }) => {
   await context.addCookies([{ name: "neirohub-locale", value: "en", url: baseURL! }]);
   const paymentPath = "/app/payment-return?payment_id=90000000-0000-4000-8000-000000000001";
   const payment = await context.request.get(paymentPath, { maxRedirects: 0 });
   expect(payment.status()).toBe(307);
-  expect(new URL(payment.headers().location, baseURL).href).toBe(`${baseURL}/en${paymentPath}`);
+  expect(new URL(payment.headers().location, baseURL).href).toBe(`${baseURL}/ru${paymentPath}`);
   await page.goto("/en/app/chats?model=gpt-image-2");
+  await expect(page).toHaveURL(/\/ru\/app\/chats\?model=gpt-image-2$/);
   await page.goto("/login");
-  await expect(page).toHaveURL(/\/en\/login$/);
-  await page.route("**/web/v1/auth/password/login", route => route.fulfill({ json: {} }));
-  await page.locator('input[name="email"]').fill("local-test@example.invalid");
-  await page.locator('input[name="password"]').fill("local-test-only");
-  await page.locator('button[type="submit"]').click();
-  await expect(page).toHaveURL(/\/en\/app\/chats\?model=gpt-image-2$/);
+  await expect(page).toHaveURL(/\/ru\/login$/);
+  await expect(page.locator("html")).toHaveAttribute("lang", "ru");
 });

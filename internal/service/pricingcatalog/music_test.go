@@ -17,8 +17,14 @@ func TestMusicCandidateQuotes(t *testing.T) {
 		{"stems_all", false, 240000, 145}, {"export", false, 1600, 5},
 	} {
 		for _, model := range []string{"suno_v6", "suno_v6_wild", "suno_v6_mini"} {
+			want := tc.retail
+			if model == "suno_v6" && !tc.max {
+				if rate, exists := map[string]int64{"generate": 60, "inspo": 60, "sounds": 60, "lyrics": 20, "stems_all": 100}[tc.action]; exists {
+					want = rate
+				}
+			}
 			s, err := MusicCandidateQuote(model, tc.action, tc.max)
-			if err != nil || !s.Valid() || s.Floor.Amount != tc.floor || s.InternalCredits != tc.retail {
+			if err != nil || !s.Valid() || s.Floor.Amount != tc.floor || s.InternalCredits != want {
 				t.Errorf("%s/%s max=%v: got floor=%d price=%d err=%v", model, tc.action, tc.max, s.Floor.Amount, s.InternalCredits, err)
 			}
 		}

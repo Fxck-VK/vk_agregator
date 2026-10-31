@@ -10,10 +10,10 @@ import {usePublicCopy} from "@/i18n/public/use-public-copy";
 
 
 export function AcademyNavigation({currentSlug,onNavigate}:{currentSlug?:string;onNavigate?:()=>void}){
-  const {copy,coursePath} = usePublicCopy(publicCopySourcesForLocale);
+  const {copy,coursePath} = usePublicCopy(publicCopySourcesForLocale,{"copy":"courseEn","coursePath":"__route.basePath"});
 
   const locale=useLocale(),[query,setQuery]=useState(""),searchId=useId(),normalized=query.trim().toLocaleLowerCase(locale);
-  const modules=searchCourseModules(query,locale);
+  const modules=searchCourseModules(query,locale,copy);
   return <nav className={styles.navigation} aria-label={copy.labels.sectionTitle}>
     <div className={styles.search}><HelpIcon kind="search"/><input id={searchId} type="search" aria-label={copy.labels.search} placeholder={copy.labels.search} value={query} onChange={e=>setQuery(e.target.value)}/></div>
     <a className={styles.navigationLink} href="mailto:support@epifera.com" onClick={onNavigate}><HelpIcon kind="support"/>{copy.labels.support}</a>

@@ -1,8 +1,11 @@
 "use client";
 
-import { useMessages } from "@/i18n/LocaleProvider";
+import { useLocale, useMessages } from "@/i18n/LocaleProvider";
+import Link from "@/i18n/Link";
+import { RichMessage } from "@/i18n/RichMessage";
+import { useRouter } from "@/i18n/navigation";
 
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useRef, useState, type RefObject } from "react";
 
 import { assetPaths } from "@/assets/asset-paths";
 import { AssetIcon } from "@/components/icons/AssetIcon";
@@ -11,20 +14,24 @@ import { ModalBackdrop } from "@/components/ui/ModalBackdrop/ModalBackdrop";
 import { ModalCloseButton } from "@/components/ui/ModalCloseButton/ModalCloseButton";
 import { ScrollArea } from "@/components/ui/ScrollArea/ScrollArea";
 
-import { subscriptionPlanDialogValues } from "@/features/pricing/subscription-preview";
+import { subscriptionPlanDialogValues, subscriptionPlanDiscountPercent, type SubscriptionPreviewId } from "@/features/pricing/subscription-preview";
+import { SubscriptionCheckout } from "@/features/subscriptions/SubscriptionCheckout";
+import { useLiteOffer } from "@/features/subscriptions/use-lite-offer";
+import { subscriptionCopy } from "@/features/subscriptions/copy";
 import { PromoCodeDialog } from "./PromoCodeDialog";
 import styles from "./SubscriptionPlansDialog.module.css";
+import paymentStyles from "./TokenTopUpDialog.module.css";
 
 type SubscriptionPlansDialogProps = {
   onClose: () => void;
 };
 
 type Plan = {
+  id: SubscriptionPreviewId;
   name: string;
   price: string;
   period: string;
   previousPrice?: string;
-  discount?: string;
   description: string;
   creditPeriod: string;
   credits: string;
@@ -35,12 +42,14 @@ type Plan = {
   popular?: boolean;
 };
 
-function PlanCard({ plan }: { plan: Plan }) {
+function PlanCard({ plan, onActivate }: { plan: Plan; onActivate: (id: SubscriptionPreviewId, trigger: HTMLButtonElement) => void }) {
   const msg = useMessages();
+  const percent = subscriptionPlanDiscountPercent(plan.id, plan.previousPrice);
+  const discount = percent === null ? undefined : `−${percent}%`;
   return (
     <article className={`${styles.planCard} ${plan.popular ? styles.popularPlan : ""}`}>
       {plan.popular ? <span className={styles.popularLabel}>{msg("subscriptionPlansDialog.popular")}</span> : null}
-      {plan.discount ? <span className={styles.discount}>{plan.discount}</span> : null}
+      {discount ? <span className={styles.discount}>{discount}</span> : null}
 
       <div className={styles.planSummary}>
         <h3>{plan.name}</h3>
@@ -49,7 +58,7 @@ function PlanCard({ plan }: { plan: Plan }) {
           {plan.previousPrice ? <del>{plan.previousPrice}</del> : null}
         </p>
         <p className={styles.description}>{plan.description}</p>
-        <button className={styles.subscribeButton} type="button">
+        <button className={styles.subscribeButton} onClick={(event) => onActivate(plan.id, event.currentTarget)} type="button">
           {msg("subscriptionPlansDialog.activateSubscription")}</button>
       </div>
 
@@ -70,8 +79,37 @@ function PlanCard({ plan }: { plan: Plan }) {
   );
 }
 
+function SubscriptionCheckoutDialog({ planID, onClose, returnFocusRef, fallbackFocusRef }: {
+  planID: SubscriptionPreviewId;
+  onClose: () => void;
+  returnFocusRef: RefObject<HTMLButtonElement | null>;
+  fallbackFocusRef: RefObject<HTMLButtonElement | null>;
+}) {
+  const msg = useMessages();
+  const locale = useLocale();
+  const closeButtonRef = useRef<HTMLButtonElement>(null);
+  useEffect(() => {
+    const trigger = returnFocusRef.current;
+    const fallback = fallbackFocusRef.current;
+    closeButtonRef.current?.focus();
+    return () => { (trigger?.isConnected ? trigger : fallback)?.focus(); };
+  }, [returnFocusRef, fallbackFocusRef]);
+
+  return <ModalBackdrop onClose={onClose} testId="subscription-checkout-backdrop">
+    {(requestClose) => <div aria-labelledby="subscription-checkout-title" aria-modal="true" className={paymentStyles.dialogLayer} role="dialog">
+      <ModalCloseButton aria-label={msg("subscriptionPlansDialog.closePlans")} className={paymentStyles.closeButtonPlacement} onClick={requestClose} ref={closeButtonRef} />
+      <section className={paymentStyles.dialog}>
+        <header className={paymentStyles.header}><h2 id="subscription-checkout-title">{subscriptionCopy[locale].offer}</h2></header>
+        <ScrollArea><SubscriptionCheckout planID={planID} /></ScrollArea>
+      </section>
+    </div>}
+  </ModalBackdrop>;
+}
+
 export function SubscriptionPlansDialog({ onClose }: SubscriptionPlansDialogProps) {
   const msg = useMessages();
+  const router = useRouter();
+  const liteOffer = useLiteOffer();
   const plans: Plan[] = [
     {
       ...subscriptionPlanDialogValues("lite"),
@@ -88,7 +126,6 @@ export function SubscriptionPlansDialog({ onClose }: SubscriptionPlansDialogProp
       ...subscriptionPlanDialogValues("start"),
       period: msg("subscriptionPlansDialog.month"),
       previousPrice: "632",
-      discount: "−15%",
       description: msg("subscriptionPlansDialog.aGreatPlaceToStart"),
       creditPeriod: msg("subscriptionPlansDialog.monthly"),
       features: [
@@ -102,7 +139,6 @@ export function SubscriptionPlansDialog({ onClose }: SubscriptionPlansDialogProp
       ...subscriptionPlanDialogValues("pro"),
       period: msg("subscriptionPlansDialog.month"),
       previousPrice: "1200",
-      discount: "−20%",
       description: msg("subscriptionPlansDialog.aBalancedChoice"),
       creditPeriod: msg("subscriptionPlansDialog.monthly"),
       features: [
@@ -116,7 +152,6 @@ export function SubscriptionPlansDialog({ onClose }: SubscriptionPlansDialogProp
       ...subscriptionPlanDialogValues("ultima"),
       period: msg("subscriptionPlansDialog.month"),
       previousPrice: "2600",
-      discount: "−30%",
       description: msg("subscriptionPlansDialog.morePossibilities"),
       creditPeriod: msg("subscriptionPlansDialog.monthly"),
       features: [
@@ -131,7 +166,6 @@ export function SubscriptionPlansDialog({ onClose }: SubscriptionPlansDialogProp
       ...subscriptionPlanDialogValues("elite"),
       period: msg("subscriptionPlansDialog.month"),
       previousPrice: "7000",
-      discount: "−40%",
       description: msg("subscriptionPlansDialog.maximumValue"),
       creditPeriod: msg("subscriptionPlansDialog.monthly"),
       features: [
@@ -152,6 +186,8 @@ export function SubscriptionPlansDialog({ onClose }: SubscriptionPlansDialogProp
   const closeButtonRef = useRef<HTMLButtonElement>(null);
   const promoButtonRef = useRef<HTMLButtonElement>(null);
   const [promoOpen, setPromoOpen] = useState(false);
+  const [checkoutPlan, setCheckoutPlan] = useState<SubscriptionPreviewId | null>(null);
+  const checkoutButtonRef = useRef<HTMLButtonElement | null>(null);
 
   useEffect(() => {
     const previouslyFocusedElement = document.activeElement instanceof HTMLElement
@@ -166,13 +202,13 @@ export function SubscriptionPlansDialog({ onClose }: SubscriptionPlansDialogProp
 
   return (
     <>
-      <ModalBackdrop closeOnBackdropClick={!promoOpen} closeOnEscape={!promoOpen} onClose={onClose} testId="subscription-plans-backdrop">
+      <ModalBackdrop closeOnBackdropClick={!promoOpen && checkoutPlan === null} closeOnEscape={!promoOpen && checkoutPlan === null} onClose={onClose} testId="subscription-plans-backdrop">
         {(requestClose) => <section
-          aria-hidden={promoOpen || undefined}
+          aria-hidden={promoOpen || checkoutPlan !== null || undefined}
           aria-labelledby="subscription-plans-title"
-          aria-modal={!promoOpen}
+          aria-modal={!promoOpen && checkoutPlan === null}
           className={styles.dialog}
-          inert={promoOpen}
+          inert={promoOpen || checkoutPlan !== null}
           role="dialog"
         >
           <ScrollArea className={styles.scrollArea}>
@@ -191,7 +227,10 @@ export function SubscriptionPlansDialog({ onClose }: SubscriptionPlansDialogProp
 
             <div className={styles.plansContent}>
               <div className={styles.planGrid}>
-                {plans.map((plan) => <PlanCard key={plan.name} plan={plan} />)}
+                {plans.filter(plan => plan.id !== "lite" || liteOffer.visible).map((plan) => <PlanCard key={plan.name} plan={plan} onActivate={(id, trigger) => {
+                  checkoutButtonRef.current = trigger;
+                  setCheckoutPlan(id);
+                }} />)}
 
                 <article className={`${styles.planCard} ${styles.teamPlan}`}>
                   <div className={styles.planSummary}>
@@ -211,14 +250,18 @@ export function SubscriptionPlansDialog({ onClose }: SubscriptionPlansDialogProp
               </div>
 
               <footer className={styles.dialogFooter}>
-                <p>{msg("subscriptionPlansDialog.byPurchasingASubscriptionYouAgreeTo")}</p>
-                <button type="button">{msg("subscriptionPlansDialog.learnMoreAboutPlans")}</button>
+                <p><RichMessage id="subscriptionPlansDialog.byPurchasingASubscriptionYouAgreeTo" values={{
+                  agreement: <Link href="/legal/user-agreement" target="_blank" rel="noopener noreferrer">{msg("subscriptionPlansDialog.userAgreement")}</Link>,
+                  recurring: <Link href="/legal/paid-access" target="_blank" rel="noopener noreferrer">{msg("subscriptionPlansDialog.recurringPayments")}</Link>,
+                }} /></p>
+                <button onClick={() => { onClose(); router.push("/pricing"); }} type="button">{msg("subscriptionPlansDialog.learnMoreAboutPlans")}</button>
               </footer>
             </div>
           </ScrollArea>
         </section>}
       </ModalBackdrop>
       {promoOpen ? <PromoCodeDialog onClose={() => setPromoOpen(false)} returnFocusRef={promoButtonRef} /> : null}
+      {checkoutPlan ? <SubscriptionCheckoutDialog onClose={() => { setCheckoutPlan(null); liteOffer.refresh(); }} planID={checkoutPlan} returnFocusRef={checkoutButtonRef} fallbackFocusRef={closeButtonRef} /> : null}
     </>
   );
 }

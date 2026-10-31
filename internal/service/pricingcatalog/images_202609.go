@@ -75,7 +75,7 @@ func QuoteAPIMartImage(s PricingSnapshot, aspectRatio string, references int) (P
 	var base ProductPrice
 	for _, price := range newAPIMartImageTariffs() {
 		if price.Key == s.Key {
-			base = price
+			base = applyEconomicRetailPolicy(price)
 			break
 		}
 	}
@@ -131,6 +131,7 @@ func finalizeImageQuote(s PricingSnapshot) (PricingSnapshot, error) {
 	s.InternalCredits, s.InternalCreditCap, s.DefaultDisplayCredits = credits, credits, credits
 	s.FloorAmountCap = s.Floor.Amount
 	s.Multiplier = exactRetailMultiplier(s.Floor.Amount, s.UnitConversion, credits)
+	s = applyEconomicRetailSnapshot(s)
 	if !s.Valid() {
 		return PricingSnapshot{}, ErrInvalidSnapshot
 	}

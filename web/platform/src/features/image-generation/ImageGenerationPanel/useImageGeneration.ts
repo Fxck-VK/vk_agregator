@@ -6,8 +6,10 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useRouter } from "@/i18n/navigation";
 
 import { loadImageModelCatalog } from "@/features/models/image-model-catalog-cache";
+import { imagePrice } from "@/features/models/image-price";
 import { useWorkspaceModelSelection } from "@/features/models/WorkspaceModelSelection/WorkspaceModelSelection";
 import {
+  parseAccountBalance,
   parseImageJobActivation,
   parseImageJobPreparation,
   type ImageJob,
@@ -15,7 +17,7 @@ import {
   type ImageJobResult,
   type ImageModel,
 } from "@/lib/web-api/contracts";
-import { webBrowserMutation } from "@/lib/web-api/browser";
+import { webBrowserFetch, webBrowserMutation } from "@/lib/web-api/browser";
 
 
 type PanelStage = "loading" | "loadFailure" | "editor" | "preparing" | "confirmation" | "activating" | "tracking" | "result";
@@ -77,6 +79,7 @@ export function useImageGeneration({ access = "authenticated", model, promptValu
   const [outputCountSelection, setOutputCountSelection] = useState<OutputCountSelection>({ modelID: "", value: 1 });
   const [prepareIntent, setPrepareIntent] = useState<PrepareIntent | null>(null);
   const [preparation, setPreparation] = useState<ImageJobPreparation | null>(null);
+  const [confirmationBalanceKnown, setConfirmationBalanceKnown] = useState(true);
   const [activeJob, setActiveJob] = useState<ImageJob | null>(null);
   const [result, setResult] = useState<ImageJobResult | null>(null);
   const [error, setError] = useState<"load" | "noModels" | "prepare" | "activation" | "insufficient" | null>(null);
@@ -104,8 +107,7 @@ export function useImageGeneration({ access = "authenticated", model, promptValu
   const outputCount = selectedModel !== null && outputCountSelection.modelID === selectedModel.id
     ? Math.min(Math.max(1, outputCountSelection.value), Math.max(1, maxOutputCount))
     : 1;
-  const unitPrice = (selectedModel?.price_by_variant ? selectedModel.price_by_variant[`${imageQuality}:${aspectRatio}`] : selectedModel?.price_by_quality?.[imageQuality]) ?? null;
-  const selectedPrice = unitPrice === null ? null : unitPrice * outputCount;
+  const selectedPrice = imagePrice(selectedModel,imageQuality,aspectRatio,outputCount) ?? null;
   const promptByteLimit = selectedModel?.max_prompt_bytes ?? null;
   const promptByteLength = useMemo(() => new TextEncoder().encode(prompt).length, [prompt]);
   const promptTooLong = promptByteLimit !== null && promptByteLength > promptByteLimit;
@@ -264,6 +266,7 @@ export function useImageGeneration({ access = "authenticated", model, promptValu
         throw new Error("Unable to prepare image generation.");
       }
       setPreparation(parseImageJobPreparation(await response.json()));
+      setConfirmationBalanceKnown(true);
       setStage("confirmation");
     } catch {
       setError("prepare");
@@ -294,10 +297,22 @@ export function useImageGeneration({ access = "authenticated", model, promptValu
       if (response.status !== 200 && response.status !== 402) {
         throw new Error("Unable to activate image generation.");
       }
+      if (response.status === 402) setConfirmationBalanceKnown(false);
       const activation = parseImageJobActivation(await response.json());
       if (response.status === 402) {
-        setPreparation((current) => (current === null ? null : { ...current, job: activation.job }));
+        setPreparation((current) => (current === null ? null : { ...current, job: activation.job, can_afford: false }));
         setError("insufficient");
+        try {
+          const balanceResponse = await webBrowserFetch("/web/v1/balance", { cache: "no-store" });
+          if (balanceResponse.status !== 200) throw new Error("Balance unavailable.");
+          const balance = parseAccountBalance(await balanceResponse.json()).balance;
+          setPreparation(current => current?.job.id === activation.job.id
+            ? { ...current, balance, can_afford: balance >= current.job.cost_estimate }
+            : current);
+          setConfirmationBalanceKnown(true);
+        } catch {
+          // Keep unknown figures hidden; the frozen job price remains visible.
+        }
         setStage("confirmation");
         return;
       }
@@ -349,7 +364,7 @@ export function useImageGeneration({ access = "authenticated", model, promptValu
   }, [busy]);
 
   return {
-    stage, busy, selectedModel, canPrepare, prompt, preparation, activeJob, result,
+    stage, busy, selectedModel, canPrepare, prompt, preparation, confirmationBalanceKnown, activeJob, result,
     editorError, confirmationError, loadFailure,
     retryModelCatalog, prepareImage, activateImage, handleJobUpdate, showResult, createAnother, changePrompt, reset,
     composerProps: {

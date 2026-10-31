@@ -17,8 +17,8 @@ import {usePublicCopy} from "@/i18n/public/use-public-copy";
 
 
 export function AcademyCourse({lesson:sourceLesson}:{lesson?:CourseLessonRecord}){
-  const {copy,coursePath} = usePublicCopy(publicCopySourcesForLocale);
-  const lesson=usePublicCopy(sourceLesson),courseLessons=getCourseLessons(useLocale());
+  const {copy,coursePath} = usePublicCopy(publicCopySourcesForLocale,{"copy":"courseEn","coursePath":"__route.basePath"});
+  const lesson=usePublicCopy(sourceLesson),courseLessons=getCourseLessons(useLocale(),copy);
 
   const [dialog,setDialog]=useState<"overview"|"share"|null>(null);
   const shareLabels=lesson?{...copy.share,share:copy.labels.shareLesson}:copy.share;

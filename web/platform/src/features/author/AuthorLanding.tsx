@@ -17,7 +17,7 @@ import {usePublicCopy} from "@/i18n/public/use-public-copy";
 
 
 export function AuthorLanding({items,page}:{items:readonly AuthorMaterial[];page:number}){
-  const {aiToolsEn,t,homeEn,authorProfile} = usePublicCopy(publicCopySourcesForLocale);
+  const {aiToolsEn,t,homeEn,authorProfile} = usePublicCopy(publicCopySourcesForLocale,{"t":"authorEn","authorProfile":"authorProfile"});
 
   const[dialog,setDialog]=useState<'search'|'source'|null>(null);
   const root=useRef<HTMLDivElement>(null),opener=useRef<HTMLElement|null>(null),open=dialog!==null;

@@ -29,7 +29,7 @@ describe("rebuilt image generator landing", () => {
     for (const id of ["create", "models", "use-cases", "workflow", "trust", "numbers", "plans", "questions"]) expect(container.querySelector(`#${id}`)).not.toBeNull();
     expect(container.querySelectorAll("#questions details")).toHaveLength(11);
     expect(screen.getByText(/Source: Magnific/)).toBeInTheDocument();
-    expect(screen.getByRole("link", { name: "Generate now" })).toHaveAttribute("href", "/en/app/image");
+    expect(screen.getByRole("link", { name: "Generate now" })).toHaveAttribute("href", "/ru/app/image");
     expect(screen.queryByText(/20 free images|SOC 2|ISO 27001|€47/)).not.toBeInTheDocument();
   });
   it.each([
@@ -59,7 +59,7 @@ describe("rebuilt image generator landing", () => {
     await page();
     fireEvent.change(screen.getByRole("textbox", { name: "Describe the image you want to create" }), { target: { value: "A paper bird above a cloud" } });
     fireEvent.click(screen.getByRole("button", { name: "Generate" }));
-    expect(request.push).toHaveBeenCalledWith("/en/app/image");
+    expect(request.push).toHaveBeenCalledWith("/ru/app/image");
     expect(fetch).not.toHaveBeenCalled(); expect(storage).not.toHaveBeenCalled();
     fetch.mockRestore(); storage.mockRestore();
   });

@@ -13,11 +13,11 @@ beforeEach(() => {
   vi.mocked(cookies).mockResolvedValue({ get: () => undefined, set } as never);
   vi.mocked(headers).mockResolvedValue(new Headers() as never);
 });
-it("uses the proxy-attested URL locale and keeps concurrent requests independent", async () => {
+it("resolves even legacy locale headers to Russian without request-global mutation", async () => {
   vi.mocked(headers).mockResolvedValueOnce(new Headers({ [localeRequestHeader]: "en" }) as never)
     .mockResolvedValueOnce(new Headers({ [localeRequestHeader]: "ru" }) as never);
   const [english, russian] = await Promise.all([getRequestDictionary(), getRequestDictionary()]);
-  expect(english.navigation.files).toBe("My files");
+  expect(english.navigation.files).toBe("Мои файлы");
   expect(russian.navigation.files).toBe("Мои файлы");
   expect(await getRequestLocale()).toBe("ru");
 });
@@ -26,8 +26,9 @@ it("never lets the preference cookie determine page language", async () => {
   expect(await getRequestLocale()).toBe("ru");
 });
 it("validates and persists a shared preference without reading or mutating account data", async () => {
-  await setLocalePreference("en");
-  expect(set).toHaveBeenCalledWith(localeCookieName, "en", expect.objectContaining({ path: "/", httpOnly: true, sameSite: "lax", maxAge: 31536000 }));
+  await setLocalePreference("ru");
+  expect(set).toHaveBeenCalledWith(localeCookieName, "ru", expect.objectContaining({ path: "/", httpOnly: true, sameSite: "lax", maxAge: 31536000 }));
+  await expect(setLocalePreference("en")).rejects.toThrow("Unsupported locale for website");
   await expect(setLocalePreference("unknown")).rejects.toThrow("Unsupported locale");
   expect(set).toHaveBeenCalledTimes(1);
 });

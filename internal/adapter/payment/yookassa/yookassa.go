@@ -122,13 +122,22 @@ func (p *Provider) CreatePayment(ctx context.Context, in domain.CreatePaymentInp
 			Currency: currency,
 		},
 		Capture: capture,
-		Confirmation: confirmationRequest{
+		Confirmation: &confirmationRequest{
 			Type:      "redirect",
 			ReturnURL: returnURL,
 		},
 		Description: descriptionOrDefault(in.Description),
 		Metadata:    metadataForPayment(in),
 		Receipt:     receipt,
+	}
+	if in.PaymentMethodID != "" {
+		if in.SavePaymentMethod {
+			return domain.CreatePaymentResult{}, errors.New("yookassa payment: conflicting method request")
+		}
+		request.Confirmation = nil
+		request.PaymentMethodID = in.PaymentMethodID
+	} else {
+		request.SavePaymentMethod = in.SavePaymentMethod
 	}
 
 	var response paymentResponse
@@ -161,18 +170,38 @@ func (p *Provider) GetPayment(ctx context.Context, providerPaymentID string) (do
 		return domain.ProviderPayment{}, fmt.Errorf("yookassa payment: parse amount: %w", err)
 	}
 	return domain.ProviderPayment{
-		ProviderPaymentID: response.ID,
-		Status:            mapPaymentStatus(response),
-		Amount:            amount,
-		Currency:          domainCurrency(response.Amount.Currency),
-		Paid:              response.Paid,
-		Captured:          response.Paid || response.Status == "succeeded",
-		Refundable:        response.Refundable,
-		Raw:               raw,
+		VerifiedIntentID:   verifiedMetadataUUID(response.Metadata, "intent_id"),
+		VerifiedAccountID:  verifiedMetadataUUID(response.Metadata, "account_id"),
+		ProviderPaymentID:  response.ID,
+		Status:             mapPaymentStatus(response),
+		Amount:             amount,
+		Currency:           domainCurrency(response.Amount.Currency),
+		Paid:               response.Paid,
+		Captured:           response.Paid || response.Status == "succeeded",
+		Refundable:         response.Refundable,
+		PaymentMethodID:    response.PaymentMethod.ID,
+		PaymentMethodSaved: response.PaymentMethod.Saved,
+		CancellationReason: response.CancellationDetails.Reason,
+		Raw:                raw,
 	}, nil
 }
 
 // CancelPayment requests cancellation for a provider payment.
+func (p *Provider) GetRefund(ctx context.Context, id string) (domain.VerifiedPaymentRefund, error) {
+	if id == "" || len(id) > 128 || strings.ContainsAny(id, "/\\%?# \r\n\t") {
+		return domain.VerifiedPaymentRefund{}, errors.New("yookassa payment: invalid refund id")
+	}
+	var response refundResponse
+	if _, err := p.doJSON(ctx, http.MethodGet, "/refunds/"+id, "", nil, &response); err != nil {
+		return domain.VerifiedPaymentRefund{}, err
+	}
+	amount, err := parseKopecks(response.Amount.Value)
+	if err != nil {
+		return domain.VerifiedPaymentRefund{}, err
+	}
+	return domain.VerifiedPaymentRefund{ID: response.ID, PaymentID: response.PaymentID, Status: mapRefundStatus(response.Status), Amount: amount, Currency: domainCurrency(response.Amount.Currency)}, nil
+}
+
 func (p *Provider) CancelPayment(ctx context.Context, providerPaymentID string) error {
 	providerPaymentID = strings.TrimSpace(providerPaymentID)
 	if providerPaymentID == "" {
@@ -356,12 +385,14 @@ type confirmationRequest struct {
 }
 
 type createPaymentRequest struct {
-	Amount       amountValue         `json:"amount"`
-	Capture      bool                `json:"capture"`
-	Confirmation confirmationRequest `json:"confirmation"`
-	Description  string              `json:"description,omitempty"`
-	Metadata     map[string]any      `json:"metadata,omitempty"`
-	Receipt      receipt             `json:"receipt"`
+	Amount            amountValue          `json:"amount"`
+	Capture           bool                 `json:"capture"`
+	Confirmation      *confirmationRequest `json:"confirmation,omitempty"`
+	SavePaymentMethod bool                 `json:"save_payment_method,omitempty"`
+	PaymentMethodID   string               `json:"payment_method_id,omitempty"`
+	Description       string               `json:"description,omitempty"`
+	Metadata          map[string]any       `json:"metadata,omitempty"`
+	Receipt           receipt              `json:"receipt"`
 }
 
 type receipt struct {
@@ -401,6 +432,11 @@ type cancellationDetails struct {
 }
 
 type paymentResponse struct {
+	Metadata      map[string]json.RawMessage `json:"metadata"`
+	PaymentMethod struct {
+		ID    string `json:"id"`
+		Saved bool   `json:"saved"`
+	} `json:"payment_method"`
 	ID                  string               `json:"id"`
 	Status              string               `json:"status"`
 	Paid                bool                 `json:"paid"`
@@ -524,6 +560,9 @@ func newRefundReceipt(in domain.CreateRefundInput) (receipt, error) {
 
 func metadataForPayment(in domain.CreatePaymentInput) map[string]any {
 	metadata := metadataFromRaw(in.Metadata)
+	for _, private := range []string{"subscription", "subscription_submit_started_at", "subscription_submit_attempt_id", "subscription_payment_method_id", "payment_method_id", "save_payment_method"} {
+		delete(metadata, private)
+	}
 	// Canonical payment provenance is set after merging raw metadata. Raw data
 	// is not an authorization source and must never override these keys.
 	delete(metadata, "intent_id")
@@ -543,6 +582,20 @@ func metadataForPayment(in domain.CreatePaymentInput) map[string]any {
 		metadata["credits"] = in.Credits
 	}
 	return metadata
+}
+
+// Invalid or absent GET metadata leaves recovery disabled without changing
+// ordinary already-bound payment verification.
+func verifiedMetadataUUID(metadata map[string]json.RawMessage, key string) uuid.UUID {
+	var value string
+	if err := json.Unmarshal(metadata[key], &value); err != nil {
+		return uuid.Nil
+	}
+	id, err := uuid.Parse(strings.TrimSpace(value))
+	if err != nil {
+		return uuid.Nil
+	}
+	return id
 }
 
 func metadataForRefund(in domain.CreateRefundInput) map[string]any {

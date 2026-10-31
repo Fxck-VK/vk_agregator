@@ -17,7 +17,7 @@ import {useLocale} from "@/i18n/LocaleProvider";
 
 
 export function TattooHero({ onPreview }: { onPreview: (image: TattooImage) => void }) {
-  const {copy,media} = usePublicCopy(publicCopySourcesForLocale);
+  const {copy,media} = usePublicCopy(publicCopySourcesForLocale,{"copy":"tattooEn","media":"tattooReferenceEn"});
   const locale = useLocale();
 
   const [idea, setIdea] = useState("");

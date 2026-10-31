@@ -2,6 +2,10 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { createLocalSimulator } from "./simulator";
 import { defaultScenarios } from "./scenarios";
+import catalog from "@/features/session/model-catalog.preview.json";
+import { parseModelCatalog, projectImageModelCatalog } from "@/features/models/model-catalog-contract";
+
+const imageModels = projectImageModelCatalog(parseModelCatalog(catalog)).items;
 
 describe("local API simulator", () => {
   beforeEach(() => { vi.useFakeTimers(); vi.stubGlobal("createImageBitmap", vi.fn(async () => ({ width: 800, height: 600, close: vi.fn() }))); });
@@ -13,7 +17,7 @@ describe("local API simulator", () => {
   }
   it("reports progressive upload, returns reusable in-memory artifacts and quotes without network", async () => {
     const network = vi.fn(); vi.stubGlobal("fetch", network);
-    const simulator = createLocalSimulator(() => defaultScenarios);
+    const simulator = createLocalSimulator(() => defaultScenarios, { seed: { conversations: [], messages: {}, imageModels } });
     const progress = vi.fn();
     const pending = simulator.handle("/web/v1/input-artifacts?model_id=preview", { method: "POST", body: upload(), onUploadProgress: progress })!;
     await vi.advanceTimersByTimeAsync(400);
@@ -23,10 +27,25 @@ describe("local API simulator", () => {
     expect(data).toMatchObject({ artifact_id: expect.any(String), width: 800, height: 600, mime_type: "image/png" });
     const artifact = await simulator.handle(`/web/v1/image-artifacts/${data.artifact_id}`);
     expect(artifact?.headers.get("content-type")).toBe("image/png");
-    const quote = await simulator.handle("/web/v1/image-reference-quote?output_count=2");
-    expect(await quote?.json()).toEqual({ credits: 40 });
-    expect(await (await simulator.handle("/web/v1/image-reference-quote?output_count=15"))?.json()).toEqual({ credits: 300 });
+    const quote = await simulator.handle("/web/v1/image-reference-quote?model_id=nano_banana_pro&image_quality=2K&aspect_ratio=1:1&output_count=1&reference_count=1");
+    expect(await quote?.json()).toEqual({ credits: 55 });
+    const larger = await simulator.handle("/web/v1/image-reference-quote?model_id=seedream_4_5&image_quality=4K&aspect_ratio=1:1&output_count=4&reference_count=1");
+    expect(await larger!.json()).toEqual({ credits: 180 });
+    expect((await simulator.handle("/web/v1/image-reference-quote?output_count=15"))?.status).toBe(400);
     expect(network).not.toHaveBeenCalled();
+    simulator.dispose();
+  });
+  it.each([
+    "model_id=unknown&image_quality=2K&aspect_ratio=1:1&output_count=1&reference_count=1",
+    "model_id=nano_banana_pro&image_quality=8K&aspect_ratio=1:1&output_count=1&reference_count=1",
+    "model_id=nano_banana_pro&image_quality=2K&aspect_ratio=1:1&output_count=2&reference_count=1",
+    "model_id=nano_banana_pro&image_quality=2K&aspect_ratio=1:1&output_count=1&reference_count=0",
+    "model_id=nano_banana_pro&image_quality=2K&aspect_ratio=1:1&output_count=1&reference_count=100",
+    "model_id=gpt_image_2_5_flare&image_quality=4K-max&aspect_ratio=1:1&output_count=4&reference_count=1",
+    "model_id=seedream_5_0_lite&image_quality=2K&aspect_ratio=1:1&output_count=2&reference_count=14",
+  ])("rejects unavailable quote settings instead of inventing a price: %s", async query => {
+    const simulator = createLocalSimulator(() => defaultScenarios, { seed: { conversations: [], messages: {}, imageModels } });
+    expect((await simulator.handle(`/web/v1/image-reference-quote?${query}`))?.status).toBe(400);
     simulator.dispose();
   });
   it("can fail then retry successfully after changing scenarios", async () => {
@@ -69,6 +88,9 @@ describe("local API simulator", () => {
     const simulator = createLocalSimulator(() => defaultScenarios);
     expect(simulator.handle("/web/v1/models")).toBeUndefined();
     expect((await simulator.handle("/web/v1/payments/intents", { method: "POST" }))?.status).toBe(503);
+    expect(await (await simulator.handle("/web/v1/subscription"))?.json()).toEqual({ subscription: null, balances: [], checkout_available: false, recurring_available: false, trial_used: false });
+    expect((await simulator.handle("/web/v1/subscription/checkout", { method: "POST" }))?.status).toBe(503);
+    expect((await simulator.handle("/web/v1/subscription/cancel", { method: "POST" }))?.status).toBe(503);
     expect((await simulator.handle("/web/v1/input-artifacts", { method: "POST", body: new FormData() }))?.status).toBe(400);
     vi.mocked(createImageBitmap).mockRejectedValueOnce(new Error("Invalid image"));
     expect((await simulator.handle("/web/v1/input-artifacts", { method: "POST", body: upload() }))?.status).toBe(400);

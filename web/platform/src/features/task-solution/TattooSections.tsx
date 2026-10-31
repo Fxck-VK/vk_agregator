@@ -15,7 +15,7 @@ import {usePublicCopy} from "@/i18n/public/use-public-copy";
 
 
 export function TattooHowTo() {
-  const {copy,media} = usePublicCopy(publicCopySourcesForLocale);
+  const {copy,media} = usePublicCopy(publicCopySourcesForLocale,{"copy":"tattooEn","media":"tattooReferenceEn"});
 
   const [selected, setSelected] = useState(0);
   const refs = useRef<(HTMLButtonElement | null)[]>([]);
@@ -30,13 +30,13 @@ export function TattooHowTo() {
 }
 
 export function TattooBenefits() {
-  const {copy,media} = usePublicCopy(publicCopySourcesForLocale);
+  const {copy,media} = usePublicCopy(publicCopySourcesForLocale,{"copy":"tattooEn","media":"tattooReferenceEn"});
 
   return <section id="benefits" className={styles.benefits} aria-label={copy.hero.title}>{copy.features.map((feature, index) => <div className={styles.feature} key={feature.title}><div className={styles.featureText}><h2>{feature.title}</h2><p>{feature.description}</p></div><div className={styles.featureImage}><TattooPicture image={media.features[index]} sizes="(max-width: 767px) 90vw, 46vw" /></div></div>)}</section>;
 }
 
 export function TattooFlows({ onPreview }: { onPreview: (item: OverviewAction) => void }) {
-  const {copy,media} = usePublicCopy(publicCopySourcesForLocale);
+  const {copy,media} = usePublicCopy(publicCopySourcesForLocale,{"copy":"tattooEn","media":"tattooReferenceEn"});
 
   return <section id="more-flows" className={styles.flows}><h2>{copy.flows.title}</h2><LandingCarousel label={copy.flows.label} previous={copy.flows.previous} next={copy.flows.next} className={styles.flowViewport} bounded>{copy.flows.items.map((item, index) => {
     const children = <><TattooPicture image={media.flows[index]} sizes="(max-width: 767px) 80vw, 26vw" decorative /><div className={styles.flowText}><h3>{item.title}</h3><p>{item.description}</p>{"planned" in item ? <small>{copy.comingSoon}</small> : null}<LandingArrow /></div></>;
@@ -45,25 +45,25 @@ export function TattooFlows({ onPreview }: { onPreview: (item: OverviewAction) =
 }
 
 export function TattooDirectory() {
-  const {copy} = usePublicCopy(publicCopySourcesForLocale);
+  const {copy} = usePublicCopy(publicCopySourcesForLocale,{"copy":"tattooEn","media":"tattooReferenceEn"});
 
   return <section id="directory" className={styles.directory}><h2>{copy.directory.title}</h2><p>{copy.directory.description}</p><div className={styles.directoryLinks}>{copy.directory.items.map(item => <Link href={`/app?model=${encodeURIComponent(item.id)}`} key={item.id}>{item.label}<span aria-hidden="true">↗</span></Link>)}{copy.directory.tools.map(item => <Link href={item.href} key={item.href}>{item.label}<span aria-hidden="true">↗</span></Link>)}</div></section>;
 }
 
 export function TattooPlans() {
-  const {copy} = usePublicCopy(publicCopySourcesForLocale);
+  const {copy} = usePublicCopy(publicCopySourcesForLocale,{"copy":"tattooEn","media":"tattooReferenceEn"});
 
   return <LandingPlanCards {...copy.plans} />;
 }
 
 export function TattooWorkflow() {
-  const {copy,media} = usePublicCopy(publicCopySourcesForLocale);
+  const {copy,media} = usePublicCopy(publicCopySourcesForLocale,{"copy":"tattooEn","media":"tattooReferenceEn"});
 
   return <section id="workflow" className={styles.workflow}><div className={styles.centerHeading}><h2>{copy.workflow.title}</h2><p>{copy.workflow.description}</p></div><div className={styles.workflowGrid}>{copy.workflow.items.map((item, index) => <article key={item.title} className={styles.workflowCard} data-workflow-card><TattooPicture image={media.workflow[index]} sizes={index === 0 ? "(max-width: 767px) 90vw, 62vw" : "(max-width: 767px) 90vw, 30vw"} decorative /><div><span className={styles.workflowNumber}>{String(index + 1).padStart(2, "0")}</span><h3>{item.title}</h3><p>{item.description}</p></div></article>)}</div><p className={styles.artworkNote}>{copy.hero.attribution}</p></section>;
 }
 
 export function TattooQuestions() {
-  const {copy} = usePublicCopy(publicCopySourcesForLocale);
+  const {copy} = usePublicCopy(publicCopySourcesForLocale,{"copy":"tattooEn","media":"tattooReferenceEn"});
 
   return <section id="questions" className={styles.questions}><h2>{copy.faq.title}</h2><FAQ items={copy.faq.items} name="tattoo-faq" /></section>;
 }

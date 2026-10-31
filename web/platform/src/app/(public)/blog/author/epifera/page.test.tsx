@@ -30,18 +30,18 @@ describe('T24 author archive',()=>{
   });
   it('renders the second and last pages from query params without duplicates',async()=>{
     let view=await page('2');const second=[...view.container.querySelectorAll('[data-author-material]')].map(a=>a.getAttribute('href'));
-    expect(second).toEqual(authorMaterials.slice(12,24).map(item=>'/en'+item.href));expect(screen.getByRole('link',{name:'Page 2'})).toHaveAttribute('aria-current','page');
+    expect(second).toEqual(authorMaterials.slice(12,24).map(item=>'/ru'+item.href));expect(screen.getByRole('link',{name:'Page 2'})).toHaveAttribute('aria-current','page');
     cleanup();view=await page('999');const last=paginateAuthorMaterials(authorMaterials,999);expect(view.container.querySelectorAll('[data-author-material]')).toHaveLength(last.items.length);
     expect(screen.getByRole('button',{name:t.next})).toBeDisabled();expect(screen.getByRole('button',{name:t.last})).toBeDisabled();
   });
   it('has bounded locale-preserving pagination URLs with a real target anchor',async()=>{
     const{container}=await page();expect(screen.getByRole('button',{name:t.previous})).toBeDisabled();expect(screen.getByRole('button',{name:t.first})).toBeDisabled();
-    expect(screen.getByRole('link',{name:t.next})).toHaveAttribute('href','/en'+authorPath+'?page=2#author-materials');expect(container.querySelector('#author-materials')).not.toBeNull();
+    expect(screen.getByRole('link',{name:t.next})).toHaveAttribute('href','/ru'+authorPath+'?page=2#author-materials');expect(container.querySelector('#author-materials')).not.toBeNull();
   });
   it('searches materials from all pages and handles no matches locally',async()=>{
     const fetchData=vi.fn();vi.stubGlobal('fetch',fetchData);await page();fireEvent.click(screen.getByRole('button',{name:t.search}));
     const dialog=screen.getByRole('dialog',{name:t.searchTitle}),input=within(dialog).getByRole('searchbox',{name:t.searchPlaceholder});
-    const last=authorMaterials.at(-1)!;fireEvent.change(input,{target:{value:last.title}});expect(within(dialog).getByRole('link',{name:last.category+' '+last.title})).toHaveAttribute('href','/en'+last.href);
+    const last=authorMaterials.at(-1)!;fireEvent.change(input,{target:{value:last.title}});expect(within(dialog).getByRole('link',{name:last.category+' '+last.title})).toHaveAttribute('href','/ru'+last.href);
     fireEvent.change(input,{target:{value:'<script>unknown material</script>'}});expect(dialog).toHaveTextContent(t.noResults);expect(dialog.querySelector('script')).toBeNull();expect(fetchData).not.toHaveBeenCalled();
     const clear=within(dialog).getByRole('button',{name:t.clear});clear.focus();fireEvent.click(clear);
     expect(input).toHaveValue('');expect(input).toHaveFocus();expect(within(dialog).getAllByRole('link')).toHaveLength(authorMaterials.length);
@@ -57,7 +57,7 @@ describe('T24 author archive',()=>{
     fireEvent.click(screen.getByRole('button',{name:t.source.action}));expect(within(screen.getByRole('dialog',{name:t.source.title})).getByRole('link',{name:t.source.link})).toHaveAttribute('href','https://www.magnific.com/blog/author/magnific/');
   });
   it.each([ArtPromptsArticle,AvatarComparison])('connects the existing article byline to the author',Component=>{
-    render(<LocaleProvider locale={request.locale}><Component/></LocaleProvider>);expect(screen.getByRole('link',{name:`By ${brandName}`})).toHaveAttribute('href','/en'+authorPath);
+    render(<LocaleProvider locale={request.locale}><Component/></LocaleProvider>);expect(screen.getByRole('link',{name:`By ${brandName}`})).toHaveAttribute('href','/ru'+authorPath);
   });
   it('does not persist queries or create account/payment/generation writes',async()=>{const fetchData=vi.fn();vi.stubGlobal('fetch',fetchData);await page();fireEvent.click(screen.getByRole('button',{name:t.search}));expect(fetchData).not.toHaveBeenCalled();expect(localStorage.length).toBe(0);expect(location.search).toBe('');});
 });

@@ -4,23 +4,24 @@
   justify-content: center;
   min-block-size: 2.75rem;
   padding-block: 0;
-  border: 0;
-  border-radius: 999px;
-  background: var(--color-accent);
-  color: var(--color-text-on-accent);
+  border: 0.0625rem solid var(--color-accent);
+  border-radius: var(--radius-sm);
+  background: transparent;
+  color: var(--color-text);
   font: inherit;
   font-weight: var(--font-weight-semibold);
   cursor: pointer;
   text-decoration: none;
-  transition: background-color var(--motion-fast), transform var(--motion-fast);
+  transition: border-color var(--motion-fast);
 }
 
 .action:hover {
-  background: var(--color-accent-hover, var(--color-accent-strong));
+  border-color: var(--color-accent-strong);
+  background: transparent;
 }
 
 .action:active {
-  transform: translateY(0.0625rem);
+  transform: none;
 }
 
 .action:focus-visible {

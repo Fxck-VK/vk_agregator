@@ -2,6 +2,7 @@ package memory
 
 import (
 	"context"
+	"math"
 	"sync"
 	"time"
 
@@ -24,6 +25,9 @@ type BillingRepo struct {
 	ledger        []domain.LedgerEntry
 	ledgerKeys    map[string]bool
 	resKeys       map[string]uuid.UUID
+	lots          map[uuid.UUID]domain.CreditLot
+	subscriptions map[uuid.UUID]domain.AccountSubscription
+	allocations   map[uuid.UUID]map[uuid.UUID]int64
 }
 
 // NewBillingRepo builds an empty BillingRepo.
@@ -37,6 +41,9 @@ func NewBillingRepo() *BillingRepo {
 		reservations:  map[uuid.UUID]domain.CreditReservation{},
 		ledgerKeys:    map[string]bool{},
 		resKeys:       map[string]uuid.UUID{},
+		lots:          map[uuid.UUID]domain.CreditLot{},
+		subscriptions: map[uuid.UUID]domain.AccountSubscription{},
+		allocations:   map[uuid.UUID]map[uuid.UUID]int64{},
 	}
 }
 
@@ -49,6 +56,10 @@ func userCurrencyKey(userID uuid.UUID, currency domain.Currency) string {
 func (r *BillingRepo) CreateAccount(_ context.Context, a *domain.CreditAccount) error {
 	r.mu.Lock()
 	defer r.mu.Unlock()
+	openingLotKind := a.OpeningLotKind
+	if openingLotKind != "" && !openingLotKind.Valid() {
+		return domain.ErrConflict
+	}
 	if a.OwnerAccountID == uuid.Nil {
 		a.OwnerAccountID = a.UserID
 	}
@@ -78,6 +89,7 @@ func (r *BillingRepo) CreateAccount(_ context.Context, a *domain.CreditAccount) 
 	// from the ledger sum (invariant #14, audit B1).
 	grant := a.BalanceCached
 	a.BalanceCached = 0
+	a.OpeningLotKind = ""
 	r.accounts[a.ID] = *a
 	if legacyKey != "" {
 		r.claimedUsers[legacyKey] = true
@@ -99,6 +111,7 @@ func (r *BillingRepo) CreateAccount(_ context.Context, a *domain.CreditAccount) 
 			Status:                    domain.LedgerStatusCommitted,
 			IdempotencyKey:            "grant:open:" + a.ID.String(),
 			Reason:                    "opening balance grant",
+			LotKind:                   openingLotKind,
 		}); err != nil {
 			return err
 		}
@@ -147,6 +160,29 @@ func (r *BillingRepo) AppendEntry(_ context.Context, e *domain.LedgerEntry) erro
 }
 
 func (r *BillingRepo) appendLocked(e *domain.LedgerEntry) error {
+	return r.appendProjectedLocked(e, true)
+}
+
+func (r *BillingRepo) appendProjectedLocked(e *domain.LedgerEntry, project bool) error {
+	if e.Amount == math.MinInt64 {
+		return domain.ErrConflict
+	}
+	if e.LotKind != "" && !e.LotKind.Valid() {
+		return domain.ErrConflict
+	}
+	if e.LotExpiresAt != nil && (e.LotKind == "" || e.LotKind == domain.CreditLotLegacy || e.LotKind == domain.CreditLotPurchased) {
+		return domain.ErrConflict
+	}
+	account, ok := r.accounts[e.AccountID]
+	if !ok {
+		return domain.ErrNotFound
+	}
+	if e.OwnerAccountID != uuid.Nil && e.OwnerAccountID != account.OwnerAccountID {
+		return domain.ErrConflict
+	}
+	if (e.Status == "" || e.Status == domain.LedgerStatusCommitted) && ((e.Amount > 0 && account.BalanceCached > math.MaxInt64-e.Amount) || (e.Amount < 0 && account.BalanceCached < math.MinInt64-e.Amount)) {
+		return domain.ErrConflict
+	}
 	if r.ledgerKeys[e.IdempotencyKey] {
 		return domain.ErrConflict
 	}
@@ -165,7 +201,15 @@ func (r *BillingRepo) appendLocked(e *domain.LedgerEntry) error {
 		}
 	}
 	e.CreatedAt = time.Now()
-	r.ledger = append(r.ledger, *e)
+	e.LotExpiresAt = copyLotTime(e.LotExpiresAt)
+	if project {
+		if err := r.projectEntryLocked(e); err != nil {
+			return err
+		}
+	}
+	stored := *e
+	stored.LotExpiresAt = copyLotTime(e.LotExpiresAt)
+	r.ledger = append(r.ledger, stored)
 	r.ledgerKeys[e.IdempotencyKey] = true
 	if e.Status == domain.LedgerStatusCommitted && e.Amount != 0 {
 		acc := r.accounts[e.AccountID]
@@ -188,6 +232,7 @@ func (r *BillingRepo) ListEntries(_ context.Context, accountID uuid.UUID, limit,
 	var out []*domain.LedgerEntry
 	for i := offset; i < len(filtered) && len(out) < limit; i++ {
 		e := filtered[i]
+		e.LotExpiresAt = copyLotTime(e.LotExpiresAt)
 		out = append(out, &e)
 	}
 	return out, nil
@@ -221,6 +266,7 @@ func (r *BillingRepo) ReserveForOwner(ctx context.Context, ownerAccountID uuid.U
 func (r *BillingRepo) reserve(_ context.Context, requestedOwner uuid.UUID, res *domain.CreditReservation, ownerScoped bool) error {
 	r.mu.Lock()
 	defer r.mu.Unlock()
+	lotNow := time.Now()
 	account, ok := r.accounts[res.AccountID]
 	if !ok {
 		return domain.ErrNotFound
@@ -245,6 +291,12 @@ func (r *BillingRepo) reserve(_ context.Context, requestedOwner uuid.UUID, res *
 			return nil
 		}
 		return domain.ErrConflict
+	}
+	if res.Amount <= 0 || (res.Status != "" && res.Status != domain.ReservationReserved) {
+		return domain.ErrConflict
+	}
+	if _, err := r.expireAccountLotsLocked(res.AccountID, lotNow, 0); err != nil {
+		return err
 	}
 	if r.availableLocked(res.AccountID) < res.Amount {
 		return domain.ErrInsufficientCredits
@@ -284,6 +336,7 @@ func (r *BillingRepo) reserve(_ context.Context, requestedOwner uuid.UUID, res *
 		delete(r.reservations, res.ID)
 		return err
 	}
+	r.allocateLotsLocked(res, lotNow)
 	r.resKeys[res.IdempotencyKey] = res.ID
 	return nil
 }
@@ -302,6 +355,7 @@ func (r *BillingRepo) CaptureForOwner(ctx context.Context, ownerAccountID, reser
 func (r *BillingRepo) capture(_ context.Context, ownerAccountID, reservationID uuid.UUID, amount int64, idempotencyKey string, ownerScoped bool) error {
 	r.mu.Lock()
 	defer r.mu.Unlock()
+	lotNow := time.Now()
 	res, ok := r.reservations[reservationID]
 	if !ok {
 		return domain.ErrNotFound
@@ -322,8 +376,11 @@ func (r *BillingRepo) capture(_ context.Context, ownerAccountID, reservationID u
 		return domain.ErrConflict
 	}
 
+	if err := r.preflightTerminalLotsLocked(res, true, lotNow); err != nil {
+		return err
+	}
 	jobID := res.JobID
-	if err := r.appendLocked(&domain.LedgerEntry{
+	if err := r.appendProjectedLocked(&domain.LedgerEntry{
 		AccountID:                 res.AccountID,
 		OwnerAccountID:            res.OwnerAccountID,
 		JobID:                     &jobID,
@@ -334,7 +391,10 @@ func (r *BillingRepo) capture(_ context.Context, ownerAccountID, reservationID u
 		Status:                    domain.LedgerStatusCommitted,
 		IdempotencyKey:            idempotencyKey,
 		Reason:                    "credit capture",
-	}); err != nil {
+	}, false); err != nil {
+		return err
+	}
+	if err := r.terminalLotsLocked(res, true, lotNow); err != nil {
 		return err
 	}
 	res.Status = domain.ReservationCaptured
@@ -357,6 +417,7 @@ func (r *BillingRepo) ReleaseForOwner(ctx context.Context, ownerAccountID, reser
 func (r *BillingRepo) release(_ context.Context, ownerAccountID, reservationID uuid.UUID, idempotencyKey string, ownerScoped bool) error {
 	r.mu.Lock()
 	defer r.mu.Unlock()
+	lotNow := time.Now()
 	res, ok := r.reservations[reservationID]
 	if !ok {
 		return domain.ErrNotFound
@@ -374,6 +435,9 @@ func (r *BillingRepo) release(_ context.Context, ownerAccountID, reservationID u
 		return domain.ErrConflict
 	}
 
+	if err := r.preflightTerminalLotsLocked(res, false, lotNow); err != nil {
+		return err
+	}
 	jobID := res.JobID
 	if err := r.appendLocked(&domain.LedgerEntry{
 		AccountID:                 res.AccountID,
@@ -387,6 +451,9 @@ func (r *BillingRepo) release(_ context.Context, ownerAccountID, reservationID u
 		IdempotencyKey:            idempotencyKey,
 		Reason:                    "credit release",
 	}); err != nil {
+		return err
+	}
+	if err := r.terminalLotsLocked(res, false, lotNow); err != nil {
 		return err
 	}
 	res.Status = domain.ReservationReleased

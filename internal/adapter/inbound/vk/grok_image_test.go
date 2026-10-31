@@ -105,9 +105,12 @@ func TestPhotoMenuWithGrokFitsVKInlineKeyboard(t *testing.T) {
 }
 
 func TestPhotoGrokCreatesReservedVKJobWithValidWorkerOptions(t *testing.T) {
-	for _, tc := range []struct{ id, model, resolution string }{
-		{"grok_image_1_5", "grok-imagine-1.5-apimart", ""},
-		{"grok_image_2_0", "grok-imagine-2.0-ext", "quality"},
+	for _, tc := range []struct {
+		id, model, resolution string
+		credits               int64
+	}{
+		{"grok_image_1_5", "grok-imagine-1.5-apimart", "", 10},
+		{"grok_image_2_0", "grok-imagine-2.0-ext", "quality", 25},
 	} {
 		t.Run(tc.id, func(t *testing.T) {
 			h := newHarnessWithConfig(vkdelivery.NewMockClient(), vk.Config{Secret: "s3cr3t", ImageModels: grokVKImageModels(t)})
@@ -125,10 +128,10 @@ func TestPhotoGrokCreatesReservedVKJobWithValidWorkerOptions(t *testing.T) {
 				t.Fatalf("jobs=%d, error=%v; want one idempotent job", len(jobs), err)
 			}
 			job := jobs[0]
-			if job.Source != "vk_bot" || job.OperationType != domain.OperationImageGenerate || job.CostReserved != 10 || job.CostEstimate != 10 {
+			if job.Source != "vk_bot" || job.OperationType != domain.OperationImageGenerate || job.CostReserved != tc.credits || job.CostEstimate != tc.credits {
 				t.Fatal("incorrect VK job routing or credit reservation")
 			}
-			if price, ok := job.PricingSnapshotCredits(); !ok || price != 10 {
+			if price, ok := job.PricingSnapshotCredits(); !ok || price != tc.credits {
 				t.Fatal("wrong immutable tariff")
 			}
 			var params struct {

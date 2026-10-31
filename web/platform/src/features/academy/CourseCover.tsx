@@ -9,8 +9,8 @@ import {usePublicCopy} from "@/i18n/public/use-public-copy";
 
 
 export function CourseCover({onOverview}:{onOverview:()=>void}){
-  const {copy} = usePublicCopy(publicCopySourcesForLocale);
-  const locale=useLocale(),courseLessons=getCourseLessons(locale),courseReadingMinutes=getCourseReadingMinutes(locale);
+  const {copy} = usePublicCopy(publicCopySourcesForLocale,{"copy":"courseEn"});
+  const locale=useLocale(),courseLessons=getCourseLessons(locale,copy),courseReadingMinutes=getCourseReadingMinutes(locale,copy);
 
   return <section className={styles.cover} aria-labelledby="course-title">
     <div className={styles.coverArt} aria-hidden="true"><span><HelpIcon kind="grid"/></span><span><HelpIcon kind="file"/></span><span className={styles.brandTile}><BrandLogo size={104}/></span><span><HelpIcon kind="level"/></span><span><HelpIcon kind="book"/></span></div>

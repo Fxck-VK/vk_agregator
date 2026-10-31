@@ -16,7 +16,7 @@ function Chapter({ id, eyebrow, title, intro, children }: { id: string; eyebrow:
 function TextLink({ href, children }: { href: string; children: ReactNode }) { return <Link href={href} className={styles.useCaseLink}><span>{children}</span><span className={styles.useCaseArrow}><LandingArrow /></span></Link>; }
 
 export function ImageGeneratorModels() {
-  const {copy,reference} = usePublicCopy(publicCopySourcesForLocale);
+  const {copy,reference} = usePublicCopy(publicCopySourcesForLocale,{"copy":"imageGeneratorEn","reference":"imageGeneratorReferenceEn"});
 
   return <Chapter id="models" {...copy.models}>
     <div className={styles.modelsTableCard}><div className={styles.modelsTableScroll} role="region" aria-label={copy.models.title} tabIndex={0}><table className={styles.modelsTable}><thead><tr>{copy.models.columns.map(label => <th scope="col" key={label}>{label}</th>)}</tr></thead><tbody>{copy.models.rows.map(row => <tr key={row.need}><th scope="row" className={styles.modelsWhen}>{row.need}</th><td><div className={styles.modelChips}>{row.models.map(name => <Link href="/app/models" className={styles.modelChip} key={name}>{name}</Link>)}</div></td><td className={styles.modelsWhy}>{row.why}</td><td className={styles.modelsOutput}><Link href="/app/models" className={styles.modelsOutputBadge}>{row.output}</Link></td></tr>)}</tbody></table></div></div>
@@ -27,7 +27,7 @@ export function ImageGeneratorModels() {
 }
 
 export function ImageGeneratorUseCases({ onOpen }: { onOpen: (image: ReferenceImage) => void }) {
-  const {copy,reference} = usePublicCopy(publicCopySourcesForLocale);
+  const {copy,reference} = usePublicCopy(publicCopySourcesForLocale,{"copy":"imageGeneratorEn","reference":"imageGeneratorReferenceEn"});
 
   return <Chapter id="use-cases" {...copy.useCases}><div className={styles.useCaseGrid}>{copy.useCases.cards.map((card, index) => <article className={styles.useCaseCard} key={card.label}>
     <div className={styles.useCaseImgWrap}><GeneratorPicture image={reference.useCaseImages[index]} className={styles.useCaseImg} /><div className={styles.useCaseChips}>{card.models.map(model => <Link href="/app/models" className={styles.useCaseChip} key={model}>{model}</Link>)}</div></div>
@@ -36,25 +36,25 @@ export function ImageGeneratorUseCases({ onOpen }: { onOpen: (image: ReferenceIm
 }
 
 export function ImageGeneratorWorkflow() {
-  const {copy,reference} = usePublicCopy(publicCopySourcesForLocale);
+  const {copy,reference} = usePublicCopy(publicCopySourcesForLocale,{"copy":"imageGeneratorEn","reference":"imageGeneratorReferenceEn"});
 
   return <Chapter id="workflow" {...copy.workflow}><ul className={styles.workflowSteps}>{copy.workflow.steps.map(step => <li key={step.title}><Link href={step.href} className={styles.workflowStepInner}><span className={styles.workflowIcon}><LandingToolIcon name={step.icon} /></span><span className={styles.workflowStepLabel}>{step.title}</span><span className={styles.workflowStepLine}>{step.body}</span></Link></li>)}</ul><div className={styles.workflowCards}>{copy.workflow.cards.map((card, index) => <article className={styles.workflowCard} key={card.title}><div className={styles.workflowCardImg}><GeneratorPicture image={reference.workflowImages[index]} sizes="(max-width: 820px) 92vw, 26vw" /></div><div className={styles.workflowCardBodyWrap}><h3 className={styles.workflowCardTitle}>{card.title}</h3><p className={styles.workflowCardBody}>{card.body}</p><div className={styles.useCaseLinks}>{card.href ? <TextLink href={card.href}>{card.action}</TextLink> : <span className={styles.upcoming}>{card.action}</span>}</div></div></article>)}</div></Chapter>;
 }
 
 export function ImageGeneratorTrust() {
-  const {copy} = usePublicCopy(publicCopySourcesForLocale);
+  const {copy} = usePublicCopy(publicCopySourcesForLocale,{"copy":"imageGeneratorEn","reference":"imageGeneratorReferenceEn"});
 
   return <section id="trust" className={styles.chapter} aria-labelledby="trust-title"><p className={styles.eyebrow}>{copy.trust.eyebrow}</p><div className={styles.trustHead}><div className={styles.trustHeadText}><h2 id="trust-title" className={styles.chapterTitle}>{copy.trust.title}</h2><p className={styles.chapterIntro}>{copy.trust.intro}</p></div><Link href="/legal" className={styles.trustRanking}><span className={styles.trustRankingBadge}>{copy.trust.badge}<span className={styles.trustRankingScale}>{copy.trust.badgeSmall}</span></span><span><span className={styles.trustRankingTitle}>{copy.trust.badgeTitle}</span><span className={styles.trustRankingSource}>{copy.trust.badgeLink}</span></span></Link></div><div className={styles.trustGrid}>{copy.trust.tiles.map((tile,index) => <div className={styles.trustTile} key={tile.title}><span className={styles.trustTileNum}>{`0${index+1}`}</span><h3 className={styles.trustTileTitle}>{tile.title}</h3><p className={styles.trustTileLine}>{tile.body}</p></div>)}</div></section>;
 }
 
 export function ImageGeneratorPlans() {
-  const {copy} = usePublicCopy(publicCopySourcesForLocale);
+  const {copy} = usePublicCopy(publicCopySourcesForLocale,{"copy":"imageGeneratorEn","reference":"imageGeneratorReferenceEn"});
 
   return <Chapter id="plans" {...copy.plans}><div className={styles.plansLead}><p>{copy.plans.lead}</p></div><div className={styles.plansTiers}>{copy.plans.cards.map((card,index) => <article className={`${styles.planTier} ${index ? styles.planTierFeatured : ""}`} key={card.name}><h3 className={styles.planTierName}>{card.name}</h3><p className={styles.planTierPrice}>{card.price}</p><p className={styles.planTierNote}>{card.note}</p><p className={styles.planTierLine}>{card.body}</p><Link href={card.href} className={`${styles.planTierCta} ${index ? styles.planTierCtaSolid : ""}`}>{card.action}</Link></article>)}</div><p className={styles.plansNote}>{copy.plans.note}</p></Chapter>;
 }
 
 export function ImageGeneratorFinale() {
-  const {copy,reference} = usePublicCopy(publicCopySourcesForLocale);
+  const {copy,reference} = usePublicCopy(publicCopySourcesForLocale,{"copy":"imageGeneratorEn","reference":"imageGeneratorReferenceEn"});
 
   return <><section id="questions" className={styles.faq} aria-labelledby="questions-title"><h2 id="questions-title" className={styles.faqTitle}>{copy.faqTitle}</h2><div className={styles.faqList}>{copy.questions.map(item => <details key={item.q} className={styles.faqItem}><summary className={styles.faqSummary}><span>{item.q}</span><span className={styles.faqPlus} aria-hidden="true">+</span></summary><p className={styles.faqAnswer}>{item.a}</p></details>)}</div></section>
     <section className={styles.closingBanner} aria-labelledby="closing-title"><GeneratorPicture image={reference.closing} className={styles.closingBannerBg} sizes="100vw" decorative /><div className={styles.closingBannerOverlay} /><div className={styles.closingBannerInner}><h2 id="closing-title" className={styles.closingBannerTitle}>{copy.closing.title}</h2><div className={styles.closingBannerCtas}><Link href="/app/image" className={styles.closingBannerCta}>{copy.closing.action}</Link></div></div></section>

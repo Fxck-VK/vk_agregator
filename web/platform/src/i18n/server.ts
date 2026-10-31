@@ -3,11 +3,11 @@ import "server-only";
 import { headers } from "next/headers";
 import { redirect } from "next/navigation";
 import { getDictionary } from "./dictionary";
-import { resolveLocale, type Locale } from "./locales";
+import { resolveSiteLocale, type Locale } from "./locales";
 import { localeRequestHeader, localizeHref } from "./routing";
 
 export async function getRequestLocale() {
-  return resolveLocale((await headers()).get(localeRequestHeader));
+  return resolveSiteLocale((await headers()).get(localeRequestHeader));
 }
 
 export async function getRequestDictionary() {

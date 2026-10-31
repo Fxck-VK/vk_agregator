@@ -550,9 +550,8 @@
   },
   {
     "id": "u1049",
-    "ru": "Сравнение 8 моделей ИИ-изображений для концепций аватаров | Epifera",
-    "back": "Comparison of 8 AI image models for avatar concepts | Epifera",
-    "keepReason": "Preserved brand, model or technical notation: Epifera."
+    "ru": "Сравнение 8 ИИ-моделей для создания изображений аватаров | Epifera",
+    "back": "A comparison of 8 AI models for creating avatar images | Epifera"
   },
   {
     "id": "u1050",
@@ -1191,8 +1190,8 @@
   },
   {
     "id": "u1171",
-    "ru": "Откройте свои чаты и файлы. Разговор содержит контекст задачи, а библиотека файлов собирает сгенерированные медиа. Используйте оба представления для поиска прошлых работ.",
-    "back": "Open your chats and files. A conversation contains task context while the file library collects generated media. Use both views to find past work."
+    "ru": "Откройте свои чаты и файлы. Чат содержит контекст задачи, а библиотека файлов объединяет созданные медиафайлы. Используйте оба раздела, чтобы найти предыдущие работы.",
+    "back": "Open your chats and files. A chat contains the task context, while the file library brings created media files together. Use both sections to find earlier work."
   },
   {
     "id": "u1172",
@@ -1201,8 +1200,8 @@
   },
   {
     "id": "u1173",
-    "ru": "Вы знаете, как переходить между инструментами, разговорами и сгенерированными файлами.",
-    "back": "You know how to move between tools, conversations and generated files."
+    "ru": "Вы знаете, как переходить между инструментами, чатами и созданными файлами.",
+    "back": "You know how to move between tools, chats and files you have created."
   },
   {
     "id": "u1174",
@@ -1216,8 +1215,8 @@
   },
   {
     "id": "u1176",
-    "ru": "Начните с задачи, а не названия модели. Для текстового ответа, неподвижного изображения и движущегося кадра нужны разные типы моделей и настроек.",
-    "back": "Start with the task rather than the model name. A text answer, still image and moving shot need different model types and settings."
+    "ru": "Начните с задачи, а не с названия модели. Для текстового ответа, статичного изображения и видеосцены с движением нужны разные типы моделей и настроек.",
+    "back": "Begin with the task rather than the model name. A text reply, a static image and a video scene with motion need different model types and settings."
   },
   {
     "id": "u1177",
@@ -1417,8 +1416,8 @@
   },
   {
     "id": "u1216",
-    "ru": "Опишите движущийся кадр",
-    "back": "Describe a moving shot"
+    "ru": "Опишите движение в видеосцене",
+    "back": "Describe the motion in a video scene"
   },
   {
     "id": "u1217",
@@ -1427,18 +1426,18 @@
   },
   {
     "id": "u1218",
-    "ru": "Видеобрифу нужно больше, чем описание неподвижного кадра. Продумайте действие объекта, камеру и то, как кадр начинается и заканчивается.",
-    "back": "A video brief needs more than a still-frame description. Think through the subject's action, camera and how the shot begins and ends."
+    "ru": "Видеобрифу недостаточно описания статичного кадра. Продумайте действие объекта, работу камеры и то, как начинается и заканчивается сцена.",
+    "back": "A video brief needs more than a description of a static frame. Think through the subject’s action, the camera work and how the scene starts and ends."
   },
   {
     "id": "u1219",
-    "ru": "Выберите одно понятное действие объекта. Опишите видимое движение и окружение, не вмещая несвязанные события в короткий кадр.",
-    "back": "Choose one understandable subject action. Describe the visible movement and surroundings without packing unrelated events into a short shot."
+    "ru": "Выберите одно понятное действие объекта. Опишите видимое движение и окружение, не пытаясь вместить несвязанные события в короткий видеофрагмент.",
+    "back": "Choose one clear action for the subject. Describe the visible movement and setting without trying to fit unrelated events into a short video segment."
   },
   {
     "id": "u1220",
-    "ru": "Добавляйте указание для камеры, только если оно помогает идее. Медленное приближение, неподвижный вид и следящая съёмка предъявляют разные требования к композиции.",
-    "back": "Add a camera instruction only if it serves the idea. A slow push-in, locked view and tracking shot make different demands on composition."
+    "ru": "Добавляйте указания для камеры, только если они помогают передать идею. Медленный наезд, съёмка неподвижной камерой и движение камеры за объектом предъявляют разные требования к композиции.",
+    "back": "Add camera directions only when they help convey the idea. A slow push-in, filming with a fixed camera and camera movement following the subject place different demands on composition."
   },
   {
     "id": "u1221",
@@ -1472,8 +1471,8 @@
   },
   {
     "id": "u1227",
-    "ru": "Если кадр начинается с готовых медиа, проверьте допустимые входные изображения или видео. Уточните доступные требования к файлам до выбора источника.",
-    "back": "If the shot starts from existing media check acceptable image or video inputs. Clarify available file requirements before choosing a source."
+    "ru": "Если для создания сцены вы используете готовые изображения или видео, проверьте, какие из них можно загрузить. Перед выбором исходного файла уточните требования к нему.",
+    "back": "If you use existing images or video to create the scene, check which inputs can be uploaded. Confirm the requirements before choosing the source file."
   },
   {
     "id": "u1228",
@@ -1482,8 +1481,8 @@
   },
   {
     "id": "u1229",
-    "ru": "Проверьте стоимость и подтверждайте, только когда конфигурация соответствует задаче. Оцените движение, непрерывность и последний кадр результата перед планированием следующего кадра.",
-    "back": "Check cost and confirm only when configuration matches the task. Assess resulting movement, continuity and final frame before planning the next shot."
+    "ru": "Проверьте стоимость и подтверждайте, только когда конфигурация соответствует задаче. Оцените движение, непрерывность и последний кадр результата перед планированием следующей сцены.",
+    "back": "Check the cost and confirm only when the configuration matches the task. Review the motion, continuity and final frame of the result before planning the next scene."
   },
   {
     "id": "u1230",
@@ -1492,8 +1491,8 @@
   },
   {
     "id": "u1231",
-    "ru": "Вы можете объяснить, почему конкретная видеоконфигурация подходит вашему кадру.",
-    "back": "You can explain why a particular video configuration fits your shot."
+    "ru": "Вы можете объяснить, почему выбранные настройки видео подходят вашей сцене.",
+    "back": "You can explain why the selected video settings suit your scene."
   },
   {
     "id": "u1232",
@@ -1597,13 +1596,13 @@
   },
   {
     "id": "u1252",
-    "ru": "Сгенерированные медиа появляются в своём разговоре и библиотеке файлов. Используйте эти представления для оценки результата и скачивания всего, что хотите сохранить для проекта.",
-    "back": "Generated media appears in its conversation and the file library. Use these views to assess the result and download anything you want to keep for the project."
+    "ru": "Созданные медиафайлы появляются в чате и в библиотеке файлов. Здесь можно оценить результат и скачать всё, что хотите сохранить для проекта.",
+    "back": "Created media files appear in the chat and the file library. There you can review a result and download anything you want to keep for the project."
   },
   {
     "id": "u1253",
-    "ru": "Откройте разговор, в котором создан результат, чтобы изучить контекст. Откройте библиотеку файлов для просмотра медиа из разных задач.",
-    "back": "Open the conversation where the result was created to examine context. Open the file library to view media from different tasks."
+    "ru": "Откройте чат, в котором был создан результат, чтобы изучить его контекст. В библиотеке файлов можно просмотреть медиафайлы из разных задач.",
+    "back": "Open the chat in which the result was created to review its context. In the file library you can browse media files from different tasks."
   },
   {
     "id": "u1254",
@@ -1637,8 +1636,8 @@
   },
   {
     "id": "u1260",
-    "ru": "Удаление файла — осознанное действие в библиотеке. Подтверждение объясняет, что результат удаляется из ваших файлов и разговора, где был создан, вместе с сохранёнными вариантами медиа.",
-    "back": "File deletion is a deliberate action in the library. The confirmation explains that the result is removed from your files and the conversation where it was created, together with stored media variants."
+    "ru": "Удаление файла — осознанное действие в библиотеке. В окне подтверждения указано, что результат будет удалён из ваших файлов и из чата, где он был создан, вместе с сохранёнными вариантами медиафайла.",
+    "back": "Deleting a file is a deliberate library action. The confirmation says the result will be removed from your files and from the chat where it was created, along with the stored media variants."
   },
   {
     "id": "u1261",
@@ -1647,8 +1646,8 @@
   },
   {
     "id": "u1262",
-    "ru": "Различайте сгенерированный медиафайл и окружающий разговор. Удаление одного результата не означает удаление всех сообщений или остальных результатов в чате.",
-    "back": "Distinguish generated media file from surrounding conversation. Removing one output does not mean removing every message or other results in the chat."
+    "ru": "Различайте созданный медиафайл и сам чат. Удаление одного результата не означает, что удалятся все сообщения или остальные результаты в этом чате.",
+    "back": "Distinguish a created media file from the chat itself. Deleting one result does not mean that every message or the other results in that chat will be deleted."
   },
   {
     "id": "u1263",
@@ -2226,8 +2225,8 @@
   },
   {
     "id": "u1496",
-    "ru": "Когда запрос завершится, оцените изображения в разговоре и разделе ",
-    "back": "When the request finishes assess images in the conversation and in the section "
+    "ru": "Когда запрос завершится, оцените изображения в чате и разделе ",
+    "back": "When the request finishes, review the images in the chat and the section "
   },
   {
     "id": "u1497",
@@ -2252,8 +2251,8 @@
   },
   {
     "id": "u1501",
-    "ru": ". Используйте вкладки категорий, чтобы сузить результаты. Файл также может появляться в разговоре, где он был создан.",
-    "back": ". Use category tabs to narrow results. A file may also appear in the conversation where it was created."
+    "ru": ". Используйте вкладки категорий, чтобы сузить список результатов. Файл также может появляться в чате, где он был создан.",
+    "back": ". Use the category tabs to narrow the list of results. A file may also appear in the chat where it was created."
   },
   {
     "id": "u1502",
@@ -2297,8 +2296,8 @@
   },
   {
     "id": "u1510",
-    "ru": "Удалённый результат исчезает из раздела «Мои файлы» и своего разговора. Остальные результаты и текст разговора сохраняются.",
-    "back": "The deleted output disappears from My files and its conversation. Other outputs and conversation text are preserved."
+    "ru": "Удалённый результат исчезает из раздела «Мои файлы» и чата, в котором он был создан. Остальные результаты и текст чата сохраняются.",
+    "back": "The deleted output disappears from My files and the chat in which it was created. The other outputs and the chat text remain."
   },
   {
     "id": "u1511",
@@ -2492,8 +2491,8 @@
   },
   {
     "id": "u1549",
-    "ru": "Сначала проверьте статус в существующем разговоре. После обрыва сети дайте интерфейсу восстановить соединение. Не отправляйте один запрос повторно, пока исходный ещё обрабатывается.",
-    "back": "First check status in the existing conversation. After a network interruption let the interface reconnect. Do not send one request repeatedly while the original is still processing."
+    "ru": "Сначала проверьте статус в существующем чате. После обрыва сети дайте интерфейсу восстановить соединение. Не отправляйте один запрос повторно, пока исходный ещё обрабатывается.",
+    "back": "First check the status in the existing chat. After a network interruption, let the interface reconnect. Do not send the same request again while the original is still being processed."
   },
   {
     "id": "u1550",
@@ -2752,8 +2751,8 @@
   },
   {
     "id": "u1600",
-    "ru": "Удаление текущего сеанса завершает ваш вход. Управление сеансами не удаляет файлы или разговоры.",
-    "back": "Removing the current session signs you out. Session management does not delete files or conversations."
+    "ru": "Удаление текущего сеанса завершает ваш вход. Управление сеансами не удаляет файлы или чаты.",
+    "back": "Removing the current session signs you out. Managing sessions does not delete files or chats."
   },
   {
     "id": "u1601",
@@ -3891,9 +3890,8 @@
   },
   {
     "id": "u3625",
-    "ru": "Выберите «Изучить процесс работы», чтобы посмотреть входные данные и шаги. Каждый шаг содержит ссылку на соответствующее рабочее пространство Epifera, когда вы будете готовы продолжить.",
-    "back": "Select Explore the workflow to view inputs and steps. Each step contains a link to the relevant Epifera workspace when ready to continue.",
-    "keepReason": "Preserved brand, model or technical notation: Epifera."
+    "ru": "Выберите «Изучите рабочий процесс», чтобы посмотреть входные данные и шаги. Каждый шаг содержит ссылку на соответствующее рабочее пространство Epifera, где можно продолжить, когда будете готовы.",
+    "back": "Choose “Explore the workflow” to see the inputs and steps. Each step contains a link to the corresponding Epifera workspace where you can continue when ready."
   },
   {
     "id": "u3626",

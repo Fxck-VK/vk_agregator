@@ -64,11 +64,11 @@ func TestWebImageJobPrepareUsesServerResolvedPriceAndReturnsSafeDTO(t *testing.T
 	if jobs.prepareInput.AccountID != accountID || jobs.prepareInput.Operation != domain.OperationImageGenerate || jobs.prepareInput.Modality != domain.ModalityImage {
 		t.Fatalf("prepare input = %+v", jobs.prepareInput)
 	}
-	if jobs.prepareInput.CostEstimateCredits != 60 || jobs.prepareInput.PricingSnapshot.InternalCredits != 60 {
-		t.Fatalf("server price = %d / %+v, want 60", jobs.prepareInput.CostEstimateCredits, jobs.prepareInput.PricingSnapshot)
+	if jobs.prepareInput.CostEstimateCredits != 25 || jobs.prepareInput.PricingSnapshot.InternalCredits != 25 {
+		t.Fatalf("server price = %d / %+v, want 25", jobs.prepareInput.CostEstimateCredits, jobs.prepareInput.PricingSnapshot)
 	}
 	assertPreparedImageJobParams(t, jobs.prepareInput.Params, "night city after rain", modelcatalog.PublicImageNanoBanana2, modelcatalog.ImageQuality2K, "4:5")
-	assertSafeWebImagePreparation(t, rec.Body.Bytes(), jobs.prepared.ID, domain.JobStatusPrepared, 60, 104)
+	assertSafeWebImagePreparation(t, rec.Body.Bytes(), jobs.prepared.ID, domain.JobStatusPrepared, 25, 104)
 	if bytes.Contains(bytes.ToLower(rec.Body.Bytes()), []byte("provider")) || bytes.Contains(bytes.ToLower(rec.Body.Bytes()), []byte("model_code")) {
 		t.Fatalf("public response leaked private routing: %s", rec.Body.String())
 	}
@@ -434,9 +434,9 @@ func TestWebImageModelsReturnsOnlyServerSafeCatalog(t *testing.T) {
 		t.Fatalf("reference support = %+v", response.Items[0])
 	}
 	if got := response.Items[0].PriceByQuality; !reflect.DeepEqual(got, map[string]int64{
-		modelcatalog.ImageQuality1K: 50,
-		modelcatalog.ImageQuality2K: 60,
-		modelcatalog.ImageQuality4K: 70,
+		modelcatalog.ImageQuality1K: 15,
+		modelcatalog.ImageQuality2K: 25,
+		modelcatalog.ImageQuality4K: 40,
 	}) {
 		t.Fatalf("price_by_quality = %+v, want exact public price for each displayed quality", got)
 	}
@@ -508,7 +508,7 @@ func TestWebImageModelsHideUnpricedQualitiesAndModels(t *testing.T) {
 	if item.ID != modelcatalog.PublicImageNanoBanana2 || !reflect.DeepEqual(item.QualityOptions, []string{modelcatalog.ImageQuality2K}) || item.DefaultQuality != modelcatalog.ImageQuality2K {
 		t.Fatalf("priced catalog model = %+v, want Nano Banana 2 with only its priced default quality", item)
 	}
-	if !reflect.DeepEqual(item.PriceByQuality, map[string]int64{modelcatalog.ImageQuality2K: 60}) {
+	if !reflect.DeepEqual(item.PriceByQuality, map[string]int64{modelcatalog.ImageQuality2K: 25}) {
 		t.Fatalf("price_by_quality = %+v, want only the available exact price", item.PriceByQuality)
 	}
 }

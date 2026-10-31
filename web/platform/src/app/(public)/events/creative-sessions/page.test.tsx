@@ -71,8 +71,8 @@ describe('T22 event/project template',()=>{
   });
   it('uses exclusive FAQ and internal reading/tool links',async()=>{
     const{container}=await page();expect([...container.querySelectorAll('[data-ui=faq] details')].every(e=>e.getAttribute('name')==='event-project-faq')).toBe(true);
-    expect(container.querySelector('[data-event-journal]')).toHaveAttribute('href','/en/blog/ai-art-prompts');
-    expect(screen.getByRole('link',{name:t.features[2].action})).toHaveAttribute('href','/en/workflows/product-campaign');
+    expect(container.querySelector('[data-event-journal]')).toHaveAttribute('href','/ru/blog/ai-art-prompts');
+    expect(screen.getByRole('link',{name:t.features[2].action})).toHaveAttribute('href','/ru/workflows/product-campaign');
   });
   it('restores focus after native inert blurs the opening control',async()=>{
     const{container}=await page(),root=container.querySelector<HTMLElement>('[data-event-page]')!;let inert=false;

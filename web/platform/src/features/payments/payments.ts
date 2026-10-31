@@ -10,18 +10,21 @@ export function isCheckoutURL(value: string): boolean {
   } catch { return false; }
 }
 
+// Go's domain currency is "rub"; browser comparisons use the ISO spelling.
+// Accept only these two explicit representations, never another currency.
+const rubCurrencySchema = z.enum(["RUB", "rub"]).transform(() => "RUB" as const);
 const productSchema = z.object({
   code: z.string().min(1).max(64),
   amount: z.number().int().positive().safe(),
-  currency: z.literal("RUB"),
+  currency: rubCurrencySchema,
   credits: z.number().int().positive().safe(),
 }).strict();
 const catalogSchema = z.object({ items: z.array(productSchema), checkout_available: z.boolean() }).strict();
-const paymentSchema = z.object({
+export const paymentSchema = z.object({
   id: z.string().uuid(),
   status: z.enum(["created", "provider_pending", "waiting_for_user", "succeeded", "canceled", "failed", "expired", "refunded", "partially_refunded"]),
   amount: z.number().int().positive().safe(),
-  currency: z.literal("RUB"),
+  currency: rubCurrencySchema,
   credits: z.number().int().positive().safe(),
   confirmation_url: z.string().refine(isCheckoutURL).optional(),
 }).strict();

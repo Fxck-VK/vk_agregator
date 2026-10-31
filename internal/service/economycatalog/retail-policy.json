@@ -1,0 +1,1210 @@
+{
+  "schema_version": 1,
+  "version": 20261028,
+  "research_date": "2026-10-28",
+  "research_path": "docs/research/study24-pricing-2026-10-28.json",
+  "research_sha256": "058b1bfc55089748a755bb2015c664ce98d1a63ac0c612d49fbfb2256b14a1df",
+  "image_rules": [
+    {
+      "source_id": "nano_banana_pro",
+      "model_ids": [
+        "nano_banana_pro"
+      ],
+      "qualities": [
+        "1K",
+        "2K",
+        "4K"
+      ],
+      "stars": 55,
+      "note": "Adopt the fixed per-result rate across existing local variants; no capability expansion."
+    },
+    {
+      "source_id": "gpt_image",
+      "model_ids": [
+        "gpt_image_2"
+      ],
+      "qualities": [
+        "1K",
+        "2K",
+        "4K"
+      ],
+      "stars": 51,
+      "note": "Adopt the fixed per-result rate across existing local variants; no capability expansion."
+    },
+    {
+      "source_id": "gpt-image-25",
+      "model_ids": [
+        "gpt_image_2_5_flare"
+      ],
+      "qualities": [
+        "1K-low",
+        "1K-medium",
+        "1K-high",
+        "1K-xhigh",
+        "1K-max",
+        "2K-low",
+        "2K-medium",
+        "2K-high",
+        "2K-xhigh",
+        "2K-max",
+        "4K-low",
+        "4K-medium",
+        "4K-high",
+        "4K-xhigh",
+        "4K-max"
+      ],
+      "stars": 52,
+      "note": "Image Studio explicitly identifies Flare. Sunburst general generation is not the photoshoot offer."
+    },
+    {
+      "source_id": "seedream5",
+      "model_ids": [
+        "seedream_5_0_pro"
+      ],
+      "qualities": [
+        "1K",
+        "1.5K",
+        "2K"
+      ],
+      "stars": 35,
+      "note": "Adopt the fixed per-result rate across existing local variants; no capability expansion."
+    },
+    {
+      "source_id": "seedream_5",
+      "model_ids": [
+        "seedream_5_0_lite"
+      ],
+      "qualities": [
+        "2K",
+        "3K",
+        "4K"
+      ],
+      "stars": 30,
+      "note": "Adopt the fixed per-result rate across existing local variants; no capability expansion."
+    },
+    {
+      "source_id": "qwen-image",
+      "model_ids": [
+        "qwen_image_3",
+        "qwen_image_3_pro"
+      ],
+      "qualities": [
+        "1K",
+        "2K"
+      ],
+      "stars": 30,
+      "note": "Adopt the fixed per-result rate across existing local variants; no capability expansion."
+    },
+    {
+      "source_id": "grok_image2",
+      "model_ids": [
+        "grok_image_2_0"
+      ],
+      "qualities": [
+        "standard"
+      ],
+      "stars": 25,
+      "note": "Adopt the fixed per-result rate across existing local variants; no capability expansion."
+    },
+    {
+      "source_id": "google_image",
+      "model_ids": [
+        "nano_banana"
+      ],
+      "qualities": [
+        "",
+        "1K"
+      ],
+      "stars": 30,
+      "note": "Adopt the fixed per-result rate across existing local variants; no capability expansion."
+    }
+  ],
+  "video_rules": [
+    {
+      "source_id": "seedance",
+      "model_ids": [
+        "seedance_2_0"
+      ],
+      "resolutions": [
+        "480p",
+        "720p"
+      ],
+      "qualities": [
+        ""
+      ],
+      "unit": "second",
+      "rate": null,
+      "rates_by_resolution": {
+        "720p": "104.91183976",
+        "480p": "47.2108"
+      }
+    },
+    {
+      "source_id": "wan_3",
+      "model_ids": [
+        "wan_3_0"
+      ],
+      "resolutions": [
+        "480p",
+        "720p",
+        "1080p"
+      ],
+      "qualities": [
+        ""
+      ],
+      "unit": "second",
+      "rate": null,
+      "rates_by_resolution": {
+        "480p": "50",
+        "720p": "100",
+        "1080p": "200"
+      }
+    },
+    {
+      "source_id": "kling_3",
+      "model_ids": [
+        "video_kling_v3"
+      ],
+      "resolutions": [
+        "720p",
+        "1080p"
+      ],
+      "qualities": [
+        "",
+        "audio"
+      ],
+      "unit": "result",
+      "rate": "500",
+      "rates_by_resolution": {}
+    },
+    {
+      "source_id": "kling_3_turbo",
+      "model_ids": [
+        "video_kling_3_0_turbo"
+      ],
+      "resolutions": [
+        "720p",
+        "1080p"
+      ],
+      "qualities": [
+        ""
+      ],
+      "unit": "second",
+      "rate": "50",
+      "rates_by_resolution": {}
+    },
+    {
+      "source_id": "minimax-h3",
+      "model_ids": [
+        "video_minimax_h3"
+      ],
+      "resolutions": [
+        "768p",
+        "2k"
+      ],
+      "qualities": [
+        ""
+      ],
+      "unit": "second",
+      "rate": "75",
+      "rates_by_resolution": {}
+    },
+    {
+      "source_id": "kling_2_6",
+      "model_ids": [
+        "kling_2_6"
+      ],
+      "resolutions": [
+        "720p",
+        "1080p"
+      ],
+      "qualities": [
+        "",
+        "pro-sound"
+      ],
+      "unit": "result",
+      "rate": "300",
+      "rates_by_resolution": {}
+    },
+    {
+      "source_id": "grok_imagine_1_5",
+      "model_ids": [
+        "grok_imagine_1_5_video"
+      ],
+      "resolutions": [
+        "480p",
+        "720p"
+      ],
+      "qualities": [
+        ""
+      ],
+      "unit": "second",
+      "rate": "25",
+      "rates_by_resolution": {}
+    }
+  ],
+  "music_rules": [
+    {
+      "source_operation": "song/instr",
+      "model_ids": [
+        "suno_v6"
+      ],
+      "actions": [
+        "generate"
+      ],
+      "unit": "track",
+      "stars": 60,
+      "max_mode": false
+    },
+    {
+      "source_operation": "lyrics",
+      "model_ids": [
+        "suno_v6"
+      ],
+      "actions": [
+        "lyrics"
+      ],
+      "unit": "operation",
+      "stars": 20,
+      "max_mode": false
+    },
+    {
+      "source_operation": "bgm",
+      "model_ids": [
+        "suno_v6"
+      ],
+      "actions": [
+        "sounds"
+      ],
+      "unit": "operation",
+      "stars": 60,
+      "max_mode": false
+    },
+    {
+      "source_operation": "cover",
+      "model_ids": [
+        "suno_v6"
+      ],
+      "actions": [
+        "cover",
+        "upload_cover"
+      ],
+      "unit": "track",
+      "stars": 55,
+      "max_mode": false
+    },
+    {
+      "source_operation": "mashup",
+      "model_ids": [
+        "suno_v6"
+      ],
+      "actions": [
+        "mashup"
+      ],
+      "unit": "track",
+      "stars": 60,
+      "max_mode": false
+    },
+    {
+      "source_operation": "continue",
+      "model_ids": [
+        "suno_v6"
+      ],
+      "actions": [
+        "extend",
+        "upload_extend"
+      ],
+      "unit": "track",
+      "stars": 60,
+      "max_mode": false
+    },
+    {
+      "source_operation": "edit",
+      "model_ids": [
+        "suno_v6"
+      ],
+      "actions": [
+        "replace_section"
+      ],
+      "unit": "operation",
+      "stars": 60,
+      "max_mode": false
+    },
+    {
+      "source_operation": "novocal",
+      "model_ids": [
+        "suno_v6"
+      ],
+      "actions": [
+        "stems"
+      ],
+      "unit": "operation",
+      "stars": 100,
+      "max_mode": false
+    },
+    {
+      "source_operation": "stems",
+      "model_ids": [
+        "suno_v6"
+      ],
+      "actions": [
+        "stems_all"
+      ],
+      "unit": "operation",
+      "stars": 100,
+      "max_mode": false
+    },
+    {
+      "source_operation": "addvocal",
+      "model_ids": [
+        "suno_v6"
+      ],
+      "actions": [
+        "add_vocals"
+      ],
+      "unit": "track",
+      "stars": 60,
+      "max_mode": false
+    },
+    {
+      "source_operation": "addmusic",
+      "model_ids": [
+        "suno_v6"
+      ],
+      "actions": [
+        "add_instrumental"
+      ],
+      "unit": "track",
+      "stars": 60,
+      "max_mode": false
+    },
+    {
+      "source_operation": "video",
+      "model_ids": [
+        "suno_v6"
+      ],
+      "actions": [
+        "generate_video"
+      ],
+      "unit": "operation",
+      "stars": 60,
+      "max_mode": false
+    },
+    {
+      "source_operation": "ref",
+      "model_ids": [
+        "suno_v6"
+      ],
+      "actions": [
+        "inspo"
+      ],
+      "unit": "track",
+      "stars": 60,
+      "max_mode": false
+    }
+  ],
+  "applications": {
+    "photoshoot": {
+      "standard": 25,
+      "hd": 35,
+      "max_count": 4
+    },
+    "slides": {
+      "graphical": 450,
+      "editable": 800,
+      "custom_style_surcharge": 60
+    },
+    "seller": {
+      "base": 120,
+      "included_images": 4,
+      "extra_image": 30,
+      "allowed_counts": [
+        1,
+        2,
+        4,
+        6,
+        8
+      ]
+    },
+    "coder": {
+      "minimum": 30,
+      "usage_coefficients_verified": false
+    }
+  },
+  "coverage": [
+    {
+      "source_id": "sai_plus",
+      "name": "StudyAI Plus",
+      "status": "retained",
+      "reason": "Input/output/context coefficients are not public; existing bounded server pricing retained.",
+      "local_product_ids": []
+    },
+    {
+      "source_id": "open_ai_image_bot",
+      "name": "Генератор изображений",
+      "status": "retained",
+      "reason": "No exact implemented public product or operation has been established.",
+      "local_product_ids": []
+    },
+    {
+      "source_id": "claude-opus-5-5",
+      "name": "Claude Opus 5.5",
+      "status": "retained",
+      "reason": "Input/output/context coefficients are not public; existing bounded server pricing retained.",
+      "local_product_ids": [
+        "claude_opus_5_5"
+      ]
+    },
+    {
+      "source_id": "nano_banana_2",
+      "name": "Nano Banana 2.1",
+      "status": "retained",
+      "reason": "Public research says2.1; local public ID says2. Version equivalence is unverified.",
+      "local_product_ids": [
+        "nano_banana_2"
+      ]
+    },
+    {
+      "source_id": "seedance-25-max",
+      "name": "Seedance 2.5 Max",
+      "status": "retained",
+      "reason": "Max product/settings are not established by the local Seedance2.5 route.",
+      "local_product_ids": [
+        "video_seedance_2_5"
+      ]
+    },
+    {
+      "source_id": "nano_banana_pro",
+      "name": "Nano Banana Pro",
+      "status": "applied_compatible_variants",
+      "reason": "Only listed compatible local variants; provider admission and other versions unchanged.",
+      "local_product_ids": [
+        "nano_banana_pro"
+      ]
+    },
+    {
+      "source_id": "seedream5",
+      "name": "Seedream 5.0 Pro",
+      "status": "applied_compatible_variants",
+      "reason": "Only listed compatible local variants; provider admission and other versions unchanged.",
+      "local_product_ids": [
+        "seedream_5_0_pro"
+      ]
+    },
+    {
+      "source_id": "midjourney_toe_bot",
+      "name": "Midjourney",
+      "status": "retained",
+      "reason": "Matching product family exists; selected version, settings, output count or duration-price equivalence is unverified.",
+      "local_product_ids": [
+        "midjourney_v7"
+      ]
+    },
+    {
+      "source_id": "gpt_image",
+      "name": "GPT Image 2",
+      "status": "applied_compatible_variants",
+      "reason": "Only listed compatible local variants; provider admission and other versions unchanged.",
+      "local_product_ids": [
+        "gpt_image_2"
+      ]
+    },
+    {
+      "source_id": "gpt-image-25",
+      "name": "GPT Image 2.5",
+      "status": "applied_compatible_variants",
+      "reason": "52/image applied to Flare; photoshoot Sunburst25/35 is a separate workflow, not a general Sunburst tariff.",
+      "local_product_ids": [
+        "gpt_image_2_5_flare"
+      ]
+    },
+    {
+      "source_id": "mai_image_2_5",
+      "name": "Microsoft: MAI-Image-2.5",
+      "status": "retained",
+      "reason": "No exact implemented public product or operation has been established.",
+      "local_product_ids": []
+    },
+    {
+      "source_id": "grok_image",
+      "name": "Grok Image",
+      "status": "retained",
+      "reason": "Studio offers two outputs/task; the existing Grok1.5 route is a different explicit version and admits one output. Do not infer a 20-token one-image tariff.",
+      "local_product_ids": [
+        "grok_image_1_5"
+      ]
+    },
+    {
+      "source_id": "grok_image2",
+      "name": "Grok Image 2.0",
+      "status": "applied_compatible_variants",
+      "reason": "Only listed compatible local variants; provider admission and other versions unchanged.",
+      "local_product_ids": [
+        "grok_image_2_0"
+      ]
+    },
+    {
+      "source_id": "flux_2",
+      "name": "Flux 2 Pro",
+      "status": "retained",
+      "reason": "Matching product family exists; selected version, settings, output count or duration-price equivalence is unverified.",
+      "local_product_ids": [
+        "flux_2_pro"
+      ]
+    },
+    {
+      "source_id": "qwen-image",
+      "name": "Qwen Image 3",
+      "status": "applied_compatible_variants",
+      "reason": "Only listed compatible local variants; provider admission and other versions unchanged.",
+      "local_product_ids": [
+        "qwen_image_3",
+        "qwen_image_3_pro"
+      ]
+    },
+    {
+      "source_id": "recraft_ai",
+      "name": "Recraft AI",
+      "status": "retained",
+      "reason": "No exact implemented public product or operation has been established.",
+      "local_product_ids": []
+    },
+    {
+      "source_id": "krea_2",
+      "name": "Krea 2",
+      "status": "retained",
+      "reason": "No exact implemented public product or operation has been established.",
+      "local_product_ids": []
+    },
+    {
+      "source_id": "google_image",
+      "name": "Nano Banana",
+      "status": "applied_compatible_variants",
+      "reason": "Only listed compatible local variants; provider admission and other versions unchanged.",
+      "local_product_ids": [
+        "nano_banana"
+      ]
+    },
+    {
+      "source_id": "seedream_5",
+      "name": "Seedream 5.0 Lite",
+      "status": "applied_compatible_variants",
+      "reason": "Only listed compatible local variants; provider admission and other versions unchanged.",
+      "local_product_ids": [
+        "seedream_5_0_lite"
+      ]
+    },
+    {
+      "source_id": "banana_2lite",
+      "name": "Nano Banana 2 Lite",
+      "status": "retained",
+      "reason": "No exact implemented public product or operation has been established.",
+      "local_product_ids": []
+    },
+    {
+      "source_id": "topaz",
+      "name": "Topaz",
+      "status": "retained",
+      "reason": "No exact implemented public product or operation has been established.",
+      "local_product_ids": []
+    },
+    {
+      "source_id": "ai_photo",
+      "name": "ИИ-фотосессия",
+      "status": "workflow_tariff_ready",
+      "reason": "Typed workflow formula adopted; the separate application/provider-input workflow is not an existing admitted product.",
+      "local_product_ids": []
+    },
+    {
+      "source_id": "higgsfield_soul",
+      "name": "Генерация фотографий",
+      "status": "retained",
+      "reason": "No exact implemented public product or operation has been established.",
+      "local_product_ids": []
+    },
+    {
+      "source_id": "improve_photo",
+      "name": "Улучшение качества фото",
+      "status": "retained",
+      "reason": "No exact implemented public product or operation has been established.",
+      "local_product_ids": []
+    },
+    {
+      "source_id": "september",
+      "name": "Открытка 1 сентября",
+      "status": "retained",
+      "reason": "No exact implemented public product or operation has been established.",
+      "local_product_ids": []
+    },
+    {
+      "source_id": "photo_love_is",
+      "name": "Открытка в стиле Love is...",
+      "status": "retained",
+      "reason": "No exact implemented public product or operation has been established.",
+      "local_product_ids": []
+    },
+    {
+      "source_id": "gpt-sol",
+      "name": "GPT 6.1 Sol",
+      "status": "retained",
+      "reason": "Input/output/context coefficients are not public; existing bounded server pricing retained.",
+      "local_product_ids": [
+        "gpt_6_sol"
+      ]
+    },
+    {
+      "source_id": "gemini-4",
+      "name": "Gemini 4 Argon",
+      "status": "retained",
+      "reason": "Input/output/context coefficients are not public; existing bounded server pricing retained.",
+      "local_product_ids": []
+    },
+    {
+      "source_id": "fable_51",
+      "name": "Claude Fable 5.1",
+      "status": "retained",
+      "reason": "Input/output/context coefficients are not public; existing bounded server pricing retained.",
+      "local_product_ids": [
+        "claude_fable_5_1"
+      ]
+    },
+    {
+      "source_id": "claude_5",
+      "name": "Claude Opus 5",
+      "status": "retained",
+      "reason": "Input/output/context coefficients are not public; existing bounded server pricing retained.",
+      "local_product_ids": [
+        "claude_opus_5"
+      ]
+    },
+    {
+      "source_id": "gemini-flash-37",
+      "name": "Gemini 3.7 Flash",
+      "status": "retained",
+      "reason": "Input/output/context coefficients are not public; existing bounded server pricing retained.",
+      "local_product_ids": [
+        "gemini_3_7_flash"
+      ]
+    },
+    {
+      "source_id": "claude_fable",
+      "name": "Claude Fable 5",
+      "status": "retained",
+      "reason": "Input/output/context coefficients are not public; existing bounded server pricing retained.",
+      "local_product_ids": [
+        "claude_fable_5"
+      ]
+    },
+    {
+      "source_id": "claude_opus_48",
+      "name": "Claude Opus 4.8",
+      "status": "retained",
+      "reason": "Input/output/context coefficients are not public; existing bounded server pricing retained.",
+      "local_product_ids": [
+        "claude_opus_4_8"
+      ]
+    },
+    {
+      "source_id": "gpt_56",
+      "name": "GPT 5.6 Terra",
+      "status": "retained",
+      "reason": "Input/output/context coefficients are not public; existing bounded server pricing retained.",
+      "local_product_ids": [
+        "gpt_5_6_terra"
+      ]
+    },
+    {
+      "source_id": "gemini_36_flash",
+      "name": "Gemini 3.6 Flash",
+      "status": "retained",
+      "reason": "Input/output/context coefficients are not public; existing bounded server pricing retained.",
+      "local_product_ids": [
+        "gemini_3_6_flash"
+      ]
+    },
+    {
+      "source_id": "chat_gpt5",
+      "name": "ChatGPT 5",
+      "status": "retained",
+      "reason": "Input/output/context coefficients are not public; existing bounded server pricing retained.",
+      "local_product_ids": [
+        "gpt_5"
+      ]
+    },
+    {
+      "source_id": "gpt-luna",
+      "name": "GPT 6 Luna",
+      "status": "retained",
+      "reason": "Input/output/context coefficients are not public; existing bounded server pricing retained.",
+      "local_product_ids": [
+        "gpt_6_luna"
+      ]
+    },
+    {
+      "source_id": "gemini3_pro",
+      "name": "Gemini 3.1 Pro",
+      "status": "retained",
+      "reason": "Input/output/context coefficients are not public; existing bounded server pricing retained.",
+      "local_product_ids": [
+        "gemini_3_1_pro"
+      ]
+    },
+    {
+      "source_id": "claude_haiku",
+      "name": "Claude Haiku 5.5",
+      "status": "retained",
+      "reason": "Input/output/context coefficients are not public; existing bounded server pricing retained.",
+      "local_product_ids": [
+        "claude_haiku_4_5_20251001"
+      ]
+    },
+    {
+      "source_id": "deepseek_v4",
+      "name": "DeepSeek V4 Pro",
+      "status": "retained",
+      "reason": "Input/output/context coefficients are not public; existing bounded server pricing retained.",
+      "local_product_ids": [
+        "deepseek_v4_pro"
+      ]
+    },
+    {
+      "source_id": "claude_opus_47",
+      "name": "Claude Opus 4.7",
+      "status": "retained",
+      "reason": "Input/output/context coefficients are not public; existing bounded server pricing retained.",
+      "local_product_ids": [
+        "claude_opus_4_7"
+      ]
+    },
+    {
+      "source_id": "gemini_3_5_flash",
+      "name": "Gemini 3.5 Flash",
+      "status": "retained",
+      "reason": "Input/output/context coefficients are not public; existing bounded server pricing retained.",
+      "local_product_ids": [
+        "gemini_3_5_flash"
+      ]
+    },
+    {
+      "source_id": "kimi_k3",
+      "name": "Kimi K3",
+      "status": "retained",
+      "reason": "Input/output/context coefficients are not public; existing bounded server pricing retained.",
+      "local_product_ids": [
+        "kimi_k3"
+      ]
+    },
+    {
+      "source_id": "qwen_max",
+      "name": "Qwen 3.8 Max",
+      "status": "retained",
+      "reason": "Input/output/context coefficients are not public; existing bounded server pricing retained.",
+      "local_product_ids": [
+        "qwen_3_8_max"
+      ]
+    },
+    {
+      "source_id": "claude_sonnet",
+      "name": "Claude Sonnet 5.5",
+      "status": "retained",
+      "reason": "Input/output/context coefficients are not public; existing bounded server pricing retained.",
+      "local_product_ids": []
+    },
+    {
+      "source_id": "chat_gpt5_4",
+      "name": "ChatGPT 5.4",
+      "status": "retained",
+      "reason": "Input/output/context coefficients are not public; existing bounded server pricing retained.",
+      "local_product_ids": [
+        "gpt_5_4"
+      ]
+    },
+    {
+      "source_id": "chat_gpt5_5",
+      "name": "ChatGPT 5.5",
+      "status": "retained",
+      "reason": "Input/output/context coefficients are not public; existing bounded server pricing retained.",
+      "local_product_ids": [
+        "gpt_5_5"
+      ]
+    },
+    {
+      "source_id": "chatgpt_codex",
+      "name": "ChatGPT 5.3 Codex",
+      "status": "retained",
+      "reason": "Input/output/context coefficients are not public; existing bounded server pricing retained.",
+      "local_product_ids": [
+        "gpt_5_3_codex"
+      ]
+    },
+    {
+      "source_id": "grok-4-7",
+      "name": "Grok 4.7",
+      "status": "retained",
+      "reason": "Input/output/context coefficients are not public; existing bounded server pricing retained.",
+      "local_product_ids": [
+        "grok_4_7"
+      ]
+    },
+    {
+      "source_id": "grok_45",
+      "name": "Grok 4.5",
+      "status": "retained",
+      "reason": "Input/output/context coefficients are not public; existing bounded server pricing retained.",
+      "local_product_ids": [
+        "grok_4_5"
+      ]
+    },
+    {
+      "source_id": "grok-46",
+      "name": "Grok 4.6",
+      "status": "retained",
+      "reason": "Input/output/context coefficients are not public; existing bounded server pricing retained.",
+      "local_product_ids": [
+        "grok_4_6"
+      ]
+    },
+    {
+      "source_id": "chat_gpt5_2",
+      "name": "ChatGPT 5.2",
+      "status": "retained",
+      "reason": "Input/output/context coefficients are not public; existing bounded server pricing retained.",
+      "local_product_ids": [
+        "gpt_5_2"
+      ]
+    },
+    {
+      "source_id": "claude_opus",
+      "name": "Claude Opus 4.6",
+      "status": "retained",
+      "reason": "Input/output/context coefficients are not public; existing bounded server pricing retained.",
+      "local_product_ids": [
+        "claude_opus_4_6"
+      ]
+    },
+    {
+      "source_id": "perplexity_plus_bot",
+      "name": "Perplexity",
+      "status": "retained",
+      "reason": "Input/output/context coefficients are not public; existing bounded server pricing retained.",
+      "local_product_ids": []
+    },
+    {
+      "source_id": "gpt-6",
+      "name": "GPT 6 Astra",
+      "status": "retained",
+      "reason": "Input/output/context coefficients are not public; existing bounded server pricing retained.",
+      "local_product_ids": [
+        "gpt_6_astra"
+      ]
+    },
+    {
+      "source_id": "seedance25",
+      "name": "Seedance 2.5 Lite",
+      "status": "retained",
+      "reason": "Lite product/settings are not established by the local Seedance2.5 route.",
+      "local_product_ids": [
+        "video_seedance_2_5"
+      ]
+    },
+    {
+      "source_id": "seedance",
+      "name": "Seedance 2.0",
+      "status": "applied_compatible_variants",
+      "reason": "Exact no-video-reference480p/720p multipliers applied. Other resolutions/video-reference workflow remain separate.",
+      "local_product_ids": [
+        "seedance_2_0"
+      ]
+    },
+    {
+      "source_id": "kling",
+      "name": "Kling 4.0",
+      "status": "retained",
+      "reason": "No exact implemented public product or operation has been established.",
+      "local_product_ids": []
+    },
+    {
+      "source_id": "videogen",
+      "name": "Генератор видео",
+      "status": "retained",
+      "reason": "No exact implemented public product or operation has been established.",
+      "local_product_ids": []
+    },
+    {
+      "source_id": "suno",
+      "name": "Suno",
+      "status": "applied_compatible_variants",
+      "reason": "Only Suno V6 non-Max mapped operations. Track-priced jobs guarantee at least one playable track; all returned alternatives are preserved without extra charge. Other versions, Max and disabled admission remain unchanged.",
+      "local_product_ids": [
+        "suno_v6"
+      ]
+    },
+    {
+      "source_id": "gemini_omni1",
+      "name": "Gemini Omni 1.1",
+      "status": "retained",
+      "reason": "Research label does not establish equivalence to local1.1 Flash.",
+      "local_product_ids": [
+        "video_gemini_omni_1_1_flash"
+      ]
+    },
+    {
+      "source_id": "wan_3",
+      "name": "Wan 3.0",
+      "status": "applied_compatible_variants",
+      "reason": "Only listed compatible local variants; provider admission and other versions unchanged.",
+      "local_product_ids": [
+        "wan_3_0"
+      ]
+    },
+    {
+      "source_id": "google_veo3",
+      "name": "Google Veo 3.1",
+      "status": "retained",
+      "reason": "Matching product family exists; selected version, settings, output count or duration-price equivalence is unverified.",
+      "local_product_ids": [
+        "video_veo_3_1_fast",
+        "video_veo_3_1_quality",
+        "video_veo_3_1_lite"
+      ]
+    },
+    {
+      "source_id": "seedance_mini",
+      "name": "Seedance 2.0 Mini",
+      "status": "retained",
+      "reason": "Matching product family exists; selected version, settings, output count or duration-price equivalence is unverified.",
+      "local_product_ids": [
+        "seedance_2_0_mini"
+      ]
+    },
+    {
+      "source_id": "seedance_20_pro",
+      "name": "Seedance 2.0 Pro",
+      "status": "retained",
+      "reason": "No exact implemented public product or operation has been established.",
+      "local_product_ids": []
+    },
+    {
+      "source_id": "minimax-h3",
+      "name": "Minimax H3",
+      "status": "applied_compatible_variants",
+      "reason": "Only listed compatible local variants; provider admission and other versions unchanged.",
+      "local_product_ids": [
+        "video_minimax_h3"
+      ]
+    },
+    {
+      "source_id": "kling_3",
+      "name": "Kling 3.0",
+      "status": "applied_compatible_variants",
+      "reason": "500/video applied to existing720p/1080p variants; unobserved4K pricing retained.",
+      "local_product_ids": [
+        "video_kling_v3"
+      ]
+    },
+    {
+      "source_id": "kling_3_turbo",
+      "name": "Kling 3.0 Turbo",
+      "status": "applied_compatible_variants",
+      "reason": "Only listed compatible local variants; provider admission and other versions unchanged.",
+      "local_product_ids": [
+        "video_kling_3_0_turbo"
+      ]
+    },
+    {
+      "source_id": "kling_2_6",
+      "name": "Kling 2.6",
+      "status": "applied_compatible_variants",
+      "reason": "Only listed compatible local variants; provider admission and other versions unchanged.",
+      "local_product_ids": [
+        "kling_2_6"
+      ]
+    },
+    {
+      "source_id": "kling_2_1_master",
+      "name": "Kling 2.5 Turbo",
+      "status": "retained",
+      "reason": "Study24 URL says2.1 master but label says2.5 Turbo; exact route equivalence is unknown.",
+      "local_product_ids": []
+    },
+    {
+      "source_id": "kling_mc",
+      "name": "Kling Motion Control",
+      "status": "retained",
+      "reason": "Matching product family exists; selected version, settings, output count or duration-price equivalence is unverified.",
+      "local_product_ids": [
+        "video_kling_2_6_motion_control"
+      ]
+    },
+    {
+      "source_id": "kmc_pro",
+      "name": "Kling Motion Control Pro",
+      "status": "retained",
+      "reason": "Pro product and variant equivalence are unverified.",
+      "local_product_ids": [
+        "video_kling_2_6_motion_control"
+      ]
+    },
+    {
+      "source_id": "sound_generation",
+      "name": "Генерация озвучки",
+      "status": "retained",
+      "reason": "No exact implemented public product or operation has been established.",
+      "local_product_ids": []
+    },
+    {
+      "source_id": "grok_imagine_1_5",
+      "name": "Grok Imagine 1.5",
+      "status": "applied_compatible_variants",
+      "reason": "Only listed compatible local variants; provider admission and other versions unchanged.",
+      "local_product_ids": [
+        "grok_imagine_1_5_video"
+      ]
+    },
+    {
+      "source_id": "eleven_labs",
+      "name": "Eleven Labs (озвучка текста)",
+      "status": "retained",
+      "reason": "No exact implemented public product or operation has been established.",
+      "local_product_ids": []
+    },
+    {
+      "source_id": "animating_image",
+      "name": "Оживить фото или картинку",
+      "status": "retained",
+      "reason": "No exact implemented public product or operation has been established.",
+      "local_product_ids": []
+    },
+    {
+      "source_id": "happy_horse",
+      "name": "Happy Horse",
+      "status": "retained",
+      "reason": "Research label omits version; local candidates1.0 and1.1 are distinct.",
+      "local_product_ids": [
+        "happyhorse_1_0",
+        "happyhorse_1_1"
+      ]
+    },
+    {
+      "source_id": "video_edit",
+      "name": "Редактор видео",
+      "status": "retained",
+      "reason": "No exact implemented public product or operation has been established.",
+      "local_product_ids": []
+    },
+    {
+      "source_id": "gemini_omni_flash",
+      "name": "Gemini Omni Flash",
+      "status": "retained",
+      "reason": "Research label does not establish equivalence to local Flash Preview.",
+      "local_product_ids": [
+        "gemini_omni_flash_preview"
+      ]
+    },
+    {
+      "source_id": "gemini3_flash",
+      "name": "Gemini 3.1 Flash",
+      "status": "retained",
+      "reason": "No exact existing free-model binding; zero-price jobs need a separate admission/budget contract.",
+      "local_product_ids": []
+    },
+    {
+      "source_id": "deepseek_v4_lite",
+      "name": "DeepSeek V4",
+      "status": "retained",
+      "reason": "No exact existing free-model binding; zero-price jobs need a separate admission/budget contract.",
+      "local_product_ids": []
+    },
+    {
+      "source_id": "generator_prompta",
+      "name": "Генератор промпта",
+      "status": "retained",
+      "reason": "No exact existing free-model binding; zero-price jobs need a separate admission/budget contract.",
+      "local_product_ids": []
+    },
+    {
+      "source_id": "gemini_pro_plus_bot",
+      "name": "Gemini 2.5 Pro",
+      "status": "retained",
+      "reason": "No exact existing free-model binding; zero-price jobs need a separate admission/budget contract.",
+      "local_product_ids": []
+    },
+    {
+      "source_id": "qwen",
+      "name": "Qwen 3.7 Flash",
+      "status": "retained",
+      "reason": "No exact existing free-model binding; zero-price jobs need a separate admission/budget contract.",
+      "local_product_ids": []
+    },
+    {
+      "source_id": "a24_deepseek_r1",
+      "name": "Deepseek R1",
+      "status": "retained",
+      "reason": "No exact existing free-model binding; zero-price jobs need a separate admission/budget contract.",
+      "local_product_ids": []
+    },
+    {
+      "source_id": "gemini25_flash_lite",
+      "name": "Gemini 2.5 Flash Lite",
+      "status": "retained",
+      "reason": "No exact existing free-model binding; zero-price jobs need a separate admission/budget contract.",
+      "local_product_ids": []
+    },
+    {
+      "source_id": "gpt_mini",
+      "name": "ChatGPT Mini",
+      "status": "retained",
+      "reason": "No exact existing free-model binding; zero-price jobs need a separate admission/budget contract.",
+      "local_product_ids": []
+    },
+    {
+      "source_id": "generate_presentation_plus_bot",
+      "name": "Генератор презентаций",
+      "status": "workflow_tariff_ready",
+      "reason": "Typed workflow formula adopted; the separate application/provider-input workflow is not an existing admitted product.",
+      "local_product_ids": []
+    },
+    {
+      "source_id": "text_generator",
+      "name": "Генератор текста",
+      "status": "retained",
+      "reason": "Input/output/context coefficients are not public; existing bounded server pricing retained.",
+      "local_product_ids": []
+    },
+    {
+      "source_id": "ai_friend",
+      "name": "AI-друг Настя",
+      "status": "retained",
+      "reason": "Input/output/context coefficients are not public; existing bounded server pricing retained.",
+      "local_product_ids": []
+    },
+    {
+      "source_id": "code_generator",
+      "name": "Генератор кода",
+      "status": "retained",
+      "reason": "Minimum30 is not a fixed quote; actual-usage coefficients and an admitted application workflow are missing. Do not invent a fixed minimum debit.",
+      "local_product_ids": []
+    },
+    {
+      "source_id": "card_marketplaces",
+      "name": "Карточка для маркетплейсов",
+      "status": "workflow_tariff_ready",
+      "reason": "Typed workflow formula adopted; the separate application/provider-input workflow is not an existing admitted product.",
+      "local_product_ids": []
+    },
+    {
+      "source_id": "ai_smm",
+      "name": "SMM",
+      "status": "retained",
+      "reason": "Input/output/context coefficients are not public; existing bounded server pricing retained.",
+      "local_product_ids": []
+    },
+    {
+      "source_id": "natal_chart",
+      "name": "Генератор натальной карты",
+      "status": "retained",
+      "reason": "Input/output/context coefficients are not public; existing bounded server pricing retained.",
+      "local_product_ids": []
+    }
+  ]
+}

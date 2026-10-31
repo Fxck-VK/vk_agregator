@@ -89,6 +89,9 @@ type CreditAccount struct {
 	Currency Currency `json:"currency"`
 	// BalanceCached is the projected available balance from the ledger.
 	BalanceCached int64 `json:"balance_cached"`
+	// OpeningLotKind is create-only grant provenance, never stored on the
+	// credit-account row or exposed in JSON. Zero preserves legacy callers.
+	OpeningLotKind CreditLotKind `json:"-"`
 	// CreditDenominationVersion identifies how balance units are interpreted.
 	CreditDenominationVersion int `json:"credit_denomination_version"`
 	// CreatedAt is the row creation timestamp.
@@ -116,6 +119,10 @@ type LedgerEntry struct {
 	// Amount is the signed magnitude in the account's currency. Positive adds
 	// to the available balance, negative removes from it.
 	Amount int64 `json:"amount"`
+	// LotKind and LotExpiresAt optionally classify positive committed grants.
+	// Omitted metadata preserves existing non-expiring legacy grants.
+	LotKind      CreditLotKind `json:"lot_kind,omitempty"`
+	LotExpiresAt *time.Time    `json:"lot_expires_at,omitempty"`
 	// CreditDenominationVersion identifies the historical unit of Amount.
 	CreditDenominationVersion int `json:"credit_denomination_version"`
 	// Status is the commit state of the entry.

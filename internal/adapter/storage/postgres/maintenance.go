@@ -6,6 +6,9 @@ import (
 	"fmt"
 	"time"
 
+	"github.com/jackc/pgx/v5"
+	"github.com/jackc/pgx/v5/pgxpool"
+
 	"vk-ai-aggregator/internal/domain"
 )
 
@@ -503,6 +506,22 @@ type MaintenanceRepository struct {
 // NewMaintenanceRepository builds a MaintenanceRepository over db.
 func NewMaintenanceRepository(db Querier) *MaintenanceRepository {
 	return &MaintenanceRepository{db: db}
+}
+
+// ExpireCreditLots delegates financial mutations to billing's transaction and
+// lock rules. A bare nontransactional Querier must never execute this mutation.
+func (r *MaintenanceRepository) ExpireCreditLots(ctx context.Context, now time.Time, limit int) (int64, error) {
+	if limit <= 0 {
+		return 0, nil
+	}
+	switch db := r.db.(type) {
+	case *pgxpool.Pool:
+		return NewBillingRepository(db).ExpireCreditLots(ctx, now, limit)
+	case pgx.Tx:
+		return NewBillingRepositoryTx(db).ExpireCreditLots(ctx, now, limit)
+	default:
+		return 0, fmt.Errorf("postgres: credit lot expiry requires a pool or transaction")
+	}
 }
 
 // CleanupExpiredIdempotencyKeys deletes expired idempotency records.

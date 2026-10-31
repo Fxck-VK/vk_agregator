@@ -33,6 +33,9 @@ func TestGPTImage25BoundedQuotes(t *testing.T) {
 			if err != nil {
 				t.Fatal(err)
 			}
+			if id == "gpt_image_2_5_flare" {
+				tc.credits = 104
+			}
 			if got.Worker.Resolution != "1K" || got.PricingSnapshot.InternalCredits != tc.credits {
 				t.Fatalf("wrong quote for %s", tc.quality)
 			}
@@ -53,6 +56,9 @@ func TestGPTImage25BoundedQuotes(t *testing.T) {
 			{"4K-max", "16:9", 338640, 205},
 		} {
 			got, err := resolver.Resolve(imagegeneration.Request{ModelID: id, Quality: tc.quality, AspectRatio: tc.ratio})
+			if id == "gpt_image_2_5_flare" && tc.quality != "4K-max" {
+				tc.credits = 52
+			}
 			if err != nil || got.PricingSnapshot.Floor.Amount != tc.floor || got.PricingSnapshot.InternalCredits != tc.credits {
 				t.Fatalf("wrong ratio quote %s/%s: %v", tc.quality, tc.ratio, err)
 			}

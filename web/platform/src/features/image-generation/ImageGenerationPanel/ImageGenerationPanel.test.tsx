@@ -253,32 +253,33 @@ describe("ImageGenerationPanel", () => {
     })));
   });
 
-  it("prepares GPT Image 2.5 composite quality and output count from the catalog", async () => {
+  it("offers unique sizes and prepares the retained catalogue tier with its actual price", async () => {
     vi.mocked(loadImageModelCatalog).mockResolvedValueOnce(parseImageModelList({ items: [{
       id: "gpt_image_2_5_flare", name: "GPT Image 2.5 Flare", quality_options: gptImage25QualityOptions, default_quality: "1K-medium",
       price_by_quality: gptImage25Prices, max_output_count: 4, max_reference_images: 0,
       supports_reference_image: false, allowed_aspect_ratios: ["16:9", "1:1"],
     }] }));
     vi.mocked(webBrowserMutation).mockResolvedValueOnce(Response.json({
-      job: { ...job, model_id: "gpt_image_2_5_flare", image_quality: "4K-max", aspect_ratio: "1:1", cost_estimate: 240 }, balance: 300, can_afford: true,
+      job: { ...job, model_id: "gpt_image_2_5_flare", image_quality: "4K-medium", aspect_ratio: "1:1", cost_estimate: 82 }, balance: 300, can_afford: true,
     }, { status: 201 }));
     render(<ImageGenerationPanel />);
     const promptInput = await screen.findByRole("textbox", { name: ru.imageGeneration.promptLabel });
-    expect(screen.getByRole("button", { name: "Разрешение: 1K·Среднее" })).toBeVisible();
+    expect(screen.getByRole("button", { name: "Разрешение: 1K" })).toBeVisible();
     expect(screen.queryByText(ru.imageGeneration.priceDependsOnAspectRatio)).not.toBeInTheDocument();
     expect(screen.getByLabelText(`${ru.imageGeneration.priceLabel}: 31 звезда`)).toBeVisible();
-    fireEvent.click(screen.getByRole("button", { name: "Разрешение: 1K·Среднее" }));
-    expect(screen.getAllByRole("radio")).toHaveLength(15);
-    expect(screen.getByRole("radio", { name: "1K·Низкое" })).toBeVisible();
-    expect(screen.getByRole("radio", { name: "2K·Максимум" })).toBeVisible();
-    fireEvent.click(screen.getByRole("radio", { name: "4K·Максимум" }));
+    fireEvent.click(screen.getByRole("button", { name: "Разрешение: 1K" }));
+    expect(screen.getAllByRole("radio")).toHaveLength(3);
+    expect(screen.getByRole("radio", { name: "1K" })).toBeVisible();
+    expect(screen.getByRole("radio", { name: "2K" })).toBeVisible();
+    fireEvent.click(screen.getByRole("radio", { name: "4K" }));
     fireEvent.click(screen.getByRole("button", { name: ru.imageGeneration.increaseOutputCount }));
+    expect(screen.getByLabelText(`${ru.imageGeneration.priceLabel}: 82 звезды`)).toBeVisible();
     fireEvent.click(screen.getByRole("button", { name: "Соотношение сторон: 16:9" }));
     fireEvent.click(screen.getByRole("radio", { name: "1:1" }));
     fireEvent.change(promptInput, { target: { value: "Synthetic scene" } });
     fireEvent.click(getGenerateButton());
     await waitFor(() => expect(webBrowserMutation).toHaveBeenCalledWith("/web/v1/image-jobs/prepare", expect.objectContaining({
-      body: JSON.stringify({ prompt: "Synthetic scene", model_id: "gpt_image_2_5_flare", image_quality: "4K-max", aspect_ratio: "1:1", output_count: 2 }),
+      body: JSON.stringify({ prompt: "Synthetic scene", model_id: "gpt_image_2_5_flare", image_quality: "4K-medium", aspect_ratio: "1:1", output_count: 2 }),
     })));
   });
 
@@ -501,6 +502,57 @@ describe("ImageGenerationPanel", () => {
     expect(await screen.findByRole("alert")).toHaveTextContent(ru.imageGeneration.insufficientBalance);
     expect(screen.getAllByLabelText("60 звёзд").length).toBeGreaterThan(0);
     expect(webBrowserMutation).toHaveBeenCalledTimes(2);
+  });
+
+  it("hides the stale balance during a 402 refresh and then shows the current balance", async () => {
+    let finish!: (response: Response) => void;
+    const promptInput = await renderReadyEditor();
+    vi.mocked(webBrowserMutation)
+      .mockResolvedValueOnce(Response.json({ job, balance: 104, can_afford: true }, { status: 201 }))
+      .mockResolvedValueOnce(Response.json({ job: { ...job, status: "awaiting_payment" } }, { status: 402 }));
+    vi.mocked(webBrowserFetch).mockReturnValueOnce(new Promise(resolve => { finish = resolve; }));
+    fireEvent.change(promptInput, { target: { value: job.prompt } });
+    fireEvent.click(getGenerateButton());
+    await screen.findByRole("heading", { name: ru.imageGeneration.confirmationTitle });
+    fireEvent.click(screen.getByRole("button", { name: new RegExp(ru.imageGeneration.confirm) }));
+    await waitFor(() => expect(screen.queryByLabelText("104 звезды")).toBeNull());
+    expect(screen.queryByLabelText("44 звезды")).toBeNull();
+    expect(screen.getAllByLabelText("60 звёзд").length).toBeGreaterThan(0);
+    finish(Response.json({ balance: 10 }));
+    expect(await screen.findByRole("alert")).toHaveTextContent(ru.imageGeneration.insufficientBalance);
+    expect(screen.getByLabelText("10 звёзд")).toBeVisible();
+    expect(webBrowserFetch).toHaveBeenCalledWith("/web/v1/balance", { cache: "no-store" });
+  });
+
+  it.each([503, 200])("keeps an unknown balance after a failed or malformed 402 balance refresh (%i)", async status => {
+    const promptInput = await renderReadyEditor();
+    vi.mocked(webBrowserMutation)
+      .mockResolvedValueOnce(Response.json({ job, balance: 104, can_afford: true }, { status: 201 }))
+      .mockResolvedValueOnce(Response.json({ job: { ...job, status: "awaiting_payment" } }, { status: 402 }));
+    vi.mocked(webBrowserFetch).mockResolvedValueOnce(Response.json({ balance: "invalid" }, { status }));
+    fireEvent.change(promptInput, { target: { value: job.prompt } });
+    fireEvent.click(getGenerateButton());
+    await screen.findByRole("heading", { name: ru.imageGeneration.confirmationTitle });
+    fireEvent.click(screen.getByRole("button", { name: new RegExp(ru.imageGeneration.confirm) }));
+    await screen.findByRole("alert");
+    expect(screen.queryByLabelText("104 звезды")).toBeNull();
+    expect(screen.queryByLabelText("44 звезды")).toBeNull();
+    expect(screen.getAllByText("—")).toHaveLength(2);
+  });
+
+  it("invalidates old balance figures even if the activation402 body is malformed", async () => {
+    const promptInput = await renderReadyEditor();
+    vi.mocked(webBrowserMutation)
+      .mockResolvedValueOnce(Response.json({ job, balance: 104, can_afford: true }, { status: 201 }))
+      .mockResolvedValueOnce(Response.json({ error: "insufficient credits" }, { status: 402 }));
+    fireEvent.change(promptInput, { target: { value: job.prompt } });
+    fireEvent.click(getGenerateButton());
+    await screen.findByRole("heading", { name: ru.imageGeneration.confirmationTitle });
+    fireEvent.click(screen.getByRole("button", { name: new RegExp(ru.imageGeneration.confirm) }));
+    expect(await screen.findByRole("alert")).toHaveTextContent(ru.imageGeneration.activationFailure);
+    expect(screen.queryByLabelText("104 звезды")).toBeNull();
+    expect(screen.queryByLabelText("44 звезды")).toBeNull();
+    expect(screen.getAllByText("—")).toHaveLength(2);
   });
 
   it("clears an expired preparation intent after a 409 so the next prepare uses a new key", async () => {

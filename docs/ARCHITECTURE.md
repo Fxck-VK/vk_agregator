@@ -3438,3 +3438,88 @@ Existing accounts are never automatically marked accepted. Historical snapshots,
 authentication, Origin/CSRF, ownership, billing and job idempotency remain intact.
 Marketing is a separate voluntary profile preference, never granted by signup.
 Runtime and current behavior: docs/runbooks/WEB_LEGAL.md.
+
+
+## Subscription and attributable star lots (2026-10-27, local)
+
+The versioned economycatalog policy owns five fixed-day offers and dated model
+price facts. Its deterministic public JSON projection supplies pricing/checkout;
+unknown variants and research-only model entries never enable provider admission.
+Complete catalogue policy2026102802 assigns108 existing model/route decisions:
+104 paid, one sponsored chat and three unavailable TTS/Hailuo routes. Compatible
+retail-policy20261028 references apply only when the complete quote covers nominal
+provider cost at the cheapest paid subscription star price; otherwise stored cost
+is multiplied by3 and rounded once up to5 stars. New active top-ups cannot undercut
+that income ratio. Approved runtime operator tariffs retain their explicit basis.
+New quotes freeze policy version and economic_basis; historical Jobs, intents and
+reservations do not reprice. Provider floors/conversions/spend guards remain intact.
+The video resolver uses the same runtime catalogue; conflicting legacy supplied
+route estimates fail before reservation. GPT price_by_count maps apply shared input
+once and are authoritative in both UI consumers. Text remains a bounded fixed reply.
+New SunoV6 non-Max paid-track Jobs freeze a minimum-one-playable-track condition;
+all extra alternatives are preserved free. Later pricing changes cannot invalidate it.
+Photoshoot/slides/seller calculators remain separate until workflows are admitted.
+The mandatory model check includes the whole-catalogue offline economic audit.
+Local development quotes with references are a generated public-total matrix from
+the same image resolver, paired with the preview catalogue and checked together.
+The browser simulator only looks up totals; accepted simulated Jobs freeze them.
+Top-up UI compares returned amount/currency/stars before checkout navigation;
+mismatches refresh packages and require a new user click with a fresh attempt.
+Contract: docs/runbooks/MODEL_ECONOMY.md. Complete current inventory:
+docs/research/epifera-economy-2026-10-28.md.
+
+Account-native subscription intents snapshot the plan, next offer, period and
+explicit renewal choice. Provider-verified settlement commits subscription state,
+immutable ledger grant and expiring credit lot in one payment transaction. Private
+provider method IDs never enter website DTOs. Renewal uses a durable per-cycle
+intent, rechecks cancellation under the account/subscription lock, and cannot
+blindly resubmit ambiguous operations beyond provider idempotency retention.
+Immediate CreatePayment success stays pending until authenticated verification.
+Provider-verified unsuccessful renewals atomically update past-due/retry state
+with payment status and inbox acknowledgement. The canonical policy v1 permits
+only authenticated unpaid insufficient_funds cancellations to retry: minimum24h,
+window14 days from first failure, at most14 failures including the first. New
+checkout opt-in snapshots that version; legacy/missing consent never expands.
+The private JSON state retains policy, failure count, deadline and next attempt;
+no new migration is required. Each proved failure has one durable next intent/key
+at the original cycle price, while ambiguous outcomes retain their binding.
+Current-time owner-locked deadline checks, monotonic/fenced backoff and owned
+first-receipt retirement prevent late/burst or duplicate submits. Cancellation,
+other reasons and exhaustion stop further charges. Only the exact pending/previous
+paid-intent pair can change state; amount/currency/unpaid proof is mandatory.
+Newer checkouts, paid periods and explicit cancellation remain intact. Recovery
+grants once and resets retry state; a late paid outcome cannot revive expired
+renewal permission. Existing renewal_at exposes the actual next attempt only.
+
+Credit lots attribute purchased, subscription, bonus and legacy funds. Earliest
+expiry reservations, capture/release and signed adjustments preserve the ledger
+sum. Expiry removes only unreserved remainder; already-created holds may finish,
+and late release cannot resurrect expired credits. Filtered spendable reads are
+immediate; cleanup is bounded. Verified full subscription refunds revoke only
+that grant's unused remainder and matching access/renewal. Partial subscription
+refunds require operator handling and are not silently acknowledged.
+
+The web exposes only account-owned subscription/balance DTOs and cookie/Origin/
+CSRF protected checkout/cancel. Existing test-shop gates remain; production money,
+merchant recurring readiness and release are separate. Operational contract and
+explicit gaps: docs/runbooks/BILLING.md#subscription-economy-local-implementation-2026-10-27.
+
+### Older top-up refund after subscription reversal (2026-10-29, local)
+
+The conservative top-up refund scan may exclude a committed adjustment only
+through SubscriptionRefundReversalReader, an optional transaction-bound storage
+proof. PostgreSQL binds the exact stored debit to a fully unused subscription
+grant/lot, immutable purchase snapshot and processed provider-verified full refund,
+with the same canonical owner/account and current denomination. Proof and debit
+run under the canonical owner lock. Missing or incomplete attribution fails
+closed; storage failures abort. Actual spend, holds, partial source revocation,
+ordinary expiry and other debits keep their previous guards. Non-expiring-only
+balance admission, bounded scan, operator/full-only policy, ledger idempotency
+and provider-failure compensation are unchanged. No migration, HTTP surface,
+frontend layout or new provider path is introduced. Operations and regressions:
+docs/runbooks/BILLING.md#local-test-shop-verification-2026-10-29.
+
+
+## Public template content catalogue (2026-10-29)
+
+All 24 public template types use the existing components through `web/platform/src/content/templates/render.tsx`. Reviewed Russian JSON records own canonical paths, metadata, publication and named immutable template sources; explicit bindings reach child components without DOM rewriting or a browser-wide content catalogue. New records resolve through the existing catch-all before the original safe 404. Course lessons and help articles derive child routes from their parent data. Billing and legal adapters retain their authoritative runtime catalogues, and editor data cannot override them. The build admission validates data, media and route ownership. Published/index records feed sitemap automatically, with URL-count/size sharding for large inventories. No provider, auth, ledger or private artifact boundary changes. See `web/platform/docs/public-content-authoring.md`.

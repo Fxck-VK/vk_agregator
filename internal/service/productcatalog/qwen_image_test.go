@@ -43,7 +43,7 @@ func TestQwenImageCatalogAndTrustedQuote(t *testing.T) {
 			t.Fatal("wrong trusted worker request")
 		}
 		price := result.PricingSnapshot
-		if price.InternalCredits != 15 || price.Floor.Amount != 205712 || price.Floor.Unit != pricingcatalog.FloorUnitAPIMartCredits || price.InternalCreditCap != 15 {
+		if price.InternalCredits != 30 || price.Floor.Amount != 205712 || price.Floor.Unit != pricingcatalog.FloorUnitAPIMartCredits || price.InternalCreditCap != 30 {
 			t.Fatalf("wrong exact Qwen tariff: %+v", price)
 		}
 	}

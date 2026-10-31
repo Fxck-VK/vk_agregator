@@ -7,6 +7,7 @@ import { loadWorkspaceSession } from "@/features/session/session-data";
 import { WorkspaceLogoutBoundary } from "@/features/session/WorkspaceLogout/WorkspaceLogoutBoundary";
 import { isServicePath } from "@/i18n/routing";
 import { initialModelCatalog } from "@/features/models/model-catalog-server";
+import {resolveContentPage} from '@/content/templates/catalog';
 
 export const dynamic = "force-dynamic";
 export const revalidate = 0;
@@ -19,6 +20,7 @@ type MissingPageLayoutProps = Readonly<{
 
 export default async function MissingPageLayout({ children, params }: MissingPageLayoutProps) {
   const { missing } = await params;
+  if(resolveContentPage(`/${missing.join('/')}`,{preview:process.env.NODE_ENV==='development'}))return children;
   // Missing assets and technical endpoints must not load or serialize an account.
   if (isServicePath(`/${missing.join("/")}`)) return <main>{children}</main>;
 

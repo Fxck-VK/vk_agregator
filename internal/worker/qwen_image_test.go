@@ -211,6 +211,8 @@ func testAPIMartImageLifecycle(t *testing.T, publicModel, providerModel, quality
 			if err != nil {
 				t.Fatal(err)
 			}
+			// Lifecycle fixtures reserve the authoritative quote; exact retail values have separate regressions.
+			credits = snapshot.InternalCredits
 			raw, err := json.Marshal(snapshot)
 			if err != nil {
 				t.Fatal(err)

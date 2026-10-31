@@ -2,7 +2,7 @@ import { describe, expect, it, vi } from "vitest";
 
 vi.mock("server-only", () => ({}));
 
-import { defaultLocale, locales, parseLocale } from "../locales";
+import { defaultLocale, locales, siteLocales, parseLocale } from "../locales";
 import { publicDictionaryEn } from "./en";
 import { getPublicDictionary } from "./get-public-dictionary";
 import { publicDictionaryRu } from "./ru";
@@ -24,6 +24,7 @@ function flattenKeys(value: unknown, prefix = ""): string[] {
 describe("public localization contract", () => {
   it("defines Russian as the default and accepts only supported locales", () => {
     expect(locales).toEqual(["ru", "en"]);
+    expect(siteLocales).toEqual(["ru"]);
     expect(defaultLocale).toBe("ru");
     expect(parseLocale("ru")).toBe("ru");
     expect(parseLocale("en")).toBe("en");

@@ -10,7 +10,7 @@ import {usePublicCopy} from "@/i18n/public/use-public-copy";
 
 
 function EventTrailer(){
-  const {media,t} = usePublicCopy(publicCopySourcesForLocale);
+  const {media,t} = usePublicCopy(publicCopySourcesForLocale,{"t":"eventProjectEn","media":"eventProjectReference"});
 
   const video=useRef<HTMLVideoElement>(null);
   useEffect(()=>{
@@ -24,7 +24,7 @@ function EventTrailer(){
 
 export type EventDialogKind='details'|'source'|'trailer';
 export function EventDialogs({kind,onClose}:{kind:EventDialogKind;onClose:()=>void}){
-  const {t} = usePublicCopy(publicCopySourcesForLocale);
+  const {t} = usePublicCopy(publicCopySourcesForLocale,{"t":"eventProjectEn","media":"eventProjectReference"});
 
   if(kind==='trailer')return <LandingDialog title={t.film.dialog} closeLabel={t.controls.close} onClose={onClose} wide><EventTrailer/></LandingDialog>;
   if(kind==='source')return <LandingDialog title={t.source.title} closeLabel={t.controls.close} onClose={onClose}><div className={styles.dialogCopy}><p>{t.source.description}</p><a href={t.source.href} target="_blank" rel="noopener noreferrer">{t.source.link}<span aria-hidden="true"> ↗</span></a></div></LandingDialog>;

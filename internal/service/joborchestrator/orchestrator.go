@@ -403,6 +403,9 @@ func (o *Orchestrator) CreateJob(ctx context.Context, in CreateJobInput) (*domai
 			return nil, fmt.Errorf("joborchestrator: pricing snapshot: %w", err)
 		}
 	} else if in.CostEstimateCredits > 0 {
+		if routeResolution.Resolved && in.CostEstimateCredits != routeResolution.InternalCostCredits {
+			return nil, fmt.Errorf("%w: supplied estimate disagrees with resolved video price", ErrBackendPriceRequired)
+		}
 		estimate = in.CostEstimateCredits
 	}
 	routeSnapshot := routeResolution.Snapshot

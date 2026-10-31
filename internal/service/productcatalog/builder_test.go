@@ -190,7 +190,7 @@ func TestFromConfigNanoBananaProUsesAPIMartReadiness(t *testing.T) {
 	if image == nil {
 		t.Fatalf("Nano Banana Pro missing from APIMart-ready public catalog: %+v", runtimeCatalog.ImageModels())
 	}
-	if image.DefaultQuality != modelcatalog.ImageQuality1K || image.EstimateCredits != 50 || !image.SupportsReferenceImage || image.MaxReferenceImages != 14 {
+	if image.DefaultQuality != modelcatalog.ImageQuality1K || image.EstimateCredits != 55 || !image.SupportsReferenceImage || image.MaxReferenceImages != 14 {
 		t.Fatalf("Nano Banana Pro public catalog contract = %+v", image)
 	}
 

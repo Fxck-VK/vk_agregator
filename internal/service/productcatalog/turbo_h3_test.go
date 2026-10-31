@@ -32,7 +32,7 @@ func TestTurboH3CatalogReadinessAndPricing(t *testing.T) {
 			minDuration:       3,
 			resolutions:       []string{"720p", "1080p"},
 			aspects:           []string{"16:9", "9:16", "1:1"},
-			wantFiveSecond:    map[string]int64{"720p": 345, "1080p": 430},
+			wantFiveSecond:    map[string]int64{"720p": 250, "1080p": 250},
 			wantProviderCost:  map[string]int64{"720p": 6, "1080p": 8},
 		},
 		{
@@ -43,7 +43,7 @@ func TestTurboH3CatalogReadinessAndPricing(t *testing.T) {
 			minDuration:       4,
 			resolutions:       []string{"2k", "768p"},
 			aspects:           []string{"16:9", "9:16", "1:1", "4:3", "3:4", "21:9"},
-			wantFiveSecond:    map[string]int64{"768p": 175, "2k": 275},
+			wantFiveSecond:    map[string]int64{"768p": 375, "2k": 375},
 			wantProviderCost:  map[string]int64{"768p": 3, "2k": 5},
 		},
 	} {

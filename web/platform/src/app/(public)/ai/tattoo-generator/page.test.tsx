@@ -51,7 +51,7 @@ describe("Tattoo task-solution landing",()=>{
   });
   it("links the planned integration landing and resolves every local anchor",async()=>{
     const {container}=await page();fireEvent.click(screen.getByRole('tab',{name:'Codex'}));expect(screen.getByRole('tabpanel',{name:'Codex'})).toHaveTextContent('Coming soon');
-    expect(screen.getByRole('link',{name:'Explore Epifera MCP'})).toHaveAttribute('href','/en/mcp');expect(screen.queryByRole('dialog')).toBeNull();
+    expect(screen.getByRole('link',{name:'Explore Epifera MCP'})).toHaveAttribute('href','/ru/mcp');expect(screen.queryByRole('dialog')).toBeNull();
     expect(container.querySelector('a[href^="cursor:"],a[href^="vscode:"],a[href*="mcp.magnific"]')).toBeNull();
     for(const anchor of container.querySelectorAll<HTMLAnchorElement>('a[href^="#"]'))expect(container.querySelector(anchor.getAttribute('href')!)).not.toBeNull();
   });

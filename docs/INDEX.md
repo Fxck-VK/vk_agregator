@@ -2,6 +2,10 @@
 
 Local platform UI without backend/deploy: [local development scenarios](../web/platform/docs/local-development.md).
 
+Study24 subscription/shared-star model adoption: [implementation plan](superpowers/plans/2026-10-27-study24-economy.md), [current billing contract and explicit gaps](../docs/runbooks/BILLING.md#subscription-economy-local-implementation-2026-10-27). Local implementation only; real merchant enablement and deployment are separate.
+
+Study24 full pricing research, 2026-10-28: [searchable report for all 94 entries](research/study24-pricing-2026-10-28.html), [parameters, conditional price rules, sources and gaps](research/study24-pricing-2026-10-28.json), [94-row CSV](research/study24-pricing-2026-10-28.csv), [88 conditional rate branches](research/study24-pricing-2026-10-28-rates.csv). Includes the six current application surfaces and separate Image Studio/Suno rules. Research only; it does not change Epifera billing or authorize model admission.
+
 Canonical Epifera login and account flows: [implementation and local verification](superpowers/plans/2026-10-27-login-v2.md), [browser identity contract](../docs/ACCOUNT_IDENTITY_CONTRACT.md#canonical-browser-authentication), [shared UI contract](../web/platform/docs/ui-catalog.md#browser-account). Localized `/login` uses the chosen reference layout; `/login-v2` only redirects. Registration, reset-link recovery and conditional email verification share server-owned authentication; all auth routes remain noindex.
 
 Website invitation flow and deferred reward rules: [web referrals](../docs/runbooks/WEB_REFERRALS.md).
@@ -40,7 +44,7 @@ Read only the document that matches the current task:
 
 | Task scope | Active document |
 | --- | --- |
-| Russian versions of all24 public templates | [Localization contract](../web/platform/docs/public-template-localization.md); [implementation plan](superpowers/plans/2026-10-25-russian-public-templates.md); [source/RU/reverse records](research/ru-template-translations/). Same components at `/ru` and `/en`, draft/noindex; approved Russian legal content preserved. |
+| Russian versions of all24 public templates | [Localization contract](../web/platform/docs/public-template-localization.md); [implementation plan](superpowers/plans/2026-10-25-russian-public-templates.md); [source/RU/reverse records](research/ru-template-translations/). Russian-only website at `/ru`; legacy `/en` redirects308, shared English sources/audit retained. [Russian-only recheck](superpowers/plans/2026-10-28-ru-only.md). Draft/noindex and approved Russian legal bodies preserved. |
 | English author archive from reference 24 | [Local plan](superpowers/plans/2026-10-25-author-template.md); [UI contract](../web/platform/docs/ui-catalog.md#author-archive-template); [cover provenance](research/author-reference-media.json). `/en/blog/author/epifera`, 25 existing articles/lessons/guides with real pagination and local search; RU localized (see localization contract above), draft/noindex. All24 local template types implemented. |
 | English event/project template from reference 22 | [Local plan](superpowers/plans/2026-10-25-event-project-template.md); [UI contract](../web/platform/docs/ui-catalog.md#event-and-project-template); [media provenance](research/event-project-reference-media.json). `/en/events/creative-sessions`, project concept with programme, trailer and collaboration contact; RU localized (see localization contract above), draft/noindex. |
 | English company/contact template from reference 21 | [Local plan](superpowers/plans/2026-10-25-company-about-template.md); [UI contract](../web/platform/docs/ui-catalog.md#about-and-contacts-template); [media provenance](research/about-reference-media.json). `/en/company/about-us`, truthful company content and support links; RU localized (see localization contract above), draft/noindex. |
@@ -76,6 +80,7 @@ Read only the document that matches the current task:
 | English Magnific SEO URL inventory, hierarchy, observed links, source coverage and proposed Epifera mappings | [Registry and method](../docs/research/magnific-seo-registry/README.md) |
 | Static and original-JavaScript Magnific reference archives, interaction states and mobile captures | [Archive plan and verification scope](superpowers/plans/2026-10-23-magnific-interactive-references.md) |
 | Proposed Epifera public SEO templates, content fields, relationships and publication prerequisites | [Structure and data](superpowers/specs/2026-10-23-epifera-seo-structure-design.md); [machine catalog and candidate pages](../docs/research/epifera-seo-structure/README.md) |
+| Scaling all 24 public templates, data records, authoring CLI and automatic publication | [Russian authoring guide and 24 examples](../web/platform/docs/public-content-authoring.md); [implementation plan](superpowers/plans/2026-10-29-scalable-public-content.md) |
 | Automatic sitemap from implemented public pages, publication/noindex policy and localized canonical URLs | [Authoring contract](../web/platform/docs/locale-routing.md#публикация-новой-seo-страницы); [implementation and checks](superpowers/plans/2026-10-24-automatic-public-sitemap.md) |
 | Browser login, verified email registration, Resend SMTP, recovery, OAuth, profile bindings and sessions | [Browser account access](../docs/runbooks/BROWSER_ACCOUNT.md) |
 | Cached personal invitation link, session isolation and independent referral statistics | [Implementation plan](superpowers/plans/2026-10-08-referral-link-cache.md); [website invitations](../docs/runbooks/WEB_REFERRALS.md) |
@@ -89,6 +94,8 @@ Read only the document that matches the current task:
 | Atomic recovery codes, password/session transactions and security email notices | [Implementation plan](superpowers/plans/2026-10-05-email-auth-security.md); [browser account](../docs/runbooks/BROWSER_ACCOUNT.md) |
 | Confirmed browser sign-in, fresh authenticated navigation and safe failure diagnostics | [Implementation plan](superpowers/plans/2026-10-04-login-completion.md); [browser account](../docs/runbooks/BROWSER_ACCOUNT.md#sign-in-completion-and-diagnostics) |
 | Model input/output capabilities, API support vs implemented application, grouped text/image/video/audio inventory | [Model capabilities](../docs/MODEL_CAPABILITIES.md); generated with `go run ./cmd/model-catalog -format markdown` |
+| Complete current model economy, quote provenance and admission checks | [Model economy runbook](../docs/runbooks/MODEL_ECONOMY.md); [108-model inventory](research/epifera-economy-2026-10-28.md); [machine-readable inventory](research/epifera-economy-current.json) |
+| Study24 reference research and historical first adoption | [Initial adoption report](research/epifera-retail-adoption-2026-10-28.md); [reference policy](../internal/service/economycatalog/retail-policy.json) |
 | Text models: KIE and APIMart integration, prices and rollout gates | [Text models](../docs/runbooks/KIE_TEXT_MODELS.md) |
 | Study24 model research, provider documentation and shared integration work | [Model catalog](../docs/superpowers/plans/2026-09-08-study24-apimart/README.md); [shared foundation](../docs/superpowers/plans/2026-09-08-study24-apimart/00-common-foundation.md); [DEV configuration](../docs/runbooks/DEV.md); [read-only preflight](../docs/runbooks/APIMART_PREFLIGHT.md) |
 | Account-first backend core independence, VK adapter separation, neutral sessions and delivery | docs/superpowers/specs/2026-07-30-account-first-backend-core-design.md; implementation plan: docs/superpowers/plans/2026-07-30-channel-neutral-result-delivery.md |
@@ -101,7 +108,7 @@ Read only the document that matches the current task:
 | Remembered DEV gateway access, session expiry and rotation | [Operations](../docs/runbooks/DEV.md#remembered-browser-dev-access); [implementation plan](superpowers/plans/2026-09-29-dev-access-session.md) |
 | Workspace chat availability, account session recovery and private list cache | [Loading contract](../web/platform/docs/preloading.md); [implementation plan](superpowers/plans/2026-09-29-workspace-read-recovery.md) |
 | DEV deploy fast feedback, preflight serialization, workflow polling and build caches | approved design: `docs/superpowers/specs/2026-08-18-dev-deploy-fast-feedback-design.md`; implementation plan: `docs/superpowers/plans/2026-08-18-dev-deploy-fast-feedback.md` |
-| YooKassa, payment intents, refunds, billing smoke | `docs/runbooks/BILLING.md` |
+| YooKassa, payment intents, refunds, billing smoke | `docs/runbooks/BILLING.md`; [daily14-day retry plan](superpowers/plans/2026-10-29-subscription-retries.md); [refund after subscription reversal](superpowers/plans/2026-10-29-refund-after-subscription-reversal.md) |
 | k6, loadtest contour, capacity reports | `docs/runbooks/LOAD_TESTING.md` |
 | Incidents, broken deploys, provider/payment/queue triage | `docs/runbooks/INCIDENTS.md` |
 | Rollback, backups, restore policy | `docs/runbooks/ROLLBACK.md` |

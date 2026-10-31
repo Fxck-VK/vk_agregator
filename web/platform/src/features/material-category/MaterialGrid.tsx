@@ -14,7 +14,7 @@ import {translatePublicText} from "@/i18n/public/public-copy";
 
 const bookmarks=deviceBookmarks("epifera.saved-materials");
 function MaterialCardActions({item,onNotice}:{item:MaterialRecord;onNotice:(message:string)=>void}){
-  const {t} = usePublicCopy(publicCopySourcesForLocale);
+  const {t} = usePublicCopy(publicCopySourcesForLocale,{"t":"materialCategoryEn"});
 
   const saved=useSyncExternalStore(bookmarks.subscribe,()=>bookmarks.isSaved(item.id),()=>false);
   return <div className={styles.cardActions}><button type="button" aria-label={`${saved?t.saved:t.save} ${item.alt}`} aria-pressed={saved} onClick={()=>{const result=bookmarks.toggle(item.id);onNotice(result.ok?(result.saved?t.savedNotice:t.removedNotice):t.saveError);}}><svg aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinejoin="round"><path d="M6 3h12v18l-6-4-6 4Z"/></svg></button><a href={item.src} download={`${brandFilePrefix}-${item.id}.webp`} aria-label={`${t.download} ${item.alt}`}><AssetIcon iconName="download" source="/assets/icons/ui/download-white.svg"/></a></div>;

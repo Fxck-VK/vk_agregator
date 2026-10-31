@@ -7,7 +7,7 @@ import {usePublicCopy} from "@/i18n/public/use-public-copy";
 
 
 export function AuthorPagination({items,page}:{items:readonly AuthorMaterial[];page:number}){
-  const {authorPath,t} = usePublicCopy(publicCopySourcesForLocale);
+  const {authorPath,t} = usePublicCopy(publicCopySourcesForLocale,{"t":"authorEn","authorPath":"authorPath"});
 
   const result=paginateAuthorMaterials(items,page);
   const target=(value:number)=>`${authorPath}${value>1?`?page=${value}`:''}#author-materials`;

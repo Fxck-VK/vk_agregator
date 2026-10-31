@@ -105,8 +105,8 @@ func TestKlingV3VideoAudioChangesResolvedProviderFloor(t *testing.T) {
 		providerCost int64
 		internalCost int64
 	}{
-		{name: "720p without audio", providerCost: 4, internalCost: 240},
-		{name: "720p with audio", audio: true, providerCost: 6, internalCost: 360},
+		{name: "720p without audio", providerCost: 4, internalCost: 500},
+		{name: "720p with audio", audio: true, providerCost: 6, internalCost: 500},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			resolution, err := catalog.Resolve(context.Background(), videorouter.Request{
@@ -155,7 +155,7 @@ func TestKlingMotionRequiresOwnedVideoIDAndOneImage(t *testing.T) {
 		imageOrientation.Snapshot.CharacterOrientation != "image" ||
 		!imageOrientation.Snapshot.KeepOriginalSound ||
 		imageOrientation.Snapshot.ProviderCostCredits != 6 ||
-		imageOrientation.Snapshot.InternalCostCredits != 360 {
+		imageOrientation.Snapshot.InternalCostCredits != 345 {
 		t.Fatalf("unexpected image-oriented motion snapshot: %+v", imageOrientation.Snapshot)
 	}
 
@@ -173,7 +173,7 @@ func TestKlingMotionRequiresOwnedVideoIDAndOneImage(t *testing.T) {
 	if videoOrientation.Snapshot.CharacterOrientation != "video" ||
 		videoOrientation.Snapshot.KeepOriginalSound ||
 		videoOrientation.Snapshot.ProviderCostCredits != 18 ||
-		videoOrientation.Snapshot.InternalCostCredits != 1080 {
+		videoOrientation.Snapshot.InternalCostCredits != 1030 {
 		t.Fatalf("unexpected video-oriented motion snapshot: %+v", videoOrientation.Snapshot)
 	}
 

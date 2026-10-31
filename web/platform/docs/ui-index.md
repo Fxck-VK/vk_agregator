@@ -1,8 +1,14 @@
 # UI: короткий индекс для агента
 
+Масштабирование всех 24 публичных типов: [добавление страниц через данные](public-content-authoring.md). Каталог и общий рендерер сохраняют существующие макеты; именованные источники подключаются вторым аргументом `usePublicCopy`.
+
 Статус: активный. Входная точка для задач по интерфейсу `web/platform`.
 
-Все 24 публичных шаблона `/ru` и `/en`, словари редакционных данных,
+Обязательная проверка вёрстки: **360, 390, 768, 1024, 1440, 1920, 2560 и 3840 CSS px**;
+2K — **2560 × 1440**, 4K — **3840 × 2160**. Покрытие страниц, состояния и фиксация
+результатов: [правило адаптивной проверки](../AGENTS.md#mandatory-responsive-layout-verification).
+
+Все 24 публичных шаблона `/ru` (прежние `/en` → 308 на русский), словари редакционных данных,
 обратный перевод и проверка новых текстов:
 [контракт локализации публичных шаблонов](public-template-localization.md).
 
@@ -16,11 +22,11 @@
 У них собственные панель иконок, меню документов и область чтения; шапка и подвал
 главной здесь не используются. Утверждённый каталог и согласия не меняются.
 
-Тексты и язык интерфейса: [локализация](localization.md). Использовать общий `LocaleProvider`, `useDictionary` / `useMessages`; язык переключает готовый `LanguageSwitcher`. Не добавлять прямые импорты `ru` и надписи вне словарей.
+Тексты и язык интерфейса: [локализация](localization.md). Использовать общий `LocaleProvider`, `useDictionary` / `useMessages`; на сайте включён только `ru`, `LanguageSwitcher` скрыт. Не добавлять прямые импорты `ru` и надписи вне словарей.
 
 Источник бренда сайта и писем — [branding/brand.json](../branding/brand.json); [config/brand.ts](../src/config/brand.ts) экспортирует его настройки: `brandName`, `brandLogoPath`, `brandIcons` для вкладки и устройств. Основной логотип выводит общий [BrandLogo](../src/components/brand/BrandLogo/BrandLogo.tsx), включая боковую панель, публичную шапку и подвалы; фирменный чат использует тот же путь. Фирменное начертание — общий [BrandName / BrandText](../src/components/brand/BrandName/BrandName.tsx), SVG-надписи зарегистрированы в `branding/brand.json` по ключу из имени бренда. Комплект Epifera (знак, надпись и значки вкладки/устройств) получен из SVG, присланного владельцем. Контуры сохранены, точка над i градиентная; цвет букв наследуется от темы. Если для нового имени SVG нет, используется исходный `--font-sans` / Geist. [Границы настройки](localization.md#общая-система-словарей).
 
-Ссылки: `@/i18n/Link`; переходы и сравнение пути: `@/i18n/navigation`. Они сохраняют язык URL. `LanguageSwitcher` открывает текущую страницу на другом языке, сохраняя состояние. Правила: [языковые адреса](locale-routing.md).
+Ссылки: `@/i18n/Link`; переходы и сравнение пути: `@/i18n/navigation`. Они формируют русский адрес, в том числе из прежних `/en` ссылок. `siteLocales` управляет доступными языками. Правила: [языковые адреса](locale-routing.md).
 
 Префикс имён скачиваемых фото и видеопримеров — `brandFilePrefix` из того же `config/brand.ts`; он автоматически вычисляется из `brandName` и отдельно не настраивается.
 
@@ -70,10 +76,12 @@
 | Тумблер, режимы, тема, только иконки | `ModeSwitchPanel`; `fullWidth` для всей доступной ширины, `iconOnly` для иконок | [Панели](ui-catalog.md#panels), [пример 3](ui-catalog-examples.md#example-3) |
 | Раскрывающиеся вопросы и ответы | Общий `FAQ`, `items`; `name` для одного открытого ответа | [FAQ](ui-catalog.md#faq) |
 | Кнопка или счётчик внутри поля | `InputControlChip` button/div | [Ввод](ui-catalog.md#input), [радиус и размеры](ui-catalog.md#tokens) |
-| Выбор соотношения сторон или разрешения, в том числе в редакторе фото | `ImageAspectRatioSelector`, `ImageQualitySelector`; в модальном редакторе portalLayer=170 | [Ввод](ui-catalog.md#input), [панели](ui-catalog.md#panels) |
+| Выбор соотношения сторон или разрешения, в том числе в редакторе фото | `ImageAspectRatioSelector`, `ImageQualitySelector`: уникальные доступные размеры 1K/2K/4K/8K без приписок о качестве; исходные коды и цены каталога сохранены; в модальном редакторе portalLayer=170 | [Ввод](ui-catalog.md#input), [панели](ui-catalog.md#panels) |
 | Кнопка с заливкой / прозрачная кнопка с обводкой | `Button`: `variant="filled"` по умолчанию; `variant="outline"` для прозрачного фона во всех состояниях | [Ввод](ui-catalog.md#input) |
+| Гостевой «Войти» в боковой панели и шапке | `WorkspaceLoginAction placement="sidebar" \| "header"`: прозрачный фон, фирменная обводка, радиус 0,5 rem | [Ввод](ui-catalog.md#input) |
 | Поле сообщения / запрос генерации / загрузка медиа | `ChatComposer`; в существующем сценарии — его адаптер | [Ввод](ui-catalog.md#input), [пример 5](ui-catalog-examples.md#example-5) |
-| Общий раздел «Аудио»: музыка и речь | Один пункт `Sidebar`; `WorkspaceHeader` переключает `/app/music` и `/app/speech` через `ModeSwitchPanel`, сохраняя язык | [Модели](ui-catalog.md#models), [панели](ui-catalog.md#panels) |
+| Общий раздел «Аудио»: музыка и речь | `WorkspaceSectionNavigation` подключает переключатель через общий слот `WorkspaceHeader.sectionNavigation` сразу справа от выбора модели. `ModeSwitchPanel density="compact"` имеет высоту 2.75 rem, как остальные кнопки; CSS шапки одинаков на всех маршрутах. Баланс и тариф остаются у правого края | [Модели](ui-catalog.md#models), [панели](ui-catalog.md#panels) |
+| Масштаб кабинета только на 2K/4K | `AppShell` включает rem-масштаб только при viewport ≥2560 CSS px: 200% на 2560 и 300% на 3840. Ниже 2560 сохраняются исходные размеры. Панели в body наследуют его; публичные страницы и вход сохраняют свой масштаб. Не расширять правило на обычные экраны | [Оболочка](ui-catalog.md#models) |
 | Музыкальная workspace-страница / Suno и Lyria | `MusicWorkspaceController` + `MusicWorkspace` + `MusicStudioTools`: быстрое создание, раскрываемые настройки; `MusicTrackCard` для результатов и выбора источника. «Мои треки» открывает «Мои файлы → Музыка». Продолжение не запускает платную работу автоматически | [Модели](ui-catalog.md#models), [Ввод](ui-catalog.md#input), [загрузка](preloading.md) |
 | Музыка в «Моих файлах» / компактный плеер и меню | `MusicFiles` + `MusicTrackCard`; общий кеш с музыкальным экраном | [Каталог](ui-catalog.md#выбор-готового-решения), [кеш](preloading.md) |
 | Озвучка текста / распознавание записи | `SpeechWorkspace` в `/app/speech`; серверный prepare/activate; Whisper на DEV: MP3/WAV до 25 МБ и 8 минут, 25 кредитов за начатую минуту; pending-модели не запускаются | [Модели](ui-catalog.md#models), [Ввод](ui-catalog.md#input) |
@@ -101,7 +109,7 @@
 | Подсказка при наведении | `Tooltip`; при своём позиционировании — `TooltipBubble` | [Подсказки](ui-catalog.md#overlays), [пример 9](ui-catalog-examples.md#example-9) |
 | Описание модели в подсказке только у инпута | `ModelSelector descriptionMode="tooltip"`; по умолчанию `inline` | [Модели](ui-catalog.md#models), [пример 8](ui-catalog-examples.md#example-8) |
 | Общая прокрутка / scrollbar | `ScrollArea` | [Прокрутка](ui-catalog.md#overlays), [пример 9](ui-catalog-examples.md#example-9) |
-| Выбор нейросети / карточка модели | `ModelSelector`, его адаптеры; `ModelCard` и `ModelIcon` | [Модели](ui-catalog.md#models), [пример 8](ui-catalog-examples.md#example-8) |
+| Выбор нейросети / карточка модели | `ModelSelector`, его адаптеры; `WorkspaceHero` синхронизирует активную модель с общей шапкой через `WorkspaceModelSelection`; `ModelCard` и `ModelIcon` | [Модели](ui-catalog.md#models), [пример 8](ui-catalog-examples.md#example-8) |
 | Назначить иконку модели по ID | `model-icon-registry.ts` → `getModelPresentation` → существующий `ModelIcon`; назначены все модели текущего каталога, версии одной семьи используют общий знак модели или разработчика | [Модели](ui-catalog.md#models), [источники SVG](../public/assets/images/models/README.md) |
 | Закрепить значок чата за первой нейросетью | `ConversationRow` → `ModelIcon` по серверному `first_model_id`; смена модели внутри чата значок не меняет | [Иконки](ui-catalog.md#icons-motion) |
 | Цвет запасной иконки модели, белых кнопок и QR | Общие переменные в `globals.css`; `ModelIcon` окрашивает SVG через CSS-маску | [Токены](ui-catalog.md#tokens), [модели](ui-catalog.md#models) |
@@ -111,6 +119,7 @@
 | Быстрые кнопки моделей под полем на главной, переключить без перехода | `WorkspaceHero` + `FeaturedModelShortcuts`; один WorkspacePrompt → ChatComposer, сменные ImageGenerationControls | [Модели](ui-catalog.md#models), [ввод](ui-catalog.md#input) |
 | Ширина страницы / публичные блоки | `WorkspacePageFrame`; публичная часть — `PageContainer` и свои компоненты | [Оболочки](ui-catalog.md#models) |
 | Купить пакет токенов / вернуться из ЮKassa | `TokenTopUpDialog`, `PaymentStatus`, `PaymentReturn`; серверный каталог и account-native платёж | [Окна](ui-catalog.md#overlays), [billing runbook](../../../docs/runbooks/BILLING.md#web-platform-test-checkout) |
+| Купить подписку, увидеть оплаченный срок и отменить продление | `SubscriptionCheckout`, `ProfileSubscriptionCard`; единая политика тарифов, защищённый API подписок и существующий возврат из оплаты | [Подписки](ui-catalog.md#subscription-economy), [billing runbook](../../../docs/runbooks/BILLING.md#subscription-economy-local-implementation-2026-10-27) |
 | Цена или баланс со звездой | `CreditAmount` | [Ввод](ui-catalog.md#input) |
 | Ожидание, ошибка, пустой список, предзагрузка фото | `LoadingIndicator`, `Skeleton`, `SkeletonGrid`, `StateNotice`, `MediaState`, `RetryAction`; байты медиа — `MediaImage` / `MediaVideo` | [Общие состояния](ui-catalog.md#async-states), [карта 20 мест](shared-async-states.md) |
 | Общие цвета, обводка, скругления, анимация | Токены `globals.css`, готовые состояния и движения компонентов | [Токены](ui-catalog.md#tokens), [иконки и движение](ui-catalog.md#icons-motion) |

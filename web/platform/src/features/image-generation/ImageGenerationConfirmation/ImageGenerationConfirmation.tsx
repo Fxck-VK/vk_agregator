@@ -11,6 +11,7 @@ import type { ImageJobPreparation } from "@/lib/web-api/contracts";
 import styles from "./ImageGenerationConfirmation.module.css";
 
 type ImageGenerationConfirmationProps = {
+  balanceKnown?: boolean;
   errorMessage: string | null;
   isActivating: boolean;
   onConfirm: () => void;
@@ -18,6 +19,7 @@ type ImageGenerationConfirmationProps = {
 };
 
 export function ImageGenerationConfirmation({
+  balanceKnown = true,
   errorMessage,
   isActivating,
   onConfirm,
@@ -36,11 +38,11 @@ export function ImageGenerationConfirmation({
         </div>
         <div>
           <dt>{t.imageGeneration.balanceLabel}</dt>
-          <dd><CreditAmount value={preparation.balance} /></dd>
+          <dd>{balanceKnown ? <CreditAmount value={preparation.balance} /> : "—"}</dd>
         </div>
         <div>
           <dt>{t.imageGeneration.balanceAfterLabel}</dt>
-          <dd><CreditAmount value={balanceAfter} /></dd>
+          <dd>{balanceKnown ? <CreditAmount value={balanceAfter} /> : "—"}</dd>
         </div>
       </dl>
       <Button variant="outline" disabled={isActivating} onClick={onConfirm}>

@@ -3759,5 +3759,15 @@
   "u3758": "Use the newest message for the action you started. Keep verification codes and password-reset links private; do not forward them to anyone.",
   "u3759": "Before requesting another message",
   "u3760": "Give the message time to arrive and check that your mailbox can receive other email. Follow any retry timer or rate-limit message shown by the form. Repeated requests can make it harder to identify the message for your current action.",
-  "u3761": " with the approximate request time, the type of action and your email provider. Never include a password, verification code or password-reset link."
+  "u3761": " with the approximate request time, the type of action and your email provider. Never include a password, verification code or password-reset link.",
+  "u3762": "Review connection status",
+  "u3763": "Planned connection",
+  "u3764": "Available tools",
+  "u3765": "Guided workflows",
+  "u3766": "Planned team capacity",
+  "u3767": "Existing workspace",
+  "u3768": "Project concept",
+  "u3769": "CTV · Digital · Social",
+  "u3770": "Download formats",
+  "u3771": "Dominant color"
 }

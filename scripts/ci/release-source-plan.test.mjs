@@ -20,7 +20,7 @@ const assertFastWebChecks = (plan, pkg) => {
     assert.deepEqual(testChecks[0].args.slice(0, 2), ['node_modules/vitest/vitest.mjs', 'run']);
     assert(testChecks[0].args.slice(2).length >= guards.length);
     assert(testChecks[0].args.slice(2).every(path => path === 'src/app/login/page.test.tsx'
-      || /(?:[.-]contract|server-boundary)\.test\.tsx?$/.test(path)));
+      || /(?:[.-]contract|server-boundary|\.styles)\.test\.tsx?$/.test(path)));
   }
 };
 
@@ -40,6 +40,15 @@ test('CSS edits still execute typography guards read through the filesystem', ()
   const file = 'web/platform/src/features/public-home/PublicHome.module.css';
   const plan = createSourcePlan([file], [...guards, file]);
   assert(commandsFor(plan, 'web/platform').some(c => c.args.includes('src/app/typography.contract.test.ts')));
+});
+
+test('CSS edits execute bounded filesystem style guards without related-test expansion', () => {
+  const file = 'web/platform/src/components/ui/ModeSwitchPanel/ModeSwitchPanel.module.css';
+  const style = 'web/platform/src/features/files/FilePreviewDialog/FilePreviewDialog.styles.test.ts';
+  const plan = createSourcePlan([file], [...guards, file, style]);
+  assert(commandsFor(plan, 'web/platform').some(c => c.args.includes(style.slice('web/platform/'.length))));
+  assert.equal(commandsFor(plan, 'web/platform').some(c => c.args.includes('related')), false);
+  assert.deepEqual(plan.deferredFullSuites, ['web/platform']);
 });
 
 test('new tests and paths with spaces do not expand early tests', () => {
@@ -96,6 +105,19 @@ test('release tooling changes select shared contract and orchestration regressio
   assert(plan.commands.some(c => c.args.includes('scripts/ci/release-contract.test.mjs')));
   assert(plan.commands.some(c => c.args.includes('scripts/ci/test-dev-deploy-preflight.ps1')));
   assert.deepEqual(plan.commands[0], { cwd: '.', command: 'node', args: ['scripts/ci/release-linux-check.mjs'] });
+});
+
+test('shared pricing edits include downstream VK and APIMart quote consumers early', () => {
+  for (const pkg of ['pricingcatalog', 'economycatalog', 'productcatalog', 'videorouter']) {
+    const file = `internal/service/${pkg}/catalog.go`;
+    const plan = createSourcePlan([file], [file]);
+    for (const action of ['test', 'vet']) {
+      const command = plan.commands.find(c => c.command === 'go' && c.args[0] === action);
+      assert(command.args.includes('./internal/adapter/inbound/vk'));
+      assert(command.args.includes('./internal/adapter/provider/apimart'));
+      assert(command.args.includes(`./internal/service/${pkg}`));
+    }
+  }
 });
 
 test('infrastructure admission precedes web checks and reports each affected package once', () => {

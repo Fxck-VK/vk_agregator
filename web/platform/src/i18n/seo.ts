@@ -1,10 +1,11 @@
 import "server-only";
 import type { Metadata, MetadataRoute } from "next";
-import { defaultLocale, locales, type Locale } from "./locales";
+import { defaultLocale, siteLocales, resolveSiteLocale, type Locale } from "./locales";
 import { localizeHref } from "./routing";
 import { publicPageSources } from "@/content/publication/generated";
 import { isIndexablePublication, publishedPublicPages, validatePublication } from "@/content/publication/policy";
 import type { PublicPagePublication, PublicPageSource } from "@/content/publication/types";
+import {contentPublicationSources} from '@/content/templates/catalog';
 
 /** Deployment configuration only: never derive canonical hosts from request headers. */
 export function getPublicOrigin(): string {
@@ -17,7 +18,7 @@ export function getPublicOrigin(): string {
 }
 
 function publicationLanguages(page: PublicPagePublication, origin: string): Record<string, string> {
-  return Object.fromEntries(locales.flatMap(locale => {
+  return Object.fromEntries(siteLocales.flatMap(locale => {
     const path = page.paths[locale];
     return path ? [[locale, origin + localizeHref(path, locale)]] : [];
   }));
@@ -26,7 +27,8 @@ function publicationLanguages(page: PublicPagePublication, origin: string): Reco
 export function publicPageMetadata(locale: Locale, page: PublicPagePublication, now = Date.now()): Metadata {
   validatePublication(page);
   const origin = getPublicOrigin();
-  const path = page.paths[locale];
+  const activeLocale = resolveSiteLocale(locale);
+  const path = page.paths[activeLocale];
   if (!path) throw new Error("Public page has no translation for the requested locale.");
   const index = isIndexablePublication(page, now);
   const languages = publicationLanguages(page, origin);
@@ -34,7 +36,7 @@ export function publicPageMetadata(locale: Locale, page: PublicPagePublication, 
   return {
     robots: { index, follow: index },
     alternates: {
-      canonical: origin + localizeHref(path, locale),
+      canonical: origin + localizeHref(path, activeLocale),
       ...(index ? { languages: { ...languages, ...(defaultPath ? { "x-default": origin + localizeHref(defaultPath, defaultLocale) } : {}) } } : {}),
     },
   };
@@ -44,7 +46,7 @@ export function buildPublicSitemap(sources: readonly PublicPageSource[], now = D
   const origin = getPublicOrigin();
   return publishedPublicPages(sources, now).flatMap(page => {
     const languages = publicationLanguages(page, origin);
-    return locales.flatMap(locale => {
+    return siteLocales.flatMap(locale => {
       const url = languages[locale];
       return url ? [{ url, ...(page.updatedAt ? { lastModified: page.updatedAt } : {}), alternates: { languages } }] : [];
     });
@@ -52,5 +54,5 @@ export function buildPublicSitemap(sources: readonly PublicPageSource[], now = D
 }
 
 export function publicSitemap(): MetadataRoute.Sitemap {
-  return buildPublicSitemap(publicPageSources);
+  return buildPublicSitemap(contentPublicationSources(publicPageSources));
 }

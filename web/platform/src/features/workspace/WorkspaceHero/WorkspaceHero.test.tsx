@@ -17,6 +17,7 @@ import { readPendingConversationBootstrap } from "@/features/conversations/pendi
 import { webBrowserMutation } from "@/lib/web-api/browser";
 import { ru } from "@/i18n/ru";
 import { imageModelFixture } from "@/test/model-catalog";
+import { getCreditAmountLabel } from "@/components/ui/CreditAmount/CreditAmount";
 import { WorkspaceHero } from "./WorkspaceHero";
 
 const push = vi.fn();
@@ -66,6 +67,45 @@ afterEach(() => {
 });
 
 describe("WorkspaceHero model selection", () => {
+  it("shows the price for the visible output count and prepares those same settings", async () => {
+    vi.mocked(webBrowserMutation).mockReturnValue(new Promise(() => {}));
+    renderHero();
+    await selectModel("Nano Banana Pro");
+    const priceLabel = (price: number) => getCreditAmountLabel(price, `${ru.imageGeneration.priceLabel}:`);
+    expect(screen.getByLabelText(priceLabel(30))).toBeVisible();
+    for (const price of [60, 90, 120]) {
+      fireEvent.click(screen.getByRole("button", { name: ru.imageGeneration.increaseOutputCount }));
+      expect(screen.getByLabelText(priceLabel(price))).toBeVisible();
+    }
+    fireEvent.click(screen.getByRole("button", { name: "Разрешение: 2K" }));
+    fireEvent.click(screen.getByRole("radio", { name: "4K" }));
+    expect(screen.getByLabelText(priceLabel(240))).toBeVisible();
+    fireEvent.click(screen.getByRole("button", { name: ru.imageGeneration.decreaseOutputCount }));
+    expect(screen.getByLabelText(priceLabel(180))).toBeVisible();
+    fireEvent.change(screen.getByRole("textbox"), { target: { value: "Три изображения" } });
+    fireEvent.click(screen.getByRole("button", { name: ru.imageGeneration.generate }));
+    expect(JSON.parse(vi.mocked(webBrowserMutation).mock.calls[0][1]!.body as string)).toMatchObject({
+      output_count: 3, image_quality: "4K", aspect_ratio: "16:9",
+    });
+  });
+
+  it("shows authoritative batch prices instead of a second composer's single-image quote", async () => {
+    const model = imageGenerationModel({
+      id: "gpt_image_2_5_sunburst", name: "GPT Image 2.5 Sunburst",
+      quality_options: ["1K"], default_quality: "1K", allowed_aspect_ratios: ["1:1"],
+      max_output_count: 4, price_by_quality: { "1K": 20 },
+      price_by_count: { "1K:1:1:1": 20, "1K:1:1:2": 35, "1K:1:1:3": 50, "1K:1:1:4": 65 },
+      supports_reference_image: false, max_reference_images: 0,
+    });
+    vi.mocked(loadGenerationModelCatalog).mockResolvedValue({ ...catalogue, items: [chatModel, model] });
+    renderHero();
+    await selectModel(model.name);
+    for (const price of [35, 50, 65]) {
+      fireEvent.click(screen.getByRole("button", { name: ru.imageGeneration.increaseOutputCount }));
+      expect(screen.getByLabelText(getCreditAmountLabel(price, `${ru.imageGeneration.priceLabel}:`))).toBeVisible();
+    }
+  });
+
   it("submits the loaded default text model before an image shortcut is selected", async () => {
     renderHero();
     await screen.findByRole("button", { name: `Выбрать модель: ${brandName} Chat` });

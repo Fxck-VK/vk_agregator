@@ -80,6 +80,15 @@ export function TokenTopUpDialog({ onClose }: Readonly<TokenTopUpDialogProps>) {
     attempt.current ??= { request, key: paymentAttemptKey(selectedPackage.code) };
     try {
       const payment = await createPayment(attempt.current.request, attempt.current.key);
+      if (payment.amount !== selectedPackage.amount || payment.credits !== selectedPackage.credits || payment.currency !== selectedPackage.currency) {
+        attempt.current = null;
+        clearPaymentAttempt();
+        if (alive.current) {
+          setError("tokenTopUpDialog.purchaseDetailsHaveChangedSelectThePack");
+          setLoading(true); setCatalog(null); setReload(current => current + 1);
+        }
+        return;
+      }
       savePendingPayment(payment.id); clearPaymentAttempt();
       if (!alive.current) return;
       if (payment.status === "waiting_for_user" && payment.confirmation_url) {

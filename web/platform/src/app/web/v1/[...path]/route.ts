@@ -4,6 +4,7 @@ import { join } from "node:path";
 import {
   isLocalWorkspacePreviewEnabled,
   localWorkspacePreviewChatModels,
+  localWorkspacePreviewConversations,
   localWorkspacePreviewModels,
   localWorkspacePreviewVideoModels,
   localWorkspacePreviewConversationMessages,
@@ -63,9 +64,11 @@ async function handleSource(request: Request): Promise<Response> {
     return Response.json({ error: "Payments require a real authenticated backend" }, { status: 503, headers: { "Cache-Control": "no-store" } });
   }
   if (isLocalWorkspacePreviewEnabled() && request.method === "GET") {
+    if (requestURL.pathname === "/web/v1/conversations") return previewJson({ items: localWorkspacePreviewConversations });
     if (requestURL.pathname === "/web/v1/auth/methods") return previewJson(previewAuthMethods);
     if (requestURL.pathname === "/web/v1/account/sessions") return previewJson({ items: [{ id: "31000000-0000-4000-8000-000000000001", account_id: localWorkspacePreviewProfile.account_id, created_at: "2026-10-01T12:00:00Z", updated_at: "2026-10-01T12:00:00Z", expires_at: "2026-10-31T12:00:00Z", revoked: false, current: true }] });
     if (requestURL.pathname === "/web/v1/payment-products") return previewJson(localWorkspacePreviewPaymentProducts);
+    if (requestURL.pathname === "/web/v1/subscription") return previewJson({ subscription: null, balances: [], checkout_available: false, recurring_available: false });
     if (rawPath === "/web/v1/models") return previewJson(localWorkspacePreviewModels);
     if (rawPath === "/web/v1/video-models") return previewJson(localWorkspacePreviewVideoModels);
     if (rawPath === "/web/v1/chat-models") {

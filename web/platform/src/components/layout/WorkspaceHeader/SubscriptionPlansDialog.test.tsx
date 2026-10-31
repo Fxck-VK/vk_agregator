@@ -3,7 +3,10 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 
 import { SubscriptionPlansDialog } from "./SubscriptionPlansDialog";
 
-afterEach(cleanup);
+const { push } = vi.hoisted(() => ({ push: vi.fn() }));
+vi.mock("next/navigation", () => ({ useRouter: () => ({ push }) }));
+
+afterEach(() => { cleanup(); vi.clearAllMocks(); });
 
 function openPromo() {
   const onClose = vi.fn();
@@ -15,6 +18,61 @@ function openPromo() {
 }
 
 describe("subscription promo dialog", () => {
+  it("opens the Russian pricing page and closes the tariff dialog", () => {
+    const onClose = vi.fn();
+    render(<SubscriptionPlansDialog onClose={onClose} />);
+    fireEvent.click(screen.getByRole("button", { name: "Подробнее о тарифах" }));
+    expect(onClose).toHaveBeenCalledOnce();
+    expect(push).toHaveBeenCalledExactlyOnceWith("/ru/pricing");
+  });
+
+  it("provides actual legal links in the existing footer sentence", () => {
+    render(<SubscriptionPlansDialog onClose={() => {}} />);
+    const agreement = screen.getByRole("link", { name: "пользовательским соглашением" });
+    expect(agreement).toHaveAttribute("href", "/ru/legal/user-agreement");
+    expect(agreement).toHaveAttribute("target", "_blank");
+    expect(agreement).toHaveAttribute("rel", "noopener noreferrer");
+    expect(screen.getByRole("link", { name: "рекуррентными платежами" })).toHaveAttribute("href", "/ru/legal/paid-access");
+    expect(agreement.closest("p")).toHaveTextContent("Покупая подписку, вы соглашаетесь с пользовательским соглашением и рекуррентными платежами.");
+  });
+  it.each([["Start+", "−13%"], ["Pro", "−16%"], ["Ultima", "−23%"], ["Elite", "−28%"]])("calculates the %s badge from the displayed prices without overstating it", (name, discount) => {
+    render(<SubscriptionPlansDialog onClose={() => {}} />);
+    const card = screen.getByRole("heading", { name }).closest("article")!;
+    expect(within(card).getByText(discount)).toBeVisible();
+  });
+  it("preserves the original six-card presentation with features, badges and canonical balances", () => {
+    render(<SubscriptionPlansDialog onClose={() => {}} />);
+    const container = screen.getByRole("dialog", { name: "С подпиской — максимум возможностей" });
+    expect(container.querySelectorAll("article")).toHaveLength(6);
+    expect(screen.getByRole("heading", { name: "Командный тариф" })).toBeVisible();
+    expect(screen.getByText(/Популярное/)).toBeVisible();
+    expect(container.querySelectorAll("del")).toHaveLength(4);
+    expect(screen.getAllByRole("button", { name: "Активировать подписку" })).toHaveLength(5);
+    expect(container.querySelectorAll("li").length).toBeGreaterThan(15);
+    const pro = screen.getByRole("heading", { name: "Pro" }).closest("article")!;
+    expect(pro).toHaveTextContent(/2\s*100/);
+    expect(screen.queryByRole("dialog", { name: "Условия подписки" })).toBeNull();
+  });
+  it("opens payment terms only for the chosen card and returns focus without changing the tariff layout", () => {
+    const onClose = vi.fn();
+    render(<SubscriptionPlansDialog onClose={onClose} />);
+    const pro = screen.getByRole("heading", { name: "Pro" }).closest("article")!;
+    const trigger = within(pro).getByRole("button", { name: "Активировать подписку" });
+    trigger.focus();
+    fireEvent.click(trigger);
+    const checkout = screen.getByRole("dialog", { name: "Условия подписки" });
+    expect(checkout).toHaveTextContent(/Pro.*999/);
+    expect(checkout).toHaveTextContent(/2\s*100/);
+    expect(within(checkout).getByRole("button", { name: "Перейти к оплате" })).toBeDisabled();
+    expect(within(checkout).getByRole("checkbox")).not.toBeChecked();
+    expect(screen.getByTestId("subscription-plans-backdrop")).toHaveAttribute("data-state", "open");
+    fireEvent.keyDown(window, { key: "Escape" });
+    const backdrop = screen.getByTestId("subscription-checkout-backdrop");
+    fireEvent.animationEnd(backdrop, { animationName: "modalBackdropOut" });
+    expect(screen.queryByRole("dialog", { name: "Условия подписки" })).toBeNull();
+    expect(trigger).toHaveFocus();
+    expect(onClose).not.toHaveBeenCalled();
+  });
   it("focuses the input, rejects blank codes and explains unavailable activation", () => {
     openPromo();
     const dialog = screen.getByRole("dialog", { name: "У меня есть промокод" });

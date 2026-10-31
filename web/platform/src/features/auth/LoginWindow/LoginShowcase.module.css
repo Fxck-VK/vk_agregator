@@ -7,7 +7,7 @@
 .showcase:lang(ru) .caption h2 { font-family: inherit; font-weight: var(--font-weight-bold); letter-spacing: -.045em; }
 .caption > p { max-inline-size: 34rem; margin-block: .5rem 0; color: rgb(255 255 255 / 80%); font-size: .75rem; line-height: 1.6; }
 .tabs { position: absolute; z-index: 3; display: flex; gap: .5rem; inset-inline: 1.5rem; inset-block-end: 1.75rem; }
-.tabs button { display: grid; flex: 0 1 5rem; gap: .5rem; min-inline-size: 0; border: 0; padding: .25rem .5rem; background: transparent; color: rgb(255 255 255 / 55%); text-align: start; font-size: .625rem; line-height: 1.6; font-weight: var(--font-weight-medium); text-transform: uppercase; white-space: nowrap; cursor: pointer; }
+.tabs button { display: grid; grid-template-columns: minmax(0, 1fr); flex: 0 1 5rem; gap: .5rem; min-inline-size: 0; border: 0; padding: .25rem .5rem; background: transparent; color: rgb(255 255 255 / 55%); text-align: start; font-size: .625rem; line-height: 1.6; font-weight: var(--font-weight-medium); text-transform: uppercase; white-space: nowrap; cursor: pointer; }
 .tabs button[aria-selected="true"] { color: #fff; }
 .track { position: relative; order: 2; display: block; overflow: hidden; block-size: 4px; border-radius: 2px; background: rgb(255 255 255 / 25%); }
 .track i { display: block; block-size: 100%; background: transparent; }

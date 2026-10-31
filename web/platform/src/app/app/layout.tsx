@@ -69,6 +69,7 @@ export async function WorkspaceSessionContent({ children }: Readonly<{ children:
       <WorkspaceFrame
         initialCatalog={await initialModelCatalog()}
         deferred={session.deferred}
+        deferConversations={developmentTools !== null || session.deferred}
         account={<AccountControl profile={session.profile} />}
         accountId={session.profile.account_id}
         balance={session.balance}

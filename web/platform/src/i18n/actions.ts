@@ -1,10 +1,10 @@
 "use server";
 
 import { cookies } from "next/headers";
-import { localeCookieName, parseLocale } from "./locales";
+import { localeCookieName, parseSiteLocale } from "./locales";
 
 export async function setLocalePreference(input: string) {
-  const locale = parseLocale(input);
+  const locale = parseSiteLocale(input);
   (await cookies()).set(localeCookieName, locale, {
     path: "/",
     sameSite: "lax",

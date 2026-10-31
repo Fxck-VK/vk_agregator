@@ -12,7 +12,7 @@ afterEach(() => { request.locale = "en"; vi.restoreAllMocks(); });
 async function page() { return render(<LocaleProvider locale={request.locale}>{await ToolsPage()}</LocaleProvider>); }
 
 describe("English AI tools overview", () => {
-  it("links to the integration landing while preserving its planned state",async()=>{await page();expect(screen.getByRole("link",{name:"Explore Epifera MCP"})).toHaveAttribute("href","/en/mcp");expect(screen.getAllByText("Connection details are being prepared.")).toHaveLength(8);});
+  it("links to the integration landing while preserving its planned state",async()=>{await page();expect(screen.getByRole("link",{name:"Explore Epifera MCP"})).toHaveAttribute("href","/ru/mcp");expect(screen.getAllByText("Connection details are being prepared.")).toHaveLength(8);});
   it.each(["en", "ru"] as const)("keeps %s draft and outside the sitemap", async locale => {
     request.locale = locale;
     expect((await generateMetadata()).robots).toEqual({ index: false, follow: false });
@@ -67,7 +67,7 @@ describe("English AI tools overview", () => {
     const trigger = screen.getByRole("button", { name: /After Effects/ });
     trigger.focus(); fireEvent.click(trigger);
     expect(screen.getByRole("dialog", { name: "After Effects" })).toBeInTheDocument();
-    expect(within(screen.getByRole("dialog")).getByRole("link", { name: "Explore available tools" })).toHaveAttribute("href", "/en/ai#tools");
+    expect(within(screen.getByRole("dialog")).getByRole("link", { name: "Explore available tools" })).toHaveAttribute("href", "/ru/ai#tools");
     fireEvent.keyDown(window, { key: "Escape" });
     fireEvent.animationEnd(screen.getByTestId("landing-dialog-backdrop"));
     expect(screen.queryByRole("dialog")).not.toBeInTheDocument();

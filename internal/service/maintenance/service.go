@@ -27,6 +27,7 @@ const (
 	defaultJobErrorAggregateLookback  = 30 * 24 * time.Hour
 	defaultAnalyticsAggregateLookback = 7 * 24 * time.Hour
 	defaultWebReferralCleanupLimit    = 1000
+	defaultCreditLotExpiryLimit       = 100
 )
 
 // Store is the database-side maintenance contract.
@@ -51,6 +52,10 @@ type Store interface {
 	MarkMediaCleanupDeleted(ctx context.Context, candidate domain.MediaCleanupCandidate) error
 	ProductActiveUserCounts(ctx context.Context, since time.Time) ([]domain.ProductActiveUserCount, error)
 	BalanceMismatches(ctx context.Context, limit int) ([]domain.BalanceMismatch, error)
+}
+
+type creditLotExpirer interface {
+	ExpireCreditLots(context.Context, time.Time, int) (int64, error)
 }
 
 type webReferralVisitCleaner interface {
@@ -235,9 +240,19 @@ func (s *Service) runReconciliation(ctx context.Context) {
 }
 
 // Cleanup deletes expired idempotency keys, terminal outbox rows past retention
-// and trims Redis stream backlog.
+// and trims Redis stream backlog. Optional credit-lot expiry appends billing
+// adjustments through its repository; financial ledger history is retained.
 func (s *Service) Cleanup(ctx context.Context) error {
 	now := s.now()
+	var creditLotsExpired int64
+	if expirer, ok := s.store.(creditLotExpirer); ok {
+		var err error
+		creditLotsExpired, err = expirer.ExpireCreditLots(ctx, now, defaultCreditLotExpiryLimit)
+		if err != nil {
+			return err
+		}
+		metrics.MaintenanceDeleted.WithLabelValues("credit_lots_expired").Add(float64(creditLotsExpired))
+	}
 	idemDeleted, err := s.store.CleanupExpiredIdempotencyKeys(ctx, now)
 	if err != nil {
 		return err
@@ -306,7 +321,7 @@ func (s *Service) Cleanup(ctx context.Context) error {
 		return err
 	}
 	metrics.MaintenanceDeleted.WithLabelValues("web_referral_visits").Add(float64(webReferralVisitsDeleted))
-	if idemDeleted > 0 || outboxDeleted > 0 || mediaExpired > 0 || mediaDeleted > 0 ||
+	if creditLotsExpired > 0 || idemDeleted > 0 || outboxDeleted > 0 || mediaExpired > 0 || mediaDeleted > 0 ||
 		jobErrorsAggregated > 0 || dailyAnalyticsRefreshed > 0 || jobEventsDeleted > 0 ||
 		providerPayloadsExpired > 0 || providerPayloadsRedacted > 0 ||
 		conversationExpired > 0 || conversationRedacted > 0 ||
@@ -315,6 +330,7 @@ func (s *Service) Cleanup(ctx context.Context) error {
 		webReferralVisitsDeleted > 0 ||
 		commandsExpired > 0 || commandsRedacted > 0 {
 		s.log.InfoContext(ctx, "maintenance cleanup completed",
+			"credit_lots_expired", creditLotsExpired,
 			"idempotency_keys_deleted", idemDeleted,
 			"outbox_events_deleted", outboxDeleted,
 			"job_errors_aggregated", jobErrorsAggregated,

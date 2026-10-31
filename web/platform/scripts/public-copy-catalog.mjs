@@ -32,7 +32,10 @@ for(const file of files){
     if(/\uFFFD/.test(row.ru+row.back))errors.push(`${row.id}: invalid encoding`);
     const tokens=text=>(text.match(/\{[a-zA-Z][a-zA-Z0-9_]*\}/g)||[]).sort().join('|');
     if(tokens(source)!==tokens(row.ru)||tokens(source)!==tokens(row.back))errors.push(`${row.id}: message parameters changed`);
-    const numbers=text=>(text.match(/\d+(?:[.,]\d+)*/g)||[]).map(token=>token.replace(',','.')).join('|');
+    const numbers=text=>(text.match(/\d+(?:(?:[.,]\d+)|(?:[ \u00a0\u202f]\d{3}(?!\d)))*/g)||[]).map(token=>{
+      const compact=token.replace(/[ \u00a0\u202f]/g,'');
+      return /^[1-9]\d{0,2}(?:,\d{3})+(?:\.\d+)?$/.test(compact)?compact.replaceAll(',',''):compact.replaceAll(',','.');
+    }).join('|');
     if(numbers(source)!==numbers(row.ru))errors.push(`${row.id}: numbers changed`);
     for(const edge of [/^\s*/,/\s*$/])if(source.match(edge)[0]!==row.ru.match(edge)[0])errors.push(`${row.id}: inline whitespace changed`);
     output[row.id]=row.ru;

@@ -18,7 +18,7 @@ import {usePublicCopy} from "@/i18n/public/use-public-copy";
 
 
 export function EventLanding(){
-  const {t,aiToolsEn,homeEn,media,eventProject} = usePublicCopy(publicCopySourcesForLocale);
+  const {t,aiToolsEn,homeEn,media,eventProject} = usePublicCopy(publicCopySourcesForLocale,{"eventProject":"eventProject","t":"eventProjectEn","media":"eventProjectReference"});
 
   const[dialog,setDialog]=useState<EventDialogKind|'search'|null>(null);
   const root=useRef<HTMLDivElement>(null),opener=useRef<HTMLElement|null>(null),open=dialog!==null;

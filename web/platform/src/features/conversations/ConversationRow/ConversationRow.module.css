@@ -25,6 +25,7 @@
   overflow: hidden;
   border-radius: var(--radius-sm);
   padding: var(--space-2) var(--space-3);
+  padding-inline-end: var(--space-1);
   color: var(--color-text-muted);
   font-size: var(--font-size-ui);
   font-weight: var(--font-weight-regular);
@@ -159,10 +160,29 @@
 
 .inlineRenameFeedback {
   grid-column: 1 / -1;
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  min-inline-size: 0;
+  align-items: start;
   gap: var(--space-2);
+  padding-inline: var(--space-3);
+  padding-block-end: var(--space-3);
+}
+
+.inlineRenameFeedback > button {
+  justify-self: start;
+  max-inline-size: 100%;
+}
+
+.errorNotice.errorNotice {
+  grid-column: 1 / -1;
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  align-items: start;
+  gap: var(--space-2);
+}
+
+.hiddenFailure {
   padding-inline: var(--space-3);
 }
 
@@ -193,8 +213,43 @@
 }
 
 @media (hover: hover) and (pointer: fine) {
-  .actionToggle { opacity: 0; }
+  .row {
+    grid-template-columns: minmax(0, 1fr) 0;
+    column-gap: 0;
+    transition:
+      box-shadow var(--motion-fast),
+      grid-template-columns var(--motion-fast);
+  }
+
+  .actionToggle {
+    opacity: 0;
+    min-inline-size: 0;
+    inline-size: 100%;
+    padding-inline: 0;
+    overflow: hidden;
+    pointer-events: none;
+    transition: opacity var(--motion-fast);
+  }
+
+  .row:where(:has(.actionToggle):is(:hover, :focus-within, [data-panel-open="true"])) {
+    grid-template-columns: minmax(0, 1fr) 2.25rem;
+  }
+
+  .row:where(:has(.actionToggle):is(:hover, :focus-within, [data-panel-open="true"])) .link {
+    padding-inline-end: 0;
+  }
+
   .row:hover .actionToggle,
   .row[data-panel-open="true"] .actionToggle,
-  .actions:focus-within .actionToggle { opacity: 1; }
+  .row:focus-within .actionToggle,
+  .actions:focus-within .actionToggle {
+    opacity: 1;
+    pointer-events: auto;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .row { transition: box-shadow var(--motion-fast); }
+
+  .actionToggle { transition: none; }
 }

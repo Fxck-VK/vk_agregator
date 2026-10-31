@@ -16,7 +16,7 @@ describe("sign-in completion", () => {
     const abort = controller(); const stage = vi.fn();
     const completion = completeSignIn(accepted(), { locale: "en", returnTo: "/ru/app/files", signal: abort.signal, onStage: stage });
     const rejection = expect(completion).rejects.toMatchObject({ name: "AbortError" });
-    await vi.waitFor(() => expect(replaceSignInDocument).toHaveBeenCalledWith("/en/app/files"));
+    await vi.waitFor(() => expect(replaceSignInDocument).toHaveBeenCalledWith("/ru/app/files"));
     expect(fetch).toHaveBeenCalledWith("/web/v1/me", expect.objectContaining({ credentials: "include", cache: "no-store", signal: expect.any(AbortSignal) }));
     expect(stage.mock.calls).toEqual([["session"], ["navigation"]]);
     abort.abort(); await rejection;

@@ -32,7 +32,7 @@ describe("Marketing audience landing", () => {
     const first=screen.getByRole('tab',{name:'Campaigns'});first.focus();fireEvent.keyDown(first,{key:'End'});expect(screen.getByRole('tab',{name:'Audiences'})).toHaveFocus();expect(screen.getByRole('tabpanel',{name:'Audiences'})).toBeVisible();
   });
   it("opens a local guide and closes it with focus returned to the trigger",async()=>{
-    await page();const trigger=screen.getByRole('button',{name:'Apply different styles to your images'});trigger.focus();fireEvent.click(trigger);const dialog=screen.getByRole('dialog',{name:'Apply different styles to your images'});expect(dialog.querySelectorAll('li')).toHaveLength(3);expect(dialog).toHaveTextContent('Magnific reference artwork');expect(within(dialog).getByRole('link',{name:'Open image generator'})).toHaveAttribute('href','/en/app/image');expect(dialog.querySelector('video,iframe')).toBeNull();
+    await page();const trigger=screen.getByRole('button',{name:'Apply different styles to your images'});trigger.focus();fireEvent.click(trigger);const dialog=screen.getByRole('dialog',{name:'Apply different styles to your images'});expect(dialog.querySelectorAll('li')).toHaveLength(3);expect(dialog).toHaveTextContent('Magnific reference artwork');expect(within(dialog).getByRole('link',{name:'Open image generator'})).toHaveAttribute('href','/ru/app/image');expect(dialog.querySelector('video,iframe')).toBeNull();
     fireEvent.keyDown(window,{key:'Escape'});fireEvent.animationEnd(screen.getByTestId('landing-dialog-backdrop'));expect(screen.queryByRole('dialog')).not.toBeInTheDocument();expect(trigger).toHaveFocus();
   });
   it("shows unsupported standalone tools as planned without fake launch links",async()=>{

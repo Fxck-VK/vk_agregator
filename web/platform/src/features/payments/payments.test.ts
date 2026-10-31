@@ -11,6 +11,20 @@ describe("web payments", () => {
   vi.mocked(webBrowserFetch).mockResolvedValue(Response.json({ items: [{ code: "server-package", amount: 12345, currency: "RUB", credits: 777 }], checkout_available: true }));
   expect((await loadPaymentProducts()).items[0]).toEqual({ code: "server-package", amount: 12345, currency: "RUB", credits: 777 });
  });
+ it("normalizes the Go API rub currency in the server catalog", async () => {
+  vi.mocked(webBrowserFetch).mockResolvedValue(Response.json({ items: [{ code: "server-package", amount: 12345, currency: "rub", credits: 777 }], checkout_available: true }));
+  expect((await loadPaymentProducts()).items[0].currency).toBe("RUB");
+ });
+ it("accepts and normalizes actual Go API checkout and status responses", async () => {
+  vi.mocked(webBrowserMutation).mockResolvedValue(Response.json({ ...payment, currency: "rub" }));
+  expect((await createPayment({ product_code: "server-package" }, id)).currency).toBe("RUB");
+  vi.mocked(webBrowserFetch).mockResolvedValue(Response.json({ ...payment, currency: "rub" }));
+  expect((await getPayment(id)).currency).toBe("RUB");
+ });
+ it.each(["USD", "eur", "credits", "RuB"])("rejects unsupported server payment currency %s", async (currency) => {
+  vi.mocked(webBrowserFetch).mockResolvedValue(Response.json({ ...payment, currency }));
+  await expect(getPayment(id)).rejects.toThrow();
+ });
  it("sends only the product with a stable idempotency key", async () => {
   vi.mocked(webBrowserMutation).mockResolvedValue(Response.json(payment));
   await createPayment({ product_code: "server-package" }, id);

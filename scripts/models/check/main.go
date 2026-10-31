@@ -11,6 +11,7 @@ import (
 	"path/filepath"
 
 	"vk-ai-aggregator/internal/service/modelcontract"
+	"vk-ai-aggregator/internal/service/productcatalog"
 	"vk-ai-aggregator/internal/service/providermodels"
 )
 
@@ -78,6 +79,17 @@ func run(args []string, out, errors io.Writer) int {
 		fmt.Fprintln(errors, err)
 		return 1
 	}
+	catalog, err := productcatalog.WorkspacePreviewCatalog()
+	if err != nil {
+		fmt.Fprintln(errors, err)
+		return 1
+	}
+	economics, err := productcatalog.AuditWorkspaceEconomy(catalog)
+	if err != nil {
+		fmt.Fprintln(errors, err)
+		return 1
+	}
+	fmt.Fprintf(out, "economy: %d models, %d quotes checked\n", len(economics.Models), economics.QuotesChecked)
 	for _, b := range r.Bindings() {
 		status := "legacy-unverified"
 		if _, exists := r.Contracts[b.PublicID]; exists {

@@ -306,6 +306,31 @@ describe("ScrollArea", () => {
     expect(edgeWheel.defaultPrevented).toBe(false);
   });
 
+  it.each([
+    { scrollLeft: 599.8, deltaY: 80 },
+    { scrollLeft: 0.2, deltaY: -80 },
+  ])("releases the wheel at a fractional horizontal edge ($scrollLeft)", ({ scrollLeft, deltaY }) => {
+    render(<ScrollArea orientation="horizontal" viewportProps={{ "data-testid": "scroll-viewport" }} />);
+    const viewport = screen.getByTestId("scroll-viewport");
+    const track = screen.getByTestId("floating-scrollbar-track");
+    setHorizontalScrollMetrics(viewport, track, { clientWidth: 200, scrollWidth: 800, scrollLeft });
+    const wheel = new WheelEvent("wheel", { bubbles: true, cancelable: true, deltaY });
+    viewport.dispatchEvent(wheel);
+    expect(wheel.defaultPrevented).toBe(false);
+    expect(viewport.scrollLeft).toBe(scrollLeft);
+  });
+
+  it("preserves fractional wheel movement away from an edge", () => {
+    render(<ScrollArea orientation="horizontal" viewportProps={{ "data-testid": "scroll-viewport" }} />);
+    const viewport = screen.getByTestId("scroll-viewport");
+    const track = screen.getByTestId("floating-scrollbar-track");
+    setHorizontalScrollMetrics(viewport, track, { clientWidth: 200, scrollWidth: 800, scrollLeft: 100 });
+    const wheel = new WheelEvent("wheel", { bubbles: true, cancelable: true, deltaY: 0.5 });
+    viewport.dispatchEvent(wheel);
+    expect(wheel.defaultPrevented).toBe(true);
+    expect(viewport.scrollLeft).toBe(100.5);
+  });
+
   it.each(["floating-scrollbar-track", "floating-scrollbar-thumb"])(
     "scrolls over %s without moving focus from another panel",
     (targetTestId) => {

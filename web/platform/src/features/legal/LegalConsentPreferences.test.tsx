@@ -10,7 +10,7 @@ const status = { ...meta, accepted: false, marketing_opt_in: false, marketing_av
 afterEach(() => { cleanup(); vi.resetAllMocks(); });
 it("keeps localized documents linked in the registration notice", () => {
   render(<LocaleProvider locale="en"><LegalNotice /></LocaleProvider>);
-  expect(screen.getByRole("link", { name: "User agreement" })).toHaveAttribute("href", "/en/legal/user-agreement");
+  expect(screen.getByRole("link", { name: "User agreement" })).toHaveAttribute("href", "/ru/legal/user-agreement");
 });
 it("keeps advertising an unchecked independent profile choice", async () => {
   vi.mocked(webBrowserFetch).mockResolvedValue(Response.json(status));

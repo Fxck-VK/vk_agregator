@@ -4,12 +4,12 @@ import { getPublicOrigin, publicPageMetadata, publicSitemap } from "./seo";
 import { homePublication } from "@/app/(public)/publication";
 
 afterEach(() => vi.unstubAllEnvs());
-it("uses configured origin, self canonicals and reciprocal language links", () => {
+it("uses configured origin and only Russian canonicals and language links", () => {
   vi.stubEnv("WEB_ORIGIN", "https://platform.example");
   for (const locale of ["ru", "en"] as const) {
     expect(publicPageMetadata(locale, { ...homePublication, status: "published", indexing: "index" }).alternates).toEqual({
-      canonical: `https://platform.example/${locale}`,
-      languages: { ru: "https://platform.example/ru", en: "https://platform.example/en", "x-default": "https://platform.example/ru" },
+      canonical: "https://platform.example/ru",
+      languages: { ru: "https://platform.example/ru", "x-default": "https://platform.example/ru" },
     });
   }
 });

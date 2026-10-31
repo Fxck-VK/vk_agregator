@@ -15,7 +15,7 @@ const source = "https://www.magnific.com/ai/image-generator#numbers";
 type Chart = NonNullable<(typeof reference.stats)[number]["chart"]>;
 
 function ResearchChart({ chart, grouped }: { chart: Chart; grouped: boolean }) {
-  const {copy} = usePublicCopy(publicCopySourcesForLocale);
+  const {copy} = usePublicCopy(publicCopySourcesForLocale,{"imageGeneratorEn":"imageGeneratorEn","reference":"imageGeneratorReferenceEn","copy":"imageGeneratorEn.study"});
 
   const max = Math.max(...chart.rows.map(row => parseFloat(row.value)));
   return <figure className={styles.studyFigure}><figcaption className={styles.studyFigCaption}>{chart.title}</figcaption>{grouped ? <div className={styles.studySeriesLegend}><span className={styles.studySeriesLegendItem}><span className={`${styles.studySeriesDot} ${styles.studySeriesDotTeam}`} />{copy.team}</span><span className={styles.studySeriesLegendItem}><span className={`${styles.studySeriesDot} ${styles.studySeriesDotIndividual}`} />{copy.individual}</span></div> : null}
@@ -23,19 +23,19 @@ function ResearchChart({ chart, grouped }: { chart: Chart; grouped: boolean }) {
   </figure>;
 }
 function ResearchBanner() {
-  const {copy} = usePublicCopy(publicCopySourcesForLocale);
+  const {copy} = usePublicCopy(publicCopySourcesForLocale,{"imageGeneratorEn":"imageGeneratorEn","reference":"imageGeneratorReferenceEn","copy":"imageGeneratorEn.study"});
 
   return <aside className={styles.studyBlockInline}><div><p className={styles.studyBlockEyebrow}>{copy.business.eyebrow}</p><p className={styles.studyBlockInlineHeadline}>{copy.business.title}</p><ul className={styles.studyBlockPoints}>{copy.business.points.map(point => <li key={point}><span className={styles.studyBlockDot} />{point}</li>)}</ul><p className={styles.studyBlockMicro}>{copy.business.note}</p></div><div className={styles.studyBlockInlineCtas}><a href={source} target="_blank" rel="noreferrer" className={styles.studyCtaOutlineDark}>{copy.business.action}</a><Link href="/app/models" className={styles.studyCtaTextDark}>{copy.business.secondary}</Link></div></aside>;
 }
 function CanvasBanner() {
-  const {copy} = usePublicCopy(publicCopySourcesForLocale);
+  const {copy} = usePublicCopy(publicCopySourcesForLocale,{"imageGeneratorEn":"imageGeneratorEn","reference":"imageGeneratorReferenceEn","copy":"imageGeneratorEn.study"});
 
   return <aside className={styles.studyBlockFeature}><div><p className={styles.studyBlockEyebrowLight}>{copy.canvas.eyebrow}</p><p className={styles.studyBlockFeatureHeadline}>{copy.canvas.title}</p><p className={styles.studyBlockFeatureBody}>{copy.canvas.body}</p><p className={styles.studyBlockFeatureBodyStrong}>{copy.canvas.strong}</p><div className={styles.studyBlockFeatureCtas}><a href={source} target="_blank" rel="noreferrer" className={styles.studyCtaMaroon}>{copy.canvas.action}</a><Link href="#models" className={styles.studyCtaTextMaroon}>{copy.canvas.secondary}</Link></div></div><div className={styles.studyBlockFeatureVisual} aria-hidden="true">{["studyCanvasThumbA","studyCanvasThumbB","studyCanvasThumbHero","studyCanvasThumbC","studyCanvasThumbD","studyCanvasAvatarPurple","studyCanvasAvatarMaroon","studyCanvasAvatarAmber"].map(name => <span key={name} className={styles[name]} />)}</div></aside>;
 }
 export function ImageGeneratorStudy() {
   const publicCopyLocale=useLocale();
 
-  const {copy,reference} = usePublicCopy(publicCopySourcesForLocale);
+  const {copy,reference} = usePublicCopy(publicCopySourcesForLocale,{"imageGeneratorEn":"imageGeneratorEn","reference":"imageGeneratorReferenceEn","copy":"imageGeneratorEn.study"});
 
   return <section id="numbers" className={styles.chapter} aria-labelledby="numbers-title"><p className={styles.eyebrow}>{copy.eyebrow}</p><h2 id="numbers-title" className={styles.chapterTitle}>{copy.title}</h2><p className={styles.sourceAttribution}>{copy.source} <a href={source} target="_blank" rel="noreferrer">{copy.link}</a></p><div className={styles.numbersBlock}><div className={`${styles.studyChapter} ${styles.studyChapterEmbedded}`}><div className={styles.studyInner}>
     <div className={styles.studyOpening}><p className={styles.studyHeroFigure}>+60<span className={styles.studyHeroFigureUnit}>%</span></p><div className={styles.studyOpeningBody}><p className={styles.studyKicker}>{copy.title}</p><h3 className={styles.studyTitle}>{copy.title2}</h3></div></div><p className={styles.studyLead}>{copy.lead}</p><p className={styles.studyLead}>{copy.lead2}</p><div className={styles.studyLegend}><span className={`${styles.studyLegendItem} ${styles.studyLegendMeasured}`}>{copy.measured}</span><span className={`${styles.studyLegendItem} ${styles.studyLegendEditorial}`}>{copy.editorial}</span></div><ResearchBanner />

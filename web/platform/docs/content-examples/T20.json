@@ -1,0 +1,362 @@
+{
+  "id": "page-t20",
+  "template": "T20",
+  "path": "/customers/football-campaign",
+  "locale": "ru",
+  "status": "draft",
+  "indexing": "noindex",
+  "seo": {
+    "title": "Разбор стороннего клиентского кейса об ИИ-продакшене от Epifera",
+    "description": "Изучите структуру истории кампании из референса: задачу, творческий процесс, результаты по данным источника и участников производства."
+  },
+  "relatedIds": [],
+  "content": {
+    "customerStoryEn": {
+      "metadata": {
+        "title": "Разбор стороннего клиентского кейса об ИИ-продакшене от Epifera",
+        "description": "Изучите структуру истории кампании из референса: задачу, творческий процесс, результаты по данным источника и участников производства."
+      },
+      "skip": "Перейти к истории",
+      "category": "История клиента · разбор референса",
+      "project": "Billy Boman AI Productions × Ritual Labs | 2026",
+      "title": "Как команда ИИ-производства воплотила кампанию к чемпионату мира по футболу",
+      "subtitle": "Разбор референса футбольной кампании Lenovo, в которой производство с ИИ сочеталось с работой арт-директора.",
+      "referenceNotice": "Кейс из референса Magnific. Команда производства и результаты относятся к этому источнику; это не история клиента Epifera.",
+      "intro": "Архивный кейс Magnific рассказывает о работе Billy Boman AI Productions и Ritual Labs над тремя роликами кампании Lenovo для восьми рынков. Эта страница изучает производственный процесс и его подачу с явным указанием исходной команды и источника.",
+      "atGlance": "Кратко",
+      "reportedMetrics": "Данные приведены Magnific; Epifera не проводила их независимую проверку.",
+      "facts": [
+        {
+          "label": "Бренд",
+          "value": "Lenovo"
+        },
+        {
+          "label": "Производственная студия",
+          "value": "Billy Boman AI Productions"
+        },
+        {
+          "label": "Партнёр",
+          "value": "Ritual Labs"
+        },
+        {
+          "label": "Кампания",
+          "value": "FIFA World Cup 2026"
+        },
+        {
+          "label": "Отрасль",
+          "value": "Creative production"
+        },
+        {
+          "label": "Распространение",
+          "value": "CTV · Digital · Social"
+        }
+      ],
+      "sourceDetails": "Об этом референсе",
+      "sourceTitle": "Источник референса и указание авторства",
+      "originalStory": "Прочитать оригинальную историю Magnific",
+      "sourceCapture": "Архив сохранён 23 октября 2026 года",
+      "sourceNote": "Изображения, оригинальные фильмы и список участников производства относятся к кейсу Magnific. Коммерческие права, гарантии и корпоративные функции, описанные первоначальным издателем, не являются обещаниями Epifera.",
+      "business": "Познакомиться с Epifera для команд",
+      "films": [
+        {
+          "id": "52PPkrPZXb8",
+          "key": "behind-scenes",
+          "title": "За кадром",
+          "description": "Оригинальный разбор кампании · Magnific"
+        },
+        {
+          "id": "PvxSc664rO4",
+          "key": "spot-1",
+          "title": "Ролик кампании I",
+          "description": "Оригинальный ролик кампании Lenovo"
+        },
+        {
+          "id": "AMFsy4aNvfw",
+          "key": "spot-2",
+          "title": "Ролик кампании II",
+          "description": "Оригинальный ролик кампании Lenovo"
+        },
+        {
+          "id": "jDw8tLezR_E",
+          "key": "spot-3",
+          "title": "Ролик кампании III",
+          "description": "Оригинальный ролик кампании Lenovo"
+        }
+      ],
+      "watchOriginal": "Смотреть оригинал на YouTube",
+      "outboundNote": "Открывает оригинальное видео на YouTube.",
+      "sections": [
+        {
+          "id": "challenge",
+          "label": "Задача",
+          "title": "Начните с движения",
+          "body": "Источник называет футбольную динамику главной производственной задачей: правдоподобные игроки, движение камеры и переходы должны были складываться в единое целое.",
+          "note": "Для нового брифа сначала определите самый сложный кадр. Короткий тест поможет выявить ограничения до разработки всей последовательности."
+        },
+        {
+          "id": "craft",
+          "label": "Мастерство",
+          "title": "Создайте цельный визуальный мир",
+          "body": "Кейс сочетает стилизованную художественную постановку, выбранные референсы, ИИ-видео и традиционную финальную обработку. За творческие решения по-прежнему отвечали люди.",
+          "note": "Держите небольшой набор референсов по свету, костюмам, кадрированию и фактуре. Оценивайте последовательность целиком, а не только отдельные кадры."
+        },
+        {
+          "id": "process",
+          "label": "За кадром",
+          "title": "Свяжите референсы, правки и проверку",
+          "body": "Команда, работавшая над оригинальной кампанией, использовала Magnific, чтобы организовывать работу с изображениями и видео, сравнивать итерации и обмениваться обратной связью.",
+          "note": "Полезная проверка должна определять желаемое изменение, опорный кадр и причину решения. Зафиксируйте выбранную версию перед следующей итерацией."
+        },
+        {
+          "id": "result",
+          "label": "Результат",
+          "title": "Изучайте результат в исходном контексте",
+          "body": "Magnific сообщает о трёх фильмах, восьми рынках и сокращении сроков и затрат производства. Эти цифры описывают кампанию из источника.",
+          "note": "Для будущего кейса Epifera зафиксируйте реальную исходную точку, объём работ, даты и разрешение на публикацию. Отделяйте измеренные результаты от оценок и редакционных трактовок."
+        }
+      ],
+      "takeaways": [
+        {
+          "text": "Чёткая визуальная концепция помогает понять, какой вопрос нужно решить на каждой итерации.",
+          "label": "Редакционный вывод · Epifera"
+        },
+        {
+          "text": "Воспринимайте референс как исходные данные для решения, а не как обещание итогового результата.",
+          "label": "Редакционный вывод · Epifera"
+        },
+        {
+          "text": "Полезный разбор кейса связывает задачу, решения и доказательства.",
+          "label": "Редакционный вывод · Epifera"
+        }
+      ],
+      "gallery": {
+        "title": "Референсы производства",
+        "viewer": "Галерея референсов кампании",
+        "previous": "Предыдущее изображение-референс",
+        "next": "Следующее изображение-референс",
+        "thumbnails": "Миниатюры референсов кампании",
+        "note": "Изображения из архивного кейса Magnific.",
+        "items": [
+          {
+            "id": "references",
+            "title": "Работа над кадром с помощью референсов",
+            "alt": "Рабочее пространство кампании Magnific с визуальными референсами"
+          },
+          {
+            "id": "frames",
+            "title": "Доработка кадра в сравнении с другими кадрами",
+            "alt": "Опорные кадры в интерфейсе Magnific"
+          },
+          {
+            "id": "celebration",
+            "title": "Кадр из готовой кампании",
+            "alt": "Референс кампании с празднующими болельщиками"
+          }
+        ]
+      },
+      "creditsTitle": "Участники производства",
+      "creditsNote": "Некоторые участники исходной кампании по списку Magnific.",
+      "credits": [
+        {
+          "company": "Billy Boman AI Productions",
+          "people": [
+            {
+              "role": "AI Lead",
+              "name": "Billy Boman"
+            },
+            {
+              "role": "Head of Studio",
+              "name": "Monika Karczanowska"
+            },
+            {
+              "role": "Asst. AI Lead",
+              "name": "Neda Modiri Sadejou"
+            },
+            {
+              "role": "Asst. AI Artist",
+              "name": "Julian Martorell"
+            },
+            {
+              "role": "Retouch",
+              "name": "Philip Cederman"
+            }
+          ]
+        },
+        {
+          "company": "Ritual Labs",
+          "people": [
+            {
+              "role": "Exec Producer",
+              "name": "Matthew Pfeffer"
+            },
+            {
+              "role": "Exec Producer",
+              "name": "Danny Yourd"
+            },
+            {
+              "role": "Post Producer",
+              "name": "Germaine Putz"
+            },
+            {
+              "role": "Editor",
+              "name": "Steve Davis"
+            },
+            {
+              "role": "Color",
+              "name": "Brandon Jones / Swatch Four"
+            }
+          ]
+        },
+        {
+          "company": "Lenovo",
+          "people": [
+            {
+              "role": "Art Director",
+              "name": "Chris Stollmeyer"
+            },
+            {
+              "role": "Copywriter",
+              "name": "Brandon Willingham"
+            },
+            {
+              "role": "Creative Dir.",
+              "name": "Owen Tingle"
+            },
+            {
+              "role": "Creative Dir.",
+              "name": "Justin Baum"
+            },
+            {
+              "role": "Producer",
+              "name": "Koree Sharma"
+            }
+          ]
+        }
+      ],
+      "closing": {
+        "label": "Epifera для команд",
+        "title": "Сформируйте следующий творческий процесс",
+        "description": "Изучите доступные инструменты и планируемую командную конфигурацию. Начните с понятного брифа и обсудите нужные вашей команде возможности.",
+        "watch": "Смотреть референс платформы",
+        "videoTitle": "Референсное видео платформы Magnific",
+        "videoNote": "Оригинальные кадры платформы Magnific из архивного кейса. Они не демонстрируют работающие корпоративные функции Epifera.",
+        "tags": [
+          "Творческие инструменты",
+          "Руководства по рабочим процессам",
+          "Планируемый командный доступ",
+          "Понятные требования"
+        ]
+      },
+      "controls": {
+        "heroAlt": "Изображение стадиона из кейса Magnific и Billy Boman",
+        "facts": "Факты кейса",
+        "close": "Закрыть",
+        "search": "Найти или создать",
+        "pricing": "Тарифы",
+        "previous": "Назад",
+        "next": "Далее",
+        "gallery": "Изображения процесса создания кампании",
+        "reference": "Референс Magnific",
+        "enlarge": "Увеличить",
+        "source": "Цитата из источника",
+        "editorial": "Редакционный вывод"
+      }
+    },
+    "footballCaseStudy": {
+      "id": "football-campaign",
+      "status": "reference",
+      "isEpiferaCustomer": false,
+      "client": "Billy Boman AI Productions",
+      "industry": "Производство креативного контента",
+      "challenge": "Правдоподобно передать футбольную динамику в кампании для нескольких рынков.",
+      "solution": "Объединить производство с ИИ на основе референсов с работой арт-директора и постпродакшеном.",
+      "results": {
+        "verifiedByEpifera": false,
+        "metrics": [
+          {
+            "value": "~50%",
+            "label": "Заявленное сокращение сроков"
+          },
+          {
+            "value": "~60%",
+            "label": "Заявленное снижение затрат"
+          },
+          {
+            "value": "3",
+            "label": "Ролики кампании"
+          },
+          {
+            "value": "8",
+            "label": "Рынки"
+          }
+        ]
+      },
+      "quote": {
+        "text": "Самым сложным был не масштаб, а движение. Футбол — это динамика.",
+        "author": "Billy Boman",
+        "role": "Руководитель креативного направления · Billy Boman AI Productions"
+      },
+      "source": {
+        "publisher": "Magnific",
+        "url": "https://www.magnific.com/customers/billyboman",
+        "capturedOn": "2026-10-23"
+      }
+    },
+    "customerStoryReference": {
+      "hero": {
+        "src": "/assets/images/customer-story/hero.webp",
+        "width": 626,
+        "height": 470
+      },
+      "portrait": {
+        "src": "/assets/images/customer-story/portrait.avif",
+        "width": 88,
+        "height": 88
+      },
+      "gallery-1": {
+        "src": "/assets/images/customer-story/gallery-1.webp",
+        "width": 626,
+        "height": 352
+      },
+      "gallery-2": {
+        "src": "/assets/images/customer-story/gallery-2.avif",
+        "width": 626,
+        "height": 352
+      },
+      "gallery-3": {
+        "src": "/assets/images/customer-story/gallery-3.webp",
+        "width": 626,
+        "height": 352
+      },
+      "closing": {
+        "src": "/assets/images/customer-story/closing.avif",
+        "width": 626,
+        "height": 370
+      },
+      "video": {
+        "src": "/assets/videos/customer-story/platform-reference.webm",
+        "poster": "/assets/images/customer-story/closing.avif"
+      },
+      "behind-scenes": {
+        "src": "/assets/images/customer-story/behind-scenes.webp",
+        "width": 1280,
+        "height": 720
+      },
+      "spot-1": {
+        "src": "/assets/images/customer-story/spot-1.webp",
+        "width": 1280,
+        "height": 720
+      },
+      "spot-2": {
+        "src": "/assets/images/customer-story/spot-2.webp",
+        "width": 1280,
+        "height": 720
+      },
+      "spot-3": {
+        "src": "/assets/images/customer-story/spot-3.webp",
+        "width": 1280,
+        "height": 720
+      }
+    }
+  }
+}

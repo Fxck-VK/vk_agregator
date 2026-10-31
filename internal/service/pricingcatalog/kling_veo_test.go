@@ -120,7 +120,17 @@ func assertKlingVeoPrice(t *testing.T, price ProductPrice, key ProductKey, wantF
 	if err != nil {
 		t.Fatalf("%+v internal credits: %v", key, err)
 	}
-	if want := providerCreditMicrosX3RoundedToFive(wantFloor); credits != want {
+	want := providerCreditMicrosX3RoundedToFive(wantFloor)
+	if price.RetailPolicyVersion > 0 && key.VideoRouteAlias == domain.VideoRouteKlingV3 && key.Resolution != "4k" {
+		want = 500
+	}
+	if key.VideoRouteAlias == domain.VideoRouteKling30Turbo {
+		want = 50 * int64(key.DurationSec)
+	}
+	if key.VideoRouteAlias == domain.VideoRouteMiniMaxH3 {
+		want = 75 * int64(key.DurationSec)
+	}
+	if credits != want {
 		t.Fatalf("%+v internal credits = %d, want %d", key, credits, want)
 	}
 	if credits%5 != 0 {

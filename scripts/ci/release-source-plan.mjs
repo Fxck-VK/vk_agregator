@@ -39,7 +39,7 @@ export function createSourcePlan(changedFiles, existingFiles) {
         if (!existing.has(`${pkg}/${guard}`)) throw new Error(`Missing mandatory source guard: ${pkg}/${guard}`);
       }
       const guards = [...new Set([...required, ...existingFiles.filter(path => path.startsWith(`${pkg}/src/`)
-        && /(?:[.-]contract|server-boundary)\.test\.tsx?$/.test(path)).map(path => path.slice(pkg.length + 1))])].sort();
+        && /(?:[.-]contract|server-boundary|\.styles)\.test\.tsx?$/.test(path)).map(path => path.slice(pkg.length + 1))])].sort();
       add('node', ['node_modules/vitest/vitest.mjs', 'run', ...guards], pkg);
       add('npm', ['run', 'validate:assets'], pkg);
     }
@@ -52,7 +52,9 @@ export function createSourcePlan(changedFiles, existingFiles) {
   if (existingGo.length) add('gofmt', ['-l', ...existingGo], '.', { expectEmptyOutput: true });
   if (goFiles.length || changed.some(path => ['go.mod', 'go.sum'].includes(path))) {
     const broad = changed.some(path => ['go.mod', 'go.sum'].includes(path)) || goFiles.some(path => !existing.has(path));
-    const packages = broad ? ['./...'] : [...new Set(goFiles.map(path => `./${dirname(path).replaceAll('\\', '/')}`))].sort();
+    const consumers = goFiles.some(path => /^internal\/service\/(pricingcatalog|economycatalog|productcatalog|videorouter)\//.test(path))
+      ? ['./internal/adapter/inbound/vk', './internal/adapter/provider/apimart'] : [];
+    const packages = broad ? ['./...'] : [...new Set([...goFiles.map(path => `./${dirname(path).replaceAll('\\', '/')}`), ...consumers])].sort();
     for (const action of ['test', 'vet']) add('go', [action, ...packages]);
   }
 

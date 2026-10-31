@@ -14,7 +14,7 @@ import {useLocale} from "@/i18n/LocaleProvider";
 export function BusinessHero({onPlan,paused}:{onPlan:()=>void;paused:boolean}){
   const publicCopyLocale=useLocale();
 
-  const {media,t} = usePublicCopy(publicCopySourcesForLocale);
+  const {media,t} = usePublicCopy(publicCopySourcesForLocale,{"t":"businessEn","media":"businessReference"});
 
  const video=useRef<HTMLVideoElement>(null),[userPaused,setUserPaused]=useState(false),reduced=useLandingReducedMotion(),stopped=userPaused||reduced||paused;
  useEffect(()=>{const node=video.current;if(!node)return;let visible=true;const update=()=>{if(stopped||document.hidden||!visible)node.pause();else void node.play().catch(()=>undefined);};const observer=typeof IntersectionObserver==='undefined'?null:new IntersectionObserver(entries=>{visible=entries.some(e=>e.isIntersecting);update();});observer?.observe(node);document.addEventListener('visibilitychange',update);node.addEventListener('canplay',update);update();return()=>{observer?.disconnect();document.removeEventListener('visibilitychange',update);node.removeEventListener('canplay',update);node.pause();};},[stopped]);

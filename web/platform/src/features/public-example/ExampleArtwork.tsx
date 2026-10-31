@@ -11,7 +11,7 @@ import {usePublicCopy} from "@/i18n/public/use-public-copy";
 
 
 export function ExampleArtwork({example,onEnlarge,showBadge=true,presets:sourcePresets,originNote}:{example:Pick<PublicExampleRecord,"media"|"suggestedPrompt">;onEnlarge:()=>void;showBadge?:boolean;presets?:readonly {label:string;instruction:string}[];originNote?:ReactNode}){
-  const {t} = usePublicCopy(publicCopySourcesForLocale);
+  const {t} = usePublicCopy(publicCopySourcesForLocale,{"t":"publicExampleEn"});
   const presets=usePublicCopy(sourcePresets??t.presets);
 
   const [instruction,setInstruction]=useState(""),[visible,setVisible]=useState(true),input=useRef<HTMLInputElement>(null),router=useRouter(),id=useId();

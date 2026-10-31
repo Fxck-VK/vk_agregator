@@ -11,6 +11,17 @@ import {
 } from "./model-catalog-contract";
 
 describe("model catalog contract", () => {
+  it("requires complete and consistent backend batch prices", () => {
+    const payload = parseModelCatalog(previewCatalog);
+    const image = payload.items.find(model => model.id === "gpt_image_2_5_flare")!.operations[0].image!;
+    const batch = image.price_by_count!;
+    delete batch[Object.keys(batch)[0]];
+    expect(() => parseModelCatalog(payload)).toThrow();
+    const changed = parseModelCatalog(previewCatalog);
+    const quoted = changed.items.find(model => model.id === "gpt_image_2_5_flare")!.operations[0].image!;
+    quoted.price_by_count![`${quoted.default_quality}:${quoted.default_aspect_ratio}:1`] = 1;
+    expect(() => parseModelCatalog(changed)).toThrow();
+  });
   it("keeps documented but unpriced videos informational until pricing is complete", () => {
     const payload = publicModelCatalog();
     const model = payload.items[2];

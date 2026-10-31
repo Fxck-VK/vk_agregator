@@ -103,7 +103,7 @@ test("keeps the Next lint root-dir dependency scoped to the current caller contr
   const aliasPackage = readJson(aliasPackagePath);
 
   assert.equal(aliasPackage.name, "glob");
-  assert.equal(aliasPackage.version, "12.0.0");
+  assert.equal(aliasPackage.version, "14.0.3");
   assert.equal(typeof fastGlobAlias.globSync, "function");
   assert.deepEqual(
     fastGlobAlias.globSync(toPosixPath(platformDirectory), { onlyDirectories: true }).map(normalizePath),

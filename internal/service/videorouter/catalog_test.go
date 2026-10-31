@@ -151,8 +151,8 @@ func TestCatalogResolveReturnsRouteEstimateAndSanitizedSnapshot(t *testing.T) {
 	if !resolution.Resolved {
 		t.Fatal("route should be resolved")
 	}
-	if resolution.InternalCostCredits != 200 {
-		t.Fatalf("internal cost = %d, want 200", resolution.InternalCostCredits)
+	if resolution.InternalCostCredits != 300 {
+		t.Fatalf("internal cost = %d, want 300", resolution.InternalCostCredits)
 	}
 	if resolution.Snapshot.Provider != domain.ProviderPoYo || resolution.Snapshot.ProviderModelID != "kling-o3/standard" {
 		t.Fatalf("unexpected snapshot: %+v", resolution.Snapshot)
@@ -168,17 +168,17 @@ func TestCatalogResolveReturnsRouteEstimateAndSanitizedSnapshot(t *testing.T) {
 	if err := json.Unmarshal(params["resolved_video_route"], &snapshot); err != nil {
 		t.Fatalf("unmarshal snapshot: %v", err)
 	}
-	if !snapshot.Valid() || snapshot.InternalCostCredits != 200 || snapshot.ProviderCostCredits != 100 {
+	if !snapshot.Valid() || snapshot.InternalCostCredits != 300 || snapshot.ProviderCostCredits != 100 {
 		t.Fatalf("bad resolved snapshot: %+v", snapshot)
 	}
 }
 
-func TestCatalogResolveHailuoRouteUsesFixedProviderCost(t *testing.T) {
+func TestCatalogResolveHailuoRejectsUnverifiedDurationPrice(t *testing.T) {
 	catalog := newConfiguredCatalog(t, map[domain.VideoRouteAlias]bool{
 		domain.VideoRouteHailuo23Standard: true,
 	})
 
-	resolution, err := catalog.Resolve(context.Background(), videorouter.Request{
+	_, err := catalog.Resolve(context.Background(), videorouter.Request{
 		Operation: domain.OperationVideoGenerate,
 		Modality:  domain.ModalityVideo,
 		Params: rawJSON(t, map[string]any{
@@ -188,14 +188,8 @@ func TestCatalogResolveHailuoRouteUsesFixedProviderCost(t *testing.T) {
 			"resolution":        "768p",
 		}),
 	})
-	if err != nil {
-		t.Fatalf("resolve: %v", err)
-	}
-	if resolution.InternalCostCredits != 2 || resolution.Snapshot.ProviderCostCredits != 1 {
-		t.Fatalf("unexpected cost snapshot: %+v", resolution.Snapshot)
-	}
-	if resolution.Snapshot.Provider != domain.ProviderAPIMart || resolution.Snapshot.ProviderModelID != "MiniMax-Hailuo-2.3" {
-		t.Fatalf("unexpected route snapshot: %+v", resolution.Snapshot)
+	if !errors.Is(err, videorouter.ErrRouteCostUnavailable) {
+		t.Fatalf("unverified duration price accepted: %v", err)
 	}
 }
 
@@ -254,8 +248,8 @@ func TestCatalogResolveRunwaySupportsOfficialPortraitAspect(t *testing.T) {
 	if resolution.Snapshot.AspectRatio != "3:4" {
 		t.Fatalf("aspect ratio = %q, want 3:4", resolution.Snapshot.AspectRatio)
 	}
-	if resolution.InternalCostCredits != 50 {
-		t.Fatalf("internal cost = %d, want 50", resolution.InternalCostCredits)
+	if resolution.InternalCostCredits != 150 {
+		t.Fatalf("internal cost = %d, want 150", resolution.InternalCostCredits)
 	}
 }
 

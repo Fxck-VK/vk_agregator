@@ -18,6 +18,7 @@ import { loadPaymentProducts } from "@/features/payments/payments";
 vi.mock("@/features/payments/payments", async (original) => ({ ...await original<typeof import("@/features/payments/payments")>(), loadPaymentProducts: vi.fn() }));
 
 import { WorkspaceHeader } from "./WorkspaceHeader";
+import { WorkspaceSectionNavigation } from "./WorkspaceSectionNavigation";
 
 const push = vi.fn();
 
@@ -78,25 +79,26 @@ describe("WorkspaceHeader", () => {
   it.each([
     ["/app/music", "Музыка", "Речь", "/ru/app/speech"],
     ["/app/speech", "Речь", "Музыка", "/ru/app/music"],
-  ])("switches audio tools from %s", (pathname, active, target, destination) => {
+  ])("keeps the model selector beside the audio switch on %s", (pathname, active, target, destination) => {
     vi.mocked(usePathname).mockReturnValue(pathname);
-    render(<WorkspaceHeader balance={104} />);
+    render(<WorkspaceHeader balance={104} sectionNavigation={<WorkspaceSectionNavigation />} />);
 
     expect(screen.getByRole("banner", { name: "Аудио" })).toBeInTheDocument();
     expect(screen.getByRole("toolbar", { name: "Аудио" })).toBeInTheDocument();
     expect(screen.getByRole("button", { name: active })).toHaveAttribute("aria-pressed", "true");
-    expect(screen.queryByRole("button", { name: "Nano Banana 2" })).not.toBeInTheDocument();
+    const modelSelector = screen.getByRole("button", { name: "Nano Banana 2" });
+    expect(modelSelector.compareDocumentPosition(screen.getByRole("toolbar", { name: "Аудио" })) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
     fireEvent.click(screen.getByRole("button", { name: target }));
     expect(push).toHaveBeenCalledWith(destination);
   });
 
-  it("preserves the English locale when switching audio tools with the keyboard", () => {
+  it("uses Russian destinations from legacy English context when switching audio tools with the keyboard", () => {
     vi.mocked(usePathname).mockReturnValue("/en/app/speech");
-    render(<LocaleProvider locale="en"><WorkspaceHeader balance={104} /></LocaleProvider>);
+    render(<LocaleProvider locale="en"><WorkspaceHeader balance={104} sectionNavigation={<WorkspaceSectionNavigation />} /></LocaleProvider>);
 
     expect(screen.getByRole("banner", { name: "Audio" })).toBeInTheDocument();
     fireEvent.keyDown(screen.getByRole("button", { name: "Speech" }), { key: "Home" });
-    expect(push).toHaveBeenCalledWith("/en/app/music");
+    expect(push).toHaveBeenCalledWith("/ru/app/music");
   });
 
   it("renders the shared credit-star artwork instead of a text glyph", () => {

@@ -31,7 +31,7 @@ describe("documentation article",()=>{
     expect(within(screen.getByRole("navigation",{name:"Help articles"})).getByRole("link",{name:"Account management"})).toHaveAttribute("aria-current","page");
     expect(container.textContent).toContain("Yandex ID");expect(container.textContent).toContain("VK ID");
     expect(container.textContent).not.toMatch(/Google sign-in|Apple ID|3 devices|Facebook|Magnific|Freepik/);
-    expect(screen.getByRole("link",{name:"Next: Email delivery"})).toHaveAttribute("href","/en/ai/docs/receiving-emails");
+    expect(screen.getByRole("link",{name:"Next: Email delivery"})).toHaveAttribute("href","/ru/ai/docs/receiving-emails");
     expect(container.querySelector("iframe,video,form")).toBeNull();
   });
   it("finds articles across collapsed groups and restores the catalogue after clearing",async()=>{

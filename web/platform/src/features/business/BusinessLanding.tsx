@@ -18,7 +18,7 @@ import styles from './Business.module.css';
 import {usePublicCopy} from "@/i18n/public/use-public-copy";
 
 export function BusinessLanding(){
-  const {t,aiToolsEn,homeEn,media} = usePublicCopy(publicCopySourcesForLocale);
+  const {t,aiToolsEn,homeEn,media} = usePublicCopy(publicCopySourcesForLocale,{"t":"businessEn","media":"businessReference"});
 
  const[dialog,setDialog]=useState<BusinessDialog|null>(null),[sticky,setSticky]=useState(false),root=useRef<HTMLDivElement>(null),opener=useRef<HTMLElement|null>(null),open=dialog!==null;
  const launch=(target:BusinessDialog)=>{opener.current=document.activeElement instanceof HTMLElement?document.activeElement:null;setDialog(target);};

@@ -1,7 +1,9 @@
-import { spawn } from "node:child_process";
+import { spawn, spawnSync } from "node:child_process";
 import { fileURLToPath } from "node:url";
 import { generatePublicPageManifest, watchPublicPages } from "./public-page-manifest.mjs";
 
+const contentAdmission = spawnSync(process.execPath, [fileURLToPath(new URL('./content-pages.mjs', import.meta.url)), 'check'], {cwd:fileURLToPath(new URL('..',import.meta.url)),stdio:'inherit',windowsHide:true});
+if(contentAdmission.error||contentAdmission.status!==0)throw new Error('Content catalogue admission failed. Run npm run content:check.');
 generatePublicPageManifest();
 const stopPublicPageWatch = watchPublicPages();
 

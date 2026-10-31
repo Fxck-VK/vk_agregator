@@ -1,0 +1,52 @@
+[
+  {
+    "source": "Review connection status",
+    "ru": "Проверить статус подключения",
+    "back": "Check the connection status"
+  },
+  {
+    "source": "Planned connection",
+    "ru": "Подключение в планах",
+    "back": "The connection is planned"
+  },
+  {
+    "source": "Available tools",
+    "ru": "Доступные инструменты",
+    "back": "Available tools"
+  },
+  {
+    "source": "Guided workflows",
+    "ru": "Пошаговые рабочие процессы",
+    "back": "Step-by-step workflows"
+  },
+  {
+    "source": "Planned team capacity",
+    "ru": "Ресурсы команды в планах",
+    "back": "Planned resources for the team"
+  },
+  {
+    "source": "Existing workspace",
+    "ru": "Текущее рабочее пространство",
+    "back": "The current workspace"
+  },
+  {
+    "source": "Project concept",
+    "ru": "Концепция проекта",
+    "back": "A project concept"
+  },
+  {
+    "source": "CTV · Digital · Social",
+    "ru": "CTV · Цифровые каналы · Соцсети",
+    "back": "CTV · Digital channels · Social media"
+  },
+  {
+    "source": "Download formats",
+    "ru": "Форматы скачивания",
+    "back": "Download formats"
+  },
+  {
+    "source": "Dominant color",
+    "ru": "Основной цвет",
+    "back": "Dominant color"
+  }
+]

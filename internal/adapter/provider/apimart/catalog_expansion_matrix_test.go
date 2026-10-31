@@ -43,7 +43,7 @@ func TestCatalogExpansionEveryCatalogVariantBuildsAndPrices(t *testing.T) {
 				}
 			}
 		} else {
-			if op.Image == nil || op.Image.DefaultQuality != "1K" || op.Image.PriceByQuality["1K"] != 10 {
+			if op.Image == nil || op.Image.DefaultQuality != "1K" || op.Image.PriceByQuality["1K"] != 30 {
 				t.Fatal("Nano 1K controls/price missing")
 			}
 			for _, ratio := range op.Image.AllowedAspectRatios {

@@ -18,7 +18,7 @@ import styles from './About.module.css';
 import {usePublicCopy} from "@/i18n/public/use-public-copy";
 
 export function AboutLanding(){
-  const {t,aiToolsEn,homeEn,media} = usePublicCopy(publicCopySourcesForLocale);
+  const {t,aiToolsEn,homeEn,media} = usePublicCopy(publicCopySourcesForLocale,{"t":"aboutEn","media":"aboutReference"});
 
  const[dialog,setDialog]=useState<'search'|'source'|null>(null),root=useRef<HTMLDivElement>(null),opener=useRef<HTMLElement|null>(null),open=dialog!==null;
  const launch=(kind:'source')=>{opener.current=document.activeElement instanceof HTMLElement?document.activeElement:null;setDialog(kind);};

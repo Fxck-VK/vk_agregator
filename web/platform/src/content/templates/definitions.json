@@ -1,0 +1,284 @@
+[
+  {
+    "id": "T01",
+    "label": "Главная",
+    "path": "/",
+    "primary": "homeEn",
+    "managed": false,
+    "sources": {
+      "homeEn": "@/i18n/public/home-en"
+    }
+  },
+  {
+    "id": "T02",
+    "label": "Обзор инструментов",
+    "path": "/ai",
+    "primary": "aiToolsEn",
+    "managed": false,
+    "sources": {
+      "aiToolsEn": "@/i18n/public/ai-tools-en",
+      "aiToolsReferenceEn": "@/i18n/public/ai-tools-reference-en"
+    }
+  },
+  {
+    "id": "T03",
+    "label": "Инструмент",
+    "path": "/ai/image-generator",
+    "primary": "imageGeneratorEn",
+    "managed": false,
+    "sources": {
+      "imageGeneratorEn": "@/i18n/public/image-generator-en",
+      "imageGeneratorReferenceEn": "@/i18n/public/image-generator-reference-en"
+    }
+  },
+  {
+    "id": "T04",
+    "label": "Семейство моделей",
+    "path": "/ai/kling",
+    "primary": "klingEn",
+    "managed": false,
+    "sources": {
+      "klingEn": "@/i18n/public/kling-en",
+      "klingReferenceEn": "@/i18n/public/kling-reference-en",
+      "klingCatalogEn": "@/i18n/public/kling-catalog-en"
+    }
+  },
+  {
+    "id": "T05",
+    "label": "Версия модели",
+    "path": "/ai/kling/kling-3-0",
+    "primary": "kling30En",
+    "managed": false,
+    "sources": {
+      "kling30En": "@/i18n/public/kling30-en",
+      "klingEn": "@/i18n/public/kling-en",
+      "kling30ReferenceEn": "@/i18n/public/kling30-reference-en"
+    }
+  },
+  {
+    "id": "T06",
+    "label": "Решение задачи",
+    "path": "/ai/tattoo-generator",
+    "primary": "tattooEn",
+    "managed": false,
+    "sources": {
+      "tattooEn": "@/i18n/public/tattoo-en",
+      "tattooReferenceEn": "@/i18n/public/tattoo-reference-en"
+    }
+  },
+  {
+    "id": "T07",
+    "label": "Профессия / отрасль",
+    "path": "/ai/marketing",
+    "primary": "marketingEn",
+    "managed": false,
+    "sources": {
+      "marketingEn": "@/i18n/public/marketing-en",
+      "marketingReferenceEn": "@/i18n/public/marketing-reference-en"
+    }
+  },
+  {
+    "id": "T08",
+    "label": "Сравнение",
+    "path": "/compare/ai-avatar-models",
+    "primary": "comparisonEn",
+    "managed": false,
+    "sources": {
+      "comparisonEn": "@/i18n/public/comparison-en",
+      "authorPath": "@/i18n/public/author-en",
+      "comparisonReferenceEn": "@/i18n/public/comparison-reference-en",
+      "avatarModelsEn": "@/i18n/public/avatar-models-en"
+    }
+  },
+  {
+    "id": "T09",
+    "label": "Статья",
+    "path": "/blog/ai-art-prompts",
+    "primary": "artPromptsEn",
+    "managed": false,
+    "sources": {
+      "artPromptsEn": "@/i18n/public/art-prompts-en",
+      "authorPath": "@/i18n/public/author-en",
+      "artPromptsReferenceEn": "@/i18n/public/art-prompts-reference-en",
+      "comparisonReferenceEn": "@/i18n/public/comparison-reference-en"
+    }
+  },
+  {
+    "id": "T10",
+    "label": "Курс / урок",
+    "path": "/academy/courses/epifera-essentials",
+    "primary": "courseEn",
+    "managed": false,
+    "sources": {
+      "courseEn": "@/i18n/public/course-en"
+    }
+  },
+  {
+    "id": "T11",
+    "label": "Документация / помощь",
+    "path": "/ai/docs",
+    "primary": "documentationEn",
+    "managed": false,
+    "sources": {
+      "documentationEn": "@/i18n/public/documentation-en",
+      "documentationArticles": "@/i18n/public/documentation-en",
+      "documentationGroups": "@/i18n/public/documentation-en"
+    }
+  },
+  {
+    "id": "T12",
+    "label": "Workflow",
+    "path": "/workflows/product-campaign",
+    "primary": "workflowEn",
+    "managed": false,
+    "sources": {
+      "workflowEn": "@/i18n/public/workflow-en",
+      "workflowReferenceEn": "@/i18n/public/workflow-reference-en",
+      "productCampaignWorkflow": "@/i18n/public/workflow-en"
+    }
+  },
+  {
+    "id": "T13",
+    "label": "Подборка примеров",
+    "path": "/inspiration/cinematic-scenes",
+    "primary": "collectionEn",
+    "managed": false,
+    "sources": {
+      "collectionEn": "@/i18n/public/collection-en",
+      "cinematicCollection": "@/i18n/public/collection-en"
+    }
+  },
+  {
+    "id": "T14",
+    "label": "Публичный результат",
+    "path": "/inspiration/examples/aesthetic-flowers",
+    "primary": "publicExampleEn",
+    "managed": false,
+    "sources": {
+      "publicExampleEn": "@/i18n/public/public-example-en",
+      "flowerExample": "@/i18n/public/public-example-en"
+    }
+  },
+  {
+    "id": "T15",
+    "label": "Категория материалов",
+    "path": "/photos/nature",
+    "primary": "materialCategoryEn",
+    "managed": false,
+    "sources": {
+      "materialCategoryEn": "@/i18n/public/material-category-en",
+      "natureCategory": "@/i18n/public/material-category-en",
+      "natureMaterials": "@/i18n/public/material-category-en",
+      "gypsophilaMaterial": "@/i18n/public/material-detail-en",
+      "materialFilters": "@/i18n/public/material-category-en",
+      "initialMaterialFilters": "@/features/material-category/category-model"
+    }
+  },
+  {
+    "id": "T16",
+    "label": "Карточка материала",
+    "path": "/stock/items/dried-gypsophila/gypsophila-01",
+    "primary": "materialDetailEn",
+    "managed": false,
+    "sources": {
+      "materialDetailEn": "@/i18n/public/material-detail-en",
+      "publicExampleEn": "@/i18n/public/public-example-en",
+      "gypsophilaMaterial": "@/i18n/public/material-detail-en"
+    }
+  },
+  {
+    "id": "T17",
+    "label": "Интеграция",
+    "path": "/mcp",
+    "primary": "mcpEn",
+    "managed": false,
+    "sources": {
+      "mcpEn": "@/i18n/public/integration-en",
+      "mcpPrompts": "@/i18n/public/integration-en",
+      "mcpClients": "@/i18n/public/integration-en",
+      "integrationReference": "@/i18n/public/integration-reference-en",
+      "mcpIntegration": "@/i18n/public/integration-en"
+    }
+  },
+  {
+    "id": "T18",
+    "label": "Тарифы",
+    "path": "/pricing",
+    "primary": "pricingEn",
+    "managed": true,
+    "sources": {
+      "pricingEn": "@/i18n/public/pricing-en",
+      "pricingReference": "@/i18n/public/pricing-reference-en"
+    }
+  },
+  {
+    "id": "T19",
+    "label": "Команды / бизнес",
+    "path": "/business",
+    "primary": "businessEn",
+    "managed": false,
+    "sources": {
+      "businessEn": "@/i18n/public/business-en",
+      "businessReference": "@/i18n/public/business-reference-en",
+      "businessPlan": "@/i18n/public/business-en"
+    }
+  },
+  {
+    "id": "T20",
+    "label": "История клиента",
+    "path": "/customers/football-campaign",
+    "primary": "customerStoryEn",
+    "managed": false,
+    "sources": {
+      "customerStoryEn": "@/i18n/public/customer-story-en",
+      "footballCaseStudy": "@/i18n/public/customer-story-en",
+      "customerStoryReference": "@/i18n/public/customer-story-reference-en"
+    }
+  },
+  {
+    "id": "T21",
+    "label": "Компания / контакты",
+    "path": "/company/about-us",
+    "primary": "aboutEn",
+    "managed": false,
+    "sources": {
+      "aboutEn": "@/i18n/public/about-en",
+      "aboutReference": "@/i18n/public/about-reference-en",
+      "aboutModels": "@/i18n/public/about-en",
+      "aboutStats": "@/i18n/public/about-en"
+    }
+  },
+  {
+    "id": "T22",
+    "label": "Событие / проект",
+    "path": "/events/creative-sessions",
+    "primary": "eventProjectEn",
+    "managed": false,
+    "sources": {
+      "eventProjectEn": "@/i18n/public/event-project-en",
+      "eventProjectReference": "@/i18n/public/event-project-reference-en",
+      "eventProject": "@/i18n/public/event-project-en"
+    }
+  },
+  {
+    "id": "T23",
+    "label": "Правовые документы",
+    "path": "/legal",
+    "primary": null,
+    "managed": true,
+    "sources": {}
+  },
+  {
+    "id": "T24",
+    "label": "Автор",
+    "path": "/blog/author/epifera",
+    "primary": "authorEn",
+    "managed": false,
+    "sources": {
+      "authorEn": "@/i18n/public/author-en",
+      "authorProfile": "@/i18n/public/author-en",
+      "authorPath": "@/i18n/public/author-en",
+      "authorMaterials": "@/features/author/author-catalog"
+    }
+  }
+]

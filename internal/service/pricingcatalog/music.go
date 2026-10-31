@@ -67,5 +67,6 @@ func candidateUSDQuote(key ProductKey, amount int64) (PricingSnapshot, error) {
 		return PricingSnapshot{}, err
 	}
 	credits = ((credits + 4) / 5) * 5
-	return (ProductPrice{Key: key, Version: StaticCatalogVersion, Source: StaticSource, Enabled: true, Floor: floor, UnitConversion: conversion, Multiplier: exactRetailMultiplier(amount, conversion, credits), Caps: SafetyCaps{InternalCreditCap: credits, FloorAmountCap: amount}}).Snapshot()
+	price := ProductPrice{Key: key, Version: StaticCatalogVersion, Source: StaticSource, Enabled: true, Floor: floor, UnitConversion: conversion, Multiplier: exactRetailMultiplier(amount, conversion, credits), Caps: SafetyCaps{InternalCreditCap: credits, FloorAmountCap: amount}}
+	return applyEconomicRetailPolicy(price).Snapshot()
 }

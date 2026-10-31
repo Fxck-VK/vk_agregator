@@ -7,7 +7,7 @@ import styles from './Business.module.css';
 import {usePublicCopy} from "@/i18n/public/use-public-copy";
 
 export function BusinessPricing({onQuote,onGuide}:{onQuote:(seats:number,annual:boolean)=>void;onGuide:()=>void}){
-  const {businessPlan,t} = usePublicCopy(publicCopySourcesForLocale);
+  const {businessPlan,t} = usePublicCopy(publicCopySourcesForLocale,{"businessPlan":"businessPlan","t":"businessEn"});
 
  const[seats,setSeats]=useState('2'),[annual,setAnnual]=useState(false),[more,setMore]=useState(false),count=parseTeamSeats(seats),invalid=count===null;
  const step=(by:number)=>{if(count!==null)setSeats(String(Math.min(businessPlan.seatRange.max,Math.max(businessPlan.seatRange.min,count+by))));};

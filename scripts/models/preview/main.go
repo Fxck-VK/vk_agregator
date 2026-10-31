@@ -8,6 +8,7 @@ import (
 	"flag"
 	"fmt"
 	"os"
+	"path/filepath"
 
 	"vk-ai-aggregator/internal/service/productcatalog"
 )
@@ -23,21 +24,27 @@ func main() {
 	if err != nil {
 		fail(err)
 	}
-	data, err := json.MarshalIndent(catalog, "", "  ")
+	references, err := referencePrices(catalog)
 	if err != nil {
 		fail(err)
 	}
-	data = append(data, '\n')
-	if *check {
-		current, err := os.ReadFile(path)
+	for output, value := range map[string]any{path: catalog, filepath.Join(filepath.Dir(path), "model-reference-prices.preview.json"): references} {
+		data, err := json.MarshalIndent(value, "", "  ")
 		if err != nil {
 			fail(err)
 		}
-		if !bytes.Equal(bytes.ReplaceAll(current, []byte("\r\n"), []byte("\n")), data) {
-			fail(fmt.Errorf("catalog preview is stale; run go run ./scripts/models/preview"))
+		data = append(data, '\n')
+		if *check {
+			current, err := os.ReadFile(output)
+			if err != nil {
+				fail(err)
+			}
+			if !bytes.Equal(bytes.ReplaceAll(current, []byte("\r\n"), []byte("\n")), data) {
+				fail(fmt.Errorf("preview %s is stale; run go run ./scripts/models/preview", output))
+			}
+		} else if err := os.WriteFile(output, data, 0644); err != nil {
+			fail(err)
 		}
-	} else if err := os.WriteFile(path, data, 0644); err != nil {
-		fail(err)
 	}
 	fmt.Printf("catalog preview: %d models\n", len(catalog.Items))
 }

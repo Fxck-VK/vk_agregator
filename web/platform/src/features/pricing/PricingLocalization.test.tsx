@@ -6,13 +6,14 @@ import {PricingComparison} from "./PricingComparison";
 import {PricingInformation} from "./PricingDialogs";
 
 describe("pricing display locale",()=>{
-  it("localizes annual periods, currency grouping and dynamic preview action labels",()=>{
+  it("shows exact thirty-day periods and localized plan actions",()=>{
     const onPlan=vi.fn();
     render(<LocaleProvider locale="ru"><PersonalPlans period="yearly" capacity="ultima" onCapacity={()=>{}} onPlan={onPlan} onUnits={()=>{}}/></LocaleProvider>);
     fireEvent.click(screen.getByRole('button',{name:'Посмотреть предварительный вариант Start+'}));
     expect(onPlan).toHaveBeenCalledWith('start');
-    expect(screen.getAllByText('/год')).toHaveLength(3);
-    expect(screen.getByText(/6\s588/)).toBeInTheDocument();
+    expect(screen.getAllByText('/30 дней')).toHaveLength(3);
+    expect(screen.queryByRole('switch')).not.toBeInTheDocument();
+    expect(screen.getByText('549')).toBeInTheDocument();
     expect(screen.queryByText('/year')).not.toBeInTheDocument();
   });
   it("localizes comparison control names and team-only values",()=>{
@@ -20,8 +21,8 @@ describe("pricing display locale",()=>{
     const {rerender}=render(<LocaleProvider locale="ru"><PricingComparison {...props} teams={false}/></LocaleProvider>);
     expect(screen.getByRole('button',{name:'Убрать Start+ из сравнения'})).toBeDisabled();
     expect(screen.getByRole('button',{name:'Посмотреть сведения о Start+'})).toBeInTheDocument();
-    expect(screen.getByRole('switch')).not.toHaveAccessibleName(/in comparison/);
-    expect(screen.getByText(/\/месяц/)).toBeInTheDocument();
+    expect(screen.queryByRole('switch')).not.toBeInTheDocument();
+    expect(screen.getByText(/\/30 дней/)).toBeInTheDocument();
     rerender(<LocaleProvider locale="ru"><PricingComparison {...props} teams/></LocaleProvider>);
     expect(screen.getAllByText('Требует обсуждения').length).toBeGreaterThan(0);
     expect(screen.queryByText('To be discussed')).not.toBeInTheDocument();

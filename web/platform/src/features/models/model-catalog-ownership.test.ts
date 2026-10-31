@@ -31,7 +31,7 @@ it("keeps model definitions and pricing out of functional UI modules", () => {
         if (id && ts.isStringLiteralLike(id) && get("name") && ["quality_options", "estimate_credits", "price_by_option", "categories"].some(name => get(name))) {
           report(node, "inline model record; keep only curated IDs");
         }
-        for (const key of ["price_by_quality", "price_by_variant", "price_by_option"]) {
+        for (const key of ["price_by_quality", "price_by_variant", "price_by_count", "price_by_option"]) {
           const value = get(key);
           if (value && ts.isObjectLiteralExpression(value) && value.properties.length > 0) report(value, "inline model prices");
         }

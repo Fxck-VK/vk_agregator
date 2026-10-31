@@ -1,0 +1,2403 @@
+{
+  "schema_version": 1,
+  "version": 20261027,
+  "research_date": "2026-10-27",
+  "credit_denomination_version": 2,
+  "star_nominal_kopecks": 50,
+  "signup_bonus_stars": 60,
+  "amount_unit": "kopeck",
+  "currency": "RUB",
+  "renewal_retries": {
+    "version": 1,
+    "window_days": 14,
+    "interval_hours": 24,
+    "max_attempts": 14
+  },
+  "sources": [
+    "https://study24.ai/pricing",
+    "https://study24.ai/bots",
+    "https://study24.ai/apps/catalog/suno"
+  ],
+  "verification": "Guest public UI facts; no purchase, generation or balance debit was performed. Mapping is not provider admission.",
+  "plans": [
+    {
+      "code": "lite",
+      "name": "Lite",
+      "amount": 19900,
+      "stars": 400,
+      "period_days": 7,
+      "trial": true,
+      "next_plan_code": "start"
+    },
+    {
+      "code": "start",
+      "name": "Start+",
+      "amount": 54900,
+      "stars": 1250,
+      "period_days": 30,
+      "trial": false,
+      "next_plan_code": ""
+    },
+    {
+      "code": "pro",
+      "name": "Pro",
+      "amount": 99900,
+      "stars": 2100,
+      "period_days": 30,
+      "trial": false,
+      "next_plan_code": ""
+    },
+    {
+      "code": "ultima",
+      "name": "Ultima",
+      "amount": 199900,
+      "stars": 4300,
+      "period_days": 30,
+      "trial": false,
+      "next_plan_code": ""
+    },
+    {
+      "code": "elite",
+      "name": "Elite",
+      "amount": 499900,
+      "stars": 11000,
+      "period_days": 30,
+      "trial": false,
+      "next_plan_code": ""
+    }
+  ],
+  "models": [
+    {
+      "id": "sai_plus",
+      "name": "StudyAI Plus",
+      "category": "Популярные",
+      "url": "https://study24.ai/chat/sai_plus",
+      "source_date": "2026-10-27",
+      "pricing_source_url": "https://study24.ai/pricing",
+      "catalog_source_url": "https://study24.ai/bots",
+      "minimum_stars": 5,
+      "catalog_card_stars": null,
+      "price_conflict": false,
+      "unit": "request",
+      "displayed_unit": "запрос",
+      "free_category": false,
+      "mapping": {
+        "status": "missing",
+        "product_ids": [],
+        "qualities": [],
+        "unit": "request",
+        "reason": "No exact implemented public product or operation has been established."
+      }
+    },
+    {
+      "id": "open_ai_image_bot",
+      "name": "Генератор изображений",
+      "category": "Популярные",
+      "url": "https://study24.ai/chat/open_ai_image_bot",
+      "source_date": "2026-10-27",
+      "pricing_source_url": "https://study24.ai/pricing",
+      "catalog_source_url": "https://study24.ai/bots",
+      "minimum_stars": 55,
+      "catalog_card_stars": 55,
+      "price_conflict": false,
+      "unit": "generation",
+      "displayed_unit": "генерация",
+      "free_category": false,
+      "mapping": {
+        "status": "missing",
+        "product_ids": [],
+        "qualities": [],
+        "unit": "generation",
+        "reason": "No exact implemented public product or operation has been established."
+      }
+    },
+    {
+      "id": "claude-opus-5-5",
+      "name": "Claude Opus 5.5",
+      "category": "Популярные",
+      "url": "https://study24.ai/chat/claude-opus-5-5",
+      "source_date": "2026-10-27",
+      "pricing_source_url": "https://study24.ai/pricing",
+      "catalog_source_url": "https://study24.ai/bots",
+      "minimum_stars": 5,
+      "catalog_card_stars": null,
+      "price_conflict": false,
+      "unit": "request",
+      "displayed_unit": "запрос",
+      "free_category": false,
+      "mapping": {
+        "status": "formula_unverified",
+        "product_ids": [
+          "claude_opus_5_5"
+        ],
+        "qualities": [],
+        "unit": "request",
+        "reason": "Public minimum has no verified text/context formula."
+      }
+    },
+    {
+      "id": "nano_banana_2",
+      "name": "Nano Banana 2.1",
+      "category": "Популярные",
+      "url": "https://study24.ai/chat/nano_banana_2",
+      "source_date": "2026-10-27",
+      "pricing_source_url": "https://study24.ai/pricing",
+      "catalog_source_url": "https://study24.ai/bots",
+      "minimum_stars": 55,
+      "catalog_card_stars": 55,
+      "price_conflict": false,
+      "unit": "generation",
+      "displayed_unit": "генерация",
+      "free_category": false,
+      "mapping": {
+        "status": "version_ambiguous",
+        "product_ids": [
+          "nano_banana_2"
+        ],
+        "qualities": [],
+        "unit": "generation",
+        "reason": "Public research says2.1; local public ID says2. Version equivalence is unverified."
+      }
+    },
+    {
+      "id": "seedance-25-max",
+      "name": "Seedance 2.5 Max",
+      "category": "Популярные",
+      "url": "https://study24.ai/chat/seedance-25-max",
+      "source_date": "2026-10-27",
+      "pricing_source_url": "https://study24.ai/pricing",
+      "catalog_source_url": "https://study24.ai/bots",
+      "minimum_stars": 50,
+      "catalog_card_stars": 50,
+      "price_conflict": false,
+      "unit": "second",
+      "displayed_unit": "секунда",
+      "free_category": false,
+      "mapping": {
+        "status": "version_ambiguous",
+        "product_ids": [
+          "video_seedance_2_5"
+        ],
+        "qualities": [],
+        "unit": "second",
+        "reason": "Max product/settings are not established by the local Seedance2.5 route."
+      }
+    },
+    {
+      "id": "nano_banana_pro",
+      "name": "Nano Banana Pro",
+      "category": "Изображения",
+      "url": "https://study24.ai/chat/nano_banana_pro",
+      "source_date": "2026-10-27",
+      "pricing_source_url": "https://study24.ai/pricing",
+      "catalog_source_url": "https://study24.ai/bots",
+      "minimum_stars": 55,
+      "catalog_card_stars": 55,
+      "price_conflict": false,
+      "unit": "generation",
+      "displayed_unit": "генерация",
+      "free_category": false,
+      "mapping": {
+        "status": "exact",
+        "product_ids": [
+          "nano_banana_pro"
+        ],
+        "qualities": [
+          "1K",
+          "2K",
+          "4K"
+        ],
+        "unit": "image",
+        "reason": "Guest UI verified55 per image for1K/2K/4K; four images total220. Input/provider admission remains separate."
+      }
+    },
+    {
+      "id": "seedream5",
+      "name": "Seedream 5.0 Pro",
+      "category": "Изображения",
+      "url": "https://study24.ai/chat/seedream5",
+      "source_date": "2026-10-27",
+      "pricing_source_url": "https://study24.ai/pricing",
+      "catalog_source_url": "https://study24.ai/bots",
+      "minimum_stars": 35,
+      "catalog_card_stars": 35,
+      "price_conflict": false,
+      "unit": "generation",
+      "displayed_unit": "генерация",
+      "free_category": false,
+      "mapping": {
+        "status": "variant_unverified",
+        "product_ids": [
+          "seedream_5_0_pro"
+        ],
+        "qualities": [],
+        "unit": "generation",
+        "reason": "Matching product family exists; selected version, settings, output count or duration-price equivalence is unverified."
+      }
+    },
+    {
+      "id": "midjourney_toe_bot",
+      "name": "Midjourney",
+      "category": "Изображения",
+      "url": "https://study24.ai/chat/midjourney_toe_bot",
+      "source_date": "2026-10-27",
+      "pricing_source_url": "https://study24.ai/pricing",
+      "catalog_source_url": "https://study24.ai/bots",
+      "minimum_stars": 55,
+      "catalog_card_stars": 55,
+      "price_conflict": false,
+      "unit": "generation",
+      "displayed_unit": "генерация",
+      "free_category": false,
+      "mapping": {
+        "status": "variant_unverified",
+        "product_ids": [
+          "midjourney_v7"
+        ],
+        "qualities": [],
+        "unit": "generation",
+        "reason": "Matching product family exists; selected version, settings, output count or duration-price equivalence is unverified."
+      }
+    },
+    {
+      "id": "gpt_image",
+      "name": "GPT Image 2",
+      "category": "Изображения",
+      "url": "https://study24.ai/chat/gpt_image",
+      "source_date": "2026-10-27",
+      "pricing_source_url": "https://study24.ai/pricing",
+      "catalog_source_url": "https://study24.ai/bots",
+      "minimum_stars": 51,
+      "catalog_card_stars": 51,
+      "price_conflict": false,
+      "unit": "generation",
+      "displayed_unit": "генерация",
+      "free_category": false,
+      "mapping": {
+        "status": "variant_unverified",
+        "product_ids": [
+          "gpt_image_2"
+        ],
+        "qualities": [],
+        "unit": "generation",
+        "reason": "Matching product family exists; selected version, settings, output count or duration-price equivalence is unverified."
+      }
+    },
+    {
+      "id": "gpt-image-25",
+      "name": "GPT Image 2.5",
+      "category": "Изображения",
+      "url": "https://study24.ai/chat/gpt-image-25",
+      "source_date": "2026-10-27",
+      "pricing_source_url": "https://study24.ai/pricing",
+      "catalog_source_url": "https://study24.ai/bots",
+      "minimum_stars": 52,
+      "catalog_card_stars": 52,
+      "price_conflict": false,
+      "unit": "generation",
+      "displayed_unit": "генерация",
+      "free_category": false,
+      "mapping": {
+        "status": "variant_unverified",
+        "product_ids": [
+          "gpt_image_2_5_flare",
+          "gpt_image_2_5_sunburst"
+        ],
+        "qualities": [],
+        "unit": "generation",
+        "reason": "Matching product family exists; selected version, settings, output count or duration-price equivalence is unverified."
+      }
+    },
+    {
+      "id": "mai_image_2_5",
+      "name": "Microsoft: MAI-Image-2.5",
+      "category": "Изображения",
+      "url": "https://study24.ai/chat/mai_image_2_5",
+      "source_date": "2026-10-27",
+      "pricing_source_url": "https://study24.ai/pricing",
+      "catalog_source_url": "https://study24.ai/bots",
+      "minimum_stars": 55,
+      "catalog_card_stars": 55,
+      "price_conflict": false,
+      "unit": "generation",
+      "displayed_unit": "генерация",
+      "free_category": false,
+      "mapping": {
+        "status": "missing",
+        "product_ids": [],
+        "qualities": [],
+        "unit": "generation",
+        "reason": "No exact implemented public product or operation has been established."
+      }
+    },
+    {
+      "id": "grok_image",
+      "name": "Grok Image",
+      "category": "Изображения",
+      "url": "https://study24.ai/chat/grok_image",
+      "source_date": "2026-10-27",
+      "pricing_source_url": "https://study24.ai/pricing",
+      "catalog_source_url": "https://study24.ai/bots",
+      "minimum_stars": 20,
+      "catalog_card_stars": 20,
+      "price_conflict": false,
+      "unit": "generation",
+      "displayed_unit": "генерация",
+      "free_category": false,
+      "mapping": {
+        "status": "variant_unverified",
+        "product_ids": [
+          "grok_image_1_5"
+        ],
+        "qualities": [],
+        "unit": "generation",
+        "reason": "Matching product family exists; selected version, settings, output count or duration-price equivalence is unverified."
+      }
+    },
+    {
+      "id": "grok_image2",
+      "name": "Grok Image 2.0",
+      "category": "Изображения",
+      "url": "https://study24.ai/chat/grok_image2",
+      "source_date": "2026-10-27",
+      "pricing_source_url": "https://study24.ai/pricing",
+      "catalog_source_url": "https://study24.ai/bots",
+      "minimum_stars": 25,
+      "catalog_card_stars": 25,
+      "price_conflict": false,
+      "unit": "generation",
+      "displayed_unit": "генерация",
+      "free_category": false,
+      "mapping": {
+        "status": "variant_unverified",
+        "product_ids": [
+          "grok_image_2_0"
+        ],
+        "qualities": [],
+        "unit": "generation",
+        "reason": "Matching product family exists; selected version, settings, output count or duration-price equivalence is unverified."
+      }
+    },
+    {
+      "id": "flux_2",
+      "name": "Flux 2 Pro",
+      "category": "Изображения",
+      "url": "https://study24.ai/chat/flux_2",
+      "source_date": "2026-10-27",
+      "pricing_source_url": "https://study24.ai/pricing",
+      "catalog_source_url": "https://study24.ai/bots",
+      "minimum_stars": 55,
+      "catalog_card_stars": 55,
+      "price_conflict": false,
+      "unit": "generation",
+      "displayed_unit": "генерация",
+      "free_category": false,
+      "mapping": {
+        "status": "variant_unverified",
+        "product_ids": [
+          "flux_2_pro"
+        ],
+        "qualities": [],
+        "unit": "generation",
+        "reason": "Matching product family exists; selected version, settings, output count or duration-price equivalence is unverified."
+      }
+    },
+    {
+      "id": "qwen-image",
+      "name": "Qwen Image 3",
+      "category": "Изображения",
+      "url": "https://study24.ai/chat/qwen-image",
+      "source_date": "2026-10-27",
+      "pricing_source_url": "https://study24.ai/pricing",
+      "catalog_source_url": "https://study24.ai/bots",
+      "minimum_stars": 30,
+      "catalog_card_stars": 30,
+      "price_conflict": false,
+      "unit": "generation",
+      "displayed_unit": "генерация",
+      "free_category": false,
+      "mapping": {
+        "status": "variant_unverified",
+        "product_ids": [
+          "qwen_image_3"
+        ],
+        "qualities": [],
+        "unit": "generation",
+        "reason": "Matching product family exists; selected version, settings, output count or duration-price equivalence is unverified."
+      }
+    },
+    {
+      "id": "recraft_ai",
+      "name": "Recraft AI",
+      "category": "Изображения",
+      "url": "https://study24.ai/chat/recraft_ai",
+      "source_date": "2026-10-27",
+      "pricing_source_url": "https://study24.ai/pricing",
+      "catalog_source_url": "https://study24.ai/bots",
+      "minimum_stars": 5,
+      "catalog_card_stars": 5,
+      "price_conflict": false,
+      "unit": "generation",
+      "displayed_unit": "генерация",
+      "free_category": false,
+      "mapping": {
+        "status": "missing",
+        "product_ids": [],
+        "qualities": [],
+        "unit": "generation",
+        "reason": "No exact implemented public product or operation has been established."
+      }
+    },
+    {
+      "id": "krea_2",
+      "name": "Krea 2",
+      "category": "Изображения",
+      "url": "https://study24.ai/chat/krea_2",
+      "source_date": "2026-10-27",
+      "pricing_source_url": "https://study24.ai/pricing",
+      "catalog_source_url": "https://study24.ai/bots",
+      "minimum_stars": 35,
+      "catalog_card_stars": 35,
+      "price_conflict": false,
+      "unit": "generation",
+      "displayed_unit": "генерация",
+      "free_category": false,
+      "mapping": {
+        "status": "missing",
+        "product_ids": [],
+        "qualities": [],
+        "unit": "generation",
+        "reason": "No exact implemented public product or operation has been established."
+      }
+    },
+    {
+      "id": "google_image",
+      "name": "Nano Banana",
+      "category": "Изображения",
+      "url": "https://study24.ai/chat/google_image",
+      "source_date": "2026-10-27",
+      "pricing_source_url": "https://study24.ai/pricing",
+      "catalog_source_url": "https://study24.ai/bots",
+      "minimum_stars": 30,
+      "catalog_card_stars": 30,
+      "price_conflict": false,
+      "unit": "generation",
+      "displayed_unit": "генерация",
+      "free_category": false,
+      "mapping": {
+        "status": "variant_unverified",
+        "product_ids": [
+          "nano_banana"
+        ],
+        "qualities": [],
+        "unit": "generation",
+        "reason": "Matching product family exists; selected version, settings, output count or duration-price equivalence is unverified."
+      }
+    },
+    {
+      "id": "seedream_5",
+      "name": "Seedream 5.0 Lite",
+      "category": "Изображения",
+      "url": "https://study24.ai/chat/seedream_5",
+      "source_date": "2026-10-27",
+      "pricing_source_url": "https://study24.ai/pricing",
+      "catalog_source_url": "https://study24.ai/bots",
+      "minimum_stars": 30,
+      "catalog_card_stars": 30,
+      "price_conflict": false,
+      "unit": "generation",
+      "displayed_unit": "генерация",
+      "free_category": false,
+      "mapping": {
+        "status": "variant_unverified",
+        "product_ids": [
+          "seedream_5_0_lite"
+        ],
+        "qualities": [],
+        "unit": "generation",
+        "reason": "Matching product family exists; selected version, settings, output count or duration-price equivalence is unverified."
+      }
+    },
+    {
+      "id": "banana_2lite",
+      "name": "Nano Banana 2 Lite",
+      "category": "Изображения",
+      "url": "https://study24.ai/chat/banana_2lite",
+      "source_date": "2026-10-27",
+      "pricing_source_url": "https://study24.ai/pricing",
+      "catalog_source_url": "https://study24.ai/bots",
+      "minimum_stars": 15,
+      "catalog_card_stars": 15,
+      "price_conflict": false,
+      "unit": "generation",
+      "displayed_unit": "генерация",
+      "free_category": false,
+      "mapping": {
+        "status": "missing",
+        "product_ids": [],
+        "qualities": [],
+        "unit": "generation",
+        "reason": "No exact implemented public product or operation has been established."
+      }
+    },
+    {
+      "id": "topaz",
+      "name": "Topaz",
+      "category": "Изображения",
+      "url": "https://study24.ai/chat/topaz",
+      "source_date": "2026-10-27",
+      "pricing_source_url": "https://study24.ai/pricing",
+      "catalog_source_url": "https://study24.ai/bots",
+      "minimum_stars": 55,
+      "catalog_card_stars": 55,
+      "price_conflict": false,
+      "unit": "generation",
+      "displayed_unit": "генерация",
+      "free_category": false,
+      "mapping": {
+        "status": "missing",
+        "product_ids": [],
+        "qualities": [],
+        "unit": "generation",
+        "reason": "No exact implemented public product or operation has been established."
+      }
+    },
+    {
+      "id": "ai_photo",
+      "name": "ИИ-фотосессия",
+      "category": "Изображения",
+      "url": "https://study24.ai/chat/ai_photo",
+      "source_date": "2026-10-27",
+      "pricing_source_url": "https://study24.ai/pricing",
+      "catalog_source_url": "https://study24.ai/bots",
+      "minimum_stars": 55,
+      "catalog_card_stars": 55,
+      "price_conflict": false,
+      "unit": "generation",
+      "displayed_unit": "генерация",
+      "free_category": false,
+      "mapping": {
+        "status": "missing",
+        "product_ids": [],
+        "qualities": [],
+        "unit": "generation",
+        "reason": "No exact implemented public product or operation has been established."
+      }
+    },
+    {
+      "id": "higgsfield_soul",
+      "name": "Генерация фотографий",
+      "category": "Изображения",
+      "url": "https://study24.ai/chat/higgsfield_soul",
+      "source_date": "2026-10-27",
+      "pricing_source_url": "https://study24.ai/pricing",
+      "catalog_source_url": "https://study24.ai/bots",
+      "minimum_stars": 30,
+      "catalog_card_stars": 30,
+      "price_conflict": false,
+      "unit": "generation",
+      "displayed_unit": "генерация",
+      "free_category": false,
+      "mapping": {
+        "status": "missing",
+        "product_ids": [],
+        "qualities": [],
+        "unit": "generation",
+        "reason": "No exact implemented public product or operation has been established."
+      }
+    },
+    {
+      "id": "improve_photo",
+      "name": "Улучшение качества фото",
+      "category": "Изображения",
+      "url": "https://study24.ai/chat/improve_photo",
+      "source_date": "2026-10-27",
+      "pricing_source_url": "https://study24.ai/pricing",
+      "catalog_source_url": "https://study24.ai/bots",
+      "minimum_stars": 55,
+      "catalog_card_stars": 55,
+      "price_conflict": false,
+      "unit": "generation",
+      "displayed_unit": "генерация",
+      "free_category": false,
+      "mapping": {
+        "status": "missing",
+        "product_ids": [],
+        "qualities": [],
+        "unit": "generation",
+        "reason": "No exact implemented public product or operation has been established."
+      }
+    },
+    {
+      "id": "september",
+      "name": "Открытка 1 сентября",
+      "category": "Изображения",
+      "url": "https://study24.ai/chat/september",
+      "source_date": "2026-10-27",
+      "pricing_source_url": "https://study24.ai/pricing",
+      "catalog_source_url": "https://study24.ai/bots",
+      "minimum_stars": 55,
+      "catalog_card_stars": 55,
+      "price_conflict": false,
+      "unit": "generation",
+      "displayed_unit": "генерация",
+      "free_category": false,
+      "mapping": {
+        "status": "missing",
+        "product_ids": [],
+        "qualities": [],
+        "unit": "generation",
+        "reason": "No exact implemented public product or operation has been established."
+      }
+    },
+    {
+      "id": "photo_love_is",
+      "name": "Открытка в стиле Love is...",
+      "category": "Изображения",
+      "url": "https://study24.ai/chat/photo_love_is",
+      "source_date": "2026-10-27",
+      "pricing_source_url": "https://study24.ai/pricing",
+      "catalog_source_url": "https://study24.ai/bots",
+      "minimum_stars": 55,
+      "catalog_card_stars": 55,
+      "price_conflict": false,
+      "unit": "generation",
+      "displayed_unit": "генерация",
+      "free_category": false,
+      "mapping": {
+        "status": "missing",
+        "product_ids": [],
+        "qualities": [],
+        "unit": "generation",
+        "reason": "No exact implemented public product or operation has been established."
+      }
+    },
+    {
+      "id": "gpt-sol",
+      "name": "GPT 6.1 Sol",
+      "category": "Текст",
+      "url": "https://study24.ai/chat/gpt-sol",
+      "source_date": "2026-10-27",
+      "pricing_source_url": "https://study24.ai/pricing",
+      "catalog_source_url": "https://study24.ai/bots",
+      "minimum_stars": 5,
+      "catalog_card_stars": null,
+      "price_conflict": false,
+      "unit": "request",
+      "displayed_unit": "запрос",
+      "free_category": false,
+      "mapping": {
+        "status": "version_ambiguous",
+        "product_ids": [
+          "gpt_6_sol"
+        ],
+        "qualities": [],
+        "unit": "request",
+        "reason": "Public research says6.1 Sol; local route is6 Sol. Do not substitute a different version."
+      }
+    },
+    {
+      "id": "gemini-4",
+      "name": "Gemini 4 Argon",
+      "category": "Текст",
+      "url": "https://study24.ai/chat/gemini-4",
+      "source_date": "2026-10-27",
+      "pricing_source_url": "https://study24.ai/pricing",
+      "catalog_source_url": "https://study24.ai/bots",
+      "minimum_stars": 5,
+      "catalog_card_stars": null,
+      "price_conflict": false,
+      "unit": "request",
+      "displayed_unit": "запрос",
+      "free_category": false,
+      "mapping": {
+        "status": "missing",
+        "product_ids": [],
+        "qualities": [],
+        "unit": "request",
+        "reason": "No exact implemented public product or operation has been established."
+      }
+    },
+    {
+      "id": "fable_51",
+      "name": "Claude Fable 5.1",
+      "category": "Текст",
+      "url": "https://study24.ai/chat/fable_51",
+      "source_date": "2026-10-27",
+      "pricing_source_url": "https://study24.ai/pricing",
+      "catalog_source_url": "https://study24.ai/bots",
+      "minimum_stars": 5,
+      "catalog_card_stars": null,
+      "price_conflict": false,
+      "unit": "request",
+      "displayed_unit": "запрос",
+      "free_category": false,
+      "mapping": {
+        "status": "formula_unverified",
+        "product_ids": [
+          "claude_fable_5_1"
+        ],
+        "qualities": [],
+        "unit": "request",
+        "reason": "Public minimum has no verified text/context formula."
+      }
+    },
+    {
+      "id": "claude_5",
+      "name": "Claude Opus 5",
+      "category": "Текст",
+      "url": "https://study24.ai/chat/claude_5",
+      "source_date": "2026-10-27",
+      "pricing_source_url": "https://study24.ai/pricing",
+      "catalog_source_url": "https://study24.ai/bots",
+      "minimum_stars": 5,
+      "catalog_card_stars": null,
+      "price_conflict": false,
+      "unit": "request",
+      "displayed_unit": "запрос",
+      "free_category": false,
+      "mapping": {
+        "status": "formula_unverified",
+        "product_ids": [
+          "claude_opus_5"
+        ],
+        "qualities": [],
+        "unit": "request",
+        "reason": "Public minimum has no verified text/context formula."
+      }
+    },
+    {
+      "id": "gemini-flash-37",
+      "name": "Gemini 3.7 Flash",
+      "category": "Текст",
+      "url": "https://study24.ai/chat/gemini-flash-37",
+      "source_date": "2026-10-27",
+      "pricing_source_url": "https://study24.ai/pricing",
+      "catalog_source_url": "https://study24.ai/bots",
+      "minimum_stars": 5,
+      "catalog_card_stars": null,
+      "price_conflict": false,
+      "unit": "request",
+      "displayed_unit": "запрос",
+      "free_category": false,
+      "mapping": {
+        "status": "formula_unverified",
+        "product_ids": [
+          "gemini_3_7_flash"
+        ],
+        "qualities": [],
+        "unit": "request",
+        "reason": "Public minimum has no verified text/context formula."
+      }
+    },
+    {
+      "id": "claude_fable",
+      "name": "Claude Fable 5",
+      "category": "Текст",
+      "url": "https://study24.ai/chat/claude_fable",
+      "source_date": "2026-10-27",
+      "pricing_source_url": "https://study24.ai/pricing",
+      "catalog_source_url": "https://study24.ai/bots",
+      "minimum_stars": 5,
+      "catalog_card_stars": null,
+      "price_conflict": false,
+      "unit": "request",
+      "displayed_unit": "запрос",
+      "free_category": false,
+      "mapping": {
+        "status": "formula_unverified",
+        "product_ids": [
+          "claude_fable_5"
+        ],
+        "qualities": [],
+        "unit": "request",
+        "reason": "Public minimum has no verified text/context formula."
+      }
+    },
+    {
+      "id": "claude_opus_48",
+      "name": "Claude Opus 4.8",
+      "category": "Текст",
+      "url": "https://study24.ai/chat/claude_opus_48",
+      "source_date": "2026-10-27",
+      "pricing_source_url": "https://study24.ai/pricing",
+      "catalog_source_url": "https://study24.ai/bots",
+      "minimum_stars": 5,
+      "catalog_card_stars": null,
+      "price_conflict": false,
+      "unit": "request",
+      "displayed_unit": "запрос",
+      "free_category": false,
+      "mapping": {
+        "status": "formula_unverified",
+        "product_ids": [
+          "claude_opus_4_8"
+        ],
+        "qualities": [],
+        "unit": "request",
+        "reason": "Public minimum has no verified text/context formula."
+      }
+    },
+    {
+      "id": "gpt_56",
+      "name": "GPT 5.6 Terra",
+      "category": "Текст",
+      "url": "https://study24.ai/chat/gpt_56",
+      "source_date": "2026-10-27",
+      "pricing_source_url": "https://study24.ai/pricing",
+      "catalog_source_url": "https://study24.ai/bots",
+      "minimum_stars": 5,
+      "catalog_card_stars": null,
+      "price_conflict": false,
+      "unit": "request",
+      "displayed_unit": "запрос",
+      "free_category": false,
+      "mapping": {
+        "status": "formula_unverified",
+        "product_ids": [
+          "gpt_5_6_terra"
+        ],
+        "qualities": [],
+        "unit": "request",
+        "reason": "Public minimum has no verified text/context formula."
+      }
+    },
+    {
+      "id": "gemini_36_flash",
+      "name": "Gemini 3.6 Flash",
+      "category": "Текст",
+      "url": "https://study24.ai/chat/gemini_36_flash",
+      "source_date": "2026-10-27",
+      "pricing_source_url": "https://study24.ai/pricing",
+      "catalog_source_url": "https://study24.ai/bots",
+      "minimum_stars": 5,
+      "catalog_card_stars": null,
+      "price_conflict": false,
+      "unit": "request",
+      "displayed_unit": "запрос",
+      "free_category": false,
+      "mapping": {
+        "status": "formula_unverified",
+        "product_ids": [
+          "gemini_3_6_flash"
+        ],
+        "qualities": [],
+        "unit": "request",
+        "reason": "Public minimum has no verified text/context formula."
+      }
+    },
+    {
+      "id": "chat_gpt5",
+      "name": "ChatGPT 5",
+      "category": "Текст",
+      "url": "https://study24.ai/chat/chat_gpt5",
+      "source_date": "2026-10-27",
+      "pricing_source_url": "https://study24.ai/pricing",
+      "catalog_source_url": "https://study24.ai/bots",
+      "minimum_stars": 5,
+      "catalog_card_stars": null,
+      "price_conflict": false,
+      "unit": "request",
+      "displayed_unit": "запрос",
+      "free_category": false,
+      "mapping": {
+        "status": "formula_unverified",
+        "product_ids": [
+          "gpt_5"
+        ],
+        "qualities": [],
+        "unit": "request",
+        "reason": "Public minimum has no verified text/context formula."
+      }
+    },
+    {
+      "id": "gpt-luna",
+      "name": "GPT 6 Luna",
+      "category": "Текст",
+      "url": "https://study24.ai/chat/gpt-luna",
+      "source_date": "2026-10-27",
+      "pricing_source_url": "https://study24.ai/pricing",
+      "catalog_source_url": "https://study24.ai/bots",
+      "minimum_stars": 5,
+      "catalog_card_stars": null,
+      "price_conflict": false,
+      "unit": "request",
+      "displayed_unit": "запрос",
+      "free_category": false,
+      "mapping": {
+        "status": "formula_unverified",
+        "product_ids": [
+          "gpt_6_luna"
+        ],
+        "qualities": [],
+        "unit": "request",
+        "reason": "Public minimum has no verified text/context formula."
+      }
+    },
+    {
+      "id": "gemini3_pro",
+      "name": "Gemini 3.1 Pro",
+      "category": "Текст",
+      "url": "https://study24.ai/chat/gemini3_pro",
+      "source_date": "2026-10-27",
+      "pricing_source_url": "https://study24.ai/pricing",
+      "catalog_source_url": "https://study24.ai/bots",
+      "minimum_stars": 5,
+      "catalog_card_stars": null,
+      "price_conflict": false,
+      "unit": "request",
+      "displayed_unit": "запрос",
+      "free_category": false,
+      "mapping": {
+        "status": "formula_unverified",
+        "product_ids": [
+          "gemini_3_1_pro"
+        ],
+        "qualities": [],
+        "unit": "request",
+        "reason": "Public minimum has no verified text/context formula."
+      }
+    },
+    {
+      "id": "claude_haiku",
+      "name": "Claude Haiku 5.5",
+      "category": "Текст",
+      "url": "https://study24.ai/chat/claude_haiku",
+      "source_date": "2026-10-27",
+      "pricing_source_url": "https://study24.ai/pricing",
+      "catalog_source_url": "https://study24.ai/bots",
+      "minimum_stars": 5,
+      "catalog_card_stars": null,
+      "price_conflict": false,
+      "unit": "request",
+      "displayed_unit": "запрос",
+      "free_category": false,
+      "mapping": {
+        "status": "version_ambiguous",
+        "product_ids": [
+          "claude_haiku_4_5_20251001"
+        ],
+        "qualities": [],
+        "unit": "request",
+        "reason": "Public research saysHaiku5.5; local candidate is4.5. Versions differ."
+      }
+    },
+    {
+      "id": "deepseek_v4",
+      "name": "DeepSeek V4 Pro",
+      "category": "Текст",
+      "url": "https://study24.ai/chat/deepseek_v4",
+      "source_date": "2026-10-27",
+      "pricing_source_url": "https://study24.ai/pricing",
+      "catalog_source_url": "https://study24.ai/bots",
+      "minimum_stars": 5,
+      "catalog_card_stars": null,
+      "price_conflict": false,
+      "unit": "request",
+      "displayed_unit": "запрос",
+      "free_category": false,
+      "mapping": {
+        "status": "formula_unverified",
+        "product_ids": [
+          "deepseek_v4_pro"
+        ],
+        "qualities": [],
+        "unit": "request",
+        "reason": "Public minimum has no verified text/context formula."
+      }
+    },
+    {
+      "id": "claude_opus_47",
+      "name": "Claude Opus 4.7",
+      "category": "Текст",
+      "url": "https://study24.ai/chat/claude_opus_47",
+      "source_date": "2026-10-27",
+      "pricing_source_url": "https://study24.ai/pricing",
+      "catalog_source_url": "https://study24.ai/bots",
+      "minimum_stars": 5,
+      "catalog_card_stars": null,
+      "price_conflict": false,
+      "unit": "request",
+      "displayed_unit": "запрос",
+      "free_category": false,
+      "mapping": {
+        "status": "formula_unverified",
+        "product_ids": [
+          "claude_opus_4_7"
+        ],
+        "qualities": [],
+        "unit": "request",
+        "reason": "Public minimum has no verified text/context formula."
+      }
+    },
+    {
+      "id": "gemini_3_5_flash",
+      "name": "Gemini 3.5 Flash",
+      "category": "Текст",
+      "url": "https://study24.ai/chat/gemini_3_5_flash",
+      "source_date": "2026-10-27",
+      "pricing_source_url": "https://study24.ai/pricing",
+      "catalog_source_url": "https://study24.ai/bots",
+      "minimum_stars": 5,
+      "catalog_card_stars": null,
+      "price_conflict": false,
+      "unit": "request",
+      "displayed_unit": "запрос",
+      "free_category": false,
+      "mapping": {
+        "status": "formula_unverified",
+        "product_ids": [
+          "gemini_3_5_flash"
+        ],
+        "qualities": [],
+        "unit": "request",
+        "reason": "Public minimum has no verified text/context formula."
+      }
+    },
+    {
+      "id": "kimi_k3",
+      "name": "Kimi K3",
+      "category": "Текст",
+      "url": "https://study24.ai/chat/kimi_k3",
+      "source_date": "2026-10-27",
+      "pricing_source_url": "https://study24.ai/pricing",
+      "catalog_source_url": "https://study24.ai/bots",
+      "minimum_stars": 5,
+      "catalog_card_stars": null,
+      "price_conflict": false,
+      "unit": "request",
+      "displayed_unit": "запрос",
+      "free_category": false,
+      "mapping": {
+        "status": "formula_unverified",
+        "product_ids": [
+          "kimi_k3"
+        ],
+        "qualities": [],
+        "unit": "request",
+        "reason": "Public minimum has no verified text/context formula."
+      }
+    },
+    {
+      "id": "qwen_max",
+      "name": "Qwen 3.8 Max",
+      "category": "Текст",
+      "url": "https://study24.ai/chat/qwen_max",
+      "source_date": "2026-10-27",
+      "pricing_source_url": "https://study24.ai/pricing",
+      "catalog_source_url": "https://study24.ai/bots",
+      "minimum_stars": 5,
+      "catalog_card_stars": null,
+      "price_conflict": false,
+      "unit": "request",
+      "displayed_unit": "запрос",
+      "free_category": false,
+      "mapping": {
+        "status": "formula_unverified",
+        "product_ids": [
+          "qwen_3_8_max"
+        ],
+        "qualities": [],
+        "unit": "request",
+        "reason": "Public minimum has no verified text/context formula."
+      }
+    },
+    {
+      "id": "claude_sonnet",
+      "name": "Claude Sonnet 5.5",
+      "category": "Текст",
+      "url": "https://study24.ai/chat/claude_sonnet",
+      "source_date": "2026-10-27",
+      "pricing_source_url": "https://study24.ai/pricing",
+      "catalog_source_url": "https://study24.ai/bots",
+      "minimum_stars": 5,
+      "catalog_card_stars": null,
+      "price_conflict": false,
+      "unit": "request",
+      "displayed_unit": "запрос",
+      "free_category": false,
+      "mapping": {
+        "status": "missing",
+        "product_ids": [],
+        "qualities": [],
+        "unit": "request",
+        "reason": "No exact implemented public product or operation has been established."
+      }
+    },
+    {
+      "id": "chat_gpt5_4",
+      "name": "ChatGPT 5.4",
+      "category": "Текст",
+      "url": "https://study24.ai/chat/chat_gpt5_4",
+      "source_date": "2026-10-27",
+      "pricing_source_url": "https://study24.ai/pricing",
+      "catalog_source_url": "https://study24.ai/bots",
+      "minimum_stars": 5,
+      "catalog_card_stars": null,
+      "price_conflict": false,
+      "unit": "request",
+      "displayed_unit": "запрос",
+      "free_category": false,
+      "mapping": {
+        "status": "formula_unverified",
+        "product_ids": [
+          "gpt_5_4"
+        ],
+        "qualities": [],
+        "unit": "request",
+        "reason": "Public minimum has no verified text/context formula."
+      }
+    },
+    {
+      "id": "chat_gpt5_5",
+      "name": "ChatGPT 5.5",
+      "category": "Текст",
+      "url": "https://study24.ai/chat/chat_gpt5_5",
+      "source_date": "2026-10-27",
+      "pricing_source_url": "https://study24.ai/pricing",
+      "catalog_source_url": "https://study24.ai/bots",
+      "minimum_stars": 5,
+      "catalog_card_stars": null,
+      "price_conflict": false,
+      "unit": "request",
+      "displayed_unit": "запрос",
+      "free_category": false,
+      "mapping": {
+        "status": "formula_unverified",
+        "product_ids": [
+          "gpt_5_5"
+        ],
+        "qualities": [],
+        "unit": "request",
+        "reason": "Public minimum has no verified text/context formula."
+      }
+    },
+    {
+      "id": "chatgpt_codex",
+      "name": "ChatGPT 5.3 Codex",
+      "category": "Текст",
+      "url": "https://study24.ai/chat/chatgpt_codex",
+      "source_date": "2026-10-27",
+      "pricing_source_url": "https://study24.ai/pricing",
+      "catalog_source_url": "https://study24.ai/bots",
+      "minimum_stars": 5,
+      "catalog_card_stars": null,
+      "price_conflict": false,
+      "unit": "request",
+      "displayed_unit": "запрос",
+      "free_category": false,
+      "mapping": {
+        "status": "formula_unverified",
+        "product_ids": [
+          "gpt_5_3_codex"
+        ],
+        "qualities": [],
+        "unit": "request",
+        "reason": "Public minimum has no verified text/context formula."
+      }
+    },
+    {
+      "id": "grok-4-7",
+      "name": "Grok 4.7",
+      "category": "Текст",
+      "url": "https://study24.ai/chat/grok-4-7",
+      "source_date": "2026-10-27",
+      "pricing_source_url": "https://study24.ai/pricing",
+      "catalog_source_url": "https://study24.ai/bots",
+      "minimum_stars": 5,
+      "catalog_card_stars": null,
+      "price_conflict": false,
+      "unit": "request",
+      "displayed_unit": "запрос",
+      "free_category": false,
+      "mapping": {
+        "status": "formula_unverified",
+        "product_ids": [
+          "grok_4_7"
+        ],
+        "qualities": [],
+        "unit": "request",
+        "reason": "Public minimum has no verified text/context formula."
+      }
+    },
+    {
+      "id": "grok_45",
+      "name": "Grok 4.5",
+      "category": "Текст",
+      "url": "https://study24.ai/chat/grok_45",
+      "source_date": "2026-10-27",
+      "pricing_source_url": "https://study24.ai/pricing",
+      "catalog_source_url": "https://study24.ai/bots",
+      "minimum_stars": 5,
+      "catalog_card_stars": null,
+      "price_conflict": false,
+      "unit": "request",
+      "displayed_unit": "запрос",
+      "free_category": false,
+      "mapping": {
+        "status": "formula_unverified",
+        "product_ids": [
+          "grok_4_5"
+        ],
+        "qualities": [],
+        "unit": "request",
+        "reason": "Public minimum has no verified text/context formula."
+      }
+    },
+    {
+      "id": "grok-46",
+      "name": "Grok 4.6",
+      "category": "Текст",
+      "url": "https://study24.ai/chat/grok-46",
+      "source_date": "2026-10-27",
+      "pricing_source_url": "https://study24.ai/pricing",
+      "catalog_source_url": "https://study24.ai/bots",
+      "minimum_stars": 5,
+      "catalog_card_stars": null,
+      "price_conflict": false,
+      "unit": "request",
+      "displayed_unit": "запрос",
+      "free_category": false,
+      "mapping": {
+        "status": "formula_unverified",
+        "product_ids": [
+          "grok_4_6"
+        ],
+        "qualities": [],
+        "unit": "request",
+        "reason": "Public minimum has no verified text/context formula."
+      }
+    },
+    {
+      "id": "chat_gpt5_2",
+      "name": "ChatGPT 5.2",
+      "category": "Текст",
+      "url": "https://study24.ai/chat/chat_gpt5_2",
+      "source_date": "2026-10-27",
+      "pricing_source_url": "https://study24.ai/pricing",
+      "catalog_source_url": "https://study24.ai/bots",
+      "minimum_stars": 5,
+      "catalog_card_stars": null,
+      "price_conflict": false,
+      "unit": "request",
+      "displayed_unit": "запрос",
+      "free_category": false,
+      "mapping": {
+        "status": "formula_unverified",
+        "product_ids": [
+          "gpt_5_2"
+        ],
+        "qualities": [],
+        "unit": "request",
+        "reason": "Public minimum has no verified text/context formula."
+      }
+    },
+    {
+      "id": "claude_opus",
+      "name": "Claude Opus 4.6",
+      "category": "Текст",
+      "url": "https://study24.ai/chat/claude_opus",
+      "source_date": "2026-10-27",
+      "pricing_source_url": "https://study24.ai/pricing",
+      "catalog_source_url": "https://study24.ai/bots",
+      "minimum_stars": 5,
+      "catalog_card_stars": null,
+      "price_conflict": false,
+      "unit": "request",
+      "displayed_unit": "запрос",
+      "free_category": false,
+      "mapping": {
+        "status": "formula_unverified",
+        "product_ids": [
+          "claude_opus_4_6"
+        ],
+        "qualities": [],
+        "unit": "request",
+        "reason": "Public minimum has no verified text/context formula."
+      }
+    },
+    {
+      "id": "perplexity_plus_bot",
+      "name": "Perplexity",
+      "category": "Текст",
+      "url": "https://study24.ai/chat/perplexity_plus_bot",
+      "source_date": "2026-10-27",
+      "pricing_source_url": "https://study24.ai/pricing",
+      "catalog_source_url": "https://study24.ai/bots",
+      "minimum_stars": 5,
+      "catalog_card_stars": null,
+      "price_conflict": false,
+      "unit": "request",
+      "displayed_unit": "запрос",
+      "free_category": false,
+      "mapping": {
+        "status": "missing",
+        "product_ids": [],
+        "qualities": [],
+        "unit": "request",
+        "reason": "No exact implemented public product or operation has been established."
+      }
+    },
+    {
+      "id": "gpt-6",
+      "name": "GPT 6 Astra",
+      "category": "Текст",
+      "url": "https://study24.ai/chat/gpt-6",
+      "source_date": "2026-10-27",
+      "pricing_source_url": "https://study24.ai/pricing",
+      "catalog_source_url": "https://study24.ai/bots",
+      "minimum_stars": 5,
+      "catalog_card_stars": null,
+      "price_conflict": false,
+      "unit": "request",
+      "displayed_unit": "запрос",
+      "free_category": false,
+      "mapping": {
+        "status": "formula_unverified",
+        "product_ids": [
+          "gpt_6_astra"
+        ],
+        "qualities": [],
+        "unit": "request",
+        "reason": "Public minimum has no verified text/context formula."
+      }
+    },
+    {
+      "id": "seedance25",
+      "name": "Seedance 2.5 Lite",
+      "category": "Видео и аудио",
+      "url": "https://study24.ai/chat/seedance25",
+      "source_date": "2026-10-27",
+      "pricing_source_url": "https://study24.ai/pricing",
+      "catalog_source_url": "https://study24.ai/bots",
+      "minimum_stars": 50,
+      "catalog_card_stars": 50,
+      "price_conflict": false,
+      "unit": "second",
+      "displayed_unit": "секунда",
+      "free_category": false,
+      "mapping": {
+        "status": "version_ambiguous",
+        "product_ids": [
+          "video_seedance_2_5"
+        ],
+        "qualities": [],
+        "unit": "second",
+        "reason": "Lite product/settings are not established by the local Seedance2.5 route."
+      }
+    },
+    {
+      "id": "seedance",
+      "name": "Seedance 2.0",
+      "category": "Видео и аудио",
+      "url": "https://study24.ai/chat/seedance",
+      "source_date": "2026-10-27",
+      "pricing_source_url": "https://study24.ai/pricing",
+      "catalog_source_url": "https://study24.ai/bots",
+      "minimum_stars": 28,
+      "catalog_card_stars": 28,
+      "price_conflict": false,
+      "unit": "second",
+      "displayed_unit": "секунда",
+      "free_category": false,
+      "mapping": {
+        "status": "variant_unverified",
+        "product_ids": [
+          "seedance_2_0"
+        ],
+        "qualities": [],
+        "unit": "second",
+        "reason": "Matching product family exists; selected version, settings, output count or duration-price equivalence is unverified."
+      }
+    },
+    {
+      "id": "kling",
+      "name": "Kling 4.0",
+      "category": "Видео и аудио",
+      "url": "https://study24.ai/chat/kling",
+      "source_date": "2026-10-27",
+      "pricing_source_url": "https://study24.ai/pricing",
+      "catalog_source_url": "https://study24.ai/bots",
+      "minimum_stars": 55,
+      "catalog_card_stars": 55,
+      "price_conflict": false,
+      "unit": "second",
+      "displayed_unit": "секунда",
+      "free_category": false,
+      "mapping": {
+        "status": "missing",
+        "product_ids": [],
+        "qualities": [],
+        "unit": "second",
+        "reason": "No exact implemented public product or operation has been established."
+      }
+    },
+    {
+      "id": "videogen",
+      "name": "Генератор видео",
+      "category": "Видео и аудио",
+      "url": "https://study24.ai/chat/videogen",
+      "source_date": "2026-10-27",
+      "pricing_source_url": "https://study24.ai/pricing",
+      "catalog_source_url": "https://study24.ai/bots",
+      "minimum_stars": 25,
+      "catalog_card_stars": 25,
+      "price_conflict": false,
+      "unit": "second",
+      "displayed_unit": "секунда",
+      "free_category": false,
+      "mapping": {
+        "status": "missing",
+        "product_ids": [],
+        "qualities": [],
+        "unit": "second",
+        "reason": "No exact implemented public product or operation has been established."
+      }
+    },
+    {
+      "id": "suno",
+      "name": "Suno",
+      "category": "Видео и аудио",
+      "url": "https://study24.ai/chat/suno",
+      "source_date": "2026-10-27",
+      "pricing_source_url": "https://study24.ai/pricing",
+      "catalog_source_url": "https://study24.ai/bots",
+      "minimum_stars": 60,
+      "catalog_card_stars": 60,
+      "price_conflict": false,
+      "unit": "generation",
+      "displayed_unit": "генерация",
+      "free_category": false,
+      "mapping": {
+        "status": "variant_unverified",
+        "product_ids": [
+          "suno_v6",
+          "suno_v6_wild",
+          "suno_v6_mini"
+        ],
+        "qualities": [],
+        "unit": "generation",
+        "reason": "Matching product family exists; selected version, settings, output count or duration-price equivalence is unverified."
+      }
+    },
+    {
+      "id": "gemini_omni1",
+      "name": "Gemini Omni 1.1",
+      "category": "Видео и аудио",
+      "url": "https://study24.ai/chat/gemini_omni1",
+      "source_date": "2026-10-27",
+      "pricing_source_url": "https://study24.ai/pricing",
+      "catalog_source_url": "https://study24.ai/bots",
+      "minimum_stars": 36,
+      "catalog_card_stars": 40,
+      "price_conflict": true,
+      "unit": "second",
+      "displayed_unit": "секунда",
+      "free_category": false,
+      "mapping": {
+        "status": "version_ambiguous",
+        "product_ids": [
+          "video_gemini_omni_1_1_flash"
+        ],
+        "qualities": [],
+        "unit": "second",
+        "reason": "Research label does not establish equivalence to local1.1 Flash."
+      }
+    },
+    {
+      "id": "wan_3",
+      "name": "Wan 3.0",
+      "category": "Видео и аудио",
+      "url": "https://study24.ai/chat/wan_3",
+      "source_date": "2026-10-27",
+      "pricing_source_url": "https://study24.ai/pricing",
+      "catalog_source_url": "https://study24.ai/bots",
+      "minimum_stars": 50,
+      "catalog_card_stars": 50,
+      "price_conflict": false,
+      "unit": "second",
+      "displayed_unit": "секунда",
+      "free_category": false,
+      "mapping": {
+        "status": "variant_unverified",
+        "product_ids": [
+          "wan_3_0"
+        ],
+        "qualities": [],
+        "unit": "second",
+        "reason": "Matching product family exists; selected version, settings, output count or duration-price equivalence is unverified."
+      }
+    },
+    {
+      "id": "google_veo3",
+      "name": "Google Veo 3.1",
+      "category": "Видео и аудио",
+      "url": "https://study24.ai/chat/google_veo3",
+      "source_date": "2026-10-27",
+      "pricing_source_url": "https://study24.ai/pricing",
+      "catalog_source_url": "https://study24.ai/bots",
+      "minimum_stars": 264,
+      "catalog_card_stars": 264,
+      "price_conflict": false,
+      "unit": "generation",
+      "displayed_unit": "генерация",
+      "free_category": false,
+      "mapping": {
+        "status": "variant_unverified",
+        "product_ids": [
+          "video_veo_3_1_fast",
+          "video_veo_3_1_quality",
+          "video_veo_3_1_lite"
+        ],
+        "qualities": [],
+        "unit": "generation",
+        "reason": "Matching product family exists; selected version, settings, output count or duration-price equivalence is unverified."
+      }
+    },
+    {
+      "id": "seedance_mini",
+      "name": "Seedance 2.0 Mini",
+      "category": "Видео и аудио",
+      "url": "https://study24.ai/chat/seedance_mini",
+      "source_date": "2026-10-27",
+      "pricing_source_url": "https://study24.ai/pricing",
+      "catalog_source_url": "https://study24.ai/bots",
+      "minimum_stars": 25,
+      "catalog_card_stars": 25,
+      "price_conflict": false,
+      "unit": "second",
+      "displayed_unit": "секунда",
+      "free_category": false,
+      "mapping": {
+        "status": "variant_unverified",
+        "product_ids": [
+          "seedance_2_0_mini"
+        ],
+        "qualities": [],
+        "unit": "second",
+        "reason": "Matching product family exists; selected version, settings, output count or duration-price equivalence is unverified."
+      }
+    },
+    {
+      "id": "seedance_20_pro",
+      "name": "Seedance 2.0 Pro",
+      "category": "Видео и аудио",
+      "url": "https://study24.ai/chat/seedance_20_pro",
+      "source_date": "2026-10-27",
+      "pricing_source_url": "https://study24.ai/pricing",
+      "catalog_source_url": "https://study24.ai/bots",
+      "minimum_stars": 190,
+      "catalog_card_stars": 190,
+      "price_conflict": false,
+      "unit": "second",
+      "displayed_unit": "секунда",
+      "free_category": false,
+      "mapping": {
+        "status": "missing",
+        "product_ids": [],
+        "qualities": [],
+        "unit": "second",
+        "reason": "No exact implemented public product or operation has been established."
+      }
+    },
+    {
+      "id": "minimax-h3",
+      "name": "Minimax H3",
+      "category": "Видео и аудио",
+      "url": "https://study24.ai/chat/minimax-h3",
+      "source_date": "2026-10-27",
+      "pricing_source_url": "https://study24.ai/pricing",
+      "catalog_source_url": "https://study24.ai/bots",
+      "minimum_stars": 75,
+      "catalog_card_stars": 75,
+      "price_conflict": false,
+      "unit": "second",
+      "displayed_unit": "секунда",
+      "free_category": false,
+      "mapping": {
+        "status": "variant_unverified",
+        "product_ids": [
+          "video_minimax_h3"
+        ],
+        "qualities": [],
+        "unit": "second",
+        "reason": "Matching product family exists; selected version, settings, output count or duration-price equivalence is unverified."
+      }
+    },
+    {
+      "id": "kling_3",
+      "name": "Kling 3.0",
+      "category": "Видео и аудио",
+      "url": "https://study24.ai/chat/kling_3",
+      "source_date": "2026-10-27",
+      "pricing_source_url": "https://study24.ai/pricing",
+      "catalog_source_url": "https://study24.ai/bots",
+      "minimum_stars": 500,
+      "catalog_card_stars": 500,
+      "price_conflict": false,
+      "unit": "generation",
+      "displayed_unit": "генерация",
+      "free_category": false,
+      "mapping": {
+        "status": "variant_unverified",
+        "product_ids": [
+          "video_kling_v3"
+        ],
+        "qualities": [],
+        "unit": "generation",
+        "reason": "Matching product family exists; selected version, settings, output count or duration-price equivalence is unverified."
+      }
+    },
+    {
+      "id": "kling_3_turbo",
+      "name": "Kling 3.0 Turbo",
+      "category": "Видео и аудио",
+      "url": "https://study24.ai/chat/kling_3_turbo",
+      "source_date": "2026-10-27",
+      "pricing_source_url": "https://study24.ai/pricing",
+      "catalog_source_url": "https://study24.ai/bots",
+      "minimum_stars": 50,
+      "catalog_card_stars": 50,
+      "price_conflict": false,
+      "unit": "second",
+      "displayed_unit": "секунда",
+      "free_category": false,
+      "mapping": {
+        "status": "variant_unverified",
+        "product_ids": [
+          "video_kling_3_0_turbo"
+        ],
+        "qualities": [],
+        "unit": "second",
+        "reason": "Matching product family exists; selected version, settings, output count or duration-price equivalence is unverified."
+      }
+    },
+    {
+      "id": "kling_2_6",
+      "name": "Kling 2.6",
+      "category": "Видео и аудио",
+      "url": "https://study24.ai/chat/kling_2_6",
+      "source_date": "2026-10-27",
+      "pricing_source_url": "https://study24.ai/pricing",
+      "catalog_source_url": "https://study24.ai/bots",
+      "minimum_stars": 300,
+      "catalog_card_stars": 300,
+      "price_conflict": false,
+      "unit": "generation",
+      "displayed_unit": "генерация",
+      "free_category": false,
+      "mapping": {
+        "status": "variant_unverified",
+        "product_ids": [
+          "kling_2_6"
+        ],
+        "qualities": [],
+        "unit": "generation",
+        "reason": "Matching product family exists; selected version, settings, output count or duration-price equivalence is unverified."
+      }
+    },
+    {
+      "id": "kling_2_1_master",
+      "name": "Kling 2.5 Turbo",
+      "category": "Видео и аудио",
+      "url": "https://study24.ai/chat/kling_2_1_master",
+      "source_date": "2026-10-27",
+      "pricing_source_url": "https://study24.ai/pricing",
+      "catalog_source_url": "https://study24.ai/bots",
+      "minimum_stars": 200,
+      "catalog_card_stars": 200,
+      "price_conflict": false,
+      "unit": "generation",
+      "displayed_unit": "генерация",
+      "free_category": false,
+      "mapping": {
+        "status": "version_ambiguous",
+        "product_ids": [],
+        "qualities": [],
+        "unit": "generation",
+        "reason": "Study24 URL says2.1 master but label says2.5 Turbo; exact route equivalence is unknown."
+      }
+    },
+    {
+      "id": "kling_mc",
+      "name": "Kling Motion Control",
+      "category": "Видео и аудио",
+      "url": "https://study24.ai/chat/kling_mc",
+      "source_date": "2026-10-27",
+      "pricing_source_url": "https://study24.ai/pricing",
+      "catalog_source_url": "https://study24.ai/bots",
+      "minimum_stars": 400,
+      "catalog_card_stars": 400,
+      "price_conflict": false,
+      "unit": "generation",
+      "displayed_unit": "генерация",
+      "free_category": false,
+      "mapping": {
+        "status": "variant_unverified",
+        "product_ids": [
+          "video_kling_2_6_motion_control"
+        ],
+        "qualities": [],
+        "unit": "generation",
+        "reason": "Matching product family exists; selected version, settings, output count or duration-price equivalence is unverified."
+      }
+    },
+    {
+      "id": "kmc_pro",
+      "name": "Kling Motion Control Pro",
+      "category": "Видео и аудио",
+      "url": "https://study24.ai/chat/kmc_pro",
+      "source_date": "2026-10-27",
+      "pricing_source_url": "https://study24.ai/pricing",
+      "catalog_source_url": "https://study24.ai/bots",
+      "minimum_stars": 550,
+      "catalog_card_stars": 550,
+      "price_conflict": false,
+      "unit": "generation",
+      "displayed_unit": "генерация",
+      "free_category": false,
+      "mapping": {
+        "status": "version_ambiguous",
+        "product_ids": [
+          "video_kling_2_6_motion_control"
+        ],
+        "qualities": [],
+        "unit": "generation",
+        "reason": "Pro product and variant equivalence are unverified."
+      }
+    },
+    {
+      "id": "sound_generation",
+      "name": "Генерация озвучки",
+      "category": "Видео и аудио",
+      "url": "https://study24.ai/chat/sound_generation",
+      "source_date": "2026-10-27",
+      "pricing_source_url": "https://study24.ai/pricing",
+      "catalog_source_url": "https://study24.ai/bots",
+      "minimum_stars": 100,
+      "catalog_card_stars": 100,
+      "price_conflict": false,
+      "unit": "generation",
+      "displayed_unit": "генерация",
+      "free_category": false,
+      "mapping": {
+        "status": "missing",
+        "product_ids": [],
+        "qualities": [],
+        "unit": "generation",
+        "reason": "No exact implemented public product or operation has been established."
+      }
+    },
+    {
+      "id": "grok_imagine_1_5",
+      "name": "Grok Imagine 1.5",
+      "category": "Видео и аудио",
+      "url": "https://study24.ai/chat/grok_imagine_1_5",
+      "source_date": "2026-10-27",
+      "pricing_source_url": "https://study24.ai/pricing",
+      "catalog_source_url": "https://study24.ai/bots",
+      "minimum_stars": 25,
+      "catalog_card_stars": 25,
+      "price_conflict": false,
+      "unit": "second",
+      "displayed_unit": "секунда",
+      "free_category": false,
+      "mapping": {
+        "status": "variant_unverified",
+        "product_ids": [
+          "grok_imagine_1_5_video"
+        ],
+        "qualities": [],
+        "unit": "second",
+        "reason": "Matching product family exists; selected version, settings, output count or duration-price equivalence is unverified."
+      }
+    },
+    {
+      "id": "eleven_labs",
+      "name": "Eleven Labs (озвучка текста)",
+      "category": "Видео и аудио",
+      "url": "https://study24.ai/chat/eleven_labs",
+      "source_date": "2026-10-27",
+      "pricing_source_url": "https://study24.ai/pricing",
+      "catalog_source_url": "https://study24.ai/bots",
+      "minimum_stars": 120,
+      "catalog_card_stars": 120,
+      "price_conflict": false,
+      "unit": "generation",
+      "displayed_unit": "генерация",
+      "free_category": false,
+      "mapping": {
+        "status": "missing",
+        "product_ids": [],
+        "qualities": [],
+        "unit": "generation",
+        "reason": "No exact implemented public product or operation has been established."
+      }
+    },
+    {
+      "id": "animating_image",
+      "name": "Оживить фото или картинку",
+      "category": "Видео и аудио",
+      "url": "https://study24.ai/chat/animating_image",
+      "source_date": "2026-10-27",
+      "pricing_source_url": "https://study24.ai/pricing",
+      "catalog_source_url": "https://study24.ai/bots",
+      "minimum_stars": 25,
+      "catalog_card_stars": 25,
+      "price_conflict": false,
+      "unit": "second",
+      "displayed_unit": "секунда",
+      "free_category": false,
+      "mapping": {
+        "status": "missing",
+        "product_ids": [],
+        "qualities": [],
+        "unit": "second",
+        "reason": "No exact implemented public product or operation has been established."
+      }
+    },
+    {
+      "id": "happy_horse",
+      "name": "Happy Horse",
+      "category": "Видео и аудио",
+      "url": "https://study24.ai/chat/happy_horse",
+      "source_date": "2026-10-27",
+      "pricing_source_url": "https://study24.ai/pricing",
+      "catalog_source_url": "https://study24.ai/bots",
+      "minimum_stars": 80,
+      "catalog_card_stars": 80,
+      "price_conflict": false,
+      "unit": "second",
+      "displayed_unit": "секунда",
+      "free_category": false,
+      "mapping": {
+        "status": "version_ambiguous",
+        "product_ids": [
+          "happyhorse_1_0",
+          "happyhorse_1_1"
+        ],
+        "qualities": [],
+        "unit": "second",
+        "reason": "Research label omits version; local candidates1.0 and1.1 are distinct."
+      }
+    },
+    {
+      "id": "video_edit",
+      "name": "Редактор видео",
+      "category": "Видео и аудио",
+      "url": "https://study24.ai/chat/video_edit",
+      "source_date": "2026-10-27",
+      "pricing_source_url": "https://study24.ai/pricing",
+      "catalog_source_url": "https://study24.ai/bots",
+      "minimum_stars": 2300,
+      "catalog_card_stars": 2300,
+      "price_conflict": false,
+      "unit": "generation",
+      "displayed_unit": "генерация",
+      "free_category": false,
+      "mapping": {
+        "status": "missing",
+        "product_ids": [],
+        "qualities": [],
+        "unit": "generation",
+        "reason": "No exact implemented public product or operation has been established."
+      }
+    },
+    {
+      "id": "gemini_omni_flash",
+      "name": "Gemini Omni Flash",
+      "category": "Видео и аудио",
+      "url": "https://study24.ai/chat/gemini_omni_flash",
+      "source_date": "2026-10-27",
+      "pricing_source_url": "https://study24.ai/pricing",
+      "catalog_source_url": "https://study24.ai/bots",
+      "minimum_stars": 45,
+      "catalog_card_stars": 45,
+      "price_conflict": false,
+      "unit": "second",
+      "displayed_unit": "секунда",
+      "free_category": false,
+      "mapping": {
+        "status": "version_ambiguous",
+        "product_ids": [
+          "gemini_omni_flash_preview"
+        ],
+        "qualities": [],
+        "unit": "second",
+        "reason": "Research label does not establish equivalence to local Flash Preview."
+      }
+    },
+    {
+      "id": "gemini3_flash",
+      "name": "Gemini 3.1 Flash",
+      "category": "Бесплатные",
+      "url": "https://study24.ai/chat/gemini3_flash",
+      "source_date": "2026-10-27",
+      "pricing_source_url": "https://study24.ai/pricing",
+      "catalog_source_url": "https://study24.ai/bots",
+      "minimum_stars": null,
+      "catalog_card_stars": null,
+      "price_conflict": false,
+      "unit": "unspecified",
+      "displayed_unit": "",
+      "free_category": true,
+      "mapping": {
+        "status": "free_unverified",
+        "product_ids": [],
+        "qualities": [],
+        "unit": "unspecified",
+        "reason": "Free category is a research fact only; it neither enables a route nor authorizes free usage."
+      }
+    },
+    {
+      "id": "deepseek_v4_lite",
+      "name": "DeepSeek V4",
+      "category": "Бесплатные",
+      "url": "https://study24.ai/chat/deepseek_v4_lite",
+      "source_date": "2026-10-27",
+      "pricing_source_url": "https://study24.ai/pricing",
+      "catalog_source_url": "https://study24.ai/bots",
+      "minimum_stars": null,
+      "catalog_card_stars": null,
+      "price_conflict": false,
+      "unit": "unspecified",
+      "displayed_unit": "",
+      "free_category": true,
+      "mapping": {
+        "status": "free_unverified",
+        "product_ids": [],
+        "qualities": [],
+        "unit": "unspecified",
+        "reason": "Free category is a research fact only; it neither enables a route nor authorizes free usage."
+      }
+    },
+    {
+      "id": "generator_prompta",
+      "name": "Генератор промпта",
+      "category": "Бесплатные",
+      "url": "https://study24.ai/chat/generator_prompta",
+      "source_date": "2026-10-27",
+      "pricing_source_url": "https://study24.ai/pricing",
+      "catalog_source_url": "https://study24.ai/bots",
+      "minimum_stars": null,
+      "catalog_card_stars": null,
+      "price_conflict": false,
+      "unit": "unspecified",
+      "displayed_unit": "",
+      "free_category": true,
+      "mapping": {
+        "status": "free_unverified",
+        "product_ids": [],
+        "qualities": [],
+        "unit": "unspecified",
+        "reason": "Free category is a research fact only; it neither enables a route nor authorizes free usage."
+      }
+    },
+    {
+      "id": "gemini_pro_plus_bot",
+      "name": "Gemini 2.5 Pro",
+      "category": "Бесплатные",
+      "url": "https://study24.ai/chat/gemini_pro_plus_bot",
+      "source_date": "2026-10-27",
+      "pricing_source_url": "https://study24.ai/pricing",
+      "catalog_source_url": "https://study24.ai/bots",
+      "minimum_stars": null,
+      "catalog_card_stars": null,
+      "price_conflict": false,
+      "unit": "unspecified",
+      "displayed_unit": "",
+      "free_category": true,
+      "mapping": {
+        "status": "free_unverified",
+        "product_ids": [],
+        "qualities": [],
+        "unit": "unspecified",
+        "reason": "Free category is a research fact only; it neither enables a route nor authorizes free usage."
+      }
+    },
+    {
+      "id": "qwen",
+      "name": "Qwen 3.7 Flash",
+      "category": "Бесплатные",
+      "url": "https://study24.ai/chat/qwen",
+      "source_date": "2026-10-27",
+      "pricing_source_url": "https://study24.ai/pricing",
+      "catalog_source_url": "https://study24.ai/bots",
+      "minimum_stars": null,
+      "catalog_card_stars": null,
+      "price_conflict": false,
+      "unit": "unspecified",
+      "displayed_unit": "",
+      "free_category": true,
+      "mapping": {
+        "status": "free_unverified",
+        "product_ids": [],
+        "qualities": [],
+        "unit": "unspecified",
+        "reason": "Free category is a research fact only; it neither enables a route nor authorizes free usage."
+      }
+    },
+    {
+      "id": "a24_deepseek_r1",
+      "name": "Deepseek R1",
+      "category": "Бесплатные",
+      "url": "https://study24.ai/chat/a24_deepseek_r1",
+      "source_date": "2026-10-27",
+      "pricing_source_url": "https://study24.ai/pricing",
+      "catalog_source_url": "https://study24.ai/bots",
+      "minimum_stars": null,
+      "catalog_card_stars": null,
+      "price_conflict": false,
+      "unit": "unspecified",
+      "displayed_unit": "",
+      "free_category": true,
+      "mapping": {
+        "status": "free_unverified",
+        "product_ids": [],
+        "qualities": [],
+        "unit": "unspecified",
+        "reason": "Free category is a research fact only; it neither enables a route nor authorizes free usage."
+      }
+    },
+    {
+      "id": "gemini25_flash_lite",
+      "name": "Gemini 2.5 Flash Lite",
+      "category": "Бесплатные",
+      "url": "https://study24.ai/chat/gemini25_flash_lite",
+      "source_date": "2026-10-27",
+      "pricing_source_url": "https://study24.ai/pricing",
+      "catalog_source_url": "https://study24.ai/bots",
+      "minimum_stars": null,
+      "catalog_card_stars": null,
+      "price_conflict": false,
+      "unit": "unspecified",
+      "displayed_unit": "",
+      "free_category": true,
+      "mapping": {
+        "status": "free_unverified",
+        "product_ids": [],
+        "qualities": [],
+        "unit": "unspecified",
+        "reason": "Free category is a research fact only; it neither enables a route nor authorizes free usage."
+      }
+    },
+    {
+      "id": "gpt_mini",
+      "name": "ChatGPT Mini",
+      "category": "Бесплатные",
+      "url": "https://study24.ai/chat/gpt_mini",
+      "source_date": "2026-10-27",
+      "pricing_source_url": "https://study24.ai/pricing",
+      "catalog_source_url": "https://study24.ai/bots",
+      "minimum_stars": null,
+      "catalog_card_stars": null,
+      "price_conflict": false,
+      "unit": "unspecified",
+      "displayed_unit": "",
+      "free_category": true,
+      "mapping": {
+        "status": "free_unverified",
+        "product_ids": [],
+        "qualities": [],
+        "unit": "unspecified",
+        "reason": "Free category is a research fact only; it neither enables a route nor authorizes free usage."
+      }
+    },
+    {
+      "id": "generate_presentation_plus_bot",
+      "name": "Генератор презентаций",
+      "category": "Учеба и работа",
+      "url": "https://study24.ai/chat/generate_presentation_plus_bot",
+      "source_date": "2026-10-27",
+      "pricing_source_url": "https://study24.ai/pricing",
+      "catalog_source_url": "https://study24.ai/bots",
+      "minimum_stars": 420,
+      "catalog_card_stars": 420,
+      "price_conflict": false,
+      "unit": "generation",
+      "displayed_unit": "генерация",
+      "free_category": false,
+      "mapping": {
+        "status": "missing",
+        "product_ids": [],
+        "qualities": [],
+        "unit": "generation",
+        "reason": "No exact implemented public product or operation has been established."
+      }
+    },
+    {
+      "id": "text_generator",
+      "name": "Генератор текста",
+      "category": "Учеба и работа",
+      "url": "https://study24.ai/chat/text_generator",
+      "source_date": "2026-10-27",
+      "pricing_source_url": "https://study24.ai/pricing",
+      "catalog_source_url": "https://study24.ai/bots",
+      "minimum_stars": 5,
+      "catalog_card_stars": null,
+      "price_conflict": false,
+      "unit": "request",
+      "displayed_unit": "запрос",
+      "free_category": false,
+      "mapping": {
+        "status": "missing",
+        "product_ids": [],
+        "qualities": [],
+        "unit": "request",
+        "reason": "No exact implemented public product or operation has been established."
+      }
+    },
+    {
+      "id": "ai_friend",
+      "name": "AI-друг Настя",
+      "category": "Учеба и работа",
+      "url": "https://study24.ai/chat/ai_friend",
+      "source_date": "2026-10-27",
+      "pricing_source_url": "https://study24.ai/pricing",
+      "catalog_source_url": "https://study24.ai/bots",
+      "minimum_stars": 5,
+      "catalog_card_stars": null,
+      "price_conflict": false,
+      "unit": "request",
+      "displayed_unit": "запрос",
+      "free_category": false,
+      "mapping": {
+        "status": "missing",
+        "product_ids": [],
+        "qualities": [],
+        "unit": "request",
+        "reason": "No exact implemented public product or operation has been established."
+      }
+    },
+    {
+      "id": "code_generator",
+      "name": "Генератор кода",
+      "category": "Учеба и работа",
+      "url": "https://study24.ai/chat/code_generator",
+      "source_date": "2026-10-27",
+      "pricing_source_url": "https://study24.ai/pricing",
+      "catalog_source_url": "https://study24.ai/bots",
+      "minimum_stars": 5,
+      "catalog_card_stars": null,
+      "price_conflict": false,
+      "unit": "request",
+      "displayed_unit": "запрос",
+      "free_category": false,
+      "mapping": {
+        "status": "missing",
+        "product_ids": [],
+        "qualities": [],
+        "unit": "request",
+        "reason": "No exact implemented public product or operation has been established."
+      }
+    },
+    {
+      "id": "card_marketplaces",
+      "name": "Карточка для маркетплейсов",
+      "category": "Учеба и работа",
+      "url": "https://study24.ai/chat/card_marketplaces",
+      "source_date": "2026-10-27",
+      "pricing_source_url": "https://study24.ai/pricing",
+      "catalog_source_url": "https://study24.ai/bots",
+      "minimum_stars": 55,
+      "catalog_card_stars": 55,
+      "price_conflict": false,
+      "unit": "generation",
+      "displayed_unit": "генерация",
+      "free_category": false,
+      "mapping": {
+        "status": "missing",
+        "product_ids": [],
+        "qualities": [],
+        "unit": "generation",
+        "reason": "No exact implemented public product or operation has been established."
+      }
+    },
+    {
+      "id": "ai_smm",
+      "name": "SMM",
+      "category": "Учеба и работа",
+      "url": "https://study24.ai/chat/ai_smm",
+      "source_date": "2026-10-27",
+      "pricing_source_url": "https://study24.ai/pricing",
+      "catalog_source_url": "https://study24.ai/bots",
+      "minimum_stars": 5,
+      "catalog_card_stars": null,
+      "price_conflict": false,
+      "unit": "request",
+      "displayed_unit": "запрос",
+      "free_category": false,
+      "mapping": {
+        "status": "missing",
+        "product_ids": [],
+        "qualities": [],
+        "unit": "request",
+        "reason": "No exact implemented public product or operation has been established."
+      }
+    },
+    {
+      "id": "natal_chart",
+      "name": "Генератор натальной карты",
+      "category": "Учеба и работа",
+      "url": "https://study24.ai/chat/natal_chart",
+      "source_date": "2026-10-27",
+      "pricing_source_url": "https://study24.ai/pricing",
+      "catalog_source_url": "https://study24.ai/bots",
+      "minimum_stars": 5,
+      "catalog_card_stars": null,
+      "price_conflict": false,
+      "unit": "request",
+      "displayed_unit": "запрос",
+      "free_category": false,
+      "mapping": {
+        "status": "missing",
+        "product_ids": [],
+        "qualities": [],
+        "unit": "request",
+        "reason": "No exact implemented public product or operation has been established."
+      }
+    }
+  ],
+  "operation_facts": [
+    {
+      "id": "suno_studio_generate",
+      "name": "Новый трек",
+      "minimum_stars": 60,
+      "unit": "operation",
+      "url": "https://study24.ai/apps/catalog/suno",
+      "source_date": "2026-10-27",
+      "mapping_status": "variant_unverified",
+      "reason": "Studio UI operation price only; provider version, Max and output-count equivalence are unverified."
+    },
+    {
+      "id": "suno_studio_custom_song",
+      "name": "Песня по своему тексту",
+      "minimum_stars": 60,
+      "unit": "operation",
+      "url": "https://study24.ai/apps/catalog/suno",
+      "source_date": "2026-10-27",
+      "mapping_status": "variant_unverified",
+      "reason": "Studio UI operation price only; provider version, Max and output-count equivalence are unverified."
+    },
+    {
+      "id": "suno_studio_instrumental",
+      "name": "Инструментал",
+      "minimum_stars": 60,
+      "unit": "operation",
+      "url": "https://study24.ai/apps/catalog/suno",
+      "source_date": "2026-10-27",
+      "mapping_status": "variant_unverified",
+      "reason": "Studio UI operation price only; provider version, Max and output-count equivalence are unverified."
+    },
+    {
+      "id": "suno_studio_lyrics",
+      "name": "Текст песни",
+      "minimum_stars": 20,
+      "unit": "operation",
+      "url": "https://study24.ai/apps/catalog/suno",
+      "source_date": "2026-10-27",
+      "mapping_status": "variant_unverified",
+      "reason": "Studio UI operation price only; provider version, Max and output-count equivalence are unverified."
+    },
+    {
+      "id": "suno_studio_sounds",
+      "name": "Фон и звуки",
+      "minimum_stars": 60,
+      "unit": "operation",
+      "url": "https://study24.ai/apps/catalog/suno",
+      "source_date": "2026-10-27",
+      "mapping_status": "variant_unverified",
+      "reason": "Studio UI operation price only; provider version, Max and output-count equivalence are unverified."
+    },
+    {
+      "id": "suno_studio_cover",
+      "name": "Кавер",
+      "minimum_stars": 55,
+      "unit": "operation",
+      "url": "https://study24.ai/apps/catalog/suno",
+      "source_date": "2026-10-27",
+      "mapping_status": "variant_unverified",
+      "reason": "Studio UI operation price only; provider version, Max and output-count equivalence are unverified."
+    },
+    {
+      "id": "suno_studio_mashup",
+      "name": "Смешать песни",
+      "minimum_stars": 60,
+      "unit": "operation",
+      "url": "https://study24.ai/apps/catalog/suno",
+      "source_date": "2026-10-27",
+      "mapping_status": "variant_unverified",
+      "reason": "Studio UI operation price only; provider version, Max and output-count equivalence are unverified."
+    },
+    {
+      "id": "suno_studio_stems",
+      "name": "Убрать вокал",
+      "minimum_stars": 100,
+      "unit": "operation",
+      "url": "https://study24.ai/apps/catalog/suno",
+      "source_date": "2026-10-27",
+      "mapping_status": "variant_unverified",
+      "reason": "Studio UI operation price only; provider version, Max and output-count equivalence are unverified."
+    },
+    {
+      "id": "suno_studio_stems_all",
+      "name": "Разделить на дорожки",
+      "minimum_stars": 100,
+      "unit": "operation",
+      "url": "https://study24.ai/apps/catalog/suno",
+      "source_date": "2026-10-27",
+      "mapping_status": "variant_unverified",
+      "reason": "Studio UI operation price only; provider version, Max and output-count equivalence are unverified."
+    },
+    {
+      "id": "suno_studio_add_vocals",
+      "name": "Добавить вокал",
+      "minimum_stars": 60,
+      "unit": "operation",
+      "url": "https://study24.ai/apps/catalog/suno",
+      "source_date": "2026-10-27",
+      "mapping_status": "variant_unverified",
+      "reason": "Studio UI operation price only; provider version, Max and output-count equivalence are unverified."
+    },
+    {
+      "id": "suno_studio_add_instrumental",
+      "name": "Добавить музыку",
+      "minimum_stars": 60,
+      "unit": "operation",
+      "url": "https://study24.ai/apps/catalog/suno",
+      "source_date": "2026-10-27",
+      "mapping_status": "variant_unverified",
+      "reason": "Studio UI operation price only; provider version, Max and output-count equivalence are unverified."
+    }
+  ],
+  "gaps": [
+    {
+      "code": "text_formula",
+      "reason": "A displayed minimum of5 does not establish context/input/output or per-request exact billing."
+    },
+    {
+      "code": "variant_prices",
+      "reason": "Most public minima do not establish resolution, quality, duration, reference or output-count prices."
+    },
+    {
+      "code": "free_routes",
+      "reason": "Eight free-category entries do not establish free backend operations or grant provider admission."
+    },
+    {
+      "code": "annual_offers",
+      "reason": "Annual discount/purchasing is unverified."
+    },
+    {
+      "code": "topup_packs",
+      "reason": "Additional pack sizes and coupon terms are unverified."
+    },
+    {
+      "code": "upgrades",
+      "reason": "Upgrade, proration and partial-refund rules are unverified."
+    },
+    {
+      "code": "suno_equivalence",
+      "reason": "Studio operation prices do not establish Suno version/Max or per-output equivalence."
+    }
+  ]
+}

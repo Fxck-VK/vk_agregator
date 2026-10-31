@@ -19,7 +19,7 @@ import {usePublicCopy} from "@/i18n/public/use-public-copy";
 
 
 export function TattooSolution() {
-  const {copy,aiToolsEn,homeEn} = usePublicCopy(publicCopySourcesForLocale);
+  const {copy,aiToolsEn,homeEn} = usePublicCopy(publicCopySourcesForLocale,{"copy":"tattooEn"});
 
   const [search, setSearch] = useState(false);
   const [image, setImage] = useState<TattooImage | null>(null);

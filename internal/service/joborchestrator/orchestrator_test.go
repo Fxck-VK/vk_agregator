@@ -635,7 +635,7 @@ func TestCreateJobResolvedVideoRouteUsesBackendEstimateBeforeReservation(t *test
 		Modality:            domain.ModalityVideo,
 		IdempotencyKey:      "vk_job:1:route-expensive",
 		Params:              params,
-		CostEstimateCredits: 200,
+		CostEstimateCredits: 300,
 	})
 	if !errors.Is(err, domain.ErrInsufficientCredits) {
 		t.Fatalf("expected ErrInsufficientCredits, got job=%+v err=%v", job, err)
@@ -643,8 +643,8 @@ func TestCreateJobResolvedVideoRouteUsesBackendEstimateBeforeReservation(t *test
 	if job == nil || job.Status != domain.JobStatusAwaitingPayment {
 		t.Fatalf("expected awaiting_payment job, got %+v", job)
 	}
-	if job.CostEstimate != 200 || job.CostReserved != 0 {
-		t.Fatalf("cost estimate/reserved = %d/%d, want 200/0", job.CostEstimate, job.CostReserved)
+	if job.CostEstimate != 300 || job.CostReserved != 0 {
+		t.Fatalf("cost estimate/reserved = %d/%d, want 300/0", job.CostEstimate, job.CostReserved)
 	}
 	var out struct {
 		Snapshot domain.VideoRouteSnapshot `json:"resolved_video_route"`
@@ -652,12 +652,22 @@ func TestCreateJobResolvedVideoRouteUsesBackendEstimateBeforeReservation(t *test
 	if err := json.Unmarshal(job.Params, &out); err != nil {
 		t.Fatalf("unmarshal job params: %v", err)
 	}
-	if !out.Snapshot.Valid() || out.Snapshot.InternalCostCredits != 200 {
+	if !out.Snapshot.Valid() || out.Snapshot.InternalCostCredits != 300 {
 		t.Fatalf("missing route snapshot: %+v", out.Snapshot)
 	}
 	f.drain(t)
 	if f.pub.Len() != 0 {
 		t.Fatalf("awaiting_payment job must not enqueue, got %d tasks", f.pub.Len())
+	}
+}
+
+func TestCreateJobRejectsDisagreementBetweenRouteAndSuppliedPrice(t *testing.T) {
+	catalog := newRouteCatalogForOrchestratorTest(t)
+	f := newFixtureWithOrchestratorOptions([]joborchestrator.Option{joborchestrator.WithVideoRouteResolver(routeResolverForTest(catalog))})
+	params, _ := json.Marshal(map[string]any{"prompt": "Offline economy validation", "video_route_alias": string(domain.VideoRouteKlingO3Standard), "duration_sec": 10, "resolution": "720p"})
+	job, err := f.orch.CreateJob(context.Background(), joborchestrator.CreateJobInput{UserID: uuid.New(), CommandID: uuid.New(), Operation: domain.OperationVideoGenerate, Modality: domain.ModalityVideo, IdempotencyKey: "economic_price_disagreement", Params: params, CostEstimateCredits: 1})
+	if err == nil || job != nil {
+		t.Fatalf("disagreeing price accepted: %+v %v", job, err)
 	}
 }
 
@@ -682,13 +692,13 @@ func TestCreateJobResolvedVideoRouteReservesResolvedAmount(t *testing.T) {
 		Modality:            domain.ModalityVideo,
 		IdempotencyKey:      "vk_job:1:route-reserve",
 		Params:              params,
-		CostEstimateCredits: 200,
+		CostEstimateCredits: 300,
 	})
 	if err != nil {
 		t.Fatalf("create route job: %v", err)
 	}
-	if job.CostEstimate != 200 || job.CostReserved != 200 {
-		t.Fatalf("cost estimate/reserved = %d/%d, want 200/200", job.CostEstimate, job.CostReserved)
+	if job.CostEstimate != 300 || job.CostReserved != 300 {
+		t.Fatalf("cost estimate/reserved = %d/%d, want 300/300", job.CostEstimate, job.CostReserved)
 	}
 	f.drain(t)
 	if f.pub.Len() != 1 {

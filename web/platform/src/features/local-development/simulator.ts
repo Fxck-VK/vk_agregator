@@ -2,6 +2,7 @@ import type { BrowserRequestInit, DevelopmentTransport } from "@/lib/web-api/dev
 import { WebNetworkError } from "@/lib/web-api/network-error";
 import type { LocalScenarios } from "./scenarios";
 import { createConversationSimulator, type LocalConversationSeed } from "./conversation-simulator";
+import { localImagePrice } from "./image-pricing";
 
 const maxFileBytes = 20 * 1024 * 1024;
 const maxRetainedBytes = 64 * 1024 * 1024;
@@ -88,14 +89,21 @@ export function createLocalSimulator(getScenarios: () => LocalScenarios, options
     if (init.signal?.aborted) return Promise.reject(new DOMException("Aborted", "AbortError"));
     const url = new URL(path, "http://local-preview.invalid");
     const method = (init.method ?? "GET").toUpperCase();
+    if (url.pathname === "/web/v1/subscription" && method === "GET") return Promise.resolve(json({ subscription: null, balances: [], checkout_available: false, recurring_available: false, trial_used: false }));
     // Only the server-gated preview route may persist fixture tombstones.
     // Other writes still fail closed here and never reach a real backend.
     if (method === "DELETE" && /^\/web\/v1\/artifacts\/[a-f0-9-]{36}$/i.test(url.pathname)) return undefined;
     if (url.pathname === "/web/v1/input-artifacts" && method === "POST") return upload(init, scenarios.upload);
     if (url.pathname === "/web/v1/image-reference-quote" && method === "GET") {
-      const count = Number(url.searchParams.get("output_count") ?? 1);
-      return Promise.resolve(scenarios.quote === "error" ? json({ error: "Simulated quote failure" }, 503)
-        : json({ credits: 20 * (Number.isInteger(count) && count >= 1 && count <= 100 ? count : 1) }));
+      if (scenarios.quote === "error") return Promise.resolve(json({ error: "Simulated quote failure" }, 503));
+      const refs = Number(url.searchParams.get("reference_count"));
+      const credits = refs > 0 ? localImagePrice(options?.seed?.imageModels, {
+        model_id: url.searchParams.get("model_id") ?? undefined,
+        image_quality: url.searchParams.get("image_quality") ?? undefined,
+        aspect_ratio: url.searchParams.get("aspect_ratio") ?? undefined,
+        output_count: Number(url.searchParams.get("output_count")), reference_count: refs,
+      }) : undefined;
+      return Promise.resolve(credits === undefined ? json({ error: "Invalid preview image options" }, 400) : json({ credits }));
     }
     const match = url.pathname.match(/^\/web\/v1\/(?:input|image)-artifacts\/(f0000000-[a-f0-9-]+)$/);
     if (match && method === "GET") {

@@ -31,6 +31,7 @@ type ModeSwitchPanelProps<ID extends string> = Omit<
 > & {
   activeID: ID;
   ariaLabel: string;
+  density?: "comfortable" | "compact";
   fullWidth?: boolean;
   iconOnly?: boolean;
   items: readonly ModeSwitchPanelItem<ID>[];
@@ -42,6 +43,7 @@ export function ModeSwitchPanel<ID extends string>({
   activeID,
   ariaLabel,
   className,
+  density = "comfortable",
   fullWidth = false,
   iconOnly = false,
   items,
@@ -138,6 +140,7 @@ export function ModeSwitchPanel<ID extends string>({
       {...rootProps}
       className={[styles.root, className].filter(Boolean).join(" ")}
       data-full-width={fullWidth || undefined}
+      data-density={density === "compact" ? density : undefined}
       data-icon-only={iconOnly || undefined}
       data-mode-switch-panel="true"
       orientation="horizontal"

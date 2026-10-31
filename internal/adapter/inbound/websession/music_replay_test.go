@@ -25,11 +25,11 @@ func TestMusicPreparationReplay(t *testing.T) {
 		credits int64
 		lyrics  bool
 	}{
-		{"suno_v6", 30, false},
+		{"suno_v6", 60, false},
 		{"suno_v6_wild", 30, false},
 		{"suno_v6_mini", 30, false},
 		{"lyria_3_5", 40, false},
-		{"suno_v6", 30, true},
+		{"suno_v6", 60, true},
 		{"suno_v6_wild", 30, true},
 		{"suno_v6_mini", 30, true},
 	} {

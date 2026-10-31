@@ -20,6 +20,10 @@ func TestWebGrokImageCatalogAndPrepare(t *testing.T) {
 		{"grok_image_2_0", "grok-imagine-2.0-ext", "quality"},
 	} {
 		t.Run(tc.id, func(t *testing.T) {
+			want := int64(10)
+			if tc.id == "grok_image_2_0" {
+				want = 25
+			}
 			h, jobs, sessions := newImageJobTestHandler(t)
 			model, ok := modelcatalog.ResolvePublicModel(domain.OperationImageGenerate, tc.id)
 			if !ok {
@@ -35,7 +39,7 @@ func TestWebGrokImageCatalogAndPrepare(t *testing.T) {
 			if err := json.Unmarshal(rec.Body.Bytes(), &catalog); err != nil {
 				t.Fatal(err)
 			}
-			if rec.Code != http.StatusOK || len(catalog.Items) != 1 || !reflect.DeepEqual(catalog.Items[0].AllowedAspectRatios, model.AllowedAspectRatios) || catalog.Items[0].PriceByQuality["standard"] != 10 {
+			if rec.Code != http.StatusOK || len(catalog.Items) != 1 || !reflect.DeepEqual(catalog.Items[0].AllowedAspectRatios, model.AllowedAspectRatios) || catalog.Items[0].PriceByQuality["standard"] != want {
 				t.Fatal("wrong public catalog limits or price")
 			}
 			for _, ratio := range []string{"1:1", "21:9"} {
@@ -48,7 +52,7 @@ func TestWebGrokImageCatalogAndPrepare(t *testing.T) {
 					}
 					continue
 				}
-				if rec.Code != http.StatusCreated || jobs.prepareCalls != 1 || jobs.prepareInput.AccountID != owner || jobs.prepareInput.CostEstimateCredits != 10 || jobs.prepareInput.PricingSnapshot.InternalCredits != 10 {
+				if rec.Code != http.StatusCreated || jobs.prepareCalls != 1 || jobs.prepareInput.AccountID != owner || jobs.prepareInput.CostEstimateCredits != want || jobs.prepareInput.PricingSnapshot.InternalCredits != want {
 					t.Fatal("wrong owner or server quote")
 				}
 				var params webImageJobParams
@@ -58,7 +62,7 @@ func TestWebGrokImageCatalogAndPrepare(t *testing.T) {
 				if params.Provider != domain.ProviderAPIMart || params.ModelCode != tc.model || params.ModelID != tc.id || params.Resolution != tc.resolution {
 					t.Fatal("wrong private Job snapshot")
 				}
-				assertSafeWebImagePreparation(t, rec.Body.Bytes(), jobs.prepared.ID, domain.JobStatusPrepared, 10, 104)
+				assertSafeWebImagePreparation(t, rec.Body.Bytes(), jobs.prepared.ID, domain.JobStatusPrepared, want, 104)
 				for _, private := range []string{"provider", "model_code", "apimart", "floor", "multiplier"} {
 					if bytes.Contains(bytes.ToLower(rec.Body.Bytes()), []byte(private)) {
 						t.Fatalf("private field %s in public DTO", private)

@@ -34,12 +34,72 @@ data store.
 
 ## Implementation Gate
 
+Only Russian website pages may be published on DEV or public servers until the
+owner explicitly asks to introduce English. Keep `siteLocales = ["ru"]`, legacy
+`/en` → `/ru`308 redirects and Russian-only links/SEO. The mandatory
+`scripts/site-language-policy.mjs` build/source gate must remain enabled.
+English source dictionaries and reverse audits are retained; they are not an
+enabled website language. No environment-specific opt-in is authorized.
+
 The app scaffold and shared components already exist. Reuse the current package
 configuration and scripts. New dependencies or runtime surfaces must belong to
 the user-authorized feature and include the relevant lint, typecheck, tests,
 build, packaging and CI checks for that change.
 
+## Mandatory Responsive Layout Verification
+
+For changes to layout, sizing, typography, text wrapping or responsive behavior,
+check affected pages in a browser at every width below. Widths are the actual
+CSS viewport (`window.innerWidth`), not physical screen pixels or screenshot
+dimensions. Use 100% browser zoom for the baseline and record viewport height,
+zoom and device-pixel ratio; a high-DPI screenshot of a narrow viewport does
+not replace a wide-viewport check.
+
+| Target | Required viewport |
+| --- | --- |
+| Small phone | 360 CSS px wide |
+| Phone | 390 CSS px wide |
+| Tablet portrait | 768 CSS px wide |
+| Tablet / small desktop | 1024 CSS px wide |
+| Desktop | 1440 CSS px wide |
+| Full HD | 1920 CSS px wide |
+| 2K / QHD | 2560 x 1440 CSS px |
+| 4K / UHD | 3840 x 2160 CSS px |
+
+- The baseline audit covers one representative page for each of T01-T24,
+  including applicable course/help/legal child layouts. Workspace and auth
+  pages follow the same width matrix. A focused change checks affected pages;
+  a shared layout change includes its affected consumers.
+- Inspect header/sidebar alignment, text wrapping, card grids, images/video,
+  tables, content width, empty space, scroll regions and access to controls.
+  Check menus, dialogs, tabs and available loading/error/long-content states.
+  Prevent unintended page-wide horizontal scrolling, clipping and overlaps;
+  intentional local table/tab scrollers must remain usable.
+- Check intermediate widths near changed CSS breakpoints when a layout changes
+  between required widths. Keep the existing approved visual design.
+- Save route/template, actual viewport, checked states, outcome and screenshot
+  paths in ignored `.cache/responsive-qa/` evidence. Use local preview fixtures
+  where appropriate; visual verification does not authorize paid actions.
+- State exactly which widths/pages passed, failed or were not run. A successful
+  build, lint, DOM/unit test or previous partial desktop/mobile check does not
+  replace browser layout checks. If browser access is blocked, record that
+  limitation and do not mark those cases passed.
+
+This is the required verification procedure, not a statement that the existing
+24 templates have already passed the complete matrix.
+
 ## UI Reuse Workflow
+
+Preserve the user's existing visual design when implementing billing, business
+logic or data integration. Those tasks do not authorize simplifying cards,
+removing visual sections/badges/icons, or changing layout, sizes and spacing.
+Change the presentation only when the user explicitly requests that visual work.
+
+Resolution selectors must use the shared `ImageQualitySelector`: one option per
+actual catalogue size (1K, 2K, 4K, 8K where supported), without medium/high/ultra/pro
+suffixes. The shared projection retains the selected backend tier where
+available and never synthesizes codes or unsupported sizes. Preserve the raw
+request code, catalogue defaults and pricing; see the root resolution UI policy.
 
 For UI changes and text-only UI proposals within `web/platform`, use this order:
 

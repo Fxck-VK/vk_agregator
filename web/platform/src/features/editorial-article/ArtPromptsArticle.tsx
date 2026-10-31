@@ -8,6 +8,10 @@ import {comparisonReferenceEn as sharedMedia} from "@/i18n/public/comparison-ref
 import {ArticleBody,articleReadingMinutes} from "./ArticleBody";
 import {usePublicCopy} from "@/i18n/public/use-public-copy";
 
+
+
+export function ArtPromptsArticle(){
+  const {authorPath,copy,media,sharedMedia}=usePublicCopy(publicCopySourcesForLocale,{"authorPath":"authorPath","copy":"artPromptsEn","media":"artPromptsReferenceEn","sharedMedia":"comparisonReferenceEn"});
 const sharedImage=(item:typeof sharedMedia.inspiration|typeof sharedMedia.related[number]):EditorialImage=>({src:`/assets/images/comparison/${item.file}`,alt:item.alt,width:item.width,height:item.height});
 const page:EditorialPageData={
   id:"art-prompts",kind:"article",title:copy.title,skip:copy.skip,
@@ -17,8 +21,6 @@ const page:EditorialPageData={
   hero:media.hero,source:copy.source,inspiration:{...copy.inspiration,image:sharedImage(sharedMedia.inspiration)},
   related:{title:copy.related.title,items:copy.related.items.map((item,index)=>({...item,image:sharedImage(sharedMedia.related[index])}))},
 };
-export function ArtPromptsArticle(){
-  const {page,copy,media} = usePublicCopy(publicCopySourcesForLocale);
 return <EditorialPage page={page}><ArticleBody article={copy} images={media.illustrations} source={copy.source} notes={copy.notes}/></EditorialPage>;}
 
-const publicCopySourcesForLocale={authorPath,copy,media,sharedMedia,page};
+const publicCopySourcesForLocale={authorPath,copy,media,sharedMedia};

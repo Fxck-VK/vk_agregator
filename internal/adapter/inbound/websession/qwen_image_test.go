@@ -24,7 +24,7 @@ func TestWebQwenImagePrepareUsesPrivateRouteAndServerPrice(t *testing.T) {
 			if rec.Code != http.StatusCreated {
 				t.Fatalf("status = %d", rec.Code)
 			}
-			if jobs.prepareCalls != 1 || jobs.prepareInput.AccountID != owner || jobs.prepareInput.CostEstimateCredits != 15 || jobs.prepareInput.PricingSnapshot.InternalCredits != 15 {
+			if jobs.prepareCalls != 1 || jobs.prepareInput.AccountID != owner || jobs.prepareInput.CostEstimateCredits != 30 || jobs.prepareInput.PricingSnapshot.InternalCredits != 30 {
 				t.Fatal("wrong owner or server quote")
 			}
 			var params webImageJobParams
@@ -34,7 +34,7 @@ func TestWebQwenImagePrepareUsesPrivateRouteAndServerPrice(t *testing.T) {
 			if params.Provider != domain.ProviderAPIMart || params.ModelCode != "qwen-image-3.0" || params.ModelID != "qwen_image_3" || params.Resolution != quality {
 				t.Fatal("wrong private Job snapshot")
 			}
-			assertSafeWebImagePreparation(t, rec.Body.Bytes(), jobs.prepared.ID, domain.JobStatusPrepared, 15, 104)
+			assertSafeWebImagePreparation(t, rec.Body.Bytes(), jobs.prepared.ID, domain.JobStatusPrepared, 30, 104)
 			for _, secret := range []string{"provider", "model_code", "apimart", "qwen-image-3.0", "floor", "multiplier"} {
 				if bytes.Contains(bytes.ToLower(rec.Body.Bytes()), []byte(secret)) {
 					t.Fatalf("private field %s in public DTO", secret)

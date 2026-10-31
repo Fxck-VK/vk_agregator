@@ -181,8 +181,8 @@
   },
   {
     "id": "u0715",
-    "ru": "Соберите направление из общедоступных визуальных референсов.",
-    "back": "Assemble a direction from publicly available visual references."
+    "ru": "Сформируйте визуальную концепцию на основе общедоступных референсов.",
+    "back": "Form a visual concept using publicly available references."
   },
   {
     "id": "u0716",
@@ -321,8 +321,8 @@
   },
   {
     "id": "u0743",
-    "ru": "Узнайте, как обрабатывается ваша работа",
-    "back": "Find out how your work is handled"
+    "ru": "Узнайте, как сервис обращается с вашими материалами",
+    "back": "Learn how the service handles your materials"
   },
   {
     "id": "u0744",
@@ -366,8 +366,8 @@
   },
   {
     "id": "u0752",
-    "ru": "Доступ компании, в планах",
-    "back": "Company access, planned"
+    "ru": "Корпоративный доступ — в планах",
+    "back": "Company access is planned"
   },
   {
     "id": "u0753",
@@ -406,8 +406,8 @@
   },
   {
     "id": "u0760",
-    "ru": "Обсудите нужных команде участников, модели и объёмы. Общий запас звёзд запланирован; этот предварительный обзор не начисляет лимит.",
-    "back": "Discuss the people, models and volumes needed by the team. A shared star pool is planned; this preview does not allocate an allowance."
+    "ru": "Обсудите нужных команде участников, модели и объёмы. Общий запас звёзд запланирован; в рамках этого предварительного обзора звёзды не начисляются.",
+    "back": "Discuss the people, models and volume the team needs. A shared supply of stars is planned; no stars are allocated through this preview."
   },
   {
     "id": "u0761",
@@ -476,8 +476,8 @@
   },
   {
     "id": "u0774",
-    "ru": "Определите, как будет создавать ваша команда",
-    "back": "Determine how your team will create"
+    "ru": "Определите, как ваша команда будет работать над творческими задачами",
+    "back": "Shape how your team will approach creative tasks"
   },
   {
     "id": "u0775",
@@ -521,8 +521,8 @@
   },
   {
     "id": "u0783",
-    "ru": "Проверяйте результаты в «Моих файлах» и скачивайте доступные материалы. Совместная передача клиенту остаётся требованием для обсуждения.",
-    "back": "Review results in My files and download the available material. Shared delivery to a client remains a requirement for discussion."
+    "ru": "Проверяйте результаты в «Моих файлах» и скачивайте доступные материалы. Совместная передача результатов клиенту остаётся требованием для обсуждения.",
+    "back": "Review results in My files and download the available materials. Collaborative delivery of results to a client remains a requirement to discuss."
   },
   {
     "id": "u0784",
@@ -627,8 +627,8 @@
   },
   {
     "id": "u0804",
-    "ru": "Отчёты об использовании командой",
-    "back": "Team usage reports"
+    "ru": "Отчёты об использовании ресурсов командой",
+    "back": "Reports on the team's resource usage"
   },
   {
     "id": "u0805",
@@ -752,8 +752,8 @@
   },
   {
     "id": "u0829",
-    "ru": "Обсудите требования с поддержкой. Этот предварительный обзор не обещает SSO, сертификацию, юридическое возмещение убытков, уровни обслуживания или корпоративные средства управления.",
-    "back": "Discuss requirements with support. This preview does not promise SSO, certification, legal indemnification, service levels or corporate controls."
+    "ru": "Обсудите требования с поддержкой. Этот предварительный обзор не обещает SSO, сертификацию, возмещение убытков по правовым претензиям, уровни обслуживания или корпоративные средства управления.",
+    "back": "Discuss your requirements with support. This preview promises no SSO, certification, compensation for losses arising from legal claims, service levels or corporate management controls."
   },
   {
     "id": "u0830",
@@ -1733,13 +1733,13 @@
   },
   {
     "id": "u1014",
-    "ru": "Назад к примеру",
-    "back": "Back to an example"
+    "ru": "Предыдущий пример",
+    "back": "Previous example"
   },
   {
     "id": "u1015",
-    "ru": "Далее к примеру",
-    "back": "Forward to an example"
+    "ru": "Следующий пример",
+    "back": "Next example"
   },
   {
     "id": "u1016",
@@ -1914,13 +1914,13 @@
   },
   {
     "id": "u1335",
-    "ru": "Творческое производство",
-    "back": "Creative production"
+    "ru": "Производство креативного контента",
+    "back": "Creative content production"
   },
   {
     "id": "u1336",
-    "ru": "Создать убедительное движение в футболе для кампании на нескольких рынках.",
-    "back": "Create convincing football movement for a campaign across several markets."
+    "ru": "Правдоподобно передать футбольную динамику в кампании для нескольких рынков.",
+    "back": "Convey the dynamics of football convincingly in a campaign for multiple markets."
   },
   {
     "id": "u1337",
@@ -1971,8 +1971,8 @@
   },
   {
     "id": "u1346",
-    "ru": "История клиента об ИИ-производстве — разбор референса Epifera",
-    "back": "A customer story about AI production — Epifera's reference analysis"
+    "ru": "Разбор стороннего клиентского кейса об ИИ-продакшене от Epifera",
+    "back": "Epifera's analysis of an external customer case involving AI production"
   },
   {
     "id": "u1347",
@@ -2022,8 +2022,8 @@
   },
   {
     "id": "u1356",
-    "ru": "Цифры приведены Magnific и не проверены Epifera независимо.",
-    "back": "The figures are reported by Magnific and have not been independently verified by Epifera."
+    "ru": "Данные приведены Magnific; Epifera не проводила их независимую проверку.",
+    "back": "The data was reported by Magnific; Epifera has not independently verified it."
   },
   {
     "id": "u1357",
@@ -2132,8 +2132,8 @@
   },
   {
     "id": "u1378",
-    "ru": "Источник называет движение в футболе главной производственной задачей: правдоподобные игроки, движение камеры и переходы должны были складываться в единое целое.",
-    "back": "The source calls football movement the main production challenge: believable players, camera movement and transitions had to come together as a whole."
+    "ru": "Источник называет футбольную динамику главной производственной задачей: правдоподобные игроки, движение камеры и переходы должны были складываться в единое целое.",
+    "back": "The source identifies football dynamics as the main production challenge: convincing players, camera movement and transitions had to form a coherent whole."
   },
   {
     "id": "u1379",
@@ -2167,8 +2167,8 @@
   },
   {
     "id": "u1385",
-    "ru": "Исходная команда использовала Magnific, чтобы организовывать работу с изображениями и видео, сравнивать итерации и обмениваться обратной связью в ходе кампании.",
-    "back": "The original team used Magnific to organize image and video work, compare iterations and exchange feedback throughout the campaign."
+    "ru": "Команда, работавшая над оригинальной кампанией, использовала Magnific, чтобы организовывать работу с изображениями и видео, сравнивать итерации и обмениваться обратной связью.",
+    "back": "The team behind the original campaign used Magnific to organize image and video work, compare iterations and exchange feedback."
   },
   {
     "id": "u1386",
@@ -2197,8 +2197,8 @@
   },
   {
     "id": "u1391",
-    "ru": "Ясное визуальное направление даёт каждой итерации полезный вопрос для решения.",
-    "back": "A clear visual direction gives every iteration a useful question to resolve."
+    "ru": "Чёткая визуальная концепция помогает понять, какой вопрос нужно решить на каждой итерации.",
+    "back": "A clear visual concept helps identify the question to resolve at each iteration."
   },
   {
     "id": "u1392",
@@ -2227,13 +2227,13 @@
   },
   {
     "id": "u1397",
-    "ru": "Назад к изображению-референсу",
-    "back": "Back to a reference image"
+    "ru": "Предыдущее изображение-референс",
+    "back": "Previous reference image"
   },
   {
     "id": "u1398",
-    "ru": "Далее к изображению-референсу",
-    "back": "Forward to a reference image"
+    "ru": "Следующее изображение-референс",
+    "back": "Next reference image"
   },
   {
     "id": "u1399",
@@ -2498,8 +2498,8 @@
   },
   {
     "id": "u1448",
-    "ru": "Изображения производства кампании",
-    "back": "Campaign production images"
+    "ru": "Изображения процесса создания кампании",
+    "back": "Images of the campaign production process"
   },
   {
     "id": "u1449",
@@ -2623,8 +2623,8 @@
   },
   {
     "id": "u1668",
-    "ru": "Принесите вопрос, рабочий процесс или идею сотрудничества. Следующая полезная идея может начаться с разговора.",
-    "back": "Bring a question, a workflow or a collaboration idea. The next useful idea can begin with a conversation."
+    "ru": "Приходите обсудить вопрос, рабочий процесс или возможное сотрудничество. Следующая полезная идея может начаться с разговора.",
+    "back": "Come to discuss a question, a workflow or a possible collaboration. The next useful idea can start with a conversation."
   },
   {
     "id": "u1669",
@@ -2639,8 +2639,8 @@
   },
   {
     "id": "u1671",
-    "ru": "Референс фильма для разговора о творческом направлении. Посмотрите глубже инструментов и отметьте решения, связывающие личную историю в единое целое.",
-    "back": "A film reference for a conversation about creative direction. Look deeper than the tools and notice the decisions that connect a personal story into a whole."
+    "ru": "Фильм-референс для разговора о творческой концепции. Обратите внимание не только на инструменты, но и на решения, которые делают камерную историю цельной.",
+    "back": "A reference film for discussing a creative concept. Notice both the tools and the decisions that make an intimate story coherent."
   },
   {
     "id": "u1672",
@@ -2654,8 +2654,8 @@
   },
   {
     "id": "u1674",
-    "ru": "Candela от Myriam Mira / Magnific. Это сохранённый референсный трейлер длительностью 18,5 секунды, а не производство Epifera.",
-    "back": "Candela by Myriam Mira / Magnific. This is the saved reference trailer lasting 18.5 seconds, rather than an Epifera production."
+    "ru": "Candela — фильм Myriam Mira / Magnific. Здесь представлен сохранённый референсный трейлер длительностью 18,5 секунды; это не работа Epifera.",
+    "back": "Candela is a film by Myriam Mira / Magnific. This is the saved reference trailer, 18.5 seconds long; it is not Epifera's work."
   },
   {
     "id": "u1675",
@@ -2709,8 +2709,8 @@
   },
   {
     "id": "u1685",
-    "ru": "Как вы узнаёте свой взгляд в результате?",
-    "back": "How do you recognize your point of view in the result?"
+    "ru": "Как вы узнаёте в результате собственное видение?",
+    "back": "How do you recognize your own vision in the result?"
   },
   {
     "id": "u1686",
@@ -2776,7 +2776,7 @@
   },
   {
     "id": "u1698",
-    "ru": "Дайте место следующей идее",
+    "ru": "Освободите место для следующей идеи",
     "back": "Make room for the next idea"
   },
   {
@@ -2842,13 +2842,13 @@
   },
   {
     "id": "u1711",
-    "ru": "Список чтения для вопросов, которые остаются после первого разговора.",
-    "back": "A reading list for questions that remain after the first conversation."
+    "ru": "Подборка материалов по вопросам, которые остаются после первого разговора.",
+    "back": "A selection of reading on questions that remain after the first conversation."
   },
   {
     "id": "u1712",
-    "ru": "Список чтения",
-    "back": "Reading list"
+    "ru": "Материалы для чтения",
+    "back": "Reading materials"
   },
   {
     "id": "u1713",
@@ -2942,8 +2942,8 @@
   },
   {
     "id": "u1731",
-    "ru": "Проект находится на стадии концепции. Даты, площадка, спикеры и регистрация не объявлены. Можно изучить предварительную программу и обратиться к проекту с вопросом или идеей сотрудничества.",
-    "back": "The project is at concept stage. Dates, venue, speakers and registration have not been announced. You can explore the programme preview and approach the project with a question or collaboration idea."
+    "ru": "Проект находится на стадии концепции. Даты, площадка, спикеры и регистрация не объявлены. Можно изучить предварительную программу и связаться по вопросам проекта или с идеей сотрудничества.",
+    "back": "The project is at concept stage. Dates, venue, speakers and registration have not been announced. You can explore the provisional programme and get in touch about the project or a collaboration idea."
   },
   {
     "id": "u1732",
@@ -2957,13 +2957,13 @@
   },
   {
     "id": "u1734",
-    "ru": "Макет, фильм с указанием авторства, иллюстрации площадки, встречи и интерфейса взяты с сохранённой страницы Magnific о Cannes Lions. Они служат визуальными референсами для этой локальной концепции Epifera. Epifera не заявляет о партнёрстве с Cannes Lions, подтверждённом мероприятии или принадлежности исходного производства.",
-    "back": "The layout, attributed film and venue, meet-up and interface illustrations come from the saved Magnific Cannes Lions page. They serve as visual references for this local Epifera concept. Epifera does not claim a Cannes Lions partnership, a confirmed event or ownership of the original production."
+    "ru": "Макет, фильм с указанием авторства, иллюстрации площадки, встречи и интерфейса взяты с сохранённой страницы Magnific о Cannes Lions. Они служат визуальными референсами для этой локальной концепции Epifera. Epifera не заявляет о партнёрстве с Cannes Lions или подтверждённом мероприятии и не выдаёт оригинальные работы за собственные.",
+    "back": "The layout, credited film and venue, meet-up and interface illustrations come from the saved Magnific Cannes Lions page. They are visual references for this local Epifera concept. Epifera claims neither a Cannes Lions partnership nor a confirmed event and does not present the original works as its own."
   },
   {
     "id": "u2240",
-    "ru": "Разговор рядом с вашими творческими инструментами.",
-    "back": "A conversation beside your creative tools."
+    "ru": "Общение и творческие инструменты под рукой.",
+    "back": "Conversation with creative tools close at hand."
   },
   {
     "id": "u2241",
@@ -2982,8 +2982,8 @@
   },
   {
     "id": "u2244",
-    "ru": "Творческое направление рядом с задачей программирования.",
-    "back": "A creative direction beside a programming task."
+    "ru": "Творческая концепция параллельно с работой над кодом.",
+    "back": "A creative concept alongside work on code."
   },
   {
     "id": "u2245",
@@ -3037,8 +3037,8 @@
   },
   {
     "id": "u2255",
-    "ru": "Творческие брифы рядом с вашей разработкой.",
-    "back": "Creative briefs beside your development work."
+    "ru": "Творческие брифы в ходе разработки.",
+    "back": "Creative briefs during development work."
   },
   {
     "id": "u2256",
@@ -3057,8 +3057,8 @@
   },
   {
     "id": "u2259",
-    "ru": "Творческий процесс рядом с вашим редактором.",
-    "back": "A creative process beside your editor."
+    "ru": "Творческий процесс в связке с вашим редактором.",
+    "back": "A creative workflow connected with your editor."
   },
   {
     "id": "u2260",
@@ -3169,13 +3169,13 @@
   },
   {
     "id": "u2281",
-    "ru": "Подготовьте пятисекундную кинематографичную сцену среди залитых солнцем дюн. Опишите кадр, напишите одну короткую реплику и предложите подходящий фоновый звук. Оставьте направления изображения, голоса и видео отдельными этапами для проверки.",
-    "back": "Prepare a five-second cinematic scene among sunlit dunes. Describe the shot, write one short line and suggest a suitable background sound. Keep image, voice and video directions as separate stages for review."
+    "ru": "Подготовьте пятисекундную кинематографичную сцену среди залитых солнцем дюн. Опишите кадр, напишите одну короткую реплику и предложите подходящий фоновый звук. Оформите указания для изображения, озвучки и видео как отдельные этапы для проверки.",
+    "back": "Prepare a five-second cinematic scene among sunlit dunes. Describe the shot, write a single short line and suggest a suitable ambient sound. Present image, voice-over and video instructions as separate review steps."
   },
   {
     "id": "u2282",
-    "ru": "Направление изображения",
-    "back": "Image direction"
+    "ru": "Концепция изображения",
+    "back": "Image concept"
   },
   {
     "id": "u2283",
@@ -3214,8 +3214,8 @@
   },
   {
     "id": "u2290",
-    "ru": "Превратите фотографию продукта в творческий бриф для изображения в повседневной обстановке, квадратной рекламы и концепции короткой анимации. Перечислите признаки, которые должны оставаться узнаваемыми, и составьте список проверки каждого результата.",
-    "back": "Turn a product photograph into a creative brief for an image in a lifestyle setting, a square advertisement and a short animation concept. List features that must remain recognizable and create a checklist for each result."
+    "ru": "Превратите фотографию продукта в творческий бриф для изображения в повседневной обстановке, квадратной рекламы и концепции короткой анимации. Перечислите признаки, которые должны оставаться узнаваемыми, и составьте чек-лист для оценки каждого результата.",
+    "back": "Turn a product photograph into a creative brief for a lifestyle image, a square advertisement and a short animation concept. List the features that must remain recognizable and make a checklist for evaluating every result."
   },
   {
     "id": "u2291",
@@ -3239,8 +3239,8 @@
   },
   {
     "id": "u2295",
-    "ru": "Составьте многократно используемый список проверки листа персонажа по таким шагам: описать персонажа, выбрать визуальный стиль, спланировать виды спереди и сбоку, проверить согласованность одежды и аксессуаров. Для каждого шага укажите понятные входные данные и результат.",
-    "back": "Create a reusable character-sheet checklist using these steps: describe the character, choose a visual style, plan front and side views, and check consistency of clothing and accessories. Give each step clear inputs and a result."
+    "ru": "Составьте универсальный чек-лист для листа персонажа по таким шагам: описать персонажа, выбрать визуальный стиль, спланировать виды спереди и сбоку, проверить согласованность одежды и аксессуаров. Для каждого шага укажите понятные входные данные и результат.",
+    "back": "Create a reusable character-sheet checklist using these steps: describe the character, select a visual style, plan front and side views and check clothing and accessories for consistency. Specify clear inputs and a result for every step."
   },
   {
     "id": "u2296",
@@ -3259,8 +3259,8 @@
   },
   {
     "id": "u2299",
-    "ru": "Подготовьте по концепции бриф листа персонажа: вид спереди, профиль и крупный план в одном стиле. Сохраняйте причёску, одежду и аксессуары согласованными. Перечислите, что нужно проверить перед выбором итоговых изображений.",
-    "back": "Prepare a character-sheet brief from a concept: a front view, a profile and a close-up in one style. Keep hairstyle, clothing and accessories consistent. List what needs checking before choosing the final images."
+    "ru": "Подготовьте по концепции бриф листа персонажа: вид спереди, профиль и крупный план в одном стиле. Проследите, чтобы причёска, одежда и аксессуары сохраняли единый вид во всех ракурсах. Перечислите, что нужно проверить перед выбором итоговых изображений.",
+    "back": "Prepare a character-sheet brief from a concept: front view, profile and close-up in a single style. Make sure the hair, clothes and accessories remain consistent across the views. List the checks needed before selecting final images."
   },
   {
     "id": "u2300",
@@ -3445,18 +3445,18 @@
   },
   {
     "id": "u2336",
-    "ru": "Изучите предполагаемые направления коннектора. Творческие инструменты ниже доступны отдельно в рабочем пространстве Epifera.",
-    "back": "Explore the intended directions of the connector. The creative tools below are available separately in the Epifera workspace."
+    "ru": "Изучите предполагаемые сценарии использования коннектора. Творческие инструменты ниже доступны отдельно в рабочем пространстве Epifera.",
+    "back": "Explore the intended uses of the connector. The creative tools below are separately available in the Epifera workspace."
   },
   {
     "id": "u2337",
-    "ru": "Изучите инструменты изображений, видео, музыки и речи в рабочем пространстве.",
-    "back": "Explore image, video, music and speech tools in the workspace."
+    "ru": "Изучите инструменты для работы с изображениями, видео, музыкой и речью в рабочем пространстве.",
+    "back": "Explore workspace tools for working with images, video, music and speech."
   },
   {
     "id": "u2338",
-    "ru": "Направления изображений",
-    "back": "Image directions"
+    "ru": "Визуальные концепции",
+    "back": "Visual concepts"
   },
   {
     "id": "u2339",
@@ -3510,8 +3510,8 @@
   },
   {
     "id": "u2349",
-    "ru": "Начните с кампании, сцены или персонажа. Разделите бриф на направления изображения, голоса и видео, чтобы каждое решение можно было проверить.",
-    "back": "Start with a campaign, scene or character. Split the brief into image, voice and video directions so every decision can be reviewed."
+    "ru": "Начните с кампании, сцены или персонажа. Разделите бриф на указания для изображения, озвучки и видео, чтобы каждое решение можно было оценить.",
+    "back": "Begin with a campaign, a scene or a character. Divide the brief into image, voice-over and video instructions so each decision can be reviewed."
   },
   {
     "id": "u2350",
@@ -3606,13 +3606,13 @@
   },
   {
     "id": "u2368",
-    "ru": "Изучите направление изображения в доступных инструментах.",
-    "back": "Explore an image direction in the available tools."
+    "ru": "Проработайте визуальную концепцию с помощью доступных инструментов.",
+    "back": "Work through a visual concept using the available tools."
   },
   {
     "id": "u2369",
-    "ru": "Адаптируйте сильнейшую идею под своё размещение.",
-    "back": "Adapt the strongest idea for your placement."
+    "ru": "Адаптируйте лучшую идею под нужный формат размещения.",
+    "back": "Adapt the strongest idea to the required placement format."
   },
   {
     "id": "u2370",
@@ -3631,8 +3631,8 @@
   },
   {
     "id": "u2373",
-    "ru": "Брифы для начала следующей идеи",
-    "back": "Briefs to begin the next idea"
+    "ru": "Брифы для работы над следующей идеей",
+    "back": "Briefs for developing your next idea"
   },
   {
     "id": "u2374",
@@ -5166,9 +5166,8 @@
   },
   {
     "id": "u3046",
-    "ru": "Usage and license",
-    "back": "Usage and license",
-    "keepReason": "Технический идентификатор, значение перечисления, путь, имя файла или MIME-тип; точное значение сохраняется."
+    "ru": "Использование и лицензия",
+    "back": "Usage and licensing"
   },
   {
     "id": "u3047",
@@ -5182,8 +5181,8 @@
   },
   {
     "id": "u3049",
-    "ru": "Здесь доступно только кешированное превью. В источнике указан оригинал JPEG 4667 × 7000; он не включён в эти загрузки.",
-    "back": "Only a cached preview is available here. The source specifies an original 4667 × 7000 JPEG; it is not included in these downloads."
+    "ru": "Здесь доступно только кешированное превью. В источнике указан оригинал JPEG размером 4667 × 7000; он не входит в доступные здесь файлы для скачивания.",
+    "back": "Only a cached preview is available here. The source lists a 4667 × 7000 JPEG original; it is not among the files available to download here."
   },
   {
     "id": "u3050",
@@ -5192,8 +5191,8 @@
   },
   {
     "id": "u3051",
-    "ru": "Начните новое изображение с этого визуального направления.",
-    "back": "Start a new image from this visual direction."
+    "ru": "Начните работу над новым изображением на основе этого визуального замысла.",
+    "back": "Begin working on a new image using this visual direction as the starting point."
   },
   {
     "id": "u3052",
@@ -5331,8 +5330,8 @@
   },
   {
     "id": "u3077",
-    "ru": "Изучите предварительные тарифы Epifera, месячные и годовые оценки бюджета, единицы звёзд и запросы для команд. Проверьте окончательные варианты оплаты в рабочем пространстве.",
-    "back": "Explore Epifera plan previews, monthly and yearly budget estimates, star units and team enquiries. Check final payment options in the workspace."
+    "ru": "Изучите предварительные тарифы Epifera и оценки месячного и годового бюджета. Узнайте о звёздах как единице расчёта и подготовке запросов для команд. Окончательные варианты оплаты смотрите в рабочем пространстве.",
+    "back": "Explore Epifera's preliminary plans and estimates for monthly and annual budgets. Learn about stars as a unit of calculation and preparing team enquiries. See the final payment options in the workspace."
   },
   {
     "id": "u3078",
@@ -5356,8 +5355,8 @@
   },
   {
     "id": "u3082",
-    "ru": "Цифры подписок повторяют текущий предварительный интерфейс. Окончательные предложения, суммы и кредиты подтверждаются в аккаунте.",
-    "back": "Subscription figures reproduce the current interface preview. Final offers, amounts and credits are confirmed in your account."
+    "ru": "Показатели подписок соответствуют текущему предварительному обзору в интерфейсе. Окончательные предложения, суммы и начисления подтверждаются в аккаунте.",
+    "back": "Subscription figures correspond to the current interface preview. Final offers, amounts and credits are confirmed in the account."
   },
   {
     "id": "u3083",
@@ -5411,18 +5410,18 @@
   },
   {
     "id": "u3093",
-    "ru": "Как работают звёзды и стоимость моделей",
-    "back": "How stars and model costs work"
+    "ru": "Как используются звёзды и рассчитывается стоимость работы с моделями",
+    "back": "How stars are used and the cost of working with models is calculated"
   },
   {
     "id": "u3094",
-    "ru": "Звёзды и стоимость моделей",
-    "back": "Stars and model costs"
+    "ru": "Звёзды и стоимость работы с моделями",
+    "back": "Stars and the cost of using models"
   },
   {
     "id": "u3095",
-    "ru": "Окончательные суммы и кредиты поступают с сервера при оформлении оплаты.",
-    "back": "Final amounts and credits come from the server when checking out."
+    "ru": "Окончательные суммы и начисления определяет сервер при оформлении оплаты.",
+    "back": "The server determines final amounts and credits during checkout."
   },
   {
     "id": "u3096",
@@ -5461,8 +5460,8 @@
   },
   {
     "id": "u3103",
-    "ru": "Изучите инструменты изображений, видео, музыки и речи",
-    "back": "Explore image, video, music and speech tools"
+    "ru": "Изучите инструменты для работы с изображениями, видео, музыкой и речью",
+    "back": "Explore tools for images, video, music and speech"
   },
   {
     "id": "u3104",
@@ -5506,8 +5505,8 @@
   },
   {
     "id": "u3112",
-    "ru": "Годовое число — оценка 12 месячных сумм. Это не предложение ежегодной оплаты.",
-    "back": "The yearly figure is an estimate of 12 monthly amounts. This is not an annual-payment offer."
+    "ru": "Годовая сумма — оценка бюджета на 12 месяцев на основе месячных сумм. Это не предложение годовой оплаты.",
+    "back": "The annual amount estimates the budget for 12 months based on monthly amounts. It is not an annual payment offer."
   },
   {
     "id": "u3113",
@@ -5611,8 +5610,8 @@
   },
   {
     "id": "u3133",
-    "ru": "Сравнивайте одинаковые единицы в индивидуальных предварительных тарифах. Доступ к моделям и окончательные коммерческие условия подтверждаются отдельно.",
-    "back": "Compare the same units in the individual plan previews. Model access and final commercial terms are confirmed separately."
+    "ru": "Сравнивайте показатели индивидуальных предварительных тарифов в одних и тех же единицах. Доступ к моделям и окончательные коммерческие условия подтверждаются отдельно.",
+    "back": "Compare individual plan preview figures using the same units. Model access and final commercial terms are confirmed separately."
   },
   {
     "id": "u3134",
@@ -5726,8 +5725,8 @@
   },
   {
     "id": "u3156",
-    "ru": "Редакционные отправные точки, которые помогут выбрать следующий шаг.",
-    "back": "Editorial starting points to help choose the next step."
+    "ru": "Идеи от редакции, которые помогут выбрать следующий шаг.",
+    "back": "Editorial ideas to help you choose the next step."
   },
   {
     "id": "u3157",
@@ -5771,8 +5770,8 @@
   },
   {
     "id": "u3165",
-    "ru": "Звёзды — единица, в которой отображаются творческие запросы в Epifera. Перед созданием проверьте выбранную модель, настройки и показанную стоимость. Окончательные изменения баланса и кредиты за оплату определяет сервер.",
-    "back": "Stars are the unit in which creative requests are displayed in Epifera. Before creating, check the selected model, settings and displayed cost. Final balance changes and credits for payment are determined by the server."
+    "ru": "Звёзды — единица, в которой в Epifera указана стоимость творческих запросов. Перед созданием проверьте выбранную модель, настройки и показанную стоимость. Окончательные изменения баланса и начисления при оплате определяет сервер.",
+    "back": "Stars are the unit used to show the cost of creative requests in Epifera. Before creating, check the model, settings and displayed cost. The server determines final balance changes and payment credits."
   },
   {
     "id": "u3166",
@@ -6297,8 +6296,8 @@
   },
   {
     "id": "u3265",
-    "ru": "Модель не предоставлена",
-    "back": "Model not provided"
+    "ru": "Модель не указана",
+    "back": "Model unspecified"
   },
   {
     "id": "u3266",

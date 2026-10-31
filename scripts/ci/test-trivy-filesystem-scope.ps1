@@ -30,7 +30,8 @@ $safeTrackedFiles = @(
     "web/platform/package-lock.json", "web/admin/package-lock.json",
     "web/admin/package-lock.json", "scripts/ci/example.ps1",
     ".cache-not-generated/source.go", "web/platform/.next-not-generated/source.ts",
-    "docs/node_modules-guide.md", "web/admin/distribution/source.ts"
+    "docs/node_modules-guide.md", "web/admin/distribution/source.ts",
+    "references/README.md", "references/not-local/source.go"
 )
 Assert-TrivyFilesystemScanScope -RepositoryRoot $repoRoot -ConfigPath $configPath -TrackedFiles $safeTrackedFiles
 
@@ -41,7 +42,10 @@ foreach ($hiddenSource in @(
     "web/admin/dist/config.yaml", "coverage/Dockerfile",
     "web/platform/coverage/source.ts", "web/admin/coverage/source.ts",
     "web/admin/coverage/source.ts", "web/platform/playwright-report/source.ts",
-    "web/platform/test-results/source.ts"
+    "web/platform/test-results/source.ts",
+    "references/magnific-html/source.js", "references/magnific-html-js/source.js",
+    "references/magnific-login-ru/source.js", "references/magnific-reference-assets/source.js",
+    "references/magnific-states/source.js", "references/magnific-html-24-pages.zip"
 )) {
     Assert-ThrowsLike {
         Assert-TrivyFilesystemScanScope -RepositoryRoot $repoRoot -ConfigPath $configPath -TrackedFiles @($hiddenSource)
@@ -60,6 +64,10 @@ try {
         "scan:`n  skip-dirs:`n    - .cache`n    - .cache",
         "scan:`n  skip-dirs:`n    - .cache`nignore-unfixed: true",
         "scan:`n  skip-files:`n    - go.mod",
+        "scan:`n  skip-dirs:`n    - .cache`n  skip-files:`n    - go.mod",
+        "scan:`n  skip-dirs:`n    - .cache`n  skip-files:`n    - `"references/*`"",
+        "scan:`n  skip-dirs:`n    - .cache`n  skip-files:`n    - `"references/*.zip`"`n    - `"references/*.zip`"",
+        "scan:`n  skip-dirs:`n    - .cache`n  skip-files:",
         "scan:`n  skip-dirs:`n"
     )) {
         [IO.File]::WriteAllText($invalidConfigPath, $invalidConfig, [Text.UTF8Encoding]::new($false))

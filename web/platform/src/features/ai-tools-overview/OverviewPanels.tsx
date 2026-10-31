@@ -16,7 +16,7 @@ const wideSnapshot = () => window.matchMedia?.(wideQuery).matches ?? false;
 const serverSnapshot = () => false;
 
 export function OverviewModels() {
-  const {copy} = usePublicCopy(publicCopySourcesForLocale);
+  const {copy} = usePublicCopy(publicCopySourcesForLocale,{"copy":"aiToolsEn"});
 
   const [selected, setSelected] = useState<string>(copy.models.styles[0].id);
   const wide = useSyncExternalStore(subscribe, wideSnapshot, serverSnapshot);
@@ -34,9 +34,10 @@ export function OverviewModels() {
   </section>;
 }
 
-const clients = copy.connections.clients.map((label,index) => ({ id: `client-${index}`, label }));
+
 export function OverviewConnections() {
-  const {clients,copy} = usePublicCopy(publicCopySourcesForLocale);
+  const {copy} = usePublicCopy(publicCopySourcesForLocale,{"copy":"aiToolsEn"});
+  const clients=copy.connections.clients.map((label,index) => ({ id: `client-${index}`, label }));
 
   const [selected,setSelected] = useState(clients[0].id);
   return <section id="connections" className={styles.connectionSection}>
@@ -52,4 +53,4 @@ export function OverviewConnections() {
   </section>;
 }
 
-const publicCopySourcesForLocale={copy,clients};
+const publicCopySourcesForLocale={copy};

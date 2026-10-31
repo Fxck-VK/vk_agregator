@@ -21,7 +21,7 @@ func WhisperDEVQuote(seconds int) (PricingSnapshot, error) {
 		return PricingSnapshot{}, ErrInvalidProductKey
 	}
 	credits := WhisperDEVCreditsPerStartedMinute * int64(seconds/60)
-	return (ProductPrice{
+	return applyEconomicRetailPolicy(ProductPrice{
 		Key:     ProductKey{Operation: domain.OperationAudioSTT, Modality: domain.ModalityText, AudioModelID: "whisper_1", AudioAction: "transcribe", DurationSec: seconds},
 		Version: 1, Source: WhisperDEVFixedPriceSource, Enabled: true,
 		Floor:      PriceFloor{Unit: FloorUnitInternalCredits, Amount: credits * MinorUnitsPerCredit},

@@ -36,14 +36,14 @@ video.cardMedia {
   position: absolute;
   z-index: 2;
   inset: 50% auto auto 50%;
-  border-radius: 999px;
+  border: 0.0625rem solid var(--color-accent);
+  border-radius: var(--radius-sm);
   padding: 0.8rem 1.25rem;
-  background: var(--color-accent);
-  box-shadow: 0 0.75rem 2rem rgb(0 0 0 / 28%);
+  background: transparent;
   font-weight: 800;
   opacity: 0;
   transform: translate(-50%, -40%);
-  transition: opacity var(--motion-fast), transform var(--motion-fast);
+  transition: opacity var(--motion-fast), transform var(--motion-fast), border-color var(--motion-fast);
 }
 
 .cardMeta {
@@ -72,6 +72,7 @@ video.cardMedia {
 
 .card:hover .cardAction,
 .card:focus-visible .cardAction {
+  border-color: var(--color-accent-strong);
   opacity: 1;
   transform: translate(-50%, -50%);
 }

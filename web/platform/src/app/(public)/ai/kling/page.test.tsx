@@ -38,7 +38,7 @@ describe("Kling model-family landing", () => {
     const {container} = await page();
     const row = within(screen.getByRole("table",{name:"Kling versions in Epifera"})).getByRole("link",{name:"View Kling 3.0"}).closest("tr")!;
     expect(row).toHaveTextContent("Not selectable");
-    expect(within(row).getByRole("link",{name:"View Kling 3.0"})).toHaveAttribute("href","/en/app?model=video_kling_v3");
+    expect(within(row).getByRole("link",{name:"View Kling 3.0"})).toHaveAttribute("href","/ru/app?model=video_kling_v3");
     expect(container.querySelector('a[href*="modelId="]')).toBeNull();
     expect(container.querySelector('a[href*="kling-40"]')).toBeNull();
     const fetch = vi.spyOn(globalThis,"fetch");

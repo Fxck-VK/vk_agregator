@@ -112,7 +112,7 @@ func klingVeoCatalogCases() []klingVeoCatalogCase {
 		{
 			alias:           domain.VideoRouteKlingV3,
 			enable:          func(cfg *config.Config) { cfg.FeatureAPIMartKlingV3Enabled = true },
-			estimate:        205,
+			estimate:        500,
 			defaultDuration: 5,
 			defaultRes:      "720p",
 			maxDuration:     15,

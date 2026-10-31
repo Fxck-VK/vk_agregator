@@ -15,6 +15,7 @@ import (
 
 	"vk-ai-aggregator/internal/domain"
 	"vk-ai-aggregator/internal/platform/metrics"
+	"vk-ai-aggregator/internal/service/economycatalog"
 )
 
 var (
@@ -34,6 +35,10 @@ const (
 
 // Config controls payment lifecycle behavior.
 type Config struct {
+	SubscriptionStore   domain.SubscriptionRepository
+	SubscriptionBilling domain.BillingRepository
+	SubscriptionTx      PaymentTxRunner
+	RecurringEnabled    bool
 	// AccountReturnURL is the trusted web return page; VK callers keep ReturnURL.
 	AccountReturnURL             string
 	ReturnURL                    string
@@ -557,7 +562,8 @@ func (s *Service) userFacingProductAllowed(product *domain.PaymentProduct) bool 
 	if strings.EqualFold(strings.TrimSpace(product.Code), devTestPaymentProductCode) {
 		return s != nil && s.cfg.IncludeDevTestPaymentProduct
 	}
-	return true
+	stars, err := product.CurrentCredits()
+	return err == nil && economycatalog.TopUpIncomeAllowed(product.Amount, stars)
 }
 
 // AttachVKBotPaymentMessage stores only the minimal local routing data needed
@@ -874,6 +880,32 @@ func (s *Service) ensureProviderPayment(ctx context.Context, intent *domain.Paym
 		IdempotencyKey:            "pay:" + intent.ID.String(),
 		Capture:                   paymentIntentCapture(intent),
 	}
+	purchase, purchaseErr := subscriptionPurchaseFrom(intent)
+	if purchaseErr != nil {
+		return nil, purchaseErr
+	}
+	if purchase != nil {
+		started, marked, markErr := submissionStartedAt(intent)
+		if markErr != nil {
+			return nil, markErr
+		}
+		if !marked {
+			started = intent.CreatedAt
+		}
+		if !started.IsZero() && time.Since(started) > 23*time.Hour {
+			return nil, ErrSubscriptionUnavailable
+		}
+		createInput.SavePaymentMethod = purchase.AutoRenew && !purchase.Renewal
+		if purchase.Renewal {
+			var private struct {
+				Method string `json:"subscription_payment_method_id"`
+			}
+			if err := json.Unmarshal(intent.Metadata, &private); err != nil || private.Method == "" {
+				return nil, ErrSubscriptionUnavailable
+			}
+			createInput.PaymentMethodID = private.Method
+		}
+	}
 	// The local ID supports return-page recovery without browser storage. It is
 	// never proof of payment; status reads still require the owning account.
 	if paymentMetadataSource(intent.Metadata) == "web" {
@@ -892,6 +924,11 @@ func (s *Service) ensureProviderPayment(ctx context.Context, intent *domain.Paym
 	if err := validateConfirmationURL(result.ConfirmationURL); err != nil {
 		recordPaymentProviderError(s.provider.Code(), "create_payment", err)
 		return nil, err
+	}
+	// CreatePayment is not settlement proof. Keep immediate recurring success
+	// discoverable by reconciliation until GET verifies and commits the grant.
+	if purchase != nil && (result.Status == domain.PaymentIntentSucceeded || result.Status == domain.PaymentIntentCanceled || result.Status == domain.PaymentIntentFailed || result.Status == domain.PaymentIntentExpired) {
+		result.Status = domain.PaymentIntentProviderPending
 	}
 	if err := s.repo.SetIntentProviderState(ctx, intent.ID, result.Status, result.ProviderPaymentID, result.ConfirmationURL); err != nil {
 		return nil, err
@@ -1117,6 +1154,9 @@ func validateProduct(product *domain.PaymentProduct) error {
 	}
 	if product.Currency != domain.CurrencyRUB {
 		return ErrInvalidInput
+	}
+	if product.IsActive && !economycatalog.TopUpIncomeAllowed(product.Amount, product.Credits) {
+		return fmt.Errorf("%w: top-up price is below the economic minimum", ErrInvalidInput)
 	}
 	if product.VATCode != nil && !validVATCode(*product.VATCode) {
 		return ErrInvalidInput

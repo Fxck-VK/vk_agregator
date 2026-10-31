@@ -21,7 +21,7 @@ describe("legal navigation", () => {
     const current = within(navigation).getByRole("link", { name: "Privacy policy" });
     expect(current).toHaveAttribute("aria-current", "page");
     expect(current.closest("details")).toHaveAttribute("open");
-    expect(current).toHaveAttribute("href", "/en/legal/privacy-policy");
+    expect(current).toHaveAttribute("href", "/ru/legal/privacy-policy");
     expect(screen.queryByRole("button", { name: /theme/i })).not.toBeInTheDocument();
   });
 
@@ -48,8 +48,8 @@ describe("legal navigation", () => {
     page();
     fireEvent.click(screen.getByRole("button", { name: "Open navigation" }));
     const dialog = screen.getByRole("dialog", { name: "Navigation" });
-    expect(within(dialog).getByRole("link", { name: "New chat" })).toHaveAttribute("href", "/en/app");
-    expect(within(dialog).getByRole("link", { name: "All AI models" })).toHaveAttribute("href", "/en/app/models");
-    expect(within(dialog).getByRole("link", { name: "Legal pages" })).toHaveAttribute("href", "/en/legal");
+    expect(within(dialog).getByRole("link", { name: "New chat" })).toHaveAttribute("href", "/ru/app");
+    expect(within(dialog).getByRole("link", { name: "All AI models" })).toHaveAttribute("href", "/ru/app/models");
+    expect(within(dialog).getByRole("link", { name: "Legal pages" })).toHaveAttribute("href", "/ru/legal");
   });
 });

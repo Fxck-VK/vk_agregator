@@ -21,6 +21,7 @@ describe("Kling 3.0 model-version landing",()=>{
   });
   it("renders Russian content and localized links",async()=>{
     request.locale="ru";const {container}=await page();
+    expect((await generateMetadata()).title).toBe("ИИ-видеомодель Kling 3.0 — Epifera");
     expect(container.querySelector('h1')).not.toBeNull();expect(container.querySelector('main')?.textContent).toMatch(/[А-Яа-яЁё]/);expect([...container.querySelectorAll('a[href]')].filter(link=>link.getAttribute('href')?.startsWith('/en/'))).toHaveLength(0);});
   it("renders the complete version layout with one matching shell",async()=>{
     const {container}=await page();
@@ -44,7 +45,7 @@ describe("Kling 3.0 model-version landing",()=>{
   });
   it("links launches to the existing model without submitting jobs",async()=>{
     const fetch=vi.spyOn(globalThis,"fetch");const {container}=await page();
-    for(const link of screen.getAllByRole("link",{name:"Create with Kling 3.0"}))expect(link).toHaveAttribute("href","/en/app?model=video_kling_v3");
+    for(const link of screen.getAllByRole("link",{name:"Create with Kling 3.0"}))expect(link).toHaveAttribute("href","/ru/app?model=video_kling_v3");
     expect(container.querySelector('a[href*="modelId="]')).toBeNull();
     for(const anchor of container.querySelectorAll<HTMLAnchorElement>('a[href^="#"]'))expect(container.querySelector(anchor.getAttribute("href")!)).not.toBeNull();
     fireEvent.click(screen.getByRole("button",{name:/Pause motion/}));
@@ -62,10 +63,10 @@ describe("Kling 3.0 model-version landing",()=>{
   it("attributes reference research and connects the family to this version",async()=>{
     const {container,unmount}=await page();
     expect(container.querySelector("#numbers")).toHaveTextContent("not Epifera usage");
-    expect(screen.getByRole("link",{name:"Compare Kling versions"})).toHaveAttribute("href","/en/ai/kling#versions");
+    expect(screen.getByRole("link",{name:"Compare Kling versions"})).toHaveAttribute("href","/ru/ai/kling#versions");
     unmount();render(<LocaleProvider locale={request.locale}><KlingFamily/></LocaleProvider>);
     const table=screen.getByRole("table",{name:"Kling versions in Epifera"});
-    expect(within(table).getByRole("link",{name:"Kling 3.0"})).toHaveAttribute("href","/en/ai/kling/kling-3-0");
-    expect(within(table).getByRole("link",{name:"View Kling 3.0"})).toHaveAttribute("href","/en/app?model=video_kling_v3");
+    expect(within(table).getByRole("link",{name:"Kling 3.0"})).toHaveAttribute("href","/ru/ai/kling/kling-3-0");
+    expect(within(table).getByRole("link",{name:"View Kling 3.0"})).toHaveAttribute("href","/ru/app?model=video_kling_v3");
   });
 });

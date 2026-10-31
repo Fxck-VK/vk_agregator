@@ -8,16 +8,17 @@ import {usePublicCopy} from "@/i18n/public/use-public-copy";
 
 
 function ReferenceSummary({model}:{model:typeof avatarModelsEn[number]}) {
-  const {copy} = usePublicCopy(publicCopySourcesForLocale);
+  const {copy} = usePublicCopy(publicCopySourcesForLocale,{"avatarModelsEn":"avatarModelsEn","copy":"comparisonEn"});
 
   const refs=model.references,refText=refs.support==='supported'?`${copy.fields.max} ${refs.maxCount} ${copy.fields.images} (${refs.extensions.join(', ').toUpperCase()})`:refs.support==='unsupported'?copy.fields.notExposed:copy.fields.unspecified;
   return <p className={styles.modelFacts}><strong>{copy.fields.references}:</strong> {refText}. <strong>{copy.fields.resolutions}:</strong> {model.resolutions?.join(', ')||copy.fields.unspecified}. <strong>{copy.fields.ratios}:</strong> {model.ratios?.join(', ')||copy.fields.unspecified}. <strong>{copy.fields.outputs}:</strong> {model.maxOutputs??copy.fields.unspecified}. {model.qualityModes?.length?<><strong>{copy.fields.quality}:</strong> {model.qualityModes.join(', ')}. </>:null}<strong>{copy.fields.combined}:</strong> {model.maxCombinedImages??copy.fields.unspecified}.</p>;
 }
 
-export const comparisonReadingMinutes=Math.max(1,Math.ceil([copy.intro,copy.methodology,...copy.sections.flatMap(s=>[s.title,...s.paragraphs,...(s.bullets??[])]),...Object.values(copy.models).flatMap(m=>[m.description,m.review]),...copy.faq.flatMap(f=>[f.question,f.answer])].join(' ').split(/\s+/).length/200));
+export const getComparisonReadingMinutes=(copy:typeof import('@/i18n/public/comparison-en').comparisonEn)=>Math.max(1,Math.ceil([copy.intro,copy.methodology,...copy.sections.flatMap(s=>[s.title,...s.paragraphs,...(s.bullets??[])]),...Object.values(copy.models).flatMap(m=>[m.description,m.review]),...copy.faq.flatMap(f=>[f.question,f.answer])].join(' ').split(/\s+/).length/200));
+export const comparisonReadingMinutes=getComparisonReadingMinutes(copy);
 
 export function ComparisonArticle() {
-  const {copy,avatarModelsEn} = usePublicCopy(publicCopySourcesForLocale);
+  const {copy,avatarModelsEn} = usePublicCopy(publicCopySourcesForLocale,{"avatarModelsEn":"avatarModelsEn","copy":"comparisonEn"});
 
   return <article className={styles.article} aria-label={copy.title}><p>{copy.shortlist}</p><ol className={styles.shortlist}>{avatarModelsEn.map(m=><li key={m.id}><a href={`#model-${m.slug}`}>{m.name}</a></li>)}</ol><p id="methodology" className={styles.methodology}>{copy.methodology}</p><nav aria-label={copy.outline} className={styles.inlineOutline}><p>{copy.outline}</p><ol>{copy.sections.map(s=><li key={s.id}><a href={`#${s.id}`}>{s.label}</a>{s.kind==='models'?<ul>{avatarModelsEn.map(m=><li key={m.id}><a href={`#model-${m.slug}`}>{m.name}</a></li>)}</ul>:null}</li>)}</ol></nav>
     {copy.sections.map(section=><section key={section.id} id={section.id} className={styles.chapter} data-comparison-chapter><h2>{section.title}</h2>{section.paragraphs.map(p=><p key={p}>{p}</p>)}{section.bullets?<ul>{section.bullets.map(p=><li key={p}>{p}</li>)}</ul>:null}

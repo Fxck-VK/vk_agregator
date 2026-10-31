@@ -4,6 +4,7 @@ import { createPreviewImage } from "./preview-image";
 import type { BrowserRequestInit } from "@/lib/web-api/development-transport";
 import type { WebApiPath } from "@/lib/web-api/path";
 import type { UploadScenario } from "./scenarios";
+import { localImagePrice } from "./image-pricing";
 
 export type LocalConversationSeed = {
   conversations: readonly ConversationItem[];
@@ -11,6 +12,7 @@ export type LocalConversationSeed = {
   imageModels?: readonly ImageModel[];
 };
 const uuid = z.string().uuid();
+const renameInput = z.object({ title: z.string().trim().min(1).max(120) }).strict();
 const messageInput = z.object({
   prompt: z.string().trim().min(1).max(32_000),
   reference_artifact_ids: z.array(uuid).max(16).optional(),
@@ -67,6 +69,16 @@ export function createConversationSimulator({ seed, scenario, hasArtifact, reply
     const conversation = conversations.get(conversationID);
     if (!conversation) return json({ error: "Conversation not found" }, 404);
     if (!resource && method === "GET") return json(conversation);
+    if (!resource && method === "PATCH") {
+      let title: string;
+      try {
+        if (typeof init.body !== "string") return json({ error: "Invalid conversation title" }, 400);
+        title = renameInput.parse(JSON.parse(init.body)).title;
+      } catch { return json({ error: "Invalid conversation title" }, 400); }
+      conversation.title = title;
+      conversation.updated_at = now();
+      return json(conversation);
+    }
     if (resource === "jobs" && method === "GET") {
       const job = jobs.get(jobID);
       return job?.conversationID === conversationID ? json(jobResponse(job)) : json({ error: "Job not found" }, 404);
@@ -98,6 +110,8 @@ export function createConversationSimulator({ seed, scenario, hasArtifact, reply
     }
     const references = payload.reference_artifact_ids ?? [];
     if (references.some(id => !hasArtifact(id)) || new Set(references).size !== references.length) return json({ error: "Invalid attachments" }, 400);
+    const imageCost = payload.image_quality ? localImagePrice(seed?.imageModels, { ...payload, reference_count: references.length }) : undefined;
+    if (payload.image_quality && imageCost === undefined) return json({ error: "Preview image price unavailable" }, 400);
     if (scenario() === "error") return json({ error: "Simulated message failure" }, 503);
     if (jobs.size >= 500) return json({ error: "Preview capacity reached" }, 429);
     const message: ConversationMessage = { id: crypto.randomUUID(), seq: (history.at(-1)?.seq ?? 0) + 1, role: "user", text: payload.prompt, rating: null, created_at: now(), ...(references.length ? { input_images: references } : {}) };
@@ -107,7 +121,7 @@ export function createConversationSimulator({ seed, scenario, hasArtifact, reply
         job.images = Array.from({ length: count }, () => ({
           job: { id: job.id, status: "succeeded", prompt: payload.prompt, model_id: payload.model_id ?? "preview",
             model_name: model?.name ?? payload.model_id ?? "Preview", image_quality: payload.image_quality!,
-            cost_estimate: 20 * count, created_at: now(), updated_at: now() },
+            cost_estimate: imageCost!, created_at: now(), updated_at: now() },
           artifact: createPreviewImage(ratio),
         }));
       } catch { return json({ error: "Invalid preview image dimensions" }, 400); }

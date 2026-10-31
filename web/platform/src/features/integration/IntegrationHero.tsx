@@ -11,7 +11,7 @@ import {usePublicCopy} from "@/i18n/public/use-public-copy";
 
 
 export function IntegrationHero({selected,onSelect,onStatus,onGuide}:{selected:number;onSelect:(index:number)=>void;onStatus:()=>void;onGuide:()=>void}){
-  const {mcpClients,integrationReference,t} = usePublicCopy(publicCopySourcesForLocale);
+  const {mcpClients,integrationReference,t} = usePublicCopy(publicCopySourcesForLocale,{"mcpClients":"mcpClients","t":"mcpEn","integrationReference":"integrationReference"});
 
  const tabs=useRef<(HTMLButtonElement|null)[]>([]),id=useId(),client=mcpClients[selected],image=integrationReference.images.hero;
  const select=(index:number,focus=false)=>{onSelect(index);if(focus){tabs.current[index]?.focus();tabs.current[index]?.scrollIntoView?.({block:"nearest",inline:"nearest"});}};

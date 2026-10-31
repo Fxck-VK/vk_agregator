@@ -10,7 +10,7 @@ import {usePublicCopy} from "@/i18n/public/use-public-copy";
 
 
 export function CollectionCard({member,priority,onView,className,actions}:{member:CollectionMember;priority:boolean;onView:(opener?:HTMLElement)=>void;className?:string;actions?:ReactNode}){
-  const {t} = usePublicCopy(publicCopySourcesForLocale);
+  const {t} = usePublicCopy(publicCopySourcesForLocale,{"t":"collectionEn"});
 
   const [menu,setMenu]=useState(false),anchor=useRef<HTMLButtonElement>(null),id=useId();
   const close=useCallback(()=>setMenu(false),[]);

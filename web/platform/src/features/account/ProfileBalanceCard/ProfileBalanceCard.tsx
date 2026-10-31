@@ -16,10 +16,6 @@ export function ProfileBalanceCard({ balance }: ProfileBalanceCardProps) {
 
   return (
     <section aria-label={t.profile.tariffSectionTitle} className={styles.card}>
-      <div className={styles.plan}>
-        <p>{t.profile.planLabel}</p>
-        <strong>{t.profile.planPlaceholder}</strong>
-      </div>
       <div
         aria-busy={!isBalanceAvailable || undefined}
         aria-label={isBalanceAvailable ? undefined : t.profile.balanceUnavailable}

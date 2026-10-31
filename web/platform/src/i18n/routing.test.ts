@@ -14,12 +14,12 @@ describe("locale URL contract", () => {
     expect(stripLocale("/ru/app?model=x#draft")).toBe("/app?model=x#draft");
     expect(stripLocale("/app/chat/id")).toBe("/app/chat/id");
   });
-  it("switches page language once and preserves query/fragment bytes", () => {
-    expect(localizeHref("/", "en")).toBe("/en");
+  it("canonicalizes retired language requests to Russian and preserves query/fragment bytes", () => {
+    expect(localizeHref("/", "en")).toBe("/ru");
     expect(localizeHref("/ru/app/chat/id?model=a%2Bb&x=1#draft", "en"))
-      .toBe("/en/app/chat/id?model=a%2Bb&x=1#draft");
+      .toBe("/ru/app/chat/id?model=a%2Bb&x=1#draft");
     expect(localizeHref("/app", "ru")).toBe("/ru/app");
-    expect(localizeHref("/en/app", "en")).toBe("/en/app");
+    expect(localizeHref("/en/app", "en")).toBe("/ru/app");
   });
   it.each(["/web/v1/models", "/health", "/api/auth/callback", "/assets/icon.svg", "/_next/static/x.js", "/sitemap.xml", "/robots.txt"])
   ("leaves technical URLs unchanged: %s", path => {

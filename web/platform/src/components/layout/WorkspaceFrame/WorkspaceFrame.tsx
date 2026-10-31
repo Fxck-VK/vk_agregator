@@ -6,6 +6,7 @@ import { useState, useSyncExternalStore } from "react";
 import { AppShell } from "@/components/layout/AppShell/AppShell";
 import { Sidebar } from "@/components/layout/Sidebar/Sidebar";
 import { WorkspaceHeader } from "@/components/layout/WorkspaceHeader/WorkspaceHeader";
+import { WorkspaceSectionNavigation } from "@/components/layout/WorkspaceHeader/WorkspaceSectionNavigation";
 import { SidebarConversations } from "@/features/conversations/SidebarConversations/SidebarConversations";
 import { WorkspaceConversationListProvider } from "@/features/conversations/WorkspaceConversationList/WorkspaceConversationList";
 import { WorkspaceAccountProvider } from "@/features/account/WorkspaceAccount/WorkspaceAccount";
@@ -42,6 +43,7 @@ type WorkspaceFrameProps = {
   conversations: ConversationItem[];
   profile: AccountProfile;
   deferred?: boolean;
+  deferConversations?: boolean;
   initialCatalog?: ModelCatalogSnapshot | null;
 };
 
@@ -75,7 +77,7 @@ function WorkspaceChrome({ account, balance = null, children, conversations, tra
 
   return (
     <AppShell
-      header={<WorkspaceHeader balance={balance} trailingAction={trailingAction} />}
+      header={<WorkspaceHeader balance={balance} sectionNavigation={<WorkspaceSectionNavigation />} trailingAction={trailingAction} />}
       isDesktopSidebarCollapsed={isDesktopSidebarCollapsed}
       sidebar={
         <Sidebar
@@ -92,12 +94,12 @@ function WorkspaceChrome({ account, balance = null, children, conversations, tra
   );
 }
 
-export function WorkspaceFrame({ account, accountId, balance = null, children, conversations, profile, deferred = false, initialCatalog = null }: WorkspaceFrameProps) {
+export function WorkspaceFrame({ account, accountId, balance = null, children, conversations, profile, deferred = false, deferConversations = deferred, initialCatalog = null }: WorkspaceFrameProps) {
   return (
     <WorkspaceSessionHealth accountId={accountId} verification={profile} key={accountId} guest={<GuestWorkspaceFrame><SessionFailureNotice /></GuestWorkspaceFrame>}>
     <GenerationCatalogProvider initialSource={initialCatalog} key={accountId}>
     <WorkspaceAccountProvider deferred={deferred} snapshot={{ balance, profile }}>
-      <WorkspaceConversationListProvider deferred={deferred} accountId={accountId} initialConversations={conversations} key={accountId}>
+      <WorkspaceConversationListProvider deferred={deferConversations} accountId={accountId} initialConversations={conversations} key={accountId}>
         <WorkspaceDataCacheProvider>
           <WorkspaceModelSelectionProvider key={accountId}>
             <WorkspaceChrome

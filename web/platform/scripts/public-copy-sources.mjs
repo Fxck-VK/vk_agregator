@@ -8,7 +8,7 @@ import ts from 'typescript';
 // This check never imports UI components, request data, services or providers.
 const require=createRequire(import.meta.url),base=path.resolve(path.dirname(fileURLToPath(import.meta.url)),'../src'),cache=new Map();
 const sources=new Set(Object.values(JSON.parse(fs.readFileSync(path.join(base,'i18n/public/translations/sources.json'),'utf8'))));
-const excluded=new Set(['id','slug','href','url','src','file','poster','key','value','type','kind','status','mode','tier','currency','period','group','formats','extensions','executionMode','modelId','model_id','operation','operationId','assetId','ownerId','ownerKind','publicId','categoryId','icon','tone','mark','color','className','indexing','sourceWidth','sourceHeight','taxonId','taxonIds','relatedCategoryIds','categoryIds','orderedMemberIds','license','people','mediaType','downloadPolicy','origin','memberType','taskIds','publicMediaIds','sortPolicy','modelVersionId','mime','filename','path','moderationState','direction','orientation']);
+const excluded=new Set(['id','slug','href','url','src','file','poster','key','value','type','kind','mode','tier','currency','period','group','formats','extensions','executionMode','modelId','model_id','operation','operationId','assetId','ownerId','ownerKind','publicId','categoryId','icon','tone','mark','color','className','indexing','sourceWidth','sourceHeight','taxonId','taxonIds','relatedCategoryIds','categoryIds','orderedMemberIds','license','people','mediaType','downloadPolicy','origin','memberType','taskIds','publicMediaIds','sortPolicy','modelVersionId','mime','filename','path','moderationState','direction','orientation']);
 function load(name){
  if(name==='server-only')return {};
  if(!name.startsWith('@/')&&!path.isAbsolute(name))return require(name);
@@ -25,6 +25,7 @@ const missing=new Map();
 function walk(value,scope,key){
  if(excluded.has(key))return;
  if(typeof value==='string'){
+   if(key==='status'&&/^[a-z][a-z0-9_-]*$/.test(value))return;
    if(key==='support'&&['supported','unsupported','unspecified'].includes(value)||key==='format'&&['webp','png','jpeg','jpg','mp4','webm'].includes(value))return;
    if(!/[A-Za-z]/.test(value)||/^(@\/|\.\/|\/|#|https?:|mailto:|data:)/.test(value)||/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(value)||/^[^\s]+\.(webp|png|jpg|jpeg|svg|webm|mp4|avif)$/i.test(value))return;
    if(!sources.has(value))missing.set(value,scope);

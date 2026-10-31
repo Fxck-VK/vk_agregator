@@ -35,6 +35,7 @@ export function ImageGenerationFeedback({ generation, showEditorError = false }:
       ) : null}
       {(stage === "confirmation" || stage === "activating") && preparation !== null ? (
         <ImageGenerationConfirmation
+          balanceKnown={generation.confirmationBalanceKnown}
           errorMessage={generation.confirmationError}
           isActivating={stage === "activating"}
           onConfirm={() => void generation.activateImage()}

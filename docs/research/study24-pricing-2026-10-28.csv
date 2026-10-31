@@ -1,0 +1,95 @@
+﻿id,name,category,current_price_tokens,status,comparison_minimum,source,current_surface
+sai_plus,StudyAI Plus,Популярные,5–551 / сообщение,dynamic_text_range,5,https://study24.ai/chat/sai_plus,https://study24.ai/chat/sai_plus
+open_ai_image_bot,Генератор изображений,Популярные,55 / результат,published_media_formula,55,https://study24.ai/chat/open_ai_image_bot,https://study24.ai/chat/open_ai_image_bot
+claude-opus-5-5,Claude Opus 5.5,Популярные,5–2187 / сообщение,dynamic_text_range,5,https://study24.ai/chat/claude-opus-5-5,https://study24.ai/chat/claude-opus-5-5
+nano_banana_2,Nano Banana 2.1,Популярные,55 / результат,published_media_formula,55,https://study24.ai/chat/nano_banana_2,https://study24.ai/chat/nano_banana_2
+seedance-25-max,Seedance 2.5 Max,Популярные,50–553 / сек,published_media_formula,50,https://study24.ai/chat/seedance-25-max,https://study24.ai/chat/seedance-25-max
+nano_banana_pro,Nano Banana Pro,Изображения,55 / результат,published_media_formula,55,https://study24.ai/chat/nano_banana_pro,https://study24.ai/chat/nano_banana_pro
+seedream5,Seedream 5.0 Pro,Изображения,35 / результат,published_media_formula,35,https://study24.ai/chat/seedream5,https://study24.ai/chat/seedream5
+midjourney_toe_bot,Midjourney,Изображения,55 / результат,published_media_formula,55,https://study24.ai/chat/midjourney_toe_bot,https://study24.ai/chat/midjourney_toe_bot
+gpt_image,GPT Image 2,Изображения,51 / результат,published_media_formula,51,https://study24.ai/chat/gpt_image,https://study24.ai/chat/gpt_image
+gpt-image-25,GPT Image 2.5,Изображения,52 / результат,published_media_formula,52,https://study24.ai/chat/gpt-image-25,https://study24.ai/chat/gpt-image-25
+mai_image_2_5,Microsoft: MAI-Image-2.5,Изображения,55 / результат,published_media_formula,55,https://study24.ai/chat/mai_image_2_5,https://study24.ai/chat/mai_image_2_5
+grok_image,Grok Image,Изображения,20 / результат,published_media_formula,20,https://study24.ai/chat/grok_image,https://study24.ai/chat/grok_image
+grok_image2,Grok Image 2.0,Изображения,25 / результат,published_media_formula,25,https://study24.ai/chat/grok_image2,https://study24.ai/chat/grok_image2
+flux_2,Flux 2 Pro,Изображения,55 / результат,published_media_formula,55,https://study24.ai/chat/flux_2,https://study24.ai/chat/flux_2
+qwen-image,Qwen Image 3,Изображения,30 / результат,published_media_formula,30,https://study24.ai/chat/qwen-image,https://study24.ai/chat/qwen-image
+recraft_ai,Recraft AI,Изображения,5 / результат,published_media_formula,5,https://study24.ai/chat/recraft_ai,https://study24.ai/chat/recraft_ai
+krea_2,Krea 2,Изображения,35 / результат,published_media_formula,35,https://study24.ai/chat/krea_2,https://study24.ai/chat/krea_2
+google_image,Nano Banana,Изображения,30 / результат,published_media_formula,30,https://study24.ai/chat/google_image,https://study24.ai/chat/google_image
+seedream_5,Seedream 5.0 Lite,Изображения,30 / результат,published_media_formula,30,https://study24.ai/chat/seedream_5,https://study24.ai/chat/seedream_5
+banana_2lite,Nano Banana 2 Lite,Изображения,15 / результат,published_media_formula,15,https://study24.ai/chat/banana_2lite,https://study24.ai/chat/banana_2lite
+topaz,Topaz,Изображения,55 / результат,published_media_formula,55,https://study24.ai/chat/topaz,https://study24.ai/chat/topaz
+ai_photo,ИИ-фотосессия,Изображения,25 / кадр; 4K — 35,embedded_app,55,https://study24.ai/chat/ai_photo,https://study24.ai/apps/catalog/photoshoot
+higgsfield_soul,Генерация фотографий,Изображения,30 / результат,published_media_formula,30,https://study24.ai/chat/higgsfield_soul,https://study24.ai/chat/higgsfield_soul
+improve_photo,Улучшение качества фото,Изображения,55 / результат,published_media_formula,55,https://study24.ai/chat/improve_photo,https://study24.ai/chat/improve_photo
+september,Открытка 1 сентября,Изображения,55 / изображение,published_fixed_legacy,55,https://study24.ai/chat/september,https://study24.ai/chat/september
+photo_love_is,Открытка в стиле Love is...,Изображения,55 / изображение,published_fixed_legacy,55,https://study24.ai/chat/photo_love_is,https://study24.ai/chat/photo_love_is
+gpt-sol,GPT 6.1 Sol,Текст,5–1012 / сообщение,dynamic_text_range,5,https://study24.ai/chat/gpt-sol,https://study24.ai/chat/gpt-sol
+gemini-4,Gemini 4 Argon,Текст,5–2366 / сообщение,dynamic_text_range,5,https://study24.ai/chat/gemini-4,https://study24.ai/chat/gemini-4
+fable_51,Claude Fable 5.1,Текст,5–5000 / сообщение,dynamic_text_range,5,https://study24.ai/chat/fable_51,https://study24.ai/chat/fable_51
+claude_5,Claude Opus 5,Текст,5–1833 / сообщение,dynamic_text_range,5,https://study24.ai/chat/claude_5,https://study24.ai/chat/claude_5
+gemini-flash-37,Gemini 3.7 Flash,Текст,5–515 / сообщение,dynamic_text_range,5,https://study24.ai/chat/gemini-flash-37,https://study24.ai/chat/gemini-flash-37
+claude_fable,Claude Fable 5,Текст,5–5000 / сообщение,dynamic_text_range,5,https://study24.ai/chat/claude_fable,https://study24.ai/chat/claude_fable
+claude_opus_48,Claude Opus 4.8,Текст,5–1917 / сообщение,dynamic_text_range,5,https://study24.ai/chat/claude_opus_48,https://study24.ai/chat/claude_opus_48
+gpt_56,GPT 5.6 Terra,Текст,5–512 / сообщение,dynamic_text_range,5,https://study24.ai/chat/gpt_56,https://study24.ai/chat/gpt_56
+gemini_36_flash,Gemini 3.6 Flash,Текст,5–515 / сообщение,dynamic_text_range,5,https://study24.ai/chat/gemini_36_flash,https://study24.ai/chat/gemini_36_flash
+chat_gpt5,ChatGPT 5,Текст,5–99 / сообщение,dynamic_text_range,5,https://study24.ai/chat/chat_gpt5,https://study24.ai/chat/chat_gpt5
+gpt-luna,GPT 6 Luna,Текст,5–99 / сообщение,dynamic_text_range,5,https://study24.ai/chat/gpt-luna,https://study24.ai/chat/gpt-luna
+gemini3_pro,Gemini 3.1 Pro,Текст,5–984 / сообщение,dynamic_text_range,5,https://study24.ai/chat/gemini3_pro,https://study24.ai/chat/gemini3_pro
+claude_haiku,Claude Haiku 5.5,Текст,5–99 / сообщение,dynamic_text_range,5,https://study24.ai/chat/claude_haiku,https://study24.ai/chat/claude_haiku
+deepseek_v4,DeepSeek V4 Pro,Текст,5–139 / сообщение,dynamic_text_range,5,https://study24.ai/chat/deepseek_v4,https://study24.ai/chat/deepseek_v4
+claude_opus_47,Claude Opus 4.7,Текст,5–1917 / сообщение,dynamic_text_range,5,https://study24.ai/chat/claude_opus_47,https://study24.ai/chat/claude_opus_47
+gemini_3_5_flash,Gemini 3.5 Flash,Текст,5–825 / сообщение,dynamic_text_range,5,https://study24.ai/chat/gemini_3_5_flash,https://study24.ai/chat/gemini_3_5_flash
+kimi_k3,Kimi K3,Текст,5–216 / сообщение,dynamic_text_range,5,https://study24.ai/chat/kimi_k3,https://study24.ai/chat/kimi_k3
+qwen_max,Qwen 3.8 Max,Текст,5–920 / сообщение,dynamic_text_range,5,https://study24.ai/chat/qwen_max,https://study24.ai/chat/qwen_max
+claude_sonnet,Claude Sonnet 5.5,Текст,5–1012 / сообщение,dynamic_text_range,5,https://study24.ai/chat/claude_sonnet,https://study24.ai/chat/claude_sonnet
+chat_gpt5_4,ChatGPT 5.4,Текст,5–551 / сообщение,dynamic_text_range,5,https://study24.ai/chat/chat_gpt5_4,https://study24.ai/chat/chat_gpt5_4
+chat_gpt5_5,ChatGPT 5.5,Текст,5–551 / сообщение,dynamic_text_range,5,https://study24.ai/chat/chat_gpt5_5,https://study24.ai/chat/chat_gpt5_5
+chatgpt_codex,ChatGPT 5.3 Codex,Текст,5–378 / сообщение,dynamic_text_range,5,https://study24.ai/chat/chatgpt_codex,https://study24.ai/chat/chatgpt_codex
+grok-4-7,Grok 4.7,Текст,5–529 / сообщение,dynamic_text_range,5,https://study24.ai/chat/grok-4-7,https://study24.ai/chat/grok-4-7
+grok_45,Grok 4.5,Текст,5–544 / сообщение,dynamic_text_range,5,https://study24.ai/chat/grok_45,https://study24.ai/chat/grok_45
+grok-46,Grok 4.6,Текст,5–544 / сообщение,dynamic_text_range,5,https://study24.ai/chat/grok-46,https://study24.ai/chat/grok-46
+chat_gpt5_2,ChatGPT 5.2,Текст,5–574 / сообщение,dynamic_text_range,5,https://study24.ai/chat/chat_gpt5_2,https://study24.ai/chat/chat_gpt5_2
+claude_opus,Claude Opus 4.6,Текст,5–1750 / сообщение,dynamic_text_range,5,https://study24.ai/chat/claude_opus,https://study24.ai/chat/claude_opus
+perplexity_plus_bot,Perplexity,Текст,5–405 / сообщение,dynamic_text_range,5,https://study24.ai/chat/perplexity_plus_bot,https://study24.ai/chat/perplexity_plus_bot
+gpt-6,GPT 6 Astra,Текст,5–1567 / сообщение,dynamic_text_range,5,https://study24.ai/chat/gpt-6,https://study24.ai/chat/gpt-6
+seedance25,Seedance 2.5 Lite,Видео и аудио,50–200 / сек,published_media_formula,50,https://study24.ai/chat/seedance25,https://study24.ai/chat/seedance25
+seedance,Seedance 2.0,Видео и аудио,28–105 / сек,published_media_formula,28,https://study24.ai/chat/seedance,https://study24.ai/chat/seedance
+kling,Kling 4.0,Видео и аудио,55–138 / сек,published_media_formula,55,https://study24.ai/chat/kling,https://study24.ai/chat/kling
+videogen,Генератор видео,Видео и аудио,25 / сек,published_media_formula,25,https://study24.ai/chat/videogen,https://study24.ai/chat/videogen
+suno,Suno,Видео и аудио,Песня — 60 / трек; операции — 20–100,embedded_app,60,https://study24.ai/chat/suno,https://study24.ai/apps/catalog/suno
+gemini_omni1,Gemini Omni 1.1,Видео и аудио,от 384 / видео; от 36 / сек,published_media_formula,36,https://study24.ai/chat/gemini_omni1,https://study24.ai/chat/gemini_omni1
+wan_3,Wan 3.0,Видео и аудио,50–200 / сек,published_media_formula,50,https://study24.ai/chat/wan_3,https://study24.ai/chat/wan_3
+google_veo3,Google Veo 3.1,Видео и аудио,264–1298 / результат,published_media_formula,264,https://study24.ai/chat/google_veo3,https://study24.ai/chat/google_veo3
+seedance_mini,Seedance 2.0 Mini,Видео и аудио,25 / сек,published_media_formula,25,https://study24.ai/chat/seedance_mini,https://study24.ai/chat/seedance_mini
+seedance_20_pro,Seedance 2.0 Pro,Видео и аудио,190 / сек,published_media_formula,190,https://study24.ai/chat/seedance_20_pro,https://study24.ai/chat/seedance_20_pro
+minimax-h3,Minimax H3,Видео и аудио,75 / сек,published_media_formula,75,https://study24.ai/chat/minimax-h3,https://study24.ai/chat/minimax-h3
+kling_3,Kling 3.0,Видео и аудио,500 / результат,published_media_formula,500,https://study24.ai/chat/kling_3,https://study24.ai/chat/kling_3
+kling_3_turbo,Kling 3.0 Turbo,Видео и аудио,50 / сек,published_media_formula,50,https://study24.ai/chat/kling_3_turbo,https://study24.ai/chat/kling_3_turbo
+kling_2_6,Kling 2.6,Видео и аудио,300 / результат,published_media_formula,300,https://study24.ai/chat/kling_2_6,https://study24.ai/chat/kling_2_6
+kling_2_1_master,Kling 2.5 Turbo,Видео и аудио,200 / результат,published_media_formula,200,https://study24.ai/chat/kling_2_1_master,https://study24.ai/chat/kling_2_1_master
+kling_mc,Kling Motion Control,Видео и аудио,400 / результат,published_media_formula,400,https://study24.ai/chat/kling_mc,https://study24.ai/chat/kling_mc
+kmc_pro,Kling Motion Control Pro,Видео и аудио,550 / результат,published_media_formula,550,https://study24.ai/chat/kmc_pro,https://study24.ai/chat/kmc_pro
+sound_generation,Генерация озвучки,Видео и аудио,100 / результат,published_media_formula,100,https://study24.ai/chat/sound_generation,https://study24.ai/chat/sound_generation
+grok_imagine_1_5,Grok Imagine 1.5,Видео и аудио,25 / сек,published_media_formula,25,https://study24.ai/chat/grok_imagine_1_5,https://study24.ai/chat/grok_imagine_1_5
+eleven_labs,Eleven Labs (озвучка текста),Видео и аудио,120 / результат,published_media_formula,120,https://study24.ai/chat/eleven_labs,https://study24.ai/chat/eleven_labs
+animating_image,Оживить фото или картинку,Видео и аудио,25 / сек; расчёт длительности не раскрыт,published_rate_only,25,https://study24.ai/chat/animating_image,https://study24.ai/chat/animating_image
+happy_horse,Happy Horse,Видео и аудио,80 / сек,published_media_formula,80,https://study24.ai/chat/happy_horse,https://study24.ai/chat/happy_horse
+video_edit,Редактор видео,Видео и аудио,2300 / результат,published_media_formula,2300,https://study24.ai/chat/video_edit,https://study24.ai/chat/video_edit
+gemini_omni_flash,Gemini Omni Flash,Видео и аудио,45 / сек,published_media_formula,45,https://study24.ai/chat/gemini_omni_flash,https://study24.ai/chat/gemini_omni_flash
+gemini3_flash,Gemini 3.1 Flash,Бесплатные,Бесплатно,free,,https://study24.ai/chat/gemini3_flash,https://study24.ai/chat/gemini3_flash
+deepseek_v4_lite,DeepSeek V4,Бесплатные,Бесплатно,free,,https://study24.ai/chat/deepseek_v4_lite,https://study24.ai/chat/deepseek_v4_lite
+generator_prompta,Генератор промпта,Бесплатные,Бесплатно,free,,https://study24.ai/chat/generator_prompta,https://study24.ai/chat/generator_prompta
+gemini_pro_plus_bot,Gemini 2.5 Pro,Бесплатные,Бесплатно,free,,https://study24.ai/chat/gemini_pro_plus_bot,https://study24.ai/chat/gemini_pro_plus_bot
+qwen,Qwen 3.7 Flash,Бесплатные,Бесплатно,free,,https://study24.ai/chat/qwen,https://study24.ai/chat/qwen
+a24_deepseek_r1,Deepseek R1,Бесплатные,Бесплатно,free,,https://study24.ai/chat/a24_deepseek_r1,https://study24.ai/chat/a24_deepseek_r1
+gemini25_flash_lite,Gemini 2.5 Flash Lite,Бесплатные,Бесплатно,free,,https://study24.ai/chat/gemini25_flash_lite,https://study24.ai/chat/gemini25_flash_lite
+gpt_mini,ChatGPT Mini,Бесплатные,Бесплатно,free,,https://study24.ai/chat/gpt_mini,https://study24.ai/chat/gpt_mini
+generate_presentation_plus_bot,Генератор презентаций,Учеба и работа,Графическая 450; редактируемая 800; свой стиль +60,embedded_app,420,https://study24.ai/chat/generate_presentation_plus_bot,https://study24.ai/apps/catalog/slides
+text_generator,Генератор текста,Учеба и работа,5–358 / сообщение,dynamic_text_range,5,https://study24.ai/chat/text_generator,https://study24.ai/chat/text_generator
+ai_friend,AI-друг Настя,Учеба и работа,5–214 / сообщение,dynamic_text_range,5,https://study24.ai/chat/ai_friend,https://study24.ai/chat/ai_friend
+code_generator,Генератор кода,Учеба и работа,"От 30 / запрос, по фактическому расходу",embedded_app,5,https://study24.ai/chat/code_generator,https://study24.ai/apps/catalog/coder
+card_marketplaces,Карточка для маркетплейсов,Учеба и работа,120 за 1/2/4 картинки; 180 за 6; 240 за 8,embedded_app,55,https://study24.ai/chat/card_marketplaces,https://study24.ai/apps/catalog/seller
+ai_smm,SMM,Учеба и работа,5–292 / сообщение,dynamic_text_range,5,https://study24.ai/chat/ai_smm,https://study24.ai/chat/ai_smm
+natal_chart,Генератор натальной карты,Учеба и работа,5–129 / сообщение,dynamic_text_range,5,https://study24.ai/chat/natal_chart,https://study24.ai/chat/natal_chart

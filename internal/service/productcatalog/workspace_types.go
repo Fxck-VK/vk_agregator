@@ -86,6 +86,7 @@ type WorkspaceImage struct {
 	MaxReferenceImages     int              `json:"max_reference_images"`
 	PriceByQuality         map[string]int64 `json:"price_by_quality"`
 	PriceByVariant         map[string]int64 `json:"price_by_variant"`
+	PriceByCount           map[string]int64 `json:"price_by_count,omitempty"`
 }
 
 type WorkspaceVideo struct {

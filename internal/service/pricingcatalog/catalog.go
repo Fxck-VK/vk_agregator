@@ -14,6 +14,7 @@ import (
 	"sync"
 
 	"vk-ai-aggregator/internal/domain"
+	"vk-ai-aggregator/internal/service/economycatalog"
 )
 
 const (
@@ -217,6 +218,8 @@ func (c SafetyCaps) ValidFor(internalCredits int64, floor PriceFloor) bool {
 // ProductPrice is a static catalog entry. Prompt 3 adds concrete tariff
 // entries; this shape already owns the backend-only price math.
 type ProductPrice struct {
+	EconomicBasis         string         `json:"economic_basis,omitempty"`
+	RetailPolicyVersion   int            `json:"retail_policy_version,omitempty"`
 	Key                   ProductKey     `json:"key"`
 	Version               int            `json:"version"`
 	Source                string         `json:"source"`
@@ -277,6 +280,8 @@ func (p ProductPrice) Snapshot() (PricingSnapshot, error) {
 		return PricingSnapshot{}, err
 	}
 	snapshot := PricingSnapshot{
+		EconomicBasis:             p.EconomicBasis,
+		RetailPolicyVersion:       p.RetailPolicyVersion,
 		Version:                   p.Version,
 		CreditDenominationVersion: domain.CurrentCreditDenominationVersion,
 		Source:                    p.Source,
@@ -301,6 +306,11 @@ func (p ProductPrice) Snapshot() (PricingSnapshot, error) {
 		snapshot.ImageTextInputFloor = int64(domain.GPTImage25MaxPromptBytes+512) * 4
 		snapshot.ImageAspectRatio = "1:1"
 	}
+	if p.RetailPolicyVersion >= economycatalog.RetailVersion && p.Key.Operation == domain.OperationAudioMusic {
+		if _, unit, ok := economycatalog.MusicRetailRate(p.Key.AudioModelID, p.Key.AudioAction, p.Key.AudioMax); ok && unit == "track" {
+			snapshot.MusicPaidTrackCount = 1
+		}
+	}
 	if !snapshot.Valid() {
 		return PricingSnapshot{}, ErrInvalidSnapshot
 	}
@@ -312,6 +322,9 @@ func (p ProductPrice) Snapshot() (PricingSnapshot, error) {
 // and exact backend pricing facts, but no prompt, provider payload, private URL
 // or provider-native model id.
 type PricingSnapshot struct {
+	EconomicBasis             string         `json:"economic_basis,omitempty"`
+	RetailPolicyVersion       int            `json:"retail_policy_version,omitempty"`
+	MusicPaidTrackCount       int            `json:"music_paid_track_count,omitempty"`
 	ImageTextInputFloor       int64          `json:"image_text_input_floor,omitempty"`
 	ImageOutputCount          int            `json:"image_output_count,omitempty"`
 	ImagePromptByteCap        int            `json:"image_prompt_byte_cap,omitempty"`
@@ -336,6 +349,25 @@ type PricingSnapshot struct {
 // Valid reports whether a snapshot has the minimum data needed to keep an old
 // job price stable after catalog changes.
 func (s PricingSnapshot) Valid() bool {
+	switch s.EconomicBasis {
+	case "", "study24", "cost_plus", "protected_reference", "operator_fixed":
+	default:
+		return false
+	}
+	// This is the first snapshot schema with a minimum paid-track contract,
+	// not the current retail-table version. Later repricing must not invalidate
+	// previously reserved Jobs or consult the current list of retail rules.
+	const paidTrackSnapshotVersion = 20261028
+	if s.MusicPaidTrackCount != 0 && (s.MusicPaidTrackCount != 1 || s.Key.Operation != domain.OperationAudioMusic || s.Key.AudioModelID != "suno_v6" || s.Key.AudioMax || s.RetailPolicyVersion < paidTrackSnapshotVersion) {
+		return false
+	}
+	if s.MusicPaidTrackCount != 0 {
+		switch s.Key.AudioAction {
+		case "generate", "cover", "upload_cover", "mashup", "extend", "upload_extend", "add_vocals", "add_instrumental", "inspo":
+		default:
+			return false
+		}
+	}
 	if IsBoundedAPIMartImage(s.Key.ImageModelID) && (s.ImageOutputCount < 1 || s.ImageOutputCount > 15) {
 		return false
 	}
@@ -346,7 +378,7 @@ func (s PricingSnapshot) Valid() bool {
 		return false
 	}
 	s.Source = strings.TrimSpace(s.Source)
-	return s.Version > 0 &&
+	return s.Version > 0 && s.RetailPolicyVersion >= 0 &&
 		(s.CreditDenominationVersion == 0 ||
 			s.CreditDenominationVersion == domain.LegacyCreditDenominationVersion ||
 			s.CreditDenominationVersion == domain.CurrentCreditDenominationVersion) &&
@@ -396,6 +428,12 @@ func NewCatalog(prices []ProductPrice) (*Catalog, error) {
 		if err := validateProductPrice(price); err != nil {
 			return nil, err
 		}
+		if _, err := price.InternalCredits(); err != nil {
+			return nil, err
+		}
+		// Apply only to already-valid existing rows. Runtime DB reloads use this
+		// same boundary, so a stale DB multiplier cannot silently undo policy.
+		price = applyEconomicRetailPolicy(price)
 		if _, err := price.InternalCredits(); err != nil {
 			return nil, err
 		}
@@ -559,7 +597,7 @@ func validateProductPrice(p ProductPrice) error {
 	if !p.Enabled {
 		return fmt.Errorf("%w: disabled", ErrInvalidProductPrice)
 	}
-	if p.Version <= 0 {
+	if p.Version <= 0 || p.RetailPolicyVersion < 0 {
 		return fmt.Errorf("%w: version %d", ErrInvalidProductPrice, p.Version)
 	}
 	if p.Source == "" {
@@ -584,6 +622,73 @@ func validateProductPrice(p ProductPrice) error {
 		return ErrInvalidCap
 	}
 	return nil
+}
+
+// applyEconomicRetailPolicy changes new retail quotes only. It preserves the
+// runtime source/version, provider floor/conversion and provider-spend cap.
+// The internal-credit cap is the exact retail quote limit; its new value is
+// persisted with the policy version. Historical snapshots are never rewritten.
+func applyEconomicRetailPolicy(price ProductPrice) ProductPrice {
+	retail, basis, managed, err := completeRetail(price.Key, price.Floor, price.UnitConversion, 1)
+	if !managed {
+		return price
+	}
+	if err != nil {
+		price.Multiplier = Multiplier{}
+		return price
+	}
+	price.RetailPolicyVersion = economycatalog.EconomyVersion
+	price.EconomicBasis = basis
+	if basis == "operator_fixed" {
+		return price
+	}
+	// Explicit runtime operator tariffs remain authoritative when they cover
+	// cost. They are an audited override, not an unlabelled legacy fallback.
+	if price.Source == RuntimeDBSource && basis == "cost_plus" {
+		if existing, err := price.InternalCredits(); err == nil && ReferenceIncomeCoversFloor(existing, price.Floor, price.UnitConversion) {
+			price.EconomicBasis = "operator_fixed"
+			return price
+		}
+	}
+	price.Multiplier = exactRetailMultiplier(price.Floor.Amount, price.UnitConversion, retail)
+	price.Caps.InternalCreditCap = retail
+	price.DefaultDisplayCredits = retail
+	return price
+}
+
+func economicRetailAmount(key ProductKey) (int64, bool) {
+	switch {
+	case key.Operation == domain.OperationImageGenerate && key.Modality == domain.ModalityImage && key.Resolution == "":
+		return economycatalog.ImageRetailRate(key.ImageModelID, key.Quality)
+	case key.Operation == domain.OperationVideoGenerate && key.Modality == domain.ModalityVideo:
+		return economycatalog.VideoRetailRate(string(key.VideoRouteAlias), key.Quality, key.Resolution, key.DurationSec)
+	case key.Operation == domain.OperationAudioMusic && key.Modality == domain.ModalityAudio:
+		amount, _, ok := economycatalog.MusicRetailRate(key.AudioModelID, key.AudioAction, key.AudioMax)
+		return amount, ok
+	default:
+		return 0, false
+	}
+}
+
+// Called only while constructing a new parameter-aware quote. Never apply to
+// a persisted Job: its original amount/version remain the capture authority.
+func applyEconomicRetailSnapshot(s PricingSnapshot) PricingSnapshot {
+	retail, basis, managed, err := completeRetail(s.Key, s.Floor, s.UnitConversion, max(1, s.ImageOutputCount))
+	if !managed {
+		return s
+	}
+	if err != nil {
+		s.Multiplier = Multiplier{}
+		return s
+	}
+	s.RetailPolicyVersion = economycatalog.EconomyVersion
+	s.EconomicBasis = basis
+	if basis == "operator_fixed" {
+		return s
+	}
+	s.InternalCredits, s.InternalCreditCap, s.DefaultDisplayCredits = retail, retail, retail
+	s.Multiplier = exactRetailMultiplier(s.Floor.Amount, s.UnitConversion, retail)
+	return s
 }
 
 func ceilScaledProduct(amount int64, conversion UnitConversion, multiplier Multiplier) (int64, error) {

@@ -98,6 +98,7 @@ export const imageModelSchema = z
 	capabilities: modelCapabilitiesSchema.optional(),
     price_by_quality: z.record(z.string().trim().min(1), z.number().int().positive()).optional(),
     price_by_variant: z.record(z.string().trim().min(1), z.number().int().positive()).optional(),
+    price_by_count: z.record(z.string().trim().min(1), z.number().int().positive()).optional(),
     default_quality: z.string().trim().min(1),
     default_aspect_ratio: z.string().trim().min(1).optional(),
     supports_reference_image: z.boolean(),

@@ -17,6 +17,10 @@ import { FAQ } from "@/components/ui/FAQ/FAQ";
 import { CreditAmount } from "@/components/ui/CreditAmount/CreditAmount";
 import { InspirationExampleCard } from "@/features/inspiration/InspirationExampleCard/InspirationExampleCard";
 import { getInspirationExamples } from "@/features/inspiration/inspiration-examples";
+import { subscriptionPlanPreview } from "@/features/pricing/subscription-preview";
+import { formatPaymentPrice } from "@/features/payments/payments";
+import { subscriptionCopy } from "@/features/subscriptions/copy";
+import { useLiteOffer } from "@/features/subscriptions/use-lite-offer";
 
 import { FeaturedModels } from "../FeaturedModels/FeaturedModels";
 import { WorkspaceHero } from "../WorkspaceHero/WorkspaceHero";
@@ -32,6 +36,8 @@ type WorkspaceLandingProps = {
 export function WorkspaceLanding({ access = "authenticated" }: WorkspaceLandingProps) {
   const msg = useMessages();
   const locale = useLocale();
+  const liteOffer = useLiteOffer();
+  const copy = subscriptionCopy[locale], trial = subscriptionPlanPreview("lite"), next = subscriptionPlanPreview(trial.next_plan_code);
   const inspirationExamples = getInspirationExamples(locale);
   const frequentlyAskedQuestions = getFrequentlyAskedQuestions(msg);
   const promptExample = inspirationExamples[0];
@@ -140,19 +146,19 @@ export function WorkspaceLanding({ access = "authenticated" }: WorkspaceLandingP
           <CapabilityLinks />
         </section>
 
-        <section aria-labelledby="workspace-plan-title" className={`${styles.section} ${styles.contentFrame}`}>
+        {liteOffer.visible ? <section aria-labelledby="workspace-plan-title" className={`${styles.section} ${styles.contentFrame}`}>
           <div className={styles.planCard}>
             <div
               className={styles.planOffer}
               style={{ backgroundImage: `url("${assetPaths.images.workspace.litePlanBackground}")` }}
             >
               <div className={styles.planHeading}>
-                <h2 id="workspace-plan-title">Lite</h2>
+                <h2 id="workspace-plan-title">{trial.name}</h2>
                 <span aria-hidden="true" className={styles.planDivider} />
-                <CreditAmount className={styles.planBalance} value={400} />
+                <CreditAmount className={styles.planBalance} value={trial.stars} />
               </div>
               <p className={styles.planPrice}>
-                199 <span>{msg("workspaceLanding.week")}</span>
+                {formatPaymentPrice(trial.amount, locale)} <span>₽ / {trial.period_days} {copy.days}</span>
               </p>
               <SubscriptionPlansButton className={`${headerStyles.tariffButton} ${styles.planButton}`} />
             </div>
@@ -167,7 +173,7 @@ export function WorkspaceLanding({ access = "authenticated" }: WorkspaceLandingP
                     width={20}
                   />
                 </span>
-                <span><strong>{msg("workspaceLanding.upTo13ImageGenerations")}</strong> {msg("workspaceLanding.nanoBananaImageGeneratorAndGptImage")}</span>
+                <span><strong>{copy.sharedStars}</strong> {copy.costs}</span>
               </li>
               <li>
                 <span aria-hidden="true" className={styles.planBenefitIcon}>
@@ -179,7 +185,7 @@ export function WorkspaceLanding({ access = "authenticated" }: WorkspaceLandingP
                     width={20}
                   />
                 </span>
-                <span><strong>{msg("workspaceLanding.upTo2VideoGenerations")}</strong> {msg("workspaceLanding.videoGenerationAndAnimationTools")}</span>
+                <span><strong>{trial.period_days} {copy.days}</strong> {copy.expiry}</span>
               </li>
               <li>
                 <span aria-hidden="true" className={styles.planBenefitIcon}>
@@ -191,12 +197,13 @@ export function WorkspaceLanding({ access = "authenticated" }: WorkspaceLandingP
                     width={20}
                   />
                 </span>
-                <span><strong>{msg("workspaceLanding.accessToPopularAiModels")}</strong> {msg("workspaceLanding.chatgptGeminiClaudeAndMore")}</span>
+                <span><strong>{copy.next}</strong> {next.name} · {formatPaymentPrice(next.amount, locale)} ₽ · {new Intl.NumberFormat(locale).format(next.stars)} {copy.stars} / {next.period_days} {copy.days}</span>
               </li>
             </ul>
           </div>
         </section>
 
+        : null}
         <section aria-labelledby="workspace-prompts-title" className={`${styles.section} ${styles.contentFrame}`}>
           <div className={styles.sectionHeading}>
             <div>

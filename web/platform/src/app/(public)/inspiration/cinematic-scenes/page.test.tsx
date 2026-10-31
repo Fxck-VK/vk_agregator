@@ -45,12 +45,12 @@ describe("T13 cinematic collection",()=>{
     const writeText=vi.fn().mockResolvedValue(undefined);Object.defineProperty(navigator,"clipboard",{value:{writeText},configurable:true});const fetch=vi.spyOn(globalThis,"fetch");
     await page();fireEvent.click(screen.getAllByRole("button",{name:/^View example:/})[0]);const dialog=screen.getByRole("dialog");
     fireEvent.click(within(dialog).getByRole("button",{name:"Copy prompt"}));await waitFor(()=>expect(writeText).toHaveBeenCalledWith(cinematicCollection.members[0].prompt));
-    const link=within(dialog).getByRole("link",{name:"Use this prompt"});expect(link).toHaveAttribute("href","/en/app/image");fireEvent.click(link);
+    const link=within(dialog).getByRole("link",{name:"Use this prompt"});expect(link).toHaveAttribute("href","/ru/app/image");fireEvent.click(link);
     expect(readImagePrompt()).toBe(cinematicCollection.members[0].prompt);expect(fetch).not.toHaveBeenCalled();expect(localStorage.length).toBe(0);
   });
   it("opens the card Use menu and its preview returns focus to the card action",async()=>{
     await page();const trigger=screen.getByRole("button",{name:`Use ${cinematicCollection.members[0].alt}`});trigger.focus();fireEvent.click(trigger);
-    const menu=screen.getByRole("dialog",{name:"Use example"});expect(within(menu).getByRole("link",{name:"Use this prompt"})).toHaveAttribute("href","/en/app/image");
+    const menu=screen.getByRole("dialog",{name:"Use example"});expect(within(menu).getByRole("link",{name:"Use this prompt"})).toHaveAttribute("href","/ru/app/image");
     fireEvent.click(within(menu).getByRole("button",{name:"View suggested prompt"}));expect(screen.getByRole("dialog",{name:"Example preview"})).toHaveTextContent(cinematicCollection.members[0].alt);
     closePreview();expect(trigger).toHaveFocus();
   });
@@ -87,6 +87,6 @@ describe("T13 cinematic collection",()=>{
     expect(within(dialog).getByRole("button",{name:"Show results"})).toBeInTheDocument();
     fireEvent.keyDown(window,{key:"Escape"});fireEvent.animationEnd(screen.getByTestId("landing-dialog-backdrop"));
     fireEvent.click(screen.getByRole("button",{name:"Open tools"}));expect(screen.getByRole("dialog",{name:"All tools"})).toBeInTheDocument();
-    expect(within(screen.getByRole("dialog")).getByRole("link",{name:"Image Generator"})).toHaveAttribute("href","/en/app/image");
+    expect(within(screen.getByRole("dialog")).getByRole("link",{name:"Image Generator"})).toHaveAttribute("href","/ru/app/image");
   });
 });

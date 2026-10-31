@@ -2,6 +2,15 @@ import { expect, it } from "vitest";
 import { resolveGenerationOptions } from "./generation-options";
 import type { GenerationModel } from "./generation-model-catalog";
 
+it("uses the backend batch price instead of multiplying a shared-input quote", () => {
+  const image = {
+    id:"gpt_image_2_5_flare",name:"Flare",category:"images",quality_options:["4K-max"],default_quality:"4K-max",
+    allowed_aspect_ratios:["1:1"],default_aspect_ratio:"1:1",max_output_count:4,supports_reference_image:false,max_reference_images:0,
+    price_by_quality:{"4K-max":355},price_by_variant:{"4K-max:1:1":355},price_by_count:{"4K-max:1:1:4":1380},
+  } as GenerationModel;
+  expect(resolveGenerationOptions(image,{output_count:4}).cost).toBe(1380);
+});
+
 it("uses the server image default and price for the selected combination", () => {
   const image = {
     id:"image", name:"Image", category:"images", quality_options:["1K"], default_quality:"1K",

@@ -3,15 +3,15 @@ import { expect, it } from "vitest";
 import { proxy } from "../proxy";
 
 it("rewrites prefixed pages, overrides spoofed locale, and preserves queries", () => {
-  const response = proxy(new NextRequest("https://platform.example/en/app/chats?model=test", {
-    headers: { cookie: "neirohub-locale=ru", "x-neirohub-page-locale": "ru" },
+  const response = proxy(new NextRequest("https://platform.example/ru/app/chats?model=test", {
+    headers: { cookie: "neirohub-locale=en", "x-neirohub-page-locale": "en" },
   }));
   expect(response.headers.get("x-middleware-rewrite")).toBe("https://platform.example/app/chats?model=test");
-  expect(response.headers.get("x-middleware-request-x-neirohub-page-locale")).toBe("en");
+  expect(response.headers.get("x-middleware-request-x-neirohub-page-locale")).toBe("ru");
   expect(response.headers.get("location")).toBeNull();
 });
-it("redirects an old page using preference, defaulting to Russian", () => {
-  for (const [cookie, expected] of [["neirohub-locale=en", "en"], ["", "ru"], ["neirohub-locale=fr", "ru"]]) {
+it("redirects an old page to Russian regardless of an obsolete preference", () => {
+  for (const [cookie, expected] of [["neirohub-locale=en", "ru"], ["", "ru"], ["neirohub-locale=fr", "ru"]]) {
     const response = proxy(new NextRequest("https://platform.example/app/payment-return?payment=123", { headers: { cookie } }));
     expect(response.status).toBe(307);
     expect(response.headers.get("location")).toBe(`https://platform.example/${expected}/app/payment-return?payment=123`);
@@ -28,10 +28,10 @@ it.each(["/web/v1/models", "/assets/icon.svg", "/health", "/api/callback", "/sit
   expect(response.headers.getSetCookie()).toEqual([]);
 });
 it("stores only validated localized return path and allowed workspace parameters", () => {
-  const response = proxy(new NextRequest("https://platform.example/en/app/chats?model=image&prompt=secret&token=secret"));
-  expect(response.cookies.get("__Host-nh-return-to")?.value).toBe("/en/app/chats?model=image");
+  const response = proxy(new NextRequest("https://platform.example/ru/app/chats?model=image&prompt=secret&token=secret"));
+  expect(response.cookies.get("__Host-nh-return-to")?.value).toBe("/ru/app/chats?model=image");
 });
 it("does not change cookies on a speculative link prefetch", () => {
-  const response = proxy(new NextRequest("https://platform.example/en/app/files", { headers: { purpose: "prefetch" } }));
+  const response = proxy(new NextRequest("https://platform.example/ru/app/files", { headers: { purpose: "prefetch" } }));
   expect(response.headers.getSetCookie()).toEqual([]);
 });

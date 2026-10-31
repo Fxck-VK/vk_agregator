@@ -44,7 +44,13 @@ func testPool(t *testing.T) *pgxpool.Pool {
 	if err != nil {
 		t.Fatalf("connect: %v", err)
 	}
-	schemaOnce.Do(func() { schemaErr = applySchema(ctx, pool) })
+	schemaOnce.Do(func() {
+		schemaErr = applySchema(ctx, pool)
+		if schemaErr == nil {
+			ensureNativeCreditAccountSchema(t, ctx, pool)
+			schemaErr = applyCreditLotTestSchema(ctx, pool)
+		}
+	})
 	if schemaErr != nil {
 		t.Fatalf("apply schema: %v", schemaErr)
 	}
@@ -57,6 +63,9 @@ func testPool(t *testing.T) *pgxpool.Pool {
 func applySchema(ctx context.Context, pool *pgxpool.Pool) error {
 	root, err := repoRoot()
 	if err != nil {
+		return err
+	}
+	if _, err := pool.Exec(ctx, `DROP TABLE IF EXISTS credit_reservation_lots; DROP TABLE IF EXISTS credit_lots; DROP INDEX IF EXISTS credit_reservations_id_account_unique`); err != nil {
 		return err
 	}
 	scripts := []string{

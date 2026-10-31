@@ -19,7 +19,7 @@ import {usePublicCopy} from "@/i18n/public/use-public-copy";
 
 
 export function ToolsOverview() {
-  const {copy,homeEn,reference} = usePublicCopy(publicCopySourcesForLocale);
+  const {copy,homeEn,reference} = usePublicCopy(publicCopySourcesForLocale,{"copy":"aiToolsEn","reference":"aiToolsReferenceEn"});
 
   const [search,setSearch] = useState(false);
   const [preview,setPreview] = useState<OverviewAction | null>(null);

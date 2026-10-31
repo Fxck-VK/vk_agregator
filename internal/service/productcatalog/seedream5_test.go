@@ -24,14 +24,14 @@ func TestSeedream5CatalogAndQuotes(t *testing.T) {
 		refs, count       int
 		retail            int64
 	}{
-		{"seedream_5_0_lite", "seedream-5-0-lite", "2K", 0, 1, 20},
-		{"seedream_5_0_lite", "seedream-5-0-lite", "3K", 1, 14, 280},
-		{"seedream_5_0_lite", "seedream-5-0-lite", "4K", 14, 1, 20},
-		{"seedream_5_0_pro", "seedream-5-0-pro", "1K", 0, 1, 20},
-		{"seedream_5_0_pro", "seedream-5-0-pro", "1.5K", 1, 1, 20},
-		{"seedream_5_0_pro", "seedream-5-0-pro", "2K", 1, 1, 40},
-		{"seedream_5_0_pro", "seedream-5-0-pro", "1.5K", 10, 1, 30},
-		{"seedream_5_0_pro", "seedream-5-0-pro", "2K", 10, 1, 50},
+		{"seedream_5_0_lite", "seedream-5-0-lite", "2K", 0, 1, 30},
+		{"seedream_5_0_lite", "seedream-5-0-lite", "3K", 1, 14, 420},
+		{"seedream_5_0_lite", "seedream-5-0-lite", "4K", 14, 1, 30},
+		{"seedream_5_0_pro", "seedream-5-0-pro", "1K", 0, 1, 35},
+		{"seedream_5_0_pro", "seedream-5-0-pro", "1.5K", 1, 1, 35},
+		{"seedream_5_0_pro", "seedream-5-0-pro", "2K", 1, 1, 35},
+		{"seedream_5_0_pro", "seedream-5-0-pro", "1.5K", 10, 1, 35},
+		{"seedream_5_0_pro", "seedream-5-0-pro", "2K", 10, 1, 35},
 	} {
 		model := findImage(runtime.ImageModels(), tc.id)
 		if model == nil {

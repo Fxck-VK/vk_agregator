@@ -336,6 +336,8 @@ type Deps struct {
 	InputArtifacts             InputArtifactService
 	InputObjects               ImageArtifactObjectReader
 	Payments                   WebPaymentService
+	Subscriptions              WebSubscriptionService
+	SubscriptionBalances       WebSubscriptionBalances
 	ReceiptContacts            WebReceiptContacts
 	PaymentCreateLimiter       WebChatMessageLimiter
 	Authenticator              PrincipalAuthenticator
@@ -436,6 +438,9 @@ func (h *Handler) Routes() http.Handler {
 	mux.HandleFunc("GET /web/v1/video-jobs", h.requirePrincipal(h.listVideoJobs))
 	mux.HandleFunc("GET /web/v1/video-jobs/{jobID}/result", h.requirePrincipal(h.getVideoJobResult))
 	mux.HandleFunc("GET /web/v1/payment-products", h.requirePrincipal(h.listWebPaymentProducts))
+	mux.HandleFunc("GET /web/v1/subscription", h.requirePrincipal(h.getWebSubscription))
+	mux.HandleFunc("POST /web/v1/subscription/checkout", h.requireUnsafePrincipal(h.createWebSubscription))
+	mux.HandleFunc("POST /web/v1/subscription/cancel", h.requireUnsafePrincipal(h.cancelWebSubscription))
 	mux.HandleFunc("POST /web/v1/payments/intents", h.requireUnsafePrincipal(h.createWebPayment))
 	mux.HandleFunc("GET /web/v1/payments/{paymentID}", h.requirePrincipal(h.getWebPayment))
 	mux.HandleFunc("GET /web/v1/conversations/{conversationID}/jobs/{jobID}", h.requirePrincipal(h.getConversationJob))
@@ -2027,6 +2032,9 @@ type safeImageModelList struct {
 }
 
 type safeImageModel struct {
+	PriceByVariant         map[string]int64                  `json:"price_by_variant,omitempty"`
+	PriceByCount           map[string]int64                  `json:"price_by_count,omitempty"`
+	DefaultAspectRatio     string                            `json:"default_aspect_ratio,omitempty"`
 	Capabilities           *providermodels.ModelCapabilities `json:"capabilities,omitempty"`
 	ID                     string                            `json:"id"`
 	Name                   string                            `json:"name"`
@@ -2147,6 +2155,9 @@ func newSafeImageModel(model imagegeneration.PublicModel, resolver imagegenerati
 		Name:                   model.Name,
 		QualityOptions:         controls.QualityOptions,
 		PriceByQuality:         controls.PriceByQuality,
+		PriceByVariant:         controls.PriceByVariant,
+		PriceByCount:           controls.PriceByCount,
+		DefaultAspectRatio:     controls.DefaultAspectRatio,
 		DefaultQuality:         controls.DefaultQuality,
 		SupportsReferenceImage: false,
 		MaxReferenceImages:     0,

@@ -1,5 +1,11 @@
 # Добавление и изменение модели
 
+Economic admission: every registered non-test model/route needs an explicit row in
+`internal/service/economycatalog/catalog-policy.json`. The mandatory
+`go run ./scripts/models/check` includes whole-catalogue quote, income-floor and
+UI/backend agreement checks. A price does not grant execution/provider admission.
+See [Model economy](../../docs/runbooks/MODEL_ECONOMY.md).
+
 > VK Mini App was retired on 2026-10-23. The website, browser VK ID and VK bot remain. Old Mini App routes, launch-auth and UI examples below are historical only. Current replacement and migration details: [retirement runbook](../../docs/runbooks/VK_MINIAPP_RETIREMENT.md).
 
 Статус: действующий процесс. Применяется к новой модели, версии, провайдеру,

@@ -173,6 +173,7 @@ func WorkspaceImageControls(model imagegeneration.PublicModel, resolver imagegen
 	}
 	if pricingcatalog.IsGPTImage25(model.ID) {
 		out.MaxPromptBytes = domain.GPTImage25MaxPromptBytes
+		out.PriceByCount = map[string]int64{}
 	}
 	if !model.Enabled || !model.Ready || strings.TrimSpace(model.ID) == "" || strings.TrimSpace(model.Name) == "" {
 		return out, false
@@ -195,6 +196,15 @@ func WorkspaceImageControls(model imagegeneration.PublicModel, resolver imagegen
 				out.AllowedAspectRatios = append(out.AllowedAspectRatios, ratio)
 			}
 			out.PriceByVariant[q+":"+ratio] = r.PricingSnapshot.InternalCredits
+			if out.PriceByCount != nil {
+				for count := 1; count <= out.MaxOutputCount; count++ {
+					batch, err := pricingcatalog.ScaleGPTImage25Quote(r.PricingSnapshot, count)
+					if err != nil {
+						return out, false
+					}
+					out.PriceByCount[q+":"+ratio+":"+strconv.Itoa(count)] = batch.InternalCredits
+				}
+			}
 			if out.PriceByQuality[q] == 0 || r.PricingSnapshot.InternalCredits < out.PriceByQuality[q] {
 				out.PriceByQuality[q] = r.PricingSnapshot.InternalCredits
 			}

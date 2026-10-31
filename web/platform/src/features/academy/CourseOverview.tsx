@@ -11,8 +11,8 @@ import {usePublicCopy} from "@/i18n/public/use-public-copy";
 
 
 export function CourseOverview({onOverview}:{onOverview:()=>void}){
-  const {copy,coursePath} = usePublicCopy(publicCopySourcesForLocale);
-  const locale=useLocale(),courseLessons=getCourseLessons(locale),courseReadingMinutes=getCourseReadingMinutes(locale);
+  const {copy,coursePath} = usePublicCopy(publicCopySourcesForLocale,{"copy":"courseEn","coursePath":"__route.basePath"});
+  const locale=useLocale(),courseLessons=getCourseLessons(locale,copy),courseReadingMinutes=getCourseReadingMinutes(locale,copy);
 
   const [expanded,setExpanded]=useState(false);
   return <><CourseCover onOverview={onOverview}/><div className={styles.overviewGrid}>

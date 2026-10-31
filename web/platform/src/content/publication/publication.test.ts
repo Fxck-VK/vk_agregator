@@ -19,13 +19,11 @@ const source = (pages: readonly PublicPagePublication[], route = "/tools/[slug]"
 afterEach(() => vi.unstubAllEnvs());
 
 describe("public page publication and sitemap", () => {
-  it("adds a published page and its localized canonicals without editing a sitemap list", () => {
+  it("adds a published Russian page without exposing the retained English source path", () => {
     vi.stubEnv("WEB_ORIGIN", "https://epifera.example");
     expect(buildPublicSitemap(source([published]), now)).toEqual([
       { url: "https://epifera.example/ru/tools/novaya-stranitsa", lastModified: published.updatedAt,
-        alternates: { languages: { ru: "https://epifera.example/ru/tools/novaya-stranitsa", en: "https://epifera.example/en/tools/new-page" } } },
-      { url: "https://epifera.example/en/tools/new-page", lastModified: published.updatedAt,
-        alternates: { languages: { ru: "https://epifera.example/ru/tools/novaya-stranitsa", en: "https://epifera.example/en/tools/new-page" } } },
+        alternates: { languages: { ru: "https://epifera.example/ru/tools/novaya-stranitsa" } } },
     ]);
   });
 
@@ -45,15 +43,11 @@ describe("public page publication and sitemap", () => {
     }
   });
 
-  it("uses only existing translations and never invents the default-language URL", () => {
+  it("does not publish an English-only source or invent a Russian translation path", () => {
     vi.stubEnv("WEB_ORIGIN", "https://epifera.example");
     const page = { ...published, paths: { en: "/tools/new-page" } };
-    expect(buildPublicSitemap(source([page]), now)).toHaveLength(1);
-    expect(publicPageMetadata("en", page, now)).toMatchObject({
-      robots: { index: true, follow: true },
-      alternates: { canonical: "https://epifera.example/en/tools/new-page", languages: { en: "https://epifera.example/en/tools/new-page" } },
-    });
-    expect(publicPageMetadata("en", page, now).alternates?.languages).not.toHaveProperty("x-default");
+    expect(buildPublicSitemap(source([page]), now)).toEqual([]);
+    expect(() => publicPageMetadata("en", page, now)).toThrow("no translation");
   });
 
   it("sets the default alternate to the actual Russian path, even when slugs differ", () => {

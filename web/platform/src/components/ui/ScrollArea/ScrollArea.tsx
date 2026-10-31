@@ -253,7 +253,11 @@ export const ScrollArea = forwardRef<HTMLDivElement, ScrollAreaProps>(function S
       Math.max(currentScrollPosition + delta * wheelMultiplier * (orientation === "horizontal" && Math.abs(event.deltaY) >= Math.abs(event.deltaX) && getComputedStyle(viewport).direction === "rtl" ? -1 : 1), 0),
       scrollRange,
     );
-    if (nextScrollPosition === currentScrollPosition) return;
+    // Browsers can clamp to a fractional edge although scrollWidth is rounded.
+    // Release the wheel there so the containing page can continue scrolling.
+    const atRoundedEdge = (nextScrollPosition === 0 || nextScrollPosition === scrollRange)
+      && Math.abs(nextScrollPosition - currentScrollPosition) < 1;
+    if (nextScrollPosition === currentScrollPosition || atRoundedEdge) return;
 
     event.preventDefault();
     setScrollPosition(viewport, orientation, nextScrollPosition);

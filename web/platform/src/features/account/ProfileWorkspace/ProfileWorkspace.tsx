@@ -4,6 +4,7 @@ import { useState } from "react";
 
 import { ModeSwitchPanel } from "@/components/ui/ModeSwitchPanel/ModeSwitchPanel";
 import { ProfileBalanceCard } from "@/features/account/ProfileBalanceCard/ProfileBalanceCard";
+import { ProfileSubscriptionCard } from "@/features/subscriptions/ProfileSubscriptionCard";
 import { ProfileIdentityCard } from "@/features/account/ProfileIdentityCard/ProfileIdentityCard";
 import { ProfileLoginMethods } from "@/features/account/ProfileLoginMethods/ProfileLoginMethods";
 import { ProfileReferralProgram } from "@/features/account/ProfileReferralProgram/ProfileReferralProgram";
@@ -59,6 +60,7 @@ export function ProfileWorkspace({ methods = defaultAuthMethods, preview = false
             <section aria-labelledby="profile-tariff-title" className={styles.section}>
               <h2 id="profile-tariff-title">{t.profile.tariffSectionTitle}</h2>
               <ProfileBalanceCard balance={balance} />
+              <ProfileSubscriptionCard key={profile.account_id} preview={preview}/>
             </section>
 
             <section aria-labelledby="profile-promo-title" className={styles.section}>

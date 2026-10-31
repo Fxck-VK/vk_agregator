@@ -453,8 +453,10 @@ new nonignored file, Git's no-index whitespace check runs before source checks
 are selected; the baseline diff also checks committed, staged and unstaged edits.
 Whitespace errors in new files therefore fail before lint or full suites. For each
 affected web app it runs lint and typecheck. The platform always runs shared
-contract tests and the login-page regression, including the typography and
-server-only import failures found in the previous release. Asset validation
+contract tests, filesystem `*.styles.test.ts(x)` guards and the login-page
+regression, including the typography and server-only import failures found in
+the previous release. Style guards read CSS directly and therefore cannot be
+selected reliably through a module dependency graph. Asset validation
 also runs for platform changes. Docs-only
 changes select documentation validation, without frontend suites.
 
@@ -464,7 +466,10 @@ related-test graphs. Their JSON plan lists affected packages in
 test stage on the clean commit. This also applies to dependency/configuration
 changes and deletions. Mandatory filesystem/login guards still execute early.
 Go edits select formatting, package tests and vet; module/deletion
-changes conservatively select all Go packages. Release tooling/workflow changes
+changes conservatively select all Go packages. Shared changes
+also retain downstream quote checks: edits to economy, pricing, product or video
+catalogs include the VK and APIMart consumer packages in early tests and vet.
+Release tooling/workflow changes
 select the shared source-contract, inventory and preflight orchestration tests.
 They first run `node scripts/ci/release-linux-check.mjs`: native Linux executes
 portable contract/inventory/planner tests directly; Windows uses a disposable
@@ -575,8 +580,13 @@ Local and nightly Trivy filesystem scans explicitly load `trivy-filesystem.yaml`
 It skips only local `.runtime`/`.cache`, installed `node_modules`, the two web
 apps' build output, coverage, and platform browser-test reports. Keep these
 directories in place; no manual moving or deletion is needed before scanning.
+The five named local Magnific reference directories and `references/*.zip`
+archives are also excluded: they are ignored design exports, absent from release
+images, and can exhaust the local scanner deadline. `references/README.md` and
+all tracked sources remain covered. The guard also rejects any tracked file
+inside these exact directories or any tracked ZIP below `references`.
 `scripts/ci/validate-trivy-filesystem-scope.ps1` rejects unsupported exclusions,
-additional config keys and any excluded Git-tracked file. CI regression tests
+unapproved config keys and any excluded Git-tracked file. CI regression tests
 exercise that guard. Dependency lockfiles, Dockerfiles and deployment configs
 remain scanned, and HIGH/CRITICAL findings still fail the check. Immutable image
 scans do not load this filesystem config and retain their existing gates.

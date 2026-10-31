@@ -25,13 +25,13 @@ describe("RootLayout", () => {
     vi.mocked(cookies).mockResolvedValue({ get: () => undefined } as never);
   });
 
-  it("renders the saved locale and localized metadata on the server", async () => {
+  it("renders Russian document metadata even with a retired English locale header", async () => {
     vi.mocked(headers).mockResolvedValue(new Headers({ "x-neirohub-page-locale": "en" }) as never);
     const markup = renderToStaticMarkup(await RootLayout({ children: <main>Content</main> }));
     const document = new DOMParser().parseFromString(markup, "text/html");
-    expect(document.documentElement.lang).toBe("en");
+    expect(document.documentElement.lang).toBe("ru");
     expect(document.documentElement.dir).toBe("ltr");
-    expect(await generateMetadata()).toMatchObject({ title: getDictionary("en").document.title, description: getDictionary("en").document.description });
+    expect(await generateMetadata()).toMatchObject({ title: getDictionary("ru").document.title, description: getDictionary("ru").document.description });
   });
 
   it("sets Russian as the document language", async () => {

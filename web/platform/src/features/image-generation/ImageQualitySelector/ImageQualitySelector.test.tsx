@@ -22,7 +22,7 @@ const gptImage25QualityOptions = [
 ];
 
 describe("ImageQualitySelector", () => {
-  afterEach(cleanup);
+  afterEach(()=>{cleanup();vi.unstubAllGlobals();});
 
   it("opens the resolution menu and selects a quality", () => {
     const onChange = vi.fn();
@@ -89,7 +89,7 @@ describe("ImageQualitySelector", () => {
     expect(screen.getByRole("button", { name: "Разрешение: 1K" })).toBeDisabled();
   });
 
-  it("shows composite GPT quality labels without changing selected values", () => {
+  it("shows size-only choices without exposing backend quality tiers", () => {
     const onChange = vi.fn();
     render(
       <ImageQualitySelector
@@ -101,11 +101,25 @@ describe("ImageQualitySelector", () => {
       />,
     );
 
-    fireEvent.click(screen.getByRole("button", { name: "Разрешение: 1K·Среднее" }));
-    expect(screen.getAllByRole("radio")).toHaveLength(15);
+    fireEvent.click(screen.getByRole("button", { name: "Разрешение: 1K" }));
+    expect(screen.getByRole("dialog",{name:"Разрешение"})).toHaveStyle({width:"240px"});
+    expect(screen.getAllByRole("radio")).toHaveLength(3);
     expect(screen.queryByRole("radio", { name: "1K-medium" })).not.toBeInTheDocument();
-    fireEvent.click(screen.getByRole("radio", { name: "4K·Максимум" }));
+    expect(screen.queryByText(/Среднее|Низкое|Высокое|Максимум/)).not.toBeInTheDocument();
+    fireEvent.click(screen.getByRole("radio", { name: "4K" }));
 
-    expect(onChange).toHaveBeenCalledWith("4K-max");
+    expect(onChange).toHaveBeenCalledWith("4K-medium");
+  });
+  it("keeps deduplicated size choices compact inside a narrow viewport",()=>{
+    vi.stubGlobal("innerWidth",390);
+    const onChange=vi.fn();
+    render(<ImageQualitySelector disabled={false} label="Разрешение" onChange={onChange} options={gptImage25QualityOptions} value="1K-medium"/>);
+    fireEvent.click(screen.getByRole("button",{name:"Разрешение: 1K"}));
+    const menu=screen.getByRole("dialog",{name:"Разрешение"});
+    expect(menu).toHaveStyle({width:"240px"});
+    expect(screen.getAllByRole("radio")).toHaveLength(3);
+    fireEvent.click(screen.getByRole("radio",{name:"4K"}));
+    expect(onChange).toHaveBeenCalledWith("4K-medium");
+    expect(screen.getByRole("button",{name:"Разрешение: 1K"})).toHaveFocus();
   });
 });

@@ -1,0 +1,610 @@
+{
+  "id": "page-t21",
+  "template": "T21",
+  "path": "/company/about-us",
+  "locale": "ru",
+  "status": "draft",
+  "indexing": "noindex",
+  "seo": {
+    "title": "Об Epifera — творческие инструменты и контакты",
+    "description": "Познакомьтесь с Epifera: рабочим пространством для изображений, видео, музыки, речи и чата. Изучите инструменты и свяжитесь с поддержкой."
+  },
+  "relatedIds": [],
+  "content": {
+    "aboutEn": {
+      "metadata": {
+        "title": "Об Epifera — творческие инструменты и контакты",
+        "description": "Познакомьтесь с Epifera: рабочим пространством для изображений, видео, музыки, речи и чата. Изучите инструменты и свяжитесь с поддержкой."
+      },
+      "skip": "Перейти к информации о компании",
+      "announcement": "Рабочее пространство для вашей следующей идеи",
+      "title": "Epifera объединяет ваши творческие инструменты",
+      "description": "Изображения, видео, музыка, речь и чат. Изучайте возможности, задавайте направление и принимайте следующее решение сами.",
+      "discover": "Познакомиться с Epifera",
+      "aboutLink": "Об Epifera",
+      "stats": {
+        "title": "Понятная отправная точка для вашего творчества",
+        "description": "Удобные способы работы, инструменты и информация под рукой."
+      },
+      "people": {
+        "title": "The work behind Epifera",
+        "description": "From choosing a model to reviewing a result, these are the parts of the workspace we focus on.",
+        "action": "Get in touch with the project",
+        "items": [
+          {
+            "title": "Creative tools",
+            "description": "Find a starting point",
+            "href": "/ai"
+          },
+          {
+            "title": "Model choices",
+            "description": "Explore the catalog",
+            "href": "/app/models"
+          },
+          {
+            "title": "Interface",
+            "description": "Your creative workspace",
+            "href": "/app"
+          },
+          {
+            "title": "Images",
+            "description": "Shape the next frame",
+            "href": "/ai/image-generator"
+          },
+          {
+            "title": "Motion",
+            "description": "Explore video models",
+            "href": "/ai/kling"
+          },
+          {
+            "title": "Music",
+            "description": "Develop a sound direction",
+            "href": "/app/music"
+          },
+          {
+            "title": "Speech",
+            "description": "Give your ideas a voice",
+            "href": "/app/speech"
+          },
+          {
+            "title": "Conversations",
+            "description": "Continue your thinking",
+            "href": "/app/chats"
+          },
+          {
+            "title": "Created files",
+            "description": "Review your outputs",
+            "href": "/app/files"
+          },
+          {
+            "title": "Workflow guides",
+            "description": "Work through the stages",
+            "href": "/workflows/product-campaign"
+          },
+          {
+            "title": "Learning",
+            "description": "Build useful habits",
+            "href": "/academy/courses/epifera-essentials"
+          },
+          {
+            "title": "Inspiration",
+            "description": "Explore visual directions",
+            "href": "/inspiration/cinematic-scenes"
+          },
+          {
+            "title": "Account access",
+            "description": "Manage your account",
+            "href": "/ai/docs/account-management"
+          },
+          {
+            "title": "Payment terms",
+            "description": "Understand the offer",
+            "href": "/legal/paid-access"
+          },
+          {
+            "title": "Data and privacy",
+            "description": "Read the actual policy",
+            "href": "/legal/privacy-policy"
+          },
+          {
+            "title": "Team planning",
+            "description": "Discuss requirements",
+            "href": "/business"
+          },
+          {
+            "title": "Connections",
+            "description": "Explore the planned concept",
+            "href": "/mcp"
+          },
+          {
+            "title": "Support",
+            "description": "Find an answer",
+            "href": "/ai/docs"
+          }
+        ]
+      },
+      "scenarios": {
+        "title": "Много видов творчества, одна отправная точка",
+        "description": "Редакционные примеры знакомства с рабочим пространством. Это идеи, а не отзывы клиентов.",
+        "items": [
+          {
+            "title": "Найти визуальное направление",
+            "description": "Начните с настроения, брифа и нескольких референсов. Исследуйте, во что может превратиться первое изображение.",
+            "href": "/ai/image-generator"
+          },
+          {
+            "title": "Рассказать историю в движении",
+            "description": "Мыслите сценами, сравнивайте доступные настройки и выбирайте видеомодель для своей идеи.",
+            "href": "/ai/kling"
+          },
+          {
+            "title": "Разработать концепцию продукта",
+            "description": "Исследуйте окружение, материал и визуальный язык продукта.",
+            "href": "/workflows/product-campaign"
+          },
+          {
+            "title": "Найти место для звука",
+            "description": "Изучите музыкальные инструменты, подходящие настроению и ритму творческого проекта.",
+            "href": "/app/music"
+          },
+          {
+            "title": "Озвучить идею",
+            "description": "Изучите доступные речевые инструменты и найдите подходящую отправную точку для своего текста.",
+            "href": "/app/speech"
+          },
+          {
+            "title": "Проработать кампанию",
+            "description": "Свяжите бриф, визуальные эксперименты и этапы оценки с помощью руководства.",
+            "href": "/ai/marketing"
+          },
+          {
+            "title": "Освоить новый подход",
+            "description": "Выстройте рабочий процесс на основе коротких уроков и практических вопросов.",
+            "href": "/academy/courses/epifera-essentials"
+          },
+          {
+            "title": "Развивать следующую идею",
+            "description": "Возвращайтесь к своим беседам и созданным файлам, когда появится новое направление.",
+            "href": "/app"
+          }
+        ],
+        "action": "Изучить историю кампании из референса"
+      },
+      "assurance": {
+        "title": "Разобраться в инструментах, доступе и условиях",
+        "description": "Начните с того, что доступно сегодня, и учитывайте, что командные возможности пока лишь планируются.",
+        "action": "Изучить планы для команд",
+        "items": [
+          {
+            "title": "Ваш аккаунт",
+            "description": "Используйте существующие способы входа и просматривайте профиль и настройки аккаунта.",
+            "href": "/ai/docs/account-management",
+            "icon": "text"
+          },
+          {
+            "title": "Понятные условия оплаты",
+            "description": "Перед покупкой изучите действующую оферту, условия оплаты и возврата средств.",
+            "href": "/legal/paid-access",
+            "icon": "text"
+          },
+          {
+            "title": "Данные и конфиденциальность",
+            "description": "Прочитайте опубликованную политику конфиденциальности, чтобы узнать, как сервис обрабатывает данные.",
+            "href": "/legal/privacy-policy",
+            "icon": "spark"
+          },
+          {
+            "title": "Созданные файлы",
+            "description": "Просматривайте результаты и скачивайте доступные файлы. Созданные файлы хранятся два календарных месяца, если их не удалить раньше.",
+            "href": "/app/files",
+            "icon": "image"
+          },
+          {
+            "title": "Требования команд",
+            "description": "Общий доступ, корпоративные средства управления и ресурсы для команд остаются планируемыми возможностями для обсуждения.",
+            "href": "/business",
+            "icon": "spark"
+          },
+          {
+            "title": "Помощь, когда она нужна",
+            "description": "Воспользуйтесь руководствами или обратитесь в поддержку, понятно описав свой вопрос.",
+            "href": "/ai/docs",
+            "icon": "voice"
+          }
+        ]
+      },
+      "teamsAction": "Изучить планы для команд",
+      "story": {
+        "label": "Творческий процесс",
+        "title": "От первой идеи к следующему проекту",
+        "items": [
+          {
+            "title": "Изучить инструменты",
+            "text": "Найдите творческое направление, которое подходит вашей идее.",
+            "href": "/ai",
+            "action": "Познакомиться с инструментами"
+          },
+          {
+            "title": "Выбрать модель",
+            "text": "Изучите модели, входные данные и настройки, доступные в вашем рабочем пространстве.",
+            "href": "/app/models",
+            "action": "Изучить каталог"
+          },
+          {
+            "title": "Сформулировать бриф",
+            "text": "Запишите тему, направление и ограничения, важные для работы.",
+            "href": "/app",
+            "action": "Открыть рабочее пространство"
+          },
+          {
+            "title": "Проверить стоимость",
+            "text": "Перед началом платной работы проверьте указанную цену задачи и соответствующие условия оплаты.",
+            "href": "/legal/paid-access",
+            "action": "Прочитать условия оплаты"
+          },
+          {
+            "title": "Создать первый вариант",
+            "text": "Используйте существующие инструменты для следующего изображения, беседы или задачи с медиа.",
+            "href": "/app/image",
+            "action": "Изучить создание изображений"
+          },
+          {
+            "title": "Оценить и скачать",
+            "text": "Сравните доступные результаты в разделе «Мои файлы» и сохраните полезное для проекта.",
+            "href": "/app/files",
+            "action": "Открыть «Мои файлы»"
+          },
+          {
+            "title": "Продолжить обучение",
+            "text": "Используйте руководства и уроки, чтобы совершенствовать подход к следующей идее.",
+            "href": "/academy/courses/epifera-essentials",
+            "action": "Изучить уроки"
+          }
+        ]
+      },
+      "values": {
+        "label": "Что направляет нашу работу",
+        "title": "Во что мы верим",
+        "items": [
+          {
+            "title": "Ваша идея на первом месте",
+            "text": "Инструменты должны давать вашей следующей идее путь к воплощению. Начните с того, что хотите выразить, затем изучайте связанные с этим возможности."
+          },
+          {
+            "title": "Понимать следующий шаг",
+            "text": "Полезный рабочий процесс делает выбор понятным: модель, бриф, настройки и стоимость до начала платной задачи."
+          },
+          {
+            "title": "Сохранять связь между частями работы",
+            "text": "Беседы, референсы и результаты — части одного творческого процесса. Полезные материалы должно быть легко находить снова."
+          },
+          {
+            "title": "Учиться на практике",
+            "text": "Первый результат задаёт направление для оценки. Небольшие эксперименты, полезные референсы и понятная обратная связь помогут определить следующие шаги."
+          }
+        ]
+      },
+      "products": {
+        "label": "Наши инструменты",
+        "title": "Выберите, с чего начнётся ваша следующая идея",
+        "reference": "Референс интерфейса Magnific — иллюстрация компоновки",
+        "items": [
+          {
+            "name": "ИИ-генератор видео",
+            "href": "/app/models"
+          },
+          {
+            "name": "ИИ-генератор изображений",
+            "href": "/ai/image-generator"
+          },
+          {
+            "name": "Генератор музыки",
+            "href": "/app/music"
+          },
+          {
+            "name": "Озвучивание текста",
+            "href": "/app/speech"
+          },
+          {
+            "name": "ИИ-чат",
+            "href": "/app"
+          },
+          {
+            "name": "Руководства по рабочим процессам",
+            "href": "/workflows/product-campaign"
+          },
+          {
+            "name": "Концепция MCP",
+            "href": "/mcp"
+          },
+          {
+            "name": "Каталог моделей",
+            "href": "/app/models"
+          },
+          {
+            "name": "Визуальные референсы",
+            "href": "/photos/nature"
+          }
+        ]
+      },
+      "models": {
+        "title": "Выбор моделей. Одно рабочее пространство.",
+        "description": "Изучите семейства моделей, доступные входные данные, настройки и стоимость в каталоге.",
+        "label": "Изучить семейства ИИ-моделей",
+        "note": "Медиа для предпросмотра взяты из Magnific. Иллюстрации не обещают конкретного результата генерации."
+      },
+      "faqTitle": "Частые вопросы",
+      "faq": [
+        {
+          "question": "Что такое Epifera?",
+          "answer": "Epifera — творческое рабочее пространство для изображений, видео, музыки, речи и чата. Изучайте модели, развивайте идеи и просматривайте доступные результаты в своём аккаунте."
+        },
+        {
+          "question": "С чего начать?",
+          "answer": "Изучите обзор инструментов или откройте рабочее пространство. Выберите творческое направление и ознакомьтесь с доступными моделями и настройками."
+        },
+        {
+          "question": "Можно ли создавать видео с ИИ?",
+          "answer": "Видеомодели доступны в каталоге. Поддерживаемые входные данные, настройки и стоимость указаны в рабочем пространстве."
+        },
+        {
+          "question": "Можно ли использовать инструменты для творческого проекта?",
+          "answer": "Изучите доступные инструменты и условия предполагаемого использования. Эта страница не добавляет коммерческих прав или гарантий сверх действующих условий сервиса."
+        },
+        {
+          "question": "Поддерживает ли Epifera корпоративные команды?",
+          "answer": "Корпоративный формат работы планируется. Страница для команд помогает изучить концепцию и обсудить требования; она не активирует общий доступ или баланс компании."
+        },
+        {
+          "question": "Доступны ли подключения через API и MCP?",
+          "answer": "Страница MCP описывает планируемую концепцию подключения. Эта страница не предоставляет действующую конечную точку API или доступ к коннектору."
+        },
+        {
+          "question": "Как обрабатываются мои данные?",
+          "answer": "Прочитайте опубликованную политику конфиденциальности и пользовательское соглашение, чтобы узнать действующие условия обработки данных. Если нужны пояснения по конкретному использованию, обратитесь в поддержку."
+        },
+        {
+          "question": "Как долго хранятся созданные файлы?",
+          "answer": "Созданные файлы хранятся два календарных месяца с момента первоначального создания, если вы не удалите их раньше. Скачивайте результаты, которые нужно сохранить."
+        },
+        {
+          "question": "Кому принадлежит создаваемый мной контент?",
+          "answer": "Перед публикацией или передачей результата изучите пользовательское соглашение и условия, относящиеся к используемым инструментам и контенту."
+        },
+        {
+          "question": "Как связаться с Epifera?",
+          "answer": "По общим вопросам, за помощью, с запросами от СМИ и идеями сотрудничества пишите на support@epifera.com. В Справочном центре также есть руководства по распространённым задачам."
+        }
+      ],
+      "contribution": {
+        "label": "Создавайте вместе с нами",
+        "title": "Есть идея следующего шага?",
+        "description": "Полезный вопрос, предложение по рабочему процессу или идея сотрудничества — расскажите, что у вас на уме.",
+        "action": "Поделиться идеей"
+      },
+      "contacts": {
+        "label": "Связаться",
+        "title": "Давайте поговорим",
+        "items": [
+          {
+            "title": "Что у вас на уме?",
+            "description": "Мы будем рады вас услышать.",
+            "display": "support@epifera.com",
+            "href": "mailto:support@epifera.com?subject=Hello%20Epifera"
+          },
+          {
+            "title": "Пресса и партнёрства",
+            "description": "Для запросов прессы и идей сотрудничества.",
+            "display": "support@epifera.com",
+            "href": "mailto:support@epifera.com?subject=Epifera%20press%20enquiry"
+          },
+          {
+            "title": "Поддержка",
+            "description": "Руководства, ответы и рекомендации по дальнейшим действиям.",
+            "display": "Открыть Справочный центр",
+            "href": "/ai/docs"
+          }
+        ]
+      },
+      "sourceAction": "О визуальных референсах",
+      "sourceTitle": "Об этой странице и её референсах",
+      "sourceLink": "Посмотреть референс Magnific",
+      "sourceNote": "Компоновка и визуальные референсы с указанием источника взяты из сохранённой страницы Magnific о компании. Epifera не заявляет о принадлежности ей сотрудников, клиентов, отзывов, истории компании или сертификатов Magnific. Информация и контактные ссылки здесь относятся к Epifera.",
+      "controls": {
+        "close": "Закрыть",
+        "pricing": "Тарифы",
+        "previous": "Назад",
+        "next": "Далее",
+        "models": "Карточки предпросмотра ИИ-моделей",
+        "explore": "Подробнее",
+        "reference": "Визуальный референс Magnific"
+      }
+    },
+    "aboutReference": {
+      "hero": {
+        "src": "/assets/images/about/hero.avif",
+        "width": 1920,
+        "height": 820
+      },
+      "products": {
+        "src": "/assets/images/about/products.avif",
+        "width": 1457,
+        "height": 626
+      },
+      "scenario-1": {
+        "src": "/assets/images/about/scenario-1.avif",
+        "width": 2000,
+        "height": 969
+      },
+      "scenario-2": {
+        "src": "/assets/images/about/scenario-2.avif",
+        "width": 626,
+        "height": 624
+      },
+      "scenario-3": {
+        "src": "/assets/images/about/scenario-3.avif",
+        "width": 626,
+        "height": 624
+      },
+      "scenario-4": {
+        "src": "/assets/images/about/scenario-4.avif",
+        "width": 626,
+        "height": 624
+      },
+      "scenario-5": {
+        "src": "/assets/images/about/scenario-5.avif",
+        "width": 626,
+        "height": 624
+      },
+      "scenario-6": {
+        "src": "/assets/images/about/scenario-6.webp",
+        "width": 626,
+        "height": 624
+      },
+      "scenario-7": {
+        "src": "/assets/images/about/scenario-7.avif",
+        "width": 626,
+        "height": 624
+      },
+      "scenario-8": {
+        "src": "/assets/images/about/scenario-8.avif",
+        "width": 626,
+        "height": 792
+      },
+      "NanoBanana": {
+        "src": "/assets/videos/about/nano-banana.webm"
+      },
+      "Grok": {
+        "src": "/assets/videos/about/grok.webm"
+      },
+      "Happyhorse": {
+        "src": "/assets/videos/about/happyhorse.webm"
+      },
+      "Veo3Flow": {
+        "src": "/assets/videos/about/veo3flow.webm"
+      },
+      "Seedream": {
+        "src": "/assets/videos/about/seedream.webm"
+      },
+      "Seedance": {
+        "src": "/assets/videos/about/seedance.webm"
+      },
+      "Kling": {
+        "src": "/assets/videos/about/kling.webm"
+      },
+      "Flux2": {
+        "src": "/assets/videos/about/flux2.webm"
+      },
+      "Runway": {
+        "src": "/assets/videos/about/runway.webm"
+      },
+      "Wan": {
+        "src": "/assets/videos/about/wan.webm"
+      },
+      "MiniMax": {
+        "src": "/assets/videos/about/mini-max.webm"
+      }
+    },
+    "aboutModels": [
+      {
+        "id": "gpt_image_2",
+        "name": "GPT Image",
+        "poster": "/assets/images/marketing/gpt-2.webp"
+      },
+      {
+        "id": "nano_banana_pro",
+        "name": "Nano Banana",
+        "poster": "/assets/images/marketing/product-shots.webp",
+        "video": "/assets/videos/about/nano-banana.webm"
+      },
+      {
+        "id": "video_kling_v3",
+        "name": "Kling",
+        "poster": "/assets/images/marketing/preview-2.webp",
+        "video": "/assets/videos/about/kling.webm"
+      },
+      {
+        "id": "video_veo_3_1_fast",
+        "name": "Veo",
+        "poster": "/assets/images/marketing/preview-1.webp",
+        "video": "/assets/videos/about/veo3flow.webm"
+      },
+      {
+        "id": "seedream_5_0_lite",
+        "name": "Seedream",
+        "poster": "/assets/images/marketing/advertising.webp",
+        "video": "/assets/videos/about/seedream.webm"
+      },
+      {
+        "id": "flux_2_pro",
+        "name": "FLUX",
+        "poster": "/assets/images/marketing/brand-campaign.webp",
+        "video": "/assets/videos/about/flux2.webm"
+      },
+      {
+        "id": "suno_v6",
+        "name": "Suno",
+        "poster": "/assets/images/marketing/preview-4.webp"
+      },
+      {
+        "id": "gpt_4o_mini_tts",
+        "name": "GPT Voice",
+        "poster": "/assets/images/marketing/advertising.webp"
+      },
+      {
+        "id": "grok_imagine_1_5_video",
+        "name": "Grok Imagine",
+        "poster": "/assets/images/about/scenario-1.avif",
+        "video": "/assets/videos/about/grok.webm"
+      },
+      {
+        "id": "happyhorse_1_0",
+        "name": "Happy Horse",
+        "poster": "/assets/images/about/scenario-2.avif",
+        "video": "/assets/videos/about/happyhorse.webm"
+      },
+      {
+        "id": "seedance_2_0",
+        "name": "Seedance",
+        "poster": "/assets/images/about/scenario-3.avif",
+        "video": "/assets/videos/about/seedance.webm"
+      },
+      {
+        "id": "video_runway_gen4_5",
+        "name": "Runway",
+        "poster": "/assets/images/about/scenario-4.avif",
+        "video": "/assets/videos/about/runway.webm"
+      },
+      {
+        "id": "wan_3_0",
+        "name": "Wan",
+        "poster": "/assets/images/about/scenario-5.avif",
+        "video": "/assets/videos/about/wan.webm"
+      },
+      {
+        "id": "video_minimax_h3",
+        "name": "MiniMax",
+        "poster": "/assets/images/about/scenario-6.webp",
+        "video": "/assets/videos/about/mini-max.webm"
+      }
+    ],
+    "aboutStats": [
+      {
+        "value": "5",
+        "label": "Направлений для творческих экспериментов"
+      },
+      {
+        "value": "1",
+        "label": "Рабочее пространство для ваших идей"
+      },
+      {
+        "value": "2",
+        "label": "Календарных месяца хранения созданных файлов"
+      },
+      {
+        "value": "1",
+        "label": "Адрес поддержки для ваших вопросов"
+      }
+    ]
+  }
+}

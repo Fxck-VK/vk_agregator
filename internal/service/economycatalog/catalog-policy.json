@@ -1,0 +1,659 @@
+{
+  "schema_version": 1,
+  "version": 2026102802,
+  "reference_version": 20261028,
+  "cost_multiplier_numerator": 3,
+  "cost_multiplier_denominator": 1,
+  "rounding_step_stars": 5,
+  "reference_income_guard": true,
+  "models": [
+    {
+      "id": "chatgpt",
+      "kind": "text",
+      "mode": "sponsored",
+      "reason": "Existing explicitly free assistant; do not infer free access for other paid models."
+    },
+    {
+      "id": "claude_fable_5",
+      "kind": "text",
+      "mode": "reference_or_cost",
+      "reason": "Compatible verified reference rate; otherwise provider floor times3 rounded up to5 stars."
+    },
+    {
+      "id": "claude_fable_5_1",
+      "kind": "text",
+      "mode": "reference_or_cost",
+      "reason": "Compatible verified reference rate; otherwise provider floor times3 rounded up to5 stars."
+    },
+    {
+      "id": "claude_haiku_4_5_20251001",
+      "kind": "text",
+      "mode": "reference_or_cost",
+      "reason": "Compatible verified reference rate; otherwise provider floor times3 rounded up to5 stars."
+    },
+    {
+      "id": "claude_opus_4_5_20251101",
+      "kind": "text",
+      "mode": "reference_or_cost",
+      "reason": "Compatible verified reference rate; otherwise provider floor times3 rounded up to5 stars."
+    },
+    {
+      "id": "claude_opus_4_6",
+      "kind": "text",
+      "mode": "reference_or_cost",
+      "reason": "Compatible verified reference rate; otherwise provider floor times3 rounded up to5 stars."
+    },
+    {
+      "id": "claude_opus_4_7",
+      "kind": "text",
+      "mode": "reference_or_cost",
+      "reason": "Compatible verified reference rate; otherwise provider floor times3 rounded up to5 stars."
+    },
+    {
+      "id": "claude_opus_4_8",
+      "kind": "text",
+      "mode": "reference_or_cost",
+      "reason": "Compatible verified reference rate; otherwise provider floor times3 rounded up to5 stars."
+    },
+    {
+      "id": "claude_opus_5",
+      "kind": "text",
+      "mode": "reference_or_cost",
+      "reason": "Compatible verified reference rate; otherwise provider floor times3 rounded up to5 stars."
+    },
+    {
+      "id": "claude_opus_5_5",
+      "kind": "text",
+      "mode": "reference_or_cost",
+      "reason": "Compatible verified reference rate; otherwise provider floor times3 rounded up to5 stars."
+    },
+    {
+      "id": "claude_sonnet_4_6",
+      "kind": "text",
+      "mode": "reference_or_cost",
+      "reason": "Compatible verified reference rate; otherwise provider floor times3 rounded up to5 stars."
+    },
+    {
+      "id": "deepseek_r1_250528",
+      "kind": "text",
+      "mode": "reference_or_cost",
+      "reason": "Compatible verified reference rate; otherwise provider floor times3 rounded up to5 stars."
+    },
+    {
+      "id": "deepseek_v3_0324",
+      "kind": "text",
+      "mode": "reference_or_cost",
+      "reason": "Compatible verified reference rate; otherwise provider floor times3 rounded up to5 stars."
+    },
+    {
+      "id": "deepseek_v3_2",
+      "kind": "text",
+      "mode": "reference_or_cost",
+      "reason": "Compatible verified reference rate; otherwise provider floor times3 rounded up to5 stars."
+    },
+    {
+      "id": "deepseek_v3_2_exp",
+      "kind": "text",
+      "mode": "reference_or_cost",
+      "reason": "Compatible verified reference rate; otherwise provider floor times3 rounded up to5 stars."
+    },
+    {
+      "id": "deepseek_v4_flash",
+      "kind": "text",
+      "mode": "reference_or_cost",
+      "reason": "Compatible verified reference rate; otherwise provider floor times3 rounded up to5 stars."
+    },
+    {
+      "id": "deepseek_v4_pro",
+      "kind": "text",
+      "mode": "reference_or_cost",
+      "reason": "Compatible verified reference rate; otherwise provider floor times3 rounded up to5 stars."
+    },
+    {
+      "id": "flux_2_flex",
+      "kind": "image",
+      "mode": "reference_or_cost",
+      "reason": "Compatible verified reference rate; otherwise provider floor times3 rounded up to5 stars."
+    },
+    {
+      "id": "flux_2_max",
+      "kind": "image",
+      "mode": "reference_or_cost",
+      "reason": "Compatible verified reference rate; otherwise provider floor times3 rounded up to5 stars."
+    },
+    {
+      "id": "flux_2_pro",
+      "kind": "image",
+      "mode": "reference_or_cost",
+      "reason": "Compatible verified reference rate; otherwise provider floor times3 rounded up to5 stars."
+    },
+    {
+      "id": "flux_3_video",
+      "kind": "video",
+      "mode": "reference_or_cost",
+      "reason": "Compatible verified reference rate; otherwise provider floor times3 rounded up to5 stars."
+    },
+    {
+      "id": "gemini_2_5_flash",
+      "kind": "text",
+      "mode": "reference_or_cost",
+      "reason": "Compatible verified reference rate; otherwise provider floor times3 rounded up to5 stars."
+    },
+    {
+      "id": "gemini_2_5_flash_lite",
+      "kind": "text",
+      "mode": "reference_or_cost",
+      "reason": "Compatible verified reference rate; otherwise provider floor times3 rounded up to5 stars."
+    },
+    {
+      "id": "gemini_2_5_pro",
+      "kind": "text",
+      "mode": "reference_or_cost",
+      "reason": "Compatible verified reference rate; otherwise provider floor times3 rounded up to5 stars."
+    },
+    {
+      "id": "gemini_3_1_pro",
+      "kind": "text",
+      "mode": "reference_or_cost",
+      "reason": "Compatible verified reference rate; otherwise provider floor times3 rounded up to5 stars."
+    },
+    {
+      "id": "gemini_3_1_pro_preview",
+      "kind": "text",
+      "mode": "reference_or_cost",
+      "reason": "Compatible verified reference rate; otherwise provider floor times3 rounded up to5 stars."
+    },
+    {
+      "id": "gemini_3_5_flash",
+      "kind": "text",
+      "mode": "reference_or_cost",
+      "reason": "Compatible verified reference rate; otherwise provider floor times3 rounded up to5 stars."
+    },
+    {
+      "id": "gemini_3_6_flash",
+      "kind": "text",
+      "mode": "reference_or_cost",
+      "reason": "Compatible verified reference rate; otherwise provider floor times3 rounded up to5 stars."
+    },
+    {
+      "id": "gemini_3_7_flash",
+      "kind": "text",
+      "mode": "reference_or_cost",
+      "reason": "Compatible verified reference rate; otherwise provider floor times3 rounded up to5 stars."
+    },
+    {
+      "id": "gemini_3_flash_preview",
+      "kind": "text",
+      "mode": "reference_or_cost",
+      "reason": "Compatible verified reference rate; otherwise provider floor times3 rounded up to5 stars."
+    },
+    {
+      "id": "gemini_3_pro_preview",
+      "kind": "text",
+      "mode": "reference_or_cost",
+      "reason": "Compatible verified reference rate; otherwise provider floor times3 rounded up to5 stars."
+    },
+    {
+      "id": "gemini_3_pro_preview_thinking",
+      "kind": "text",
+      "mode": "reference_or_cost",
+      "reason": "Compatible verified reference rate; otherwise provider floor times3 rounded up to5 stars."
+    },
+    {
+      "id": "gemini_omni_flash_preview",
+      "kind": "video",
+      "mode": "reference_or_cost",
+      "reason": "Compatible verified reference rate; otherwise provider floor times3 rounded up to5 stars."
+    },
+    {
+      "id": "gpt_4o_mini_tts",
+      "kind": "audio",
+      "mode": "unavailable",
+      "reason": "No admitted execution/settlement unit; public provider pricing could not be verified. Keep disabled, never invent a price."
+    },
+    {
+      "id": "gpt_5",
+      "kind": "text",
+      "mode": "reference_or_cost",
+      "reason": "Compatible verified reference rate; otherwise provider floor times3 rounded up to5 stars."
+    },
+    {
+      "id": "gpt_5_1",
+      "kind": "text",
+      "mode": "reference_or_cost",
+      "reason": "Compatible verified reference rate; otherwise provider floor times3 rounded up to5 stars."
+    },
+    {
+      "id": "gpt_5_2",
+      "kind": "text",
+      "mode": "reference_or_cost",
+      "reason": "Compatible verified reference rate; otherwise provider floor times3 rounded up to5 stars."
+    },
+    {
+      "id": "gpt_5_3_codex",
+      "kind": "text",
+      "mode": "reference_or_cost",
+      "reason": "Compatible verified reference rate; otherwise provider floor times3 rounded up to5 stars."
+    },
+    {
+      "id": "gpt_5_4",
+      "kind": "text",
+      "mode": "reference_or_cost",
+      "reason": "Compatible verified reference rate; otherwise provider floor times3 rounded up to5 stars."
+    },
+    {
+      "id": "gpt_5_5",
+      "kind": "text",
+      "mode": "reference_or_cost",
+      "reason": "Compatible verified reference rate; otherwise provider floor times3 rounded up to5 stars."
+    },
+    {
+      "id": "gpt_5_6_terra",
+      "kind": "text",
+      "mode": "reference_or_cost",
+      "reason": "Compatible verified reference rate; otherwise provider floor times3 rounded up to5 stars."
+    },
+    {
+      "id": "gpt_5_chat_latest",
+      "kind": "text",
+      "mode": "reference_or_cost",
+      "reason": "Compatible verified reference rate; otherwise provider floor times3 rounded up to5 stars."
+    },
+    {
+      "id": "gpt_5_mini",
+      "kind": "text",
+      "mode": "reference_or_cost",
+      "reason": "Compatible verified reference rate; otherwise provider floor times3 rounded up to5 stars."
+    },
+    {
+      "id": "gpt_6_astra",
+      "kind": "text",
+      "mode": "reference_or_cost",
+      "reason": "Compatible verified reference rate; otherwise provider floor times3 rounded up to5 stars."
+    },
+    {
+      "id": "gpt_6_luna",
+      "kind": "text",
+      "mode": "reference_or_cost",
+      "reason": "Compatible verified reference rate; otherwise provider floor times3 rounded up to5 stars."
+    },
+    {
+      "id": "gpt_6_sol",
+      "kind": "text",
+      "mode": "reference_or_cost",
+      "reason": "Compatible verified reference rate; otherwise provider floor times3 rounded up to5 stars."
+    },
+    {
+      "id": "gpt_image_2",
+      "kind": "image",
+      "mode": "reference_or_cost",
+      "reason": "Compatible verified reference rate; otherwise provider floor times3 rounded up to5 stars."
+    },
+    {
+      "id": "gpt_image_2_5_flare",
+      "kind": "image",
+      "mode": "reference_or_cost",
+      "reason": "Compatible verified reference rate; otherwise provider floor times3 rounded up to5 stars."
+    },
+    {
+      "id": "gpt_image_2_5_sunburst",
+      "kind": "image",
+      "mode": "reference_or_cost",
+      "reason": "Compatible verified reference rate; otherwise provider floor times3 rounded up to5 stars."
+    },
+    {
+      "id": "grok_4_5",
+      "kind": "text",
+      "mode": "reference_or_cost",
+      "reason": "Compatible verified reference rate; otherwise provider floor times3 rounded up to5 stars."
+    },
+    {
+      "id": "grok_4_6",
+      "kind": "text",
+      "mode": "reference_or_cost",
+      "reason": "Compatible verified reference rate; otherwise provider floor times3 rounded up to5 stars."
+    },
+    {
+      "id": "grok_4_7",
+      "kind": "text",
+      "mode": "reference_or_cost",
+      "reason": "Compatible verified reference rate; otherwise provider floor times3 rounded up to5 stars."
+    },
+    {
+      "id": "grok_image_1_5",
+      "kind": "image",
+      "mode": "reference_or_cost",
+      "reason": "Compatible verified reference rate; otherwise provider floor times3 rounded up to5 stars."
+    },
+    {
+      "id": "grok_image_2_0",
+      "kind": "image",
+      "mode": "reference_or_cost",
+      "reason": "Compatible verified reference rate; otherwise provider floor times3 rounded up to5 stars."
+    },
+    {
+      "id": "grok_imagine_1_5_video",
+      "kind": "video",
+      "mode": "reference_or_cost",
+      "reason": "Compatible verified reference rate; otherwise provider floor times3 rounded up to5 stars."
+    },
+    {
+      "id": "happyhorse_1_0",
+      "kind": "video",
+      "mode": "reference_or_cost",
+      "reason": "Compatible verified reference rate; otherwise provider floor times3 rounded up to5 stars."
+    },
+    {
+      "id": "happyhorse_1_1",
+      "kind": "video",
+      "mode": "reference_or_cost",
+      "reason": "Compatible verified reference rate; otherwise provider floor times3 rounded up to5 stars."
+    },
+    {
+      "id": "imagen_4_0",
+      "kind": "image",
+      "mode": "reference_or_cost",
+      "reason": "Compatible verified reference rate; otherwise provider floor times3 rounded up to5 stars."
+    },
+    {
+      "id": "kimi_k3",
+      "kind": "text",
+      "mode": "reference_or_cost",
+      "reason": "Compatible verified reference rate; otherwise provider floor times3 rounded up to5 stars."
+    },
+    {
+      "id": "kling_2_6",
+      "kind": "video",
+      "mode": "reference_or_cost",
+      "reason": "Compatible verified reference rate; otherwise provider floor times3 rounded up to5 stars."
+    },
+    {
+      "id": "kling_video_o1",
+      "kind": "video",
+      "mode": "reference_or_cost",
+      "reason": "Compatible verified reference rate; otherwise provider floor times3 rounded up to5 stars."
+    },
+    {
+      "id": "lyria_3_5",
+      "kind": "audio",
+      "mode": "reference_or_cost",
+      "reason": "Compatible verified reference rate; otherwise provider floor times3 rounded up to5 stars."
+    },
+    {
+      "id": "midjourney_v7",
+      "kind": "image",
+      "mode": "reference_or_cost",
+      "reason": "Compatible verified reference rate; otherwise provider floor times3 rounded up to5 stars."
+    },
+    {
+      "id": "minimax_h3_max",
+      "kind": "video",
+      "mode": "reference_or_cost",
+      "reason": "Compatible verified reference rate; otherwise provider floor times3 rounded up to5 stars."
+    },
+    {
+      "id": "nano_banana",
+      "kind": "image",
+      "mode": "reference_or_cost",
+      "reason": "Compatible verified reference rate; otherwise provider floor times3 rounded up to5 stars."
+    },
+    {
+      "id": "nano_banana_2",
+      "kind": "image",
+      "mode": "reference_or_cost",
+      "reason": "Compatible verified reference rate; otherwise provider floor times3 rounded up to5 stars."
+    },
+    {
+      "id": "nano_banana_pro",
+      "kind": "image",
+      "mode": "reference_or_cost",
+      "reason": "Compatible verified reference rate; otherwise provider floor times3 rounded up to5 stars."
+    },
+    {
+      "id": "pixverse_v6",
+      "kind": "video",
+      "mode": "reference_or_cost",
+      "reason": "Compatible verified reference rate; otherwise provider floor times3 rounded up to5 stars."
+    },
+    {
+      "id": "qwen_3_7_flash",
+      "kind": "text",
+      "mode": "reference_or_cost",
+      "reason": "Compatible verified reference rate; otherwise provider floor times3 rounded up to5 stars."
+    },
+    {
+      "id": "qwen_3_8_max",
+      "kind": "text",
+      "mode": "reference_or_cost",
+      "reason": "Compatible verified reference rate; otherwise provider floor times3 rounded up to5 stars."
+    },
+    {
+      "id": "qwen_image_3",
+      "kind": "image",
+      "mode": "reference_or_cost",
+      "reason": "Compatible verified reference rate; otherwise provider floor times3 rounded up to5 stars."
+    },
+    {
+      "id": "qwen_image_3_pro",
+      "kind": "image",
+      "mode": "reference_or_cost",
+      "reason": "Compatible verified reference rate; otherwise provider floor times3 rounded up to5 stars."
+    },
+    {
+      "id": "seedance_2_0",
+      "kind": "video",
+      "mode": "reference_or_cost",
+      "reason": "Compatible verified reference rate; otherwise provider floor times3 rounded up to5 stars."
+    },
+    {
+      "id": "seedance_2_0_mini",
+      "kind": "video",
+      "mode": "reference_or_cost",
+      "reason": "Compatible verified reference rate; otherwise provider floor times3 rounded up to5 stars."
+    },
+    {
+      "id": "seedream_4_5",
+      "kind": "image",
+      "mode": "reference_or_cost",
+      "reason": "Compatible verified reference rate; otherwise provider floor times3 rounded up to5 stars."
+    },
+    {
+      "id": "seedream_5_0_flash",
+      "kind": "image",
+      "mode": "reference_or_cost",
+      "reason": "Compatible verified reference rate; otherwise provider floor times3 rounded up to5 stars."
+    },
+    {
+      "id": "seedream_5_0_lite",
+      "kind": "image",
+      "mode": "reference_or_cost",
+      "reason": "Compatible verified reference rate; otherwise provider floor times3 rounded up to5 stars."
+    },
+    {
+      "id": "seedream_5_0_pro",
+      "kind": "image",
+      "mode": "reference_or_cost",
+      "reason": "Compatible verified reference rate; otherwise provider floor times3 rounded up to5 stars."
+    },
+    {
+      "id": "skyreels_v4_fast",
+      "kind": "video",
+      "mode": "reference_or_cost",
+      "reason": "Compatible verified reference rate; otherwise provider floor times3 rounded up to5 stars."
+    },
+    {
+      "id": "skyreels_v4_std",
+      "kind": "video",
+      "mode": "reference_or_cost",
+      "reason": "Compatible verified reference rate; otherwise provider floor times3 rounded up to5 stars."
+    },
+    {
+      "id": "suno_v6",
+      "kind": "audio",
+      "mode": "reference_or_cost",
+      "reason": "Compatible verified reference rate; otherwise provider floor times3 rounded up to5 stars."
+    },
+    {
+      "id": "suno_v6_mini",
+      "kind": "audio",
+      "mode": "reference_or_cost",
+      "reason": "Compatible verified reference rate; otherwise provider floor times3 rounded up to5 stars."
+    },
+    {
+      "id": "suno_v6_wild",
+      "kind": "audio",
+      "mode": "reference_or_cost",
+      "reason": "Compatible verified reference rate; otherwise provider floor times3 rounded up to5 stars."
+    },
+    {
+      "id": "video_gemini_omni_1_1_flash",
+      "kind": "video",
+      "mode": "reference_or_cost",
+      "reason": "Compatible verified reference rate; otherwise provider floor times3 rounded up to5 stars."
+    },
+    {
+      "id": "video_gemini_omni_1_1_flash_ext",
+      "kind": "video",
+      "mode": "reference_or_cost",
+      "reason": "Compatible verified reference rate; otherwise provider floor times3 rounded up to5 stars."
+    },
+    {
+      "id": "video_hailuo_2_3_fast",
+      "kind": "video",
+      "mode": "unavailable",
+      "reason": "Existing explicitly disabled route: duration basis of provider floor is unverified; do not invent duration pricing or enable admission."
+    },
+    {
+      "id": "video_hailuo_2_3_standard",
+      "kind": "video",
+      "mode": "unavailable",
+      "reason": "Existing explicitly disabled route: duration basis of provider floor is unverified; do not invent duration pricing or enable admission."
+    },
+    {
+      "id": "video_kling_2_6_motion_control",
+      "kind": "video",
+      "mode": "reference_or_cost",
+      "reason": "Compatible verified reference rate; otherwise provider floor times3 rounded up to5 stars."
+    },
+    {
+      "id": "video_kling_3_0_turbo",
+      "kind": "video",
+      "mode": "reference_or_cost",
+      "reason": "Compatible verified reference rate; otherwise provider floor times3 rounded up to5 stars."
+    },
+    {
+      "id": "video_kling_o3_standard",
+      "kind": "video",
+      "mode": "reference_or_cost",
+      "reason": "Compatible verified reference rate; otherwise provider floor times3 rounded up to5 stars."
+    },
+    {
+      "id": "video_kling_v3",
+      "kind": "video",
+      "mode": "reference_or_cost",
+      "reason": "Compatible verified reference rate; otherwise provider floor times3 rounded up to5 stars."
+    },
+    {
+      "id": "video_minimax_h3",
+      "kind": "video",
+      "mode": "reference_or_cost",
+      "reason": "Compatible verified reference rate; otherwise provider floor times3 rounded up to5 stars."
+    },
+    {
+      "id": "video_runway_gen4_5",
+      "kind": "video",
+      "mode": "reference_or_cost",
+      "reason": "Compatible verified reference rate; otherwise provider floor times3 rounded up to5 stars."
+    },
+    {
+      "id": "video_runway_gen4_turbo",
+      "kind": "video",
+      "mode": "reference_or_cost",
+      "reason": "Compatible verified reference rate; otherwise provider floor times3 rounded up to5 stars."
+    },
+    {
+      "id": "video_seedance_2_0_fast",
+      "kind": "video",
+      "mode": "reference_or_cost",
+      "reason": "Compatible verified reference rate; otherwise provider floor times3 rounded up to5 stars."
+    },
+    {
+      "id": "video_seedance_2_5",
+      "kind": "video",
+      "mode": "reference_or_cost",
+      "reason": "Compatible verified reference rate; otherwise provider floor times3 rounded up to5 stars."
+    },
+    {
+      "id": "video_veo_3_1_fast",
+      "kind": "video",
+      "mode": "reference_or_cost",
+      "reason": "Compatible verified reference rate; otherwise provider floor times3 rounded up to5 stars."
+    },
+    {
+      "id": "video_veo_3_1_lite",
+      "kind": "video",
+      "mode": "reference_or_cost",
+      "reason": "Compatible verified reference rate; otherwise provider floor times3 rounded up to5 stars."
+    },
+    {
+      "id": "video_veo_3_1_quality",
+      "kind": "video",
+      "mode": "reference_or_cost",
+      "reason": "Compatible verified reference rate; otherwise provider floor times3 rounded up to5 stars."
+    },
+    {
+      "id": "vidu_q3",
+      "kind": "video",
+      "mode": "reference_or_cost",
+      "reason": "Compatible verified reference rate; otherwise provider floor times3 rounded up to5 stars."
+    },
+    {
+      "id": "vidu_q3_mix",
+      "kind": "video",
+      "mode": "reference_or_cost",
+      "reason": "Compatible verified reference rate; otherwise provider floor times3 rounded up to5 stars."
+    },
+    {
+      "id": "vidu_q3_pro",
+      "kind": "video",
+      "mode": "reference_or_cost",
+      "reason": "Compatible verified reference rate; otherwise provider floor times3 rounded up to5 stars."
+    },
+    {
+      "id": "vidu_q3_turbo",
+      "kind": "video",
+      "mode": "reference_or_cost",
+      "reason": "Compatible verified reference rate; otherwise provider floor times3 rounded up to5 stars."
+    },
+    {
+      "id": "wan_2_7",
+      "kind": "video",
+      "mode": "reference_or_cost",
+      "reason": "Compatible verified reference rate; otherwise provider floor times3 rounded up to5 stars."
+    },
+    {
+      "id": "wan_3_0",
+      "kind": "video",
+      "mode": "reference_or_cost",
+      "reason": "Compatible verified reference rate; otherwise provider floor times3 rounded up to5 stars."
+    },
+    {
+      "id": "wan_3_0_prime",
+      "kind": "video",
+      "mode": "reference_or_cost",
+      "reason": "Compatible verified reference rate; otherwise provider floor times3 rounded up to5 stars."
+    },
+    {
+      "id": "whisper_1",
+      "kind": "audio",
+      "mode": "operator_minute",
+      "reason": "Owner-approved25 stars per started minute, up to8 minutes; does not establish provider cost."
+    },
+    {
+      "id": "z_image_turbo",
+      "kind": "image",
+      "mode": "reference_or_cost",
+      "reason": "Compatible verified reference rate; otherwise provider floor times3 rounded up to5 stars."
+    }
+  ]
+}

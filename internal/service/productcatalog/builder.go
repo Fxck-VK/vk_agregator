@@ -35,7 +35,7 @@ func FromConfig(cfg config.Config, pricingCatalog *pricingcatalog.Catalog) (Runt
 	if err := validateRegistryConfigMappings(providermodels.RuntimeRegistry()); err != nil {
 		return RuntimeCatalog{}, err
 	}
-	videoCatalog, err := VideoRouteCatalogFromConfig(cfg)
+	videoCatalog, err := VideoRouteCatalogFromConfig(cfg, pricingCatalog)
 	var publicVideoRoutes []videorouter.PublicRoute
 	if err == nil && videoCatalog != nil {
 		publicVideoRoutes = videoCatalog.PublicRoutes()
@@ -56,7 +56,7 @@ func FromConfig(cfg config.Config, pricingCatalog *pricingcatalog.Catalog) (Runt
 	return result, err
 }
 
-func VideoRouteCatalogFromConfig(cfg config.Config) (*videorouter.Catalog, error) {
+func VideoRouteCatalogFromConfig(cfg config.Config, prices ...*pricingcatalog.Catalog) (*videorouter.Catalog, error) {
 	registry := providermodels.RuntimeRegistry()
 	if err := registry.Validate(); err != nil {
 		return nil, err
@@ -73,7 +73,14 @@ func VideoRouteCatalogFromConfig(cfg config.Config) (*videorouter.Catalog, error
 		}
 		providers[route.Provider] = videoProviderConfigFromRegistry(cfg, route)
 	}
+	var pricing interface {
+		Snapshot(pricingcatalog.ProductKey) (pricingcatalog.PricingSnapshot, error)
+	}
+	if len(prices) > 0 && prices[0] != nil {
+		pricing = prices[0]
+	}
 	return videorouter.NewCatalog(videorouter.Config{
+		Pricing:       pricing,
 		RouterEnabled: featureFlagEnabled(cfg, providermodels.FeatureVideoRouter),
 		Providers:     providers,
 		EnabledRoutes: enabledRoutes,

@@ -1,10 +1,12 @@
-"use client";
-
-import { notFound } from "@/i18n/navigation";
-
-export default function MissingPage() {
-  // Client components are also rendered on the server for an initial request.
-  // Keep the HTTP 404 while avoiding React's broken RSC error timing in dev:
-  // https://github.com/facebook/react/issues/37561
-  notFound();
+import {resolveContentPage} from '@/content/templates/catalog';
+import {contentMetadata,renderContentRecord} from '@/content/templates/render';
+import {MissingContentPage} from '@/content/templates/MissingContentPage';
+type Props={params:Promise<{missing:string[]}>;searchParams:Promise<{page?:string|string[]}>};
+export async function generateMetadata({params}:Props){
+  const path='/'+(await params).missing.join('/');
+  return resolveContentPage(path,{preview:process.env.NODE_ENV==='development'})?contentMetadata(path):{robots:{index:false,follow:false}};
+}
+export default async function MissingPage({params,searchParams}:Props){
+  const page=resolveContentPage('/'+(await params).missing.join('/'),{preview:process.env.NODE_ENV==='development'});
+  return page?renderContentRecord(page,(await searchParams).page):<MissingContentPage/>;
 }

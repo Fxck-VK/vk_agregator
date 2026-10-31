@@ -11,7 +11,7 @@ import {usePublicCopy} from "@/i18n/public/use-public-copy";
 const categories: readonly OverviewCategory[] = reference.categories;
 
 export function OverviewDirectory({ onPreview }: { onPreview: (item: OverviewAction) => void }) {
-  const {categories,copy} = usePublicCopy(publicCopySourcesForLocale);
+  const {categories,copy} = usePublicCopy(publicCopySourcesForLocale,{"copy":"aiToolsEn","reference":"aiToolsReferenceEn","categories":"aiToolsReferenceEn.categories"});
 
   const [selected, setSelected] = useState(categories[0].id);
   return <section id="tools" className={styles.directory}>

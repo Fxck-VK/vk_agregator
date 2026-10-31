@@ -9,7 +9,7 @@ import {usePublicCopy} from "@/i18n/public/use-public-copy";
 
 
 export function WorkflowWalkthrough({workflow,initialStep=0,onClose}:{workflow:WorkflowRecord;initialStep?:number;onClose:()=>void}){
-  const {copy} = usePublicCopy(publicCopySourcesForLocale);
+  const {copy} = usePublicCopy(publicCopySourcesForLocale,{"copy":"workflowEn"});
 
   const [index,setIndex]=useState(Math.max(0,Math.min(initialStep,workflow.steps.length-1))),id=useId(),tabs=useRef<(HTMLButtonElement|null)[]>([]),step=workflow.steps[index];
   const select=(next:number,focus=false)=>{const bounded=Math.max(0,Math.min(next,workflow.steps.length-1));setIndex(bounded);if(focus)tabs.current[bounded]?.focus();};

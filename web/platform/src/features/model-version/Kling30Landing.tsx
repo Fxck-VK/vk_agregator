@@ -26,7 +26,7 @@ const navigation=(homeEn.navigation as readonly LandingNavigationItem[]).map(ite
 export function Kling30Landing(){
   const publicCopyLocale=useLocale();
 
-  const {homeEn,navigation,reference,copy,klingEn} = usePublicCopy(publicCopySourcesForLocale);
+  const {homeEn,navigation,reference,copy,klingEn} = usePublicCopy(publicCopySourcesForLocale,{"klingEn":"klingEn","copy":"kling30En","reference":"kling30ReferenceEn"});
 
   const [search,setSearch]=useState(false),[gallery,setGallery]=useState<ModelExample|null>(null),[paused,setPaused]=useState(false);
   const openSearch=useCallback(()=>{if(!gallery)setSearch(true);},[gallery]);

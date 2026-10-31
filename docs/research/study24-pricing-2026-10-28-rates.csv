@@ -1,0 +1,89 @@
+﻿id,name,variant,conditions,unit,unrounded_rate,display_unit_ceil,5_seconds,10_seconds,required_params
+open_ai_image_bot,Генератор изображений,0,{},per_result,55,55,,,"media, prompt"
+open_ai_image_bot,Генератор изображений,1,{},per_result,55,55,,,prompt
+nano_banana_2,Nano Banana 2.1,0,{},per_result,55,55,,,"media, prompt"
+nano_banana_2,Nano Banana 2.1,1,{},per_result,55,55,,,prompt
+seedance-25-max,Seedance 2.5 Max,0,"{""mode"": ""edit"", ""resolution"": ""1080p"", ""video_urls"": ""__missing__""}",per_second,552.765373611200,553,2764,5528,"prompt, duration"
+seedance-25-max,Seedance 2.5 Max,0,"{""mode"": ""edit"", ""resolution"": ""1080p"", ""video_urls"": ""__present__""}",per_second,333.71490800,334,1669,3338,"prompt, duration"
+seedance-25-max,Seedance 2.5 Max,0,"{""mode"": ""edit"", ""resolution"": ""480p"", ""video_urls"": ""__missing__""}",per_second,137.18304800,138,686,1372,"prompt, duration"
+seedance-25-max,Seedance 2.5 Max,0,"{""mode"": ""edit"", ""resolution"": ""480p"", ""video_urls"": ""__present__""}",per_second,82.8200,83,415,829,"prompt, duration"
+seedance-25-max,Seedance 2.5 Max,0,"{""mode"": ""edit"", ""resolution"": ""720p"", ""video_urls"": ""__missing__""}",per_second,262.70553692000,263,1314,2628,"prompt, duration"
+seedance-25-max,Seedance 2.5 Max,0,"{""mode"": ""edit"", ""resolution"": ""720p"", ""video_urls"": ""__present__""}",per_second,158.6003000,159,794,1587,"prompt, duration"
+seedance-25-max,Seedance 2.5 Max,0,"{""mode"": ""reference"", ""resolution"": ""1080p"", ""video_urls"": ""__missing__""}",per_second,333.71490800,334,1669,3338,"prompt, duration"
+seedance-25-max,Seedance 2.5 Max,0,"{""mode"": ""reference"", ""resolution"": ""1080p"", ""video_urls"": ""__present__""}",per_second,201.4700,202,1008,2015,"prompt, duration"
+seedance-25-max,Seedance 2.5 Max,0,"{""mode"": ""reference"", ""resolution"": ""480p"", ""video_urls"": ""__missing__""}",per_second,82.8200,83,415,829,"prompt, duration"
+seedance-25-max,Seedance 2.5 Max,0,"{""mode"": ""reference"", ""resolution"": ""480p"", ""video_urls"": ""__present__""}",per_second,50,50,250,500,"prompt, duration"
+seedance-25-max,Seedance 2.5 Max,0,"{""mode"": ""reference"", ""resolution"": ""720p"", ""video_urls"": ""__missing__""}",per_second,158.6003000,159,794,1587,"prompt, duration"
+seedance-25-max,Seedance 2.5 Max,0,"{""mode"": ""reference"", ""resolution"": ""720p"", ""video_urls"": ""__present__""}",per_second,95.750,96,479,958,"prompt, duration"
+nano_banana_pro,Nano Banana Pro,0,{},per_result,55,55,,,"media, prompt"
+nano_banana_pro,Nano Banana Pro,1,{},per_result,55,55,,,prompt
+seedream5,Seedream 5.0 Pro,0,{},per_result,35,35,,,"media, prompt"
+seedream5,Seedream 5.0 Pro,1,{},per_result,35,35,,,prompt
+midjourney_toe_bot,Midjourney,0,{},per_result,55,55,,,"media, prompt"
+midjourney_toe_bot,Midjourney,1,{},per_result,55,55,,,prompt
+gpt_image,GPT Image 2,0,{},per_result,51,51,,,"media, prompt"
+gpt_image,GPT Image 2,1,{},per_result,51,51,,,prompt
+gpt-image-25,GPT Image 2.5,0,{},per_result,52,52,,,prompt
+mai_image_2_5,Microsoft: MAI-Image-2.5,0,{},per_result,55,55,,,prompt
+grok_image,Grok Image,0,{},per_result,20,20,,,prompt
+grok_image2,Grok Image 2.0,0,{},per_result,25,25,,,prompt
+flux_2,Flux 2 Pro,0,{},per_result,55,55,,,"media, prompt"
+flux_2,Flux 2 Pro,1,{},per_result,55,55,,,prompt
+qwen-image,Qwen Image 3,0,{},per_result,30,30,,,"media, prompt"
+qwen-image,Qwen Image 3,1,{},per_result,30,30,,,prompt
+recraft_ai,Recraft AI,0,{},per_result,5,5,,,media
+krea_2,Krea 2,0,{},per_result,35,35,,,prompt
+google_image,Nano Banana,0,{},per_result,30,30,,,"media, prompt"
+google_image,Nano Banana,1,{},per_result,30,30,,,prompt
+seedream_5,Seedream 5.0 Lite,0,{},per_result,30,30,,,"media, prompt"
+seedream_5,Seedream 5.0 Lite,1,{},per_result,30,30,,,prompt
+banana_2lite,Nano Banana 2 Lite,0,{},per_result,15,15,,,"media, prompt"
+banana_2lite,Nano Banana 2 Lite,1,{},per_result,15,15,,,prompt
+topaz,Topaz,0,{},per_result,55,55,,,"media, prompt"
+higgsfield_soul,Генерация фотографий,0,{},per_result,30,30,,,prompt
+improve_photo,Улучшение качества фото,0,{},per_result,55,55,,,"media, prompt"
+seedance25,Seedance 2.5 Lite,0,"{""resolution"": ""480P""}",per_second,50,50,250,500,"prompt, duration"
+seedance25,Seedance 2.5 Lite,0,"{""resolution"": ""720P""}",per_second,100,100,500,1000,"prompt, duration"
+seedance25,Seedance 2.5 Lite,0,"{""resolution"": ""1080P""}",per_second,200,200,1000,2000,"prompt, duration"
+seedance,Seedance 2.0,0,"{""resolution"": ""720p"", ""video_urls"": ""__present__""}",per_second,62.2216,63,312,623,"prompt, duration"
+seedance,Seedance 2.0,0,"{""resolution"": ""720p"", ""video_urls"": ""__missing__""}",per_second,104.91183976,105,525,1050,"prompt, duration"
+seedance,Seedance 2.0,0,"{""resolution"": ""480p"", ""video_urls"": ""__present__""}",per_second,28,28,140,280,"prompt, duration"
+seedance,Seedance 2.0,0,"{""resolution"": ""480p"", ""video_urls"": ""__missing__""}",per_second,47.2108,48,237,473,"prompt, duration"
+kling,Kling 4.0,0,"{""resolution"": ""1080p"", ""video_urls"": ""__missing__""}",per_second,137.90700,138,690,1380,"mode, prompt, duration"
+kling,Kling 4.0,0,"{""resolution"": ""1080p"", ""video_urls"": ""__present__""}",per_second,82.5,83,413,825,"mode, prompt, duration"
+kling,Kling 4.0,0,"{""resolution"": ""720p"", ""video_urls"": ""__missing__""}",per_second,91.9380,92,460,920,"mode, prompt, duration"
+kling,Kling 4.0,0,"{""resolution"": ""720p"", ""video_urls"": ""__present__""}",per_second,55,55,275,550,"mode, prompt, duration"
+videogen,Генератор видео,0,{},per_second,25,25,125,250,prompt
+gemini_omni1,Gemini Omni 1.1,0,"{""resolution"": ""4k""}",per_result,905.250,906,,,"prompt, video_url"
+gemini_omni1,Gemini Omni 1.1,0,"{""resolution"": ""360p""}",per_result,383.4,384,,,"prompt, video_url"
+gemini_omni1,Gemini Omni 1.1,0,"{""resolution"": ""720p""}",per_result,426,426,,,"prompt, video_url"
+gemini_omni1,Gemini Omni 1.1,0,"{""resolution"": ""1080p""}",per_result,572.970,573,,,"prompt, video_url"
+gemini_omni1,Gemini Omni 1.1,1,"{""resolution"": ""360p""}",per_second,36.0,36,180,360,"prompt, duration"
+gemini_omni1,Gemini Omni 1.1,1,"{""resolution"": ""720p""}",per_second,40,40,200,400,"prompt, duration"
+gemini_omni1,Gemini Omni 1.1,1,"{""resolution"": ""1080p""}",per_second,53.800,54,269,538,"prompt, duration"
+gemini_omni1,Gemini Omni 1.1,1,"{""resolution"": ""4k""}",per_second,85.000,85,425,850,"prompt, duration"
+wan_3,Wan 3.0,0,"{""resolution"": ""480P""}",per_second,50,50,250,500,"prompt, duration"
+wan_3,Wan 3.0,0,"{""resolution"": ""720P""}",per_second,100,100,500,1000,"prompt, duration"
+wan_3,Wan 3.0,0,"{""resolution"": ""1080P""}",per_second,200,200,1000,2000,"prompt, duration"
+google_veo3,Google Veo 3.1,0,"{""resolution"": ""4k""}",per_result,790.9968,791,,,prompt
+google_veo3,Google Veo 3.1,0,"{""resolution"": ""720p""}",per_result,264,264,,,prompt
+google_veo3,Google Veo 3.1,0,"{""resolution"": ""1080p""}",per_result,285.9912,286,,,prompt
+google_veo3,Google Veo 3.1,1,"{""resolution"": ""4k""}",per_result,1297.3546,1298,,,"prompt, media"
+google_veo3,Google Veo 3.1,1,"{""resolution"": ""720p""}",per_result,433,433,,,"prompt, media"
+google_veo3,Google Veo 3.1,1,"{""resolution"": ""1080p""}",per_result,469.0689,470,,,"prompt, media"
+seedance_mini,Seedance 2.0 Mini,0,{},per_second,25,25,125,250,"prompt, duration"
+seedance_20_pro,Seedance 2.0 Pro,0,{},per_second,190,190,950,1900,"prompt, duration"
+minimax-h3,Minimax H3,0,{},per_second,75,75,375,750,"prompt, duration"
+kling_3,Kling 3.0,0,{},per_result,500,500,,,"prompt, with_sound, duration, aspect_ratio"
+kling_3_turbo,Kling 3.0 Turbo,0,{},per_second,50,50,250,500,"prompt, duration, aspect_ratio"
+kling_2_6,Kling 2.6,0,{},per_result,300,300,,,"prompt, duration"
+kling_2_1_master,Kling 2.5 Turbo,0,{},per_result,200,200,,,"prompt, duration"
+kling_mc,Kling Motion Control,0,{},per_result,400,400,,,"media, video_url"
+kmc_pro,Kling Motion Control Pro,0,{},per_result,550,550,,,"media, video_url"
+sound_generation,Генерация озвучки,0,{},per_result,100,100,,,"prompt, voice"
+grok_imagine_1_5,Grok Imagine 1.5,0,{},per_second,25,25,125,250,prompt
+eleven_labs,Eleven Labs (озвучка текста),0,{},per_result,120,120,,,"prompt, voice"
+happy_horse,Happy Horse,0,{},per_second,80,80,400,800,prompt
+video_edit,Редактор видео,0,{},per_result,2300,2300,,,"prompt, video_url"
+gemini_omni_flash,Gemini Omni Flash,0,{},per_second,45,45,225,450,"prompt, video_url"
+gemini_omni_flash,Gemini Omni Flash,1,{},per_second,45,45,225,450,"prompt, duration"

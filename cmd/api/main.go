@@ -427,6 +427,8 @@ func main() {
 		}, redisstore.NewAccountOAuthBrowserStore(rdb), oauthRegistry, nil),
 		InputArtifacts: webInputs, InputObjects: webInputObjects,
 		Payments:               core.Payment,
+		Subscriptions:          core.Payment,
+		SubscriptionBalances:   core.BillingRepo.(websession.WebSubscriptionBalances),
 		ReceiptContacts:        core.Account,
 		PaymentCreateLimiter:   ratelimit.NewRedisFixedWindowLimiter(rdb, "web_payment_create", 10, time.Minute),
 		Authenticator:          core.AccountAuth,

@@ -1,4 +1,5 @@
 import {describe,expect,it} from "vitest";
+import {courseEn} from "@/i18n/public/course-en";
 import {courseLessons,courseReadingMinutes,findCourseLesson,getCourseLessons,getCourseReadingMinutes,lessonReadingMinutes,searchCourseModules} from "./course-model";
 
 describe("localized course catalogue",()=>{
@@ -23,5 +24,21 @@ describe("localized course catalogue",()=>{
     expect(searchCourseModules("visual brief","en").flatMap(module=>module.lessons.map(lesson=>lesson.slug))).toContain("write-a-visual-brief");
     expect(searchCourseModules("визуальный","en")).toEqual([]);
     expect(searchCourseModules("unknown-lesson","ru")).toEqual([]);
+  });
+  it("keeps projections stable per course without reusing another course's lessons",()=>{
+    const source={...courseEn,modules:courseEn.modules.map((module,index)=>index===0?{
+      ...module,title:"A separate course module",
+      lessons:module.lessons.map((lesson,lessonIndex)=>lessonIndex===0?{...lesson,title:"A separate course lesson"}:lesson),
+    }:module)};
+    const english=getCourseLessons("en",source);
+    const russian=getCourseLessons("ru",source);
+    expect(getCourseLessons("en",source)).toBe(english);
+    expect(getCourseLessons("ru",source)).toBe(russian);
+    expect(english).not.toBe(courseLessons);
+    expect(russian).not.toBe(getCourseLessons("ru"));
+    expect(english[0].title).toBe("A separate course lesson");
+    expect(russian[0].moduleTitle).toBe("A separate course module");
+    expect(courseLessons[0].title).toBe("Find your way around");
+    expect(source.modules[0].lessons[0].title).toBe("A separate course lesson");
   });
 });

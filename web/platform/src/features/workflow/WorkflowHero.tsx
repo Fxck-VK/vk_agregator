@@ -9,7 +9,7 @@ import {translatePublicText} from "@/i18n/public/public-copy";
 
 
 export function WorkflowHero({workflow,onExplore}:{workflow:WorkflowRecord;onExplore:(step?:number)=>void}){
-  const {copy,media} = usePublicCopy(publicCopySourcesForLocale);
+  const {copy,media} = usePublicCopy(publicCopySourcesForLocale,{"copy":"workflowEn","media":"workflowReferenceEn"});
   const locale=useLocale();
 
   return <section className={styles.hero} aria-labelledby="workflow-title">

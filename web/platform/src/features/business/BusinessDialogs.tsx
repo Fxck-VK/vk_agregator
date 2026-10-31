@@ -13,7 +13,7 @@ export type BusinessDialog={kind:'search'}|{kind:'guide'}|{kind:'quote';seats:nu
 export function BusinessInformation({dialog,onClose}:{dialog:Exclude<BusinessDialog,{kind:'search'}>;onClose:()=>void}){
   const publicCopyLocale=useLocale();
 
-  const {t} = usePublicCopy(publicCopySourcesForLocale);
+  const {t} = usePublicCopy(publicCopySourcesForLocale,{"t":"businessEn"});
 
  const[state,setState]=useState<'idle'|'copied'|'error'>('idle'),quote=dialog.kind==='quote'?translatePublicMessage('Business enquiry for Epifera\nTeam size: {seats} people\nBilling preference: {period}\nPrice to be agreed\nPlease discuss tools, access, shared capacity, review responsibilities and support requirements.',publicCopyLocale,{seats:dialog.seats,period:translatePublicText(dialog.annual?'Annual':'Monthly',publicCopyLocale)}):'';
  const copy=async()=>{try{await navigator.clipboard.writeText(quote);setState('copied');}catch{setState('error');}};

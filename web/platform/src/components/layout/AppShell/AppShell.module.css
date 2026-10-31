@@ -4,6 +4,14 @@
   overflow: hidden;
 }
 
+/* Large-monitor proportions are opt-in at QHD widths only.
+   Phones, tablets and ordinary desktops keep the original root font size. */
+@media (min-width: 2560px) {
+  :global(html:has(body > [data-app-shell])) {
+    font-size: clamp(100%, 1.25vw, 300%);
+  }
+}
+
 .shell {
   --sidebar-collapsed-rail-width: 5.5rem;
   --sidebar-motion-duration: 400ms;

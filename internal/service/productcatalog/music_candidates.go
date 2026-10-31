@@ -15,6 +15,7 @@ type WorkspaceMusic struct {
 	musicgeneration.Operation
 	EstimateCredits    int64  `json:"estimate_credits"`
 	MaxEstimateCredits int64  `json:"max_estimate_credits,omitempty"`
+	PricingUnit        string `json:"pricing_unit,omitempty"`
 	UnavailableReason  string `json:"unavailable_reason,omitempty"`
 }
 
@@ -79,6 +80,9 @@ func pendingMusicOperation(c providermodels.MediaCandidate, op musicgeneration.O
 		return WorkspaceOperation{}
 	}
 	controls := WorkspaceMusic{Operation: op, EstimateCredits: s.InternalCredits, UnavailableReason: "Операция ожидает проверки перед запуском."}
+	if s.MusicPaidTrackCount == 1 {
+		controls.PricingUnit = "track_request"
+	}
 	if op.SupportsMax {
 		maxQuote, err := pricingcatalog.MusicCandidateQuote(c.PublicID, string(op.ID), true)
 		if err == nil {
@@ -175,6 +179,8 @@ func pendingSpeechOperation(c providermodels.MediaCandidate) WorkspaceOperation 
 		audio.Voices = []string{"alloy", "echo", "fable", "onyx", "nova", "shimmer"}
 		audio.Formats = []string{"wav", "opus", "aac", "flac", "pcm"}
 	case "whisper_1":
+		audio.CreditsPerStartedMinute = pricingcatalog.WhisperDEVCreditsPerStartedMinute
+		audio.MaxDurationSec = domain.WhisperMaxInputDurationSec
 		inputs.Audio.Support = modelcontract.Supported
 		inputs.Audio.MaxCount = 1
 		inputs.Audio.MaxBytes = domain.WhisperMaxInputBytes

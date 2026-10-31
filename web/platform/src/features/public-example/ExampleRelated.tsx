@@ -10,12 +10,12 @@ import {publicTagLabel} from "@/features/collection/tag-labels";
 
 
 export function RelatedRow({label,items,kind,onView}:{label:string;items:readonly PublicExampleImage[];kind:"series"|"similar"|"designs"|"stills";onView:(items:readonly PublicExampleImage[],index:number)=>void}){
-  const {t} = usePublicCopy(publicCopySourcesForLocale);
+  const {t} = usePublicCopy(publicCopySourcesForLocale,{"t":"publicExampleEn"});
 
   return <section className={styles.relatedRow}><div className={styles.sectionHeading}><h2>{label}</h2>{kind==="series"?<button type="button" onClick={()=>onView(items,0)}>{t.seeAll}</button>:null}</div><LandingCarousel label={label} previous={t.previous} next={t.next} bounded controls="overlay" className={styles.carouselItems}>{items.map((item,index)=><figure key={item.id} data-example-related={kind} style={{"--thumbnail-ratio":item.width/item.height} as CSSProperties}><button type="button" aria-label={`${t.viewRelated} ${item.alt}`} onClick={()=>onView(items,index)}><MediaImage src={item.src} alt={item.alt} width={item.width} height={item.height} fit="cover" loading="lazy" passive showLoading={false}/></button></figure>)}</LandingCarousel></section>;
 }
 export function ExampleRelated({example,onView,sectionRef}:{example:PublicExampleRecord;onView:(items:readonly PublicExampleImage[],index:number)=>void;sectionRef:RefObject<HTMLElement|null>}){
-  const {t} = usePublicCopy(publicCopySourcesForLocale);
+  const {t} = usePublicCopy(publicCopySourcesForLocale,{"t":"publicExampleEn"});
   const locale=useLocale();
 
   const [tag,setTag]=useState<string|null>(null),similar=example.similar.filter(item=>tag===null||item.tags.includes(tag));

@@ -16,7 +16,7 @@ import {useLocale} from "@/i18n/LocaleProvider";
 export function OverviewPlugins({ onPreview }: { onPreview: (item: OverviewAction) => void }) {
   const publicCopyLocale=useLocale();
 
-  const {copy} = usePublicCopy(publicCopySourcesForLocale);
+  const {copy} = usePublicCopy(publicCopySourcesForLocale,{"copy":"aiToolsEn","reference":"aiToolsReferenceEn"});
 
   return <section id="plugins" className={styles.carouselSection}>
     <OverviewHeading title={copy.plugins.title} description={copy.plugins.description} />
@@ -31,7 +31,7 @@ export function OverviewPlugins({ onPreview }: { onPreview: (item: OverviewActio
 export function OverviewTeams() {
   const publicCopyLocale=useLocale();
 
-  const {reference,copy} = usePublicCopy(publicCopySourcesForLocale);
+  const {reference,copy} = usePublicCopy(publicCopySourcesForLocale,{"copy":"aiToolsEn","reference":"aiToolsReferenceEn"});
 
   const [audience,setAudience] = useState(0);
   const cards = reference.outcomes.map((image,index) => ({ ...image, ...copy.teams.cards[index] }));
@@ -46,7 +46,7 @@ export function OverviewTeams() {
 }
 
 export function OverviewDocumentation({ onPreview }: { onPreview: (item: OverviewAction) => void }) {
-  const {copy} = usePublicCopy(publicCopySourcesForLocale);
+  const {copy} = usePublicCopy(publicCopySourcesForLocale,{"copy":"aiToolsEn","reference":"aiToolsReferenceEn"});
 
   return <section id="docs" className={styles.docsSection}>
     <OverviewHeading title={copy.docs.title} description={copy.docs.description} />
@@ -56,7 +56,7 @@ export function OverviewDocumentation({ onPreview }: { onPreview: (item: Overvie
 }
 
 export function OverviewShowcase({ onPreview }: { onPreview: (item: OverviewAction) => void }) {
-  const {copy,reference} = usePublicCopy(publicCopySourcesForLocale);
+  const {copy,reference} = usePublicCopy(publicCopySourcesForLocale,{"copy":"aiToolsEn","reference":"aiToolsReferenceEn"});
 
   return <section id="explore" className={styles.carouselSection}>
     <OverviewHeading title={copy.showcase.title} description={copy.showcase.description} />
@@ -72,7 +72,7 @@ export function OverviewShowcase({ onPreview }: { onPreview: (item: OverviewActi
 }
 
 export function OverviewClosing() {
-  const {copy} = usePublicCopy(publicCopySourcesForLocale);
+  const {copy} = usePublicCopy(publicCopySourcesForLocale,{"copy":"aiToolsEn","reference":"aiToolsReferenceEn"});
 
   return <section id="start" className={styles.closing}><h2>{copy.closing.title}</h2><p>{copy.closing.description}</p><Link href="/login?mode=register">{copy.closing.action}<span aria-hidden="true">→</span></Link></section>;
 }

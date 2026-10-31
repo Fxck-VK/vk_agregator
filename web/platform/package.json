@@ -7,9 +7,13 @@
     "node": ">=22.12.0"
   },
   "scripts": {
+    "content:check": "node scripts/content-pages.mjs check",
+    "content:list": "node scripts/content-pages.mjs list",
+    "content:new": "node scripts/content-pages.mjs new",
+    "content:examples": "node scripts/content-pages.mjs examples",
     "public-copy:generate": "node scripts/public-copy-catalog.mjs --write",
-    "public-copy:check": "node scripts/public-copy-catalog.mjs && node scripts/public-copy-sources.mjs",
-    "public-pages:generate": "node scripts/public-page-manifest.mjs",
+    "public-copy:check": "node scripts/site-language-policy.mjs && node scripts/public-copy-catalog.mjs && node scripts/public-copy-sources.mjs",
+    "public-pages:generate": "npm run content:check && node scripts/public-page-manifest.mjs",
     "predev": "npm run public-pages:generate",
     "prebuild": "npm run public-copy:check && npm run public-pages:generate",
     "pretypecheck": "npm run public-copy:check && npm run public-pages:generate",
@@ -23,8 +27,8 @@
     "lint": "eslint . --max-warnings=0",
     "typecheck": "tsc --noEmit",
     "test": "vitest run && npm run test:assets && npm run test:next-lint-contract && npm run test:public-pages && npm run test:public-copy",
-    "test:public-copy": "node --test scripts/public-copy-catalog.test.mjs",
-    "test:public-pages": "node --test scripts/public-page-manifest.test.mjs",
+    "test:public-copy": "node --test scripts/public-copy-catalog.test.mjs scripts/site-language-policy.test.mjs",
+    "test:public-pages": "node --test scripts/public-page-manifest.test.mjs scripts/content-assets.test.mjs",
     "test:i18n": "vitest run src/i18n",
     "test:session-browser": "node --test scripts/test-session-recovery.mjs",
     "test:sign-in-browser": "node --test scripts/test-sign-in-browser.mjs",
@@ -46,8 +50,9 @@
     "vite": "8.2.4",
     "js-yaml": "4.3.2",
     "nanoid": "3.3.18",
+    "minimatch": "11.0.2",
     "@next/eslint-plugin-next": {
-      "fast-glob": "npm:glob@12.0.0"
+      "fast-glob": "npm:glob@14.0.3"
     },
     "next": {
       "postcss": "8.5.26",

@@ -105,6 +105,12 @@ func main() {
 		}
 	}
 	processor := paymentservice.NewWebhookProcessor(payments, provider, billing, txRunner, processorOptions...)
+	subscriptionPayments := paymentservice.New(payments, provider, paymentservice.Config{
+		SubscriptionStore: billingRepo, SubscriptionBilling: billingRepo, SubscriptionTx: txRunner,
+		// Existing rollout permits test-shop subscriptions only. Merely adding
+		// this worker never enables live merchant charges.
+		RecurringEnabled: (cfg.Env == "development" || cfg.Env == "staging") && provider.Code() == domain.PaymentProviderYooKassa && strings.HasPrefix(strings.TrimSpace(cfg.YooKassaSecretKey), "test_"),
+	})
 
 	mux := http.NewServeMux()
 	limiter := ratelimit.New(cfg.WebhookRateLimitRPS, cfg.WebhookRateLimitBurst)
@@ -130,6 +136,7 @@ func main() {
 	}
 
 	go runProcessorLoop(ctx, processor, cfg, logger)
+	go runSubscriptionMaintenanceLoop(ctx, subscriptionPayments, billingRepo, logger)
 
 	go func() {
 		logger.Info("provider webhook server listening",

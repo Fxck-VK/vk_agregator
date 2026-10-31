@@ -11,7 +11,7 @@ import { assetPaths } from "@/assets/asset-paths";
 import { InputControlChip } from "@/components/ui/InputControlChip/InputControlChip";
 import { PopoverOption } from "@/components/ui/PopoverOption/PopoverOption";
 import { PopoverPanel } from "@/components/ui/PopoverPanel/PopoverPanel";
-import { imageQualityLabel } from "@/features/image-generation/image-quality-labels";
+import { imageResolutionLabel, imageResolutionOptions } from "@/features/image-generation/image-resolution-options";
 import styles from "./ImageQualitySelector.module.css";
 
 type ImageQualitySelectorProps = {
@@ -36,21 +36,22 @@ export function ImageQualitySelector({
   const [isOpen, setIsOpen] = useState(false);
   const triggerRef = useRef<HTMLButtonElement>(null);
 
-  const isDisabled = disabled || options.length === 0;
+  const resolutionOptions = imageResolutionOptions(options, value);
+  const isDisabled = disabled || resolutionOptions.length === 0;
 
   return (
     <div className={styles.root}>
       <InputControlChip
         aria-expanded={isOpen}
         aria-haspopup="dialog"
-        aria-label={`${label}: ${imageQualityLabel(value, msg)}`}
+        aria-label={`${label}: ${imageResolutionLabel(value, msg)}`}
         className={styles.trigger}
         disabled={isDisabled}
         onClick={() => setIsOpen((current) => !current)}
         ref={triggerRef}
       >
         <TuneIcon />
-        <span>{imageQualityLabel(value, msg)}</span>
+        <span>{imageResolutionLabel(value, msg)}</span>
         <ChevronIcon />
       </InputControlChip>
 
@@ -61,15 +62,15 @@ export function ImageQualitySelector({
         label={label}
         onClose={() => setIsOpen(false)}
         portalLayer={portalLayer}
-        width={Math.max(176, options.length * 72 + 24)}
+        width={Math.min(480, Math.max(176, resolutionOptions.length * 72 + 24))}
       >
         <p className={styles.title}>{label}</p>
-        <div className={styles.options} role="radiogroup">
-          {options.map((quality) => {
+        <div className={`${styles.options} ${resolutionOptions.length > 3 ? styles.wrappedOptions : ""}`} role="radiogroup">
+          {resolutionOptions.map((quality) => {
             const selected = quality === value;
             return (
               <PopoverOption
-                aria-label={imageQualityLabel(quality, msg)}
+                aria-label={imageResolutionLabel(quality, msg)}
                 className={styles.option}
                 key={quality}
                 onClick={() => {
@@ -79,7 +80,7 @@ export function ImageQualitySelector({
                 }}
                 selected={selected}
               >
-                {imageQualityLabel(quality, msg)}
+                {imageResolutionLabel(quality, msg)}
               </PopoverOption>
             );
           })}

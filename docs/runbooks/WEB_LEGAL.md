@@ -3,10 +3,11 @@
 Status: active operational contract. Publication is controlled explicitly by the
 runtime flag; it does not certify external infrastructure or processor contracts.
 
-The final public edition is `2026-10-23.4`, effective 2026-10-23. It removes the
-inactive proposed tariff annex and internal audit language. The selected Russian
-storage architecture is stated as a public-launch condition, without inventing a
-completed migration. Subscriptions/recurring billing remain inactive.
+The current local reviewed edition is `2026-10-29.1`, effective 2026-10-29.
+It discloses the separately accepted subscription renewal retry policy below;
+the privacy and optional marketing document bodies and marketing version remain
+unchanged. Test operations remain distinct from real payments. This source
+revision does not enable real payments or certify a DEV/public deployment.
 
 ## Source and public pages
 
@@ -16,6 +17,43 @@ personal requisites. The catalogue is shared by the Go API and server-only Next.
 renderer. Text changes require updating `revision_hash`, document versions/date and
 reviewing the resulting documents. The source hash covers document titles,
 sections, paragraphs and tables. Both runtimes validate it before use.
+
+## Subscription renewal consent and retries
+
+The agreement and payment/refund terms disclose the canonical
+`internal/service/economycatalog/policy.json` renewal policy: version 1, at least
+24 hours between attempts, a 14-day window from the first authenticated
+insufficient-funds failure, and at most 14 failed attempts including that first
+failure. No new attempt starts at or after the deadline, and a delayed worker
+does not catch up missed attempts. The payment-details document links to these
+same terms without describing source changes as an enabled live service.
+
+Only authenticated provider verification of a canceled, unpaid attempt with the
+exact amount/currency and `insufficient_funds` can authorize another attempt.
+Webhook reason fields, immediate create responses and unknown outcomes do not
+establish this proof. Other or unknown reasons, missing proof, exhausted limits,
+user cancellation or refusal to use the payment method stop new attempts. The
+existing cancellation action and written support requests remain available;
+neither account deletion nor accepting a new legal edition is a prerequisite.
+
+New opt-ins explicitly retain retry policy version 1 with the immutable purchase
+consent. Existing consent without that version stays without retries; publishing
+new terms never adds retry permission to old opt-ins. Each attempt keeps the
+original renewal plan, price, period and star grant. No new stars or period access
+is granted before confirmed success; the paid period begins when the service
+confirms successful payment using its verified settlement time, rather than the
+provider's capture timestamp or the first failure.
+Historical purchases, consent snapshots and financial evidence remain immutable.
+
+The terms implement the owner's approved 14-day limit, rather than a provider
+guarantee. Primary references checked 2026-10-29:
+[YooKassa saved-method recurring payments](https://yookassa.ru/developers/payment-acceptance/scenario-extensions/recurring-payments/pay-with-saved)
+and [Rospotrebnadzor on stopping charges after refusal](https://zpp.rospotrebnadzor.ru/news/federal/571840).
+The provider supports saved-method charges; withdrawal must stop further use of
+the method. Runtime activation, live-money testing and publication remain separate
+authorized operations under the billing and release runbooks.
+
+## Public rendering and runtime configuration
 
 Localized entry: `/ru/legal` or `/en/legal`; individual documents are under
 `/legal/{user-agreement,privacy-policy,paid-access,payment-details,marketing-consent}`.
@@ -114,8 +152,9 @@ forwards writes to a real backend.
 1. Confirm actual database/backup locations, recipient providers and applicable
    processing contracts against the factual system. A competitor's text proves
    none of these facts for Epifera. Keep the private readiness report separate.
-2. Review operator requisites and the dated texts. Paid subscriptions/recurring
-   billing are not implemented by this integration and remain inactive.
+2. Review operator requisites and the dated texts. Verify that available payment
+   modes, separate renewal consent and actual runtime behavior match the edition;
+   publishing documents alone must not enable real payments or migrate old opt-ins.
 3. Release tested code/migration through the existing authorized pipeline. Configure
    identical runtime fields for API/platform, then enable publication deliberately.
 4. Smoke public texts/links, mismatched revision rejection, cookie/CSRF enforcement,

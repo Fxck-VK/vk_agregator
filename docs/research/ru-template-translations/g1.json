@@ -38,8 +38,8 @@
   },
   {
     "id": "u0008",
-    "ru": "Творческие направления для знакомства",
-    "back": "Creative directions to discover"
+    "ru": "Направлений для творческих экспериментов",
+    "back": "Areas for creative experimentation"
   },
   {
     "id": "u0009",
@@ -48,7 +48,7 @@
   },
   {
     "id": "u0010",
-    "ru": "Календарные месяцы хранения созданных файлов",
+    "ru": "Календарных месяца хранения созданных файлов",
     "back": "Calendar months of storage for created files"
   },
   {
@@ -202,8 +202,8 @@
   },
   {
     "id": "u0038",
-    "ru": "Связаться с проектом",
-    "back": "Contact the project"
+    "ru": "Связаться по вопросам проекта",
+    "back": "Get in touch about the project"
   },
   {
     "id": "u0039",
@@ -252,8 +252,8 @@
   },
   {
     "id": "u0048",
-    "ru": "Задать звуковое направление",
-    "back": "Set a sound direction"
+    "ru": "Продумать звуковое оформление",
+    "back": "Develop the sound design"
   },
   {
     "id": "u0049",
@@ -502,8 +502,8 @@
   },
   {
     "id": "u0098",
-    "ru": "Прочитайте опубликованную политику конфиденциальности сервиса и обработки данных.",
-    "back": "Read the published privacy and data-handling policy for the service."
+    "ru": "Прочитайте опубликованную политику конфиденциальности, чтобы узнать, как сервис обрабатывает данные.",
+    "back": "Read the published privacy policy to learn how the service processes data."
   },
   {
     "id": "u0099",
@@ -867,8 +867,8 @@
   },
   {
     "id": "u0171",
-    "ru": "Пишите на support@epifera.com с общими вопросами, за поддержкой, по вопросам прессы или с идеями сотрудничества. В Справочном центре также есть руководства по распространённым задачам.",
-    "back": "Write to support@epifera.com with general questions, support needs, press enquiries or collaboration ideas. The Help Center also has guides to common tasks."
+    "ru": "По общим вопросам, за помощью, с запросами от СМИ и идеями сотрудничества пишите на support@epifera.com. В Справочном центре также есть руководства по распространённым задачам.",
+    "back": "For general questions, help, media enquiries or collaboration ideas, write to support@epifera.com. The Help Center also offers guides to common tasks."
   },
   {
     "id": "u0172",
@@ -922,8 +922,8 @@
   },
   {
     "id": "u0182",
-    "ru": "Руководства, ответы и практические следующие шаги.",
-    "back": "Guides, answers and practical next steps."
+    "ru": "Руководства, ответы и рекомендации по дальнейшим действиям.",
+    "back": "Guides, answers and recommendations on what to do next."
   },
   {
     "id": "u0183",
@@ -2818,8 +2818,8 @@
   },
   {
     "id": "u0660",
-    "ru": "Этот архив объединяет существующие статьи, уроки и руководства Epifera. Компоновка и иллюстрации обложек используют сохранённый референс страницы автора Magnific. Обложки — визуальные иллюстрации, а не подтверждённые результаты генерации Epifera. Известные даты помечены как черновые; для остальных материалов даты публикации не выдуманы. Автор — редакционный бренд, а не личный профиль.",
-    "back": "This archive combines existing Epifera articles, lessons and guides. The layout and cover illustrations use the saved Magnific author page reference. Covers are visual illustrations, not confirmed Epifera generation results. Known dates are marked as draft; publication dates have not been invented for other materials. The author is an editorial brand rather than a personal profile."
+    "ru": "Этот архив объединяет существующие статьи, уроки и руководства Epifera. Компоновка и иллюстрации обложек основаны на сохранённом референсе страницы автора Magnific. Обложки — визуальные иллюстрации, а не подтверждённые результаты генерации Epifera. Известные даты помечены как черновые; для остальных материалов дата публикации не указана. Автор — редакционный бренд, а не личный профиль.",
+    "back": "This archive collects existing Epifera articles, lessons and guides. Its layout and cover illustrations are based on the saved Magnific author-page reference. Covers are illustrations rather than verified Epifera generation results. Known dates are marked as drafts; publication dates are not shown for the other materials. The author is an editorial brand rather than a personal profile."
   },
   {
     "id": "u0661",
@@ -3130,8 +3130,8 @@
   },
   {
     "id": "u1775",
-    "ru": "Профессиональное производство от начала до конца",
-    "back": "Professional production from beginning to end"
+    "ru": "Профессиональное создание контента от начала до конца",
+    "back": "Professional content creation from beginning to end"
   },
   {
     "id": "u1776",
@@ -3227,8 +3227,8 @@
   },
   {
     "id": "u1793",
-    "ru": "Ваши беседы, творческие инструменты и файлы собраны в одном месте. Продолжайте с того места, где остановилась предыдущая идея.",
-    "back": "Your conversations, creative tools and files are gathered in one place. Continue where the previous idea stopped."
+    "ru": "Ваши беседы, творческие инструменты и файлы собраны в одном месте. Возвращайтесь к предыдущей идее и продолжайте с того места, где остановились.",
+    "back": "Your conversations, creative tools and files are collected in one place. Return to your previous idea and continue from where you left off."
   },
   {
     "id": "u1794",
@@ -3759,8 +3759,8 @@
   },
   {
     "id": "u1898",
-    "ru": "Превращайте слова и референсы в изображения. Изучайте ИИ-модели, сравнивайте творческие направления и начинайте следующее изображение в Epifera.",
-    "back": "Turn words and references into images. Explore AI models, compare creative directions and start your next image in Epifera."
+    "ru": "Превращайте слова и референсы в изображения. Изучайте ИИ-модели, сравнивайте творческие направления и приступайте к созданию следующего изображения в Epifera.",
+    "back": "Turn words and references into pictures. Explore AI models, compare creative directions, and begin creating your next picture in Epifera."
   },
   {
     "id": "u1899",
@@ -3869,8 +3869,8 @@
   },
   {
     "id": "u1920",
-    "ru": "Начните с предложения, картинки или обоих сразу",
-    "back": "Start with a sentence, picture or both"
+    "ru": "Начните с предложения, картинки или их сочетания",
+    "back": "Start with a sentence, a picture or a combination of the two"
   },
   {
     "id": "u1921",
@@ -4062,8 +4062,8 @@
   },
   {
     "id": "u1958",
-    "ru": "Исследуйте бриф, проверяйте варианты и сужайте направление.",
-    "back": "Explore the brief, test variations and narrow the direction."
+    "ru": "Изучайте бриф, проверяйте варианты и постепенно уточняйте направление.",
+    "back": "Study the brief, test alternatives and gradually refine the direction."
   },
   {
     "id": "u1959",
@@ -4183,8 +4183,8 @@
   },
   {
     "id": "u1982",
-    "ru": "Шрифт, который действительно можно прочитать",
-    "back": "Type you can actually read"
+    "ru": "Текст, который действительно можно прочитать",
+    "back": "Text that is actually readable"
   },
   {
     "id": "u1983",
@@ -5209,8 +5209,8 @@
   },
   {
     "id": "u2185",
-    "ru": "Это не значит, что команды меньше редактируют. Редактирование перестало быть отдельным этапом. На холсте референс, промпт и все предыдущие версии остаются с работой, поэтому следующий участник продолжает там, где остановился предыдущий. При 50 изображениях в неделю эффект накапливается. При 2 он почти незаметен.",
-    "back": "This does not mean teams edit less. Editing has stopped being a separate stage. On a canvas, references, prompts and all previous versions stay with the work, so the next participant continues where the previous one stopped. At 50 images per week the effect compounds. At 2 it is barely noticeable."
+    "ru": "Это не значит, что команды меньше редактируют. Для редактирования больше не нужно переходить в отдельный инструмент. На холсте референс, промпт и все предыдущие версии остаются с работой, поэтому следующий участник продолжает там, где остановился предыдущий. При 50 изображениях в неделю эффект накапливается. При 2 он почти незаметен.",
+    "back": "This does not mean teams edit less. Editing no longer requires moving to a separate tool. On the canvas the reference, prompt and earlier versions remain with the work, allowing the next participant to continue where the previous one stopped. At 50 pictures a week the effect accumulates; at 2 it is barely noticeable."
   },
   {
     "id": "u2186",
@@ -5349,8 +5349,8 @@
   },
   {
     "id": "u2213",
-    "ru": "Один сеанс, а не производственная цепочка. И приоритет фона указывает на композитинг: изображение станет частью другого материала, поэтому сначала его нужно извлечь из прямоугольника, прежде чем что-либо ещё приобретёт значение.",
-    "back": "One session rather than a production chain. Prioritizing the background suggests compositing: the image will be part of another asset, so first it must be extracted from its rectangle before anything else matters."
+    "ru": "Один сеанс, а не производственная цепочка. А то, что начинают с удаления фона, указывает на композитинг: изображение станет частью другого материала, поэтому сначала его нужно извлечь из прямоугольника, прежде чем что-либо ещё приобретёт значение.",
+    "back": "A single session rather than a production pipeline. Starting with background removal points to compositing: the image will become part of another asset, so it must first be taken out of its rectangle before anything else matters."
   },
   {
     "id": "u2214",
@@ -6156,8 +6156,8 @@
   },
   {
     "id": "u2531",
-    "ru": "Как Kling сравнивается с другими видеомоделями?",
-    "back": "How does Kling compare with other video models?"
+    "ru": "Как Kling выглядит в сравнении с другими видеомоделями?",
+    "back": "How does Kling look when compared with other video models?"
   },
   {
     "id": "u2532",
@@ -6341,8 +6341,8 @@
   },
   {
     "id": "u2568",
-    "ru": "Kling 2.5 и Kling 3.0 составляют 86% созданного здесь видео Kling. 2.5 даёт объём, а 3.0 охватывает больше людей: около 69,000 авторов против 45,000.",
-    "back": "Kling 2.5 and Kling 3.0 account for 86% of Kling video created here. 2.5 supplies volume, while 3.0 reaches more people: about 69,000 creators versus 45,000."
+    "ru": "Kling 2.5 и Kling 3.0 составляют 86% созданного здесь видео Kling. 2.5 даёт объём, а 3.0 охватывает больше людей: около 69 000 авторов против 45 000.",
+    "back": "Kling 2.5 and Kling 3.0 make up 86% of the Kling video created here. 2.5 provides volume, while 3.0 reaches more people: around 69,000 creators versus 45,000."
   },
   {
     "id": "u2569",
@@ -6357,8 +6357,8 @@
   },
   {
     "id": "u2571",
-    "ru": "Motion Control объединяет 2.6 и 3.0. «Другое» — все версии с долей менее 0.5%.",
-    "back": "Motion Control combines 2.6 and 3.0. Other means all versions with a share below 0.5%."
+    "ru": "Motion Control объединяет 2.6 и 3.0. «Другое» — все версии с долей менее 0,5%.",
+    "back": "Motion Control groups 2.6 and 3.0. Other includes all versions with a share below 0.5%."
   },
   {
     "id": "u2572",
@@ -6572,8 +6572,8 @@
   },
   {
     "id": "u2614",
-    "ru": "Запишите продукт, свет и движение камеры, которые хотите исследовать. Сравните результат с брифом перед выбором следующего шага.",
-    "back": "Write down the product, light and camera movement you want to explore. Compare the result with the brief before choosing the next step."
+    "ru": "Опишите продукт, освещение и движение камеры, которые хотите попробовать. Сравните результат с брифом перед выбором следующего шага.",
+    "back": "Describe the product, lighting and camera movement you want to try. Compare the outcome with your brief before selecting the next step."
   },
   {
     "id": "u2615",
@@ -6742,8 +6742,8 @@
   },
   {
     "id": "u2648",
-    "ru": "69,000 человек генерировали с 3.0 за 30 дней — больше, чем с любой другой версией, включая 2.5.",
-    "back": "69,000 people generated with 3.0 in 30 days — more than with any other version, including 2.5."
+    "ru": "69 000 человек генерировали с 3.0 за 30 дней — больше, чем с любой другой версией, включая 2.5.",
+    "back": "69,000 people generated with 3.0 over 30 days, exceeding every other version, including 2.5."
   },
   {
     "id": "u2649",
@@ -6927,8 +6927,8 @@
   },
   {
     "id": "u2685",
-    "ru": "Включайте цвета, настроение, референсы и визуальные правила, определяющие бренд. Направляйте ими новые концепции и проверяйте каждый результат перед включением в кампанию.",
-    "back": "Include colors, mood, references and visual rules defining the brand. Use them to guide new concepts and check every result before inclusion in a campaign."
+    "ru": "Включайте цвета, настроение, референсы и визуальные правила, определяющие бренд. Опирайтесь на них при разработке новых концепций и проверяйте каждый результат перед включением в кампанию.",
+    "back": "Include the colors, mood, references and visual rules that define the brand. Rely on these when developing new concepts and review every result before adding it to a campaign."
   },
   {
     "id": "u2686",
@@ -6982,8 +6982,8 @@
   },
   {
     "id": "u2696",
-    "ru": "Используйте поддерживаемые инструменты изображений рабочего пространства, пока готовится отдельное увеличение разрешения.",
-    "back": "Use supported workspace image tools while dedicated upscaling is prepared."
+    "ru": "Используйте поддерживаемые в рабочем пространстве инструменты для работы с изображениями, пока готовится отдельный процесс увеличения разрешения.",
+    "back": "Use the image tools supported in the workspace while a dedicated upscaling workflow is being prepared."
   },
   {
     "id": "u2697",

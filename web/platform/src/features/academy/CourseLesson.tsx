@@ -7,8 +7,8 @@ import styles from "./Academy.module.css";
 import {usePublicCopy} from "@/i18n/public/use-public-copy";
 
 export function CourseLesson({lesson:sourceLesson}:{lesson:CourseLessonRecord}){
-  const {coursePath,copy} = usePublicCopy(publicCopySourcesForLocale);
-  const lesson=usePublicCopy(sourceLesson),courseLessons=getCourseLessons(useLocale());
+  const {coursePath,copy} = usePublicCopy(publicCopySourcesForLocale,{"copy":"courseEn","coursePath":"__route.basePath"});
+  const lesson=usePublicCopy(sourceLesson),courseLessons=getCourseLessons(useLocale(),copy);
 
   const index=courseLessons.findIndex(item=>item.slug===lesson.slug),previous=courseLessons[index-1],next=courseLessons[index+1];
   return <article className={styles.lessonArticle}><Link href={coursePath} className={styles.back}>{copy.labels.back}</Link>

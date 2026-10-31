@@ -33,7 +33,7 @@ func TestConversationImageUsesOwnedJobAndServerPrice(t *testing.T) {
 	in := jobs.inputs[0]
 	var params map[string]any
 	_ = json.Unmarshal(in.Params, &params)
-	if in.Operation != domain.OperationImageGenerate || in.Modality != domain.ModalityImage || in.PricingSnapshot.InternalCredits != 60 || params["conversation_id"] != conversation.ID.String() || params["output_count"] != float64(1) {
+	if in.Operation != domain.OperationImageGenerate || in.Modality != domain.ModalityImage || in.PricingSnapshot.InternalCredits != 25 || params["conversation_id"] != conversation.ID.String() || params["output_count"] != float64(1) {
 		t.Fatal("image price, operation or conversation lost")
 	}
 	for _, invalid := range []string{

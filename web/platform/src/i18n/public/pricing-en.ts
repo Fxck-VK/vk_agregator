@@ -1,6 +1,6 @@
 import {brandName} from "@/config/brand";
 import {subscriptionPreviewPlans} from "@/features/pricing/subscription-preview";
-export const pricingOffer={offerType:"subscription-preview",planRefs:subscriptionPreviewPlans.map(p=>p.id),billingUnits:"stars",termsRef:"/legal/paid-access",priceSourceRef:"web/platform/src/features/pricing/subscription-preview.ts",checkoutAuthority:"GET /web/v1/payment-products",annualOffer:null,teamPrice:null} as const;
+export const pricingOffer={offerType:"subscription-preview",planRefs:subscriptionPreviewPlans.map(p=>p.id),billingUnits:"stars",termsRef:"/legal/paid-access",priceSourceRef:"@/config/economy.generated.json",checkoutAuthority:"/web/v1/subscription",annualOffer:null,teamPrice:null} as const;
 export const pricingEn={
  metadata:{title:`${brandName} Pricing — Plans, Stars and Creative Tools`,description:"Explore Epifera plan previews, monthly and yearly budget estimates, star units and team enquiries. Review final payment options in your workspace."},
  pricingLink:"Pricing",skip:"Skip to pricing",announcement:"Explore the creative tools in your workspace",announcementBadge:"Creative tools",title:"Pick your way to create",description:"Find a starting point for your next idea, from a personal project to a larger creative brief.",

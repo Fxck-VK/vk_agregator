@@ -9,6 +9,7 @@ afterEach(() => {
   vi.useRealTimers();
   vi.restoreAllMocks();
   vi.unstubAllGlobals();
+  document.documentElement.style.removeProperty("font-size");
 });
 
 function InteractivePanel({ animated, onClose }: { animated?: boolean; onClose: () => void }) {
@@ -49,6 +50,35 @@ function renderPanel({ isOpen = true, align = "start", width = 352 }:
 }
 
 describe("PopoverPanel", () => {
+  it("scales its design width with the root font while preserving viewport coordinates", () => {
+    vi.stubGlobal("innerWidth", 2560);
+    vi.stubGlobal("innerHeight", 1440);
+    document.documentElement.style.fontSize = "32px";
+    renderPanel();
+    expect(screen.getByRole("dialog")).toHaveStyle({ width: "704px", left: "32px", top: "32px" });
+    expect(screen.getByRole("dialog").style.maxHeight).toBe("1376px");
+  });
+
+  it("clamps a scaled panel to the available viewport with scaled margins", () => {
+    vi.stubGlobal("innerWidth", 500);
+    vi.stubGlobal("innerHeight", 800);
+    document.documentElement.style.fontSize = "48px";
+    renderPanel();
+    expect(screen.getByRole("dialog")).toHaveStyle({ width: "404px", left: "48px" });
+    expect(screen.getByRole("dialog").style.maxHeight).toBe("704px");
+  });
+
+  it("recalculates the scale when an open panel moves between screen widths", () => {
+    vi.stubGlobal("innerWidth", 3840);
+    vi.stubGlobal("innerHeight", 2160);
+    document.documentElement.style.fontSize = "32px";
+    renderPanel();
+    expect(screen.getByRole("dialog")).toHaveStyle({ width: "704px" });
+    document.documentElement.style.fontSize = "48px";
+    fireEvent.resize(window);
+    expect(screen.getByRole("dialog")).toHaveStyle({ width: "1056px", left: "48px", top: "48px" });
+  });
+
   it("allows its consumer to opt out of animation", () => {
     render(<InteractivePanel animated={false} onClose={vi.fn()} />);
     const trigger = screen.getByRole("button", { name: "Настройки" });

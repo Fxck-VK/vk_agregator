@@ -12,7 +12,7 @@ import {useLocale} from "@/i18n/LocaleProvider";
 
 
 export function EventProgramme(){
-  const {t} = usePublicCopy(publicCopySourcesForLocale);
+  const {t} = usePublicCopy(publicCopySourcesForLocale,{"t":"eventProjectEn","media":"eventProjectReference"});
 
   return <section id="schedule" className={styles.programme} aria-labelledby="programme-title">
     <div className={styles.centerIntro}><span>{t.programme.label}</span><h2 id="programme-title">{t.programme.title}</h2><p>{t.programme.description}</p></div>
@@ -25,7 +25,7 @@ export function EventProgramme(){
 export function EventFilm({onTrailer}:{onTrailer:()=>void}){
   const publicCopyLocale=useLocale();
 
-  const {t,media} = usePublicCopy(publicCopySourcesForLocale);
+  const {t,media} = usePublicCopy(publicCopySourcesForLocale,{"t":"eventProjectEn","media":"eventProjectReference"});
 
   return <section id="screening" className={styles.film} aria-labelledby="film-title">
     <span className={styles.filmLabel}>{t.film.label}</span><h2 id="film-title">{t.film.title}</h2><p className={styles.filmIntro}>{t.film.description}</p>
@@ -37,7 +37,7 @@ export function EventFilm({onTrailer}:{onTrailer:()=>void}){
 }
 
 export function EventDiscussion(){
-  const {t} = usePublicCopy(publicCopySourcesForLocale);
+  const {t} = usePublicCopy(publicCopySourcesForLocale,{"t":"eventProjectEn","media":"eventProjectReference"});
 
   return <section id="conversation" className={styles.discussion} aria-labelledby="discussion-title">
     <div><span className={styles.pill}>{t.discussion.label}</span><h2 id="discussion-title">{t.discussion.title}</h2><p className={styles.meta}>{t.discussion.meta}</p><p>{t.discussion.description}</p><a className={styles.darkButton} href={t.discussion.href}>{t.discussion.action}</a></div>
@@ -46,7 +46,7 @@ export function EventDiscussion(){
 }
 
 export function EventFeatures(){
-  const {t,media} = usePublicCopy(publicCopySourcesForLocale);
+  const {t,media} = usePublicCopy(publicCopySourcesForLocale,{"t":"eventProjectEn","media":"eventProjectReference"});
 
   return <>{t.features.map((item,index)=><section id={item.id} key={item.id} className={styles.feature} data-event-feature data-reverse={index===1||undefined} aria-labelledby={`${item.id}-title`}>
     <figure><Image src={media[item.image].src} width={media[item.image].width} height={media[item.image].height} alt={item.credit} sizes="(max-width:1000px) 95vw,50vw"/><figcaption>{item.credit}</figcaption></figure>
@@ -55,7 +55,7 @@ export function EventFeatures(){
 }
 
 export function EventJournal(){
-  const {t} = usePublicCopy(publicCopySourcesForLocale);
+  const {t} = usePublicCopy(publicCopySourcesForLocale,{"t":"eventProjectEn","media":"eventProjectReference"});
 
   return <section className={styles.journal} aria-labelledby="journal-title">
     <div className={styles.centerIntro}><span>{t.journal.label}</span><h2 id="journal-title">{t.journal.title}</h2><p>{t.journal.description}</p></div>

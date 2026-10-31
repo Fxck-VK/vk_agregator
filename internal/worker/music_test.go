@@ -403,7 +403,7 @@ func TestSaveMusicOutputsMixedAndTextOnly(t *testing.T) {
 		saver := &fakeMusicArtifactSaver{}
 		p := &processor{jobs: jobs, artifacts: saver}
 		owner := uuid.New()
-		job := createMusicJobForTest(t, ctx, jobs, owner, domain.MusicActionGenerate, nil, nil)
+		job := createMusicJobForTest(t, ctx, jobs, owner, domain.MusicActionUpload, nil, nil)
 
 		err := p.saveMusicOutputs(ctx, job, domain.ProviderTaskResult{
 			Status: domain.ProviderTaskSucceeded,

@@ -25,7 +25,7 @@ describe("workflow reference template",()=>{
     expect(within(dialog).getByRole('button',{name:'Previous step'})).toBeDisabled();
     for(let i=1;i<productCampaignWorkflow.steps.length;i++)fireEvent.click(within(dialog).getByRole('button',{name:'Next step'}));
     expect(within(dialog).getByRole('button',{name:'Next step'})).toBeDisabled();expect(dialog).toHaveTextContent(productCampaignWorkflow.steps.at(-1)!.title);
-    expect(within(dialog).getByRole('link',{name:'Continue in workspace'})).toHaveAttribute('href','/en/app/files');expect(fetch).not.toHaveBeenCalled();
+    expect(within(dialog).getByRole('link',{name:'Continue in workspace'})).toHaveAttribute('href','/ru/app/files');expect(fetch).not.toHaveBeenCalled();
     fireEvent.keyDown(window,{key:'Escape'});fireEvent.animationEnd(screen.getByTestId('landing-dialog-backdrop'));expect(screen.queryByRole('dialog')).toBeNull();expect(trigger).toHaveFocus();
   });
   it("supports keyboard step selection and its matching tool destination",async()=>{
@@ -43,7 +43,7 @@ describe("workflow reference template",()=>{
   it.each(Array.from({length:10},(_,i)=>i))("opens scenario %i with its own brief and steps",async i=>{
     await page();const scenario=workflowEn.scenarios[i];fireEvent.click(screen.getByRole('button',{name:scenario.title}));const dialog=screen.getByRole('dialog',{name:scenario.title});
     expect(dialog).toHaveTextContent(scenario.inputs[0]);expect(dialog).toHaveTextContent(scenario.steps[0].title);expect(within(dialog).getAllByRole('tab')).toHaveLength(scenario.steps.length);
-    expect(within(dialog).getByRole('link',{name:'Continue in workspace'}).getAttribute('href')).toMatch(/^\/en\/app(?:\/|$)/);
+    expect(within(dialog).getByRole('link',{name:'Continue in workspace'}).getAttribute('href')).toMatch(/^\/ru\/app(?:\/|$)/);
   });
   it("onboarding opens the genuine guide and FAQ answers remain readable",async()=>{
     await page();fireEvent.click(screen.getByRole('button',{name:'Open workflow walkthrough'}));expect(screen.getByRole('dialog')).toHaveTextContent(productCampaignWorkflow.outputs[0]);

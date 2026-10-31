@@ -21,7 +21,7 @@ import {usePublicCopy} from "@/i18n/public/use-public-copy";
 
 type Dialog="search"|"status"|"guide"|"video"|null;
 export function IntegrationLanding(){
-  const {mcpClients,t,aiToolsEn,homeEn,integration,reference} = usePublicCopy(publicCopySourcesForLocale);
+  const {mcpClients,t,aiToolsEn,homeEn,integration,reference} = usePublicCopy(publicCopySourcesForLocale,{"integration":"mcpIntegration","mcpClients":"mcpClients","t":"mcpEn","reference":"integrationReference"});
 
  const[selected,setSelected]=useState(0),[dialog,setDialog]=useState<Dialog>(null),root=useRef<HTMLDivElement>(null),opener=useRef<HTMLElement|null>(null),client=mcpClients[selected],open=dialog!==null;
  const launch=(target:Dialog)=>{opener.current=document.activeElement instanceof HTMLElement?document.activeElement:null;setDialog(target);};

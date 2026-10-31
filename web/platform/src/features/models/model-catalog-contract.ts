@@ -73,6 +73,7 @@ const imageControlsSchema = z.object({
   max_reference_images: nonNegativeInt,
   price_by_quality: positivePriceByKey,
   price_by_variant: positivePriceByKey,
+  price_by_count: positivePriceByKey.optional(),
   quality_label: nonEmptyString,
   show_output_count: z.boolean(),
   max_prompt_bytes: positiveInt.optional(),
@@ -111,6 +112,20 @@ const imageControlsSchema = z.object({
     }
   }
   const defaultVariant = `${image.default_quality}:${image.default_aspect_ratio}`;
+  if (image.price_by_count) {
+    if (Object.keys(image.price_by_count).length !== Object.keys(image.price_by_variant).length * image.max_output_count) {
+      ctx.addIssue({ code: "custom", path: ["price_by_count"], message: "Every offered image count needs an exact batch price." });
+    }
+    for (const [key, price] of Object.entries(image.price_by_count)) {
+      const last = key.lastIndexOf(":");
+      const variant = key.slice(0, last);
+      const rawCount = key.slice(last + 1);
+      const count = Number(rawCount);
+      if (last < 0 || !/^[1-9][0-9]*$/.test(rawCount) || !Number.isSafeInteger(count) || count > image.max_output_count || !image.price_by_variant[variant] || (count === 1 && image.price_by_variant[variant] !== price)) {
+        ctx.addIssue({ code: "custom", path: ["price_by_count", key], message: "Batch price must use an offered variant and count." });
+      }
+    }
+  }
   if (image.price_by_variant[defaultVariant] === undefined) {
     ctx.addIssue({ code: "custom", path: ["price_by_variant", defaultVariant], message: "Default image quality and aspect ratio must have a priced variant." });
   }
@@ -227,6 +242,7 @@ const musicControlsSchema = z.object({
   max_uploads: nonNegativeInt,
   estimate_credits: nonNegativeInt,
   max_estimate_credits: nonNegativeInt.optional(),
+  pricing_unit: z.literal("track_request").optional(),
   unavailable_reason: nonEmptyString.optional(),
 }).strict().superRefine((music, ctx) => {
   if (music.max_sources < music.min_sources) {
@@ -366,6 +382,7 @@ export function projectImageModelCatalog(catalog: PublicCatalog): ImageModelList
         quality_options: operation.image.quality_options,
         price_by_quality: operation.image.price_by_quality,
         price_by_variant: operation.image.price_by_variant,
+        price_by_count: operation.image.price_by_count,
         default_quality: operation.image.default_quality,
         default_aspect_ratio: operation.image.default_aspect_ratio,
         supports_reference_image: operation.image.supports_reference_image,

@@ -1,0 +1,2192 @@
+{
+  "id": "page-t15",
+  "template": "T15",
+  "path": "/photos/nature",
+  "locale": "ru",
+  "status": "draft",
+  "indexing": "noindex",
+  "seo": {
+    "title": "Фотографии природы — визуальные референсы | Epifera",
+    "description": "Изучайте фотографии природы, пейзажи и визуальные референсы. Фильтруйте по ориентации, цвету и пометкам источника, чтобы найти новое направление для работы в Epifera."
+  },
+  "relatedIds": [],
+  "content": {
+    "materialCategoryEn": {
+      "metadata": {
+        "title": "Фотографии природы — визуальные референсы | Epifera",
+        "description": "Изучайте фотографии природы, пейзажи и визуальные референсы. Фильтруйте по ориентации, цвету и пометкам источника, чтобы найти новое направление для работы в Epifera."
+      },
+      "skip": "Перейти к материалам",
+      "current": "Фотографии природы",
+      "currentShort": "Фотографии",
+      "search": "Поиск фотографий природы",
+      "searchButton": "Открыть поиск материалов",
+      "searchPlaceholder": "Природа",
+      "clearSearch": "Очистить поиск материалов",
+      "searchDialogTitle": "Поиск фотографий природы",
+      "heading": "Фотографии природы",
+      "intro": "Изучайте леса, реки, горы и тихие мгновения природы. Найдите визуальное направление для фона, мудборда или следующей творческой идеи. Развивайте референс дальше — используйте наш",
+      "generator": "ИИ-генератор изображений",
+      "introEnd": "Найдите свет, цвет и композицию, которые придадут следующей идее ваш характер.",
+      "topics": [
+        {
+          "id": "forest",
+          "label": "Лес"
+        },
+        {
+          "id": "mountains",
+          "label": "Горы"
+        },
+        {
+          "id": "lakes",
+          "label": "Озёра"
+        },
+        {
+          "id": "flowers",
+          "label": "Цветы"
+        },
+        {
+          "id": "rivers",
+          "label": "Реки"
+        },
+        {
+          "id": "sunset",
+          "label": "Закат"
+        },
+        {
+          "id": "meadows",
+          "label": "Луга"
+        },
+        {
+          "id": "wildlife",
+          "label": "Дикая природа"
+        }
+      ],
+      "createImage": "Создать изображение с ИИ",
+      "createVideo": "Изучить ИИ-видео",
+      "filterTopic": "Фильтр по теме:",
+      "sort": "Сортировка материалов",
+      "sorts": [
+        {
+          "value": "relevance",
+          "label": "Релевантность"
+        },
+        {
+          "value": "name",
+          "label": "Название A–Z"
+        },
+        {
+          "value": "largest",
+          "label": "Крупнейшее превью"
+        }
+      ],
+      "filters": "Фильтры",
+      "openFilters": "Открыть все фильтры",
+      "showResults": "Показать результаты",
+      "reset": "Сбросить все фильтры",
+      "layout": "Вид результатов",
+      "masonry": "Мозаика",
+      "square": "Квадратная",
+      "close": "Закрыть",
+      "results": "референсные превью",
+      "showing": "Показано",
+      "of": "из",
+      "empty": "Нет подходящих материалов",
+      "emptyHint": "Попробуйте более широкий поиск или уберите фильтр, чтобы увидеть больше референсов природы.",
+      "banner": "Создавайте с Epifera",
+      "bannerClose": "Скрыть творческие инструменты",
+      "bannerLinks": [
+        {
+          "label": "Изображения",
+          "href": "/app/image"
+        },
+        {
+          "label": "Видео",
+          "href": "/app/models"
+        },
+        {
+          "label": "Музыка",
+          "href": "/app/music"
+        },
+        {
+          "label": "Мои файлы",
+          "href": "/app/files"
+        },
+        {
+          "label": "Все инструменты",
+          "href": "/ai"
+        }
+      ],
+      "pagination": "Страницы материалов",
+      "previous": "Предыдущая страница",
+      "next": "Следующая страница",
+      "page": "Страница",
+      "download": "Скачать",
+      "save": "Сохранить",
+      "saved": "Сохранено",
+      "savedNotice": "Сохранено на этом устройстве.",
+      "removedNotice": "Удалено из сохранённых материалов на этом устройстве.",
+      "saveError": "Не удалось сохранить на этом устройстве.",
+      "relatedTitle": "Развивайте следующую идею дальше",
+      "related": [
+        {
+          "label": "Изучить кинематографичные референсы",
+          "href": "/inspiration/cinematic-scenes"
+        },
+        {
+          "label": "Посмотреть пример с цветами",
+          "href": "/inspiration/examples/aesthetic-flowers"
+        },
+        {
+          "label": "Создавать изображения с ИИ",
+          "href": "/ai/image-generator"
+        },
+        {
+          "label": "Создать кампанию продукта",
+          "href": "/workflows/product-campaign"
+        }
+      ]
+    },
+    "natureCategory": {
+      "id": "nature-photos",
+      "mediaType": "photos",
+      "taxonId": "nature",
+      "selectionQuery": {
+        "tag": "nature"
+      },
+      "sortPolicy": [
+        "relevance",
+        "name",
+        "largest"
+      ],
+      "filterDefinitions": [
+        {
+          "key": "media",
+          "label": "Фотографии",
+          "options": [
+            {
+              "value": "photos",
+              "label": "Фотографии"
+            },
+            {
+              "value": "all",
+              "label": "Все изображения"
+            }
+          ]
+        },
+        {
+          "key": "license",
+          "label": "Лицензия",
+          "options": [
+            {
+              "value": "all",
+              "label": "Все"
+            },
+            {
+              "value": "unspecified",
+              "label": "Лицензия не предоставлена"
+            }
+          ],
+          "hint": "Условия лицензии для этих референсных превью не предоставлены. Перед повторным использованием изображения проверьте условия источника."
+        },
+        {
+          "key": "source",
+          "label": "Создано ИИ",
+          "options": [
+            {
+              "value": "all",
+              "label": "Все"
+            },
+            {
+              "value": "ai",
+              "label": "В источнике есть пометка об ИИ"
+            },
+            {
+              "value": "unspecified",
+              "label": "В источнике нет пометки об ИИ"
+            }
+          ]
+        },
+        {
+          "key": "orientation",
+          "label": "Ориентация",
+          "options": [
+            {
+              "value": "all",
+              "label": "Все"
+            },
+            {
+              "value": "landscape",
+              "label": "Горизонтальная"
+            },
+            {
+              "value": "portrait",
+              "label": "Вертикальная"
+            },
+            {
+              "value": "square",
+              "label": "Квадратная"
+            }
+          ]
+        },
+        {
+          "key": "color",
+          "label": "Основной цвет",
+          "options": [
+            {
+              "value": "all",
+              "label": "Все"
+            },
+            {
+              "value": "green",
+              "label": "Зелёный",
+              "color": "#4e8660"
+            },
+            {
+              "value": "blue",
+              "label": "Синий",
+              "color": "#5f8eb4"
+            },
+            {
+              "value": "orange",
+              "label": "Оранжевый",
+              "color": "#ce915a"
+            },
+            {
+              "value": "yellow",
+              "label": "Жёлтый",
+              "color": "#c4b55c"
+            },
+            {
+              "value": "purple",
+              "label": "Фиолетовый",
+              "color": "#a17daa"
+            },
+            {
+              "value": "neutral",
+              "label": "Нейтральный",
+              "color": "#93958b"
+            }
+          ],
+          "hint": "Основной цвет измерен по доступному превью."
+        },
+        {
+          "key": "people",
+          "label": "Люди",
+          "options": [
+            {
+              "value": "all",
+              "label": "Все"
+            },
+            {
+              "value": "unspecified",
+              "label": "Наличие людей не указано"
+            }
+          ],
+          "hint": "Метаданные о людях не предоставлены. Отсутствие сведений не означает, что на изображении нет людей."
+        },
+        {
+          "key": "format",
+          "label": "Тип файла",
+          "options": [
+            {
+              "value": "all",
+              "label": "Все"
+            },
+            {
+              "value": "webp",
+              "label": "Превью WebP"
+            }
+          ]
+        }
+      ],
+      "relatedCategoryIds": [
+        "forest",
+        "mountains",
+        "lakes",
+        "flowers",
+        "rivers",
+        "sunset",
+        "meadows",
+        "wildlife"
+      ]
+    },
+    "natureMaterials": [
+      {
+        "id": "nature-01",
+        "src": "/assets/images/material-category/nature-01.webp",
+        "alt": "Лавандовое поле на закате возле Валансоля",
+        "width": 740,
+        "height": 493,
+        "tags": [
+          "nature",
+          "flowers",
+          "sunset",
+          "meadows"
+        ],
+        "orientation": "landscape",
+        "color": "purple",
+        "dominant": {
+          "r": 136,
+          "g": 104,
+          "b": 120
+        },
+        "sourceAI": false,
+        "license": "unspecified",
+        "people": "unspecified",
+        "format": "webp",
+        "media": "photos",
+        "prompt": "Создайте изображение природы по мотивам этой сцены: Лавандовое поле на закате возле Валансоля. Сохраните выраженное ощущение места, естественный свет, подробные фактуры и спокойную фотографическую композицию. Без текста и водяных знаков."
+      },
+      {
+        "id": "nature-02",
+        "src": "/assets/images/material-category/nature-02.webp",
+        "alt": "Река между деревьями",
+        "width": 494,
+        "height": 740,
+        "tags": [
+          "nature",
+          "forest",
+          "rivers"
+        ],
+        "orientation": "portrait",
+        "color": "neutral",
+        "dominant": {
+          "r": 24,
+          "g": 24,
+          "b": 24
+        },
+        "sourceAI": false,
+        "license": "unspecified",
+        "people": "unspecified",
+        "format": "webp",
+        "media": "photos",
+        "prompt": "Создайте изображение природы по мотивам этой сцены: Река между деревьями. Сохраните выраженное ощущение места, естественный свет, подробные фактуры и спокойную фотографическую композицию. Без текста и водяных знаков."
+      },
+      {
+        "id": "nature-03",
+        "src": "/assets/images/material-category/nature-03.webp",
+        "alt": "Вид с воздуха на разноцветный смешанный лес, окутанный утренним туманом в прекрасный осенний день",
+        "width": 740,
+        "height": 493,
+        "tags": [
+          "nature",
+          "forest"
+        ],
+        "orientation": "landscape",
+        "color": "neutral",
+        "dominant": {
+          "r": 24,
+          "g": 24,
+          "b": 24
+        },
+        "sourceAI": false,
+        "license": "unspecified",
+        "people": "unspecified",
+        "format": "webp",
+        "media": "photos",
+        "prompt": "Создайте изображение природы по мотивам этой сцены: Вид с воздуха на разноцветный смешанный лес, окутанный утренним туманом в прекрасный осенний день. Сохраните выраженное ощущение места, естественный свет, подробные фактуры и спокойную фотографическую композицию. Без текста и водяных знаков."
+      },
+      {
+        "id": "nature-04",
+        "src": "/assets/images/material-category/nature-04.webp",
+        "alt": "Вертикальный снимок реки в окружении гор и лугов в Шотландии",
+        "width": 494,
+        "height": 740,
+        "tags": [
+          "nature",
+          "mountains",
+          "rivers",
+          "meadows"
+        ],
+        "orientation": "portrait",
+        "color": "neutral",
+        "dominant": {
+          "r": 248,
+          "g": 248,
+          "b": 248
+        },
+        "sourceAI": false,
+        "license": "unspecified",
+        "people": "unspecified",
+        "format": "webp",
+        "media": "photos",
+        "prompt": "Создайте изображение природы по мотивам этой сцены: Вертикальный снимок реки в окружении гор и лугов в Шотландии. Сохраните выраженное ощущение места, естественный свет, подробные фактуры и спокойную фотографическую композицию. Без текста и водяных знаков."
+      },
+      {
+        "id": "nature-05",
+        "src": "/assets/images/material-category/nature-05.webp",
+        "alt": "Природа, путешествие, поездка, пеший туризм и лето. Вертикальный снимок парковой дорожки, ведущей в лес. Вид на деревянный настил вдоль высоких сосен в утреннем лесу",
+        "width": 493,
+        "height": 740,
+        "tags": [
+          "nature",
+          "forest"
+        ],
+        "orientation": "portrait",
+        "color": "neutral",
+        "dominant": {
+          "r": 8,
+          "g": 24,
+          "b": 24
+        },
+        "sourceAI": false,
+        "license": "unspecified",
+        "people": "unspecified",
+        "format": "webp",
+        "media": "photos",
+        "prompt": "Создайте изображение природы по мотивам этой сцены: Природа, путешествие, поездка, пеший туризм и лето. Вертикальный снимок парковой дорожки, ведущей в лес. Вид на деревянный настил вдоль высоких сосен в утреннем лесу. Сохраните выраженное ощущение места, естественный свет, подробные фактуры и спокойную фотографическую композицию. Без текста и водяных знаков."
+      },
+      {
+        "id": "nature-06",
+        "src": "/assets/images/material-category/nature-06.webp",
+        "alt": "Доломиты, Италия: пейзаж у озера Анторно.",
+        "width": 555,
+        "height": 740,
+        "tags": [
+          "nature",
+          "mountains",
+          "lakes"
+        ],
+        "orientation": "portrait",
+        "color": "neutral",
+        "dominant": {
+          "r": 40,
+          "g": 56,
+          "b": 56
+        },
+        "sourceAI": false,
+        "license": "unspecified",
+        "people": "unspecified",
+        "format": "webp",
+        "media": "photos",
+        "prompt": "Создайте изображение природы по мотивам этой сцены: Доломиты, Италия: пейзаж у озера Анторно. Сохраните выраженное ощущение места, естественный свет, подробные фактуры и спокойную фотографическую композицию. Без текста и водяных знаков."
+      },
+      {
+        "id": "nature-07",
+        "src": "/assets/images/material-category/nature-07.webp",
+        "alt": "Природный заповедник Зеленци, Краньска-Гора, Словения, Европа. Чудесный утренний вид заповедника Зеленци, путешествие по Словении",
+        "width": 492,
+        "height": 740,
+        "tags": [
+          "nature"
+        ],
+        "orientation": "portrait",
+        "color": "neutral",
+        "dominant": {
+          "r": 216,
+          "g": 232,
+          "b": 232
+        },
+        "sourceAI": false,
+        "license": "unspecified",
+        "people": "unspecified",
+        "format": "webp",
+        "media": "photos",
+        "prompt": "Создайте изображение природы по мотивам этой сцены: Природный заповедник Зеленци, Краньска-Гора, Словения, Европа. Чудесный утренний вид заповедника Зеленци, путешествие по Словении. Сохраните выраженное ощущение места, естественный свет, подробные фактуры и спокойную фотографическую композицию. Без текста и водяных знаков."
+      },
+      {
+        "id": "nature-08",
+        "src": "/assets/images/material-category/nature-08.webp",
+        "alt": "Санта-Маддалена в Доломитовых Альпах, Южный Тироль",
+        "width": 740,
+        "height": 488,
+        "tags": [
+          "nature",
+          "mountains"
+        ],
+        "orientation": "landscape",
+        "color": "blue",
+        "dominant": {
+          "r": 120,
+          "g": 168,
+          "b": 216
+        },
+        "sourceAI": false,
+        "license": "unspecified",
+        "people": "unspecified",
+        "format": "webp",
+        "media": "photos",
+        "prompt": "Создайте изображение природы по мотивам этой сцены: Санта-Маддалена в Доломитовых Альпах, Южный Тироль. Сохраните выраженное ощущение места, естественный свет, подробные фактуры и спокойную фотографическую композицию. Без текста и водяных знаков."
+      },
+      {
+        "id": "nature-09",
+        "src": "/assets/images/material-category/nature-09.webp",
+        "alt": "Красивый природный пейзаж для обоев",
+        "width": 740,
+        "height": 415,
+        "tags": [
+          "nature"
+        ],
+        "orientation": "landscape",
+        "color": "blue",
+        "dominant": {
+          "r": 40,
+          "g": 72,
+          "b": 72
+        },
+        "sourceAI": false,
+        "license": "unspecified",
+        "people": "unspecified",
+        "format": "webp",
+        "media": "photos",
+        "prompt": "Создайте изображение природы по мотивам этой сцены: Красивый природный пейзаж для обоев. Сохраните выраженное ощущение места, естественный свет, подробные фактуры и спокойную фотографическую композицию. Без текста и водяных знаков."
+      },
+      {
+        "id": "nature-10",
+        "src": "/assets/images/material-category/nature-10.webp",
+        "alt": "Оденвальд в Германии — чистая природа",
+        "width": 740,
+        "height": 492,
+        "tags": [
+          "nature"
+        ],
+        "orientation": "landscape",
+        "color": "blue",
+        "dominant": {
+          "r": 200,
+          "g": 216,
+          "b": 232
+        },
+        "sourceAI": false,
+        "license": "unspecified",
+        "people": "unspecified",
+        "format": "webp",
+        "media": "photos",
+        "prompt": "Создайте изображение природы по мотивам этой сцены: Оденвальд в Германии — чистая природа. Сохраните выраженное ощущение места, естественный свет, подробные фактуры и спокойную фотографическую композицию. Без текста и водяных знаков."
+      },
+      {
+        "id": "nature-11",
+        "src": "/assets/images/material-category/nature-11.webp",
+        "alt": "Водопад в национальном парке Чае-Сон, Лампанг, Таиланд",
+        "width": 493,
+        "height": 740,
+        "tags": [
+          "nature",
+          "rivers"
+        ],
+        "orientation": "portrait",
+        "color": "orange",
+        "dominant": {
+          "r": 56,
+          "g": 40,
+          "b": 8
+        },
+        "sourceAI": false,
+        "license": "unspecified",
+        "people": "unspecified",
+        "format": "webp",
+        "media": "photos",
+        "prompt": "Создайте изображение природы по мотивам этой сцены: Водопад в национальном парке Чае-Сон, Лампанг, Таиланд. Сохраните выраженное ощущение места, естественный свет, подробные фактуры и спокойную фотографическую композицию. Без текста и водяных знаков."
+      },
+      {
+        "id": "nature-12",
+        "src": "/assets/images/material-category/nature-12.webp",
+        "alt": "Закат над полем полевых цветов летом",
+        "width": 493,
+        "height": 740,
+        "tags": [
+          "nature",
+          "flowers",
+          "sunset",
+          "meadows"
+        ],
+        "orientation": "portrait",
+        "color": "neutral",
+        "dominant": {
+          "r": 248,
+          "g": 248,
+          "b": 248
+        },
+        "sourceAI": false,
+        "license": "unspecified",
+        "people": "unspecified",
+        "format": "webp",
+        "media": "photos",
+        "prompt": "Создайте изображение природы по мотивам этой сцены: Закат над полем полевых цветов летом. Сохраните выраженное ощущение места, естественный свет, подробные фактуры и спокойную фотографическую композицию. Без текста и водяных знаков."
+      },
+      {
+        "id": "nature-13",
+        "src": "/assets/images/material-category/nature-13.webp",
+        "alt": "Река в окружении лесов под облачным небом в Тюрингии, Германия",
+        "width": 740,
+        "height": 462,
+        "tags": [
+          "nature",
+          "forest",
+          "rivers"
+        ],
+        "orientation": "landscape",
+        "color": "neutral",
+        "dominant": {
+          "r": 8,
+          "g": 8,
+          "b": 8
+        },
+        "sourceAI": false,
+        "license": "unspecified",
+        "people": "unspecified",
+        "format": "webp",
+        "media": "photos",
+        "prompt": "Создайте изображение природы по мотивам этой сцены: Река в окружении лесов под облачным небом в Тюрингии, Германия. Сохраните выраженное ощущение места, естественный свет, подробные фактуры и спокойную фотографическую композицию. Без текста и водяных знаков."
+      },
+      {
+        "id": "nature-14",
+        "src": "/assets/images/material-category/nature-14.webp",
+        "alt": "Ретрофотография цветка на природе",
+        "width": 493,
+        "height": 740,
+        "tags": [
+          "nature",
+          "flowers"
+        ],
+        "orientation": "portrait",
+        "color": "neutral",
+        "dominant": {
+          "r": 248,
+          "g": 248,
+          "b": 248
+        },
+        "sourceAI": false,
+        "license": "unspecified",
+        "people": "unspecified",
+        "format": "webp",
+        "media": "photos",
+        "prompt": "Создайте изображение природы по мотивам этой сцены: Ретрофотография цветка на природе. Сохраните выраженное ощущение места, естественный свет, подробные фактуры и спокойную фотографическую композицию. Без текста и водяных знаков."
+      },
+      {
+        "id": "nature-15",
+        "src": "/assets/images/material-category/nature-15.webp",
+        "alt": "Природа пешеходной тропы Чалал, Сосан, Индия",
+        "width": 740,
+        "height": 493,
+        "tags": [
+          "nature"
+        ],
+        "orientation": "landscape",
+        "color": "neutral",
+        "dominant": {
+          "r": 8,
+          "g": 8,
+          "b": 8
+        },
+        "sourceAI": false,
+        "license": "unspecified",
+        "people": "unspecified",
+        "format": "webp",
+        "media": "photos",
+        "prompt": "Создайте изображение природы по мотивам этой сцены: Природа пешеходной тропы Чалал, Сосан, Индия. Сохраните выраженное ощущение места, естественный свет, подробные фактуры и спокойную фотографическую композицию. Без текста и водяных знаков."
+      },
+      {
+        "id": "nature-16",
+        "src": "/assets/images/material-category/nature-16.webp",
+        "alt": "Красивый пейзаж горных вершин, рек и озёр, дикая природа Алтайских гор, облака над горными хребтами. Россия, Республика Алтай",
+        "width": 740,
+        "height": 493,
+        "tags": [
+          "nature",
+          "mountains",
+          "lakes",
+          "rivers"
+        ],
+        "orientation": "landscape",
+        "color": "neutral",
+        "dominant": {
+          "r": 24,
+          "g": 24,
+          "b": 8
+        },
+        "sourceAI": false,
+        "license": "unspecified",
+        "people": "unspecified",
+        "format": "webp",
+        "media": "photos",
+        "prompt": "Создайте изображение природы по мотивам этой сцены: Красивый пейзаж горных вершин, рек и озёр, дикая природа Алтайских гор, облака над горными хребтами. Россия, Республика Алтай. Сохраните выраженное ощущение места, естественный свет, подробные фактуры и спокойную фотографическую композицию. Без текста и водяных знаков."
+      },
+      {
+        "id": "nature-17",
+        "src": "/assets/images/material-category/nature-17.webp",
+        "alt": "Живописный закат над пейзажами и водопадами.",
+        "width": 740,
+        "height": 494,
+        "tags": [
+          "nature",
+          "rivers",
+          "sunset"
+        ],
+        "orientation": "landscape",
+        "color": "neutral",
+        "dominant": {
+          "r": 8,
+          "g": 24,
+          "b": 8
+        },
+        "sourceAI": false,
+        "license": "unspecified",
+        "people": "unspecified",
+        "format": "webp",
+        "media": "photos",
+        "prompt": "Создайте изображение природы по мотивам этой сцены: Живописный закат над пейзажами и водопадами. Сохраните выраженное ощущение места, естественный свет, подробные фактуры и спокойную фотографическую композицию. Без текста и водяных знаков."
+      },
+      {
+        "id": "nature-18",
+        "src": "/assets/images/material-category/nature-18.webp",
+        "alt": "Природный пейзаж",
+        "width": 740,
+        "height": 415,
+        "tags": [
+          "nature"
+        ],
+        "orientation": "landscape",
+        "color": "neutral",
+        "dominant": {
+          "r": 24,
+          "g": 40,
+          "b": 40
+        },
+        "sourceAI": true,
+        "license": "unspecified",
+        "people": "unspecified",
+        "format": "webp",
+        "media": "photos",
+        "prompt": "Создайте изображение природы по мотивам этой сцены: Природный пейзаж. Сохраните выраженное ощущение места, естественный свет, подробные фактуры и спокойную фотографическую композицию. Без текста и водяных знаков."
+      },
+      {
+        "id": "nature-19",
+        "src": "/assets/images/material-category/nature-19.webp",
+        "alt": "Природный заповедник Зеленци, Краньска-Гора, Словения, Европа. Чудесный утренний вид заповедника Зеленци, путешествие по Словении",
+        "width": 492,
+        "height": 740,
+        "tags": [
+          "nature"
+        ],
+        "orientation": "portrait",
+        "color": "neutral",
+        "dominant": {
+          "r": 56,
+          "g": 56,
+          "b": 40
+        },
+        "sourceAI": false,
+        "license": "unspecified",
+        "people": "unspecified",
+        "format": "webp",
+        "media": "photos",
+        "prompt": "Создайте изображение природы по мотивам этой сцены: Природный заповедник Зеленци, Краньска-Гора, Словения, Европа. Чудесный утренний вид заповедника Зеленци, путешествие по Словении. Сохраните выраженное ощущение места, естественный свет, подробные фактуры и спокойную фотографическую композицию. Без текста и водяных знаков."
+      },
+      {
+        "id": "nature-20",
+        "src": "/assets/images/material-category/nature-20.webp",
+        "alt": "Туман на природе",
+        "width": 740,
+        "height": 576,
+        "tags": [
+          "nature"
+        ],
+        "orientation": "landscape",
+        "color": "neutral",
+        "dominant": {
+          "r": 40,
+          "g": 40,
+          "b": 40
+        },
+        "sourceAI": true,
+        "license": "unspecified",
+        "people": "unspecified",
+        "format": "webp",
+        "media": "photos",
+        "prompt": "Создайте изображение природы по мотивам этой сцены: Туман на природе. Сохраните выраженное ощущение места, естественный свет, подробные фактуры и спокойную фотографическую композицию. Без текста и водяных знаков."
+      },
+      {
+        "id": "nature-21",
+        "src": "/assets/images/material-category/nature-21.webp",
+        "alt": "Красивые полевые цветы в горах на закате, природный фон",
+        "width": 740,
+        "height": 493,
+        "tags": [
+          "nature",
+          "mountains",
+          "flowers",
+          "sunset"
+        ],
+        "orientation": "landscape",
+        "color": "neutral",
+        "dominant": {
+          "r": 248,
+          "g": 248,
+          "b": 248
+        },
+        "sourceAI": true,
+        "license": "unspecified",
+        "people": "unspecified",
+        "format": "webp",
+        "media": "photos",
+        "prompt": "Создайте изображение природы по мотивам этой сцены: Красивые полевые цветы в горах на закате, природный фон. Сохраните выраженное ощущение места, естественный свет, подробные фактуры и спокойную фотографическую композицию. Без текста и водяных знаков."
+      },
+      {
+        "id": "nature-22",
+        "src": "/assets/images/material-category/nature-22.webp",
+        "alt": "Летний луг с полевыми цветами",
+        "width": 740,
+        "height": 493,
+        "tags": [
+          "nature",
+          "flowers",
+          "meadows"
+        ],
+        "orientation": "landscape",
+        "color": "neutral",
+        "dominant": {
+          "r": 248,
+          "g": 248,
+          "b": 248
+        },
+        "sourceAI": true,
+        "license": "unspecified",
+        "people": "unspecified",
+        "format": "webp",
+        "media": "photos",
+        "prompt": "Создайте изображение природы по мотивам этой сцены: Летний луг с полевыми цветами. Сохраните выраженное ощущение места, естественный свет, подробные фактуры и спокойную фотографическую композицию. Без текста и водяных знаков."
+      },
+      {
+        "id": "nature-23",
+        "src": "/assets/images/material-category/nature-23.webp",
+        "alt": "Спокойная природная сцена с текущей водой, созданная ИИ",
+        "width": 740,
+        "height": 423,
+        "tags": [
+          "nature",
+          "rivers"
+        ],
+        "orientation": "landscape",
+        "color": "neutral",
+        "dominant": {
+          "r": 8,
+          "g": 8,
+          "b": 8
+        },
+        "sourceAI": true,
+        "license": "unspecified",
+        "people": "unspecified",
+        "format": "webp",
+        "media": "photos",
+        "prompt": "Создайте изображение природы по мотивам этой сцены: Спокойная природная сцена с текущей водой, созданная ИИ. Сохраните выраженное ощущение места, естественный свет, подробные фактуры и спокойную фотографическую композицию. Без текста и водяных знаков."
+      },
+      {
+        "id": "nature-24",
+        "src": "/assets/images/material-category/nature-24.webp",
+        "alt": "Вертикальный снимок небольшого ручья, текущего по осеннему лесу в туманный день",
+        "width": 493,
+        "height": 740,
+        "tags": [
+          "nature",
+          "forest",
+          "rivers"
+        ],
+        "orientation": "portrait",
+        "color": "neutral",
+        "dominant": {
+          "r": 216,
+          "g": 216,
+          "b": 216
+        },
+        "sourceAI": false,
+        "license": "unspecified",
+        "people": "unspecified",
+        "format": "webp",
+        "media": "photos",
+        "prompt": "Создайте изображение природы по мотивам этой сцены: Вертикальный снимок небольшого ручья, текущего по осеннему лесу в туманный день. Сохраните выраженное ощущение места, естественный свет, подробные фактуры и спокойную фотографическую композицию. Без текста и водяных знаков."
+      },
+      {
+        "id": "nature-25",
+        "src": "/assets/images/material-category/nature-25.webp",
+        "alt": "Горизонтальный снимок озера Прагс в природном парке Фанес-Сеннес-Прагс в Южном Тироле",
+        "width": 740,
+        "height": 493,
+        "tags": [
+          "nature",
+          "lakes"
+        ],
+        "orientation": "landscape",
+        "color": "neutral",
+        "dominant": {
+          "r": 24,
+          "g": 24,
+          "b": 8
+        },
+        "sourceAI": false,
+        "license": "unspecified",
+        "people": "unspecified",
+        "format": "webp",
+        "media": "photos",
+        "prompt": "Создайте изображение природы по мотивам этой сцены: Горизонтальный снимок озера Прагс в природном парке Фанес-Сеннес-Прагс в Южном Тироле. Сохраните выраженное ощущение места, естественный свет, подробные фактуры и спокойную фотографическую композицию. Без текста и водяных знаков."
+      },
+      {
+        "id": "nature-26",
+        "src": "/assets/images/material-category/nature-26.webp",
+        "alt": "Красота природы как фон: фантастическая панорама Татр и озера с бирюзовой водой в Польше, живописный закат в горах Европы",
+        "width": 494,
+        "height": 740,
+        "tags": [
+          "nature",
+          "mountains",
+          "lakes",
+          "sunset"
+        ],
+        "orientation": "portrait",
+        "color": "neutral",
+        "dominant": {
+          "r": 200,
+          "g": 200,
+          "b": 200
+        },
+        "sourceAI": false,
+        "license": "unspecified",
+        "people": "unspecified",
+        "format": "webp",
+        "media": "photos",
+        "prompt": "Создайте изображение природы по мотивам этой сцены: Красота природы как фон: фантастическая панорама Татр и озера с бирюзовой водой в Польше, живописный закат в горах Европы. Сохраните выраженное ощущение места, естественный свет, подробные фактуры и спокойную фотографическую композицию. Без текста и водяных знаков."
+      },
+      {
+        "id": "nature-27",
+        "src": "/assets/images/material-category/nature-27.webp",
+        "alt": "Коричневые деревья на заснеженной земле днём",
+        "width": 493,
+        "height": 740,
+        "tags": [
+          "nature",
+          "forest"
+        ],
+        "orientation": "portrait",
+        "color": "neutral",
+        "dominant": {
+          "r": 216,
+          "g": 216,
+          "b": 216
+        },
+        "sourceAI": false,
+        "license": "unspecified",
+        "people": "unspecified",
+        "format": "webp",
+        "media": "photos",
+        "prompt": "Создайте изображение природы по мотивам этой сцены: Коричневые деревья на заснеженной земле днём. Сохраните выраженное ощущение места, естественный свет, подробные фактуры и спокойную фотографическую композицию. Без текста и водяных знаков."
+      },
+      {
+        "id": "nature-28",
+        "src": "/assets/images/material-category/nature-28.webp",
+        "alt": "Туман на природе, осенний горный хребет, спокойная природа",
+        "width": 740,
+        "height": 557,
+        "tags": [
+          "nature",
+          "mountains"
+        ],
+        "orientation": "landscape",
+        "color": "neutral",
+        "dominant": {
+          "r": 232,
+          "g": 232,
+          "b": 232
+        },
+        "sourceAI": false,
+        "license": "unspecified",
+        "people": "unspecified",
+        "format": "webp",
+        "media": "photos",
+        "prompt": "Создайте изображение природы по мотивам этой сцены: Туман на природе, осенний горный хребет, спокойная природа. Сохраните выраженное ощущение места, естественный свет, подробные фактуры и спокойную фотографическую композицию. Без текста и водяных знаков."
+      },
+      {
+        "id": "nature-29",
+        "src": "/assets/images/material-category/nature-29.webp",
+        "alt": "Горизонтальный снимок озера Прагс в природном парке Фанес-Сеннес-Прагс в Южном Тироле, Италия",
+        "width": 740,
+        "height": 493,
+        "tags": [
+          "nature",
+          "lakes"
+        ],
+        "orientation": "landscape",
+        "color": "neutral",
+        "dominant": {
+          "r": 248,
+          "g": 248,
+          "b": 248
+        },
+        "sourceAI": false,
+        "license": "unspecified",
+        "people": "unspecified",
+        "format": "webp",
+        "media": "photos",
+        "prompt": "Создайте изображение природы по мотивам этой сцены: Горизонтальный снимок озера Прагс в природном парке Фанес-Сеннес-Прагс в Южном Тироле, Италия. Сохраните выраженное ощущение места, естественный свет, подробные фактуры и спокойную фотографическую композицию. Без текста и водяных знаков."
+      },
+      {
+        "id": "nature-30",
+        "src": "/assets/images/material-category/nature-30.webp",
+        "alt": "Спокойное озеро и низкие облака, скрывающие скалистую гору с разноцветной осенней листвой",
+        "width": 493,
+        "height": 740,
+        "tags": [
+          "nature",
+          "mountains",
+          "lakes"
+        ],
+        "orientation": "portrait",
+        "color": "green",
+        "dominant": {
+          "r": 8,
+          "g": 40,
+          "b": 24
+        },
+        "sourceAI": false,
+        "license": "unspecified",
+        "people": "unspecified",
+        "format": "webp",
+        "media": "photos",
+        "prompt": "Создайте изображение природы по мотивам этой сцены: Спокойное озеро и низкие облака, скрывающие скалистую гору с разноцветной осенней листвой. Сохраните выраженное ощущение места, естественный свет, подробные фактуры и спокойную фотографическую композицию. Без текста и водяных знаков."
+      },
+      {
+        "id": "nature-31",
+        "src": "/assets/images/material-category/nature-31.webp",
+        "alt": "Розовые цветы у озера и гор под облачным небом днём",
+        "width": 493,
+        "height": 740,
+        "tags": [
+          "nature",
+          "mountains",
+          "lakes",
+          "flowers"
+        ],
+        "orientation": "portrait",
+        "color": "neutral",
+        "dominant": {
+          "r": 8,
+          "g": 8,
+          "b": 8
+        },
+        "sourceAI": false,
+        "license": "unspecified",
+        "people": "unspecified",
+        "format": "webp",
+        "media": "photos",
+        "prompt": "Создайте изображение природы по мотивам этой сцены: Розовые цветы у озера и гор под облачным небом днём. Сохраните выраженное ощущение места, естественный свет, подробные фактуры и спокойную фотографическую композицию. Без текста и водяных знаков."
+      },
+      {
+        "id": "nature-32",
+        "src": "/assets/images/material-category/nature-32.webp",
+        "alt": "Туманная цветущая долина на рассвете: живописный пейзаж с дикорастущими цветами, одиноким деревом и цветным облачным небом. Заповедник «Долина нарциссов» возле Хуста, Закарпатье, Украина",
+        "width": 493,
+        "height": 740,
+        "tags": [
+          "nature",
+          "mountains",
+          "flowers",
+          "sunset"
+        ],
+        "orientation": "portrait",
+        "color": "blue",
+        "dominant": {
+          "r": 8,
+          "g": 56,
+          "b": 104
+        },
+        "sourceAI": false,
+        "license": "unspecified",
+        "people": "unspecified",
+        "format": "webp",
+        "media": "photos",
+        "prompt": "Создайте изображение природы по мотивам этой сцены: Туманная цветущая долина на рассвете: живописный пейзаж с дикорастущими цветами, одиноким деревом и цветным облачным небом. Заповедник «Долина нарциссов» возле Хуста, Закарпатье, Украина. Сохраните выраженное ощущение места, естественный свет, подробные фактуры и спокойную фотографическую композицию. Без текста и водяных знаков."
+      },
+      {
+        "id": "nature-33",
+        "src": "/assets/images/material-category/nature-33.webp",
+        "alt": "Пышные зелёные холмы и горы в утреннем свете: природный пейзаж, путешествия, туризм и пешие походы",
+        "width": 576,
+        "height": 740,
+        "tags": [
+          "nature",
+          "mountains"
+        ],
+        "orientation": "portrait",
+        "color": "neutral",
+        "dominant": {
+          "r": 24,
+          "g": 24,
+          "b": 24
+        },
+        "sourceAI": false,
+        "license": "unspecified",
+        "people": "unspecified",
+        "format": "webp",
+        "media": "photos",
+        "prompt": "Создайте изображение природы по мотивам этой сцены: Пышные зелёные холмы и горы в утреннем свете: природный пейзаж, путешествия, туризм и пешие походы. Сохраните выраженное ощущение места, естественный свет, подробные фактуры и спокойную фотографическую композицию. Без текста и водяных знаков."
+      },
+      {
+        "id": "nature-34",
+        "src": "/assets/images/material-category/nature-34.webp",
+        "alt": "Спокойный озёрный пейзаж с отражениями окружающей природы",
+        "width": 557,
+        "height": 740,
+        "tags": [
+          "nature",
+          "lakes"
+        ],
+        "orientation": "portrait",
+        "color": "neutral",
+        "dominant": {
+          "r": 136,
+          "g": 152,
+          "b": 152
+        },
+        "sourceAI": false,
+        "license": "unspecified",
+        "people": "unspecified",
+        "format": "webp",
+        "media": "photos",
+        "prompt": "Создайте изображение природы по мотивам этой сцены: Спокойный озёрный пейзаж с отражениями окружающей природы. Сохраните выраженное ощущение места, естественный свет, подробные фактуры и спокойную фотографическую композицию. Без текста и водяных знаков."
+      },
+      {
+        "id": "nature-35",
+        "src": "/assets/images/material-category/nature-35.webp",
+        "alt": "Вертикальный снимок травы на холмах во время красивого утреннего восхода",
+        "width": 493,
+        "height": 740,
+        "tags": [
+          "nature",
+          "mountains",
+          "sunset",
+          "meadows"
+        ],
+        "orientation": "portrait",
+        "color": "blue",
+        "dominant": {
+          "r": 120,
+          "g": 136,
+          "b": 200
+        },
+        "sourceAI": false,
+        "license": "unspecified",
+        "people": "unspecified",
+        "format": "webp",
+        "media": "photos",
+        "prompt": "Создайте изображение природы по мотивам этой сцены: Вертикальный снимок травы на холмах во время красивого утреннего восхода. Сохраните выраженное ощущение места, естественный свет, подробные фактуры и спокойную фотографическую композицию. Без текста и водяных знаков."
+      },
+      {
+        "id": "nature-36",
+        "src": "/assets/images/material-category/nature-36.webp",
+        "alt": "Край сосен, дождевой лес, дымка, осенний туман",
+        "width": 740,
+        "height": 319,
+        "tags": [
+          "nature",
+          "forest"
+        ],
+        "orientation": "landscape",
+        "color": "blue",
+        "dominant": {
+          "r": 168,
+          "g": 200,
+          "b": 200
+        },
+        "sourceAI": false,
+        "license": "unspecified",
+        "people": "unspecified",
+        "format": "webp",
+        "media": "photos",
+        "prompt": "Создайте изображение природы по мотивам этой сцены: Край сосен, дождевой лес, дымка, осенний туман. Сохраните выраженное ощущение места, естественный свет, подробные фактуры и спокойную фотографическую композицию. Без текста и водяных знаков."
+      },
+      {
+        "id": "nature-37",
+        "src": "/assets/images/material-category/nature-37.webp",
+        "alt": "Макрофотография фиолетового дикого гороха и бабочки туманным утром: съёмка дикой природы, макросъёмка, природа в утреннем тумане, фиолетовый дикий горох и бабочка",
+        "width": 740,
+        "height": 370,
+        "tags": [
+          "nature",
+          "wildlife"
+        ],
+        "orientation": "landscape",
+        "color": "blue",
+        "dominant": {
+          "r": 56,
+          "g": 104,
+          "b": 104
+        },
+        "sourceAI": false,
+        "license": "unspecified",
+        "people": "unspecified",
+        "format": "webp",
+        "media": "photos",
+        "prompt": "Создайте изображение природы по мотивам этой сцены: Макрофотография фиолетового дикого гороха и бабочки туманным утром: съёмка дикой природы, макросъёмка, природа в утреннем тумане, фиолетовый дикий горох и бабочка. Сохраните выраженное ощущение места, естественный свет, подробные фактуры и спокойную фотографическую композицию. Без текста и водяных знаков."
+      },
+      {
+        "id": "nature-38",
+        "src": "/assets/images/material-category/nature-38.webp",
+        "alt": "Красивый пейзаж зелёной долины у Альп в Австрии под облачным небом",
+        "width": 740,
+        "height": 491,
+        "tags": [
+          "nature",
+          "mountains"
+        ],
+        "orientation": "landscape",
+        "color": "neutral",
+        "dominant": {
+          "r": 248,
+          "g": 248,
+          "b": 248
+        },
+        "sourceAI": false,
+        "license": "unspecified",
+        "people": "unspecified",
+        "format": "webp",
+        "media": "photos",
+        "prompt": "Создайте изображение природы по мотивам этой сцены: Красивый пейзаж зелёной долины у Альп в Австрии под облачным небом. Сохраните выраженное ощущение места, естественный свет, подробные фактуры и спокойную фотографическую композицию. Без текста и водяных знаков."
+      },
+      {
+        "id": "nature-39",
+        "src": "/assets/images/material-category/nature-39.webp",
+        "alt": "Красивый вертикальный снимок реки, текущей между деревьями и камнями",
+        "width": 493,
+        "height": 740,
+        "tags": [
+          "nature",
+          "forest",
+          "rivers"
+        ],
+        "orientation": "portrait",
+        "color": "neutral",
+        "dominant": {
+          "r": 24,
+          "g": 24,
+          "b": 24
+        },
+        "sourceAI": false,
+        "license": "unspecified",
+        "people": "unspecified",
+        "format": "webp",
+        "media": "photos",
+        "prompt": "Создайте изображение природы по мотивам этой сцены: Красивый вертикальный снимок реки, текущей между деревьями и камнями. Сохраните выраженное ощущение места, естественный свет, подробные фактуры и спокойную фотографическую композицию. Без текста и водяных знаков."
+      },
+      {
+        "id": "nature-40",
+        "src": "/assets/images/material-category/nature-40.webp",
+        "alt": "Лучи солнца сквозь розовые цветы вишни, весенний цветочный фон, мягкий свет, нежные лепестки, природная красота и сезонная природа",
+        "width": 529,
+        "height": 740,
+        "tags": [
+          "nature",
+          "flowers"
+        ],
+        "orientation": "portrait",
+        "color": "orange",
+        "dominant": {
+          "r": 40,
+          "g": 24,
+          "b": 8
+        },
+        "sourceAI": false,
+        "license": "unspecified",
+        "people": "unspecified",
+        "format": "webp",
+        "media": "photos",
+        "prompt": "Создайте изображение природы по мотивам этой сцены: Лучи солнца сквозь розовые цветы вишни, весенний цветочный фон, мягкий свет, нежные лепестки, природная красота и сезонная природа. Сохраните выраженное ощущение места, естественный свет, подробные фактуры и спокойную фотографическую композицию. Без текста и водяных знаков."
+      },
+      {
+        "id": "nature-41",
+        "src": "/assets/images/material-category/nature-41.webp",
+        "alt": "Цветущая трава на закате.",
+        "width": 740,
+        "height": 492,
+        "tags": [
+          "nature",
+          "flowers",
+          "sunset",
+          "meadows"
+        ],
+        "orientation": "landscape",
+        "color": "neutral",
+        "dominant": {
+          "r": 232,
+          "g": 232,
+          "b": 232
+        },
+        "sourceAI": false,
+        "license": "unspecified",
+        "people": "unspecified",
+        "format": "webp",
+        "media": "photos",
+        "prompt": "Создайте изображение природы по мотивам этой сцены: Цветущая трава на закате. Сохраните выраженное ощущение места, естественный свет, подробные фактуры и спокойную фотографическую композицию. Без текста и водяных знаков."
+      },
+      {
+        "id": "nature-42",
+        "src": "/assets/images/material-category/nature-42.webp",
+        "alt": "Фон для рафтинга: русло реки, долина, вертикальная панорама природы",
+        "width": 490,
+        "height": 740,
+        "tags": [
+          "nature",
+          "mountains",
+          "rivers"
+        ],
+        "orientation": "portrait",
+        "color": "green",
+        "dominant": {
+          "r": 24,
+          "g": 40,
+          "b": 8
+        },
+        "sourceAI": false,
+        "license": "unspecified",
+        "people": "unspecified",
+        "format": "webp",
+        "media": "photos",
+        "prompt": "Создайте изображение природы по мотивам этой сцены: Фон для рафтинга: русло реки, долина, вертикальная панорама природы. Сохраните выраженное ощущение места, естественный свет, подробные фактуры и спокойную фотографическую композицию. Без текста и водяных знаков."
+      },
+      {
+        "id": "nature-43",
+        "src": "/assets/images/material-category/nature-43.webp",
+        "alt": "Пейзаж без людей на открытом воздухе: поле, природа, дерево, цветок, небо, облако, закат, лес, гора, цветочное поле, пейзаж, солнце",
+        "width": 740,
+        "height": 616,
+        "tags": [
+          "nature",
+          "forest",
+          "mountains",
+          "flowers",
+          "sunset",
+          "meadows"
+        ],
+        "orientation": "landscape",
+        "color": "orange",
+        "dominant": {
+          "r": 248,
+          "g": 232,
+          "b": 216
+        },
+        "sourceAI": false,
+        "license": "unspecified",
+        "people": "unspecified",
+        "format": "webp",
+        "media": "photos",
+        "prompt": "Создайте изображение природы по мотивам этой сцены: Пейзаж без людей на открытом воздухе: поле, природа, дерево, цветок, небо, облако, закат, лес, гора, цветочное поле, пейзаж, солнце. Сохраните выраженное ощущение места, естественный свет, подробные фактуры и спокойную фотографическую композицию. Без текста и водяных знаков."
+      },
+      {
+        "id": "nature-44",
+        "src": "/assets/images/material-category/nature-44.webp",
+        "alt": "Красивый снимок восхода на просёлочной дороге в Нидерландах",
+        "width": 740,
+        "height": 493,
+        "tags": [
+          "nature",
+          "sunset"
+        ],
+        "orientation": "landscape",
+        "color": "yellow",
+        "dominant": {
+          "r": 40,
+          "g": 40,
+          "b": 8
+        },
+        "sourceAI": false,
+        "license": "unspecified",
+        "people": "unspecified",
+        "format": "webp",
+        "media": "photos",
+        "prompt": "Создайте изображение природы по мотивам этой сцены: Красивый снимок восхода на просёлочной дороге в Нидерландах. Сохраните выраженное ощущение места, естественный свет, подробные фактуры и спокойную фотографическую композицию. Без текста и водяных знаков."
+      },
+      {
+        "id": "nature-45",
+        "src": "/assets/images/material-category/nature-45.webp",
+        "alt": "Обои с природой, красивые обои с природой, обои с природой в 4k, обои с природой в HD, зелёная природа",
+        "width": 493,
+        "height": 740,
+        "tags": [
+          "nature"
+        ],
+        "orientation": "portrait",
+        "color": "neutral",
+        "dominant": {
+          "r": 248,
+          "g": 248,
+          "b": 248
+        },
+        "sourceAI": false,
+        "license": "unspecified",
+        "people": "unspecified",
+        "format": "webp",
+        "media": "photos",
+        "prompt": "Создайте изображение природы по мотивам этой сцены: Обои с природой, красивые обои с природой, обои с природой в 4k, обои с природой в HD, зелёная природа. Сохраните выраженное ощущение места, естественный свет, подробные фактуры и спокойную фотографическую композицию. Без текста и водяных знаков."
+      },
+      {
+        "id": "nature-46",
+        "src": "/assets/images/material-category/nature-46.webp",
+        "alt": "Свежесть горного луга, красота природы, создано ИИ",
+        "width": 740,
+        "height": 423,
+        "tags": [
+          "nature",
+          "mountains",
+          "meadows"
+        ],
+        "orientation": "landscape",
+        "color": "neutral",
+        "dominant": {
+          "r": 40,
+          "g": 40,
+          "b": 40
+        },
+        "sourceAI": true,
+        "license": "unspecified",
+        "people": "unspecified",
+        "format": "webp",
+        "media": "photos",
+        "prompt": "Создайте изображение природы по мотивам этой сцены: Свежесть горного луга, красота природы, создано ИИ. Сохраните выраженное ощущение места, естественный свет, подробные фактуры и спокойную фотографическую композицию. Без текста и водяных знаков."
+      },
+      {
+        "id": "nature-47",
+        "src": "/assets/images/material-category/nature-47.webp",
+        "alt": "Бурная река, природа",
+        "width": 413,
+        "height": 740,
+        "tags": [
+          "nature",
+          "rivers"
+        ],
+        "orientation": "portrait",
+        "color": "neutral",
+        "dominant": {
+          "r": 8,
+          "g": 8,
+          "b": 8
+        },
+        "sourceAI": false,
+        "license": "unspecified",
+        "people": "unspecified",
+        "format": "webp",
+        "media": "photos",
+        "prompt": "Создайте изображение природы по мотивам этой сцены: Бурная река, природа. Сохраните выраженное ощущение места, естественный свет, подробные фактуры и спокойную фотографическую композицию. Без текста и водяных знаков."
+      },
+      {
+        "id": "nature-48",
+        "src": "/assets/images/material-category/nature-48.webp",
+        "alt": "Снимок города Гальштат в Австрии с воздуха",
+        "width": 740,
+        "height": 493,
+        "tags": [
+          "nature"
+        ],
+        "orientation": "landscape",
+        "color": "neutral",
+        "dominant": {
+          "r": 232,
+          "g": 248,
+          "b": 248
+        },
+        "sourceAI": false,
+        "license": "unspecified",
+        "people": "unspecified",
+        "format": "webp",
+        "media": "photos",
+        "prompt": "Создайте изображение природы по мотивам этой сцены: Снимок города Гальштат в Австрии с воздуха. Сохраните выраженное ощущение места, естественный свет, подробные фактуры и спокойную фотографическую композицию. Без текста и водяных знаков."
+      },
+      {
+        "id": "nature-49",
+        "src": "/assets/images/material-category/nature-49.webp",
+        "alt": "Горное озеро",
+        "width": 740,
+        "height": 493,
+        "tags": [
+          "nature",
+          "mountains",
+          "lakes"
+        ],
+        "orientation": "landscape",
+        "color": "blue",
+        "dominant": {
+          "r": 184,
+          "g": 200,
+          "b": 232
+        },
+        "sourceAI": false,
+        "license": "unspecified",
+        "people": "unspecified",
+        "format": "webp",
+        "media": "photos",
+        "prompt": "Создайте изображение природы по мотивам этой сцены: Горное озеро. Сохраните выраженное ощущение места, естественный свет, подробные фактуры и спокойную фотографическую композицию. Без текста и водяных знаков."
+      },
+      {
+        "id": "nature-50",
+        "src": "/assets/images/material-category/nature-50.webp",
+        "alt": "Красивый снимок красных цветов рядом с зелёными деревьями и лесистыми горами вдали",
+        "width": 740,
+        "height": 490,
+        "tags": [
+          "nature",
+          "forest",
+          "mountains",
+          "flowers"
+        ],
+        "orientation": "landscape",
+        "color": "blue",
+        "dominant": {
+          "r": 184,
+          "g": 200,
+          "b": 216
+        },
+        "sourceAI": false,
+        "license": "unspecified",
+        "people": "unspecified",
+        "format": "webp",
+        "media": "photos",
+        "prompt": "Создайте изображение природы по мотивам этой сцены: Красивый снимок красных цветов рядом с зелёными деревьями и лесистыми горами вдали. Сохраните выраженное ощущение места, естественный свет, подробные фактуры и спокойную фотографическую композицию. Без текста и водяных знаков."
+      }
+    ],
+    "gypsophilaMaterial": {
+      "id": "gypsophila-01",
+      "slug": "dried-gypsophila",
+      "path": "/stock/items/dried-gypsophila/gypsophila-01",
+      "title": "Сухая гипсофила с тенью от окна на бежевой стене",
+      "mediaType": "photo",
+      "media": {
+        "id": "gypsophila-01",
+        "src": "/assets/images/material-detail/gypsophila-01.webp",
+        "alt": "Сухая гипсофила с тенью от окна на бежевой стене",
+        "width": 706,
+        "height": 1060,
+        "tags": [
+          "botanical",
+          "shadow",
+          "beige"
+        ]
+      },
+      "publicMediaIds": [
+        "gypsophila-01",
+        "botanical-01",
+        "botanical-02",
+        "botanical-03",
+        "botanical-04",
+        "botanical-05",
+        "botanical-06",
+        "botanical-07",
+        "botanical-08",
+        "botanical-09",
+        "botanical-10",
+        "botanical-11",
+        "botanical-12",
+        "botanical-13",
+        "botanical-14",
+        "botanical-15",
+        "botanical-16",
+        "botanical-17",
+        "botanical-18",
+        "botanical-19",
+        "botanical-20",
+        "botanical-21",
+        "botanical-22",
+        "botanical-23",
+        "botanical-still-01",
+        "botanical-still-02",
+        "botanical-still-03",
+        "botanical-still-04",
+        "botanical-still-05",
+        "botanical-still-06",
+        "botanical-still-07",
+        "botanical-still-08",
+        "botanical-still-09",
+        "botanical-still-10"
+      ],
+      "creatorId": "rawpixel-com",
+      "creator": {
+        "name": "rawpixel.com",
+        "url": "https://www.magnific.com/author/rawpixel-com"
+      },
+      "provenance": {
+        "source": "Magnific",
+        "url": "https://www.magnific.com/free-photo/dried-gypsophila-with-window-shadow-beige-wall_19134237.htm"
+      },
+      "licenseRef": "https://www.magnific.com/profile/license/pdf/19134237?lang=en",
+      "rights": {
+        "status": "source-terms-unverified",
+        "note": "Это превью не предоставляет коммерческих прав. Перед повторным использованием фотографии проверьте лицензию источника."
+      },
+      "fileDescriptor": {
+        "width": 706,
+        "height": 1060,
+        "format": "webp",
+        "bytes": 651014
+      },
+      "downloadPolicy": "reference-preview-only",
+      "categoryIds": [
+        "nature"
+      ],
+      "taxonIds": [
+        "botanical",
+        "shadow",
+        "flower",
+        "beige",
+        "wallpaper",
+        "white"
+      ],
+      "sourceAI": false,
+      "suggestedPrompt": "Минималистичная ботаническая фотография нежных веток сухой гипсофилы на фоне тёплой бежевой оштукатуренной стены. Мягкий естественный солнечный свет из окна отбрасывает длинные геометричные тени. Воздушная композиция, мелкие кремовые цветы, тонкая фактура стены, мягкая глубина резкости и спокойная нейтральная палитра. Без текста и водяных знаков.",
+      "photos": [
+        {
+          "id": "botanical-01",
+          "src": "/assets/images/material-detail/botanical-01.webp",
+          "alt": "Эстетичные бежевые обои для рабочего стола: сухоцвет с тенью и мерцающим оформлением",
+          "width": 626,
+          "height": 352,
+          "tags": [
+            "botanical",
+            "shadow",
+            "flower",
+            "beige",
+            "wallpaper"
+          ]
+        },
+        {
+          "id": "botanical-02",
+          "src": "/assets/images/material-detail/botanical-02.webp",
+          "alt": "Сухие белые цветы статицы с тенью от окна на белой стене",
+          "width": 417,
+          "height": 626,
+          "tags": [
+            "botanical",
+            "flower",
+            "white"
+          ]
+        },
+        {
+          "id": "botanical-03",
+          "src": "/assets/images/material-detail/botanical-03.webp",
+          "alt": "Сухая гипсофила с тенью от окна на бежевой стене",
+          "width": 417,
+          "height": 626,
+          "tags": [
+            "botanical",
+            "shadow",
+            "beige"
+          ]
+        },
+        {
+          "id": "botanical-04",
+          "src": "/assets/images/material-detail/botanical-04.webp",
+          "alt": "Сухая гипсофила на сером фоне",
+          "width": 626,
+          "height": 417,
+          "tags": [
+            "botanical"
+          ]
+        },
+        {
+          "id": "botanical-05",
+          "src": "/assets/images/material-detail/botanical-05.webp",
+          "alt": "Цветочная рамка на прозрачном фоне PNG, эстетичный дизайн стикера",
+          "width": 417,
+          "height": 626,
+          "tags": [
+            "botanical",
+            "flower"
+          ]
+        },
+        {
+          "id": "botanical-06",
+          "src": "/assets/images/material-detail/botanical-06.webp",
+          "alt": "Цветочная рамка PNG: сухая белая статица с тенью от окна на прозрачном фоне",
+          "width": 626,
+          "height": 418,
+          "tags": [
+            "botanical",
+            "shadow",
+            "flower",
+            "white"
+          ]
+        },
+        {
+          "id": "botanical-07",
+          "src": "/assets/images/material-detail/botanical-07.webp",
+          "alt": "Эстетичный фон: сухоцвет с тенью и мерцающим оформлением",
+          "width": 417,
+          "height": 626,
+          "tags": [
+            "botanical",
+            "shadow",
+            "flower"
+          ]
+        },
+        {
+          "id": "botanical-08",
+          "src": "/assets/images/material-detail/botanical-08.webp",
+          "alt": "Сухие цветы в стеклянной вазе отбрасывают тень на светло-фиолетовую стену",
+          "width": 626,
+          "height": 351,
+          "tags": [
+            "botanical",
+            "shadow",
+            "flower"
+          ]
+        },
+        {
+          "id": "botanical-09",
+          "src": "/assets/images/material-detail/botanical-09.webp",
+          "alt": "Элегантный букет сухоцветов: натюрморт из нежных кремовых и бежевых цветов",
+          "width": 626,
+          "height": 626,
+          "tags": [
+            "botanical",
+            "flower",
+            "beige"
+          ]
+        },
+        {
+          "id": "botanical-10",
+          "src": "/assets/images/material-detail/botanical-10.webp",
+          "alt": "Тень экзотического растения на белой стене.",
+          "width": 626,
+          "height": 438,
+          "tags": [
+            "botanical",
+            "shadow",
+            "white"
+          ]
+        },
+        {
+          "id": "botanical-11",
+          "src": "/assets/images/material-detail/botanical-11.webp",
+          "alt": "Элегантные белые цветы, нежный букет",
+          "width": 626,
+          "height": 626,
+          "tags": [
+            "botanical",
+            "flower",
+            "white"
+          ]
+        },
+        {
+          "id": "botanical-12",
+          "src": "/assets/images/material-detail/botanical-12.webp",
+          "alt": "Тень дерева на белой стене.",
+          "width": 626,
+          "height": 438,
+          "tags": [
+            "botanical",
+            "shadow",
+            "white"
+          ]
+        }
+      ],
+      "designs": [
+        {
+          "id": "botanical-13",
+          "src": "/assets/images/material-detail/botanical-13.webp",
+          "alt": "Фон PSD с тенью тропического листа",
+          "width": 626,
+          "height": 418,
+          "tags": [
+            "botanical",
+            "shadow",
+            "leaf"
+          ]
+        },
+        {
+          "id": "botanical-14",
+          "src": "/assets/images/material-detail/botanical-14.webp",
+          "alt": "Эстетичный векторный фон: сухоцвет с тенью, мерцающее оформление",
+          "width": 626,
+          "height": 626,
+          "tags": [
+            "botanical",
+            "shadow",
+            "flower"
+          ]
+        },
+        {
+          "id": "botanical-15",
+          "src": "/assets/images/material-detail/botanical-15.webp",
+          "alt": "Эстетичный векторный фон: сухоцвет с тенью, мерцающее оформление",
+          "width": 626,
+          "height": 418,
+          "tags": [
+            "botanical",
+            "shadow",
+            "flower"
+          ]
+        },
+        {
+          "id": "botanical-16",
+          "src": "/assets/images/material-detail/botanical-16.webp",
+          "alt": "Ботанические векторные обои для мобильного телефона",
+          "width": 352,
+          "height": 626,
+          "tags": [
+            "botanical",
+            "wallpaper"
+          ]
+        },
+        {
+          "id": "botanical-17",
+          "src": "/assets/images/material-detail/botanical-17.webp",
+          "alt": "Вертикальный абстрактный бежевый фон без текста с акварельными ветками, пампасной травой и сухими травами",
+          "width": 443,
+          "height": 626,
+          "tags": [
+            "botanical",
+            "beige"
+          ]
+        },
+        {
+          "id": "botanical-18",
+          "src": "/assets/images/material-detail/botanical-18.webp",
+          "alt": "Эстетичные векторные обои для телефона: тень листа в естественном свете",
+          "width": 352,
+          "height": 626,
+          "tags": [
+            "botanical",
+            "shadow",
+            "wallpaper",
+            "leaf"
+          ]
+        },
+        {
+          "id": "botanical-19",
+          "src": "/assets/images/material-detail/botanical-19.webp",
+          "alt": "Узор из листьев Philodendron radiatum на бежевом фоне",
+          "width": 417,
+          "height": 626,
+          "tags": [
+            "botanical",
+            "beige",
+            "leaf"
+          ]
+        },
+        {
+          "id": "botanical-20",
+          "src": "/assets/images/material-detail/botanical-20.webp",
+          "alt": "Эстетичные векторные обои для телефона: тень листа в естественном свете",
+          "width": 352,
+          "height": 626,
+          "tags": [
+            "botanical",
+            "shadow",
+            "wallpaper",
+            "leaf"
+          ]
+        },
+        {
+          "id": "botanical-21",
+          "src": "/assets/images/material-detail/botanical-21.webp",
+          "alt": "Эстетичные векторные обои с цветами",
+          "width": 352,
+          "height": 626,
+          "tags": [
+            "botanical",
+            "flower",
+            "wallpaper"
+          ]
+        },
+        {
+          "id": "botanical-22",
+          "src": "/assets/images/material-detail/botanical-22.webp",
+          "alt": "Цветочная тень на белом мраморном фоне",
+          "width": 417,
+          "height": 626,
+          "tags": [
+            "botanical",
+            "shadow",
+            "white"
+          ]
+        },
+        {
+          "id": "botanical-23",
+          "src": "/assets/images/material-detail/botanical-23.webp",
+          "alt": "Векторная иллюстрация пампасной травы, нарисованная от руки, на белом фоне",
+          "width": 626,
+          "height": 626,
+          "tags": [
+            "botanical",
+            "white"
+          ]
+        }
+      ],
+      "videoStills": [
+        {
+          "id": "botanical-still-01",
+          "src": "/assets/images/material-detail/botanical-still-01.webp",
+          "alt": "Кадр видео: вид сверху на сухие цветы, отбрасывающие тени на бежевый фон, создавая минималистичное настроение",
+          "width": 264,
+          "height": 468,
+          "tags": [
+            "botanical",
+            "video-still"
+          ]
+        },
+        {
+          "id": "botanical-still-02",
+          "src": "/assets/images/material-detail/botanical-still-02.webp",
+          "alt": "Кадр видео: камера приближается к ветке с листьями, смещающейся в центр на фактурной стене; солнечный свет проявляет листовые почки",
+          "width": 468,
+          "height": 264,
+          "tags": [
+            "botanical",
+            "video-still"
+          ]
+        },
+        {
+          "id": "botanical-still-03",
+          "src": "/assets/images/material-detail/botanical-still-03.webp",
+          "alt": "Кадр видео: колышущийся сухой султан пампасной травы слегка меняет форму в нейтральной комнате, пятно солнечного света скользит вверх",
+          "width": 568,
+          "height": 320,
+          "tags": [
+            "botanical",
+            "video-still"
+          ]
+        },
+        {
+          "id": "botanical-still-04",
+          "src": "/assets/images/material-detail/botanical-still-04.webp",
+          "alt": "Кадр видео: вертикальное видео: свет меняется, тонкая ветка отбрасывает тени на бледную стену, диагональная полоса, место для текста",
+          "width": 264,
+          "height": 470,
+          "tags": [
+            "botanical",
+            "video-still"
+          ]
+        },
+        {
+          "id": "botanical-still-05",
+          "src": "/assets/images/material-detail/botanical-still-05.webp",
+          "alt": "Кадр видео: вертикальное видео: движущаяся листва снаружи отбрасывает тени листьев на штукатурную стену с цветочным оформлением в комнате",
+          "width": 264,
+          "height": 468,
+          "tags": [
+            "botanical",
+            "video-still"
+          ]
+        },
+        {
+          "id": "botanical-still-06",
+          "src": "/assets/images/material-detail/botanical-still-06.webp",
+          "alt": "Кадр видео: вертикальное видео: группа полевых цветов качается на ветру на низком лугу, с бутонами и солнечным ореолом",
+          "width": 264,
+          "height": 468,
+          "tags": [
+            "botanical",
+            "video-still"
+          ]
+        },
+        {
+          "id": "botanical-still-07",
+          "src": "/assets/images/material-detail/botanical-still-07.webp",
+          "alt": "Кадр видео: макросъёмка крупным планом созревающих злаковых колосьев, колышущихся на ветру",
+          "width": 468,
+          "height": 264,
+          "tags": [
+            "botanical",
+            "video-still"
+          ]
+        },
+        {
+          "id": "botanical-still-08",
+          "src": "/assets/images/material-detail/botanical-still-08.webp",
+          "alt": "Кадр видео: семена травы колышутся на ветру",
+          "width": 468,
+          "height": 264,
+          "tags": [
+            "botanical",
+            "video-still"
+          ]
+        },
+        {
+          "id": "botanical-still-09",
+          "src": "/assets/images/material-detail/botanical-still-09.webp",
+          "alt": "Кадр видео: вертикальное видео: одиночный султан пампасной травы покачивается от лёгкого ветерка у бледной стены, диагональная тень",
+          "width": 320,
+          "height": 568,
+          "tags": [
+            "botanical",
+            "video-still"
+          ]
+        },
+        {
+          "id": "botanical-still-10",
+          "src": "/assets/images/material-detail/botanical-still-10.webp",
+          "alt": "Кадр видео: минималистичная видеоконцепция с сухими цветами, отбрасывающими тени на бежевую стену",
+          "width": 264,
+          "height": 468,
+          "tags": [
+            "botanical",
+            "video-still"
+          ]
+        }
+      ],
+      "downloads": [
+        {
+          "label": "Превью WebP",
+          "src": "/assets/images/material-detail/gypsophila-01.webp",
+          "filename": "epifera-dried-gypsophila-preview.webp",
+          "mime": "image/webp"
+        },
+        {
+          "label": "Превью PNG",
+          "src": "/assets/images/material-detail/gypsophila-01-preview.png",
+          "filename": "epifera-dried-gypsophila-preview.png",
+          "mime": "image/png"
+        }
+      ]
+    },
+    "materialFilters": [
+      {
+        "key": "media",
+        "label": "Фотографии",
+        "options": [
+          {
+            "value": "photos",
+            "label": "Фотографии"
+          },
+          {
+            "value": "all",
+            "label": "Все изображения"
+          }
+        ]
+      },
+      {
+        "key": "license",
+        "label": "Лицензия",
+        "options": [
+          {
+            "value": "all",
+            "label": "Все"
+          },
+          {
+            "value": "unspecified",
+            "label": "Лицензия не предоставлена"
+          }
+        ],
+        "hint": "Условия лицензии для этих референсных превью не предоставлены. Перед повторным использованием изображения проверьте условия источника."
+      },
+      {
+        "key": "source",
+        "label": "Создано ИИ",
+        "options": [
+          {
+            "value": "all",
+            "label": "Все"
+          },
+          {
+            "value": "ai",
+            "label": "В источнике есть пометка об ИИ"
+          },
+          {
+            "value": "unspecified",
+            "label": "В источнике нет пометки об ИИ"
+          }
+        ]
+      },
+      {
+        "key": "orientation",
+        "label": "Ориентация",
+        "options": [
+          {
+            "value": "all",
+            "label": "Все"
+          },
+          {
+            "value": "landscape",
+            "label": "Горизонтальная"
+          },
+          {
+            "value": "portrait",
+            "label": "Вертикальная"
+          },
+          {
+            "value": "square",
+            "label": "Квадратная"
+          }
+        ]
+      },
+      {
+        "key": "color",
+        "label": "Основной цвет",
+        "options": [
+          {
+            "value": "all",
+            "label": "Все"
+          },
+          {
+            "value": "green",
+            "label": "Зелёный",
+            "color": "#4e8660"
+          },
+          {
+            "value": "blue",
+            "label": "Синий",
+            "color": "#5f8eb4"
+          },
+          {
+            "value": "orange",
+            "label": "Оранжевый",
+            "color": "#ce915a"
+          },
+          {
+            "value": "yellow",
+            "label": "Жёлтый",
+            "color": "#c4b55c"
+          },
+          {
+            "value": "purple",
+            "label": "Фиолетовый",
+            "color": "#a17daa"
+          },
+          {
+            "value": "neutral",
+            "label": "Нейтральный",
+            "color": "#93958b"
+          }
+        ],
+        "hint": "Основной цвет измерен по доступному превью."
+      },
+      {
+        "key": "people",
+        "label": "Люди",
+        "options": [
+          {
+            "value": "all",
+            "label": "Все"
+          },
+          {
+            "value": "unspecified",
+            "label": "Наличие людей не указано"
+          }
+        ],
+        "hint": "Метаданные о людях не предоставлены. Отсутствие сведений не означает, что на изображении нет людей."
+      },
+      {
+        "key": "format",
+        "label": "Тип файла",
+        "options": [
+          {
+            "value": "all",
+            "label": "Все"
+          },
+          {
+            "value": "webp",
+            "label": "Превью WebP"
+          }
+        ]
+      }
+    ],
+    "initialMaterialFilters": {
+      "query": "Природа",
+      "topic": "all",
+      "media": "photos",
+      "license": "all",
+      "source": "all",
+      "orientation": "all",
+      "color": "all",
+      "people": "all",
+      "format": "all",
+      "sort": "relevance"
+    }
+  }
+}

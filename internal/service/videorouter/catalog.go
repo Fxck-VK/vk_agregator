@@ -12,6 +12,7 @@ import (
 	"github.com/google/uuid"
 
 	"vk-ai-aggregator/internal/domain"
+	"vk-ai-aggregator/internal/service/economycatalog"
 	"vk-ai-aggregator/internal/service/pricingcatalog"
 	"vk-ai-aggregator/internal/service/providermodels"
 )
@@ -44,6 +45,9 @@ type ProviderConfig struct {
 }
 
 type Config struct {
+	Pricing interface {
+		Snapshot(pricingcatalog.ProductKey) (pricingcatalog.PricingSnapshot, error)
+	}
 	RouterEnabled bool
 	Providers     map[domain.ProviderName]ProviderConfig
 	EnabledRoutes map[domain.VideoRouteAlias]bool
@@ -90,6 +94,7 @@ type PublicRoute struct {
 }
 
 type Catalog struct {
+	quote         func(pricingcatalog.ProductKey) (pricingcatalog.PricingSnapshot, error)
 	routerEnabled bool
 	routes        map[domain.VideoRouteAlias]Route
 	modelIDs      map[string]domain.VideoRouteAlias
@@ -123,7 +128,12 @@ func NewCatalog(cfg Config) (*Catalog, error) {
 	for _, alias := range providermodels.RuntimeRegistry().ProviderModelAliases() {
 		addProviderModelAlias(modelIDs, alias.Alias, alias.ProviderModelID)
 	}
+	quote := pricingcatalog.EconomicVideoSnapshot
+	if cfg.Pricing != nil {
+		quote = cfg.Pricing.Snapshot
+	}
 	return &Catalog{
+		quote:         quote,
 		routerEnabled: cfg.RouterEnabled,
 		routes:        routes,
 		modelIDs:      modelIDs,
@@ -283,6 +293,9 @@ func (c *Catalog) Resolve(ctx context.Context, req Request) (Resolution, error) 
 	if hasAudioReference(params) && !route.Spec.SupportsReferenceAudio {
 		return Resolution{}, fmt.Errorf("%w: %s audio reference", ErrInvalidRouteRequest, routeAlias)
 	}
+	if decision, known := economycatalog.ModelEconomicDecision(string(routeAlias)); known && decision.Mode == "unavailable" {
+		return Resolution{}, fmt.Errorf("%w: %s", ErrRouteCostUnavailable, routeAlias)
+	}
 	providerCost := route.Spec.ProviderCostCreditsFixed + route.Spec.ProviderCostCreditsPerSecond*int64(durationSec)
 	if len(route.Spec.ProviderCostMicrosByResolutionDuration) > 0 {
 		micros := route.Spec.ProviderCostMicrosByResolutionDuration[normalize(resolutionRaw)][durationSec]
@@ -318,7 +331,22 @@ func (c *Catalog) Resolve(ctx context.Context, req Request) (Resolution, error) 
 	if internalCost <= 0 {
 		return Resolution{}, fmt.Errorf("%w: %s", ErrRouteCostUnavailable, routeAlias)
 	}
-	if route.Spec.MaxInternalCostCredits > 0 && internalCost > route.Spec.MaxInternalCostCredits {
+	retailCap := route.Spec.MaxInternalCostCredits
+	quality := ""
+	if params.VideoAudio {
+		quality = pricingcatalog.VideoQualityAudio
+	}
+	if decision, ok := economycatalog.ModelEconomicDecision(string(routeAlias)); ok && decision.Mode == "reference_or_cost" {
+		quote, err := c.quote(pricingcatalog.ProductKey{Operation: domain.OperationVideoGenerate, Modality: domain.ModalityVideo, VideoRouteAlias: routeAlias, Quality: quality, Resolution: normalize(resolutionRaw), DurationSec: durationSec})
+		if err != nil {
+			return Resolution{}, fmt.Errorf("%w: %s", ErrRouteCostUnavailable, routeAlias)
+		}
+		internalCost = quote.InternalCredits
+		// This is the customer-price ceiling, independent of the unchanged
+		// provider-spend guard above. A new quote may exceed the old retail cap.
+		retailCap = max(retailCap, internalCost)
+	}
+	if retailCap > 0 && internalCost > retailCap {
 		return Resolution{}, fmt.Errorf("%w: internal cost %d exceeds route cap %d", domain.ErrCostCapExceeded, internalCost, route.Spec.MaxInternalCostCredits)
 	}
 	snapshot := domain.VideoRouteSnapshot{
@@ -336,7 +364,7 @@ func (c *Catalog) Resolve(ctx context.Context, req Request) (Resolution, error) 
 		InternalCostCredits:    internalCost,
 		PriceMultiplier:        route.Spec.PriceMultiplier,
 		MaxProviderCostCredits: route.Spec.MaxProviderCostCredits,
-		MaxInternalCostCredits: route.Spec.MaxInternalCostCredits,
+		MaxInternalCostCredits: retailCap,
 	}
 	if providermodels.RuntimeRegistry().IsDEVSmokeModel(string(route.Spec.Alias)) {
 		// Manual smoke routes have text input only, so there is no source audio.

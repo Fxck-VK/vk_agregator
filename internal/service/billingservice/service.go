@@ -8,16 +8,19 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"math/big"
+	"strings"
 	"time"
 
 	"github.com/google/uuid"
 
 	"vk-ai-aggregator/internal/domain"
+	"vk-ai-aggregator/internal/service/economycatalog"
 )
 
 // DefaultStartingBalance is the amount of credits granted to a freshly created
 // account.
-const DefaultStartingBalance int64 = 60
+const DefaultStartingBalance int64 = economycatalog.SignupBonusStars
 
 // DefaultReservationTTL bounds how long a hold may live before it is eligible
 // for automatic release.
@@ -119,11 +122,45 @@ func (s *Service) StartingBalance() int64 {
 	return s.startingBalance
 }
 
-// BalanceForEstimate returns the current cached balance for estimate-only
-// reads. If the account does not exist yet, it returns the configured starting
-// balance without creating a ledger entry. The ownerID is the canonical account
-// id; repositories still provide legacy user_id fallback for old rows.
+// creditLotBalanceReader is optional so older repositories preserve their
+// cached-balance lookup behavior.
+type creditLotBalanceReader interface {
+	CreditLotBalancesForOwner(context.Context, uuid.UUID, time.Time) ([]domain.CreditLotBalance, error)
+}
+
+// BalanceForEstimate returns spendable stars: expired portions and active holds
+// are excluded, while signed corrections remain visible. Missing accounts return
+// the configured starting bonus without creating an account or ledger entry.
 func (s *Service) BalanceForEstimate(ctx context.Context, ownerID uuid.UUID) (int64, error) {
+	if lots, ok := s.repo.(creditLotBalanceReader); ok {
+		if ownerID == uuid.Nil {
+			return 0, ErrInvalidOwnerAccount
+		}
+		acc, err := s.repo.GetAccountByOwner(ctx, ownerID, s.currency)
+		if errors.Is(err, domain.ErrNotFound) {
+			return s.startingBalance, nil
+		}
+		if err != nil {
+			return 0, err
+		}
+		if acc.OwnerAccountID != ownerID {
+			return 0, ErrInvalidOwnerAccount
+		}
+		balances, err := lots.CreditLotBalancesForOwner(ctx, ownerID, s.now())
+		if err != nil {
+			return 0, err
+		}
+		// Aggregate before narrowing so positive lots followed by legacy debt cannot
+		// overflow at an intermediate step or turn a negative balance positive.
+		var total big.Int
+		for _, lot := range balances {
+			total.Add(&total, big.NewInt(lot.AvailableCredits))
+		}
+		if !total.IsInt64() {
+			return 0, ErrInvalidAmount
+		}
+		return total.Int64(), nil
+	}
 	acc, err := s.repo.GetAccountByUser(ctx, ownerID, s.currency)
 	if err == nil {
 		return acc.BalanceCached, nil
@@ -165,6 +202,7 @@ func (s *Service) EnsureAccountForAccount(ctx context.Context, repo domain.Billi
 		OwnerAccountID:            ownerAccountID,
 		Currency:                  currency,
 		BalanceCached:             s.startingBalance,
+		OpeningLotKind:            domain.CreditLotBonus,
 		CreditDenominationVersion: domain.CurrentCreditDenominationVersion,
 	}
 	if err := repo.CreateAccount(ctx, acc); err != nil {
@@ -196,6 +234,7 @@ func (s *Service) ensureAccountWith(ctx context.Context, repo domain.BillingRepo
 		OwnerAccountID:            accountID,
 		Currency:                  s.currency,
 		BalanceCached:             s.startingBalance,
+		OpeningLotKind:            domain.CreditLotBonus,
 		CreditDenominationVersion: domain.CurrentCreditDenominationVersion,
 	}
 	if err := repo.CreateAccount(ctx, acc); err != nil {
@@ -420,6 +459,7 @@ func (s *Service) GrantWithOwner(ctx context.Context, repo domain.BillingReposit
 		Status:                    domain.LedgerStatusCommitted,
 		IdempotencyKey:            idempotencyKey,
 		Reason:                    reason,
+		LotKind:                   paymentGrantLotKind(reason),
 	}
 	if err := repo.AppendEntry(ctx, entry); err != nil {
 		if errors.Is(err, domain.ErrConflict) {
@@ -456,6 +496,7 @@ func (s *Service) GrantWithAccount(ctx context.Context, repo domain.BillingRepos
 		Status:                    domain.LedgerStatusCommitted,
 		IdempotencyKey:            idempotencyKey,
 		Reason:                    reason,
+		LotKind:                   paymentGrantLotKind(reason),
 	})
 	if errors.Is(err, domain.ErrConflict) {
 		return nil
@@ -483,4 +524,13 @@ func clonePrices(in map[domain.OperationType]int64) map[domain.OperationType]int
 		out[k] = v
 	}
 	return out
+}
+
+// Provider-verified payment settlement uses this existing server-owned reason
+// prefix. Referral/admin grants retain their prior non-expiring legacy default.
+func paymentGrantLotKind(reason string) domain.CreditLotKind {
+	if strings.HasPrefix(reason, "payment top-up via ") {
+		return domain.CreditLotPurchased
+	}
+	return ""
 }

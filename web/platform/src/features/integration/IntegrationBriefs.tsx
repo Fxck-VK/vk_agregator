@@ -12,7 +12,7 @@ import {useLocale} from "@/i18n/LocaleProvider";
 export function IntegrationBriefs({onConnect}:{onConnect:()=>void}){
   const publicCopyLocale=useLocale();
 
-  const {mcpPrompts,t} = usePublicCopy(publicCopySourcesForLocale);
+  const {mcpPrompts,t} = usePublicCopy(publicCopySourcesForLocale,{"t":"mcpEn","mcpPrompts":"mcpPrompts"});
 
  const[selected,setSelected]=useState(0),[copying,setCopying]=useState<string|null>(null),[copied,setCopied]=useState<string|null>(null),[error,setError]=useState<string|null>(null),active=mcpPrompts[selected];
  const copy=async(id:string,text:string)=>{if(copying)return;setCopying(id);setError(null);try{await navigator.clipboard.writeText(text);setCopied(id);}catch{setCopied(null);setError(id);}finally{setCopying(null);}};

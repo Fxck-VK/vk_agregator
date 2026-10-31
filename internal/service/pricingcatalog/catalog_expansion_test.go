@@ -8,11 +8,11 @@ func TestCatalogExpansionQuotes(t *testing.T) {
 		seconds        int
 		floor, credits int64
 	}{
-		{"grok_imagine_1_5_video", "", "480p", 6, 61200, 40},
-		{"grok_imagine_1_5_video", "", "720p", 15, 286800, 175},
-		{"kling_2_6", "", "720p", 5, 184000, 115},
-		{"kling_2_6", "", "1080p", 10, 625000, 375},
-		{"kling_2_6", "pro-sound", "1080p", 5, 625000, 375},
+		{"grok_imagine_1_5_video", "", "480p", 6, 61200, 150},
+		{"grok_imagine_1_5_video", "", "720p", 15, 286800, 375},
+		{"kling_2_6", "", "720p", 5, 184000, 300},
+		{"kling_2_6", "", "1080p", 10, 625000, 300},
+		{"kling_2_6", "pro-sound", "1080p", 5, 625000, 300},
 		{"seedance_2_0", "", "4k", 15, 10830000, 6500},
 		{"seedance_2_0_mini", "", "720p", 5, 114400, 70},
 	} {
@@ -22,7 +22,7 @@ func TestCatalogExpansionQuotes(t *testing.T) {
 		}
 	}
 	q, err := ImageCandidateQuote("nano_banana")
-	if err != nil || q.Floor.Amount != 12500 || q.InternalCredits != 10 {
+	if err != nil || q.Floor.Amount != 12500 || q.InternalCredits != 30 {
 		t.Errorf("Nano quote=%+v err=%v", q, err)
 	}
 	for _, tc := range []struct {

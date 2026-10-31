@@ -150,25 +150,28 @@ export function PopoverPanel({
       const panel = panelRef.current;
       if (!anchor || !panel) return;
 
-      const width = Math.max(0, Math.min(preferredWidth, window.innerWidth - viewportMargin * 2));
-      const maxHeight = Math.max(0, window.innerHeight - viewportMargin * 2);
+      const rootFontScale = Number.parseFloat(getComputedStyle(document.documentElement).fontSize) / 16 || 1;
+      const margin = viewportMargin * rootFontScale;
+      const gap = anchorGap * rootFontScale;
+      const width = Math.max(0, Math.min(preferredWidth * rootFontScale, window.innerWidth - margin * 2));
+      const maxHeight = Math.max(0, window.innerHeight - margin * 2);
       panel.style.width = `${width}px`;
       panel.style.maxHeight = `${maxHeight}px`;
       const panelHeight = Math.min(panel.offsetHeight, maxHeight);
       const bounds = anchor.getBoundingClientRect();
       const left = clamp(
         align === "end" ? bounds.right - width : bounds.left,
-        viewportMargin,
-        Math.max(viewportMargin, window.innerWidth - viewportMargin - width),
+        margin,
+        Math.max(margin, window.innerWidth - margin - width),
       );
-      const above = bounds.top - anchorGap - panelHeight;
-      const below = bounds.bottom + anchorGap;
-      const maxTop = Math.max(viewportMargin, window.innerHeight - viewportMargin - panelHeight);
-      const top = below >= viewportMargin && below + panelHeight <= window.innerHeight - viewportMargin
+      const above = bounds.top - gap - panelHeight;
+      const below = bounds.bottom + gap;
+      const maxTop = Math.max(margin, window.innerHeight - margin - panelHeight);
+      const top = below >= margin && below + panelHeight <= window.innerHeight - margin
         ? below
-        : above >= viewportMargin && above <= maxTop
+        : above >= margin && above <= maxTop
           ? above
-          : clamp(above, viewportMargin, maxTop);
+          : clamp(above, margin, maxTop);
       const motionOrigin = top < bounds.top ? "bottom" : "top";
 
       setLayout((current) => current?.left === left && current.top === top && current.width === width && current.maxHeight === maxHeight && current.motionOrigin === motionOrigin

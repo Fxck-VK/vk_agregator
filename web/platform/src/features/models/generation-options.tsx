@@ -10,6 +10,7 @@ import { ImageGenerationControls } from "@/features/image-generation/ImageGenera
 import { ImageAspectRatioSelector } from "@/features/image-generation/ImageAspectRatioSelector/ImageAspectRatioSelector";
 import { ImageQualitySelector } from "@/features/image-generation/ImageQualitySelector/ImageQualitySelector";
 import type { GenerationModel } from "./generation-model-catalog";
+import { imagePrice } from "./image-price";
 
 function videoAspectRatios(model: Extract<GenerationModel, { category: "video" }>, options: GenerationOptions) {
  return model.allowed_aspect_ratios.filter(ratio => !model.variants || model.variants.some(variant =>
@@ -22,8 +23,7 @@ export function resolveGenerationOptions(model: GenerationModel | undefined, sav
   const ratios = (model.allowed_aspect_ratios ?? []).filter(ratio => !model.price_by_variant || model.price_by_variant[`${image_quality}:${ratio}`] > 0);
   const aspect_ratio = ratios.includes(saved.aspect_ratio ?? "") ? saved.aspect_ratio! : ratios.includes(model.default_aspect_ratio ?? "") ? model.default_aspect_ratio! : ratios[0];
   const output_count = Math.min(Math.max(saved.output_count ?? 1,1),model.max_output_count ?? 1);
-  const unitPrice = model.price_by_variant ? model.price_by_variant[`${image_quality}:${aspect_ratio}`] : model.price_by_quality?.[image_quality];
-  return {options:{image_quality,aspect_ratio,output_count},cost:unitPrice === undefined ? undefined : unitPrice*output_count};
+  return {options:{image_quality,aspect_ratio,output_count},cost:imagePrice(model,image_quality,aspect_ratio ?? "",output_count)};
  }
  if (model?.category === "video") {
   const resolution = model.allowed_resolutions.includes(saved.resolution ?? "") ? saved.resolution! : model.default_resolution;

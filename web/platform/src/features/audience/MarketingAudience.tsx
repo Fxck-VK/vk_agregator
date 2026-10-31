@@ -19,7 +19,7 @@ import {usePublicCopy} from "@/i18n/public/use-public-copy";
 
 
 export function MarketingAudience() {
-  const {copy,aiToolsEn,homeEn,media} = usePublicCopy(publicCopySourcesForLocale);
+  const {copy,aiToolsEn,homeEn,media} = usePublicCopy(publicCopySourcesForLocale,{"copy":"marketingEn","media":"marketingReferenceEn"});
 
   const [search,setSearch]=useState(false),[paused,setPaused]=useState(false),[preview,setPreview]=useState<MarketingPreview|null>(null);
   const openSearch=useCallback(()=>{if(!preview)setSearch(true);},[preview]);

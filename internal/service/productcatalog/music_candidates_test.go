@@ -54,7 +54,7 @@ func TestDEVSmokeCatalogOffersOwnedSunoContinuation(t *testing.T) {
 			if op.Enabled != want {
 				t.Fatalf("unexpected availability %s/%s", model.ID, op.ID)
 			}
-			if op.ID == "extend" && (op.Music == nil || op.Music.UnavailableReason != "" || op.Music.EstimateCredits != 30) {
+			if op.ID == "extend" && (op.Music == nil || op.Music.UnavailableReason != "" || op.Music.EstimateCredits != map[string]int64{"suno_v6": 60, "suno_v6_wild": 30, "suno_v6_mini": 30}[model.ID]) {
 				t.Fatal("missing continuation quote/controls")
 			}
 		}

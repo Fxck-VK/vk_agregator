@@ -48,8 +48,12 @@ func TestGrokImageCatalogAndPricing(t *testing.T) {
 			if resolved.Worker.ModelCode != tc.model || resolved.Worker.Resolution != tc.resolution || resolved.Worker.Provider != domain.ProviderAPIMart || resolved.Public.ImageQuality != "standard" {
 				t.Fatal("incorrect trusted worker parameters")
 			}
+			want := int64(10)
+			if tc.id == "grok_image_2_0" {
+				want = 25
+			}
 			price := resolved.PricingSnapshot
-			if price.InternalCredits != 10 || price.InternalCreditCap != 10 || price.Floor.Amount != 150000 || price.Floor.Unit != pricingcatalog.FloorUnitAPIMartCredits {
+			if price.InternalCredits != want || price.InternalCreditCap != want || price.Floor.Amount != 150000 || price.Floor.Unit != pricingcatalog.FloorUnitAPIMartCredits {
 				t.Fatal("incorrect Grok tariff snapshot")
 			}
 			for _, bad := range []struct {

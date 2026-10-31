@@ -98,7 +98,7 @@ export function SpeechWorkspace() {
     finally { inFlight.current = false; setBusy(false); }
   };
 
-  return <WorkspacePageFrame><section className={styles.workspace} aria-label={msg("speech.region")}>
+  return <WorkspacePageFrame className={styles.pageFrame}><section className={styles.workspace} aria-label={msg("speech.region")}>
     <h1>{msg("speech.title")}</h1>
     <p>{msg("speech.description")}</p>
     <label className={styles.field}>{msg("speech.model")}<InputSurface><select disabled={locked} value={modelId} onChange={(e) => change(() => setModelId(e.target.value as SpeechRequest["model_id"]))}>

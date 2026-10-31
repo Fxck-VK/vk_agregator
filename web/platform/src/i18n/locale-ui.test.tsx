@@ -50,13 +50,11 @@ describe("locale changes", () => {
     expect(screen.getByRole("heading")).toHaveTextContent("An easy start with <AI>");
     expect(screen.getByRole("heading").querySelector("em")).toHaveTextContent("<AI>");
   });
-  it("reports a failed language change and keeps the selected language", async () => {
-    vi.mocked(setLocalePreference).mockRejectedValueOnce(new Error("Network unavailable"));
+  it("does not offer a language change on the Russian-only website", () => {
     render(<LocaleProvider locale="ru"><LanguageSwitcher /></LocaleProvider>);
-    fireEvent.click(screen.getByRole("button", { name: "English" }));
-    expect(await screen.findByRole("alert")).toHaveTextContent(getDictionary("ru").account.languageFailure);
-    expect(screen.getByRole("button", { name: "Русский" })).toHaveAttribute("aria-pressed", "true");
-    expect(setLocalePreference).toHaveBeenCalledWith("en");
+    expect(screen.queryByRole("button", { name: "English" })).toBeNull();
+    expect(screen.queryByRole("button", { name: "Русский" })).toBeNull();
+    expect(setLocalePreference).not.toHaveBeenCalled();
   });
   it("reverses horizontal keyboard navigation for RTL while preserving Home/End", () => {
     const readStyle = window.getComputedStyle;

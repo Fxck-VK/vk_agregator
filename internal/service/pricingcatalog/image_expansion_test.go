@@ -11,7 +11,7 @@ func TestImageExpansionResolutionPrices(t *testing.T) {
 		{"z_image_turbo", "1K", 10000, 10}, {"z_image_turbo", "2K", 10000, 10},
 		{"flux_2_max", "1MP", 56000, 35}, {"flux_2_max", "2MP", 80000, 50}, {"flux_2_max", "3MP", 104000, 65}, {"flux_2_max", "4MP", 128000, 80},
 		{"flux_2_flex", "1MP", 40000, 25}, {"flux_2_flex", "2MP", 80000, 50}, {"flux_2_flex", "3MP", 120000, 75}, {"flux_2_flex", "4MP", 160000, 100},
-		{"qwen_image_3_pro", "1K", 28572, 20}, {"qwen_image_3_pro", "2K", 57144, 35},
+		{"qwen_image_3_pro", "1K", 28572, 30}, {"qwen_image_3_pro", "2K", 57144, 30},
 	} {
 		q, err := ImageCandidateQualityQuote(tc.id, tc.quality)
 		if err != nil {

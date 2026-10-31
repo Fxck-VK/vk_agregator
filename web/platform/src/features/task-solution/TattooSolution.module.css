@@ -18,7 +18,7 @@
 .breadcrumb { grid-area: crumb; display: flex; align-items: center; gap: 10px; font-size: 14px; line-height: 1.6; padding-bottom: 2px; }
 .breadcrumb a { flex: 0 0 auto; }
 .breadcrumb > span[aria-hidden] { color: #868686; }
-.breadcrumb > span:last-child { min-inline-size: 0; }
+.breadcrumb > span:last-child { min-inline-size: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .intro { grid-area: intro; }
 .intro h1 { font-size: 60px; line-height: 1.2; letter-spacing: -.015em; }
 .intro > p { margin-top: 18px; color: #bfbfbf; font-size: 18px; line-height: 1.5; }

@@ -12,6 +12,39 @@ Do not create/switch worktrees, develop in older copies, or start an alternate
 preview port unless the user explicitly asks. Consolidate related changes here,
 preserving current work and checking integration before reporting completion.
 
+## Website language publication policy
+
+The owner requires a Russian-only website on localhost, DEV and public servers
+until they explicitly request introducing English. Do not enable `/en` pages,
+language controls or English SEO URLs as part of a merge, release or environment
+change. Legacy `/en/...` addresses redirect308 to their `/ru/...` counterparts.
+Keep `siteLocales` exactly `["ru"]`; shared English editorial source/audit data
+is retained and does not authorize publishing English. The mandatory
+`web/platform/scripts/site-language-policy.mjs` check runs before builds and in
+source validation. Do not bypass/remove it or expand active languages without
+the owner's explicit English-language request.
+
+## Mandatory responsive layout verification
+
+Layout changes must be checked at browser viewport widths 360, 390, 768, 1024,
+1440, 1920, 2560 and 3840 CSS pixels, including 2560 x 1440 (2K/QHD) and
+3840 x 2160 (4K/UHD). The rule covers all 24 public template types and
+workspace/authentication UI. Check affected pages and shared consumers according
+to `web/platform/AGENTS.md#mandatory-responsive-layout-verification`.
+Builds, DOM tests or high-DPI screenshots alone do not establish responsive
+visual verification. Report missing widths or blocked browser checks explicitly.
+
+## Image resolution UI policy
+
+Resolution controls show one choice per supported size (for example 1K, 2K, 4K,
+8K), without quality suffixes such as medium, high, ultra or pro. Use the shared
+`ImageQualitySelector` and `image-resolution-options` projection; do not recreate
+raw size/tier lists in other surfaces. Show only sizes present in the model's
+admitted catalogue, never invent 8K or other capabilities. Preserve the current
+raw code and its tier when changing size where supported; send an existing
+catalogue code and use its authoritative price. This display rule does not
+authorize provider, billing or model-admission changes.
+
 ## Canonical Read Order
 
 Every agent should use this order before making decisions:

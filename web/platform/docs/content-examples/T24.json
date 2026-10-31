@@ -1,0 +1,374 @@
+{
+  "id": "page-t24",
+  "template": "T24",
+  "path": "/blog/author/epifera",
+  "locale": "ru",
+  "status": "draft",
+  "indexing": "noindex",
+  "seo": {
+    "title": "Epifera — редакционные руководства и обучение",
+    "description": "Изучите статьи, уроки и практические руководства Epifera. Просмотрите архив и найдите полезную отправную точку для следующего творческого проекта."
+  },
+  "relatedIds": [],
+  "content": {
+    "authorEn": {
+      "metadata": {
+        "title": "Epifera — редакционные руководства и обучение",
+        "description": "Изучите статьи, уроки и практические руководства Epifera. Просмотрите архив и найдите полезную отправную точку для следующего творческого проекта."
+      },
+      "skip": "Перейти к архиву автора",
+      "materials": "Материалы Epifera",
+      "draftPreview": "Предпросмотр черновика",
+      "search": "Поиск",
+      "searchTitle": "Поиск в редакционной библиотеке",
+      "searchPlaceholder": "Поиск статей, уроков и руководств",
+      "clear": "Очистить поиск",
+      "noResults": "Материалы не найдены. Попробуйте другое слово.",
+      "resultUnit": "материалов",
+      "first": "Первая страница",
+      "previous": "Предыдущая страница",
+      "next": "Следующая страница",
+      "last": "Последняя страница",
+      "page": "Страница",
+      "pagination": "Постраничная навигация по архиву автора",
+      "showing": "Показано",
+      "of": "из",
+      "close": "Закрыть",
+      "home": "Перейти в Epifera",
+      "tools": "Инструменты ИИ",
+      "pricing": "Тарифы",
+      "categories": {
+        "article": "Руководства",
+        "comparison": "Сравнения",
+        "workflow": "Рабочие процессы",
+        "course": "Обучение",
+        "lesson": "Уроки",
+        "documentation": "Помощь и руководства"
+      },
+      "source": {
+        "action": "Об иллюстрациях обложек",
+        "title": "Об этом редакционном архиве",
+        "link": "Посмотреть референс Magnific",
+        "description": "Этот архив объединяет существующие статьи, уроки и руководства Epifera. Компоновка и иллюстрации обложек основаны на сохранённом референсе страницы автора Magnific. Обложки — визуальные иллюстрации, а не подтверждённые результаты генерации Epifera. Известные даты помечены как черновые; для остальных материалов дата публикации не указана. Автор — редакционный бренд, а не личный профиль."
+      }
+    },
+    "authorProfile": {
+      "name": "Epifera",
+      "kind": "organization",
+      "avatar": "/assets/brand/marks/epifera-mark.svg",
+      "bio": null,
+      "socials": []
+    },
+    "authorPath": "/blog/author/epifera",
+    "authorMaterials": [
+      {
+        "id": "lesson-describe-motion",
+        "title": "Опишите движение в видеосцене",
+        "category": "Уроки",
+        "href": "/academy/courses/epifera-essentials/describe-motion",
+        "date": null,
+        "cover": {
+          "src": "/assets/images/author/cover-1.webp",
+          "width": 880,
+          "height": 495
+        }
+      },
+      {
+        "id": "lesson-review-an-image",
+        "title": "Оцените и уточните изображение",
+        "category": "Уроки",
+        "href": "/academy/courses/epifera-essentials/review-an-image",
+        "date": null,
+        "cover": {
+          "src": "/assets/images/author/cover-2.webp",
+          "width": 880,
+          "height": 495
+        }
+      },
+      {
+        "id": "art-prompts",
+        "title": "Как писать промпты для создания изображений с ИИ",
+        "category": "Руководства",
+        "href": "/blog/ai-art-prompts",
+        "date": {
+          "kind": "draft",
+          "iso": "2026-10-25",
+          "label": "Черновик · 25 октября 2026 года"
+        },
+        "cover": {
+          "src": "/assets/images/author/cover-3.webp",
+          "width": 880,
+          "height": 495
+        }
+      },
+      {
+        "id": "avatar-comparison",
+        "title": "8 моделей ИИ для концепций аватаров",
+        "category": "Сравнения",
+        "href": "/compare/ai-avatar-models",
+        "date": {
+          "kind": "draft",
+          "iso": "2026-10-25",
+          "label": "Черновик · 25 октября 2026 года"
+        },
+        "cover": {
+          "src": null,
+          "width": 824,
+          "height": 618
+        }
+      },
+      {
+        "id": "product-campaign",
+        "title": "Продуктовая кампания",
+        "category": "Рабочие процессы",
+        "href": "/workflows/product-campaign",
+        "date": null,
+        "cover": {
+          "src": "/assets/images/author/cover-5.png",
+          "width": 880,
+          "height": 491
+        }
+      },
+      {
+        "id": "essentials",
+        "title": "Основы Epifera",
+        "category": "Обучение",
+        "href": "/academy/courses/epifera-essentials",
+        "date": null,
+        "cover": {
+          "src": "/assets/images/author/cover-6.png",
+          "width": 880,
+          "height": 491
+        }
+      },
+      {
+        "id": "lesson-choose-a-model",
+        "title": "Выберите модель для задачи",
+        "category": "Уроки",
+        "href": "/academy/courses/epifera-essentials/choose-a-model",
+        "date": null,
+        "cover": {
+          "src": "/assets/images/author/cover-7.webp",
+          "width": 880,
+          "height": 491
+        }
+      },
+      {
+        "id": "lesson-write-a-visual-brief",
+        "title": "Напишите визуальный бриф",
+        "category": "Уроки",
+        "href": "/academy/courses/epifera-essentials/write-a-visual-brief",
+        "date": null,
+        "cover": {
+          "src": "/assets/images/author/cover-8.webp",
+          "width": 880,
+          "height": 491
+        }
+      },
+      {
+        "id": "lesson-work-with-image-references",
+        "title": "Работайте с референсами изображений",
+        "category": "Уроки",
+        "href": "/academy/courses/epifera-essentials/work-with-image-references",
+        "date": null,
+        "cover": {
+          "src": "/assets/images/author/cover-5.png",
+          "width": 880,
+          "height": 491
+        }
+      },
+      {
+        "id": "lesson-set-framing-and-size",
+        "title": "Задайте кадрирование и размер результата",
+        "category": "Уроки",
+        "href": "/academy/courses/epifera-essentials/set-framing-and-size",
+        "date": null,
+        "cover": {
+          "src": "/assets/images/author/cover-6.png",
+          "width": 880,
+          "height": 491
+        }
+      },
+      {
+        "id": "lesson-review-video-settings",
+        "title": "Проверьте входные данные и настройки видео",
+        "category": "Уроки",
+        "href": "/academy/courses/epifera-essentials/review-video-settings",
+        "date": null,
+        "cover": {
+          "src": "/assets/images/author/cover-7.webp",
+          "width": 880,
+          "height": 491
+        }
+      },
+      {
+        "id": "lesson-prepare-a-music-brief",
+        "title": "Подготовьте музыкальный бриф",
+        "category": "Уроки",
+        "href": "/academy/courses/epifera-essentials/prepare-a-music-brief",
+        "date": null,
+        "cover": {
+          "src": "/assets/images/author/cover-8.webp",
+          "width": 880,
+          "height": 491
+        }
+      },
+      {
+        "id": "lesson-find-your-way-around",
+        "title": "Разберитесь в навигации",
+        "category": "Уроки",
+        "href": "/academy/courses/epifera-essentials/find-your-way-around",
+        "date": null,
+        "cover": {
+          "src": "/assets/images/author/cover-1.webp",
+          "width": 880,
+          "height": 495
+        }
+      },
+      {
+        "id": "lesson-prepare-a-speech-script",
+        "title": "Подготовьте текст для озвучки",
+        "category": "Уроки",
+        "href": "/academy/courses/epifera-essentials/prepare-a-speech-script",
+        "date": null,
+        "cover": {
+          "src": "/assets/images/author/cover-2.webp",
+          "width": 880,
+          "height": 495
+        }
+      },
+      {
+        "id": "lesson-keep-your-results",
+        "title": "Найдите и скачайте результаты",
+        "category": "Уроки",
+        "href": "/academy/courses/epifera-essentials/keep-your-results",
+        "date": null,
+        "cover": {
+          "src": "/assets/images/author/cover-3.webp",
+          "width": 880,
+          "height": 495
+        }
+      },
+      {
+        "id": "lesson-understand-file-deletion",
+        "title": "Разберитесь с удалением файлов",
+        "category": "Уроки",
+        "href": "/academy/courses/epifera-essentials/understand-file-deletion",
+        "date": null,
+        "cover": {
+          "src": null,
+          "width": 824,
+          "height": 618
+        }
+      },
+      {
+        "id": "lesson-develop-a-campaign-idea",
+        "title": "Разработайте идею кампании",
+        "category": "Уроки",
+        "href": "/academy/courses/epifera-essentials/develop-a-campaign-idea",
+        "date": null,
+        "cover": {
+          "src": "/assets/images/author/cover-5.png",
+          "width": 880,
+          "height": 491
+        }
+      },
+      {
+        "id": "lesson-build-your-next-brief",
+        "title": "Составьте следующий бриф",
+        "category": "Уроки",
+        "href": "/academy/courses/epifera-essentials/build-your-next-brief",
+        "date": null,
+        "cover": {
+          "src": "/assets/images/author/cover-6.png",
+          "width": 880,
+          "height": 491
+        }
+      },
+      {
+        "id": "doc-quick-start",
+        "title": "Быстрый старт",
+        "category": "Помощь и руководства",
+        "href": "/ai/docs/quick-start",
+        "date": null,
+        "cover": {
+          "src": "/assets/images/author/cover-7.webp",
+          "width": 880,
+          "height": 491
+        }
+      },
+      {
+        "id": "doc-image-generation",
+        "title": "Генерация изображений",
+        "category": "Помощь и руководства",
+        "href": "/ai/docs/image-generation",
+        "date": null,
+        "cover": {
+          "src": "/assets/images/author/cover-8.webp",
+          "width": 880,
+          "height": 491
+        }
+      },
+      {
+        "id": "doc-files-and-storage",
+        "title": "Файлы и хранение",
+        "category": "Помощь и руководства",
+        "href": "/ai/docs/files-and-storage",
+        "date": null,
+        "cover": {
+          "src": "/assets/images/author/cover-5.png",
+          "width": 880,
+          "height": 491
+        }
+      },
+      {
+        "id": "doc-credits-and-payments",
+        "title": "Кредиты и платежи",
+        "category": "Помощь и руководства",
+        "href": "/ai/docs/credits-and-payments",
+        "date": null,
+        "cover": {
+          "src": "/assets/images/author/cover-6.png",
+          "width": 880,
+          "height": 491
+        }
+      },
+      {
+        "id": "doc-troubleshooting",
+        "title": "Решение проблем",
+        "category": "Помощь и руководства",
+        "href": "/ai/docs/troubleshooting",
+        "date": null,
+        "cover": {
+          "src": "/assets/images/author/cover-7.webp",
+          "width": 880,
+          "height": 491
+        }
+      },
+      {
+        "id": "doc-account-management",
+        "title": "Управление аккаунтом",
+        "category": "Помощь и руководства",
+        "href": "/ai/docs/account-management",
+        "date": null,
+        "cover": {
+          "src": "/assets/images/author/cover-8.webp",
+          "width": 880,
+          "height": 491
+        }
+      },
+      {
+        "id": "doc-receiving-emails",
+        "title": "Доставка писем",
+        "category": "Помощь и руководства",
+        "href": "/ai/docs/receiving-emails",
+        "date": null,
+        "cover": {
+          "src": "/assets/images/author/cover-1.webp",
+          "width": 880,
+          "height": 495
+        }
+      }
+    ]
+  }
+}

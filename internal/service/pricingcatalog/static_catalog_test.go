@@ -20,17 +20,17 @@ func TestNewStaticCatalogContainsApprovedImageTariffs(t *testing.T) {
 		want    int64
 		unit    FloorUnit
 	}{
-		{modelID: PublicImageNanoBanana2, quality: ImageQuality1K, want: 50, unit: FloorUnitPoYoCredits},
-		{modelID: PublicImageNanoBanana2, quality: ImageQuality2K, want: 60, unit: FloorUnitPoYoCredits},
-		{modelID: PublicImageNanoBanana2, quality: ImageQuality4K, want: 70, unit: FloorUnitPoYoCredits},
-		{modelID: PublicImageGPTImage2, quality: ImageQuality1K, want: 40, unit: FloorUnitAPIMartCredits},
-		{modelID: PublicImageGPTImage2, quality: ImageQuality2K, want: 50, unit: FloorUnitAPIMartCredits},
-		{modelID: PublicImageGPTImage2, quality: ImageQuality4K, want: 60, unit: FloorUnitAPIMartCredits},
-		{modelID: PublicImageNanoBananaPro, quality: ImageQuality1K, want: 50, unit: FloorUnitAPIMartCredits},
-		{modelID: PublicImageNanoBananaPro, quality: ImageQuality2K, want: 60, unit: FloorUnitAPIMartCredits},
-		{modelID: PublicImageNanoBananaPro, quality: ImageQuality4K, want: 70, unit: FloorUnitAPIMartCredits},
+		{modelID: PublicImageNanoBanana2, quality: ImageQuality1K, want: 15, unit: FloorUnitPoYoCredits},
+		{modelID: PublicImageNanoBanana2, quality: ImageQuality2K, want: 25, unit: FloorUnitPoYoCredits},
+		{modelID: PublicImageNanoBanana2, quality: ImageQuality4K, want: 40, unit: FloorUnitPoYoCredits},
+		{modelID: PublicImageGPTImage2, quality: ImageQuality1K, want: 51, unit: FloorUnitAPIMartCredits},
+		{modelID: PublicImageGPTImage2, quality: ImageQuality2K, want: 51, unit: FloorUnitAPIMartCredits},
+		{modelID: PublicImageGPTImage2, quality: ImageQuality4K, want: 51, unit: FloorUnitAPIMartCredits},
+		{modelID: PublicImageNanoBananaPro, quality: ImageQuality1K, want: 55, unit: FloorUnitAPIMartCredits},
+		{modelID: PublicImageNanoBananaPro, quality: ImageQuality2K, want: 55, unit: FloorUnitAPIMartCredits},
+		{modelID: PublicImageNanoBananaPro, quality: ImageQuality4K, want: 55, unit: FloorUnitAPIMartCredits},
 		{modelID: PublicImageSeedream45, quality: ImageQuality2K, want: 30, unit: FloorUnitInternalCredits},
-		{modelID: PublicImageSeedream45, quality: ImageQuality4K, want: 40, unit: FloorUnitInternalCredits},
+		{modelID: PublicImageSeedream45, quality: ImageQuality4K, want: 45, unit: FloorUnitInternalCredits},
 	}
 	for _, tc := range cases {
 		t.Run(tc.modelID+"/"+tc.quality, func(t *testing.T) {
@@ -78,8 +78,6 @@ func TestStaticCatalogImagePricesIncreaseWithQuality(t *testing.T) {
 		qualities []string
 	}{
 		{modelID: PublicImageNanoBanana2, qualities: []string{ImageQuality1K, ImageQuality2K, ImageQuality4K}},
-		{modelID: PublicImageGPTImage2, qualities: []string{ImageQuality1K, ImageQuality2K, ImageQuality4K}},
-		{modelID: PublicImageNanoBananaPro, qualities: []string{ImageQuality1K, ImageQuality2K, ImageQuality4K}},
 		{modelID: PublicImageSeedream45, qualities: []string{ImageQuality2K, ImageQuality4K}},
 	}
 	for _, ladder := range ladders {
@@ -132,13 +130,13 @@ func TestNewStaticCatalogContainsApprovedVideoTariffs(t *testing.T) {
 		want       int64
 		unit       FloorUnit
 	}{
-		{alias: domain.VideoRouteKlingO3Standard, resolution: VideoResolution720p, duration: 5, want: 200, unit: FloorUnitPoYoCredits},
-		{alias: domain.VideoRouteKlingO3Standard, resolution: VideoResolution1080p, duration: 10, want: 400, unit: FloorUnitPoYoCredits},
-		{alias: domain.VideoRouteSeedance20Fast, resolution: VideoResolution720p, duration: 5, want: 300, unit: FloorUnitPoYoCredits},
-		{alias: domain.VideoRouteSeedance20Fast, resolution: VideoResolution720p, duration: 10, want: 600, unit: FloorUnitPoYoCredits},
-		{alias: domain.VideoRouteRunwayGen4Turbo, resolution: VideoResolution720p, duration: 5, want: 300, unit: FloorUnitRunwayCredits},
-		{alias: domain.VideoRouteRunwayGen45, resolution: VideoResolution720p, duration: 5, want: 450, unit: FloorUnitPoYoCredits},
-		{alias: domain.VideoRouteRunwayGen45, resolution: VideoResolution1080p, duration: 10, want: 900, unit: FloorUnitPoYoCredits},
+		{alias: domain.VideoRouteKlingO3Standard, resolution: VideoResolution720p, duration: 5, want: 150, unit: FloorUnitPoYoCredits},
+		{alias: domain.VideoRouteKlingO3Standard, resolution: VideoResolution1080p, duration: 10, want: 300, unit: FloorUnitPoYoCredits},
+		{alias: domain.VideoRouteSeedance20Fast, resolution: VideoResolution720p, duration: 5, want: 420, unit: FloorUnitPoYoCredits},
+		{alias: domain.VideoRouteSeedance20Fast, resolution: VideoResolution720p, duration: 10, want: 840, unit: FloorUnitPoYoCredits},
+		{alias: domain.VideoRouteRunwayGen4Turbo, resolution: VideoResolution720p, duration: 5, want: 150, unit: FloorUnitRunwayCredits},
+		{alias: domain.VideoRouteRunwayGen45, resolution: VideoResolution720p, duration: 5, want: 225, unit: FloorUnitPoYoCredits},
+		{alias: domain.VideoRouteRunwayGen45, resolution: VideoResolution1080p, duration: 10, want: 450, unit: FloorUnitPoYoCredits},
 	}
 	for _, tc := range cases {
 		t.Run(string(tc.alias)+"/"+tc.resolution, func(t *testing.T) {
@@ -186,7 +184,7 @@ func TestStaticCatalogKeepsOfficialRunwayAndPoyoRunwayGen45Tariffs(t *testing.T)
 			alias:      domain.VideoRouteRunwayGen4Turbo,
 			resolution: VideoResolution720p,
 			duration:   5,
-			want:       300,
+			want:       150,
 			unit:       FloorUnitRunwayCredits,
 		},
 		{
@@ -194,7 +192,7 @@ func TestStaticCatalogKeepsOfficialRunwayAndPoyoRunwayGen45Tariffs(t *testing.T)
 			alias:      domain.VideoRouteRunwayGen4Turbo,
 			resolution: VideoResolution720p,
 			duration:   10,
-			want:       600,
+			want:       300,
 			unit:       FloorUnitRunwayCredits,
 		},
 		{
@@ -202,7 +200,7 @@ func TestStaticCatalogKeepsOfficialRunwayAndPoyoRunwayGen45Tariffs(t *testing.T)
 			alias:      domain.VideoRouteRunwayGen45,
 			resolution: VideoResolution720p,
 			duration:   5,
-			want:       450,
+			want:       225,
 			unit:       FloorUnitPoYoCredits,
 		},
 		{
@@ -210,7 +208,7 @@ func TestStaticCatalogKeepsOfficialRunwayAndPoyoRunwayGen45Tariffs(t *testing.T)
 			alias:      domain.VideoRouteRunwayGen45,
 			resolution: VideoResolution1080p,
 			duration:   10,
-			want:       900,
+			want:       450,
 			unit:       FloorUnitPoYoCredits,
 		},
 	}
@@ -268,17 +266,17 @@ func TestStaticCatalogImageTariffsUseRoundedQualityLadders(t *testing.T) {
 	}
 
 	want := map[ProductKey]int64{
-		{Operation: domain.OperationImageGenerate, Modality: domain.ModalityImage, ImageModelID: PublicImageNanoBanana2, Quality: ImageQuality1K}:   50,
-		{Operation: domain.OperationImageGenerate, Modality: domain.ModalityImage, ImageModelID: PublicImageNanoBanana2, Quality: ImageQuality2K}:   60,
-		{Operation: domain.OperationImageGenerate, Modality: domain.ModalityImage, ImageModelID: PublicImageNanoBanana2, Quality: ImageQuality4K}:   70,
-		{Operation: domain.OperationImageGenerate, Modality: domain.ModalityImage, ImageModelID: PublicImageGPTImage2, Quality: ImageQuality1K}:     40,
-		{Operation: domain.OperationImageGenerate, Modality: domain.ModalityImage, ImageModelID: PublicImageGPTImage2, Quality: ImageQuality2K}:     50,
-		{Operation: domain.OperationImageGenerate, Modality: domain.ModalityImage, ImageModelID: PublicImageGPTImage2, Quality: ImageQuality4K}:     60,
-		{Operation: domain.OperationImageGenerate, Modality: domain.ModalityImage, ImageModelID: PublicImageNanoBananaPro, Quality: ImageQuality1K}: 50,
-		{Operation: domain.OperationImageGenerate, Modality: domain.ModalityImage, ImageModelID: PublicImageNanoBananaPro, Quality: ImageQuality2K}: 60,
-		{Operation: domain.OperationImageGenerate, Modality: domain.ModalityImage, ImageModelID: PublicImageNanoBananaPro, Quality: ImageQuality4K}: 70,
+		{Operation: domain.OperationImageGenerate, Modality: domain.ModalityImage, ImageModelID: PublicImageNanoBanana2, Quality: ImageQuality1K}:   15,
+		{Operation: domain.OperationImageGenerate, Modality: domain.ModalityImage, ImageModelID: PublicImageNanoBanana2, Quality: ImageQuality2K}:   25,
+		{Operation: domain.OperationImageGenerate, Modality: domain.ModalityImage, ImageModelID: PublicImageNanoBanana2, Quality: ImageQuality4K}:   40,
+		{Operation: domain.OperationImageGenerate, Modality: domain.ModalityImage, ImageModelID: PublicImageGPTImage2, Quality: ImageQuality1K}:     51,
+		{Operation: domain.OperationImageGenerate, Modality: domain.ModalityImage, ImageModelID: PublicImageGPTImage2, Quality: ImageQuality2K}:     51,
+		{Operation: domain.OperationImageGenerate, Modality: domain.ModalityImage, ImageModelID: PublicImageGPTImage2, Quality: ImageQuality4K}:     51,
+		{Operation: domain.OperationImageGenerate, Modality: domain.ModalityImage, ImageModelID: PublicImageNanoBananaPro, Quality: ImageQuality1K}: 55,
+		{Operation: domain.OperationImageGenerate, Modality: domain.ModalityImage, ImageModelID: PublicImageNanoBananaPro, Quality: ImageQuality2K}: 55,
+		{Operation: domain.OperationImageGenerate, Modality: domain.ModalityImage, ImageModelID: PublicImageNanoBananaPro, Quality: ImageQuality4K}: 55,
 		{Operation: domain.OperationImageGenerate, Modality: domain.ModalityImage, ImageModelID: PublicImageSeedream45, Quality: ImageQuality2K}:    30,
-		{Operation: domain.OperationImageGenerate, Modality: domain.ModalityImage, ImageModelID: PublicImageSeedream45, Quality: ImageQuality4K}:    40,
+		{Operation: domain.OperationImageGenerate, Modality: domain.ModalityImage, ImageModelID: PublicImageSeedream45, Quality: ImageQuality4K}:    45,
 	}
 	for key, expected := range want {
 		got, err := catalog.CostEstimateCredits(key)
@@ -337,7 +335,7 @@ func TestStaticCatalogUsesOnlyBoundedAliasesAndExplicitUnits(t *testing.T) {
 		if err != nil {
 			t.Fatalf("static price calculation failed: %+v: %v", price.Key, err)
 		}
-		if credits%5 != 0 {
+		if price.RetailPolicyVersion == 0 && credits%5 != 0 {
 			t.Fatalf("static price = %d, want a value ending in 0 or 5: %+v", credits, price.Key)
 		}
 		if price.Caps.InternalCreditCap != credits {

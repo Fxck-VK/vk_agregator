@@ -684,7 +684,7 @@
 
 @media (width < 36rem) {
   .workspace {
-    padding-block-start: 4.5rem;
+    padding-block-start: 8.5rem;
     gap: var(--space-5);
   }
 

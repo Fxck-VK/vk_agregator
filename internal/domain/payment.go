@@ -225,6 +225,8 @@ type PaymentRefund struct {
 // CreatePaymentInput is the provider-agnostic request to create a payment on a
 // money provider. Amount is in minor currency units (kopecks for RUB).
 type CreatePaymentInput struct {
+	SavePaymentMethod         bool            `json:"-"`
+	PaymentMethodID           string          `json:"-"`
 	IntentID                  uuid.UUID       `json:"intent_id"`
 	AccountID                 uuid.UUID       `json:"account_id,omitempty"`
 	UserID                    uuid.UUID       `json:"user_id"`
@@ -255,14 +257,21 @@ type CreatePaymentResult struct {
 
 // ProviderPayment is the normalized state fetched from a payment provider.
 type ProviderPayment struct {
-	ProviderPaymentID string              `json:"provider_payment_id"`
-	Status            PaymentIntentStatus `json:"status"`
-	Amount            int64               `json:"amount"`
-	Currency          Currency            `json:"currency"`
-	Paid              bool                `json:"paid"`
-	Captured          bool                `json:"captured"`
-	Refundable        bool                `json:"refundable"`
-	Raw               json.RawMessage     `json:"raw,omitempty"`
+	CancellationReason string `json:"-"`
+	// Verified identifiers are normalized only from authenticated provider GET
+	// metadata. Notifications and browser input never establish this binding.
+	VerifiedIntentID   uuid.UUID           `json:"-"`
+	VerifiedAccountID  uuid.UUID           `json:"-"`
+	PaymentMethodID    string              `json:"-"`
+	PaymentMethodSaved bool                `json:"-"`
+	ProviderPaymentID  string              `json:"provider_payment_id"`
+	Status             PaymentIntentStatus `json:"status"`
+	Amount             int64               `json:"amount"`
+	Currency           Currency            `json:"currency"`
+	Paid               bool                `json:"paid"`
+	Captured           bool                `json:"captured"`
+	Refundable         bool                `json:"refundable"`
+	Raw                json.RawMessage     `json:"raw,omitempty"`
 }
 
 // CreateRefundInput is the provider-agnostic request to create a refund.

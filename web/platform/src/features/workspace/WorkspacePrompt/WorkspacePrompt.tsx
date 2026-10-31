@@ -39,6 +39,7 @@ type WorkspacePromptProps = {
     canSubmit: boolean;
     disabled: boolean;
     label: string;
+    price: number | null;
     onSubmit: () => void;
   };
   variant?: "workspace" | "newChat" | "hero";
@@ -182,7 +183,9 @@ export function WorkspacePrompt({ access = "authenticated", variant = "workspace
   const referenceQuote = useReferenceQuote(selectedModel, generation.options, {
     count: attachments.items.length, ready: !attachments.blocked, artifactIds: attachments.ids,
   });
-  const cost = referenceQuote.active ? referenceQuote.cost : generation.cost;
+  const cost = submitAction !== undefined
+    ? submitAction.price ?? undefined
+    : referenceQuote.active ? referenceQuote.cost : generation.cost;
   const tooLong = selectedChatModel?.max_prompt_bytes !== undefined
     && new TextEncoder().encode(prompt.trim()).length > selectedChatModel.max_prompt_bytes;
   const canSubmit = !attachments.blocked && referenceQuote.ready && prompt.trim() !== "" && !tooLong && !chatModelUnavailable && (submitAction?.canSubmit ?? generation.canSubmit);

@@ -34,6 +34,22 @@ test('accepts checkout CRLF line endings without changing the reviewed catalog',
  const result=spawnSync(process.execPath,[item.script],{cwd:item.app,encoding:'utf8'});
  assert.equal(result.status,0,result.stderr);
 });
+test('accepts Russian thousands separators and decimal commas without changing numeric values',t=>{
+ const item=fixture(t,['web','platform']),catalog=path.join(item.app,'src/i18n/public/translations');
+ const source='69,000 creators, 45,000 images, 3.0 and 0.5%.',ru='69\u202f000 авторов, 45\u00a0000 изображений, 3.0 и 0,5%.';
+ writeFileSync(path.join(catalog,'sources.json'),JSON.stringify({u0001:source}));
+ writeFileSync(path.join(catalog,'ru.json'),JSON.stringify({u0001:ru},null,2)+'\n');
+ writeFileSync(path.join(item.audit,'g1.json'),JSON.stringify([{id:'u0001',ru,back:source}]));
+ const result=spawnSync(process.execPath,[item.script],{cwd:item.app,encoding:'utf8'});
+ assert.equal(result.status,0,result.stderr);
+});
+test('still rejects changed grouped numeric values',t=>{
+ const item=fixture(t,['web','platform']),catalog=path.join(item.app,'src/i18n/public/translations');
+ writeFileSync(path.join(catalog,'sources.json'),JSON.stringify({u0001:'69,000 creators'}));
+ writeFileSync(path.join(item.audit,'g1.json'),JSON.stringify([{id:'u0001',ru:'68\u202f000 авторов',back:'68,000 creators'}]));
+ const result=spawnSync(process.execPath,[item.script],{cwd:item.app,encoding:'utf8'});
+ assert.notEqual(result.status,0);assert.match(result.stderr,/numbers changed/);
+});
 test('Docker build copies the audit to the checker location without shipping it in runtime',()=>{
  const dockerfile=readFileSync(path.join(repositoryRoot,'Dockerfile.platform'),'utf8');
  const [build,runtime]=dockerfile.split(/FROM node:[^\n]+ AS runtime/);

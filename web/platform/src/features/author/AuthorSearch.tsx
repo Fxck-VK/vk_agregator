@@ -13,7 +13,7 @@ import {countLabel} from '@/i18n/counts';
 
 
 export function AuthorSearch({items,onClose}:{items:readonly AuthorMaterial[];onClose:()=>void}){
-  const {t} = usePublicCopy(publicCopySourcesForLocale);
+  const {t} = usePublicCopy(publicCopySourcesForLocale,{"t":"authorEn"});
   const locale=useLocale();
   const messages=useMessages();
 

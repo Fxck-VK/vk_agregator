@@ -10,6 +10,7 @@ import { beginBrowserSession, endBrowserSession } from "@/lib/web-api/browser-se
 import { ProfileWorkspace } from "./ProfileWorkspace";
 
 vi.mock("@/lib/web-api/browser", () => ({ webBrowserFetch: vi.fn() }));
+vi.mock("@/features/subscriptions/subscriptions", () => ({ loadSubscription: async () => ({ subscription: null, balances: [], checkout_available: false, recurring_available: false }), cancelSubscription: vi.fn() }));
 
 const profile: AccountProfile = {
   account_id: "62d33e7f-7b0e-4a26-975b-41080b55d78d",

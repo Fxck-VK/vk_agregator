@@ -31,6 +31,10 @@
   block-size: 0;
 }
 
+.root[data-orientation="horizontal"] > .frame > .viewport {
+  overscroll-behavior-y: auto;
+}
+
 .root[data-scrollable="false"] > .frame > .viewport {
   overscroll-behavior: auto;
 }

@@ -15,7 +15,7 @@ import styles from './CustomerStory.module.css';
 import {usePublicCopy} from "@/i18n/public/use-public-copy";
 
 export function CustomerStory(){
-  const {t,aiToolsEn,homeEn,study,media} = usePublicCopy(publicCopySourcesForLocale);
+  const {t,aiToolsEn,homeEn,study,media} = usePublicCopy(publicCopySourcesForLocale,{"study":"footballCaseStudy","t":"customerStoryEn","media":"customerStoryReference"});
 
  const[dialog,setDialog]=useState<'search'|'source'|'video'|null>(null),[image,setImage]=useState<number|null>(null),root=useRef<HTMLDivElement>(null),opener=useRef<HTMLElement|null>(null),open=dialog!==null||image!==null;
  const launch=(action:()=>void)=>{opener.current=document.activeElement instanceof HTMLElement?document.activeElement:null;action();};

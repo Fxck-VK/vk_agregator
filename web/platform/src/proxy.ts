@@ -1,7 +1,7 @@
 import { NextResponse, type NextRequest } from "next/server";
 
 import { returnPathFromURL } from "@/lib/auth/return-path";
-import { localeCookieName, resolveLocale } from "@/i18n/locales";
+import { localeCookieName, resolveSiteLocale } from "@/i18n/locales";
 import { isServicePath, localeFromPath, localeRequestHeader, localizeHref, stripLocale } from "@/i18n/routing";
 
 const returnCookieName = "__Host-nh-return-to";
@@ -50,13 +50,21 @@ export function proxy(request: NextRequest): NextResponse {
   if (isServicePath(pathname)) return NextResponse.next();
   const locale = localeFromPath(pathname);
   const internalPath = stripLocale(pathname);
-  if ((!locale && /^\/[a-z]{2}(?:-[a-z]{2})?(?:\/|$)/i.test(pathname))
+  // /ai is an implemented product root, not an unsupported language prefix.
+  if ((!locale && !/^\/ai(?:\/|$)/.test(pathname) && /^\/[a-z]{2}(?:-[a-z]{2})?(?:\/|$)/i.test(pathname))
     || (locale && (isServicePath(internalPath) || localeFromPath(internalPath)))) {
     return new NextResponse(null, { status: 404, headers: { "X-Robots-Tag": "noindex" } });
   }
+  if (locale && resolveSiteLocale(locale) !== locale) {
+    const target = request.nextUrl.clone();
+    target.pathname = localizeHref(internalPath, resolveSiteLocale(locale));
+    const response = NextResponse.redirect(target, 308);
+    response.headers.set("Cache-Control", "private, no-store");
+    return response;
+  }
   if (!locale) {
     const target = request.nextUrl.clone();
-    target.pathname = localizeHref(pathname, resolveLocale(request.cookies.get(localeCookieName)?.value));
+    target.pathname = localizeHref(pathname, resolveSiteLocale(request.cookies.get(localeCookieName)?.value));
     const response = NextResponse.redirect(target, 307);
     response.headers.set("Cache-Control", "private, no-store");
     return response;

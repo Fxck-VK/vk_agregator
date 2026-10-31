@@ -6,7 +6,7 @@ import { useRouter } from "next/navigation";
 import { ModeSwitchPanel } from "@/components/ui/ModeSwitchPanel/ModeSwitchPanel";
 import { setLocalePreference } from "./actions";
 import { useDictionary, useLocale } from "./LocaleProvider";
-import { locales, localeNames, type Locale } from "./locales";
+import { siteLocales, localeNames, type Locale } from "./locales";
 import { localizeHref } from "./routing";
 
 export function LanguageSwitcher() {
@@ -27,12 +27,13 @@ export function LanguageSwitcher() {
       catch { setHasError(true); }
     });
   };
+  if (siteLocales.length < 2) return null;
   return (
     <div>
       <ModeSwitchPanel
         activeID={locale}
         ariaLabel={t.account.languageLabel}
-        items={locales.map(id => ({ id, label: localeNames[id], disabled: isPending }))}
+        items={siteLocales.map(id => ({ id, label: localeNames[id], disabled: isPending }))}
         onChange={changeLocale}
       />
       {hasError ? <StateNotice inline kind="error">{t.account.languageFailure}</StateNotice> : null}
