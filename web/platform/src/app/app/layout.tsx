@@ -67,6 +67,7 @@ export async function WorkspaceSessionContent({ children }: Readonly<{ children:
       )}
     >
       <WorkspaceFrame
+        preview={developmentTools !== null}
         initialCatalog={await initialModelCatalog()}
         deferred={session.deferred}
         deferConversations={developmentTools !== null || session.deferred}

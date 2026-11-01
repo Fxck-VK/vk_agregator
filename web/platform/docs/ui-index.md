@@ -4,6 +4,10 @@
 
 Статус: активный. Входная точка для задач по интерфейсу `web/platform`.
 
+Промокоды первого тарифа: существующий `PromoCodeDialog` в профиле и тарифах,
+общий `SubscriptionPromotionProvider`, проверенная сумма и обычное продление —
+[контракт подписки и промокодов](ui-catalog.md#subscription-economy).
+
 Обязательная проверка вёрстки: **360, 390, 768, 1024, 1440, 1920, 2560 и 3840 CSS px**;
 2K — **2560 × 1440**, 4K — **3840 × 2160**. Покрытие страниц, состояния и фиксация
 результатов: [правило адаптивной проверки](../AGENTS.md#mandatory-responsive-layout-verification).
@@ -37,6 +41,9 @@
 
 | Запрос / задача | Готовое решение | Читать точечно |
 | --- | --- | --- |
+| Главная для гостя, кабинет для вошедшего пользователя | Серверный `loadHomeEntrySession` → временный `/ru/app` только после проверки профиля; `HomeSessionRecovery` восстанавливает сессию без новой вёрстки | [Маршрутизация](locale-routing.md#вход-и-оплата) |
+| История покупок, списаний звёзд и денежных возвратов в профиле | `ProfileBillingHistory`: приватный read-only API, проверенные суммы, пагинация и повтор; preview без финансовых примеров | [Вход и безопасность аккаунта](ui-catalog.md#вход-и-безопасность-аккаунта) |
+| Личная ссылка, условия реферального бонуса и реальные счётчики | `ProfileReferralProgram` + `ProfileReferralFaq`: проверенная политика API, отзыв бонуса при возврате, preview без реальных данных | [Вход и безопасность аккаунта](ui-catalog.md#вход-и-безопасность-аккаунта) |
 | Английская страница автора по референсу 24 | `AuthorLanding` на `/en/blog/author/epifera`: редакционный бренд, 25 существующих материалов, сетка 12/12/1, query-пагинация и поиск всего архива; RU пустой, draft/noindex | [Автор](ui-catalog.md#author-archive-template) |
 | Английский шаблон события / проекта по референсу 22 | `EventLanding` на `/en/events/creative-sessions`: концепт, программа, локальный трейлер, обсуждение, блоки встречи, журнал и FAQ; RU пустой, draft/noindex | [Событие / проект](ui-catalog.md#event-and-project-template) |
 | Английская страница о компании и контактах по референсу 21 | `AboutLanding` на `/en/company/about-us`: направления работы, сценарии, ценности, модели, FAQ и реальные контакты; RU пустой, draft/noindex | [О компании](ui-catalog.md#about-and-contacts-template) |
@@ -49,6 +56,7 @@
 | Английский публичный пример результата по референсу 14 | `PublicExamplePage` на `/en/inspiration/examples/aesthetic-flowers`: изображение, информация об источнике, PNG/WebP, действия, форма вариации и карусели; русский маршрут пустой, обе версии draft/noindex | [Публичный пример](ui-catalog.md#public-example) |
 | Английская подборка примеров / промптов по референсу 13 | `ExampleCollection` на `/en/inspiration/cinematic-scenes`: 48 изображений, поиск, меню Use, просмотр и подсказки; сохранение публичного ID на устройстве, поделиться; русский маршрут пустой, обе версии draft/noindex | [Подборка примеров](ui-catalog.md#example-collection) |
 | Имя пользователя в меню аккаунта | `AccountControl` → `AccountMenu`: серверный `display_name`, иначе прежняя подпись почты/провайдера; без запросов к VK | [Аккаунт](ui-catalog.md#browser-account) |
+| Постоянный ID аккаунта в профиле | `ProfileWorkspace` → `ProfileIdentityCard publicID`: серверный `profile.public_id`, явное копирование и ручное выделение; без подстановки UUID | [Аккаунт](ui-catalog.md#browser-account) |
 | Смена светлой, тёмной и системной темы | Только `AccountMenu` в личном кабинете через `ModeSwitchPanel`; в публичных шапках и других местах переключателя нет | [Ограничения](ui-catalog.md#limits) |
 | Английская публичная главная по референсу Magnific | `PublicHome` + общие `Landing*`: `/en`, первый экран, вкладки, карточки, FAQ; `/ru` пустая, обе версии draft/noindex | [Публичная главная](ui-catalog.md#marketing-home) |
 | Английский обзор AI-инструментов по референсу 02 | `ToolsOverview` на `/en/ai`: восемь категорий, модели, AI-клиенты, сценарии, карточки и центрированный подвал; `/ru/ai` пустая, обе версии draft/noindex | [Обзор инструментов](ui-catalog.md#ai-tools-overview) |
@@ -63,6 +71,8 @@
 | Английский курс / урок по референсу 10 | `AcademyCourse` на `/en/academy/courses/epifera-essentials` и 14 маршрутах уроков: семь модулей, поиск, обзор, упражнения и переходы; общий `HelpCenterFrame` с документами. Русский пустой, все draft/noindex | [Курс и учебная оболочка](ui-catalog.md#academy-course) |
 | Английская страница генератора изображений по референсу 03 | `ImageGeneratorLanding` на `/en/ai/image-generator`: галерея, четыре режима, модели, сценарии, графики, FAQ; `/ru` пустая, обе версии draft/noindex | [Страница инструмента](ui-catalog.md#image-tool-preview) |
 | Вход, регистрация, восстановление, основная и одна резервная почта, замена и сессии | Единственный `/login`: `LoginWindow`/`LoginShowcase`, `CanonicalLogin` (`LoginForm`), `EmailRegistration`, `RecoveryFlow`, `PasswordField`, `VerificationCodeField`, общий `completeSignIn`; `/login-v2` только redirect | [Аккаунт](ui-catalog.md#browser-account) |
+| Быстрый повторный вход без отдельного экрана | `CanonicalLogin` → `RememberedProviderButton`: персонализация кнопки провайдера, смена аккаунта в меню стрелки; остальные провайдеры и обычная почта доступны | [Аккаунт](ui-catalog.md#browser-account) |
+| Посмотреть последний аккаунт без реальной авторизации | Серверный local preview: `?demo=provider` (Яндекс) или `?demo=vk`; без настроек под формой и реальных запросов | [Локальные сценарии](local-development.md#демонстрация-повторного-входа) |
 | Создание пароля и шкала надёжности | `PasswordField` → общий `CredentialField`, глазик/Caps Lock и необязательный `PasswordStrengthMeter` только для нового пароля; регистрационный `PasswordCreationField` — адаптер | [Аккаунт](ui-catalog.md#browser-account) |
 | Приглашения на сайт и статистика аккаунта | `ProfileReferralProgram`: код в памяти текущей сессии, независимое обновление `/web/v1/referrals/stats`; `InviteEntry`, общий `Button`/`StateNotice`; бонусы пока выключены | [Аккаунт](ui-catalog.md#browser-account), [контракт приглашений](../../../docs/runbooks/WEB_REFERRALS.md) |
 | Фирменная страница 404 с рабочим меню | `NotFoundContent` внутри WorkspaceFrame / GuestWorkspaceFrame; общий Button outline и языковой Link | [404](ui-catalog.md#not-found), [дизайн и проверка](not-found-page-plan.md) |

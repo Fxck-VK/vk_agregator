@@ -1,5 +1,5 @@
 import { render, screen } from "@testing-library/react";
-import { afterEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { getDictionary } from "@/i18n/dictionary";
 import { LocaleProvider } from "@/i18n/LocaleProvider";
 
@@ -10,14 +10,32 @@ vi.mock("next/navigation", () => ({ useRouter: vi.fn(), usePathname: () => "/", 
 vi.mock("@/i18n/server", () => ({
   getRequestLocale: async () => request.locale,
   getRequestDictionary: async () => getDictionary(request.locale),
+  redirectLocalized: vi.fn((path, locale) => { throw new Error(`REDIRECT:/${locale}${path}`); }),
 }));
+vi.mock("@/features/session/home-entry.server", () => ({ loadHomeEntrySession: vi.fn() }));
+vi.mock("@/features/session/HomeSessionRecovery", () => ({ HomeSessionRecovery: () => <i data-testid="home-session-recovery" /> }));
+import { loadHomeEntrySession } from "@/features/session/home-entry.server";
+import { redirectLocalized } from "@/i18n/server";
 
 import HomePage, { generateMetadata } from "./page";
 import { publicSitemap } from "@/i18n/seo";
 
-afterEach(() => { request.locale = "ru"; });
+beforeEach(() => { vi.mocked(loadHomeEntrySession).mockResolvedValue("guest"); });
+afterEach(() => { request.locale = "ru"; vi.clearAllMocks(); });
 
 describe("homepage retirement boundary", () => {
+  it("sends a verified signed-in visitor straight to the localized workspace", async () => {
+    vi.mocked(loadHomeEntrySession).mockResolvedValue("authenticated");
+    await expect(HomePage()).rejects.toThrow("REDIRECT:/ru/app");
+    expect(redirectLocalized).toHaveBeenCalledWith("/app", "ru");
+  });
+  it("preserves the landing while a recoverable session is checked in the browser", async () => {
+    vi.mocked(loadHomeEntrySession).mockResolvedValue("refresh_required");
+    render(await HomePage());
+    expect(screen.getByRole("heading", { level: 1 })).toBeInTheDocument();
+    expect(screen.getByTestId("home-session-recovery")).toBeInTheDocument();
+    expect(redirectLocalized).not.toHaveBeenCalled();
+  });
   it("renders Russian content and localized links", async () => {
     request.locale = "ru";
     const { container } = render(await HomePage());

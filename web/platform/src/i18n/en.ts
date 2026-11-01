@@ -1,8 +1,10 @@
 import { brandName, brandMonogram } from "@/config/brand";
 import { accountAuthText } from "./account-auth";
 import { legalText } from "./legal";
+import { promotionText } from "./promotions";
 
 export const en = {
+  promotions: promotionText.en,
   auth: accountAuthText.en,
   legal: legalText.en,
   preloading: {
@@ -93,6 +95,11 @@ export const en = {
   profile: {
     title: "Profile",
     identityCardLabel: "Account details",
+    publicIDLabel: "Account ID",
+    publicIDCopy: "Copy account ID",
+    publicIDCopyPending: "Copying ID…",
+    publicIDCopied: "ID copied",
+    publicIDCopyFailure: "Unable to copy. Select the ID and copy it manually.",
     verifiedIdentity: "Verified sign-in method",
     noVerifiedIdentity: "No verified sign-in method found.",
     tabsLabel: "Profile sections",
@@ -112,6 +119,30 @@ export const en = {
     noLoginMethods: "No verified sign-in methods found yet.",
     billingTitle: "Purchases and charges",
     billingPlaceholder: "Your purchase and charge history will appear here once billing is connected.",
+    billingHistory: {
+      preview: "Local preview: purchase and charge history is unavailable. Real transactions are not loaded here.",
+      sessionUnavailable: "Sign in to see your purchase and charge history.",
+      listLabel: "Purchases and charges",
+      loading: "Loading history…", loadingMore: "Loading the next page…",
+      empty: "No purchases or charges yet.",
+      error: "Unable to load history. Please try again.",
+      pageError: "Unable to load the next page. Previously loaded transactions remain available.",
+      retry: "Retry", more: "Show more", testMode: "Test transaction",
+      kinds: {
+        subscription: "Subscription purchase", topup: "Star top-up", generation: "Generation",
+        generation_refund: "Generation star refund", bonus: "Bonus stars", expiry: "Star expiry",
+        refund_adjustment: "Refund star adjustment", refund_compensation: "Refund star compensation",
+        referral_bonus: "Referral bonus", referral_reversal: "Referral bonus reversal",
+        adjustment: "Star adjustment", refund_money: "Money refund",
+      },
+      statuses: { succeeded: "Completed", pending: "Pending", canceled: "Canceled", failed: "Failed", refunded: "Payment refunded", partially_refunded: "Payment partially refunded" },
+      plans: { lite: "Lite", start: "Start+", pro: "Pro", ultima: "Ultima", elite: "Elite" },
+      operations: {
+        text_generate: "Text generation", image_generate: "Image generation", image_edit: "Image editing",
+        image_upscale: "Image upscaling", video_generate: "Video generation", video_image_to_video: "Image animation",
+        video_extend: "Video extension", audio_tts: "Text to speech", audio_stt: "Speech recognition", audio_music: "Music creation",
+      },
+    },
     referralLaunchTitle: `Invite friends to ${brandName}`,
     referralLaunchDescription: "Share your personal link. New sign-ups through it will appear in your statistics.",
     referralLoading: "Loading your invitation…",
@@ -121,7 +152,11 @@ export const en = {
     referralCopy: "Copy invitation",
     referralCopied: "Link copied",
     referralCopyFailure: "Unable to copy. Select and copy the link from the field.",
-    referralRulesPending: "Activation and reward rules are still being decided. Rewards are disabled for now.",
+    referralRulesPending: "Rewards are disabled on the server. Invitations and sign-ups are tracked.",
+    referralRulesUnavailable: "Reward availability is confirmed after the server terms load.",
+    referralRulesActive: "We credit {stars} stars {hours} h after an invited new account's first verified live successful payment. The reward never expires, is granted once per invitee, and the number of invitees is unlimited.",
+    referralPreviewNotice: "Local preview: the agreed terms below are an example, not the real program's status.",
+    referralLegalLink: "Payment and refund terms",
     inviteTitle: `You have been invited to ${brandName}`,
     inviteLoading: "Saving your invitation…",
     inviteReady: "Invitation saved. Create a new account to use it.",
@@ -139,8 +174,8 @@ export const en = {
         description: "Your friend opens the link and creates a new account within 30 days.",
       },
       {
-        title: "History and rewards",
-        description: "The sign-up appears in your statistics. Reward terms will be announced separately.",
+        title: "First payment and reward",
+        description: "You receive {stars} stars {hours} h after your friend's first verified live successful payment for any plan or top-up. Later payments do not earn another reward.",
       },
     ],
     referralStatisticsTitle: "Statistics",
@@ -152,7 +187,7 @@ export const en = {
     referralFaqItems: [
       {
         question: "When are rewards credited?",
-        answer: "Invitations and sign-ups are tracked now. Reward amounts and conditions are still being decided.",
+        answer: "The inviter receives {stars} stars {hours} h after the invited new account's first verified live successful payment for any plan or top-up. One reward per invitee, no expiry, and unlimited invitees.",
       },
       {
         question: "Who can I invite?",
@@ -161,6 +196,18 @@ export const en = {
       {
         question: "What if I open several invitations?",
         answer: "The first invitation is saved in this browser for 30 days. Sign up in the same browser to use it.",
+      },
+      {
+        question: "What happens after a payment refund?",
+        answer: "Any confirmed refund of the first payment, including a partial refund, cancels a pending reward or revokes the full reward even if already spent. An insufficient star balance can become negative. A later payment by that invitee does not earn another reward.",
+      },
+      {
+        question: "What do activations and rewards mean?",
+        answer: "Activations count invitees whose first live successful payment was verified. Rewards count awards currently credited and not revoked; this number may decrease after a refund. The activation remains counted.",
+      },
+      {
+        question: "Do historical and test payments count?",
+        answer: "Historical payments already settled before the program was enabled are not rewarded retroactively. Test and mock payments do not qualify.",
       },
     ],
   },

@@ -26,14 +26,14 @@ describe("subscription promo dialog", () => {
     expect(push).toHaveBeenCalledExactlyOnceWith("/ru/pricing");
   });
 
-  it("provides actual legal links in the existing footer sentence", () => {
+  it("provides payment and agreement links without implying automatic renewal consent", () => {
     render(<SubscriptionPlansDialog onClose={() => {}} />);
-    const agreement = screen.getByRole("link", { name: "пользовательским соглашением" });
+    const agreement = screen.getByRole("link", { name: "Пользовательское соглашение" });
     expect(agreement).toHaveAttribute("href", "/ru/legal/user-agreement");
     expect(agreement).toHaveAttribute("target", "_blank");
     expect(agreement).toHaveAttribute("rel", "noopener noreferrer");
-    expect(screen.getByRole("link", { name: "рекуррентными платежами" })).toHaveAttribute("href", "/ru/legal/paid-access");
-    expect(agreement.closest("p")).toHaveTextContent("Покупая подписку, вы соглашаетесь с пользовательским соглашением и рекуррентными платежами.");
+    expect(screen.getByRole("link", { name: "Условия оплаты и автопродления" })).toHaveAttribute("href", "/ru/legal/paid-access");
+    expect(agreement.closest("p")).toHaveTextContent("Пользовательское соглашение · Условия оплаты и автопродления");
   });
   it.each([["Start+", "−13%"], ["Pro", "−16%"], ["Ultima", "−23%"], ["Elite", "−28%"]])("calculates the %s badge from the displayed prices without overstating it", (name, discount) => {
     render(<SubscriptionPlansDialog onClose={() => {}} />);
@@ -53,27 +53,16 @@ describe("subscription promo dialog", () => {
     expect(pro).toHaveTextContent(/2\s*100/);
     expect(screen.queryByRole("dialog", { name: "Условия подписки" })).toBeNull();
   });
-  it("opens payment terms only for the chosen card and returns focus without changing the tariff layout", () => {
+  it("sends a guest directly to login without opening a second payment dialog", () => {
     const onClose = vi.fn();
     render(<SubscriptionPlansDialog onClose={onClose} />);
     const pro = screen.getByRole("heading", { name: "Pro" }).closest("article")!;
-    const trigger = within(pro).getByRole("button", { name: "Активировать подписку" });
-    trigger.focus();
-    fireEvent.click(trigger);
-    const checkout = screen.getByRole("dialog", { name: "Условия подписки" });
-    expect(checkout).toHaveTextContent(/Pro.*999/);
-    expect(checkout).toHaveTextContent(/2\s*100/);
-    expect(within(checkout).getByRole("button", { name: "Перейти к оплате" })).toBeDisabled();
-    expect(within(checkout).getByRole("checkbox")).not.toBeChecked();
-    expect(screen.getByTestId("subscription-plans-backdrop")).toHaveAttribute("data-state", "open");
-    fireEvent.keyDown(window, { key: "Escape" });
-    const backdrop = screen.getByTestId("subscription-checkout-backdrop");
-    fireEvent.animationEnd(backdrop, { animationName: "modalBackdropOut" });
+    fireEvent.click(within(pro).getByRole("button", { name: "Активировать подписку" }));
+    expect(push).toHaveBeenCalledExactlyOnceWith("/ru/login");
     expect(screen.queryByRole("dialog", { name: "Условия подписки" })).toBeNull();
-    expect(trigger).toHaveFocus();
-    expect(onClose).not.toHaveBeenCalled();
+    expect(screen.getAllByRole("dialog")).toHaveLength(1);
   });
-  it("focuses the input, rejects blank codes and explains unavailable activation", () => {
+  it("focuses the input and asks a guest to sign in before checking codes", () => {
     openPromo();
     const dialog = screen.getByRole("dialog", { name: "У меня есть промокод" });
     const input = within(dialog).getByRole("textbox", { name: "Промокод" });
@@ -83,9 +72,9 @@ describe("subscription promo dialog", () => {
     fireEvent.change(input, { target: { value: "   " } });
     expect(submit).toBeDisabled();
     fireEvent.change(input, { target: { value: "TEST" } });
-    expect(submit).toBeEnabled();
+    expect(submit).toBeDisabled();
     fireEvent.click(submit);
-    expect(within(dialog).getByRole("status")).toHaveTextContent("Активация промокодов пока недоступна.");
+    expect(within(dialog).getByRole("status")).toHaveTextContent("Войдите в аккаунт");
     expect(screen.queryByText("Выберите подходящий объём возможностей NeiroHub")).toBeNull();
   });
 

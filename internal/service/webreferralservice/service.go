@@ -25,21 +25,23 @@ const referralAlphabet = "23456789ABCDEFGHJKLMNPQRSTUVWXYZ"
 // handler. Stage counters are cumulative: Registered includes Activated and
 // Rewarded, and Activated includes Rewarded.
 type Summary struct {
-	Code           string `json:"code"`
-	Visits         int    `json:"visits"`
-	Registered     int    `json:"registered"`
-	Activated      int    `json:"activated"`
-	Rewarded       int    `json:"rewarded"`
-	RewardsEnabled bool   `json:"rewards_enabled"`
+	Code           string                         `json:"code"`
+	Visits         int                            `json:"visits"`
+	Registered     int                            `json:"registered"`
+	Activated      int                            `json:"activated"`
+	Rewarded       int                            `json:"rewarded"`
+	RewardsEnabled bool                           `json:"rewards_enabled"`
+	RewardPolicy   domain.WebReferralRewardPolicy `json:"reward_policy"`
 }
 
 // Statistics contains changing counters without reading or allocating a code.
 type Statistics struct {
-	Visits         int  `json:"visits"`
-	Registered     int  `json:"registered"`
-	Activated      int  `json:"activated"`
-	Rewarded       int  `json:"rewarded"`
-	RewardsEnabled bool `json:"rewards_enabled"`
+	Visits         int                            `json:"visits"`
+	Registered     int                            `json:"registered"`
+	Activated      int                            `json:"activated"`
+	Rewarded       int                            `json:"rewarded"`
+	RewardsEnabled bool                           `json:"rewards_enabled"`
+	RewardPolicy   domain.WebReferralRewardPolicy `json:"reward_policy"`
 }
 
 // Repository is the storage boundary used by Service.
@@ -95,8 +97,7 @@ func New(repo Repository, opts ...Option) *Service {
 }
 
 // Summary returns the stable account referral code and aggregate funnel
-// counters. Web referral rewards remain disabled until a product decision
-// enables account-native reward qualification.
+// counters and the server-owned first-payment reward policy.
 func (s *Service) Summary(ctx context.Context, accountID uuid.UUID) (Summary, error) {
 	if s == nil || s.repo == nil {
 		return Summary{}, errors.New("webreferralservice: repository is required")
@@ -113,7 +114,8 @@ func (s *Service) Summary(ctx context.Context, accountID uuid.UUID) (Summary, er
 		return Summary{}, err
 	}
 	summary.Code = code.Code
-	summary.RewardsEnabled = false
+	summary.RewardsEnabled = true
+	summary.RewardPolicy = domain.CurrentWebReferralRewardPolicy()
 	return summary, nil
 }
 
@@ -132,7 +134,8 @@ func (s *Service) Statistics(ctx context.Context, accountID uuid.UUID) (Statisti
 	return Statistics{
 		Visits: summary.Visits, Registered: summary.Registered,
 		Activated: summary.Activated, Rewarded: summary.Rewarded,
-		RewardsEnabled: false,
+		RewardsEnabled: true,
+		RewardPolicy:   domain.CurrentWebReferralRewardPolicy(),
 	}, nil
 }
 

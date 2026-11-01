@@ -44,7 +44,5 @@
 .capsLockHint { margin: -.25rem 0 0; color: #f3bd4f; font-size: .75rem; line-height: 1.5; }
 .keepSigned { display: flex; align-items: center; gap: .5rem; color: var(--color-text-muted); font-size: .75rem; cursor: pointer; }
 .keepSigned input { inline-size: 1rem; block-size: 1rem; accent-color: var(--color-accent); }
-.remembered { display: flex; align-items: center; justify-content: center; gap: .75rem; font-size: .875rem; }
-.remembered p { margin: 0; }
 @media (max-width: 36rem) { .choiceCard h1 { font-size: 1.625rem; } }
 @media (max-width: 64rem) { .previewNote { max-inline-size: calc(100vw - 2rem); } }

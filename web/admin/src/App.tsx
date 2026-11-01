@@ -4,6 +4,8 @@ import type { OverviewCardDTO, OverviewDTO } from "./api/overview";
 import { DLQScreen } from "./screens/DLQScreen";
 import { JobsScreen } from "./screens/JobsScreen";
 import { PaymentsScreen } from "./screens/PaymentsScreen";
+import { PromotionsScreen } from "./screens/PromotionsScreen";
+import { promotionAccess, type PromotionAccess } from "./api/promotions";
 import { ConfigHealthScreen, MediaSafetyScreen, ProvidersScreen } from "./screens/ProviderMediaScreens";
 import { RetentionScreen } from "./screens/RetentionScreen";
 import { AuditLogScreen, ReferralsScreen, UsersScreen } from "./screens/UsersReferralsAuditScreens";
@@ -14,6 +16,7 @@ type ScreenId =
   | "dlq"
   | "users"
   | "payments"
+  | "promotions"
   | "providers"
   | "media"
   | "retention"
@@ -65,6 +68,13 @@ const screens: readonly Screen[] = [
     eyebrow: "Ledger-биллинг",
     summary: "Платежи, ledger, reconciliation и возвраты только из защищенного backend.",
     panels: ["История intents", "Webhook inbox", "Reconciliation", "Возвраты"],
+  },
+  {
+    id: "promotions",
+    title: "Промокоды",
+    eyebrow: "Первый тариф",
+    summary: "Процентные скидки на первую покупку тарифа: условия, лимиты и применения.",
+    panels: [],
   },
   {
     id: "providers",
@@ -187,6 +197,7 @@ export function App() {
   const [adminToken, setAdminToken] = useState("");
   const [loginError, setLoginError] = useState("");
   const [overview, setOverview] = useState<OverviewState>({ loading: false });
+  const [promoAccess, setPromoAccess] = useState<PromotionAccess>({ read: false, manage: false });
   const screen = findScreen(activeScreen);
   const sessionState = adminToken ? "Доступ открыт" : "Нужен токен";
   const tokenState = adminToken ? "только в памяти вкладки" : "не введен";
@@ -200,6 +211,16 @@ export function App() {
     ],
     [],
   );
+
+  useEffect(() => {
+    setPromoAccess({ read: false, manage: false });
+    if (!adminToken) return;
+    const controller = new AbortController();
+    adminClient.request<unknown>("/admin/access/operator", { signal: controller.signal })
+      .then((data) => { if (!controller.signal.aborted) setPromoAccess(promotionAccess(data)); })
+      .catch(() => { /* A missing access contract never enables promotion management. */ });
+    return () => controller.abort();
+  }, [adminClient, adminToken]);
 
   useEffect(() => {
     if (activeScreen !== "overview") {
@@ -275,7 +296,7 @@ export function App() {
           </div>
 
           <nav className="nav">
-            {screens.map((item) => (
+            {screens.filter((item) => item.id !== "promotions" || promoAccess.read).map((item) => (
               <button
                 className={item.id === activeScreen ? "nav__item nav__item--active" : "nav__item"}
                 key={item.id}
@@ -326,6 +347,8 @@ export function App() {
               <DLQScreen adminTokenSet={Boolean(adminToken)} client={adminClient} />
             ) : screen.id === "payments" ? (
               <PaymentsScreen adminTokenSet={Boolean(adminToken)} client={adminClient} />
+            ) : screen.id === "promotions" ? (
+              <PromotionsScreen adminTokenSet={Boolean(adminToken)} client={adminClient} access={promoAccess} />
             ) : screen.id === "users" ? (
               <UsersScreen adminTokenSet={Boolean(adminToken)} client={adminClient} />
             ) : screen.id === "providers" ? (

@@ -64,11 +64,11 @@ export function UsersScreen({ adminTokenSet, client }: OperatorScreenProps) {
     <div className="ops-stack">
       <form className="surface filters-panel" onSubmit={submitFilters}>
         <label>
-          <span>User lookup</span>
+          <span>Поиск аккаунта</span>
           <input
             autoComplete="off"
             onChange={(event) => setFilters({ userId: event.target.value })}
-            placeholder="internal user id"
+            placeholder="EP-000123 или внутренний ID пользователя"
             value={filters.userId}
           />
         </label>
@@ -238,14 +238,35 @@ function useOperatorData<T>(adminTokenSet: boolean, client: AdminClient, path: `
   return state;
 }
 
-function UserConsole({ data, loading }: { data: OperatorUsersDTO; loading: boolean }) {
+export function UserConsole({ data, loading }: { data: OperatorUsersDTO; loading: boolean }) {
+  if (data.account) {
+    return (
+      <>
+        <section className="surface queue-panel" aria-label="Аккаунт">
+          <div className="section-heading">
+            <div><p className="eyebrow">Аккаунт</p><h3>{data.account.public_id}</h3></div>
+            <span>{loading ? "Обновление" : `Обновлено ${formatDateTime(data.generated_at)}`}</span>
+          </div>
+          <dl className="detail-list">
+            <div><dt>Ссылка аккаунта</dt><dd>{data.account.account_ref}</dd></div>
+            <div><dt>Роль / статус</dt><dd>{`${data.account.role} / ${data.account.status}`}</dd></div>
+            <div><dt>Тип</dt><dd>{data.account.account_type}</dd></div>
+            <div><dt>Язык</dt><dd>{data.account.locale}</dd></div>
+            <div><dt>Создан</dt><dd>{formatDateTime(data.account.created_at)}</dd></div>
+            <div><dt>Обновлён</dt><dd>{formatDateTime(data.account.updated_at)}</dd></div>
+          </dl>
+        </section>
+        <NotesPanel notes={data.notes} />
+      </>
+    );
+  }
   if (!data.user) {
     return (
       <>
         <section className="surface panel panel--wide" role="status">
           <p className="eyebrow">Safe lookup</p>
           <h3>User not selected</h3>
-          <p>Use a protected internal lookup id to load one user summary.</p>
+          <p>Введите публичный ID аккаунта EP-000123 или внутренний ID пользователя.</p>
         </section>
         <NotesPanel notes={data.notes} />
       </>
@@ -561,10 +582,12 @@ function SafeErrorPanel({ error }: { error: AdminApiError }) {
   );
 }
 
-function usersPath(filters: UserFilters): `/admin/${string}` {
+export function usersPath(filters: UserFilters): `/admin/${string}` {
   const params = new URLSearchParams();
   if (filters.userId.trim()) {
-    params.set("user_id", filters.userId.trim());
+    const value = filters.userId.trim();
+    const isPublicID = /^ep-/i.test(value);
+    params.set(isPublicID ? "public_id" : "user_id", isPublicID ? value.toUpperCase() : value);
   }
   const query = params.toString();
   return query ? `/admin/users/operator?${query}` : "/admin/users/operator";

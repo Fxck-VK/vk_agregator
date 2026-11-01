@@ -530,11 +530,24 @@ type OperatorPricingEntryDTO struct {
 // raw VK user ids, names, timezones or internal UUIDs by default.
 type OperatorUsersDTO struct {
 	GeneratedAt time.Time                      `json:"generated_at"`
+	Account     *OperatorAccountSummaryDTO     `json:"account,omitempty"`
 	User        *OperatorUserSummaryDTO        `json:"user,omitempty"`
 	RecentJobs  []OperatorUserRecentJobDTO     `json:"recent_jobs,omitempty"`
 	Payment     OperatorUserPaymentSummaryDTO  `json:"payment"`
 	Referrals   OperatorUserReferralSummaryDTO `json:"referrals"`
 	Notes       []string                       `json:"notes,omitempty"`
+}
+
+// OperatorAccountSummaryDTO deliberately omits raw UUIDs and login identities.
+type OperatorAccountSummaryDTO struct {
+	PublicID    string    `json:"public_id"`
+	AccountRef  string    `json:"account_ref"`
+	Status      string    `json:"status"`
+	Role        string    `json:"role"`
+	AccountType string    `json:"account_type"`
+	Locale      string    `json:"locale"`
+	CreatedAt   time.Time `json:"created_at"`
+	UpdatedAt   time.Time `json:"updated_at"`
 }
 
 type OperatorUserSummaryDTO struct {

@@ -44,3 +44,24 @@ func TestSubscriptionMaintenanceRunsIndependentExpiryAndRenewal(t *testing.T) {
 		t.Fatal("renewal starved by failed expiry")
 	}
 }
+
+type referralRewardWorkerStub struct {
+	calls int
+	err   error
+}
+
+func (s *referralRewardWorkerStub) ProcessWebReferralRewards(context.Context, time.Time, int) (int64, error) {
+	s.calls++
+	return 0, s.err
+}
+func TestSubscriptionMaintenanceRunsReferralEvenWhenOtherStagesFail(t *testing.T) {
+	renew := &renewalWorkerStub{err: errors.New("renew")}
+	expire := &expiryWorkerStub{err: errors.New("expire")}
+	reward := &referralRewardWorkerStub{err: errors.New("reward")}
+	if err := runSubscriptionMaintenanceOnce(context.Background(), renew, expire, reward); !errors.Is(err, reward.err) || !errors.Is(err, renew.err) || !errors.Is(err, expire.err) {
+		t.Fatal(err)
+	}
+	if renew.calls != 1 || expire.calls != 1 || reward.calls != 1 {
+		t.Fatal("a maintenance stage was skipped")
+	}
+}

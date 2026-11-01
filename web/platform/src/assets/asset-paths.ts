@@ -124,7 +124,7 @@ export const assetPaths = {
       videoTwo: "/assets/videos/inspiration/video-2.mp4",
     },
     workspace: {
-      howItWorks: "/assets/videos/workspace/neirohub-how-it-works.mp4",
+      howItWorks: "/assets/videos/workspace/epifera-v14-centered-mono-ru.mp4",
     },
   },
 } as const;

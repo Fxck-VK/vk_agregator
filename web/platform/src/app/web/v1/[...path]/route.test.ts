@@ -24,6 +24,24 @@ import { createPreviewImage } from "@/features/local-development/preview-image";
 import sharp from "sharp";
 
 describe("web API route local workspace preview", () => {
+  it("returns an empty private billing history in preview without forwarding reads or writes", async () => {
+    vi.stubEnv("NODE_ENV", "development");
+    vi.stubEnv("NEIROHUB_LOCAL_WORKSPACE_PREVIEW", "1");
+    const response = await GET(new Request("http://localhost:7159/web/v1/billing/history?limit=20&cursor=synthetic"));
+    expect(response.status).toBe(200);
+    expect(response.headers.get("Cache-Control")).toBe("no-store");
+    expect(await response.json()).toEqual({ items: [], next_cursor: null });
+    expect((await POST(new Request("http://localhost:7159/web/v1/billing/history", { method: "POST" }))).status).toBe(503);
+    expect(proxyWebApiRequest).not.toHaveBeenCalled();
+  });
+
+  it("forwards authenticated billing history through the existing BFF outside preview", async () => {
+    vi.stubEnv("NODE_ENV", "production");
+    vi.stubEnv("NEIROHUB_LOCAL_WORKSPACE_PREVIEW", "0");
+    const request = new Request("https://web.example.test/web/v1/billing/history?limit=20&cursor=opaque");
+    await GET(request);
+    expect(proxyWebApiRequest).toHaveBeenCalledWith(request, "/web/v1/billing/history?limit=20&cursor=opaque", "http://backend.internal:8080");
+  });
   it("forwards private thumbnail reads to the backend without fetching or converting the original", async () => {
     vi.stubEnv("NODE_ENV", "production");
     vi.stubEnv("NEIROHUB_LOCAL_WORKSPACE_PREVIEW", "0");
@@ -97,7 +115,7 @@ describe("web API route local workspace preview", () => {
     await GET(request);
     expect(proxyWebApiRequest).toHaveBeenCalledTimes(1);
   });
-  it.each(["input-artifacts", "image-jobs", "conversations", "unknown-preview-path"])("never forwards preview writes to %s to a real backend", async path => {
+  it.each(["input-artifacts", "image-jobs", "conversations", "subscription/promo", "subscription/checkout", "unknown-preview-path"])("never forwards preview writes to %s to a real backend", async path => {
     vi.stubEnv("NODE_ENV", "development");
     vi.stubEnv("NEIROHUB_LOCAL_WORKSPACE_PREVIEW", "1");
     const response = await POST(new Request(`http://localhost:7159/web/v1/${path}`, { method: "POST" }));

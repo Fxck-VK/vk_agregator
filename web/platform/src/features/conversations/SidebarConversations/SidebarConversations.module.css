@@ -11,6 +11,10 @@
 .conversations:has(.statusSlot:empty) { grid-template-rows: auto minmax(0, 1fr); }
 .statusSlot { min-inline-size: 0; }
 
+.conversations > [role="note"] {
+  align-self: start;
+}
+
 .conversations h2,
 .empty {
   margin: 0;

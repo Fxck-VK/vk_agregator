@@ -16,6 +16,8 @@ const (
 type OperatorPermission string
 
 const (
+	OperatorPermissionPromotionsRead   OperatorPermission = "promotions:read"
+	OperatorPermissionPromotionsManage OperatorPermission = "promotions:manage"
 	OperatorPermissionAccessRead       OperatorPermission = "operator_access:read"
 	OperatorPermissionSystemStatusRead OperatorPermission = "system_status:read"
 	OperatorPermissionJobsSafeRead     OperatorPermission = "jobs:safe_read"
@@ -139,6 +141,8 @@ var operatorRoleDefinitions = []OperatorRoleDefinition{
 		Role:        OperatorRoleOwner,
 		Description: "Full break-glass ownership of operator/admin policy and protected actions.",
 		Permissions: []OperatorPermission{
+			OperatorPermissionPromotionsRead,
+			OperatorPermissionPromotionsManage,
 			OperatorPermissionAccessRead,
 			OperatorPermissionSystemStatusRead,
 			OperatorPermissionJobsSafeRead,
@@ -172,6 +176,8 @@ var operatorRoleDefinitions = []OperatorRoleDefinition{
 		Role:        OperatorRoleAdmin,
 		Description: "System operator for health, queues, jobs, provider status, retention and audit visibility.",
 		Permissions: []OperatorPermission{
+			OperatorPermissionPromotionsRead,
+			OperatorPermissionPromotionsManage,
 			OperatorPermissionAccessRead,
 			OperatorPermissionSystemStatusRead,
 			OperatorPermissionJobsSafeRead,
@@ -240,6 +246,8 @@ var operatorRoleDefinitions = []OperatorRoleDefinition{
 		Role:        OperatorRoleFinance,
 		Description: "Finance view for safe payment/refund operations backed by ledger and provider verification.",
 		Permissions: []OperatorPermission{
+			OperatorPermissionPromotionsRead,
+			OperatorPermissionPromotionsManage,
 			OperatorPermissionAccessRead,
 			OperatorPermissionPaymentsSafeRead,
 			OperatorPermissionRefundsManage,

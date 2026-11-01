@@ -45,16 +45,13 @@ describe("account-owned Lite offer",()=>{
     show();await waitFor(()=>expect(loadSubscription).toHaveBeenCalled());
     expect(screen.queryByRole("heading",{name:"Lite"})).toBeNull();
   });
-  it("rechecks on checkout close and returns focus to the tariff close button if Lite disappears",async()=>{
+  it("rechecks Lite eligibility after an updated account snapshot without a nested checkout",async()=>{
     vi.mocked(loadSubscription).mockResolvedValue(state);
-    show();const card=(await screen.findByRole("heading",{name:"Lite"})).closest("article")!;
-    fireEvent.click(within(card).getByRole("button",{name:"Активировать подписку"}));
-    const checkout=screen.getByRole("dialog",{name:"Условия подписки"});
+    const view=show();await screen.findByRole("heading",{name:"Lite"});
     vi.mocked(loadSubscription).mockResolvedValue({...state,trial_used:true});
-    fireEvent.click(within(checkout).getByRole("button",{name:"Закрыть тарифы"}));
-    fireEvent.animationEnd(screen.getByTestId("subscription-checkout-backdrop"),{animationName:"modalBackdropOut"});
+    view.rerender(<WorkspaceAccountProvider snapshot={{profile:{...profile},balance:400}}><SubscriptionPlansDialog onClose={()=>{}}/></WorkspaceAccountProvider>);
     await waitFor(()=>expect(screen.queryByRole("heading",{name:"Lite"})).toBeNull());
-    expect(screen.getByRole("button",{name:"Закрыть тарифы"})).toHaveFocus();
+    expect(screen.queryByRole("dialog",{name:"Условия подписки"})).toBeNull();
   });
   it("also removes the consumed Lite promotion from the account home",async()=>{
     vi.mocked(loadSubscription).mockResolvedValue({...state,trial_used:true});
@@ -76,8 +73,7 @@ describe("account-owned Lite offer",()=>{
     expect(loadSubscription).not.toHaveBeenCalled();
     const card=screen.getByRole("heading",{name:"Lite"}).closest("article")!;
     fireEvent.click(within(card).getByRole("button",{name:"Активировать подписку"}));
-    fireEvent.click(within(screen.getByRole("dialog",{name:"Условия подписки"})).getByRole("button",{name:"Закрыть тарифы"}));
-    fireEvent.animationEnd(screen.getByTestId("subscription-checkout-backdrop"),{animationName:"modalBackdropOut"});
+    expect(screen.queryByRole("dialog",{name:"Условия подписки"})).toBeNull();
     expect(loadSubscription).not.toHaveBeenCalled();
   });
 });

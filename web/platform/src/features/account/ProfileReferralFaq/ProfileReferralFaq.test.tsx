@@ -4,10 +4,11 @@ import { describe, expect, it } from "vitest";
 import { ru } from "@/i18n/ru";
 
 import { ProfileReferralFaq } from "./ProfileReferralFaq";
+import { formatRewardPolicy, previewRewardPolicy } from "../ProfileReferralProgram/reward-policy";
 
 describe("ProfileReferralFaq", () => {
   it("opens one answer with an accessible disclosure control", () => {
-    render(<ProfileReferralFaq />);
+    render(<ProfileReferralFaq policy={previewRewardPolicy} />);
 
     const question = screen.getByText(ru.profile.referralFaqItems[0].question).closest("summary")!;
     const disclosure = question.closest("details")!;
@@ -18,7 +19,7 @@ describe("ProfileReferralFaq", () => {
     fireEvent.click(question);
 
     expect(disclosure).toHaveAttribute("open");
-    expect(screen.getByText(ru.profile.referralFaqItems[0].answer)).toBeVisible();
+    expect(screen.getByText(formatRewardPolicy(ru.profile.referralFaqItems[0].answer, previewRewardPolicy, "ru"))).toBeVisible();
 
     fireEvent.click(question);
 

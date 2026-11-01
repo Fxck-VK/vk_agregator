@@ -64,6 +64,16 @@ export type OperatorUserReferralSummaryDTO = {
 
 export type OperatorUsersDTO = {
   generated_at: string;
+  account?: {
+    public_id: string;
+    account_ref: string;
+    status: string;
+    role: string;
+    account_type: string;
+    locale: string;
+    created_at: string;
+    updated_at: string;
+  };
   user?: OperatorUserSummaryDTO;
   recent_jobs?: OperatorUserRecentJobDTO[];
   payment: OperatorUserPaymentSummaryDTO;

@@ -7,11 +7,11 @@ import (
 	"vk-ai-aggregator/internal/domain"
 )
 
-func (h *Handler) getOperatorAccess(w http.ResponseWriter, _ *http.Request) {
+func (h *Handler) getOperatorAccess(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, OperatorAccessDTO{
 		GeneratedAt:     time.Now().UTC(),
 		CurrentAuthMode: "admin_token",
-		EffectiveRole:   string(domain.OperatorRoleOwner),
+		EffectiveRole:   string(operatorIdentityFromContext(r.Context()).Role),
 		GlobalBoundaries: []string{
 			string(domain.OperatorDataBoundaryBackendAPIOnly),
 			string(domain.OperatorDataBoundaryNoDirectSQL),
@@ -25,7 +25,7 @@ func (h *Handler) getOperatorAccess(w http.ResponseWriter, _ *http.Request) {
 		},
 		Roles: operatorRoleAccessDTOs(domain.OperatorRoleDefinitions()),
 		Notes: []string{
-			"Current ADMIN_TOKEN access is treated as owner/break-glass until per-operator identity is introduced.",
+			"The authenticated operator's effective role is determined by server configuration.",
 			"UI role checks are advisory; backend handlers/services remain the enforcement boundary.",
 			"Operator surfaces must use backend API and safe DTOs only; direct SQL and raw payload views are out of scope.",
 		},

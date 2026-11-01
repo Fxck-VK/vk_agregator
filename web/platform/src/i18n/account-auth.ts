@@ -1,7 +1,8 @@
 import { brandName } from "@/config/brand";
 export const accountAuthText = {
   ru: {
-    staySigned: "Оставаться в системе", welcomeBack: "С возвращением", useAnotherAccount: "Использовать другой аккаунт", verifySigninTitle: "Подтвердите вход",
+    previewAccountName: "Демо-пользователь", chooseAccount: "Выбрать аккаунт", yandexAccountName: "Яндекс ID",
+    staySigned: "Оставаться в системе", welcomeBack: "С возвращением", continueAs: "Продолжить как", useAnotherAccount: "Использовать другой аккаунт", verifySigninTitle: "Подтвердите вход",
     loginPreviewComplete: "Предпросмотр завершён. На рабочем сайте здесь выполняется вход.", invalidEmail: "Введите адрес в формате name@example.com.", mailHelpShort: "Письмо не пришло? Проверьте «Спам» или обратитесь в поддержку.",
     recoverySetPasswordTitle: "Установите новый пароль",
     recoveryLinkDescription: "Введите основную или резервную почту аккаунта. Мы отправим ссылку для установки нового пароля.", recoverySendLink: "Отправить ссылку",
@@ -61,7 +62,8 @@ export const accountAuthText = {
     failure: "Не удалось выполнить действие. Попробуйте ещё раз.", conflict: "Этот способ входа уже связан с другим аккаунтом.", retry: "Повторить", pending: "Подождите…", done: "Готово.",
   },
   en: {
-    staySigned: "Stay signed in", welcomeBack: "Welcome back", useAnotherAccount: "Use another account", verifySigninTitle: "Verify your sign-in",
+    previewAccountName: "Demo user", chooseAccount: "Choose an account", yandexAccountName: "Yandex ID",
+    staySigned: "Stay signed in", welcomeBack: "Welcome back", continueAs: "Continue as", useAnotherAccount: "Use another account", verifySigninTitle: "Verify your sign-in",
     loginPreviewComplete: "Preview complete. On the live site, this signs you in.", invalidEmail: "Enter an address in the format name@example.com.", mailHelpShort: "No email? Check Spam or contact support.",
     recoverySetPasswordTitle: "Set a new password",
     recoveryLinkDescription: "Enter a primary or backup email linked to your account. We will send a link to set a new password.", recoverySendLink: "Send reset link",

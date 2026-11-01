@@ -13,6 +13,10 @@ import (
 )
 
 func (h *Handler) getOperatorUsers(w http.ResponseWriter, r *http.Request) {
+	if r.URL.Query().Has("public_id") {
+		h.getOperatorAccountByPublicID(w, r)
+		return
+	}
 	if h.deps.Users == nil {
 		writeError(w, http.StatusServiceUnavailable, "service unavailable")
 		return
@@ -43,6 +47,33 @@ func (h *Handler) getOperatorUsers(w http.ResponseWriter, r *http.Request) {
 	dto.Payment = h.operatorUserPaymentSummary(r.Context(), user.ID)
 	dto.Referrals = h.operatorUserReferralSummary(r.Context(), user.ID)
 	writeJSON(w, http.StatusOK, dto)
+}
+
+func (h *Handler) getOperatorAccountByPublicID(w http.ResponseWriter, r *http.Request) {
+	values := r.URL.Query()
+	if values.Has("user_id") || len(values["public_id"]) != 1 {
+		writeError(w, http.StatusBadRequest, "provide one account public_id or legacy user_id")
+		return
+	}
+	number, err := domain.ParseAccountPublicID(values.Get("public_id"))
+	if err != nil {
+		writeError(w, http.StatusBadRequest, "invalid account public_id")
+		return
+	}
+	if h.deps.Accounts == nil {
+		writeError(w, http.StatusServiceUnavailable, "service unavailable")
+		return
+	}
+	account, err := h.deps.Accounts.GetAccountByPublicNumber(r.Context(), number)
+	if err != nil {
+		writeNotFoundOr500(w, err, "get operator account failed")
+		return
+	}
+	writeJSON(w, http.StatusOK, OperatorUsersDTO{
+		GeneratedAt: time.Now().UTC(),
+		Account:     &OperatorAccountSummaryDTO{PublicID: domain.FormatAccountPublicID(number), AccountRef: safeUUIDRef("account", account.ID), Status: account.Status, Role: account.Role, AccountType: account.AccountType, Locale: account.Locale, CreatedAt: account.CreatedAt, UpdatedAt: account.UpdatedAt},
+		Notes:       []string{"Exact account lookup only. Public IDs are support references, not authentication credentials. Login identities, raw UUIDs, jobs and payment details are omitted."},
+	})
 }
 
 func (h *Handler) getOperatorReferrals(w http.ResponseWriter, r *http.Request) {

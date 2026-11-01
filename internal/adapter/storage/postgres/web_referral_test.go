@@ -35,7 +35,7 @@ func TestWebReferralRepositoryAcceptsNewAccountOnce(t *testing.T) {
 	if err != nil {
 		t.Fatalf("summary: %v", err)
 	}
-	if initial.Code != "WEB2345678" || initial.RewardsEnabled {
+	if initial.Code != "WEB2345678" || !initial.RewardsEnabled {
 		t.Fatalf("initial summary = %+v", initial)
 	}
 
@@ -101,7 +101,7 @@ func TestWebReferralRepositoryAcceptsNewAccountOnce(t *testing.T) {
 	if err != nil {
 		t.Fatalf("summary after accepts: %v", err)
 	}
-	if got.Visits != 4 || got.Registered != 2 || got.Activated != 0 || got.Rewarded != 0 || got.RewardsEnabled {
+	if got.Visits != 4 || got.Registered != 2 || got.Activated != 0 || got.Rewarded != 0 || !got.RewardsEnabled {
 		t.Fatalf("summary after accepts = %+v", got)
 	}
 	var ledgerEntries int

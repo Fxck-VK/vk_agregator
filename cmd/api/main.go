@@ -280,8 +280,10 @@ func main() {
 			Limiter: ratelimit.NewRedisFixedWindowLimiter(rdb, "admin", adminRateLimitLimit, adminRateLimitWindow),
 		},
 	}, adminapi.Deps{
+		Promotions:       core.Promotions,
 		Jobs:             core.Jobs,
 		Users:            core.Users,
+		Accounts:         core.PublicIDs,
 		Deliveries:       core.Deliveries,
 		Audits:           core.Audits,
 		Referrals:        core.Referrals,
@@ -427,6 +429,7 @@ func main() {
 		}, redisstore.NewAccountOAuthBrowserStore(rdb), oauthRegistry, nil),
 		InputArtifacts: webInputs, InputObjects: webInputObjects,
 		Payments:               core.Payment,
+		AccountHistory:         core.AccountHistory,
 		Subscriptions:          core.Payment,
 		SubscriptionBalances:   core.BillingRepo.(websession.WebSubscriptionBalances),
 		ReceiptContacts:        core.Account,

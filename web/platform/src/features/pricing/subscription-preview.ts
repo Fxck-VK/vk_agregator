@@ -29,9 +29,9 @@ export function subscriptionPlanDialogValues(id: SubscriptionPreviewId) {
 }
 
 /** Display whole percentages, rounded down so a badge never overstates savings. */
-export function subscriptionPlanDiscountPercent(id: SubscriptionPreviewId, previousPrice?: string): number | null {
+export function subscriptionPlanDiscountPercent(id: SubscriptionPreviewId, previousPrice?: string, chargedAmount = subscriptionPlanPreview(id).amount): number | null {
   const previousAmount = Number(previousPrice) * 100;
-  const difference = previousAmount - subscriptionPlanPreview(id).amount;
+  const difference = previousAmount - chargedAmount;
   if (!Number.isSafeInteger(previousAmount) || previousAmount <= 0 || difference <= 0 || !Number.isSafeInteger(difference * 100)) return null;
   const percent = Math.floor(difference * 100 / previousAmount);
   return percent > 0 ? percent : null;

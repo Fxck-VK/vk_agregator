@@ -3,11 +3,24 @@
 Status: active operational contract. Publication is controlled explicitly by the
 runtime flag; it does not certify external infrastructure or processor contracts.
 
-The current local reviewed edition is `2026-10-29.1`, effective 2026-10-29.
+The current local reviewed edition is `2026-10-31.2`, effective 2026-10-31.
+Paid-access section9 describes first-payment percentage promotions: account
+eligibility, eligible plans, limits, kopeck rounding, full stars, ordinary-price
+renewals, frozen issued payments and refund/use accounting. This amendment does
+not seed a campaign or publish/deploy the local edition.
 It discloses the separately accepted subscription renewal retry policy below;
 the privacy and optional marketing document bodies and marketing version remain
 unchanged. Test operations remain distinct from real payments. This source
 revision does not enable real payments or certify a DEV/public deployment.
+
+The paid-access document now also discloses approved referral policy v1: 50
+nonexpiring stars per invited account's first verified live payment, 24-hour
+delay, unlimited invitees, no retroactive historical grants, and full bonus
+cancellation/reversal on any successful refund. Spent/held bonuses can leave
+a negative star balance; this never initiates a card charge. See docs/runbooks/WEB_REFERRALS.md
+for accounting and scheduling. Privacy/marketing bodies and the separate
+marketing version remain unchanged; accepting this edition does not opt into
+marketing or expand payment-method consent.
 
 ## Source and public pages
 

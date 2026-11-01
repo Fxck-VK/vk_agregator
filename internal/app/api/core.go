@@ -16,6 +16,7 @@ import (
 	"vk-ai-aggregator/internal/platform/config"
 	"vk-ai-aggregator/internal/platform/uow"
 	"vk-ai-aggregator/internal/service/accountauth"
+	"vk-ai-aggregator/internal/service/accounthistory"
 	"vk-ai-aggregator/internal/service/accountservice"
 	"vk-ai-aggregator/internal/service/billingservice"
 	"vk-ai-aggregator/internal/service/commandrouter"
@@ -23,13 +24,17 @@ import (
 	"vk-ai-aggregator/internal/service/joborchestrator"
 	"vk-ai-aggregator/internal/service/paymentservice"
 	"vk-ai-aggregator/internal/service/pricingcatalog"
+	"vk-ai-aggregator/internal/service/promotionservice"
 )
 
 // SharedCore groups backend-core collaborators shared by app surfaces.
 type SharedCore struct {
+	Promotions     *promotionservice.Service
+	AccountHistory *accounthistory.Service
 	Users          domain.UserRepository
 	Identity       domain.IdentityResolver
 	Account        *accountservice.Service
+	PublicIDs      domain.AccountPublicIDRepository
 	AccountAuth    *accountauth.Service
 	Jobs           domain.JobRepository
 	Commands       domain.CommandRepository
@@ -119,7 +124,7 @@ func NewSharedCore(pool *pgxpool.Pool, cfg config.Config, opts ...SharedCoreOpti
 		accountauth.WithLoginMethodEnabled(domain.AccountLoginGoogle, cfg.AccountOAuthGoogleEnabled),
 	}, options.accountAuthOptions...)
 	accountAuth := accountauth.New(identity, accountAuthOptions...)
-	accountSvc := accountservice.New(identities, accountAuth, accountservice.WithProfileRepository(identities))
+	accountSvc := accountservice.New(identities, accountAuth, accountservice.WithProfileRepository(identities), accountservice.WithPublicIDRepository(identities))
 	paymentProvider, err := paymentadapter.NewProvider(cfg)
 	if err != nil {
 		return SharedCore{}, err
@@ -147,9 +152,12 @@ func NewSharedCore(pool *pgxpool.Pool, cfg config.Config, opts ...SharedCoreOpti
 	orch := joborchestrator.New(jobs, unitOfWork, billing, cfg.MaxJobCost, orchestratorOptions...)
 
 	return SharedCore{
+		Promotions:     promotionservice.New(txRunner, payments),
+		AccountHistory: accounthistory.New(postgres.NewAccountHistoryRepository(pool)),
 		Users:          users,
 		Identity:       identity,
 		Account:        accountSvc,
+		PublicIDs:      identities,
 		AccountAuth:    accountAuth,
 		Jobs:           jobs,
 		Commands:       postgres.NewCommandRepository(pool),

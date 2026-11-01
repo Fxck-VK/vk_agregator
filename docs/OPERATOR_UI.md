@@ -101,6 +101,14 @@ Support cannot see:
 - payments/refunds;
 - provider-native payloads or private URLs.
 
+The Users lookup accepts a permanent account public ID (`EP-000123`) or a legacy
+internal user UUID. Public IDs use the same protected
+`GET /admin/users/operator?public_id=...` route and `users:safe_read` permission.
+It resolves browser-only accounts too. The result shows a public ID, masked
+account reference, role/status/type/locale and creation/update timestamps;
+it does not load legacy-user jobs/payments or disclose login identities.
+An ID is not authentication. No broad account listing or public search is added.
+
 ## Finance Boundary
 
 Finance can inspect and operate on payments/refunds through protected backend
@@ -353,6 +361,64 @@ Current frontend surfaces:
   freshness.
 - Users/Referrals/Audit: safe support and audit views without raw identifiers or
   PII dumps.
+
+## Promotion management and assistant HTTP tooling
+
+The Promotions screen uses `promotions:read` and `promotions:manage` from the
+effective `/admin/access/operator` contract. Owner, admin and finance have these
+capabilities; support and runtime operator do not. Backend enforcement remains
+authoritative. The bounded list shows 50 records per page, current revisions,
+configuration and reserved/redeemed counters. Creating or editing (including
+enabling/disabling) requires the existing operator confirmation dialog.
+
+Protected routes are `GET /admin/promotions?limit=50&offset=0`,
+`POST /admin/promotions` and `POST /admin/promotions/{UUID}`. Mutations use a bare,
+nonzero UUID in `X-Idempotency-Key`, and updates include the current `revision`
+and unchanged `code`. A timeout/transport/server failure retains the same UI
+request body/key for retry. A conflict requires a fresh list and reviewed
+revision; it must not be resolved by blindly overwriting with another key.
+
+For an authorized assistant operation use `scripts/dev/promotions.mjs`
+(Node.js 22+) against the same protected HTTP API. It does not access SQL,
+provider APIs or payment settlement. It creates no campaign automatically.
+Configure these values through a private process environment; do not place
+credentials in commands, chat, request files, URLs or logs:
+
+- `EPIFERA_PROMOTIONS_BASE_URL`: the protected API origin, HTTPS except local
+  loopback HTTP; no path, userinfo, query or fragment.
+- `EPIFERA_PROMOTIONS_TOKEN`: the operator credential, sent only in the
+  `X-Admin-Token` header. Redirects are refused.
+- `EPIFERA_PROMOTIONS_REQUEST_KEY`: one private UUID for a confirmed mutation.
+  Retain it with the unchanged request for retries; never generate a new key
+  merely because the previous response was lost.
+
+Read-only and review commands:
+
+```text
+node scripts/dev/promotions.mjs --help
+node scripts/dev/promotions.mjs list --offset 0
+node scripts/dev/promotions.mjs create --file <private-request.json>
+node scripts/dev/promotions.mjs update --id <promotion-UUID> --file <private-request.json>
+```
+
+Create/update without `--confirm` validate the file and print the normalized
+review only, with no HTTP call or credential requirement. Only after reviewing
+the exact campaign and obtaining the owner's authorization, repeat that command
+with `--confirm`; confirmed requests first check effective permissions. This
+implementation does not authorize any real campaign or live mutation.
+
+The JSON file accepts only `code`, integer `percent` (1..99), explicit boolean
+`enabled`, RFC 3339 `starts_at`, optional/null RFC 3339 `ends_at`, nonnegative
+integer `max_uses` (0 unlimited), and nonempty `plan_codes` drawn from
+`lite`, `start`, `pro`, `ultima`, `elite`. Update also requires positive integer
+`revision`. Code is ASCII case-insensitive, 3..64 characters from letters,
+digits, underscore and hyphen, and becomes immutable after creation. Files are
+bounded to 8192 bytes. Output includes only safe configuration/counters;
+credentials, request keys and raw HTTP/transport failure details are omitted.
+
+Discounts apply only to an eligible account's first successful tariff purchase.
+They do not affect stars, top-ups or renewals. Reserved capacity remains held
+while a payment is unresolved; a refund keeps the successful use consumed.
 
 ## Scale Requirements
 

@@ -483,6 +483,88 @@ button {
   min-width: 0;
 }
 
+.promotions-table {
+  min-width: 0;
+  overflow-x: auto;
+  display: grid;
+  gap: 6px;
+}
+
+.promotions-row {
+  display: grid;
+  grid-template-columns: minmax(180px, 1fr) 115px minmax(220px, 1fr) 120px 160px 160px;
+  gap: 12px;
+  min-width: 1060px;
+  align-items: center;
+  border: 1px solid #e5dccb;
+  border-radius: 8px;
+  background: #fffef9;
+  padding: 10px;
+  font-size: 13px;
+}
+
+.promotions-row > span {
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
+.promotion-code {
+  display: grid;
+  gap: 6px;
+}
+
+.promotions-row--head {
+  background: transparent;
+  border-color: transparent;
+  color: #6d665d;
+  font-weight: 800;
+}
+
+.promotion-form {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+.promotion-form__wide {
+  grid-column: 1 / -1;
+  min-width: 0;
+}
+
+.promotion-plans {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 14px;
+  border: 1px solid #c7bda9;
+  border-radius: 8px;
+  padding: 14px;
+}
+
+.promotion-form .promotion-checkbox {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.promotion-form .promotion-checkbox input {
+  width: 18px;
+  min-height: 18px;
+  flex-shrink: 0;
+}
+
+.promotions-console .action-modal {
+  max-height: calc(100dvh - 36px);
+  overflow-y: auto;
+}
+
+.promotion-form .filter-actions {
+  flex-wrap: wrap;
+}
+
+@media (max-width: 620px) {
+  .promotion-form {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
+
 .filters-panel {
   display: grid;
   grid-template-columns: repeat(3, minmax(0, 1fr));

@@ -4,6 +4,7 @@ const retries = economy.renewal_retries;
 
 export const subscriptionCopy = {
   ru: {
+    agreementLink: "Пользовательское соглашение", renewalDetails: "Подробнее об автопродлении", autoRenewLabel: "Автопродление подписки", paymentTerms: "Условия оплаты и автопродления",
     trialUsed: "Пробный тариф Lite уже использован. Выберите другой тариф.",
     title: "Подписка", otherGrant: "Начисление", adjustedBalance: "Корректировка баланса", choose: "Выбрать", days: "дней", period: "За оплаченный период", offer: "Условия подписки", pricingNote: "Цена и звёзды за указанный период. Доступность оплаты проверяется в аккаунте.", costs: "Число генераций зависит от стоимости выбранной операции. Точная цена показывается перед запуском.",
     loading: "Проверяем доступность подписок…", unavailable: "Оплата подписок сейчас недоступна.", preview: "Локальный просмотр: оплата и автопродление отключены.",
@@ -21,6 +22,7 @@ export const subscriptionCopy = {
     lot: { subscription: "Подписка", purchased: "Купленные звёзды", topup: "Пополнение", legacy: "Прежний баланс", bonus: "Бонус", adjustment: "Корректировка" },
   },
   en: {
+    agreementLink: "User agreement", renewalDetails: "Automatic renewal details", autoRenewLabel: "Renew subscription automatically", paymentTerms: "Payment and renewal terms",
     trialUsed: "The Lite trial has already been used. Choose another plan.",
     title: "Subscription", otherGrant: "Grant", adjustedBalance: "Balance adjustment", choose: "Choose", days: "days", period: "For the paid period", offer: "Subscription terms", pricingNote: "Price and stars for the displayed period. Checkout availability is checked in your account.", costs: "Generation counts depend on the selected operation cost. The exact price is shown before starting.",
     loading: "Checking subscription availability…", unavailable: "Subscription checkout is currently unavailable.", preview: "Local preview: checkout and recurring payments are disabled.",

@@ -36,6 +36,7 @@ function getDesktopSidebarPreference() {
 }
 
 type WorkspaceFrameProps = {
+  preview?: boolean;
   account?: ReactNode;
   accountId: string;
   balance?: number | null;
@@ -94,11 +95,11 @@ function WorkspaceChrome({ account, balance = null, children, conversations, tra
   );
 }
 
-export function WorkspaceFrame({ account, accountId, balance = null, children, conversations, profile, deferred = false, deferConversations = deferred, initialCatalog = null }: WorkspaceFrameProps) {
+export function WorkspaceFrame({ account, accountId, balance = null, children, conversations, profile, deferred = false, deferConversations = deferred, initialCatalog = null, preview = false }: WorkspaceFrameProps) {
   return (
     <WorkspaceSessionHealth accountId={accountId} verification={profile} key={accountId} guest={<GuestWorkspaceFrame><SessionFailureNotice /></GuestWorkspaceFrame>}>
     <GenerationCatalogProvider initialSource={initialCatalog} key={accountId}>
-    <WorkspaceAccountProvider deferred={deferred} snapshot={{ balance, profile }}>
+    <WorkspaceAccountProvider deferred={deferred} snapshot={{ balance, profile }} preview={preview}>
       <WorkspaceConversationListProvider deferred={deferConversations} accountId={accountId} initialConversations={conversations} key={accountId}>
         <WorkspaceDataCacheProvider>
           <WorkspaceModelSelectionProvider key={accountId}>

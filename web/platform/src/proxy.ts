@@ -81,6 +81,8 @@ export function proxy(request: NextRequest): NextResponse {
   const returnPath = returnPathFromURL(pathname, request.nextUrl.searchParams);
   const response = NextResponse.rewrite(target, { request: { headers: requestHeaders } });
   response.headers.set("Content-Security-Policy", contentSecurityPolicy);
+  // The homepage may return a personalized temporary workspace redirect.
+  if (internalPath === "/") response.headers.set("Cache-Control", "private, no-store");
 
   const isPrefetch = request.headers.has("next-router-prefetch")
     || request.headers.get("purpose") === "prefetch"

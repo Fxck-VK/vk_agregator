@@ -3,7 +3,7 @@
 > VK Mini App was retired on 2026-10-23. The website, browser VK ID and VK bot remain. Old Mini App routes, launch-auth and UI examples below are historical only. Current replacement and migration details: [retirement runbook](../docs/runbooks/VK_MINIAPP_RETIREMENT.md).
 
 Status: active target architecture
-Updated: 2026-10-27
+Updated: 2026-10-31
 
 This document defines the target account identity layer for all current and
 future user surfaces: VK Bot, VK Mini App, Telegram Bot, Web and Mobile.
@@ -13,6 +13,38 @@ future user surfaces: VK Bot, VK Mini App, Telegram Bot, Web and Mobile.
 One human or organization should have one internal `account_id`. Messenger IDs,
 VK Mini App launch identities, email, phone, Google, Apple, Yandex and future login
 methods are only ways to access that account.
+
+## Permanent Public Account ID
+
+The authenticated profile exposes `public_id`, for example `EP-000123`, for
+support and operator lookup. It is a label, never a credential or an ownership
+claim. Internal UUID `account_id` remains the owner of sessions, billing, jobs
+and files. The same account keeps its public ID when email or OAuth bindings
+change. Separate accounts have separate IDs; this feature does not merge them.
+
+Migration000065 backfills `accounts.public_number` and gives future account
+inserts a positive unique PostgreSQL BIGINT identity value. The server formats
+at least six decimal digits; larger values expand without truncation. Profile
+reads do not allocate numbers. A trigger rejects number changes, including
+`UPDATE ... SET public_number=DEFAULT`. Deleted numbers are not reused. Number
+gaps are expected. The migration is irreversible: `down` fails and retains the
+mapping and migration version; roll application binaries back with schema kept.
+Apply schema before the new API. Backfill takes an accounts-table lock, so
+measure its duration in the target deployment before scheduling larger tables.
+
+`AccountService` uses the canonical repository and propagates missing-row or
+storage errors. The additive profile field is optional for older DTOs; the
+browser never invents a production ID. The existing profile card supports exact
+explicit copy and selectable text if clipboard access fails. Local preview uses
+the synthetic `EP-000123`.
+
+The existing protected operator route accepts
+`GET /admin/users/operator?public_id=EP-000123` independently of legacy VK users.
+It retains operator permission, rate and audit guards; no public lookup exists.
+Mixed/duplicate filters and noncanonical IDs fail400; unknown accounts fail404.
+The response contains the public ID, masked account reference and safe account
+metadata, omitting raw UUIDs, emails and provider identities. Legacy `user_id`
+lookup remains available. See [operator UI contract](OPERATOR_UI.md).
 
 ## Canonical Browser Authentication
 

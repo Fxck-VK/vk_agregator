@@ -18,6 +18,11 @@ export const accountProfileSchema = z
   .object({
     account_id: z.string().uuid(),
     identity_refs: z.array(safeIdentityRefSchema),
+    public_id: z.string().refine(value => {
+      if (!/^EP-(?:[0-9]{6}|[1-9][0-9]{6,18})$/.test(value)) return false;
+      const sequence = BigInt(value.slice(3));
+      return sequence > BigInt(0) && sequence <= BigInt("9223372036854775807");
+    }).optional(),
     password_set: z.boolean().optional(),
     display_name: z.string().trim().min(1).refine(name => Array.from(name).length <= 160).optional(),
   })

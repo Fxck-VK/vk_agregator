@@ -2,7 +2,6 @@
 
 import { type FormEvent, useEffect, useRef, useState } from "react";
 import { BrandText } from "@/components/brand/BrandName/BrandName";
-import { BrandLogo } from "@/components/brand/BrandLogo/BrandLogo";
 import { Button } from "@/components/ui/Button/Button";
 import { LoadingIndicator, StateNotice } from "@/components/ui/AsyncState/AsyncState";
 import { useDictionary, useLocale } from "@/i18n/LocaleProvider";
@@ -16,10 +15,11 @@ import { PasswordField } from "./PasswordField";
 import { VerificationCodeField } from "./VerificationCodeField";
 import { EmailRegistration } from "./EmailRegistration";
 import { RecoveryFlow } from "./RecoveryFlow";
+import { RememberedProviderButton } from "./RememberedProviderButton";
 import styles from "./LoginForm/LoginForm.module.css";
 
 export type AuthScreen="choice"|"password"|"register"|"recover"|"reset"|"verify";
-type Props=Readonly<{returnTo?:string;methods?:AuthMethods;preview?:boolean;oauthFailed?:boolean;entry?:"email"|"choice";initialMode?:"login"|"register";legalMetadata?:LegalMetadata;appearance?:"default"|"minimal";initialScreen?:AuthScreen;navigationEnabled?:boolean}>;
+type Props=Readonly<{returnTo?:string;methods?:AuthMethods;preview?:boolean;previewAccount?:"yandex"|"vk";oauthFailed?:boolean;entry?:"email"|"choice";initialMode?:"login"|"register";legalMetadata?:LegalMetadata;appearance?:"default"|"minimal";initialScreen?:AuthScreen;navigationEnabled?:boolean}>;
 const providerOrder:Record<OAuthProvider,number>={yandex:0,vk:1,apple:2,telegram:3,google:4};
 function screenURL(screen:AuthScreen){return screen==="choice"?"/login":screen==="password"?"/login?step=password":`/login/${screen}`;}
 function screenFromURL():AuthScreen {const path=stripLocale(window.location.pathname);const suffix=path.split("/")[2];if(["register","recover","reset","verify"].includes(suffix))return suffix as AuthScreen;const query=new URLSearchParams(window.location.search);return query.get("mode")==="register"?"register":query.get("step")==="password"?"password":"choice";}
@@ -29,25 +29,33 @@ function ProviderIcon({provider}:{provider:OAuthProvider}) {
  return <span className={styles.providerMark} aria-hidden="true">{providerNames[provider].slice(0,1)}</span>;
 }
 
-export function LoginForm({returnTo,methods=defaultAuthMethods,preview=false,oauthFailed=false,entry="email",initialMode="login",legalMetadata,initialScreen,navigationEnabled=false}:Props){
+export function LoginForm({returnTo,methods=defaultAuthMethods,preview=false,previewAccount,oauthFailed=false,entry="email",initialMode="login",legalMetadata,initialScreen,navigationEnabled=false}:Props){
  const t=useDictionary(),locale=useLocale();
  const [screen,setScreen]=useState<AuthScreen>(initialScreen??(initialMode==="register"?"register":entry==="choice"?"choice":"password"));
  const [email,setEmail]=useState("");const [password,setPassword]=useState("");const [code,setCode]=useState("");
- const [persistent,setPersistent]=useState(false);const [hint,setHint]=useState("");const [useRemembered,setUseRemembered]=useState(true);
- const [hintProvider,setHintProvider]=useState<OAuthProvider|null>(null);
+ const [persistent,setPersistent]=useState(false);const [hint,setHint]=useState(preview&&previewAccount?t.auth.previewAccountName:"");
+ const [hintProvider,setHintProvider]=useState<OAuthProvider|null>(preview&&previewAccount?previewAccount:null);
  const [pending,setPending]=useState(false),[error,setError]=useState(oauthFailed?t.auth.providerFailure:""),[diagnosticId,setDiagnosticId]=useState("");
  const [accepted,setAccepted]=useState<Response|null>(null),[signInStage,setSignInStage]=useState<SignInStage>("credentials"),[previewDone,setPreviewDone]=useState(false);
  const [resendSeconds,setResendSeconds]=useState(0),[emailTouched,setEmailTouched]=useState(false);
  const request=useRef<AbortController|null>(null),root=useRef<HTMLElement>(null);
  const interactionRevision=useRef(0);
- const remembered=Boolean(hint&&useRemembered&&screen==="choice");
  const validEmail=/^[^\s@]+@[^\s@]+\.[^\s@]+$/u.test(email.trim())&&email.trim().length<=254;
  const providers=visibleOAuthProvidersForUI(methods.providers).sort((a,b)=>providerOrder[a]-providerOrder[b]);
+ const availableHint=Boolean(hint&&hintProvider&&providers.includes(hintProvider));
+ const orderedProviders=availableHint&&hintProvider?[hintProvider,...providers.filter(p=>p!==hintProvider)]:providers;
+ const providerLabel=(provider:OAuthProvider)=>provider==="yandex"?t.auth.yandexEntry:provider==="vk"?t.auth.vkEntry:`${t.auth.providerEntry} ${providerNames[provider]}`;
  const formClass=`${styles.form} ${styles.minimalForm}`;
  useEffect(()=>()=>request.current?.abort(),[]);
  useEffect(()=>{root.current?.querySelector<HTMLHeadingElement>("h1")?.focus({preventScroll:true});},[screen,previewDone]);
  useEffect(()=>{if(!resendSeconds)return;const timer=window.setTimeout(()=>setResendSeconds(v=>Math.max(0,v-1)),1000);return()=>window.clearTimeout(timer);},[resendSeconds]);
- useEffect(()=>{if(preview||entry!=="choice"||interactionRevision.current!==0)return;const c=new AbortController();const revision=interactionRevision.current;void webBrowserFetch("/web/v1/auth/remembered",{signal:c.signal}).then(async r=>{if(!r.ok)return;const data=await r.json();if(c.signal.aborted||revision!==interactionRevision.current)return;const provider=methods.providers.find(p=>p===data.provider);if(provider&&visibleOAuthProvidersForUI([provider]).length){setHintProvider(provider);setHint(typeof data.email_hint==="string"&&data.email_hint?data.email_hint:providerNames[provider]);}else if(!data.provider&&typeof data.email_hint==="string"&&data.email_hint.length<255)setHint(data.email_hint);}).catch(()=>{});return()=>c.abort();},[entry,preview,methods.providers]);
+ useEffect(()=>{if(preview||entry!=="choice"||interactionRevision.current!==0)return;const c=new AbortController();const revision=interactionRevision.current;void webBrowserFetch("/web/v1/auth/remembered",{signal:c.signal}).then(async r=>{
+  if(!r.ok)return;const data:unknown=await r.json();if(c.signal.aborted||revision!==interactionRevision.current||!data||typeof data!=="object"||Array.isArray(data))return;
+  const value=data as {provider?:unknown;email_hint?:unknown};
+  const label=typeof value.email_hint==="string"?value.email_hint.trim():"";
+  const provider=methods.providers.find(p=>p===value.provider);
+  if(provider&&visibleOAuthProvidersForUI([provider]).length&&label.length<=128){setHintProvider(provider);setHint(label||providerNames[provider]);}
+ }).catch(()=>{});return()=>c.abort();},[entry,preview,methods.providers]);
  useEffect(()=>{if(!navigationEnabled)return;const pop=()=>{interactionRevision.current+=1;request.current?.abort();request.current=null;setScreen(screenFromURL());setPassword("");setCode("");setPending(false);setError("");setAccepted(null);setPreviewDone(false);};window.addEventListener("popstate",pop);return()=>window.removeEventListener("popstate",pop);},[navigationEnabled]);
  function navigate(next:AuthScreen){interactionRevision.current+=1;request.current?.abort();request.current=null;setScreen(next);setPassword("");setCode("");setError("");setAccepted(null);setPending(false);setPreviewDone(false);setDiagnosticId("");if(navigationEnabled)window.history.pushState(null,"",localizeHref(screenURL(next),locale));}
  async function finish(response:Response,c:AbortController,started:number){setAccepted(response);setPassword("");setCode("");let stage:SignInStage="session";try{await completeSignIn(response,{locale,returnTo,signal:c.signal,onStage:next=>{stage=next;setSignInStage(next);}});}catch(e){if(c.signal.aborted)return;const d=classifySignInFailure(e,stage);reportSignInFailure(d,started);setError(signInFailureText(d,t.auth,t.login.failure));setDiagnosticId(d.diagnosticId);}}
@@ -59,7 +67,7 @@ export function LoginForm({returnTo,methods=defaultAuthMethods,preview=false,oau
    if(accepted){await finish(accepted,c,started);return;}
    if(preview){setPassword("");if(screen==="verify")setPreviewDone(true);else{setScreen("verify");setCode("");setResendSeconds(60);if(navigationEnabled)window.history.pushState(null,"",localizeHref("/login/verify",locale));}return;}
    const path=screen==="verify"?"/web/v1/auth/password/verify-login":"/web/v1/auth/password/login";
-   const body=screen==="verify"?{code:completedCode}:remembered?{password,persistent,remembered:true}:{email:email.trim(),password,persistent};
+   const body=screen==="verify"?{code:completedCode}:{email:email.trim(),password,persistent};
    const response=await webBrowserFetch(path,{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify(body),signal:AbortSignal.any([c.signal,AbortSignal.timeout(15_000)])});
    if(c.signal.aborted)return;
    if(response.status===202){setPassword("");setCode("");setScreen("verify");setResendSeconds(60);if(navigationEnabled)window.history.pushState(null,"",localizeHref("/login/verify",locale));return;}
@@ -76,8 +84,9 @@ export function LoginForm({returnTo,methods=defaultAuthMethods,preview=false,oau
  }
  async function forget(){
   if(pending||request.current)return;
+  interactionRevision.current+=1;
   const c=new AbortController();request.current=c;setPending(true);setError("");
-  try{if(!preview){const r=await webBrowserFetch("/web/v1/auth/forget",{method:"POST",signal:c.signal});if(c.signal.aborted)return;if(!r.ok)throw new Error("forget");}if(c.signal.aborted)return;setUseRemembered(false);setHint("");setHintProvider(null);setEmail("");navigate("choice");}
+  try{if(!preview){const r=await webBrowserFetch("/web/v1/auth/forget",{method:"POST",signal:c.signal});if(c.signal.aborted)return;if(!r.ok)throw new Error("forget");}if(c.signal.aborted)return;setHint("");setHintProvider(null);navigate("choice");}
   catch{if(!c.signal.aborted)setError(t.auth.loginNetwork);}finally{if(!c.signal.aborted){setPending(false);request.current=null;}}
  }
  async function oauth(provider:OAuthProvider){
@@ -93,27 +102,27 @@ export function LoginForm({returnTo,methods=defaultAuthMethods,preview=false,oau
  const staySigned=<label className={styles.keepSigned}><input type="checkbox" checked={persistent} disabled={pending} onChange={e=>setPersistent(e.target.checked)}/>{t.auth.staySigned}</label>;
  if(screen==="recover"||screen==="reset")return <section ref={root} className={formClass} aria-labelledby="recovery-title"><RecoveryFlow key={screen} mode={screen==="reset"?"reset":"request"} preview={preview} initialEmail={email} onEmailChange={setEmail} onBack={()=>navigate("password")}/></section>;
  if(screen==="register")return <section ref={root} className={formClass} aria-labelledby="login-title"><EmailRegistration preview={preview} returnTo={returnTo} legalMetadata={legalMetadata} initialEmail={email} passwordFirst title={t.auth.registrationEntry} onEmailChange={setEmail} onBack={()=>navigate("choice")} onSignIn={value=>{setEmail(value);navigate("password");}}/></section>;
- if(screen==="choice"&&!remembered)return <section ref={root} className={`${styles.choiceEntry} ${styles.minimal}`} aria-labelledby="login-title"><div className={styles.choiceCard}>
+ if(screen==="choice")return <section ref={root} className={`${styles.choiceEntry} ${styles.minimal}`} aria-labelledby="login-title"><div className={styles.choiceCard}>
   <h1 id="login-title" tabIndex={-1}><BrandText>{t.auth.minimalWelcome}</BrandText></h1>
-  {providers.length?<><p className={styles.providerLabel}>{t.auth.minimalProvidersLabel}</p><div className={styles.choiceProviders}>{providers.map(provider=><Button key={provider} className={styles.providerPill} disabled={pending||preview} onClick={()=>void oauth(provider)}><ProviderIcon provider={provider}/>{provider==="yandex"?t.auth.yandexEntry:provider==="vk"?t.auth.vkEntry:`${t.auth.providerEntry} ${providerNames[provider]}`}</Button>)}</div><div className={styles.divider}><span>{t.auth.minimalEmailDivider}</span></div></>:null}
+  {providers.length||availableHint?<><p className={styles.providerLabel}>{t.auth.minimalProvidersLabel}</p><div className={styles.choiceProviders}>
+   {orderedProviders.map(provider=>availableHint&&provider===hintProvider?<RememberedProviderButton key={provider} label={hint} caption={provider==="yandex"?t.auth.yandexAccountName:provider==="vk"?"VK ID":providerNames[provider]} providerIcon={<ProviderIcon provider={provider}/>} pending={pending} preview={preview} onLogin={()=>void oauth(provider)} onForget={()=>void forget()}/>:<Button key={provider} className={styles.providerPill} disabled={pending||preview} onClick={()=>void oauth(provider)}><ProviderIcon provider={provider}/>{providerLabel(provider)}</Button>)}
+  </div><div className={styles.divider}><span>{t.auth.minimalEmailDivider}</span></div></>:null}
   <form className={styles.emailChoice} onSubmit={e=>{e.preventDefault();if(validEmail&&!pending){setEmail(v=>v.trim());navigate("password");}}}>{emailField}<Button className={styles.continueButton} type="submit" disabled={pending||!methods.password||!validEmail}>{t.auth.minimalContinue}</Button></form>
   {errorView}{methods.registration?<p className={styles.accountPrompt}>{t.auth.minimalSignupPrompt}{" "}<button type="button" className={styles.textAction} disabled={pending} onClick={()=>navigate("register")}>{t.auth.minimalSignupAction}</button></p>:null}{previewView}
  </div></section>;
- if(remembered&&hintProvider)return <section ref={root} className={formClass} aria-labelledby="login-title"><header className={styles.heading}><h1 id="login-title" tabIndex={-1}>{t.auth.welcomeBack}</h1></header><div className={styles.remembered}><BrandLogo size={40}/><p>{hint}</p></div><Button disabled={pending||preview} onClick={()=>void oauth(hintProvider)}><ProviderIcon provider={hintProvider}/>{hintProvider==="yandex"?t.auth.yandexEntry:hintProvider==="vk"?t.auth.vkEntry:`${t.auth.providerEntry} ${providerNames[hintProvider]}`}</Button>{errorView}<button type="button" disabled={pending} className={styles.textAction} onClick={()=>void forget()}>{t.auth.useAnotherAccount}</button>{previewView}</section>;
  return <section ref={root} className={formClass} aria-labelledby="login-title">
-  <button type="button" className={`${styles.textAction} ${styles.backAction}`} disabled={pending} onClick={()=>{setUseRemembered(false);navigate("choice");}}>{t.auth.otherMethods}</button>
-  <header className={styles.heading}><h1 id="login-title" tabIndex={-1}><BrandText>{screen==="verify"?t.auth.verifySigninTitle:remembered?t.auth.welcomeBack:t.auth.minimalWelcome}</BrandText></h1></header>
+  <button type="button" className={`${styles.textAction} ${styles.backAction}`} disabled={pending} onClick={()=>navigate("choice")}>{t.auth.otherMethods}</button>
+  <header className={styles.heading}><h1 id="login-title" tabIndex={-1}><BrandText>{screen==="verify"?t.auth.verifySigninTitle:t.auth.minimalWelcome}</BrandText></h1></header>
   {previewView}
   {previewDone?<><p role="status">{t.auth.loginPreviewComplete}</p><Button onClick={()=>navigate("choice")}>{t.auth.back}</Button></>:<form className={styles.fields} onSubmit={e=>void submit(e)}>
    {accepted?null:screen==="verify"?<><p className={styles.hint} role="status">{preview?t.auth.registrationPreviewCode:t.auth.registrationCodeSent}</p><VerificationCodeField value={code} onChange={setCode} onComplete={value=>void submit(undefined,value)} disabled={pending} invalid={Boolean(error)} /></>:<>
-    {remembered?<div className={styles.remembered}><BrandLogo size={40}/><p>{hint}</p></div>:emailField}
+    {emailField}
     <PasswordField id="login-password" value={password} onChange={setPassword} disabled={pending}/>{staySigned}
    </>}
    {errorView}
-   <Button type="submit" disabled={pending||(!accepted&&screen==="verify"&&!/^\d{6}$/.test(code))||(!accepted&&screen!=="verify"&&(!password||(!remembered&&!validEmail)||!methods.password))}>{pending?<><LoadingIndicator label=""/>{accepted?signInStage==="navigation"?t.auth.loginOpening:t.auth.loginConfirming:t.auth.pending}</>:accepted?t.auth.loginRetry:screen==="verify"?t.auth.verifyRegistrationEmail:t.login.submitLabel}</Button>
+   <Button type="submit" disabled={pending||(!accepted&&screen==="verify"&&!/^\d{6}$/.test(code))||(!accepted&&screen!=="verify"&&(!password||!validEmail||!methods.password))}>{pending?<><LoadingIndicator label=""/>{accepted?signInStage==="navigation"?t.auth.loginOpening:t.auth.loginConfirming:t.auth.pending}</>:accepted?t.auth.loginRetry:screen==="verify"?t.auth.verifyRegistrationEmail:t.login.submitLabel}</Button>
    {screen==="verify"&&!accepted?<><button type="button" className={styles.textAction} disabled={pending||resendSeconds>0} onClick={()=>void resend()}>{t.auth.resend}{resendSeconds?` (${resendSeconds})`:""}</button><p className={styles.accountPrompt}>{t.auth.mailHelpShort}{" "}<a href="mailto:support@epifera.com">{t.legal.support}</a></p><button type="button" className={styles.textAction} disabled={pending} onClick={()=>navigate("password")}>{t.auth.changeEmail}</button></>:null}
    {screen!=="verify"&&!accepted&&methods.recovery?<button type="button" className={styles.textAction} disabled={pending} onClick={()=>navigate("recover")}>{t.auth.forgot}</button>:null}
-   {remembered?<button type="button" className={styles.textAction} disabled={pending} onClick={()=>void forget()}>{t.auth.useAnotherAccount}</button>:null}
   </form>}
   {screen!=="verify"&&methods.registration&&!accepted?<p className={styles.accountPrompt}>{t.auth.minimalSignupPrompt}{" "}<button type="button" className={styles.textAction} disabled={pending} onClick={()=>navigate("register")}>{t.auth.minimalSignupAction}</button></p>:null}
  </section>;

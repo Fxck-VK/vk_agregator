@@ -1,0 +1,71 @@
+.history {
+  display: grid;
+  min-inline-size: 0;
+  gap: var(--space-3);
+  padding: var(--space-4) var(--space-5);
+  border-radius: var(--radius-lg);
+  background: var(--color-panel);
+}
+
+.rows {
+  display: grid;
+  min-inline-size: 0;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, auto);
+  gap: var(--space-4);
+  padding-block: var(--space-4);
+}
+
+.row + .row {
+  border-block-start: 1px solid var(--color-border);
+}
+
+.description, .amounts {
+  display: grid;
+  align-content: start;
+  min-inline-size: 0;
+  gap: var(--space-2);
+  overflow-wrap: anywhere;
+  font-size: var(--font-size-ui);
+  line-height: var(--line-height-body);
+}
+
+.description strong {
+  font-size: var(--font-size-body);
+  font-weight: var(--font-weight-medium);
+}
+
+.description time, .details {
+  color: var(--color-text-muted);
+}
+
+.details {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-2);
+}
+
+.badge {
+  padding: var(--space-1) var(--space-2);
+  border-radius: var(--radius-sm);
+  background: var(--color-background);
+  font-size: var(--font-size-caption);
+}
+
+.amounts {
+  justify-items: end;
+  text-align: end;
+  font-variant-numeric: tabular-nums;
+}
+
+@media (width < 36rem) {
+  .row { grid-template-columns: minmax(0, 1fr); gap: var(--space-3); }
+  .amounts { justify-items: start; text-align: start; }
+}

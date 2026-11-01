@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 
 import {
   parseAccountProfile,
+  accountProfileSchema,
   parseAccountBalance,
   parseConversationList,
   parseImageJobPreparation,
@@ -11,6 +12,16 @@ import {
 } from "./contracts";
 
 describe("AccountProfile contract", () => {
+  const baseProfile = { account_id: "62d33e7f-7b0e-4a26-975b-41080b55d78d", identity_refs: [] };
+  it("returns a schema failure for malformed numeric text instead of throwing outside validation", () => {
+    expect(accountProfileSchema.safeParse({ ...baseProfile, public_id: "EP-not-a-number" }).success).toBe(false);
+  });
+  it.each(["EP-000001", "EP-000123", "EP-104582", "EP-1000000", "EP-9223372036854775807"])("preserves the server public ID %s", public_id => {
+    expect(parseAccountProfile({ ...baseProfile, public_id })).toEqual({ ...baseProfile, public_id });
+  });
+  it.each(["EP-000000", "EP-123", "EP-0000001", "EP-9223372036854775808", "EP-99999999999999999999", "ep-104582", " EP-104582", "EP-104582 ", "EP-1e0006", "EP-１２３４５６", "104582", "EP-+104582", "", null, 104582])("rejects malformed public ID %s", public_id => {
+    expect(() => parseAccountProfile({ ...baseProfile, public_id })).toThrow();
+  });
   it("accepts the bounded optional account display name", () => {
     const profile = { account_id: "62d33e7f-7b0e-4a26-975b-41080b55d78d", identity_refs: [], display_name: "Тестовый Пользователь" };
     expect(parseAccountProfile(profile).display_name).toBe(profile.display_name);

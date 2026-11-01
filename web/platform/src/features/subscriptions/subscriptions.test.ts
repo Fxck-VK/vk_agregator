@@ -1,11 +1,33 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { webBrowserFetch, webBrowserMutation } from "@/lib/web-api/browser";
 import { cancelSubscription, createSubscriptionCheckout, loadSubscription, subscriptionStateSchema } from "./subscriptions";
+import { beginBrowserSession, endBrowserSession } from "@/lib/web-api/browser-session-state";
 vi.mock("@/lib/web-api/browser", () => ({ webBrowserFetch: vi.fn(), webBrowserMutation: vi.fn() }));
-afterEach(() => vi.resetAllMocks());
+afterEach(() => { vi.resetAllMocks(); endBrowserSession(); });
 const state = { subscription: null, balances: [], checkout_available: false, recurring_available: false, trial_used: false };
 const key = "10000000-0000-4000-8000-000000000001";
 describe("account subscription transport", () => {
+  it("rejects an old-session checkout response even when its body finishes after reauthentication", async () => {
+    beginBrowserSession("one");
+    let finish!: (value: unknown) => void;
+    const response = new Response(null, { status: 200 });
+    response.json = () => new Promise(resolve => { finish = resolve; });
+    vi.mocked(webBrowserMutation).mockResolvedValue(response);
+    const result = createSubscriptionCheckout({ plan_code: "lite", auto_renew: false }, key);
+    await vi.waitFor(() => expect(finish).toBeTypeOf("function"));
+    endBrowserSession(); beginBrowserSession("one");
+    finish({ id: key, status: "canceled", amount: 19900, currency: "rub", credits: 400 });
+    await expect(result).rejects.toMatchObject({ name: "AbortError" });
+  });
+  it("sends only a verified promotion reference, without a client-controlled discount or price", async () => {
+    vi.mocked(webBrowserMutation).mockResolvedValue(Response.json({ id: key, status: "canceled", amount: 16915, currency: "rub", credits: 400 }));
+    await createSubscriptionCheckout({ plan_code: "lite", auto_renew: false, promo_code: "FIRST15", promo_revision: 3 }, key);
+    expect(webBrowserMutation).toHaveBeenCalledWith("/web/v1/subscription/checkout", expect.objectContaining({ body: '{"plan_code":"lite","auto_renew":false,"promo_code":"FIRST15","promo_revision":3}' }));
+  });
+  it.each([{ promo_code: "FIRST15" }, { promo_revision: 3 }, { promo_code: "first15", promo_revision: 3 }, { promo_code: "FIRST15", promo_revision: 0 }, { promo_code: "FIRST15", promo_revision: 3, percent: 99 }])("rejects malformed promotion references %j before networking", async promo => {
+    await expect(createSubscriptionCheckout({ plan_code: "lite", auto_renew: false, ...promo } as never, key)).rejects.toThrow();
+    expect(webBrowserMutation).not.toHaveBeenCalled();
+  });
   it("accepts the Go API lowercase rub currency for subscription checkout", async () => {
     vi.mocked(webBrowserMutation).mockResolvedValue(Response.json({ id: key, status: "waiting_for_user", amount: 19900, currency: "rub", credits: 400, confirmation_url: "https://yoomoney.ru/checkout/test" }));
     expect((await createSubscriptionCheckout({ plan_code: "lite", auto_renew: true }, key)).currency).toBe("RUB");

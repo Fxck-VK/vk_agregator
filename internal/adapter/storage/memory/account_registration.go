@@ -40,6 +40,7 @@ func (r *AccountRegistrationRepo) RegisterEmailAccount(_ context.Context, accoun
 		}
 	}
 	identity := &domain.AccountIdentity{ID: uuid.New(), AccountID: accountID, Provider: domain.IdentityProviderEmail, ExternalID: email, NormalizedID: email, VerifiedAt: now, LastUsedAt: now, CreatedAt: now, UpdatedAt: now}
+	r.identities.ensurePublicAccountLocked(accountID, now)
 	r.identities.byKey[key] = identity
 	r.identities.byID[identity.ID] = identity
 	credential := &domain.AccountCredential{ID: uuid.New(), AccountID: accountID, CredentialType: domain.AccountCredentialPassword, SecretHash: hash, ChangedAt: &now, CreatedAt: now, UpdatedAt: now}

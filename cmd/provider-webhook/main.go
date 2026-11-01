@@ -136,7 +136,7 @@ func main() {
 	}
 
 	go runProcessorLoop(ctx, processor, cfg, logger)
-	go runSubscriptionMaintenanceLoop(ctx, subscriptionPayments, billingRepo, logger)
+	go runSubscriptionMaintenanceLoop(ctx, subscriptionPayments, billingRepo, logger, postgres.NewMaintenanceRepository(pool))
 
 	go func() {
 		logger.Info("provider webhook server listening",

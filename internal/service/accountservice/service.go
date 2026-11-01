@@ -41,9 +41,14 @@ type Service struct {
 	identities IdentityStore
 	linker     IdentityLinker
 	profiles   domain.AccountProfileRepository
+	publicIDs  domain.AccountPublicIDRepository
 }
 
 type Option func(*Service)
+
+func WithPublicIDRepository(repo domain.AccountPublicIDRepository) Option {
+	return func(s *Service) { s.publicIDs = repo }
+}
 
 // WithProfileRepository exposes stored presentation metadata only to the
 // authenticated account profile, independently of login-method labels.
@@ -66,6 +71,7 @@ type AccountProfile struct {
 	IdentityRefs []AccountIdentitySafe `json:"identity_refs"`
 	PasswordSet  *bool                 `json:"password_set,omitempty"`
 	DisplayName  string                `json:"display_name,omitempty"`
+	PublicID     string                `json:"public_id,omitempty"`
 }
 
 // AccountIdentitySafe is a display-safe account identity DTO. It intentionally
@@ -103,11 +109,23 @@ func (s *Service) Profile(ctx context.Context, accountID uuid.UUID) (AccountProf
 			return AccountProfile{}, err
 		}
 	}
+	var publicID string
+	if s.publicIDs != nil {
+		number, readErr := s.publicIDs.GetAccountPublicNumber(ctx, accountID)
+		if readErr != nil {
+			return AccountProfile{}, readErr
+		}
+		publicID = domain.FormatAccountPublicID(number)
+		if publicID == "" {
+			return AccountProfile{}, domain.ErrInvalidIdentity
+		}
+	}
 	return AccountProfile{
 		AccountID:    accountID,
 		IdentityRefs: identities,
 		PasswordSet:  passwordSet,
 		DisplayName:  displayName,
+		PublicID:     publicID,
 	}, nil
 }
 

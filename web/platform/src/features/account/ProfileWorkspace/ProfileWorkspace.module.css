@@ -70,6 +70,11 @@
   opacity: 1;
 }
 
+.promotionSummary {
+  min-inline-size: 0;
+  overflow-wrap: anywhere;
+}
+
 @media (48rem <= width < 82rem) {
   .workspace {
     padding-inline-end: var(--space-4);

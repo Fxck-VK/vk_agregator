@@ -7,6 +7,7 @@ import { parseAccountBalance } from "@/lib/web-api/contracts";
 import { webBrowserFetch } from "@/lib/web-api/browser";
 import { useReadResource } from "@/lib/use-read-resource";
 import { readJson } from "@/lib/web-api/read-error";
+import { SubscriptionPromotionProvider } from "@/features/subscriptions/SubscriptionPromotion";
 
 type WorkspaceAccountSnapshot = {
   balance: number | null;
@@ -22,6 +23,7 @@ type WorkspaceAccountProviderProps = {
   children: ReactNode;
   snapshot: WorkspaceAccountSnapshot;
   deferred?: boolean;
+  preview?: boolean;
 };
 
 async function loadBalance(signal: AbortSignal) {
@@ -29,9 +31,9 @@ async function loadBalance(signal: AbortSignal) {
   return readJson(response, value => parseAccountBalance(value).balance);
 }
 
-export function WorkspaceAccountProvider({ children, snapshot, deferred = false }: WorkspaceAccountProviderProps): ReactNode {
+export function WorkspaceAccountProvider({ children, snapshot, deferred = false, preview = false }: WorkspaceAccountProviderProps): ReactNode {
   const balance = useReadResource(loadBalance, snapshot.balance, deferred, snapshot.profile);
-  return <WorkspaceAccountContext.Provider value={{ ...snapshot, balance: deferred ? balance.data : snapshot.balance, pending: balance.pending, failed: balance.failed, retry: balance.retry }}>{children}</WorkspaceAccountContext.Provider>;
+  return <WorkspaceAccountContext.Provider value={{ ...snapshot, balance: deferred ? balance.data : snapshot.balance, pending: balance.pending, failed: balance.failed, retry: balance.retry }}><SubscriptionPromotionProvider accountId={snapshot.profile.account_id} preview={preview}>{children}</SubscriptionPromotionProvider></WorkspaceAccountContext.Provider>;
 }
 
 export function useOptionalWorkspaceAccount() { return useContext(WorkspaceAccountContext); }

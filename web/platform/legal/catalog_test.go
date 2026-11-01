@@ -6,10 +6,11 @@ import (
 	"os"
 	"strings"
 	"testing"
+	"vk-ai-aggregator/internal/domain"
 )
 
 func TestCatalogRequiresRuntimeOperatorAndBindsExactText(t *testing.T) {
-	if New("Synthetic Test Operator", "123456789012", true).Checksum != "f0c2891f5bcaeefcef77971a23fcfe020a94cba5eef61de1f921778efb9a13d3" {
+	if New("Synthetic Test Operator", "123456789012", true).Checksum != "6c74f01c6d89993e7f4891802d0b04e1c4722f752fd8461e799ea962a8b7e130" {
 		t.Fatal("Go/Node legal catalogue parity fixture changed; review both runtimes")
 	}
 	if New("", "", true).Published {
@@ -31,6 +32,54 @@ func TestCatalogRequiresRuntimeOperatorAndBindsExactText(t *testing.T) {
 	}
 	if err := ValidateSource(); err != nil {
 		t.Fatal(err)
+	}
+}
+
+func TestReferralTermsMatchServerPolicy(t *testing.T) {
+	p := domain.CurrentWebReferralRewardPolicy()
+	if p.Version != 1 || p.Stars != 50 || p.DelayHours != 24 || p.Expires {
+		t.Fatal("unreviewed referral policy", p)
+	}
+	var c sourceCatalog
+	if err := json.Unmarshal(source, &c); err != nil {
+		t.Fatal(err)
+	}
+	var text string
+	for _, d := range c.Documents {
+		if d.Slug == "paid-access" {
+			for _, s := range d.Sections {
+				if strings.HasPrefix(s.Title, "8 ") {
+					text = strings.Join(s.Paragraphs, "\n")
+				}
+			}
+		}
+	}
+	for _, required := range []string{fmt.Sprintf("%d бонусных звёзд", p.Stars), fmt.Sprintf("%d часа", p.DelayHours), "один раз за каждый", "не ограничено", "не сгорают", "частичном возврате", "отзываются все 50", "ниже нуля", "не вызывает денежного списания", "задним числом не начисляется"} {
+		if !strings.Contains(text, required) {
+			t.Errorf("missing approved referral rule %q", required)
+		}
+	}
+}
+
+func TestPromotionTermsDescribeFirstPaymentWithoutChangingRenewalOrStars(t *testing.T) {
+	var catalog sourceCatalog
+	if err := json.Unmarshal(source, &catalog); err != nil {
+		t.Fatal(err)
+	}
+	var terms string
+	for _, doc := range catalog.Documents {
+		if doc.Slug == "paid-access" {
+			for _, section := range doc.Sections {
+				if strings.HasPrefix(section.Title, "9 ") {
+					terms = strings.Join(section.Paragraphs, "\n")
+				}
+			}
+		}
+	}
+	for _, required := range []string{"первую оплату тарифа", "без предыдущих успешных покупок", "не меняет количество звёзд", "по обычной цене", "один промокод", "не восстанавливает", "фактически уплаченной суммы"} {
+		if !strings.Contains(terms, required) {
+			t.Errorf("missing promotion rule %q", required)
+		}
 	}
 }
 
@@ -92,7 +141,7 @@ func TestRenewalRetryTermsMatchAcceptedCanonicalPolicy(t *testing.T) {
 	if err := json.Unmarshal(source, &catalog); err != nil {
 		t.Fatal(err)
 	}
-	if catalog.Version != "2026-10-29.1" || catalog.Date != "2026-10-29" {
+	if catalog.Version != "2026-10-31.2" || catalog.Date != "2026-10-31" {
 		t.Fatalf("retry terms need the reviewed edition and date: %s / %s", catalog.Version, catalog.Date)
 	}
 	for _, slug := range []string{"user-agreement", "paid-access"} {

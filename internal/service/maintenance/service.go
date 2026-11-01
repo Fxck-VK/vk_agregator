@@ -244,6 +244,11 @@ func (s *Service) runReconciliation(ctx context.Context) {
 // adjustments through its repository; financial ledger history is retained.
 func (s *Service) Cleanup(ctx context.Context) error {
 	now := s.now()
+	if rewards, ok := s.store.(domain.WebReferralRewardProcessor); ok {
+		if _, err := rewards.ProcessWebReferralRewards(ctx, now, 100); err != nil {
+			return err
+		}
+	}
 	var creditLotsExpired int64
 	if expirer, ok := s.store.(creditLotExpirer); ok {
 		var err error

@@ -15,6 +15,9 @@ import (
 
 // PaymentRepo is an in-memory domain.PaymentRepository.
 type PaymentRepo struct {
+	promotions         map[uuid.UUID]domain.Promotion
+	promotionUses      map[uuid.UUID]memoryPromotionUse
+	promotionMutations map[string]memoryPromotionMutation
 	mu                 sync.Mutex
 	productsByID       map[uuid.UUID]domain.PaymentProduct
 	productIDByCode    map[string]uuid.UUID
@@ -230,6 +233,11 @@ func (r *PaymentRepo) CreateIntent(_ context.Context, intent *domain.PaymentInte
 	}
 	if intent.AccountID == uuid.Nil {
 		intent.AccountID = intent.UserID
+	}
+	for id, use := range r.promotionUses {
+		if use.Owner == intent.AccountID && use.State == "reserved" && id != intent.ID {
+			return domain.ErrConflict
+		}
 	}
 	if len(intent.Metadata) == 0 {
 		intent.Metadata = json.RawMessage(`{}`)

@@ -1,7 +1,8 @@
 "use client";
 
 import { StateNotice } from "@/components/ui/AsyncState/AsyncState";
-import { useMessages } from "@/i18n/LocaleProvider";
+import { useDictionary, useMessages } from "@/i18n/LocaleProvider";
+import { useSubscriptionPromotion } from "@/features/subscriptions/SubscriptionPromotion";
 
 
 import { useEffect, useRef, useState, type KeyboardEvent, type RefObject } from "react";
@@ -16,19 +17,22 @@ import styles from "./PromoCodeDialog.module.css";
 type PromoCodeDialogProps = {
   onClose: () => void;
   returnFocusRef: RefObject<HTMLButtonElement | null>;
+  preview?: boolean;
 };
 
-export function PromoCodeDialog({ onClose, returnFocusRef }: PromoCodeDialogProps) {
+export function PromoCodeDialog({ onClose, returnFocusRef, preview = false }: PromoCodeDialogProps) {
   const msg = useMessages();
+  const t = useDictionary().promotions, promotion = useSubscriptionPromotion();
+  const cancel = promotion.cancel;
   const inputRef = useRef<HTMLInputElement>(null);
-  const [code, setCode] = useState("");
-  const [submitted, setSubmitted] = useState(false);
+  const [code, setCode] = useState(promotion.quote?.code ?? "");
+  const allowed = promotion.enabled && !preview;
 
   useEffect(() => {
     const trigger = returnFocusRef.current;
     inputRef.current?.focus();
-    return () => trigger?.focus();
-  }, [returnFocusRef]);
+    return () => { cancel(); trigger?.focus(); };
+  }, [returnFocusRef, cancel]);
 
   const keepFocusInside = (event: KeyboardEvent<HTMLElement>) => {
     if (event.key !== "Tab") return;
@@ -52,19 +56,21 @@ export function PromoCodeDialog({ onClose, returnFocusRef }: PromoCodeDialogProp
           <h2 id="promo-code-title">{msg("promoCodeDialog.iHaveAPromoCode")}</h2>
           <form className={styles.form} onSubmit={(event) => {
             event.preventDefault();
-            if (code.trim()) setSubmitted(true);
+            if (allowed && !promotion.pending && code.trim()) void promotion.apply(code).then(applied => { if (applied) onClose(); });
           }}>
             <InputSurface>
               <input
                 aria-label={msg("promoCodeDialog.promoCode")}
-                aria-describedby={submitted ? "promo-code-status" : undefined}
+                aria-describedby="promo-code-status"
                 autoComplete="off"
                 autoCapitalize="off"
                 className={styles.input}
                 name="promo-code"
+                maxLength={64}
+                disabled={promotion.pending}
                 onChange={(event) => {
                   setCode(event.target.value);
-                  setSubmitted(false);
+                  promotion.cancel();
                 }}
                 placeholder={msg("promoCodeDialog.enterPromoCode")}
                 ref={inputRef}
@@ -73,8 +79,11 @@ export function PromoCodeDialog({ onClose, returnFocusRef }: PromoCodeDialogProp
                 value={code}
               />
             </InputSurface>
-            {submitted ? <StateNotice inline kind="empty" id="promo-code-status">{msg("promoCodeDialog.promoCodeActivationIsNotAvailableYet")}</StateNotice> : null}
-            <Button className={styles.activateButton} disabled={!code.trim()} type="submit">{msg("promoCodeDialog.activate")}</Button>
+            <div id="promo-code-status">
+              {promotion.pending ? <StateNotice inline kind="loading">{t.checking}</StateNotice> : promotion.error ? <StateNotice inline kind="error">{t[promotion.error]}</StateNotice> : !allowed ? <StateNotice inline>{preview || promotion.preview ? t.preview : t.signIn}</StateNotice> : <p className={styles.status}>{t.terms}</p>}
+            </div>
+            <Button className={styles.activateButton} disabled={!allowed || promotion.pending || !/^[A-Za-z0-9_-]{3,64}$/.test(code.trim())} type="submit">{promotion.pending ? t.checking : msg("promoCodeDialog.activate")}</Button>
+            {promotion.quote ? <Button variant="outline" disabled={promotion.pending} onClick={() => { promotion.clear(); onClose(); }}>{t.remove}</Button> : null}
           </form>
         </section>
       )}

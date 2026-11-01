@@ -30,6 +30,9 @@ func (p *WebhookProcessor) processSubscriptionRefund(ctx context.Context, event 
 	if verified.ID != event.ProviderRefundID || verified.PaymentID == "" || verified.Status != domain.PaymentRefundSucceeded || (event.ProviderPaymentID != "" && verified.PaymentID != event.ProviderPaymentID) {
 		return ErrWebhookUnverified
 	}
+	if err := p.persistWebReferralRefund(ctx, event, verified); err != nil {
+		return err
+	}
 	return p.tx.RunPaymentTx(ctx, func(ctx context.Context, payments domain.PaymentRepository, billing domain.BillingRepository) error {
 		currentEvent, err := payments.GetEventByID(ctx, event.ID)
 		if err != nil {

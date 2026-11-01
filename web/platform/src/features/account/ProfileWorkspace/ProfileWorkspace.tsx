@@ -1,6 +1,8 @@
 "use client";
 
-import { useState } from "react";
+import { useRef, useState } from "react";
+import { PromoCodeDialog } from "@/components/layout/WorkspaceHeader/PromoCodeDialog";
+import { useSubscriptionPromotion } from "@/features/subscriptions/SubscriptionPromotion";
 
 import { ModeSwitchPanel } from "@/components/ui/ModeSwitchPanel/ModeSwitchPanel";
 import { ProfileBalanceCard } from "@/features/account/ProfileBalanceCard/ProfileBalanceCard";
@@ -8,6 +10,7 @@ import { ProfileSubscriptionCard } from "@/features/subscriptions/ProfileSubscri
 import { ProfileIdentityCard } from "@/features/account/ProfileIdentityCard/ProfileIdentityCard";
 import { ProfileLoginMethods } from "@/features/account/ProfileLoginMethods/ProfileLoginMethods";
 import { ProfileReferralProgram } from "@/features/account/ProfileReferralProgram/ProfileReferralProgram";
+import { ProfileBillingHistory } from "@/features/account/ProfileBillingHistory/ProfileBillingHistory";
 import { AccountSecurity } from "@/features/account/AccountSecurity/AccountSecurity";
 import { getAccountDisplayIdentity } from "@/features/account/account-display";
 import { defaultAuthMethods, type AuthMethods } from "@/lib/auth/methods";
@@ -28,13 +31,17 @@ export function ProfileWorkspace({ methods = defaultAuthMethods, preview = false
   const { balance, profile } = useWorkspaceAccountSnapshot();
   const primaryIdentity = getAccountDisplayIdentity(profile.identity_refs, t);
   const [activeTab, setActiveTab] = useState<ProfileTab>(oauthStatus ? "security" : "overview");
+  const promotion = useSubscriptionPromotion(), promoButtonRef = useRef<HTMLButtonElement>(null);
+  const [promoOpen, setPromoOpen] = useState(false);
 
   return (
     <section aria-labelledby="profile-title" className={styles.workspace}>
       <h1 className={styles.screenReaderOnly} id="profile-title">{t.profile.title}</h1>
       <ProfileIdentityCard
+        key={profile.account_id}
         hasVerifiedIdentity={primaryIdentity.hasVerifiedIdentity}
         identityLabel={primaryIdentity.label}
+        publicID={profile.public_id}
       />
 
       <ModeSwitchPanel<ProfileTab>
@@ -66,8 +73,8 @@ export function ProfileWorkspace({ methods = defaultAuthMethods, preview = false
             <section aria-labelledby="profile-promo-title" className={styles.section}>
               <h2 id="profile-promo-title">{t.profile.promoTitle}</h2>
               <div className={styles.placeholderCard}>
-                <p>{t.profile.promoDescription}</p>
-                <button disabled type="button">{t.profile.promoActionLabel}</button>
+                <p className={styles.promotionSummary}>{promotion.quote ? t.promotions.applied(promotion.quote.code, promotion.quote.percent) : t.promotions.description}</p>
+                <button aria-haspopup="dialog" aria-expanded={promoOpen} disabled={promotion.pending} onClick={() => setPromoOpen(true)} ref={promoButtonRef} type="button">{t.profile.promoActionLabel}</button>
               </div>
             </section>
 
@@ -76,9 +83,7 @@ export function ProfileWorkspace({ methods = defaultAuthMethods, preview = false
 
             <section aria-labelledby="profile-billing-title" className={styles.section}>
               <h2 id="profile-billing-title">{t.profile.billingTitle}</h2>
-              <div className={styles.placeholderCard}>
-                <p>{t.profile.billingPlaceholder}</p>
-              </div>
+              <ProfileBillingHistory accountId={profile.account_id} preview={preview} />
             </section>
           </>
         ) : activeTab === "security" ? (
@@ -87,6 +92,7 @@ export function ProfileWorkspace({ methods = defaultAuthMethods, preview = false
           <ProfileReferralProgram key={profile.account_id} accountId={profile.account_id} preview={preview} />
         )}
       </div>
+      {promoOpen ? <PromoCodeDialog onClose={() => setPromoOpen(false)} returnFocusRef={promoButtonRef} preview={preview} /> : null}
     </section>
   );
 }

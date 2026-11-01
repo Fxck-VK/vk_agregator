@@ -8,5 +8,7 @@ export async function AuthEntry({screen,searchParams}:{screen?:AuthScreen;search
  const props=await loadLoginPageProps(searchParams);
  const query=await searchParams;
  const initialScreen=screen??(props.initialMode==="register"?"register":query?.step==="password"?"password":"choice");
- return <main className={styles.page}><LoginWindow><LoginForm {...props} initialScreen={initialScreen} appearance="minimal" navigationEnabled /></LoginWindow></main>;
+ const formProps={...props,initialScreen,appearance:"minimal" as const,navigationEnabled:true};
+ const previewAccount=props.preview&&initialScreen==="choice"?(query?.demo==="provider"?"yandex":query?.demo==="vk"?"vk":undefined):undefined;
+ return <main className={styles.page}><LoginWindow><LoginForm {...formProps} previewAccount={previewAccount}/></LoginWindow></main>;
 }

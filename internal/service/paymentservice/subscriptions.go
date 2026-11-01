@@ -11,12 +11,15 @@ import (
 	"github.com/google/uuid"
 	"vk-ai-aggregator/internal/domain"
 	"vk-ai-aggregator/internal/service/economycatalog"
+	"vk-ai-aggregator/internal/service/promotionservice"
 )
 
 var ErrSubscriptionUnavailable = errors.New("subscription unavailable")
 var ErrTrialAlreadyUsed = errors.New("subscription trial already used")
 
 type CreateSubscriptionInput struct {
+	PromoCode          string
+	PromoRevision      int64
 	RetryPolicyVersion int
 	AccountID          uuid.UUID
 	PlanCode           string
@@ -26,6 +29,7 @@ type CreateSubscriptionInput struct {
 }
 
 type subscriptionPurchase struct {
+	Promotion        *domain.PromotionSnapshot       `json:"promotion,omitempty"`
 	RetryPolicy      domain.SubscriptionRetryPolicy  `json:"retry_policy"`
 	Plan             domain.SubscriptionPlanSnapshot `json:"plan"`
 	Next             domain.SubscriptionPlanSnapshot `json:"next"`
@@ -58,7 +62,16 @@ func subscriptionPurchaseFrom(intent *domain.PaymentIntent) (*subscriptionPurcha
 	if s.RetryPolicy != (domain.SubscriptionRetryPolicy{}) && !s.RetryPolicy.Enabled() {
 		return nil, ErrWebhookMismatch
 	}
-	if intent.AccountID == uuid.Nil || s.Plan.Code == "" || s.Plan.Amount != intent.Amount || s.Plan.Stars != intent.Credits || s.Plan.PeriodDays <= 0 || s.Plan.PeriodDays > 366 || s.Plan.PolicyVersion <= 0 || s.Next.Code == "" || s.Next.Amount <= 0 || s.Next.Stars <= 0 || s.Next.PeriodDays <= 0 || s.Next.PeriodDays > 366 {
+	expectedAmount := s.Plan.Amount
+	if promo := s.Promotion; promo != nil {
+		code, e := domain.NormalizePromotionCode(promo.Code)
+		amount, amountErr := domain.PromotionAmount(promo.BaseAmount, promo.Percent)
+		if e != nil || amountErr != nil || code != promo.Code || promo.PromotionID == uuid.Nil || promo.Revision < 1 || s.Renewal || promo.BaseAmount != s.Plan.Amount || promo.Amount != amount {
+			return nil, ErrWebhookMismatch
+		}
+		expectedAmount = amount
+	}
+	if intent.AccountID == uuid.Nil || s.Plan.Code == "" || expectedAmount != intent.Amount || s.Plan.Stars != intent.Credits || s.Plan.PeriodDays <= 0 || s.Plan.PeriodDays > 366 || s.Plan.PolicyVersion <= 0 || s.Next.Code == "" || s.Next.Amount <= 0 || s.Next.Stars <= 0 || s.Next.PeriodDays <= 0 || s.Next.PeriodDays > 366 {
 		return nil, ErrWebhookMismatch
 	}
 	return s, nil
@@ -86,6 +99,16 @@ func (s *Service) SubscriptionsAvailable() bool {
 }
 
 func (s *Service) CreateSubscription(ctx context.Context, in CreateSubscriptionInput) (CreateIntentResult, error) {
+	if in.PromoCode != "" {
+		code, err := domain.NormalizePromotionCode(in.PromoCode)
+		if err != nil {
+			return CreateIntentResult{}, ErrInvalidInput
+		}
+		in.PromoCode = code
+	}
+	if (in.PromoCode == "") != (in.PromoRevision == 0) || in.PromoRevision < 0 {
+		return CreateIntentResult{}, ErrInvalidInput
+	}
 	in.PlanCode = strings.TrimSpace(in.PlanCode)
 	in.ReceiptEmail = strings.TrimSpace(in.ReceiptEmail)
 	in.IdempotencyKey = strings.TrimSpace(in.IdempotencyKey)
@@ -135,6 +158,9 @@ func (s *Service) CreateSubscription(ctx context.Context, in CreateSubscriptionI
 			if old.AccountID != in.AccountID || previous == nil || previous.Plan.Code != in.PlanCode || previous.AutoRenew != in.AutoRenew || previous.RetryPolicy != purchase.RetryPolicy || previous.Renewal || old.ReceiptEmail != in.ReceiptEmail {
 				return domain.ErrConflict
 			}
+			if (previous.Promotion == nil) != (in.PromoCode == "") || previous.Promotion != nil && (previous.Promotion.Code != in.PromoCode || previous.Promotion.Revision != in.PromoRevision) {
+				return domain.ErrConflict
+			}
 			result.Intent = old
 			return nil
 		} else if !errors.Is(err, domain.ErrNotFound) {
@@ -158,11 +184,27 @@ func (s *Service) CreateSubscription(ctx context.Context, in CreateSubscriptionI
 		if plan.Trial && state.TrialUsed {
 			return ErrTrialAlreadyUsed
 		}
+		intentID := uuid.New()
+		amount := plan.Amount
+		if in.PromoCode != "" {
+			if err := checkPromotionGrantHistory(ctx, billing, in.AccountID); err != nil {
+				return err
+			}
+			promos, ok := payments.(domain.PromotionRepository)
+			if !ok {
+				return domain.ErrPromotionUnavailable
+			}
+			purchase.Promotion, err = promotionservice.ReserveLocked(ctx, promos, in.AccountID, intentID, in.PromoCode, in.PromoRevision, plan.Code, time.Now().UTC())
+			if err != nil {
+				return err
+			}
+			amount = purchase.Promotion.Amount
+		}
 		raw, err := json.Marshal(map[string]any{"source": "web", "return_url": s.cfg.AccountReturnURL, "capture": true, "subscription": purchase, subscriptionSubmitMarker: time.Now().UTC().Format(time.RFC3339Nano)})
 		if err != nil {
 			return err
 		}
-		intent := &domain.PaymentIntent{ID: uuid.New(), AccountID: in.AccountID, Status: domain.PaymentIntentCreated, Amount: plan.Amount, Currency: domain.CurrencyRUB, Credits: plan.Stars, CreditDenominationVersion: domain.CurrentCreditDenominationVersion, PriceVersion: economycatalog.Version, ReceiptDescription: "Epifera " + plan.Name, PaymentSubject: "service", PaymentMode: "full_prepayment", Provider: s.provider.Code(), IdempotencyKey: in.IdempotencyKey, ReceiptEmail: in.ReceiptEmail, Metadata: raw}
+		intent := &domain.PaymentIntent{ID: intentID, AccountID: in.AccountID, Status: domain.PaymentIntentCreated, Amount: amount, Currency: domain.CurrencyRUB, Credits: plan.Stars, CreditDenominationVersion: domain.CurrentCreditDenominationVersion, PriceVersion: economycatalog.Version, ReceiptDescription: "Epifera " + plan.Name, PaymentSubject: "service", PaymentMode: "full_prepayment", Provider: s.provider.Code(), IdempotencyKey: in.IdempotencyKey, ReceiptEmail: in.ReceiptEmail, Metadata: raw}
 		if err := payments.CreateIntent(ctx, intent); err != nil {
 			return err
 		}

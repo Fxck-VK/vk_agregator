@@ -460,3 +460,45 @@ were closed; the existing localhost7159 preview remained available. Disable the
 temporary notification URL in the TEST merchant settings after each run.
 No live-money charge, paid AI call, UI change, commit, push or deployment occurred.
 Sanitized evidence: `.cache/economy-complete-2026-10-28/recurring-report.json`.
+
+## First-purchase tariff promotions
+
+Local implementation, not a deployment. Apply additive migration
+`migrations/000067_subscription_promotions.up.sql` through the normal release
+procedure before enabling these APIs. No campaign is seeded by the migration.
+
+- Codes give an integer 1..99 percent discount on the first tariff payment;
+  eligible plans, enabled state, UTC interval and total use cap belong to each
+  campaign. Code names are immutable, case-insensitive ASCII3..64 from
+  `A-Z`, digits, `_`, `-`. A cap of0 means unlimited; end time is exclusive.
+- Any previous successful purchase, including a top-up or refunded purchase,
+  excludes the account. Registration grants do not count. One pending discounted
+  purchase reserves the account's first-purchase slot and global capacity;
+  competing normal/legacy purchases cannot bypass it.
+- Quote: authenticated CSRF-protected `POST /web/v1/subscription/promo` with
+  `{code}`. Quote returns code/revision/percent and canonical base/discounted
+  amounts and full stars for eligible plans; it consumes no use. Checkout sends
+  only `promo_code` and `promo_revision` alongside the existing plan/consent.
+- Discount is `floor(base_kopecks * percent / 100)`; actual charge is base minus
+  discount. The intent freezes that amount and promotion evidence, preserving
+  the full plan grant and regular next-renewal snapshot. Later campaign edits
+  cannot reprice accepted payment obligations.
+- Provider-verified success consumes once in the same transaction as the grant.
+  Verified unpaid cancellation releases the reservation. Refunds never restore
+  use/first-purchase eligibility; refunds use the actual paid amount. Ambiguous
+  provider outcomes keep capacity reserved until existing reconciliation or
+  verified cancellation resolves them; never release by an arbitrary TTL/SQL.
+- Admin read/manage requires explicit promotion permissions (owner/admin/finance),
+  confirmed immutable body, UUID idempotency key, revision check and atomic audit.
+  See `docs/OPERATOR_UI.md` for the existing admin and protected assistant CLI.
+- Browser quote state lives in the current account/session only. Applying/removing
+  a code updates existing cards; checkout verifies returned amount/full stars
+  before navigation. Session changes reject late quotes and checkout responses.
+  Local preview never forwards promo/payment mutations to a backend.
+
+Payment terms are versioned in `web/platform/legal/catalog.json`, edition
+`2026-10-31.2`. Go/Node checksum fixtures bind the same public text. Historical
+consent evidence remains immutable; marketing/privacy document bodies are unchanged.
+Verification covers isolated PostgreSQL reservations/races/rollback/settlement,
+business/API/client tests and responsive fixtures. No live campaign/payment was
+created by this implementation.

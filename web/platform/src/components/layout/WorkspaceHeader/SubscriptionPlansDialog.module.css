@@ -38,6 +38,9 @@
 
 .promoButton,
 .dialogFooter button {
+  min-inline-size: 0;
+  max-inline-size: 100%;
+  overflow-wrap: anywhere;
   min-block-size: 2.75rem;
   border: 0.0625rem solid var(--color-border);
   border-radius: var(--radius-sm);
@@ -58,6 +61,7 @@
 }
 
 .scrollArea {
+  --scroll-area-vertical-track-inset-block: calc(var(--space-8) + var(--space-4));
   min-block-size: 0;
 }
 
@@ -288,6 +292,32 @@
 
 .dialogFooter p {
   margin: 0;
+}
+
+.renewalChoice {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-2);
+  color: var(--panel-surface-text);
+  cursor: pointer;
+}
+
+.renewalChoice input {
+  margin: 0;
+  accent-color: var(--color-accent);
+}
+
+.renewalDetails {
+  max-inline-size: 48rem;
+  text-align: start;
+}
+
+.renewalDetails summary {
+  cursor: pointer;
+}
+
+.renewalDetails p {
+  margin-block-start: var(--space-3);
 }
 
 @keyframes dialogIn {

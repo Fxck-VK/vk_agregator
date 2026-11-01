@@ -27,6 +27,7 @@ import (
 	"vk-ai-aggregator/internal/platform/uow"
 	"vk-ai-aggregator/internal/service/outboxrelay"
 	"vk-ai-aggregator/internal/service/pricingcatalog"
+	"vk-ai-aggregator/internal/service/promotionservice"
 )
 
 const (
@@ -94,8 +95,10 @@ type AdminRateLimitConfig struct {
 
 // Deps are the repositories the admin API reads from.
 type Deps struct {
+	Promotions *promotionservice.Service
 	Jobs       domain.JobRepository
 	Users      domain.UserRepository
+	Accounts   domain.AccountPublicIDRepository
 	Deliveries domain.DeliveryRepository
 	Audits     domain.OperatorAuditRepository
 	Referrals  domain.ReferralRepository
@@ -134,6 +137,9 @@ func NewHandler(cfg Config, deps Deps) *Handler {
 // Routes returns an http.Handler with the admin routes registered.
 func (h *Handler) Routes() http.Handler {
 	mux := http.NewServeMux()
+	mux.HandleFunc("GET /admin/promotions", h.protected("admin_promotions_list", domain.OperatorPermissionPromotionsRead, h.listPromotions))
+	mux.HandleFunc("POST /admin/promotions", h.protected("admin_promotions_create", domain.OperatorPermissionPromotionsManage, h.mutatePromotion))
+	mux.HandleFunc("POST /admin/promotions/{id}", h.protected("admin_promotions_update", domain.OperatorPermissionPromotionsManage, h.mutatePromotion))
 	mux.HandleFunc("GET /admin/overview", h.protected("admin_overview_get", domain.OperatorPermissionSystemStatusRead, h.getOverview))
 	mux.HandleFunc("GET /admin/access/operator", h.protected("admin_operator_access_get", domain.OperatorPermissionAccessRead, h.getOperatorAccess))
 	mux.HandleFunc("GET /admin/jobs/operator", h.protected("admin_operator_jobs_list", domain.OperatorPermissionJobsSafeRead, h.listOperatorJobs))

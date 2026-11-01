@@ -594,6 +594,12 @@ func (p *WebhookProcessor) submitProviderRefund(ctx context.Context, intent *dom
 					return err
 				}
 			}
+			if err := p.recordWebReferralRefund(ctx, payments, current, domain.VerifiedPaymentRefund{
+				ID: providerRefund.ProviderRefundID, PaymentID: current.ProviderPaymentID,
+				Status: providerRefund.Status, Amount: providerRefund.Amount, Currency: providerRefund.Currency,
+			}); err != nil {
+				return err
+			}
 		}
 		return nil
 	}); err != nil {
@@ -864,6 +870,11 @@ func (p *WebhookProcessor) applyProviderPayment(ctx context.Context, payments do
 			return applyResult{}, nil
 		}
 	}
+	if purchase != nil && purchase.Promotion != nil && (target == domain.PaymentIntentCanceled || target == domain.PaymentIntentFailed || target == domain.PaymentIntentExpired) {
+		if providerPayment.Paid || providerPayment.Captured || providerPayment.Amount != intent.Amount || providerPayment.Currency != intent.Currency {
+			return applyResult{}, ErrWebhookMismatch
+		}
+	}
 	var result applyResult
 	if intent.Status != target {
 		result.From = intent.Status
@@ -881,6 +892,11 @@ func (p *WebhookProcessor) applyProviderPayment(ctx context.Context, payments do
 		}
 	}
 	if purchase != nil && (target == domain.PaymentIntentCanceled || target == domain.PaymentIntentFailed || target == domain.PaymentIntentExpired) {
+		if purchase.Promotion != nil {
+			if err := finishPromotion(ctx, payments, intent, false); err != nil {
+				return result, err
+			}
+		}
 		if err := p.stopFailedRenewal(ctx, billingRepo, intent, providerPayment, purchase); err != nil {
 			return result, err
 		}
@@ -915,6 +931,18 @@ func (p *WebhookProcessor) applyProviderPayment(ctx context.Context, payments do
 		}
 		if grantErr != nil {
 			return result, grantErr
+		}
+		if purchase != nil && purchase.Promotion != nil {
+			if err := finishPromotion(ctx, payments, intent, true); err != nil {
+				return result, err
+			}
+		}
+		// A replay from a pre-hook writer must not turn historical money into a
+		// new eligible payment. Missing old proof is recovered as history.
+		if !wasSucceeded {
+			if err := p.recordWebReferralPayment(ctx, payments, intent, providerPayment); err != nil {
+				return result, err
+			}
 		}
 		if result.StatusChanged {
 			result.TopupGranted = true

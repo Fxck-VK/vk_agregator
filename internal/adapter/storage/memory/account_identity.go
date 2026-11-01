@@ -20,6 +20,9 @@ type AccountIdentityRepo struct {
 	audits               []domain.AccountLinkAuditEntry
 	notices              map[uuid.UUID]*memorySecurityNotice
 	displayNames         map[uuid.UUID]string
+	publicNumbers        map[uuid.UUID]int64
+	publicAccounts       map[int64]domain.Account
+	nextPublicNumber     int64
 	usableLoginProviders domain.UsableLoginProviders
 }
 
@@ -37,6 +40,8 @@ func NewAccountIdentityRepo(opts ...AccountIdentityRepoOption) *AccountIdentityR
 		byID:                 map[uuid.UUID]*domain.AccountIdentity{},
 		notices:              map[uuid.UUID]*memorySecurityNotice{},
 		displayNames:         map[uuid.UUID]string{},
+		publicNumbers:        map[uuid.UUID]int64{},
+		publicAccounts:       map[int64]domain.Account{},
 		usableLoginProviders: domain.AccountUsableLoginProviders(false),
 	}
 	for _, opt := range opts {
@@ -176,6 +181,7 @@ func (r *AccountIdentityRepo) linkIdentity(accountID uuid.UUID, provider domain.
 		}
 		emailCount = count
 	}
+	r.ensurePublicAccountLocked(accountID, now)
 	identity := &domain.AccountIdentity{
 		ID:           uuid.New(),
 		AccountID:    accountID,

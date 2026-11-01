@@ -320,6 +320,7 @@ type WebChatMessageLimiter interface {
 
 // Deps are services shared with other account adapters.
 type Deps struct {
+	AccountHistory             AccountHistoryService
 	BrowserAuth                *browserauth.Service
 	Legal                      LegalConsentService
 	ArtifactDeletion           ArtifactDeletionService
@@ -416,6 +417,7 @@ func (h *Handler) Routes() http.Handler {
 	mux.HandleFunc("POST /web/v1/auth/logout", h.logout)
 	mux.HandleFunc("GET /web/v1/me", h.requirePrincipal(h.me))
 	mux.HandleFunc("GET /web/v1/balance", h.requirePrincipal(h.balance))
+	mux.HandleFunc("GET /web/v1/billing/history", h.requirePrincipal(h.accountHistory))
 	mux.HandleFunc("GET /web/v1/conversations", h.requirePrincipal(h.listConversations))
 	mux.HandleFunc("GET /web/v1/conversations/{conversationID}", h.requirePrincipal(h.getConversation))
 	mux.HandleFunc("GET /web/v1/conversations/{conversationID}/messages", h.requirePrincipal(h.listConversationMessages))
@@ -440,6 +442,7 @@ func (h *Handler) Routes() http.Handler {
 	mux.HandleFunc("GET /web/v1/payment-products", h.requirePrincipal(h.listWebPaymentProducts))
 	mux.HandleFunc("GET /web/v1/subscription", h.requirePrincipal(h.getWebSubscription))
 	mux.HandleFunc("POST /web/v1/subscription/checkout", h.requireUnsafePrincipal(h.createWebSubscription))
+	mux.HandleFunc("POST /web/v1/subscription/promo", h.requireUnsafePrincipal(h.quoteWebPromotion))
 	mux.HandleFunc("POST /web/v1/subscription/cancel", h.requireUnsafePrincipal(h.cancelWebSubscription))
 	mux.HandleFunc("POST /web/v1/payments/intents", h.requireUnsafePrincipal(h.createWebPayment))
 	mux.HandleFunc("GET /web/v1/payments/{paymentID}", h.requirePrincipal(h.getWebPayment))

@@ -6,7 +6,7 @@ import source from "../../../legal/catalog.json";
 it("publishes a dated final edition without an inactive tariff proposal or internal audit notes",()=>{
  const text=JSON.stringify(source.documents);
  expect(/На дату проекта|Проект будущей подписки|Тариф проекта|В проверенном коде|В исходной конфигурации|в данном контуре|текущей реализации|согласованного референса|ПРИЛОЖЕНИЕ НЕ ДЕЙСТВУЕТ/.test(text)).toBe(false);
- expect(source.date).toBe("2026-10-29");
+ expect(source.date).toBe("2026-10-31");
  expect(source.documents.find(doc=>doc.slug==="paid-access")?.title).toBe("Условия оплаты и возврата Epifera");
 });
 
@@ -15,7 +15,7 @@ it("never publishes incomplete operator details and marks drafts separately",()=
  expect(createLegalCatalog("Test","000000000000",true).metadata.published).toBe(false);
  const draft=createLegalCatalog("Synthetic Test Operator","123456789012",false);
  const live=createLegalCatalog("Synthetic Test Operator","123456789012",true);
- expect(live.metadata.checksum).toBe("f0c2891f5bcaeefcef77971a23fcfe020a94cba5eef61de1f921778efb9a13d3");
+ expect(live.metadata.checksum).toBe("6c74f01c6d89993e7f4891802d0b04e1c4722f752fd8461e799ea962a8b7e130");
  expect(draft.metadata.checksum).not.toBe(live.metadata.checksum);
  expect(live.metadata.published).toBe(true);
  expect(live.documents).toHaveLength(5);

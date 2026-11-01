@@ -13,7 +13,7 @@ import (
 	"vk-ai-aggregator/internal/service/webreferralservice"
 )
 
-func TestSummaryReusesAccountCodeAndForcesRewardsDisabled(t *testing.T) {
+func TestSummaryReusesAccountCodeAndPublishesServerRewardPolicy(t *testing.T) {
 	ctx := context.Background()
 	accountID := uuid.New()
 	repo := &fakeRepository{
@@ -38,8 +38,8 @@ func TestSummaryReusesAccountCodeAndForcesRewardsDisabled(t *testing.T) {
 	if got.Code != "WEB2345678" || got.Visits != 4 || got.Registered != 3 || got.Activated != 2 || got.Rewarded != 1 {
 		t.Fatalf("unexpected summary: %+v", got)
 	}
-	if got.RewardsEnabled {
-		t.Fatal("web referral rewards must stay disabled")
+	if !got.RewardsEnabled || got.RewardPolicy.Stars != 50 || got.RewardPolicy.DelayHours != 24 || got.RewardPolicy.Expires {
+		t.Fatal("web referral policy must match approved rules")
 	}
 	if repo.created != nil {
 		t.Fatalf("existing account code should be reused, created %+v", repo.created)
@@ -82,7 +82,7 @@ func TestStatisticsReadsCountersWithoutLookingUpOrCreatingCode(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if got.Visits != 7 || got.Registered != 2 || got.Activated != 1 || got.Rewarded != 1 || got.RewardsEnabled {
+	if got.Visits != 7 || got.Registered != 2 || got.Activated != 1 || got.Rewarded != 1 || !got.RewardsEnabled {
 		t.Fatalf("unexpected statistics: %+v", got)
 	}
 	if repo.codeReads != 0 || repo.created != nil || repo.summaryAccountID != id {

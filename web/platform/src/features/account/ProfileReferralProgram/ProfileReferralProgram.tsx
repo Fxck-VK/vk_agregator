@@ -14,6 +14,7 @@ import { Button } from "@/components/ui/Button/Button";
 import { ProfileReferralFaq } from "@/features/account/ProfileReferralFaq/ProfileReferralFaq";
 
 import styles from "./ProfileReferralProgram.module.css";
+import { formatRewardPolicy, previewRewardPolicy, rewardPolicySchema } from "./reward-policy";
 
 type ProfileReferralProgramProps = {
   accountId: string;
@@ -25,9 +26,12 @@ const referralStatistics = z.object({
   registered: z.number().int().nonnegative().max(Number.MAX_SAFE_INTEGER),
   activated: z.number().int().nonnegative().max(Number.MAX_SAFE_INTEGER),
   rewarded: z.number().int().nonnegative().max(Number.MAX_SAFE_INTEGER),
-  rewards_enabled: z.literal(false),
+  rewards_enabled: z.boolean(),
+  reward_policy: rewardPolicySchema.optional(),
 });
-const referralSummary = referralStatistics.extend({ code: z.string().regex(/^[A-Za-z0-9_-]{4,64}$/) });
+const enabledPolicyIsPresent = (data: z.infer<typeof referralStatistics>) => !data.rewards_enabled || data.reward_policy !== undefined;
+const referralSummary = referralStatistics.extend({ code: z.string().regex(/^[A-Za-z0-9_-]{4,64}$/) }).refine(enabledPolicyIsPresent);
+const validatedStatistics = referralStatistics.refine(enabledPolicyIsPresent);
 type Statistics = z.infer<typeof referralStatistics>;
 
 export function ProfileReferralProgram(props: ProfileReferralProgramProps) {
@@ -56,7 +60,7 @@ function AccountReferralProgram({ accountId, preview = false }: ProfileReferralP
         const body: unknown = await response.json();
         if (signal.aborted || browserSessionSnapshot().revision !== session.revision) return;
         if (!hasCode && !rememberReferralCode(accountId, referralSummary.parse(body).code, session)) return;
-        const data = referralStatistics.parse(body);
+        const data = validatedStatistics.parse(body);
         setLoad({ revision: session.revision, attempt, data, error: false });
       } catch {
         if (!signal.aborted && browserSessionSnapshot().revision === session.revision) {
@@ -69,6 +73,7 @@ function AccountReferralProgram({ accountId, preview = false }: ProfileReferralP
   const currentLoad = !preview && load?.revision === revision && load.attempt === attempt ? load : null;
   const data = currentLoad?.data ?? null;
   const error = currentLoad?.error ?? false;
+  const policy = preview ? previewRewardPolicy : data?.rewards_enabled ? data.reward_policy : undefined;
   const inviteURL = code && typeof window !== "undefined" ? `${window.location.origin}/${locale}/invite/${code}` : "";
   const values = data ? [data.visits, data.registered, data.activated, data.rewarded] : [];
   const retry = () => { setCopyStatus(null); setAttempt(value => value + 1); };
@@ -81,7 +86,7 @@ function AccountReferralProgram({ accountId, preview = false }: ProfileReferralP
       <section aria-labelledby="profile-referral-launch-title" className={styles.launchCard}>
         <h2 id="profile-referral-launch-title"><BrandText>{t.profile.referralLaunchTitle}</BrandText></h2>
         <p>{t.profile.referralLaunchDescription}</p>
-        {preview ? <StateNotice>{t.profile.referralStatisticsUnavailable}</StateNotice> : code ? <div className={styles.invitation}>
+        {preview ? <StateNotice>{t.profile.referralPreviewNotice} {t.profile.referralStatisticsUnavailable}</StateNotice> : code ? <div className={styles.invitation}>
             <label htmlFor="profile-referral-url">{t.profile.referralLinkLabel}</label>
             <input id="profile-referral-url" value={inviteURL} readOnly onFocus={event => event.currentTarget.select()} />
             <Button variant="outline" onClick={() => void copy()}>{t.profile.referralCopy}</Button>
@@ -100,7 +105,7 @@ function AccountReferralProgram({ accountId, preview = false }: ProfileReferralP
             <li key={step.title}>
               <span aria-hidden="true">{index + 1}</span>
               <strong>{step.title}</strong>
-              <p>{step.description}</p>
+              <p>{index === 2 ? policy ? formatRewardPolicy(step.description, policy, locale) : t.profile.referralRulesUnavailable : step.description}</p>
             </li>
           ))}
         </ol>
@@ -108,7 +113,7 @@ function AccountReferralProgram({ accountId, preview = false }: ProfileReferralP
 
       <section aria-labelledby="profile-referral-statistics-title" className={styles.section}>
         <h2 id="profile-referral-statistics-title">{t.profile.referralStatisticsTitle}</h2>
-        <p className={styles.unavailable}>{t.profile.referralRulesPending}</p>
+        <p className={styles.unavailable}>{policy ? formatRewardPolicy(t.profile.referralRulesActive, policy, locale) : data ? t.profile.referralRulesPending : t.profile.referralRulesUnavailable}</p>
         {!preview && code && !data ? <StateNotice kind={error ? "error" : "loading"}
           action={error ? { label: t.profile.referralRetry, onClick: retry } : undefined}>
           {error ? t.profile.referralStatisticsFailure : t.profile.referralStatisticsLoading}
@@ -123,7 +128,7 @@ function AccountReferralProgram({ accountId, preview = false }: ProfileReferralP
         </div> : null}
       </section>
 
-      <ProfileReferralFaq />
+      <ProfileReferralFaq policy={policy} />
     </div>
   );
 }

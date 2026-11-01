@@ -7,6 +7,16 @@ const returnCookieName = "__Host-nh-return-to";
 const privatePath = "/ru/app/chat/d7c979f5-24e5-4f88-924b-a592d6e5a906";
 
 describe("platform return-path proxy", () => {
+  it("keeps session-aware home responses private and uncached", () => {
+    const response = proxy(new NextRequest("https://platform.example/ru"));
+    expect(response.headers.get("Cache-Control")).toBe("private, no-store");
+    expect(response.headers.get("x-middleware-rewrite")).toBe("https://platform.example/");
+  });
+  it("does not redirect an unrelated public page just because session cookies exist", () => {
+    const response = proxy(new NextRequest("https://platform.example/ru/pricing", { headers: { Cookie: "nh_access=synthetic" } }));
+    expect(response.headers.get("Location")).toBeNull();
+    expect(response.headers.get("x-middleware-rewrite")).toBe("https://platform.example/pricing");
+  });
   afterEach(() => {
     vi.unstubAllEnvs();
   });

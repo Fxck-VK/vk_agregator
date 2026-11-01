@@ -415,6 +415,9 @@ func (s *Service) CreateIntent(ctx context.Context, in CreateIntentInput) (Creat
 			return CreateIntentResult{}, err
 		}
 		existing, getErr := s.repo.GetIntentByIdempotencyKey(ctx, in.IdempotencyKey)
+		if errors.Is(getErr, domain.ErrNotFound) {
+			return CreateIntentResult{}, domain.ErrConflict
+		}
 		if getErr != nil {
 			metrics.ObserveProductEvent(sourceLabel, "payment", "intent_create", "top_up", "credits", "error")
 			return CreateIntentResult{}, getErr
@@ -521,6 +524,9 @@ func (s *Service) CreateAccountIntent(ctx context.Context, in CreateAccountInten
 			return CreateIntentResult{}, err
 		}
 		existing, getErr := s.repo.GetIntentByIdempotencyKey(ctx, in.IdempotencyKey)
+		if errors.Is(getErr, domain.ErrNotFound) {
+			return CreateIntentResult{}, domain.ErrConflict
+		}
 		if getErr != nil {
 			return CreateIntentResult{}, getErr
 		}

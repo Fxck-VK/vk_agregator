@@ -1,5 +1,11 @@
 # Documentation Index
 
+Session-aware homepage: [implementation and checks](superpowers/plans/2026-10-31-home-session-entry.md), [routing contract](../web/platform/docs/locale-routing.md#вход-и-оплата). Guest landing; verified browser session temporarily redirects to the workspace. No release.
+
+Direct checkout from tariff cards: [local implementation plan](superpowers/plans/2026-10-31-direct-subscription-checkout.md), [shared UI contract](../web/platform/docs/ui-catalog.md#subscription-economy). The forced nested conditions dialog is removed; renewal remains explicit, unchecked and disclosed. No release or real payment is part of this change.
+
+Permanent public account IDs: [identity contract](../docs/ACCOUNT_IDENTITY_CONTRACT.md#permanent-public-account-id), [approved design](superpowers/specs/2026-10-31-account-public-id-design.md), [implementation/verification plan](superpowers/plans/2026-10-31-account-public-id.md). Authenticated profile/copy and protected operator lookup; UUID ownership is unchanged. Local implementation, not a deployment.
+
 Local platform UI without backend/deploy: [local development scenarios](../web/platform/docs/local-development.md).
 
 Study24 subscription/shared-star model adoption: [implementation plan](superpowers/plans/2026-10-27-study24-economy.md), [current billing contract and explicit gaps](../docs/runbooks/BILLING.md#subscription-economy-local-implementation-2026-10-27). Local implementation only; real merchant enablement and deployment are separate.
@@ -8,7 +14,9 @@ Study24 full pricing research, 2026-10-28: [searchable report for all 94 entries
 
 Canonical Epifera login and account flows: [implementation and local verification](superpowers/plans/2026-10-27-login-v2.md), [browser identity contract](../docs/ACCOUNT_IDENTITY_CONTRACT.md#canonical-browser-authentication), [shared UI contract](../web/platform/docs/ui-catalog.md#browser-account). Localized `/login` uses the chosen reference layout; `/login-v2` only redirects. Registration, reset-link recovery and conditional email verification share server-owned authentication; all auth routes remain noindex.
 
-Website invitation flow and deferred reward rules: [web referrals](../docs/runbooks/WEB_REFERRALS.md).
+Provider returning-account login: [current local implementation and verification](superpowers/plans/2026-10-31-provider-login-reference.md). Only the existing provider row is personalized; account switching is inside its arrow menu. Ordinary email/password remains; no extra email card or demo selector. No deployment.
+
+Website invitations and approved first-payment rewards: [web referrals](../docs/runbooks/WEB_REFERRALS.md).
 
 This file is the canonical map for repository documentation. It tells agents
 which documents are active, which are task-scoped, and which are historical.
@@ -219,3 +227,9 @@ tables in this index and point readers to the replacement document.
 
 Deprecated files must not be used as default context. Read them only when the
 user explicitly asks for history, regression archaeology, or an old decision.
+
+Web referral rewards: [implementation and verification](superpowers/plans/2026-10-31-web-referral-rewards.md); [financial/operational contract](../docs/runbooks/WEB_REFERRALS.md). Local implementation; no release requested.
+
+Account purchase/star history: [read contract](../docs/runbooks/WEB_ACCOUNT_HISTORY.md); [implementation plan](superpowers/plans/2026-10-31-profile-billing-history.md). Local account-owned, paginated profile history; no financial writes or deployment.
+
+First-tariff percentage promotions: [billing contract](../docs/runbooks/BILLING.md#first-purchase-tariff-promotions), [admin/assistant tooling](../docs/OPERATOR_UI.md#promotion-management-and-assistant-http-tooling), [implementation plan](superpowers/plans/2026-10-31-subscription-promotions.md). Local only; no live campaign is seeded.

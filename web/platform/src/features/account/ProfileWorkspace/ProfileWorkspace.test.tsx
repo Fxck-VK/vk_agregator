@@ -10,6 +10,7 @@ import { beginBrowserSession, endBrowserSession } from "@/lib/web-api/browser-se
 import { ProfileWorkspace } from "./ProfileWorkspace";
 
 vi.mock("@/lib/web-api/browser", () => ({ webBrowserFetch: vi.fn() }));
+vi.mock("@/features/account/ProfileBillingHistory/ProfileBillingHistory", () => ({ ProfileBillingHistory: ({ accountId, preview }: { accountId: string; preview?: boolean }) => <div data-testid="profile-billing-history" data-account={accountId} data-preview={Boolean(preview)} /> }));
 vi.mock("@/features/subscriptions/subscriptions", () => ({ loadSubscription: async () => ({ subscription: null, balances: [], checkout_available: false, recurring_available: false }), cancelSubscription: vi.fn() }));
 
 const profile: AccountProfile = {
@@ -27,6 +28,21 @@ const profile: AccountProfile = {
 };
 
 describe("ProfileWorkspace", () => {
+  it("passes only the server public ID to the identity card", () => {
+    render(<WorkspaceAccountProvider snapshot={{ balance: 104, profile: { ...profile, public_id: "EP-104582" } }}><ProfileWorkspace /></WorkspaceAccountProvider>);
+    expect(within(screen.getByLabelText(ru.profile.identityCardLabel)).getByText("EP-104582")).toBeInTheDocument();
+    expect(screen.queryByText(profile.account_id)).not.toBeInTheDocument();
+  });
+  it("clears copied feedback when the account snapshot changes", async () => {
+    Object.defineProperty(navigator, "clipboard", { configurable: true, value: { writeText: vi.fn().mockResolvedValue(undefined) } });
+    const account = (account_id: string, public_id: string) => <WorkspaceAccountProvider snapshot={{ balance: 104, profile: { ...profile, account_id, public_id } }}><ProfileWorkspace /></WorkspaceAccountProvider>;
+    const { rerender } = render(account(profile.account_id, "EP-104582"));
+    fireEvent.click(screen.getByRole("button", { name: "Скопировать ID аккаунта" }));
+    expect(await screen.findByText("ID скопирован")).toBeInTheDocument();
+    rerender(account("62d33e7f-7b0e-4a26-975b-41080b55d78e", "EP-104583"));
+    expect(screen.queryByText("ID скопирован")).not.toBeInTheDocument();
+    expect(screen.getByText("EP-104583")).toBeInTheDocument();
+  });
   afterEach(() => {
     cleanup();
     endBrowserSession();
@@ -46,9 +62,10 @@ describe("ProfileWorkspace", () => {
     expect(screen.queryByText("member@example.com")).not.toBeInTheDocument();
     expect(screen.getByLabelText("104 звезды")).toBeInTheDocument();
     expect(screen.getByText("Электронная почта")).toBeInTheDocument();
-    expect(screen.getByText("История покупок и списаний появится здесь после подключения биллинга.")).toBeInTheDocument();
+    expect(screen.getByTestId("profile-billing-history")).toHaveAttribute("data-account", profile.account_id);
     expect(screen.getByRole("tab", { name: "Реферальная программа" })).toHaveAttribute("aria-selected", "false");
-    expect(screen.getByRole("button", { name: "Ввести промокод" })).toBeDisabled();
+    fireEvent.click(screen.getByRole("button", { name: "Ввести промокод" }));
+    expect(screen.getByRole("dialog", { name: "У меня есть промокод" })).toBeInTheDocument();
     expect(screen.queryByText(profile.account_id)).not.toBeInTheDocument();
     expect(screen.queryByText("Lite")).not.toBeInTheDocument();
     expect(screen.queryByText("NH")).not.toBeInTheDocument();
@@ -127,7 +144,7 @@ describe("ProfileWorkspace", () => {
     expect(panelId).not.toBeNull();
     expect(referralTab).toHaveAttribute("aria-controls", panelId ?? "");
     expect(document.querySelectorAll('[role="tabpanel"]')).toHaveLength(1);
-    expect(screen.getByText(ru.profile.billingPlaceholder)).toBeInTheDocument();
+    expect(screen.getByTestId("profile-billing-history")).toBeInTheDocument();
     expect(screen.queryByText(ru.profile.referralLaunchTitle)).not.toBeInTheDocument();
 
     fireEvent.click(referralTab);
@@ -135,14 +152,14 @@ describe("ProfileWorkspace", () => {
     expect(screen.getByRole("tabpanel", { name: ru.profile.referralTabLabel })).toBeInTheDocument();
     expect(document.querySelectorAll('[role="tabpanel"]')).toHaveLength(1);
     expect(screen.getByRole("heading", { name: ru.profile.referralLaunchTitle })).toBeInTheDocument();
-    expect(screen.queryByText(ru.profile.billingPlaceholder)).not.toBeInTheDocument();
+    expect(screen.queryByTestId("profile-billing-history")).not.toBeInTheDocument();
 
     fireEvent.keyDown(referralTab, { key: "ArrowLeft" });
 
     expect(overviewTab).toHaveAttribute("aria-selected", "true");
     expect(overviewTab).toHaveFocus();
     expect(screen.getByRole("tabpanel", { name: ru.profile.overviewTabLabel })).toBeInTheDocument();
-    expect(screen.getByText(ru.profile.billingPlaceholder)).toBeInTheDocument();
+    expect(screen.getByTestId("profile-billing-history")).toBeInTheDocument();
     expect(screen.queryByText(ru.profile.referralLaunchTitle)).not.toBeInTheDocument();
   });
 

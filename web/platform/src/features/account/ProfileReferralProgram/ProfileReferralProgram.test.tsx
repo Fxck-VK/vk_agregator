@@ -9,8 +9,43 @@ vi.mock("@/lib/web-api/browser", () => ({ webBrowserFetch: vi.fn() }));
 beforeEach(() => beginBrowserSession("account-a"));
 afterEach(() => { act(() => endBrowserSession()); vi.resetAllMocks(); vi.unstubAllGlobals(); });
 const summary = { code: "INVITE1234", visits: 7, registered: 3, activated: 0, rewarded: 0, rewards_enabled: false };
+const enabledSummary = { ...summary, activated: 2, rewarded: 1, rewards_enabled: true, reward_policy: { version: 1, stars: 50, delay_hours: 24, expires: false } };
 
 describe("ProfileReferralProgram", () => {
+ it("renders verified reward policy values and refund conditions with live counters", async () => {
+  vi.mocked(webBrowserFetch).mockResolvedValue(Response.json(enabledSummary));
+  render(<ProfileReferralProgram accountId="account-a" />);
+  await screen.findByRole("textbox");
+  expect(screen.getByText(/Начисляем 50 звёзд через 24 ч/)).toBeInTheDocument();
+  expect(screen.getByText(/включая частичный/)).toHaveTextContent(/весь бонус.*уже потрачен/);
+  expect(screen.getByText(/Исторические оплаты/)).toHaveTextContent(/тестовые.*не учитываются/);
+  expect(within(screen.getByRole("heading", { name: "Активации" }).closest("article")!).getByText("2")).toBeInTheDocument();
+  expect(screen.getByRole("link", { name: "Условия оплаты и возврата" })).toHaveAttribute("href", "/ru/legal/paid-access");
+ });
+ it("uses amounts and delay from the server rather than hard-coded live values", async () => {
+  vi.mocked(webBrowserFetch).mockResolvedValue(Response.json({ ...enabledSummary, reward_policy: { ...enabledSummary.reward_policy, stars: 75, delay_hours: 48 } }));
+  render(<ProfileReferralProgram accountId="account-a" />);
+  await screen.findByRole("textbox");
+  expect(screen.getByText(/Начисляем 75 звёзд через 48 ч/)).toBeInTheDocument();
+  expect(screen.getByText(/Вам начисляется 75 звёзд через 48 ч/)).toBeInTheDocument();
+ });
+ it.each([undefined, null, {}, { version: 2, stars: 50, delay_hours: 24, expires: false }, { version: 1, stars: -1, delay_hours: 24, expires: false }, { version: 1, stars: 50, delay_hours: "24", expires: false }, { version: 1, stars: 50, delay_hours: 24, expires: true }])("fails closed for a missing or malformed enabled policy: %j", async reward_policy => {
+  vi.mocked(webBrowserFetch).mockResolvedValue(Response.json({ ...enabledSummary, reward_policy }));
+  render(<ProfileReferralProgram accountId="account-a" />);
+  expect(await screen.findByRole("alert")).toBeInTheDocument();
+  expect(screen.queryByRole("textbox")).not.toBeInTheDocument();
+  expect(screen.queryByText(/Начисляем 50/)).not.toBeInTheDocument();
+ });
+ it("shows a reduced unrevoked reward counter after refund without reducing activations", async () => {
+  vi.mocked(webBrowserFetch).mockResolvedValueOnce(Response.json(enabledSummary)).mockResolvedValueOnce(Response.json({ ...enabledSummary, rewarded: 0 }));
+  const view = render(<ProfileReferralProgram accountId="account-a" />);
+  await screen.findByRole("textbox");
+  view.unmount();
+  render(<ProfileReferralProgram accountId="account-a" />);
+  const rewarded = await screen.findByRole("heading", { name: "Начисления" });
+  await waitFor(() => expect(within(rewarded.closest("article")!).getByText("0")).toBeInTheDocument());
+  expect(within(screen.getByRole("heading", { name: "Активации" }).closest("article")!).getByText("2")).toBeInTheDocument();
+ });
  it("shows the cached link immediately while reopening refreshes only statistics", async () => {
   let finish!: (response: Response) => void;
   vi.mocked(webBrowserFetch).mockResolvedValueOnce(Response.json(summary)).mockReturnValueOnce(new Promise(resolve => { finish = resolve; }));
@@ -67,12 +102,13 @@ describe("ProfileReferralProgram", () => {
   expect(screen.queryByText("7")).not.toBeInTheDocument();
  });
  it("does not serialize a tab's cached code into server rendered markup", async () => {
-  vi.mocked(webBrowserFetch).mockResolvedValueOnce(Response.json(summary));
+  vi.mocked(webBrowserFetch).mockResolvedValueOnce(Response.json(enabledSummary));
   const view = render(<ProfileReferralProgram accountId="account-a" />);
   await screen.findByRole("textbox");
   view.unmount();
   const markup = renderToString(<ProfileReferralProgram accountId="account-a" />);
   expect(markup).not.toContain("INVITE1234");
+  expect(markup).not.toContain("Начисляем 50");
   expect(markup).toContain("Загружаем приглашение");
  });
  it("does not use a cached real link or make reads in preview", async () => {
@@ -116,11 +152,31 @@ describe("ProfileReferralProgram", () => {
   expect(await screen.findByRole("alert")).toBeInTheDocument();
   expect(screen.queryByRole("textbox")).not.toBeInTheDocument();
  });
+ it("does not cache a code from a rejected policy and retries the full summary", async () => {
+  vi.mocked(webBrowserFetch).mockResolvedValueOnce(Response.json({ ...enabledSummary, reward_policy: undefined })).mockResolvedValueOnce(Response.json(enabledSummary));
+  render(<ProfileReferralProgram accountId="account-a" />);
+  await screen.findByRole("alert");
+  fireEvent.click(screen.getByRole("button", { name: "Повторить" }));
+  await screen.findByRole("textbox");
+  expect(webBrowserFetch).toHaveBeenLastCalledWith("/web/v1/referrals", expect.anything());
+ });
+ it("keeps the cached code private to the session while rejecting malformed refreshed policy", async () => {
+  vi.mocked(webBrowserFetch).mockResolvedValueOnce(Response.json(enabledSummary)).mockResolvedValueOnce(Response.json({ ...enabledSummary, reward_policy: {} }));
+  const first = render(<ProfileReferralProgram accountId="account-a" />);
+  await screen.findByRole("textbox");
+  first.unmount();
+  render(<ProfileReferralProgram accountId="account-a" />);
+  await screen.findByRole("alert");
+  expect(screen.getByRole("textbox")).toHaveValue(`${window.location.origin}/ru/invite/INVITE1234`);
+  expect(screen.queryByRole("heading", { name: "Начисления" })).not.toBeInTheDocument();
+  expect(screen.queryByText(/Начисляем 50/)).not.toBeInTheDocument();
+ });
  it("keeps preview free of real requests, links and invented counts", () => {
   render(<ProfileReferralProgram accountId="account-a" preview />);
   expect(webBrowserFetch).not.toHaveBeenCalled();
   expect(screen.queryByRole("textbox")).not.toBeInTheDocument();
-  expect(screen.getByText("Статистика доступна после входа в настоящий аккаунт.")).toBeInTheDocument();
+  expect(screen.getByText(/Локальное превью:.*Статистика доступна после входа в настоящий аккаунт/)).toBeInTheDocument();
+  expect(screen.queryByRole("heading", { name: "Начисления" })).not.toBeInTheDocument();
  });
  it("removes previous counters on refresh failure while preserving the cached link", async () => {
   vi.mocked(webBrowserFetch).mockResolvedValueOnce(Response.json(summary)).mockResolvedValueOnce(new Response(null, { status: 503 }));

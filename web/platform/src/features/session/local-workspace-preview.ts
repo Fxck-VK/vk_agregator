@@ -17,6 +17,7 @@ import type {
 
 export const localWorkspacePreviewProfile: AccountProfile = {
   account_id: "10000000-0000-4000-8000-000000000001",
+  public_id: "EP-000123",
   identity_refs: [
     {
       id: "10000000-0000-4000-8000-000000000002",

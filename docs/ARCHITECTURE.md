@@ -22,6 +22,14 @@ six-digit verification and reset-link navigation without credentials or PII in
 history/localStorage. The selected left-media/right-form layout replaces the
 old page and its presentation-specific code.
 
+Homepage entry (2026-10-31): the public root uses a bounded no-store verified
+profile read before a temporary localized workspace redirect. Cookies are only
+lookup hints; absent/rejected/unavailable identity retains the guest landing.
+An invisible client helper reuses serialized CSRF-protected session recovery,
+then refreshes the server tree for a fresh profile check. Root responses are
+private/no-store; other public routes and the local design preview stay public.
+See web/platform/docs/locale-routing.md. Local implementation, not deployment.
+
 Browser receipts use a dedicated ACCOUNT_BROWSER_AUTH_SECRET of at least 32
 bytes when SMTP is enabled. Deployment preserves it in a private adjacent
 <env-file>.browser-auth sidecar and reinjects it after every env upload. The
@@ -46,6 +54,13 @@ billing, provider or deployment boundary moves into the frontend. See
 [browser authentication contract](ACCOUNT_IDENTITY_CONTRACT.md#canonical-browser-authentication).
 The implementation remains local; real mail/OAuth and live PostgreSQL evidence
 are separate from unit/mock validation and have not been established by this work.
+
+Permanent support IDs are database-owned account metadata. Migration000065
+backfills a unique positive BIGINT identity; a trigger and irreversible rollback
+preserve its mapping. AccountService formats EP-000123 in the authenticated
+profile; the guarded operator lookup resolves it without requiring a legacy VK
+user. UUID ownership, login verification and billing remain unchanged. See
+[public account identity contract](ACCOUNT_IDENTITY_CONTRACT.md#permanent-public-account-id).
 
 Release admission uses the same source-contract and deployment regression runner
 in local preflight and CI. Source inventories, signed image identities and
@@ -94,7 +109,7 @@ Website invitations use webreferralservice and canonical account-owned codes,
 without creating legacy VK users. Hashed browser intents expire after 30 days;
 acceptance locks the intent/account and records eligible new accounts once.
 The website reports real visit and registration counters, while website
-activation/reward hooks stay disabled pending product rules. Legacy VK
+activation/reward hooks use the approved first-payment policy v1 (see the local implementation section below). Legacy VK
 activation excludes website relations. Google login/linking is disabled by
 default with adapters/bindings retained; disabled providers cannot justify
 removing the last usable login. See [website invitations](runbooks/WEB_REFERRALS.md).
@@ -3523,3 +3538,18 @@ docs/runbooks/BILLING.md#local-test-shop-verification-2026-10-29.
 ## Public template content catalogue (2026-10-29)
 
 All 24 public template types use the existing components through `web/platform/src/content/templates/render.tsx`. Reviewed Russian JSON records own canonical paths, metadata, publication and named immutable template sources; explicit bindings reach child components without DOM rewriting or a browser-wide content catalogue. New records resolve through the existing catch-all before the original safe 404. Course lessons and help articles derive child routes from their parent data. Billing and legal adapters retain their authoritative runtime catalogues, and editor data cannot override them. The build admission validates data, media and route ownership. Published/index records feed sitemap automatically, with URL-count/size sharding for large inventories. No provider, auth, ledger or private artifact boundary changes. See `web/platform/docs/public-content-authoring.md`.
+
+
+## Website referral first-payment rewards (2026-10-31)
+
+Account-native source=web rewards use provider-verified immutable evidence, not client metadata. Policy v1 grants 50 permanent bonus stars to the inviter 24 hours after each invited account first pays; test/mock and historical settlements do not qualify. Any successful partial/full refund cancels or reverses all 50 with append-only ledger attribution, preserving held allocations and recording spent/held debt without touching purchased/subscription lot provenance. One reward per invitee; deterministic keys and canonical wallet-lock order make parallel maintenance safe. Payment settlement commits proof atomically; refund proof commits before the separate principal-refund path. Provider-webhook minute maintenance and worker cleanup call one bounded PostgreSQL processor. Summary API exposes policy and no-PII counters. Apply migration 000066 before new writers; code rollback retains proof and schema. Details: docs/runbooks/WEB_REFERRALS.md. Local implementation is not a DEV deployment.
+
+
+## Account purchase and star history (2026-10-31)
+
+GET /web/v1/billing/history is an account-native no-store read projection over ledger movements, stored payment orders and authenticated refund facts. Cookie principal ownership applies to every SQL branch and related-object join; there is no legacy user fallback. Owner-bound versioned keyset cursors use immutable created_at/source/UUID. Payment credits appear once and only when committed; pending holds and zero releases are not final debits. Historical denominations convert through the domain function; prices come from stored orders. Verified successful refund evidence supersedes stale manual status/amount while money refunds and ledger star corrections remain separate facts. DTOs omit raw metadata/reasons/keys, provider IDs, contacts and task contents. The profile keeps only account-keyed component memory, cancels/discards obsolete session reads, preserves rows on pagination errors and labels local preview explicitly. This path performs no financial mutation or provider call and adds no migration; existing schema through 000066 is required. See docs/runbooks/WEB_ACCOUNT_HISTORY.md. Local implementation is not a DEV rollout.
+
+
+## First-tariff promotions
+
+Promotion configuration and revisioned first-purchase policy belong to internal/service/promotionservice. PostgreSQL migration067 adds campaign/configuration, reserved/consumed usage and durable audited mutation records. Account locks precede promotion locks; a payment-insert guard covers account and legacy writers. Existing payment transactions freeze the charged amount while retaining full plan and regular renewal snapshots; verified settlement consumes the promotion atomically with the star grant. Refunds preserve consumption and first-purchase history. The website quote is account/session scoped and never a billing authority. Protected admin UI and assistant HTTP CLI use the same permission/idempotency/audit boundary, never direct SQL. See docs/runbooks/BILLING.md and docs/OPERATOR_UI.md.

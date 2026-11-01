@@ -113,6 +113,8 @@ func (h *Handler) createWebSubscription(w http.ResponseWriter, r *http.Request) 
 		return
 	}
 	var req struct {
+		PromoCode          string `json:"promo_code"`
+		PromoRevision      int64  `json:"promo_revision"`
 		PlanCode           string `json:"plan_code"`
 		AutoRenew          bool   `json:"auto_renew"`
 		RetryPolicyVersion int    `json:"retry_policy_version"`
@@ -144,7 +146,7 @@ func (h *Handler) createWebSubscription(w http.ResponseWriter, r *http.Request) 
 		}
 		return
 	}
-	result, err := h.deps.Subscriptions.CreateSubscription(r.Context(), paymentservice.CreateSubscriptionInput{AccountID: owner.AccountID, PlanCode: req.PlanCode, AutoRenew: req.AutoRenew, RetryPolicyVersion: req.RetryPolicyVersion, ReceiptEmail: email, IdempotencyKey: "web-subscription:" + owner.AccountID.String() + ":" + key.String()})
+	result, err := h.deps.Subscriptions.CreateSubscription(r.Context(), paymentservice.CreateSubscriptionInput{PromoCode: req.PromoCode, PromoRevision: req.PromoRevision, AccountID: owner.AccountID, PlanCode: req.PlanCode, AutoRenew: req.AutoRenew, RetryPolicyVersion: req.RetryPolicyVersion, ReceiptEmail: email, IdempotencyKey: "web-subscription:" + owner.AccountID.String() + ":" + key.String()})
 	if err != nil {
 		if errors.Is(err, domain.ErrConflict) || errors.Is(err, paymentservice.ErrTrialAlreadyUsed) {
 			writeError(w, 409, "subscription purchase conflicts with current state")

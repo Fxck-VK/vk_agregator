@@ -86,7 +86,7 @@ describe("assetPaths", () => {
 
   it("exposes the workspace how-to video URL", () => {
     expect(assetPaths.videos.workspace.howItWorks).toBe(
-      "/assets/videos/workspace/neirohub-how-it-works.mp4",
+      "/assets/videos/workspace/epifera-v14-centered-mono-ru.mp4",
     );
   });
 
