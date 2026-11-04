@@ -23,6 +23,11 @@ function matrix(source, expected, label) {
 export function validateReleaseContract(read, dockerfiles) {
   const services = inventory(dockerfiles.map(p => p.replace(/^Dockerfile\./, '')));
   assert(services.length > 0, 'Release image inventory is empty');
+  for (const path of ['Dockerfile.api', 'Dockerfile.worker']) {
+    const runtimeStage = read(path).split(/^FROM\s+/m).at(-1);
+    assert.match(runtimeStage, /^RUN apk add --no-cache [^\r\n]*'libexpat>=2\.10\.0-r0'/m,
+      `${path} must install patched libexpat in its final runtime stage`);
+  }
   const images = read('.github/workflows/docker-images.yml');
   const names = [...images.matchAll(/^name: (.+)\r?$/gm)];
   assert.equal(names.length, 1, 'Exactly one literal workflow name is required');

@@ -5,13 +5,14 @@ import { resolve } from 'node:path';
 import { validateReleaseContract } from './check-release-contract.mjs';
 
 const root = resolve(import.meta.dirname, '../..');
+const dockerfiles = readdirSync(root).filter(p => p.startsWith('Dockerfile.'));
 const files = new Map([
   '.github/workflows/ci.yml', '.github/workflows/docker-images.yml',
   '.github/workflows/deploy-dev.yml', '.github/workflows/nightly-quality.yml',
   'scripts/deploy/verify-release-images.sh', 'docker-compose.prod.yml', 'docker-compose.dev-web.yml',
   'scripts/ci/dev-deploy-preflight.ps1',
+  ...dockerfiles,
 ].map(p => [p, readFileSync(resolve(root, p), 'utf8')]));
-const dockerfiles = readdirSync(root).filter(p => p.startsWith('Dockerfile.'));
 const check = (changes = {}) => validateReleaseContract(p => changes[p] ?? files.get(p), dockerfiles);
 function rejects(path, before, after, message) {
   assert(files.get(path).includes(before), 'mutation must change actual source');
@@ -19,6 +20,17 @@ function rejects(path, before, after, message) {
 }
 test('current source agrees across publication, verifier, Compose and DEV', () => {
   assert.equal(check().services.length, 7);
+});
+
+test('media runtime images reject vulnerable or missing libexpat floors', () => {
+  for (const path of ['Dockerfile.api', 'Dockerfile.worker']) {
+    const source = files.get(path);
+    const floor = /'libexpat>=[^']+'/;
+    assert.match(source, floor, 'mutation must target the installed package floor');
+    for (const replacement of ["'libexpat>=2.9.0-r0'", '']) {
+      assert.throws(() => check({ [path]: source.replace(floor, replacement) }), /patched libexpat/);
+    }
+  }
 });
 
 test('each web checks stage must bootstrap its own lockfile-scoped dependencies', () => {
