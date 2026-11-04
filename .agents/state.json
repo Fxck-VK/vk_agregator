@@ -1,7 +1,7 @@
 {
   "schema_version": 5,
-  "updated_at": "2026-10-31T17:57:05.807Z",
-  "branch": "codex/vk-profile-name",
+  "updated_at": "2026-11-04T11:36:45Z",
+  "branch": "codex/home-suite-copy",
   "remote_tracking": "origin/dev-deploy",
   "purpose": "Short machine-readable current context and routing for agents. This file is not project history.",
   "read_policy": {
@@ -57,7 +57,7 @@
   },
   "current_context": {
     "active_branch_role": "dev-deploy is the integration/deployment branch; synchronize fastlife_dev after tested merges. Production remains main-only.",
-    "worktree": "Single active development checkout: C:/Users/Lenovo/Documents/агрегатор/epifera-domain-cutover. All preserved UI/brand/model-icon and current backend/auth changes are integrated here; other working directories are inactive history.",
+    "worktree": "Single active development checkout: D:/vk_agregator. All preserved UI/brand/model-icon and current backend/auth changes are integrated here; other working directories are inactive history.",
     "responsive_qa": "Layout changes require affected-page browser checks at 360/390/768/1024/1440/1920/2560/3840 CSS px; QHD 2560x1440 and UHD 3840x2160. Follow web/platform/AGENTS.md#mandatory-responsive-layout-verification. Local audit 2026-10-29 completed: 24 Russian template instances x8=192 cases plus lesson/help article/legal document x8=24; full-scroll pass for24 and representative open panels. Fixed ReferenceChrome search flex overflow at768, mobile tattoo breadcrumb wrapping and fractional-edge horizontal ScrollArea wheel trap.102 focused tests, types, targeted lint and diff check pass. Evidence: .cache/responsive-qa/2026-10-29-all-templates/report.html and summary.json. Chromium CSS-viewport emulation at100%, not physical-device/cross-browser coverage; future content changes require recheck. No push/deploy.",
     "dev_contour": "DEV uses separate secrets, VPS, tunnel, VK group and payment configuration.",
     "prod_contour": "main deploys through GitHub Actions and immutable GHCR images with mandatory smoke.",
@@ -192,7 +192,7 @@
     ]
   },
   "local_development": {
-    "workspace": "C:/Users/Lenovo/Documents/агрегатор/epifera-domain-cutover",
+    "workspace": "D:/vk_agregator",
     "url": "http://localhost:7159",
     "start": "npm --prefix web/platform run dev:preview",
     "policy": "Reuse this checkout/server. No alternate local copies, worktrees or preview ports without explicit user request."

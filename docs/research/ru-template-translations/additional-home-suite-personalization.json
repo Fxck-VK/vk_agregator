@@ -1,0 +1,67 @@
+[
+  {
+    "source": "Bring your ideas to life in Epifera",
+    "ru": "Воплощайте свои идеи в Epifera",
+    "back": "Bring your ideas to life in Epifera"
+  },
+  {
+    "source": "Images, video, music, voice and text — choose where to start.",
+    "ru": "Изображения, видео, музыка, голос и текст — выберите, с чего начать.",
+    "back": "Images, video, music, voice and text — choose where to start."
+  },
+  {
+    "source": "From your first request to your own work",
+    "ru": "От первого запроса до вашей работы",
+    "back": "From your first prompt to your work"
+  },
+  {
+    "source": "Discuss an idea with an AI model, create an image or compose music. In Epifera, you choose a model and settings for your task, see the cost before starting and find completed results in your account.",
+    "ru": "Обсудите идею с нейросетью, создайте изображение или напишите музыку. В Epifera вы выбираете модель и настройки под свою задачу, видите стоимость перед запуском и находите готовые результаты в своём аккаунте.",
+    "back": "Discuss an idea with AI, create an image or write music. In Epifera, you choose the model and settings for your task, see the cost before starting and find the finished results in your account."
+  },
+  {
+    "source": "Describe what you want to see or add a reference image. Choose an AI model and generation settings. Completed images appear in My files.",
+    "ru": "Опишите, что хотите увидеть, или добавьте изображение-референс. Выберите нейросеть и параметры генерации. Готовые изображения появятся в разделе «Мои файлы».",
+    "back": "Describe what you want to see or add a reference image. Choose an AI model and generation settings. The finished images will appear in My files."
+  },
+  {
+    "source": "Turn a description or an image into a video scene. Choose a video model, adjust the available settings and start generation.",
+    "ru": "Превратите описание или изображение в видеосцену. Выберите видеомодель, настройте доступные параметры и запустите генерацию.",
+    "back": "Turn a description or an image into a video scene. Choose a video model, adjust the available settings and start generating."
+  },
+  {
+    "source": "Create music from your description. Set the mood and style of your track, then listen to and download the finished result directly in Epifera.",
+    "ru": "Создавайте музыку по своему описанию. Задайте настроение и стиль будущего трека, а готовый результат слушайте и скачивайте прямо в Epifera.",
+    "back": "Create music from your own description. Set the mood and style of your future track, then listen to and download the finished result directly in Epifera."
+  },
+  {
+    "source": "Write and edit texts, ask questions and develop ideas in a chat with an AI model. Your conversation history is saved so you can return and continue.",
+    "ru": "Пишите и редактируйте тексты, задавайте вопросы и развивайте идеи в чате с нейросетью. История беседы сохраняется — можно вернуться к разговору и продолжить.",
+    "back": "Write and edit texts, ask questions and develop ideas in a chat with AI. Your conversation history is saved, so you can return to the conversation and continue."
+  },
+  {
+    "source": "Look through examples, explore prompts and find ideas for your work. Start with a scene or style you like and try your own version.",
+    "ru": "Смотрите примеры, изучайте промпты и находите идеи для своей работы. Возьмите за основу понравившийся сюжет или стиль и попробуйте свой вариант.",
+    "back": "View examples, explore prompts and find ideas for your work. Use a scene or style you like as a starting point and try your own version."
+  },
+  {
+    "source": "Choose a video model",
+    "ru": "Выбрать видеомодель",
+    "back": "Choose a video model"
+  },
+  {
+    "source": "Create music",
+    "ru": "Создать музыку",
+    "back": "Create music"
+  },
+  {
+    "source": "Open chat",
+    "ru": "Открыть чат",
+    "back": "Open chat"
+  },
+  {
+    "source": "See examples",
+    "ru": "Смотреть примеры",
+    "back": "View examples"
+  }
+]

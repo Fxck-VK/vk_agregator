@@ -5,7 +5,7 @@ Read this first. Keep context small and current.
 ## Single Active Local Workspace
 
 The user requires one active development checkout and one local website.
-Use `C:/Users/Lenovo/Documents/агрегатор/epifera-domain-cutover` and
+Use `D:/vk_agregator` and
 `http://localhost:7159` for all ordinary project work. Reuse the existing server;
 start with `npm --prefix web/platform run dev:preview` when it is stopped.
 Do not create/switch worktrees, develop in older copies, or start an alternate
