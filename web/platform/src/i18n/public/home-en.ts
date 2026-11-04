@@ -1,4 +1,5 @@
 import { brandName } from "@/config/brand";
+import { homePresentationEn } from "./home-media-en";
 
 // Editorial source for the Russian homepage and its reviewed translation catalog.
 export const homeEn = {
@@ -17,7 +18,7 @@ export const homeEn = {
   ],
   login: "Log in", signup: "Sign up",
   hero: { eyebrow: "Your creative tools, all together", title: "The creative platform to direct your best work", description: "AI models for video, image, and audio. Explore ideas, shape your visual world, and move from your first prompt to a result worth sharing.", modelCaption: "Find your creative flow with leading AI model families", capabilities: ["Generate images", "Bring ideas to life", "Create your own music", "Tell your story", "Explore new worlds", "Find the right words"], partners: ["Google", "OpenAI", "FLUX", "KLING", "Suno", "elevenlabs"] },
-  suite: { title: `Bring your ideas to life in ${brandName}`, description: "Images, video, music, voice and text — choose where to start.", tabsLabel: "Explore the platform", tabs: ["Creative Suite", "Workspace", "MCP & API", "Agents", "Plugins", "Inspiration"],
+  suite: { title: homePresentationEn.suiteTitle, description: homePresentationEn.suiteDescription, tabsLabel: "Explore the platform", tabs: ["Creative Suite", "Workspace", "MCP & API", "Agents", "Plugins", "Inspiration"],
     heading: "From your first request to your own work", intro: `Discuss an idea with an AI model, create an image or compose music. In ${brandName}, you choose a model and settings for your task, see the cost before starting and find completed results in your account.`, tour: "Take a tour", categoriesLabel: "Creative Suite tools",
     categories: [
       { name: "Image", icon: "image", description: "Describe what you want to see or add a reference image. Choose an AI model and generation settings. Completed images appear in My files.", href: "/app/image", image: "product-shots.webp", video: "creative-suite-image.webm" },

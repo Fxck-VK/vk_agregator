@@ -28,7 +28,7 @@ export function HomeSuite({ copy, onTour }: { copy: HomeEnglishCopy; onTour: () 
   const selected = copy.suite.categories[category];
   const other = platform > 0 ? copy.suite.platforms[platform - 1] : null;
   const categoryKey = selected.icon as keyof typeof presentation.categoryHeadings;
-  return <LandingSection id="creative-suite" title={presentation.suiteTitle} description={presentation.suiteDescription} className={styles.suiteSection} align="start">
+  return <LandingSection id="creative-suite" title={copy.suite.title} description={copy.suite.description} className={styles.suiteSection} align="start">
     <div className={styles.platformTabs} role="tablist" aria-label={copy.suite.tabsLabel}>
       {copy.suite.tabs.map((label, index) => <button key={label} ref={node => { tabs.current[index] = node; }} type="button" role="tab" id={`${id}-platform-${index}`} aria-controls={`${id}-platform-panel`} aria-selected={platform === index} tabIndex={platform === index ? 0 : -1} onClick={() => setPlatform(index)} onKeyDown={event => { const next = keyboardTab(event, index, copy.suite.tabs.length); if (next !== null) { setPlatform(next); tabs.current[next]?.focus(); } }}>{label}</button>)}
     </div>

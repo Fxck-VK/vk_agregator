@@ -1,7 +1,7 @@
 import { fireEvent, render, screen, within } from "@testing-library/react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { LocaleProvider } from "@/i18n/LocaleProvider";
-import { homeEn } from "@/i18n/public/home-en";
+import { homeEn, type HomeEnglishCopy } from "@/i18n/public/home-en";
 import { PublicHome } from "./PublicHome";
 
 vi.mock("next/navigation", () => ({ useRouter: vi.fn() }));
@@ -14,6 +14,13 @@ function home() { render(<LocaleProvider locale="en"><PublicHome copy={homeEn} /
 beforeEach(() => { vi.spyOn(HTMLMediaElement.prototype, "pause").mockImplementation(() => undefined); });
 
 describe("rebuilt English public home", () => {
+  it("honors editable suite title and description from the page content", () => {
+    const copy = { ...homeEn, suite: { ...homeEn.suite, title: "Edited suite title", description: "Edited suite description" } } as unknown as HomeEnglishCopy;
+    render(<LocaleProvider locale="en"><PublicHome copy={copy} /></LocaleProvider>);
+    expect(screen.getByRole("heading", { name: "Edited suite title" })).toBeVisible();
+    expect(screen.getByText("Edited suite description")).toBeVisible();
+  });
+
   it("shows visible image briefs instead of loading reference-site photos or video", () => {
     home();
     expect(screen.getAllByText("Image prompt").length).toBeGreaterThan(10);
