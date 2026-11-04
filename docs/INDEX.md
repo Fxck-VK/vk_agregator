@@ -110,7 +110,7 @@ Read only the document that matches the current task:
 | Production deploy, domains, Cloudflare, VPS runtime | `docs/runbooks/DEPLOYMENT.md` |
 | Support mailbox, editable Roundcube theme, UI publication, SMTP/IMAP and certificates | [Support mail](../docs/runbooks/SUPPORT_MAIL.md); [design](superpowers/specs/2026-10-22-mail-ui-delivery-design.md); [plan](superpowers/plans/2026-10-22-mail-ui-delivery.md) |
 | Local DEV contour and DEV GitHub deploy | `docs/runbooks/DEV.md` |
-| English homepage rebuild after retiring the old home on both locales | [Active plan and verification](superpowers/plans/2026-10-24-english-home-rebuild.md); [UI contract](../web/platform/docs/ui-catalog.md#marketing-home). `/en` draft; `/ru` empty; both noindex. |
+| Russian homepage editorial refresh and visible image prompts | [Approved scope and implementation](superpowers/plans/2026-11-04-homepage-editorial-refresh.md); [UI contract](../web/platform/docs/ui-catalog.md#marketing-home). Existing section order, Russian-only, no backend changes. |
 | Registration legal notice | [Registration notice plan](superpowers/plans/2026-10-24-registration-legal-notice.md); [legal UI](../web/platform/docs/ui-catalog.md#legal-documents), [runtime](../docs/runbooks/WEB_LEGAL.md). Small notice on registration; no workspace or first-action consent gate. |
 | Cancel obsolete DEV image runs after mail-only pushes | [Implementation and verification](superpowers/plans/2026-10-22-cancel-superseded-dev-images.md) |
 | Remembered DEV gateway access, session expiry and rotation | [Operations](../docs/runbooks/DEV.md#remembered-browser-dev-access); [implementation plan](superpowers/plans/2026-09-29-dev-access-session.md) |

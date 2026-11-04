@@ -1,16 +1,13 @@
-import { render } from "@testing-library/react";
-import { afterEach, expect, it, vi } from "vitest";
-import { HomeLoop } from "./HomeMedia";
+import { render, screen } from "@testing-library/react";
+import { expect, it } from "vitest";
+import { LocaleProvider } from "@/i18n/LocaleProvider";
+import { homeMediaBriefsEn } from "@/i18n/public/home-media-en";
+import { HomeMediaPrompt } from "./HomeMedia";
 
-afterEach(() => vi.unstubAllGlobals());
-
-it("keeps decorative video paused when the visitor requests reduced motion", () => {
-  vi.stubGlobal("matchMedia", vi.fn((query: string) => ({
-    matches: query === "(prefers-reduced-motion: reduce)",
-    addEventListener: vi.fn(), removeEventListener: vi.fn(),
-  })));
-  const pause = vi.spyOn(HTMLMediaElement.prototype, "pause").mockImplementation(() => undefined);
-  const { container } = render(<HomeLoop file="creative-suite-image.webm" poster="product-shots.webp" paused={false} />);
-  expect(container.querySelector("video")).not.toHaveAttribute("autoplay");
-  expect(pause).toHaveBeenCalled();
+it("renders an accessible visible image brief without fetching a reference asset", () => {
+  const { container } = render(<LocaleProvider locale="en"><HomeMediaPrompt brief="suiteImage" /></LocaleProvider>);
+  expect(screen.getByRole("figure")).toHaveAccessibleName(/Image prompt/);
+  expect(screen.getByText(homeMediaBriefsEn.suiteImage.prompt)).toBeVisible();
+  expect(screen.getByText(`Format ${homeMediaBriefsEn.suiteImage.format}`)).toBeVisible();
+  expect(container.querySelector("img,video,source")).toBeNull();
 });
