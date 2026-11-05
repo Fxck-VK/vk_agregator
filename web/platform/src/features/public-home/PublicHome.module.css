@@ -180,15 +180,22 @@
 .mediaPrompt.mediaArtwork { position: relative; display: block; align-self: center; inline-size: 100%; min-block-size: 0; padding: 0; overflow: hidden; }
 .mediaArtwork > [data-ui="media-image"] { block-size: 100%; }
 .mediaPrompt.mediaArtwork .artworkCaption { position: absolute; inline-size: 1px; block-size: 1px; margin: -1px; padding: 0; overflow: hidden; clip-path: inset(50%); white-space: nowrap; }
-.mediaCapture { position: absolute; inset-inline-start: 6%; inset-block-start: 10%; display: block; inline-size: 88%; border: 1px solid #414650; border-radius: 5px; background: #0c1016; box-shadow: 0 12px 32px #17191d24; }
-.mediaCapture > [data-ui="media-image"] { block-size: 100%; }
-.mediaArtwork:is([data-brief="hero"], [data-brief="suiteImage"], [data-brief="platformWorkspace"]) .mediaCapture[data-kind="image"] { inset-inline-start: 5%; inset-block-start: 50%; inline-size: 64%; transform: translateY(-50%); }
-.mediaArtwork[data-brief="suiteText"] .mediaCapture[data-kind="text"] { inset-block-start: 10%; inline-size: 88%; }
-.mediaArtwork[data-brief="workflowTools"] .mediaCapture[data-kind="models"] { inset-block-start: 8%; inline-size: 55%; }
-.mediaArtwork:is([data-brief="workflowProcess"], [data-brief="workflowStart"]) .mediaCapture[data-kind="image"] { inset-block-start: 24%; inline-size: 88%; }
-.mediaArtwork[data-brief="workflowFiles"] .mediaCapture[data-kind="files"] { inset-inline-start: 5%; inset-block-start: 10%; inline-size: 90%; }
-.mediaArtwork[data-brief="overview"] .mediaCapture[data-kind="image"] { inset-inline-start: 4%; inset-block-start: 15%; inline-size: 76%; }
-.mediaArtwork[data-brief="overview"] .mediaCapture[data-kind="text"] { inset-inline-start: 36%; inset-block-start: 38%; inline-size: 60%; }
+.page .hero:has(.heroArtwork.mediaArtwork) { padding-block-start: 0; }
+.heroInner:has(.mediaArtwork) { isolation: isolate; position: relative; grid-template-columns: minmax(0, 1fr); min-block-size: max(680px, calc(100svh - 110px)); inline-size: 100%; padding: clamp(72px, 7vw, 144px) clamp(20px, 6vw, 160px); overflow: hidden; color: #fff; background: #14171c; }
+.heroInner:has(.mediaArtwork)::after { content: ""; position: absolute; z-index: 1; inset: 0; pointer-events: none; background: linear-gradient(90deg, #14171cee 0%, #14171cdd 33%, #14171c47 68%, #14171c14 100%); }
+.heroInner:has(.mediaArtwork) .heroCopy { position: relative; z-index: 2; inline-size: min(66%, 900px); }
+.heroInner:has(.mediaArtwork) :is(.eyebrow, .introButton) { color: #fff; }
+.heroInner:has(.mediaArtwork) .heroCopy > p { color: #f1f2f4; }
+.heroInner:has(.mediaArtwork) .heroActions a[data-tone] { background: #fff; color: #17191d; }
+.heroInner:has(.mediaArtwork) .heroActions a[data-tone]:hover { background: #eaeef3; }
+.heroInner:has(.mediaArtwork) .introButton { min-block-size: 54px; padding: 14px 20px; border: 1px solid #ffffff80; border-radius: 8px; }
+.heroInner .heroArtwork.mediaArtwork { position: absolute; z-index: 0; inset: 0; block-size: 100%; min-block-size: 0; border: 0; border-radius: 0; background: #14171c; }
+@media (width < 48rem) {
+  .heroInner:has(.mediaArtwork) { min-block-size: max(740px, calc(100svh - 102px)); padding: 56px 20px; }
+  .heroInner:has(.mediaArtwork)::after { background: linear-gradient(90deg, #14171ce6, #14171cb3); }
+  .heroInner:has(.mediaArtwork) .heroCopy { inline-size: 100%; }
+  .heroInner .heroArtwork.mediaArtwork img { object-position: 68% center; }
+}
 
 /* Homepage reading scale; shared landing components retain their own defaults. */
 .page main [data-align] > div > p { max-inline-size: 760px; font-size: var(--home-body); line-height: 1.6; }

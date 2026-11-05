@@ -26,13 +26,7 @@ export function HomeMediaPrompt({ brief, className = "" }: { brief: HomeMediaBri
       <figcaption id={captionId} className={styles.artworkCaption}>{content.title}</figcaption>
       <MediaImage src={artwork.src} alt={content.title} width={artwork.width} height={artwork.height}
         srcSet={artwork.srcSet} sizes={artwork.sizes}
-        fit="contain" passive loading={loading} fetchPriority={brief === "hero" ? "high" : "auto"} />
-      {artwork.captures?.map(capture => <span key={`${capture.kind}:${capture.src}`}
-        className={styles.mediaCapture} data-kind={capture.kind}
-        style={{ aspectRatio: `${capture.width} / ${capture.height}` }}>
-        <MediaImage src={capture.src} alt="" width={capture.width} height={capture.height}
-          fit="contain" passive loading={loading} />
-      </span>)}
+        fit={brief === "hero" ? "cover" : "contain"} passive loading={loading} fetchPriority={brief === "hero" ? "high" : "auto"} />
     </figure>;
   }
   return <figure className={`${styles.mediaPrompt} ${className}`} data-media-brief={brief} aria-labelledby={captionId}>
