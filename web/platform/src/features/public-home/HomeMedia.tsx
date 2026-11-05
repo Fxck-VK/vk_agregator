@@ -1,8 +1,10 @@
 "use client";
 
 import { useId, useSyncExternalStore } from "react";
+import { MediaImage } from "@/components/media/MediaImage/MediaImage";
 import { homeMediaBriefsEn, homePresentationEn, type HomeMediaBriefKey } from "@/i18n/public/home-media-en";
 import { usePublicCopy } from "@/i18n/public/use-public-copy";
+import { homeMediaAssets } from "./HomeMedia.assets";
 import styles from "./PublicHome.module.css";
 
 const reducedQuery = "(prefers-reduced-motion: reduce)";
@@ -13,6 +15,26 @@ export function HomeMediaPrompt({ brief, className = "" }: { brief: HomeMediaBri
   const content = usePublicCopy(homeMediaBriefsEn[brief]);
   const labels = usePublicCopy(homePresentationEn);
   const captionId = useId();
+  const artwork = homeMediaAssets[brief];
+  if (artwork) {
+    const loading = brief === "hero" ? "eager" : "lazy";
+    return <figure
+      className={`${styles.mediaPrompt} ${styles.mediaArtwork} ${className}`}
+      data-media-brief={brief} data-brief={brief} aria-labelledby={captionId}
+      style={{ aspectRatio: `${artwork.width} / ${artwork.height}` }}
+    >
+      <figcaption id={captionId} className={styles.artworkCaption}>{content.title}</figcaption>
+      <MediaImage src={artwork.src} alt={content.title} width={artwork.width} height={artwork.height}
+        srcSet={artwork.srcSet} sizes={artwork.sizes}
+        fit="contain" passive loading={loading} fetchPriority={brief === "hero" ? "high" : "auto"} />
+      {artwork.captures?.map(capture => <span key={`${capture.kind}:${capture.src}`}
+        className={styles.mediaCapture} data-kind={capture.kind}
+        style={{ aspectRatio: `${capture.width} / ${capture.height}` }}>
+        <MediaImage src={capture.src} alt="" width={capture.width} height={capture.height}
+          fit="contain" passive loading={loading} />
+      </span>)}
+    </figure>;
+  }
   return <figure className={`${styles.mediaPrompt} ${className}`} data-media-brief={brief} aria-labelledby={captionId}>
     <figcaption id={captionId}><span className={styles.promptLabel}>{labels.promptLabel}</span><strong className={styles.promptTitle}>{content.title}</strong></figcaption>
     <p>{content.prompt}</p><span className={styles.promptFormat}>{labels.formatLabel} {content.format}</span>

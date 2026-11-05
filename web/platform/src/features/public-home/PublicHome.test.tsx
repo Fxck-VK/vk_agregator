@@ -2,6 +2,7 @@ import { fireEvent, render, screen, within } from "@testing-library/react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { LocaleProvider } from "@/i18n/LocaleProvider";
 import { homeEn, type HomeEnglishCopy } from "@/i18n/public/home-en";
+import { homeMediaBriefsEn } from "@/i18n/public/home-media-en";
 import { PublicHome } from "./PublicHome";
 
 vi.mock("next/navigation", () => ({ useRouter: vi.fn() }));
@@ -21,9 +22,12 @@ describe("rebuilt English public home", () => {
     expect(screen.getByText("Edited suite description")).toBeVisible();
   });
 
-  it("shows visible image briefs instead of loading reference-site photos or video", () => {
+  it("shows Epifera artwork and the skin-detail portrait without reference-site media", () => {
     home();
-    expect(screen.getAllByText("Image prompt").length).toBeGreaterThan(10);
+    expect(screen.queryByText("Image prompt")).not.toBeInTheDocument();
+    expect(screen.getByRole("img", { name: homeMediaBriefsEn.hero.title })).toHaveAttribute("src", "/assets/images/home/hero.webp");
+    expect(screen.getByRole("heading", { name: homeEn.originals.slides[1].title })).toBeVisible();
+    expect(screen.getByRole("img", { name: homeMediaBriefsEn.originalPortrait.title })).toHaveAttribute("src", "/assets/images/home/original-portrait.webp");
     expect(document.querySelector('img[src*="/assets/images/marketing/"]')).toBeNull();
     expect(document.querySelector("video")).toBeNull();
   });

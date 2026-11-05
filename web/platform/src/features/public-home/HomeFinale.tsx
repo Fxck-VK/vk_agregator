@@ -10,7 +10,7 @@ import styles from "./PublicHome.module.css";
 const originalBriefs: readonly HomeMediaBriefKey[] = ["originalWorld", "originalPortrait", "originalMotion"];
 
 export function HomeOriginals({ copy }: { copy: HomeEnglishCopy }) {
-  const [selected, setSelected] = useState(0);
+  const [selected, setSelected] = useState(1);
   const slide = copy.originals.slides[selected];
   const move = (direction: number) => setSelected((selected + direction + copy.originals.slides.length) % copy.originals.slides.length);
   return <LandingSection id="originals" title={copy.originals.title} description={copy.originals.description} align="start" action={<LandingLink href="/app/inspiration">{copy.originals.action}<LandingArrow /></LandingLink>}>
