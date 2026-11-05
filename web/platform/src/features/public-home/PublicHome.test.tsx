@@ -22,12 +22,16 @@ describe("rebuilt English public home", () => {
     expect(screen.getByText("Edited suite description")).toBeVisible();
   });
 
-  it("shows Epifera artwork and the skin-detail portrait without reference-site media", () => {
+  it("shows the cinematic Epifera scene instead of the rejected portrait", () => {
     home();
     expect(screen.queryByText("Image prompt")).not.toBeInTheDocument();
     expect(screen.getByRole("img", { name: homeMediaBriefsEn.hero.title })).toHaveAttribute("src", "/assets/images/home/hero.webp");
     expect(screen.getByRole("heading", { name: homeEn.originals.slides[1].title })).toBeVisible();
-    expect(screen.getByRole("img", { name: homeMediaBriefsEn.originalPortrait.title })).toHaveAttribute("src", "/assets/images/home/original-portrait.webp");
+    expect(screen.getByRole("img", { name: homeMediaBriefsEn.suiteVideo.title })).toHaveAttribute("src", "/assets/images/home/suite-video.webp");
+    for (const slide of [1, 3, 2]) {
+      fireEvent.click(screen.getByRole("button", { name: `Go to slide ${slide}` }));
+      expect(document.querySelector('img[src*="original-portrait"]')).toBeNull();
+    }
     expect(document.querySelector('img[src*="/assets/images/marketing/"]')).toBeNull();
     expect(document.querySelector("video")).toBeNull();
   });

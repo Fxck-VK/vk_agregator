@@ -7,7 +7,7 @@ import type { HomeEnglishCopy } from "@/i18n/public/home-en";
 import { HomeMediaPrompt } from "./HomeMedia";
 import type { HomeMediaBriefKey } from "@/i18n/public/home-media-en";
 import styles from "./PublicHome.module.css";
-const originalBriefs: readonly HomeMediaBriefKey[] = ["originalWorld", "originalPortrait", "originalMotion"];
+const originalBriefs: readonly HomeMediaBriefKey[] = ["originalWorld", "suiteVideo", "originalMotion"];
 
 export function HomeOriginals({ copy }: { copy: HomeEnglishCopy }) {
   const [selected, setSelected] = useState(1);

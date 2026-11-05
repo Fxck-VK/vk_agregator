@@ -11,7 +11,7 @@ import Link from "@/i18n/Link";
 import type { HomeEnglishCopy } from "@/i18n/public/home-en";
 import styles from "./PublicHome.module.css";
 
-export function HomeSearch({ copy, onClose }: { copy: HomeEnglishCopy; onClose: () => void }) {
+export function HomeSearch({ copy, onClose, className }: { copy: HomeEnglishCopy; onClose: () => void; className?: string }) {
   const [query, setQuery] = useState("");
   const [models, setModels] = useState<readonly { id: string; name: string }[]>([]);
   const [status, setStatus] = useState<"loading" | "ready" | "error">("loading");
@@ -25,7 +25,7 @@ export function HomeSearch({ copy, onClose }: { copy: HomeEnglishCopy; onClose: 
   const tools = searchModels(copy.tools.items.map(item => ({ ...item, id: item.title, name: item.title })), query);
   const found = searchModels(models, query);
   const resultLinks = () => Array.from(results.current?.querySelectorAll<HTMLAnchorElement>("a[href]") ?? []);
-  return <LandingDialog title={copy.controls.search} closeLabel={copy.controls.close} onClose={onClose}>
+  const content = <>
     <div className={styles.searchField}><svg aria-hidden="true" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5"><circle cx="10" cy="10" r="6.5" /><path d="m15 15 6 6" /></svg><input ref={input} type="search" aria-label={copy.controls.searchPlaceholder} placeholder={copy.controls.searchPlaceholder} value={query} onChange={event => setQuery(event.target.value)} onKeyDown={event => { if (event.key === "ArrowDown") { event.preventDefault(); resultLinks()[0]?.focus(); } }} /></div>
     <p className={styles.searchHint}>{copy.controls.searchHint}</p>
     <div className={styles.searchResults} ref={results} onKeyDown={event => { const links = resultLinks(); const index = links.indexOf(document.activeElement as HTMLAnchorElement); if (event.key === "ArrowDown") { event.preventDefault(); links[(index + 1) % links.length]?.focus(); } else if (event.key === "ArrowUp") { event.preventDefault(); if (index <= 0) input.current?.focus(); else links[index - 1]?.focus(); } }}>
@@ -35,5 +35,8 @@ export function HomeSearch({ copy, onClose }: { copy: HomeEnglishCopy; onClose: 
       {found.length ? <><h3>{copy.controls.modelResults}</h3>{found.map(model => <Link key={model.id} href={`/app?model=${encodeURIComponent(model.id)}`}><ModelIcon src={modelIconRegistry[model.id]} className={styles.searchModelIcon} /><span>{model.name}</span><LandingArrow /></Link>)}</> : null}
       {status === "ready" && !tools.length && !found.length ? <p role="status">{copy.controls.noResults}</p> : null}
     </div>
+  </>;
+  return <LandingDialog title={copy.controls.search} closeLabel={copy.controls.close} onClose={onClose}>
+    {className ? <div className={className}>{content}</div> : content}
   </LandingDialog>;
 }

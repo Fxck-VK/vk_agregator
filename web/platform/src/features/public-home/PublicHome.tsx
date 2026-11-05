@@ -28,7 +28,7 @@ export function PublicHome({ copy }: { copy: HomeEnglishCopy }) {
       <HomeSuite copy={copy} onTour={openIntro} /><HomeModels copy={copy} paused={paused} /><HomeWorkflow copy={copy} /><HomeTools copy={copy} /><HomePossibilities copy={copy} /><HomeOriginals copy={copy} /><HomeTeams copy={copy} /><HomePlans copy={copy} /><HomeQuestions copy={copy} /><HomeClosing copy={copy} />
     </main>
     <LandingFooter {...copy.footer} />
-    {dialog === "search" ? <HomeSearch copy={copy} onClose={() => setDialog(null)} /> : null}
+    {dialog === "search" ? <HomeSearch copy={copy} onClose={() => setDialog(null)} className={styles.searchReadingScale} /> : null}
     {dialog === "intro" ? <LandingDialog title={copy.why} closeLabel={copy.controls.close} onClose={() => setDialog(null)} wide><HomeMediaPrompt brief="overview" /><p className={styles.introCaption}>{copy.suite.intro}</p><LandingLink href="/app">{copy.start}<LandingArrow /></LandingLink></LandingDialog> : null}
   </div>;
 }
