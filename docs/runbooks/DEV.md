@@ -533,6 +533,12 @@ The October 21 security baseline uses Go 1.26.10 and `golang.org/x/net` v0.60.0.
 All Go build images use the same pinned Go release and immutable digest.
 See the [Go release history](https://go.dev/doc/devel/release#go1.26.10).
 
+All seven runtime Dockerfiles explicitly install `zlib>=1.3.2-r1` for
+[CVE-2026-85091](https://security.alpinelinux.org/vuln/CVE-2026-85091).
+The early infrastructure policy checks that the final stage's `apk add`
+instruction retains this floor. Existing pinned base digests, OpenSSL floors,
+immutable image vulnerability scans, signatures and provenance remain required.
+
 It starts with the mandatory `source-fast` gate, using the reviewed inventory's
 baseline. It then runs the shared release contract (the same entrypoint as CI), npm audits,
 `govulncheck`, documentation/infrastructure policy and the pinned Trivy scan

@@ -369,6 +369,9 @@ foreach ($dockerfile in $expectedDockerfiles) {
             throw "$dockerfile final stage must install $opensslPackage to remediate CVE-2026-14456"
         }
     }
+    if ($finalStage -notmatch '(?m)^RUN[ \t]+apk[ \t]+add[ \t]+--no-cache[^\r\n]*[''"]zlib>=1\.3\.2-r1[''"]') {
+        throw "$dockerfile final stage must install zlib>=1.3.2-r1 to remediate CVE-2026-85091"
+    }
 }
 
 Write-Host "Production Dockerfile inventory ($($expectedDockerfiles.Count)):"
