@@ -1,6 +1,7 @@
 import {cleanup,fireEvent,render,screen,waitFor,within} from "@testing-library/react";
 import {afterEach,describe,expect,it,vi} from "vitest";
 import {WorkspaceAccountProvider} from "@/features/account/WorkspaceAccount/WorkspaceAccount";
+import {ReleaseViewProvider} from "@/features/release/ReleaseViewProvider";
 import {SubscriptionPlansDialog} from "@/components/layout/WorkspaceHeader/SubscriptionPlansDialog";
 import {WorkspaceLanding} from "@/features/workspace/WorkspaceLanding/WorkspaceLanding";
 import {loadSubscription,subscriptionStateSchema} from "./subscriptions";
@@ -9,7 +10,8 @@ vi.mock("@/features/workspace/WorkspaceHero/WorkspaceHero",()=>({WorkspaceHero:(
 vi.mock("next/navigation",()=>({useRouter:()=>({push:vi.fn()})}));
 const profile={account_id:"10000000-0000-4000-8000-000000000001",identity_refs:[]};
 const state={subscription:null,balances:[],checkout_available:true,recurring_available:false,trial_used:false};
-function show(home=false){return render(<WorkspaceAccountProvider snapshot={{profile,balance:0}}>{home?<WorkspaceLanding/>:<SubscriptionPlansDialog onClose={()=>{}}/>}</WorkspaceAccountProvider>);}
+const development={view:"dev" as const,canSwitch:true,localSimulation:false};
+function show(home=false){return render(<ReleaseViewProvider initial={development}><WorkspaceAccountProvider snapshot={{profile,balance:0}}>{home?<WorkspaceLanding/>:<SubscriptionPlansDialog onClose={()=>{}}/>}</WorkspaceAccountProvider></ReleaseViewProvider>);}
 afterEach(()=>{cleanup();vi.resetAllMocks();});
 describe("account-owned Lite offer",()=>{
   it("requires an explicit trial eligibility flag and does not guess from an empty active subscription",()=>{
@@ -49,7 +51,7 @@ describe("account-owned Lite offer",()=>{
     vi.mocked(loadSubscription).mockResolvedValue(state);
     const view=show();await screen.findByRole("heading",{name:"Lite"});
     vi.mocked(loadSubscription).mockResolvedValue({...state,trial_used:true});
-    view.rerender(<WorkspaceAccountProvider snapshot={{profile:{...profile},balance:400}}><SubscriptionPlansDialog onClose={()=>{}}/></WorkspaceAccountProvider>);
+    view.rerender(<ReleaseViewProvider initial={development}><WorkspaceAccountProvider snapshot={{profile:{...profile},balance:400}}><SubscriptionPlansDialog onClose={()=>{}}/></WorkspaceAccountProvider></ReleaseViewProvider>);
     await waitFor(()=>expect(screen.queryByRole("heading",{name:"Lite"})).toBeNull());
     expect(screen.queryByRole("dialog",{name:"Условия подписки"})).toBeNull();
   });
@@ -62,18 +64,25 @@ describe("account-owned Lite offer",()=>{
     vi.mocked(loadSubscription).mockResolvedValue(state);
     const view=show(true);await screen.findByRole("heading",{name:"Lite"});
     vi.mocked(loadSubscription).mockResolvedValue({...state,trial_used:true});
-    view.rerender(<WorkspaceAccountProvider snapshot={{profile:{...profile},balance:400}}><WorkspaceLanding/></WorkspaceAccountProvider>);
+    view.rerender(<ReleaseViewProvider initial={development}><WorkspaceAccountProvider snapshot={{profile:{...profile},balance:400}}><WorkspaceLanding/></WorkspaceAccountProvider></ReleaseViewProvider>);
     await waitFor(()=>expect(screen.queryByRole("heading",{name:"Lite"})).toBeNull());
     await waitFor(()=>expect(loadSubscription).toHaveBeenCalledTimes(2));
   });
   it("keeps the unchanged guest tariff cards visible without reading private account state",()=>{
-    render(<SubscriptionPlansDialog onClose={()=>{}}/>);
+    render(<ReleaseViewProvider initial={development}><SubscriptionPlansDialog onClose={()=>{}}/></ReleaseViewProvider>);
     expect(screen.getByRole("heading",{name:"Lite"})).toBeVisible();
     expect(screen.getByRole("dialog").querySelectorAll("article")).toHaveLength(6);
     expect(loadSubscription).not.toHaveBeenCalled();
     const card=screen.getByRole("heading",{name:"Lite"}).closest("article")!;
     fireEvent.click(within(card).getByRole("button",{name:"Активировать подписку"}));
     expect(screen.queryByRole("dialog",{name:"Условия подписки"})).toBeNull();
+    expect(loadSubscription).not.toHaveBeenCalled();
+  });
+  it("keeps individual offers in PROD while hiding the unfinished team plan",()=>{
+    render(<SubscriptionPlansDialog onClose={()=>{}}/>);
+    for(const name of ["Lite","Start+","Pro","Ultima","Elite"])expect(screen.getByRole("heading",{name})).toBeVisible();
+    expect(screen.queryByRole("heading",{name:"Командный тариф"})).toBeNull();
+    expect(screen.getByRole("dialog").querySelectorAll("article")).toHaveLength(5);
     expect(loadSubscription).not.toHaveBeenCalled();
   });
 });

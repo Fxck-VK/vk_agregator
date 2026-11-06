@@ -15,7 +15,14 @@ afterEach(() => { request.locale = "en"; vi.restoreAllMocks(); });
 async function page() { return render(<LocaleProvider locale={request.locale}>{await ToolsPage()}</LocaleProvider>); }
 
 describe("English AI tools overview", () => {
-  it("links to the integration landing while preserving its planned state",async()=>{await page();expect(screen.getByRole("link",{name:"Explore Epifera MCP"})).toHaveAttribute("href","/ru/mcp");expect(screen.getAllByText("Connection details are being prepared.")).toHaveLength(8);});
+  it("links to the integration landing while preserving its planned state",async()=>{
+    const {container}=await page();
+    const section=container.querySelector<HTMLElement>("#connections");
+    expect(section).not.toBeNull();
+    const connections=within(section!);
+    expect(connections.getByRole("link",{name:"Explore Epifera MCP"})).toHaveAttribute("href","/ru/mcp");
+    expect(connections.getAllByText("Connection details are being prepared.")).toHaveLength(8);
+  });
   it.each(["en", "ru"] as const)("keeps %s draft and outside the sitemap", async locale => {
     request.locale = locale;
     expect((await generateMetadata()).robots).toEqual({ index: false, follow: false });
