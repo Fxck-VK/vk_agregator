@@ -15,7 +15,7 @@ type WebPromotionService interface {
 func (h *Handler) quoteWebPromotion(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Cache-Control", "no-store")
 	service, ok := h.deps.Subscriptions.(WebPromotionService)
-	if !h.cfg.TestPaymentsEnabled || !ok {
+	if !h.cfg.PaymentsEnabled || !ok {
 		writeError(w, 503, "promotions unavailable")
 		return
 	}

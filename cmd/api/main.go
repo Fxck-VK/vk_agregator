@@ -396,10 +396,11 @@ func main() {
 	}
 	legalDocuments := legalcatalog.New(cfg.LegalOperatorName, cfg.LegalOperatorINN, cfg.LegalDocumentsPublished)
 	web := websession.NewHandler(websession.Config{
+		Environment:                 cfg.Env,
 		RequireBrowserEmailProof:    true,
 		EmailDeliveryEnabled:        strings.EqualFold(cfg.AccountEmailDeliveryProvider, "smtp"),
 		PhoneDeliveryEnabled:        strings.EqualFold(cfg.AccountPhoneDeliveryProvider, "http"),
-		TestPaymentsEnabled:         apiapp.WebTestPaymentsEnabled(&cfg),
+		PaymentsEnabled:             apiapp.WebPaymentsEnabled(&cfg),
 		VideoRoutes:                 runtimeCatalog.VideoRoutes(),
 		WebOrigin:                   cfg.WebOrigin,
 		TextModels:                  runtimeCatalog.TextModels,

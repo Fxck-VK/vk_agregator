@@ -8,6 +8,7 @@ import { webBrowserFetch } from "@/lib/web-api/browser";
 import { useReadResource } from "@/lib/use-read-resource";
 import { readJson } from "@/lib/web-api/read-error";
 import { SubscriptionPromotionProvider } from "@/features/subscriptions/SubscriptionPromotion";
+import { measureWorkspaceRead } from "@/features/workspace/WorkspaceNavigationMetrics/workspace-navigation-metrics";
 
 type WorkspaceAccountSnapshot = {
   balance: number | null;
@@ -27,8 +28,10 @@ type WorkspaceAccountProviderProps = {
 };
 
 async function loadBalance(signal: AbortSignal) {
-  const response = await webBrowserFetch("/web/v1/balance", { signal });
-  return readJson(response, value => parseAccountBalance(value).balance);
+  return measureWorkspaceRead("balance", "network", async () => {
+    const response = await webBrowserFetch("/web/v1/balance", { signal });
+    return readJson(response, value => parseAccountBalance(value).balance);
+  });
 }
 
 export function WorkspaceAccountProvider({ children, snapshot, deferred = false, preview = false }: WorkspaceAccountProviderProps): ReactNode {

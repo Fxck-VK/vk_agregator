@@ -1,5 +1,16 @@
 import { cleanup, fireEvent, render, screen, within } from "@testing-library/react";
-import { afterEach, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, expect, it, vi } from "vitest";
+
+// This baseline suite exercises the complete DEV interface, including draft links.
+vi.mock("@/features/release/ReleaseViewProvider", async () => {
+  const { allowsReleasePath, featureEnabled } = await import("@/features/release/policy");
+  return { useReleaseView: () => ({
+    view: "dev", canSwitch: false, localSimulation: false, switching: false, error: false,
+    enabled: (id: string) => featureEnabled(id, "dev"),
+    allowsPath: (href: string) => allowsReleasePath(href, "dev"),
+    changeView: async () => false,
+  }) };
+});
 
 vi.mock("next/navigation", () => ({
   usePathname: () => "/ru/app/models",
@@ -16,6 +27,7 @@ import { projectGenerationModelCatalog } from "./generation-model-catalog";
 import { parseModelCatalog } from "./model-catalog-contract";
 import { ModelsCatalog } from "./ModelsCatalog/ModelsCatalog";
 import { WorkspaceModelSelector } from "./WorkspaceModelSelector/WorkspaceModelSelector";
+import { bindModelCatalogSession, resetModelCatalogCacheForTests } from "./model-catalog-cache";
 
 const musicIds = ["suno_v6", "suno_v6_wild", "suno_v6_mini", "lyria_3_5"];
 
@@ -33,6 +45,7 @@ function devCatalog() {
   return catalog;
 }
 
+beforeEach(() => { resetModelCatalogCacheForTests(); bindModelCatalogSession("music-discovery-fixture", "dev"); });
 afterEach(() => { cleanup(); vi.clearAllMocks(); window.sessionStorage.clear(); });
 
 it("keeps all four runnable music models in the shared catalog, but excludes pending and blocked models", () => {

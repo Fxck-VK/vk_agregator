@@ -69,6 +69,9 @@ func (h *Handler) listVideoModels(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Cache-Control", "no-store")
 	items := make([]safeVideoModel, 0)
 	for _, route := range h.conversationVideoRoutes() {
+		if !h.releaseModelAllowed(r, route.Alias, "video") {
+			continue
+		}
 		controls, ok := productcatalog.WorkspaceVideoControls(route, h.deps.ImagePricing)
 		if !ok {
 			continue

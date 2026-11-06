@@ -3,8 +3,10 @@ import type { MessageCatalog } from "../messages";
 import { messagesSpeechEn } from "../speech";
 import { messagesMusicCatalogEn } from "../music-catalog";
 import { messagesMusicEn } from "../music";
+import { messagesReleasePreviewEn } from "../release-preview";
 
 export const messagesEn = {
+  ...messagesReleasePreviewEn,
   "units.materials.zero": "{count} materials",
   "units.materials.one": "{count} material",
   "units.materials.two": "{count} materials",

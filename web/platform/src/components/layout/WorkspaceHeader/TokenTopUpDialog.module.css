@@ -13,7 +13,7 @@
   gap: clamp(0.5rem, 1.3dvh, 1rem);
   inline-size: 100%;
   block-size: auto;
-  max-block-size: 80dvh;
+  max-block-size: calc(100dvh - 2rem);
   min-block-size: 0;
   overflow: hidden;
   border: var(--panel-surface-border);
@@ -46,7 +46,7 @@
 .closeButtonPlacement {
   position: fixed;
   z-index: 1;
-  /* Keep the button above the centered panel's maximum height. */
+  /* Global close control stays outside the panel's layout. */
   inset-block-start: max(env(safe-area-inset-top, 0px), clamp(0.25rem, calc(10dvh - 3.25rem), 1.5rem));
   inset-inline-end: max(env(safe-area-inset-right, 0px), clamp(0.75rem, 2vw, 1.5rem));
 }
@@ -58,7 +58,7 @@
   gap: clamp(0.25rem, 0.75dvh, 0.5rem);
   min-block-size: 0;
   min-inline-size: 0;
-  margin: 0;
+  margin: 0 -1px var(--space-2) 0;
   border: 0;
   padding: 0;
 }
@@ -173,16 +173,14 @@
   overflow: visible;
   padding: 1px;
 }
-.checkoutForm > :not(.packageScroll) { flex-shrink: 0; }
+.checkoutForm > * { flex-shrink: 0; }
 .checkoutForm > p { margin: 0; font-size: var(--font-size-ui); line-height: 1.4; }
-.packageScroll {
-  flex: 0 1 auto;
-  min-block-size: 0;
-  margin-block-end: var(--space-2);
-  /* Keep the scrollbar in the dialog gutter, outside the full-width cards. */
-  margin-inline-end: calc(-1px - var(--top-up-inline-padding));
+.checkoutError {
+  flex-wrap: nowrap;
+  align-items: flex-start;
+  gap: var(--space-2);
 }
-.packageViewport { padding: 1px var(--top-up-inline-padding) 1px 1px; }
+.checkoutError > div { flex: 1; }
 .purchaseButton:disabled { cursor: default; opacity: 0.65; }
 .error { color: var(--panel-surface-text); }
 
@@ -196,6 +194,30 @@
 @media (width < 40rem) {
   .dialogLayer {
     inline-size: min(28rem, calc(100% - 1.5rem));
+  }
+
+  .header h2 {
+    padding-inline: 2.75rem;
+  }
+}
+
+@media (height < 48rem) {
+  .dialog,
+  .checkoutForm {
+    gap: 0.25rem;
+  }
+
+  .packageList {
+    grid-auto-rows: minmax(3.125rem, auto);
+    gap: 0.25rem;
+  }
+
+  .paymentNotice p {
+    margin-block: 0.25rem;
+  }
+
+  .checkoutError {
+    padding-block: 0.25rem;
   }
 }
 

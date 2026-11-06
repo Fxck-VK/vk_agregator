@@ -221,6 +221,33 @@ if [[ "${payment_provider}" == "yookassa" ]]; then
     require_value YOOKASSA_WEBHOOK_IP_ALLOWLIST "required when YOOKASSA_WEBHOOK_IP_ALLOWLIST_ENABLED=true"
   fi
 fi
+live_web_payments="$(get_value WEB_LIVE_PAYMENTS_ENABLED false)"
+live_web_recurring="$(get_value WEB_LIVE_RECURRING_ENABLED false)"
+for live_flag in WEB_LIVE_PAYMENTS_ENABLED WEB_LIVE_RECURRING_ENABLED; do
+  case "$(get_value "${live_flag}" false)" in
+    ""|true|false) ;;
+    *) add_problem "${live_flag}" "must be canonical true or false" ;;
+  esac
+done
+if is_true_value "${live_web_recurring}" && ! is_true_value "${live_web_payments}"; then
+  add_problem WEB_LIVE_RECURRING_ENABLED "requires WEB_LIVE_PAYMENTS_ENABLED=true"
+fi
+if is_true_value "${live_web_payments}" || is_true_value "${live_web_recurring}"; then
+  [[ "$(get_value APP_ENV)" == production ]] || add_problem WEB_LIVE_PAYMENTS_ENABLED "requires APP_ENV=production"
+  [[ "${payment_provider}" == yookassa ]] || add_problem PAYMENT_PROVIDER "live web payments require yookassa"
+  [[ "$(get_value YOOKASSA_SECRET_KEY)" == live_* ]] || add_problem YOOKASSA_SECRET_KEY "live web payments require an unmodified live_ key"
+  live_api_url="$(get_value YOOKASSA_BASE_URL https://api.yookassa.ru/v3)"
+  while [[ "${live_api_url}" == */ ]]; do live_api_url="${live_api_url%/}"; done
+  [[ "${live_api_url}" == https://api.yookassa.ru/v3 ]] || add_problem YOOKASSA_BASE_URL "live web payments require the official YooKassa API"
+  live_web_origin="$(get_value WEB_ORIGIN)"
+  if [[ ! "${live_web_origin}" =~ ^https://[a-z0-9.-]+(:[0-9]+)?$ ]] || [[ "${live_web_origin}" == https://localhost* || "${live_web_origin}" == https://127.* || "${live_web_origin}" == *:443 ]]; then
+    add_problem WEB_ORIGIN "live web payments require a canonical public HTTPS origin without credentials, path or query"
+  fi
+fi
+case "$(get_value YOOKASSA_RECEIPT_MODE yookassa)" in
+  yookassa|npd_manual) ;;
+  *) add_problem YOOKASSA_RECEIPT_MODE "must be yookassa or npd_manual" ;;
+esac
 if is_true_value "$(get_value FEATURE_DEV_PAYMENT_TEST_PRODUCT_ENABLED false)"; then
   add_problem FEATURE_DEV_PAYMENT_TEST_PRODUCT_ENABLED "not allowed in staging/production"
 fi

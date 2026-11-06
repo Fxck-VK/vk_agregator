@@ -29,24 +29,26 @@ const (
 	maxResponseBytes       = 1 << 20
 )
 
-// Config contains only YooKassa transport credentials and endpoints. Secrets
+// Config contains YooKassa transport credentials, endpoints and receipt policy. Secrets
 // must be supplied from runtime config and must never be logged.
 type Config struct {
-	ShopID    string
-	SecretKey string
-	BaseURL   string
-	ReturnURL string
+	ShopID      string
+	SecretKey   string
+	BaseURL     string
+	ReturnURL   string
+	ReceiptMode string
 
 	HTTPClient *http.Client
 }
 
 // Provider is a YooKassa implementation of domain.PaymentProvider.
 type Provider struct {
-	shopID    string
-	secretKey string
-	baseURL   string
-	returnURL string
-	client    *http.Client
+	shopID      string
+	secretKey   string
+	baseURL     string
+	returnURL   string
+	receiptMode string
+	client      *http.Client
 }
 
 var _ domain.PaymentProvider = (*Provider)(nil)
@@ -56,6 +58,13 @@ func New(cfg Config) (*Provider, error) {
 	shopID := strings.TrimSpace(cfg.ShopID)
 	secretKey := strings.TrimSpace(cfg.SecretKey)
 	returnURL := strings.TrimSpace(cfg.ReturnURL)
+	receiptMode := strings.TrimSpace(cfg.ReceiptMode)
+	if receiptMode == "" {
+		receiptMode = "yookassa"
+	}
+	if receiptMode != "yookassa" && receiptMode != "npd_manual" {
+		return nil, errors.New("yookassa payment: unsupported receipt mode")
+	}
 	baseURL := strings.TrimRight(strings.TrimSpace(cfg.BaseURL), "/")
 	if baseURL == "" {
 		baseURL = defaultBaseURL
@@ -75,11 +84,12 @@ func New(cfg Config) (*Provider, error) {
 		client = &http.Client{Timeout: defaultHTTPTimeout}
 	}
 	return &Provider{
-		shopID:    shopID,
-		secretKey: secretKey,
-		baseURL:   baseURL,
-		returnURL: returnURL,
-		client:    client,
+		shopID:      shopID,
+		secretKey:   secretKey,
+		baseURL:     baseURL,
+		returnURL:   returnURL,
+		receiptMode: receiptMode,
+		client:      client,
 	}, nil
 }
 
@@ -128,7 +138,10 @@ func (p *Provider) CreatePayment(ctx context.Context, in domain.CreatePaymentInp
 		},
 		Description: descriptionOrDefault(in.Description),
 		Metadata:    metadataForPayment(in),
-		Receipt:     receipt,
+		Receipt:     &receipt,
+	}
+	if p.receiptMode == "npd_manual" {
+		request.Receipt = nil
 	}
 	if in.PaymentMethodID != "" {
 		if in.SavePaymentMethod {
@@ -248,7 +261,10 @@ func (p *Provider) CreateRefund(ctx context.Context, in domain.CreateRefundInput
 		},
 		Description: strings.TrimSpace(in.Reason),
 		Metadata:    metadataForRefund(in),
-		Receipt:     receipt,
+		Receipt:     &receipt,
+	}
+	if p.receiptMode == "npd_manual" {
+		request.Receipt = nil
 	}
 
 	var response refundResponse
@@ -392,7 +408,7 @@ type createPaymentRequest struct {
 	PaymentMethodID   string               `json:"payment_method_id,omitempty"`
 	Description       string               `json:"description,omitempty"`
 	Metadata          map[string]any       `json:"metadata,omitempty"`
-	Receipt           receipt              `json:"receipt"`
+	Receipt           *receipt             `json:"receipt,omitempty"`
 }
 
 type receipt struct {
@@ -419,7 +435,7 @@ type createRefundRequest struct {
 	Amount      amountValue    `json:"amount"`
 	Description string         `json:"description,omitempty"`
 	Metadata    map[string]any `json:"metadata,omitempty"`
-	Receipt     receipt        `json:"receipt"`
+	Receipt     *receipt       `json:"receipt,omitempty"`
 }
 
 type confirmationResponse struct {

@@ -1,5 +1,5 @@
 import { assetPaths } from "@/assets/asset-paths";
-import type { HomeMediaBriefKey } from "@/i18n/public/home-media-en";
+import type { HomeMediaBriefKey } from "./home-copy";
 
 export type HomeMediaAsset = { src: string; width: number; height: number; srcSet?: string; sizes?: string };
 

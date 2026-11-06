@@ -52,10 +52,11 @@ type principalContextKey struct{}
 
 // Config contains browser adapter settings.
 type Config struct {
+	Environment                 string
 	RequireBrowserEmailProof    bool
 	EmailDeliveryEnabled        bool
 	PhoneDeliveryEnabled        bool
-	TestPaymentsEnabled         bool
+	PaymentsEnabled             bool
 	VideoRoutes                 []productcatalog.VideoRoute
 	TextModels                  []textgeneration.PublicModel
 	WebOrigin                   string
@@ -644,7 +645,7 @@ func (h *Handler) balance(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, safeBalance{Balance: balance})
 }
 
-func (h *Handler) listImageModels(w http.ResponseWriter, _ *http.Request) {
+func (h *Handler) listImageModels(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Cache-Control", "no-store")
 	if h.deps.ImagePricing == nil || len(h.cfg.ImageModels) == 0 {
 		writeError(w, http.StatusServiceUnavailable, "image generation unavailable")
@@ -653,6 +654,9 @@ func (h *Handler) listImageModels(w http.ResponseWriter, _ *http.Request) {
 	resolver := imagegeneration.NewResolver(h.cfg.ImageModels, h.deps.ImagePricing)
 	items := make([]safeImageModel, 0, len(h.cfg.ImageModels))
 	for _, model := range h.cfg.ImageModels {
+		if !h.releaseModelAllowed(r, model.ID, "image") {
+			continue
+		}
 		safeModel, ok := newSafeImageModel(model, resolver)
 		if !ok {
 			continue
@@ -703,6 +707,9 @@ func (h *Handler) prepareImageJob(w http.ResponseWriter, r *http.Request) {
 	})
 	if err != nil {
 		writeError(w, http.StatusBadRequest, "invalid image generation request")
+		return
+	}
+	if !h.requireReleaseModel(w, r, strings.TrimSpace(req.ModelID), "image") {
 		return
 	}
 	if existing, err := h.deps.ImageJobIdempotency.GetByIdempotencyKeyForAccount(r.Context(), principal.AccountID, idempotencyKey.String()); err == nil {
@@ -843,6 +850,9 @@ func (h *Handler) activateImageJob(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusBadRequest, "invalid image job id")
 		return
 	}
+	if !h.requireReleaseImageJob(w, r, principal.AccountID, jobID) {
+		return
+	}
 	job, err := h.deps.ImageJobs.ActivatePreparedAccountJob(r.Context(), principal.AccountID, jobID)
 	if errors.Is(err, domain.ErrNotFound) {
 		writeError(w, http.StatusNotFound, "image job not found")
@@ -882,6 +892,9 @@ func (h *Handler) retryImageJob(w http.ResponseWriter, r *http.Request) {
 	originalJobID, err := uuid.Parse(r.PathValue("jobID"))
 	if err != nil || originalJobID == uuid.Nil {
 		writeError(w, http.StatusBadRequest, "invalid image job id")
+		return
+	}
+	if !h.requireReleaseImageJob(w, r, principal.AccountID, originalJobID) {
 		return
 	}
 	job, err := h.deps.ImageJobs.RetryExpiredAccountImageJob(r.Context(), principal.AccountID, originalJobID)
@@ -1559,6 +1572,25 @@ func (h *Handler) createConversationMessage(w http.ResponseWriter, r *http.Reque
 		return
 	}
 	req.ModelID = strings.TrimSpace(req.ModelID)
+	modelID, kind := req.ModelID, "text"
+	if modelID == "" {
+		modelID = providermodels.PublicTextChatGPT
+	}
+	for _, model := range h.cfg.ImageModels {
+		if model.ID == modelID {
+			kind = "image"
+			break
+		}
+	}
+	for _, route := range h.cfg.VideoRoutes {
+		if route.Alias == modelID {
+			kind = "video"
+			break
+		}
+	}
+	if !h.requireReleaseModel(w, r, modelID, kind) {
+		return
+	}
 	_, paidModel := providermodels.PaidTextModel(req.ModelID)
 	if req.ModelID != "" && req.ModelID != providermodels.PublicTextChatGPT && !paidModel && !h.isConversationMediaModel(req.ModelID) {
 		writeError(w, http.StatusBadRequest, "invalid chat model")
@@ -2303,5 +2335,5 @@ func writeError(w http.ResponseWriter, status int, message string) {
 
 func (h *Handler) listTextModels(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Cache-Control", "no-store")
-	writeJSON(w, http.StatusOK, map[string]any{"items": h.availableTextModels()})
+	writeJSON(w, http.StatusOK, map[string]any{"items": h.releaseTextModels(r)})
 }

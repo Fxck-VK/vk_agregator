@@ -147,4 +147,33 @@ sed -i 's/ARTIFACT_SCANNER=none/ARTIFACT_SCANNER=openai/' "${openai_env}"
 expect_failure "bash OpenAI scanner without key" bash "${bash_checker}" --env-file "${openai_env}"
 expect_failure "PowerShell OpenAI scanner without key" run_powershell_checker "${openai_env}"
 
-echo "Production scanner and video profile env regression tests passed"
+live_web_env="${tmpdir}/live-web.env"
+sed 's/^PAYMENT_PROVIDER=manual$/PAYMENT_PROVIDER=yookassa/' "${bypass_env}" > "${live_web_env}"
+cat >> "${live_web_env}" <<'EOF'
+YOOKASSA_SHOP_ID=1234567
+YOOKASSA_SECRET_KEY=live_synthetic
+YOOKASSA_RETURN_URL=https://epifera.com/ru/app/payment-return
+YOOKASSA_BASE_URL=https://api.yookassa.ru/v3
+YOOKASSA_RECEIPT_MODE=npd_manual
+WEB_ORIGIN=https://epifera.com
+WEB_LIVE_PAYMENTS_ENABLED=true
+WEB_LIVE_RECURRING_ENABLED=false
+EOF
+bash "${bash_checker}" --env-file "${live_web_env}" >/dev/null
+run_powershell_checker "${live_web_env}" >/dev/null
+for variant in recurring_without_checkout unsafe_api wrong_provider malformed_key mixed_case_key noncanonical_checkout noncanonical_recurring; do
+  bad_live_env="${tmpdir}/live-${variant}.env"
+  case "${variant}" in
+    recurring_without_checkout) sed -e 's/WEB_LIVE_PAYMENTS_ENABLED=true/WEB_LIVE_PAYMENTS_ENABLED=false/' -e 's/WEB_LIVE_RECURRING_ENABLED=false/WEB_LIVE_RECURRING_ENABLED=true/' "${live_web_env}" > "${bad_live_env}" ;;
+    unsafe_api) sed 's|YOOKASSA_BASE_URL=https://api.yookassa.ru/v3|YOOKASSA_BASE_URL=https://example.test/v3|' "${live_web_env}" > "${bad_live_env}" ;;
+    wrong_provider) sed 's/^PAYMENT_PROVIDER=yookassa$/PAYMENT_PROVIDER=manual/' "${live_web_env}" > "${bad_live_env}" ;;
+    malformed_key) sed 's/YOOKASSA_SECRET_KEY=live_synthetic/YOOKASSA_SECRET_KEY=liveXsynthetic/' "${live_web_env}" > "${bad_live_env}" ;;
+    mixed_case_key) sed 's/YOOKASSA_SECRET_KEY=live_synthetic/YOOKASSA_SECRET_KEY=Live_synthetic/' "${live_web_env}" > "${bad_live_env}" ;;
+    noncanonical_checkout) sed 's/WEB_LIVE_PAYMENTS_ENABLED=true/WEB_LIVE_PAYMENTS_ENABLED=on/' "${live_web_env}" > "${bad_live_env}" ;;
+    noncanonical_recurring) sed 's/WEB_LIVE_RECURRING_ENABLED=false/WEB_LIVE_RECURRING_ENABLED=T/' "${live_web_env}" > "${bad_live_env}" ;;
+  esac
+  expect_failure "bash live web ${variant}" bash "${bash_checker}" --env-file "${bad_live_env}"
+  expect_failure "PowerShell live web ${variant}" run_powershell_checker "${bad_live_env}"
+done
+
+echo "Production scanner, video and live merchant env regression tests passed"

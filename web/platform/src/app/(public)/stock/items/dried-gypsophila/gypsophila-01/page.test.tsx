@@ -1,5 +1,8 @@
 import {cleanup,fireEvent,render,screen,within,waitFor} from "@testing-library/react";
 import {afterEach,describe,expect,it,vi} from "vitest";
+// Original public-template fixtures explicitly use the development view.
+vi.mock("@/features/release/server", () => ({ getRequestReleaseState: async () => ({ view: "dev", canSwitch: true, localSimulation: false }) }));
+vi.mock("@/features/release/ReleaseViewProvider", () => ({ useReleaseView: () => ({ view: "dev", canSwitch: true, localSimulation: false, enabled: () => true, allowsPath: () => true, switching: false, error: false, changeView: async () => true }) }));
 import {LocaleProvider} from "@/i18n/LocaleProvider";
 const request=vi.hoisted(()=>({locale:"en" as "en"|"ru",push:vi.fn()}));
 vi.mock("@/i18n/navigation",()=>({useRouter:()=>({push:request.push}),usePathname:()=>"/stock/items/dried-gypsophila/gypsophila-01"}));

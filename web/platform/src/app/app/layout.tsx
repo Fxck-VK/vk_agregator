@@ -7,8 +7,10 @@ import { AccountControl } from "@/features/account/AccountControl/AccountControl
 import { SessionRefresh } from "@/features/session/SessionRefresh/SessionRefresh";
 import { WorkspaceLogoutBoundary } from "@/features/session/WorkspaceLogout/WorkspaceLogoutBoundary";
 import { loadWorkspaceSession } from "@/features/session/session-data";
-import { isLocalWorkspacePreviewEnabled, localWorkspacePreviewConversations, localWorkspacePreviewConversationMessages, localWorkspacePreviewImageModels } from "@/features/session/local-workspace-preview";
+import { isLocalWorkspacePreviewEnabled } from "@/features/session/local-workspace-preview";
+import { getRequestReleaseState } from "@/features/release/server";
 import { WorkspaceHome } from "@/features/workspace/WorkspaceHome/WorkspaceHome";
+import { WorkspaceNavigationMetrics } from "@/features/workspace/WorkspaceNavigationMetrics/WorkspaceNavigationMetrics";
 import { getRequestDictionary } from "@/i18n/server";
 
 import styles from "./layout.module.css";
@@ -31,14 +33,18 @@ export default function WorkspaceLayout({ children }: Readonly<{ children: React
   return <Suspense fallback={<LoadingWorkspaceFrame />}><WorkspaceSessionContent>{children}</WorkspaceSessionContent></Suspense>;
 }
 
-export async function WorkspaceSessionContent({ children }: Readonly<{ children: ReactNode }>) {
+async function loadWorkspaceSessionWithTiming() {
+  const measureIdentity = !isLocalWorkspacePreviewEnabled()
+    && (process.env.NODE_ENV === "development" || process.env.WEB_ORIGIN === "https://dev-web.epifera.com");
+  const identityStartedAt = measureIdentity ? performance.now() : undefined;
   const session = await loadWorkspaceSession();
-  let developmentTools: ReactNode = null;
-  if (process.env.NODE_ENV === "development" && isLocalWorkspacePreviewEnabled()) {
-    const { LocalDevelopmentTools } = await import("@/features/local-development/LocalDevelopmentTools");
-    const { previewWithTombstones } = await import("@/features/local-development/preview-artifact-deletion.server");
-    developmentTools = <LocalDevelopmentTools seed={{ conversations: localWorkspacePreviewConversations, messages: await previewWithTombstones(localWorkspacePreviewConversationMessages), imageModels: localWorkspacePreviewImageModels.items }} />;
-  }
+  const identityDurationMs = identityStartedAt === undefined ? undefined : performance.now() - identityStartedAt;
+  return { session, identityDurationMs };
+}
+
+export async function WorkspaceSessionContent({ children }: Readonly<{ children: ReactNode }>) {
+  const { session, identityDurationMs } = await loadWorkspaceSessionWithTiming();
+  const preview = process.env.NODE_ENV === "development" && isLocalWorkspacePreviewEnabled();
 
   if (session.kind === "unauthenticated") {
     return (
@@ -54,10 +60,12 @@ export async function WorkspaceSessionContent({ children }: Readonly<{ children:
 
   if (session.kind === "unavailable") {
     return (
-      <LoadingWorkspaceFrame><div className={styles.unavailableState}><SessionFailureNotice /></div></LoadingWorkspaceFrame>
+      <LoadingWorkspaceFrame><WorkspaceNavigationMetrics identityDurationMs={identityDurationMs} identityOutcome="failure" /><div className={styles.unavailableState}><SessionFailureNotice /></div></LoadingWorkspaceFrame>
     );
   }
 
+  const release = await getRequestReleaseState();
+  const catalogue = initialModelCatalog(release.view);
   return (
     <WorkspaceLogoutBoundary
       guest={(
@@ -67,10 +75,12 @@ export async function WorkspaceSessionContent({ children }: Readonly<{ children:
       )}
     >
       <WorkspaceFrame
-        preview={developmentTools !== null}
-        initialCatalog={await initialModelCatalog()}
+        identityDurationMs={identityDurationMs}
+        preview={preview}
+        initialCatalog={catalogue.source}
+        pendingCatalog={catalogue.pending}
         deferred={session.deferred}
-        deferConversations={developmentTools !== null || session.deferred}
+        deferConversations={preview || session.deferred}
         account={<AccountControl profile={session.profile} />}
         accountId={session.profile.account_id}
         balance={session.balance}
@@ -79,7 +89,6 @@ export async function WorkspaceSessionContent({ children }: Readonly<{ children:
       >
         {children}
       </WorkspaceFrame>
-      {developmentTools}
     </WorkspaceLogoutBoundary>
   );
 }

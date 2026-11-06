@@ -1,7 +1,12 @@
 import {act,cleanup,fireEvent,render,screen,within,waitFor} from "@testing-library/react";
 import {afterEach,describe,expect,it,vi} from "vitest";
+// Original public-template fixtures explicitly use the development view.
+vi.mock("@/features/release/server", () => ({ getRequestReleaseState: async () => ({ view: "dev", canSwitch: true, localSimulation: false }) }));
 import {LocaleProvider} from "@/i18n/LocaleProvider";
 const request=vi.hoisted(()=>({locale:"en" as "en"|"ru"}));
+const releaseView=vi.hoisted(()=>({view:"dev"}));
+vi.mock("@/features/release/ReleaseViewProvider",()=>({useReleaseView:()=>({view:releaseView.view,canSwitch:true,localSimulation:false,enabled:()=>releaseView.view==="dev",allowsPath:()=>true,switching:false,error:false,changeView:async()=>true})}));
+afterEach(()=>{releaseView.view="dev";});
 vi.mock("server-only",()=>({}));
 vi.mock("@/i18n/server",()=>({getRequestLocale:async()=>request.locale}));
 import ArticlePage,{generateMetadata} from "./page";
@@ -10,6 +15,7 @@ import {artPromptsEn} from "@/i18n/public/art-prompts-en";
 afterEach(()=>{cleanup();request.locale="en";vi.restoreAllMocks();vi.unstubAllGlobals();window.history.replaceState({},"","/");});
 async function page(){return render(<LocaleProvider locale={request.locale}>{await ArticlePage()}</LocaleProvider>);}
 describe("Art prompts article",()=>{
+  it("hides unavailable listening in PROD",async()=>{releaseView.view="prod";await page();expect(screen.queryByRole('button',{name:'Listen to this article'})).not.toBeInTheDocument();});
   it.each(["en","ru"] as const)("keeps %s draft/noindex outside sitemap",async locale=>{request.locale=locale;expect((await generateMetadata()).robots).toEqual({index:false,follow:false});expect(publicSitemap().some(x=>x.url.includes('/blog/ai-art-prompts'))).toBe(false);});
   it("renders Russian content and localized links",async()=>{request.locale='ru';const {container}=await page();expect(container.querySelector('h1')).not.toBeNull();expect(container.querySelector('main')?.textContent).toMatch(/[А-Яа-яЁё]/);expect([...container.querySelectorAll('a[href]')].filter(link=>link.getAttribute('href')?.startsWith('/en/'))).toHaveLength(0);});
   it("renders one editorial shell with five sections, three illustrations, four examples and three related guides",async()=>{

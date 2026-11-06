@@ -18,7 +18,7 @@ import {
   ModelCatalogToolbar,
   type ModelCatalogCategory,
 } from "../ModelCatalogToolbar/ModelCatalogToolbar";
-import { filterAndSortCatalogModels } from "./model-filters";
+import { filterAndSortCatalogModels, matchesModelCatalogCategory } from "./model-filters";
 import styles from "./ModelsCatalog.module.css";
 
 
@@ -31,12 +31,14 @@ export function ModelsCatalog() {
   const [query, setQuery] = useState("");
   const [category, setCategory] = useState<ModelCatalogCategory["id"]>("popular");
   const deferredQuery = useDeferredValue(query);
+  const categories = t.modelsCatalog.categories.filter(item => catalog?.items.some(model => matchesModelCatalogCategory(model, item.id)));
+  const activeCategory = categories.some(item => item.id === category) ? category : categories[0]?.id ?? "popular";
 
   const filteredModels = useMemo(
-    () => filterAndSortCatalogModels(catalog?.items ?? [], { category, query: deferredQuery }, "catalog"),
-    [category, deferredQuery, catalog],
+    () => filterAndSortCatalogModels(catalog?.items ?? [], { category: activeCategory, query: deferredQuery }, "catalog"),
+    [activeCategory, deferredQuery, catalog],
   );
-  const selectedCategory = t.modelsCatalog.categories.find((item) => item.id === category) ?? t.modelsCatalog.categories[0];
+  const selectedCategory = t.modelsCatalog.categories.find((item) => item.id === activeCategory) ?? t.modelsCatalog.categories[0];
 
   return (
     <WorkspacePageFrame>
@@ -57,8 +59,8 @@ export function ModelsCatalog() {
         {status === "ready" ? (
           <>
             <ModelCatalogToolbar
-              categories={t.modelsCatalog.categories}
-              category={category}
+              categories={categories}
+              category={activeCategory}
               onCategoryChange={setCategory}
               onQueryChange={setQuery}
               query={query}
@@ -66,7 +68,7 @@ export function ModelsCatalog() {
             />
 
             <div
-              aria-labelledby={getModelCatalogCategoryTabId(category)}
+              aria-labelledby={categories.length ? getModelCatalogCategoryTabId(activeCategory) : undefined}
               className={styles.section}
               id={modelsCatalogPanelId}
               role="tabpanel"

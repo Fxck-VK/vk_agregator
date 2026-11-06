@@ -1,11 +1,20 @@
 import { cleanup, fireEvent, render, screen, within } from "@testing-library/react";
-import { afterEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import { SubscriptionPlansDialog } from "./SubscriptionPlansDialog";
 
 const { push } = vi.hoisted(() => ({ push: vi.fn() }));
+const release = vi.hoisted(() => ({ view: "dev" as "dev" | "prod" }));
+vi.mock("@/features/release/ReleaseViewProvider", () => ({
+  useReleaseView: () => ({
+    view: release.view,
+    enabled: (id: string) => id !== "teams" || release.view === "dev",
+    allowsPath: () => true,
+  }),
+}));
 vi.mock("next/navigation", () => ({ useRouter: () => ({ push }) }));
 
+beforeEach(() => { release.view = "dev"; });
 afterEach(() => { cleanup(); vi.clearAllMocks(); });
 
 function openPromo() {
@@ -18,6 +27,24 @@ function openPromo() {
 }
 
 describe("subscription promo dialog", () => {
+  it("shows the team article only in DEV while preserving all five individual cards exactly", () => {
+    const onClose = vi.fn();
+    const result = render(<SubscriptionPlansDialog onClose={onClose} />);
+    expect(screen.getByRole("heading", { name: "Командный тариф" })).toBeVisible();
+    const individualCards = screen.getAllByRole("button", { name: "Активировать подписку" })
+      .map(button => button.closest("article")!);
+    expect(individualCards).toHaveLength(5);
+    const originalMarkup = individualCards.map(card => card.outerHTML);
+
+    release.view = "prod";
+    result.rerender(<SubscriptionPlansDialog onClose={onClose} />);
+    expect(screen.queryByRole("heading", { name: "Командный тариф" })).not.toBeInTheDocument();
+    const remainingCards = screen.getAllByRole("article");
+    expect(remainingCards).toHaveLength(5);
+    expect(remainingCards.map(card => card.outerHTML)).toEqual(originalMarkup);
+    remainingCards.forEach((card, index) => expect(card).toBe(individualCards[index]));
+  });
+
   it("opens the Russian pricing page and closes the tariff dialog", () => {
     const onClose = vi.fn();
     render(<SubscriptionPlansDialog onClose={onClose} />);

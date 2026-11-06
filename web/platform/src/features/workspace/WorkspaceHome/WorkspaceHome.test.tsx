@@ -3,6 +3,17 @@ import { renderToStaticMarkup } from "react-dom/server";
 import { fireEvent, render, screen, within } from "@testing-library/react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
+// This baseline suite exercises the complete DEV interface, including draft links.
+vi.mock("@/features/release/ReleaseViewProvider", async () => {
+  const { allowsReleasePath, featureEnabled } = await import("@/features/release/policy");
+  return { useReleaseView: () => ({
+    view: "dev", canSwitch: false, localSimulation: false, switching: false, error: false,
+    enabled: (id: string) => featureEnabled(id, "dev"),
+    allowsPath: (href: string) => allowsReleasePath(href, "dev"),
+    changeView: async () => false,
+  }) };
+});
+
 vi.mock("next/navigation", () => ({
   useRouter: vi.fn(() => ({ push: vi.fn() })),
 }));
@@ -71,7 +82,8 @@ describe("WorkspaceHome", () => {
     expect(markup).toContain("<video");
     expect(markup).not.toContain(" controls");
     expect(markup).toContain('preload="none"');
-    expect(markup).toContain('poster="/assets/images/workspace/neirohub-how-it-works-poster.png"');
+    // The overview defers its poster until viewport/focus demand; SSR must not fetch it.
+    expect(markup).not.toMatch(/<video\b[^>]*\sposter=/);
     expect(markup).toContain('src="/assets/videos/workspace/epifera-v14-centered-mono-ru.mp4"');
     expect(markup).toContain('type="video/mp4"');
     expect(markup).toContain(`aria-label="Воспроизвести: Как работает ${brandName}"`);

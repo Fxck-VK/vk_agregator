@@ -1,5 +1,6 @@
 import { NextRequest } from "next/server";
-import { expect, it } from "vitest";
+import { expect, it, vi } from "vitest";
+vi.mock("server-only", () => ({}));
 import { proxy } from "../proxy";
 
 it("rewrites prefixed pages, overrides spoofed locale, and preserves queries", () => {

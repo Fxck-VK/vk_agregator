@@ -107,9 +107,8 @@ func main() {
 	processor := paymentservice.NewWebhookProcessor(payments, provider, billing, txRunner, processorOptions...)
 	subscriptionPayments := paymentservice.New(payments, provider, paymentservice.Config{
 		SubscriptionStore: billingRepo, SubscriptionBilling: billingRepo, SubscriptionTx: txRunner,
-		// Existing rollout permits test-shop subscriptions only. Merely adding
-		// this worker never enables live merchant charges.
-		RecurringEnabled: (cfg.Env == "development" || cfg.Env == "staging") && provider.Code() == domain.PaymentProviderYooKassa && strings.HasPrefix(strings.TrimSpace(cfg.YooKassaSecretKey), "test_"),
+		// The API and renewal worker use the same explicit merchant policy.
+		RecurringEnabled: cfg.WebRecurringPaymentsEnabled(),
 	})
 
 	mux := http.NewServeMux()

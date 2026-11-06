@@ -14,25 +14,45 @@ describe("server model seed", () => {
     vi.mocked(webServerFetch).mockResolvedValueOnce(Response.json(rawCatalog));
     const [first, second] = await Promise.all([loadServerModelCatalog(), loadServerModelCatalog()]);
     expect(first?.value.items.length).toBeGreaterThan(0);
-    expect(first?.value.items.some(model => model.id === "gpt_4o_mini_tts")).toBe(true);
+    expect(first?.value.items.some(model => model.id === "gpt_4o_mini_tts")).toBe(false);
     expect(first?.updatedAt).toBeGreaterThan(0);
     expect(second).toBe(first);
     expect(await loadServerModelCatalog()).toBe(first);
     expect(webServerFetch).toHaveBeenCalledTimes(1);
   });
-  it("does not cache authorization failures and bounds the initial screen wait", async () => {
+  it("hands the pending server read to the client without waiting or discarding it", async () => {
     const { loadServerModelCatalog, initialModelCatalog } = await import("./model-catalog-server");
     vi.mocked(webServerFetch).mockResolvedValueOnce(new Response(null, { status: 401 }));
     expect(await loadServerModelCatalog()).toBeNull();
     let finish!: (response: Response) => void;
     vi.mocked(webServerFetch).mockReturnValueOnce(new Promise(resolve => { finish = resolve; }));
     vi.useFakeTimers();
-    const pending = initialModelCatalog();
+    const bootstrap = initialModelCatalog();
+    expect(bootstrap.source).toBeNull();
+    expect(bootstrap.pending).toBeInstanceOf(Promise);
     await vi.advanceTimersByTimeAsync(200);
-    expect(await pending).toBeNull();
     expect(webServerFetch).toHaveBeenCalledTimes(2);
     finish(Response.json(rawCatalog));
+    expect((await bootstrap.pending)?.snapshot?.value.items.length).toBeGreaterThan(0);
     expect((await loadServerModelCatalog())?.value.items.length).toBeGreaterThan(0);
+  });
+  it("retains a bounded last good snapshot while one expired server read refreshes it", async () => {
+    vi.useFakeTimers();
+    vi.setSystemTime(100_000);
+    const { loadServerModelCatalog, initialModelCatalog } = await import("./model-catalog-server");
+    vi.mocked(webServerFetch).mockResolvedValueOnce(Response.json(rawCatalog));
+    const previous = await loadServerModelCatalog();
+    vi.advanceTimersByTime(60_001);
+    let finish!: (response: Response) => void;
+    vi.mocked(webServerFetch).mockReturnValueOnce(new Promise(resolve => { finish = resolve; }));
+    const bootstrap = initialModelCatalog();
+    expect(bootstrap.source).toBe(previous);
+    const again = initialModelCatalog();
+    expect(again.source).toBe(previous);
+    expect(webServerFetch).toHaveBeenCalledTimes(2);
+    finish(Response.json(rawCatalog));
+    expect((await bootstrap.pending)?.snapshot?.updatedAt).toBe(160_001);
+    await again.pending;
   });
   it("preserves the seed age on cache hits and reloads after 60 seconds", async () => {
     vi.useFakeTimers();

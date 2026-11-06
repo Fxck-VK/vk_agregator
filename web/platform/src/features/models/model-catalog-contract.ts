@@ -316,7 +316,9 @@ export const modelCatalogSchema = z.object({
 });
 
 export type PublicCatalog = z.infer<typeof modelCatalogSchema>;
-export type ModelCatalogSnapshot = { value: PublicCatalog; updatedAt: number };
+export type ModelCatalogSnapshot = { value: PublicCatalog; updatedAt: number; view?: "dev" | "prod" };
+export type ModelCatalogDelivery = { snapshot: ModelCatalogSnapshot | null; durationMs: number };
+export type ModelCatalogBootstrap = { source: ModelCatalogSnapshot | null; pending: Promise<ModelCatalogDelivery> | null };
 export type PublicCatalogModel = PublicCatalog["items"][number];
 export type PublicOperation = PublicCatalogModel["operations"][number];
 export type PublicCatalogCategory = PublicCatalogModel["categories"][number];

@@ -11,6 +11,8 @@ import {
   beginWorkspaceNavigation,
   completeWorkspaceNavigation,
   recordWorkspaceDataLoad,
+  recordWorkspaceRead,
+  measureWorkspaceRead,
   type WorkspaceMetric,
 } from "./workspace-navigation-metrics";
 import { WorkspaceNavigationMetrics } from "./WorkspaceNavigationMetrics";
@@ -28,6 +30,73 @@ describe("workspace navigation metrics", () => {
     delete (window as MetricsWindow)[metricsKey];
     vi.restoreAllMocks();
     vi.unstubAllGlobals();
+  });
+
+  it("projects read diagnostics to safe finite fields and rejects unknown categories", () => {
+    vi.stubGlobal("location", new URL("http://localhost/app"));
+    const input = { target: "models" as const, source: "server" as const, outcome: "success" as const, durationMs: 12.8, payload: "private", url: "/private/id", accountId: "private" };
+    recordWorkspaceRead(input);
+    for (const invalid of [
+      { ...input, target: "private" }, { ...input, source: "private" }, { ...input, outcome: "private" },
+      { ...input, durationMs: Infinity }, { ...input, durationMs: NaN }, { ...input, durationMs: "12" },
+    ]) recordWorkspaceRead(invalid as unknown as Parameters<typeof recordWorkspaceRead>[0]);
+    expect(getMetrics()).toEqual([{ type: "read", target: "models", source: "server", outcome: "success", durationMs: 13 }]);
+  });
+
+  it("measures the complete asynchronous read once and returns its original result", async () => {
+    vi.stubGlobal("location", new URL("http://localhost/app"));
+    const now = vi.spyOn(performance, "now").mockReturnValue(10);
+    let finish!: (value: { privateValue: string }) => void;
+    const result = { privateValue: "not diagnostic data" };
+    const read = vi.fn(() => new Promise<typeof result>(resolve => { finish = resolve; }));
+    const pending = measureWorkspaceRead("balance", "network", read);
+    expect(read).toHaveBeenCalledOnce();
+    expect(getMetrics()).toEqual([]);
+    now.mockReturnValue(42.6);
+    finish(result);
+    expect(await pending).toBe(result);
+    expect(getMetrics()).toEqual([{ type: "read", target: "balance", source: "network", outcome: "success", durationMs: 33 }]);
+  });
+
+  it("records a failed read without capturing its error and rethrows the same error", async () => {
+    vi.stubGlobal("location", new URL("https://dev-web.epifera.com/app"));
+    vi.spyOn(performance, "now").mockReturnValueOnce(10).mockReturnValueOnce(31);
+    const error = new Error("private error details");
+    await expect(measureWorkspaceRead("conversations", "network", async () => { throw error; })).rejects.toBe(error);
+    expect(getMetrics()).toEqual([{ type: "read", target: "conversations", source: "network", outcome: "failure", durationMs: 21 }]);
+  });
+
+  it("does not record or time reads on production while preserving the operation", async () => {
+    vi.stubGlobal("location", new URL("https://epifera.com/app"));
+    const now = vi.spyOn(performance, "now");
+    recordWorkspaceRead({ target: "identity", source: "server", outcome: "success", durationMs: 30 });
+    const read = vi.fn(async () => 7);
+    expect(await measureWorkspaceRead("models", "cache", read)).toBe(7);
+    expect(read).toHaveBeenCalledOnce();
+    expect(now).not.toHaveBeenCalled();
+    expect(getMetrics()).toEqual([]);
+  });
+
+  it("shares the fifty-entry limit for navigation, data and read diagnostics", () => {
+    vi.stubGlobal("location", new URL("http://localhost/app"));
+    recordWorkspaceDataLoad({ type: "data", target: "files", source: "cache", durationMs: 0 });
+    for (let durationMs = 1; durationMs <= 51; durationMs++) recordWorkspaceRead({ target: "models", source: "cache", outcome: "success", durationMs });
+    expect(getMetrics()).toHaveLength(50);
+    expect(getMetrics()[0]).toEqual({ type: "read", target: "models", source: "cache", outcome: "success", durationMs: 2 });
+  });
+
+  it("records the delivered identity timing once across renders", () => {
+    vi.stubGlobal("location", new URL("http://localhost/app"));
+    const rendered = render(<WorkspaceNavigationMetrics identityDurationMs={18.6} />);
+    rendered.rerender(<WorkspaceNavigationMetrics identityDurationMs={18.6} />);
+    expect(getMetrics()).toEqual([{ type: "read", target: "identity", source: "server", outcome: "success", durationMs: 19 }]);
+  });
+
+  it("records unavailable identity reads as failure without adding visible UI", () => {
+    vi.stubGlobal("location", new URL("http://localhost/app"));
+    const { container } = render(<WorkspaceNavigationMetrics identityDurationMs={44.6} identityOutcome="failure" />);
+    expect(container).toBeEmptyDOMElement();
+    expect(getMetrics()).toEqual([{ type: "read", target: "identity", source: "server", outcome: "failure", durationMs: 45 }]);
   });
 
   it("does not collect metrics on a production hostname", () => {

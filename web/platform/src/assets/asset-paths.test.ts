@@ -80,7 +80,7 @@ describe("assetPaths", () => {
 
   it("exposes the workspace how-to poster URL", () => {
     expect(assetPaths.images.workspace.howItWorksPoster).toBe(
-      "/assets/images/workspace/neirohub-how-it-works-poster.png",
+      "/assets/images/workspace/neirohub-how-it-works-poster.webp",
     );
   });
 

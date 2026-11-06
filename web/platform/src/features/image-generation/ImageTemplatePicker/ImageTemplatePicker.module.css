@@ -99,14 +99,15 @@
   position: absolute;
   z-index: 3;
   inset: 50% auto auto 50%;
-  border-radius: 999px;
+  border: 0.0625rem solid var(--color-accent);
+  border-radius: var(--radius-sm);
   padding: 0.7rem 1rem;
-  background: var(--color-accent);
+  background: transparent;
   color: #fff;
   font-weight: 800;
   opacity: 0;
   transform: translate(-50%, -40%);
-  transition: opacity var(--motion-fast), transform var(--motion-fast);
+  transition: opacity var(--motion-fast), transform var(--motion-fast), border-color var(--motion-fast);
 }
 
 .card:hover .cardImage,
@@ -117,6 +118,7 @@
 
 .card:hover .cardAction,
 .card:focus-visible .cardAction {
+  border-color: var(--color-accent-strong);
   opacity: 1;
   transform: translate(-50%, -50%);
 }

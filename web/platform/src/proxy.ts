@@ -3,6 +3,8 @@ import { NextResponse, type NextRequest } from "next/server";
 import { returnPathFromURL } from "@/lib/auth/return-path";
 import { localeCookieName, resolveSiteLocale } from "@/i18n/locales";
 import { isServicePath, localeFromPath, localeRequestHeader, localizeHref, stripLocale } from "@/i18n/routing";
+import { releaseStateForRequest } from "@/features/release/server";
+import { allowsReleasePath } from "@/features/release/policy";
 
 const returnCookieName = "__Host-nh-return-to";
 
@@ -77,9 +79,12 @@ export function proxy(request: NextRequest): NextResponse {
   requestHeaders.set(localeRequestHeader, locale);
 
   const target = request.nextUrl.clone();
-  target.pathname = internalPath;
+  const release = releaseStateForRequest(request.headers);
+  const blocked = internalPath !== "/" && !allowsReleasePath(internalPath, release.view);
+  target.pathname = blocked ? "/release-unavailable" : internalPath;
   const returnPath = returnPathFromURL(pathname, request.nextUrl.searchParams);
-  const response = NextResponse.rewrite(target, { request: { headers: requestHeaders } });
+  const response = NextResponse.rewrite(target, { ...(blocked ? { status: 404 } : {}), request: { headers: requestHeaders } });
+  response.headers.set("Cache-Control", "private, no-store");
   response.headers.set("Content-Security-Policy", contentSecurityPolicy);
   // The homepage may return a personalized temporary workspace redirect.
   if (internalPath === "/") response.headers.set("Cache-Control", "private, no-store");

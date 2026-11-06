@@ -4,6 +4,7 @@ import { BrandName } from "@/components/brand/BrandName/BrandName";
 import { BrandLogo } from "@/components/brand/BrandLogo/BrandLogo";
 
 import { useDictionary } from "@/i18n/LocaleProvider";
+import { useReleaseView } from "@/features/release/ReleaseViewProvider";
 
 
 import Image from "next/image";
@@ -75,7 +76,8 @@ type SidebarProps = {
 
 export function Sidebar({ account, conversations, isDesktopCollapsed = false, onDesktopToggle }: SidebarProps) {
   const t = useDictionary();
-  const navigationItems = getWorkspaceNavigationItems(t);
+  const { allowsPath } = useReleaseView();
+  const navigationItems = getWorkspaceNavigationItems(t).filter(item => allowsPath(item.href));
   const pathname = usePathname();
   const [isNarrowViewport, setIsNarrowViewport] = useState<boolean | null>(null);
   const [isOpen, setIsOpen] = useState(false);

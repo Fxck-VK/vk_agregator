@@ -1,5 +1,14 @@
 export type WorkspaceMetricTarget = "workspace" | "chats" | "files" | "models" | "inspiration" | "conversation";
+export type WorkspaceReadTarget = "identity" | "models" | "balance" | "conversations";
+export type WorkspaceReadSource = "server" | "cache" | "network";
+export type WorkspaceReadMetric = {
+  target: WorkspaceReadTarget;
+  source: WorkspaceReadSource;
+  outcome: "success" | "failure";
+  durationMs: number;
+};
 export type WorkspaceMetric =
+  | ({ type: "read" } & WorkspaceReadMetric)
   | { type: "navigation"; target: WorkspaceMetricTarget; durationMs: number }
   | { type: "data"; target: "files" | "conversation"; source: "cache" | "network"; durationMs: number };
 
@@ -108,4 +117,28 @@ export function recordWorkspaceDataLoad(metric: Extract<WorkspaceMetric, { type:
   if (durationMs === undefined) return;
 
   appendMetric({ type: "data", target: metric.target, source: metric.source, durationMs });
+}
+
+export function recordWorkspaceRead(metric: WorkspaceReadMetric): void {
+  if (!getMetricsWindow()
+    || !["identity", "models", "balance", "conversations"].includes(metric.target)
+    || !["server", "cache", "network"].includes(metric.source)
+    || (metric.outcome !== "success" && metric.outcome !== "failure")) return;
+  const durationMs = toDurationMs(metric.durationMs);
+  if (durationMs === undefined) return;
+  appendMetric({ type: "read", target: metric.target, source: metric.source, outcome: metric.outcome, durationMs });
+}
+
+/** Time the complete read/decoding operation without retaining its result or error. */
+export async function measureWorkspaceRead<T>(target: WorkspaceReadTarget, source: WorkspaceReadSource, read: () => Promise<T>): Promise<T> {
+  if (!isWorkspaceMetricsEnabled()) return read();
+  const startedAt = performance.now();
+  try {
+    const result = await read();
+    recordWorkspaceRead({ target, source, outcome: "success", durationMs: performance.now() - startedAt });
+    return result;
+  } catch (error) {
+    recordWorkspaceRead({ target, source, outcome: "failure", durationMs: performance.now() - startedAt });
+    throw error;
+  }
 }

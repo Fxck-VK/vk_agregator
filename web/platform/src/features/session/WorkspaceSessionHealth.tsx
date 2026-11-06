@@ -6,6 +6,7 @@ import { useRouter } from "@/i18n/navigation";
 import { accountChangedEvent, devAccessRequiredEvent, navigateToDevAccess, sessionRequiredEvent } from "@/lib/web-api/browser-session";
 import { beginBrowserSession, endBrowserSession } from "@/lib/web-api/browser-session-state";
 import { clearConversationCache } from "@/features/conversations/conversation-list-cache";
+import { clearModelCatalogCache } from "@/features/models/model-catalog-cache";
 
 export function WorkspaceSessionHealth({ accountId, verification, children, guest }: { accountId: string; verification?: object; children: ReactNode; guest: ReactNode }) {
   const router = useRouter();
@@ -32,7 +33,7 @@ export function WorkspaceSessionHealth({ accountId, verification, children, gues
         navigateToDevAccess();
         return;
       }
-      endBrowserSession(); clearConversationCache(); setState({ verification, denied: true });
+      endBrowserSession(); clearConversationCache(); clearModelCatalogCache(); setState({ verification, denied: true });
       if (event.type === accountChangedEvent) router.refresh(); else router.replace("/login");
     };
     let channel: BroadcastChannel | undefined;

@@ -14,12 +14,15 @@ import { scenarioStore } from "./scenario-store";
 import { createLocalSimulator } from "./simulator";
 import type { LocalScenarios, UploadScenario } from "./scenarios";
 import type { LocalConversationSeed } from "./conversation-simulator";
+import { useReleaseView } from "@/features/release/ReleaseViewProvider";
+import { ReleaseReadinessPanel } from "@/features/release/ReleaseReadinessPanel";
 import styles from "./LocalDevelopmentTools.module.css";
 
 const subscribeToHydration = () => () => {};
 
-export function LocalDevelopmentTools({ seed }: { seed: LocalConversationSeed }) {
+export function LocalDevelopmentTools({ seed }: { seed?: LocalConversationSeed }) {
   const msg = useMessages();
+  const release = useReleaseView();
   const initialSeed = useRef(seed);
   const currentMessages = useRef(msg);
   useEffect(() => { currentMessages.current = msg; }, [msg]);
@@ -28,15 +31,15 @@ export function LocalDevelopmentTools({ seed }: { seed: LocalConversationSeed })
   const anchor = useRef<HTMLButtonElement>(null);
   const [open, setOpen] = useState(false);
   useEffect(() => {
-    if (process.env.NODE_ENV !== "development") return;
+    if (process.env.NODE_ENV !== "development" || !release.localSimulation || !initialSeed.current) return;
     scenarioStore.initialize();
     const simulator = createLocalSimulator(scenarioStore.getSnapshot, { seed: initialSeed.current,
       reply: () => currentMessages.current("localDevelopment.reply"),
       imageReply: () => currentMessages.current("localDevelopment.imageReply") });
     const unregister = registerDevelopmentTransport(simulator.handle);
     return () => { unregister(); simulator.dispose(); };
-  }, []);
-  if (process.env.NODE_ENV !== "development" || !hydrated) return null;
+  }, [release.localSimulation]);
+  if (!release.canSwitch || !hydrated) return null;
   const choices: { id: UploadScenario; label: string }[] = [
     { id: "success", label: msg("localDevelopment.success") },
     { id: "error", label: msg("localDevelopment.error") },
@@ -45,7 +48,7 @@ export function LocalDevelopmentTools({ seed }: { seed: LocalConversationSeed })
   const uploadChoices: { id: LocalScenarios["upload"]; label: string }[] = [
     ...choices, { id: "offline", label: msg("localDevelopment.offline") },
   ];
-  const launcherLabel = `${msg("localDevelopment.title")} · ${scenarios.enabled ? uploadChoices.find(item => item.id === scenarios.upload)?.label : msg("localDevelopment.off")}`;
+  const launcherLabel = msg("releasePreview.title");
   return createPortal(<>
     <div className={styles.launcher} data-ui="local-development-tools" data-open={open}>
       <Tooltip label={launcherLabel}>
@@ -63,6 +66,8 @@ export function LocalDevelopmentTools({ seed }: { seed: LocalConversationSeed })
           <strong>{msg("localDevelopment.title")}</strong>
           <ModalCloseButton size="compact" aria-label={msg("localDevelopment.close")} onClick={() => { setOpen(false); anchor.current?.focus(); }} />
         </header>
+        <ReleaseReadinessPanel />
+        {release.localSimulation ? <details><summary>{msg("localDevelopment.title")}</summary>
         <p>{msg("localDevelopment.description")}</p>
         <Link href="/app/ui-states" onClick={() => setOpen(false)}>{msg("localDevelopment.states")}</Link>
         <Button variant="outline" aria-pressed={scenarios.enabled} onClick={() => scenarioStore.update({ ...scenarios, enabled: !scenarios.enabled })}>
@@ -76,6 +81,7 @@ export function LocalDevelopmentTools({ seed }: { seed: LocalConversationSeed })
         <ModeSwitchPanel fullWidth activeID={scenarios.message} ariaLabel={msg("localDevelopment.message")} items={choices} onChange={message => scenarioStore.update({ ...scenarios, enabled: true, message })} />
         <p>{msg("localDevelopment.instructions")}</p>
         <p className={styles.note}>{msg("localDevelopment.scope")}</p>
+        </details> : null}
       </div>
     </PopoverPanel>
   </>, document.body);

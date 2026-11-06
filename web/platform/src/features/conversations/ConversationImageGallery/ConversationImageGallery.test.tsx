@@ -1,5 +1,6 @@
 import { act, cleanup, fireEvent, render, screen, within } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
+vi.mock("@/features/release/ReleaseViewProvider", () => ({ useReleaseView: () => ({ enabled: () => true, allowsPath: () => true }) }));
 
 vi.mock("@/lib/web-api/browser", () => ({ webBrowserFetch: vi.fn() }));
 

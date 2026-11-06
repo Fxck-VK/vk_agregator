@@ -141,12 +141,13 @@ reserved expiring credits: that legacy refund/compensation path has no exact lot
 attribution and must not turn subscription credits into permanent purchased funds.
 Support must resolve these mixed-balance cases before using that operator flow.
 
-**Availability:** web and recurring payment enablement still require the existing
-development/staging YooKassa test-shop gate. This local change does not enable
-live merchant charges, deploy code, migrate the application DB, or create real
-payments. Local website preview returns no active subscription and never forwards
-checkout/cancel writes. Real-money rollout still needs merchant/recurring readiness,
-reviewed current payment documents and an explicit release with live smoke.
+**Availability:** development/staging retains the YooKassa test-shop gate.
+Production has separate explicit checkout/recurring flags described under
+Live website merchant below; they are not enabled by a display preference.
+Local implementation does not apply server configuration, deploy code, migrate
+the application DB or create real payments. Local preview returns no active
+subscription and never forwards checkout/cancel writes. Real-money rollout needs
+merchant readiness, current documents and an explicit release with live smoke.
 
 ### First credit-lot rollout
 
@@ -311,11 +312,12 @@ The web uses the existing account-native payment service and ledger pipeline:
 - `GET /web/v1/payments/{id}`: exact account ownership, safe status DTO.
   Only approved HTTPS YooKassa checkout hosts may reach the browser.
 
-This rollout permits **test checkout only**: `APP_ENV=development|staging`,
+Test checkout remains restricted to `APP_ENV=development|staging`,
 `PAYMENT_PROVIDER=yookassa`, configured `YOOKASSA_SHOP_ID`, a test secret key
-(`test_` prefix), and a valid `WEB_ORIGIN`. Live/mock or incomplete configurations
-leave checkout unavailable. Credentials belong in runtime secrets, never the
-frontend or chat. The existing provider-webhook runtime must use the same shop.
+(`test_` prefix), and a valid `WEB_ORIGIN`. Production checkout has a separate
+explicit opt-in described below. Mock/incomplete configurations leave checkout
+unavailable. Credentials belong in runtime secrets, never the frontend or chat.
+The existing provider-webhook runtime must use the same shop as the API.
 
 Account-native web payments return to `WEB_ORIGIN/app/payment-return?payment_id=...`.
 This server-owned return URL does not change VK/Mini App return URLs. The ID is
@@ -342,6 +344,59 @@ always have `checkout_available=false`, and payment requests are never forwarded
 Disable preview and use the real authenticated API for a provider integration test.
 
 ## Payment Smoke
+
+### Live website merchant (local implementation, 2026-11-02)
+
+The owner authorized preparation of the activated live YooKassa merchant. This
+is local configuration/code preparation, not a deployed production release.
+One read-only authenticated `GET /v3/me` confirmed matching credentials,
+`test=false`, `status=enabled` and available payment methods. No payment, saved
+method, refund or bank charge was created. Do not store the raw response or
+credentials in tracked evidence.
+
+- `WEB_LIVE_PAYMENTS_ENABLED=true` enables web checkout only with exact
+  `APP_ENV=production`, a configured `live_` YooKassa key/shop, the official
+  `https://api.yookassa.ru/v3` endpoint and a safe HTTPS `WEB_ORIGIN`.
+- `WEB_LIVE_RECURRING_ENABLED=true` is an independent default-off opt-in. Enable
+  only after confirming recurring payments on this live merchant; the API and
+  provider-webhook renewal process use the same config policy. Test-shop
+  recurring behavior remains unchanged.
+- Both flags require canonical `true`/`false`. Wrong-environment flags, incomplete
+  live configuration and invalid receipt policy fail startup/admission. A browser
+  cookie, query or DEV/PROD display preference never selects a payment merchant.
+- `YOOKASSA_RECEIPT_MODE=yookassa` preserves the original default fiscal receipt
+  body. For this owner's NPD merchant use `npd_manual`: payments and refunds omit
+  the 54-FZ `receipt` object; the verified buyer contact requirement is retained.
+  The operator issues/transfers NPD receipts through My Tax. This configuration
+  does not create NPD receipts automatically. Existing legal documents already
+  describe the operator's NPD receipt obligation.
+
+Official sources: [merchant API](https://yookassa.ru/developers/api),
+[receipt routes](https://yookassa.ru/developers/payment-acceptance/receipts/basics),
+[recurring merchant enablement](https://yookassa.ru/developers/payment-acceptance/scenario-extensions/recurring-payments/basics).
+
+Owner input is ignored `.runtime/payments/live-shop.env`. Merge the approved
+merchant values into the existing `ENV_PAYMENTS_PROD`/server configuration during
+an explicitly authorized release, preserving unrelated legacy payment/VK fields.
+Do not overwrite the complete opaque secret with a partial file. Account-native
+return URLs still derive from `WEB_ORIGIN`; preserve any existing provider/VK
+return configuration rather than changing it for the web route.
+
+The permanent callback target is
+`https://epifera.com/billing/webhooks/yookassa` with `payment.succeeded`,
+`payment.canceled`, `refund.succeeded`. Configure it on the correct live merchant
+after confirming the production ingress/worker and its actual HTTPS reachability;
+no temporary tunnel or DEV URL belongs in live settings. Direct HEAD/read-only
+reachability was not confirmed in this preparation (timeout); do not describe
+the callback as working or the merchant as fully integrated from `/me` alone.
+
+Before enabling real acceptance: deploy API and provider-webhook consistently,
+verify current merchant/flags/receipt mode, ingress and reconciliation, then run
+an owner-authorized small real payment, settlement/replay/refund smoke. Recurring
+charges and NPD receipt operations require their own verification. See the
+[implementation evidence](../superpowers/plans/2026-11-02-live-merchant.md).
+
+### Required payment lifecycle checks
 
 Before real-money confidence, verify:
 

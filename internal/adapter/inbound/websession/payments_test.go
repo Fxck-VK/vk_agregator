@@ -50,7 +50,7 @@ func (s *webPaymentStub) GetAccountIntent(_ context.Context, accountID, id uuid.
 
 func TestWebPaymentCatalogAndCreate(t *testing.T) {
 	h, _, sessions := newTestHandler(t)
-	h.cfg.TestPaymentsEnabled = true
+	h.cfg.PaymentsEnabled = true
 	stub := &webPaymentStub{intent: &domain.PaymentIntent{ID: uuid.New(), Status: domain.PaymentIntentWaitingForUser, Amount: 40000, Currency: domain.CurrencyRUB, Credits: 800, CreditDenominationVersion: 2, Provider: domain.PaymentProviderYooKassa, ConfirmationURL: "https://yoomoney.ru/checkout/payments/v2/contract?orderId=test"}}
 	h.deps.Payments = stub
 	contacts := &webReceiptContactStub{}
@@ -109,11 +109,11 @@ func TestWebPaymentRejectsUnsafeRequests(t *testing.T) {
 		{name: "csrf", mutate: func(r *http.Request, _ *Handler) { r.Header.Del("X-CSRF-Token") }, want: 403},
 		{name: "origin", mutate: func(r *http.Request, _ *Handler) { r.Header.Set("Origin", "https://evil.test") }, want: 403},
 		{name: "session", mutate: func(r *http.Request, _ *Handler) { r.Header.Del("Cookie") }, want: 403},
-		{name: "unavailable test shop", mutate: func(_ *http.Request, h *Handler) { h.cfg.TestPaymentsEnabled = false }, want: 503},
+		{name: "unavailable test shop", mutate: func(_ *http.Request, h *Handler) { h.cfg.PaymentsEnabled = false }, want: 503},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			h, _, sessions := newTestHandler(t)
-			h.cfg.TestPaymentsEnabled = true
+			h.cfg.PaymentsEnabled = true
 			stub := &webPaymentStub{}
 			h.deps.Payments = stub
 			body := tc.body
@@ -145,7 +145,7 @@ func TestWebPaymentRequiresVerifiedAccountReceiptContact(t *testing.T) {
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			h, _, sessions := newTestHandler(t)
-			h.cfg.TestPaymentsEnabled = true
+			h.cfg.PaymentsEnabled = true
 			stub := &webPaymentStub{}
 			h.deps.Payments = stub
 			h.deps.ReceiptContacts = &webReceiptContactStub{err: tc.contactErr}

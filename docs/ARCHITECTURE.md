@@ -14,7 +14,29 @@
 
 ---
 
+Production website payments use default-off WEB_LIVE_PAYMENTS_ENABLED and an
+independent WEB_LIVE_RECURRING_ENABLED opt-in. API and renewal worker share the
+config-layer environment/merchant policy; DEV display settings never select
+real-money credentials. NPD manual receipt mode omits the provider fiscal receipt
+body while keeping verified buyer contact, identity, idempotency and ledger
+checks. Operator NPD receipt issuance remains external/manual. No schema change.
 # Current implementation addendum: app surfaces and backend core
+Landing comparison is independent of the public content catalogue. The original
+T01/public-home renderer remains canonical; the incoming homepage from ba2001cd
+uses isolated feature styles and frozen Russian data. Server-only comparison
+routes require the existing trusted DEV release state, reject PROD/direct access
+and retain noindex outside sitemap. Account routing and publication rules remain
+unchanged. See ../web/platform/docs/landing-variants.md. Local integration only.
+
+Release views share web/platform/release/features.json between the platform and
+API. The existing DEV gateway authorizes a private preview preference; actual
+production/unknown runtime always forces PROD. Flags only restrict existing
+admission. Direct pages, catalogues, paid preparation and owned stored-job
+activation/retry use server guards; historical reads and pricing stay intact.
+The existing developer panel displays readiness and publication status without
+changing data/merchant configuration. Catalogue snapshots and caches bind their
+release view, avoiding cross-profile freshness or late-response reuse. API and
+platform must be rebuilt together after registry edits. See docs/RELEASE_SCOPE.md.
 Canonical browser authentication uses one localized `/login` UI with child
 register/recover/reset/verify routes; `/login-v2` redirects to it. Shared
 PasswordField/VerificationCodeField/RecoveryFlow implement password-first signup,
@@ -104,6 +126,16 @@ selects the canonical row across processes. Next remains an API proxy, with
 the previous bounded Sharp path for offline fixtures and temporary preview
 503s. Original reads and worker/provider/moderation/billing boundaries stay
 unchanged. See [workspace loading](../web/platform/docs/preloading.md).
+Workspace catalogue bootstrap starts only after verified identity. It streams a
+shared pending read together with the last normalized non-personal snapshot;
+selectors and raw adapters adopt the same result, with one authenticated browser
+fallback on server failure. Server/browser freshness is 60 seconds; optional
+validated sessionStorage presentation data is bounded to 15 minutes/1.5MB UTF-8,
+cleared on logout/account transition, and never grants model or price authority.
+Profile, balances and conversations do not use this catalogue cache. Local/DEV
+read diagnostics retain only operation/source/outcome/duration in a 50-entry
+in-memory ring; no identity, payload or remote telemetry. DEV static assets remain
+gated on every private browser revalidation. See [loading checks](superpowers/plans/2026-11-01-workspace-loading.md).
 
 Website invitations use webreferralservice and canonical account-owned codes,
 without creating legacy VK users. Hashed browser intents expire after 30 days;

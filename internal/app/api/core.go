@@ -138,7 +138,7 @@ func NewSharedCore(pool *pgxpool.Pool, cfg config.Config, opts ...SharedCoreOpti
 		AccountReturnURL: WebPaymentReturnURL(&cfg), ReturnURL: cfg.YooKassaReturnURL,
 		IncludeDevTestPaymentProduct: cfg.FeatureDevPaymentTestProductEnabled,
 		SubscriptionStore:            billingRepo, SubscriptionBilling: billingRepo, SubscriptionTx: txRunner,
-		RecurringEnabled: WebTestPaymentsEnabled(&cfg),
+		RecurringEnabled: cfg.WebRecurringPaymentsEnabled(),
 	})
 	paymentOps := paymentservice.NewWebhookProcessor(payments, paymentProvider, billing, txRunner)
 

@@ -7,7 +7,7 @@ import (
 
 func TestWebTestPaymentsRequireTestShopAndSafeReturnOrigin(t *testing.T) {
 	cfg := &config.Config{Env: "staging", PaymentProvider: "yookassa", YooKassaShopID: "synthetic-shop", YooKassaSecretKey: "test_synthetic", WebOrigin: "https://dev-web.example.test"}
-	if !WebTestPaymentsEnabled(cfg) || WebPaymentReturnURL(cfg) != "https://dev-web.example.test/app/payment-return" {
+	if !WebPaymentsEnabled(cfg) || WebPaymentReturnURL(cfg) != "https://dev-web.example.test/app/payment-return" {
 		t.Fatal("valid test config disabled")
 	}
 	for _, change := range []func(*config.Config){
@@ -20,7 +20,7 @@ func TestWebTestPaymentsRequireTestShopAndSafeReturnOrigin(t *testing.T) {
 	} {
 		copy := *cfg
 		change(&copy)
-		if WebTestPaymentsEnabled(&copy) {
+		if WebPaymentsEnabled(&copy) {
 			t.Fatal("unsafe/non-test config enabled")
 		}
 	}

@@ -7,27 +7,19 @@ import { ModelIcon } from "@/features/models/ModelIcon/ModelIcon";
 import { modelIconRegistry } from "@/features/models/model-icon-registry";
 import Link from "@/i18n/Link";
 import type { HomeEnglishCopy } from "@/i18n/public/home-en";
-import type { HomeMediaBriefKey } from "@/i18n/public/home-media-en";
-import { HomeMediaPrompt } from "./HomeMedia";
+import { HomePicture } from "./HomeMedia";
 import { keyboardTab } from "./HomeSuite";
 import styles from "./PublicHome.module.css";
 
-const modelBriefs: Record<HomeEnglishCopy["models"]["items"][number]["id"], HomeMediaBriefKey> = {
-  gpt_image_2: "modelGptImage", nano_banana_pro: "modelNanoBanana", video_kling_v3: "modelKling", video_veo_3_1_fast: "modelVeo",
-  seedream_5_0_lite: "modelSeedream", flux_2_pro: "modelFlux", suno_v6: "modelSuno", gpt_4o_mini_tts: "modelGptVoice",
-};
-const workflowBriefs: readonly HomeMediaBriefKey[] = ["workflowTools", "workflowProcess", "workflowFiles", "workflowStart"];
-const possibilityBriefs: readonly HomeMediaBriefKey[] = ["possibilityAdvertising", "possibilityProduct", "possibilityBrand", "possibilityFilm"];
-
 export function HomeModels({ copy, paused }: { copy: HomeEnglishCopy; paused: boolean }) {
-  return <LandingSection id="models" title={copy.models.title} description={copy.models.description} className={styles.modelsSection} align="start">
-    <LandingCarousel label={copy.models.label} previous={copy.controls.previous} next={copy.controls.next} auto paused={paused} className={styles.modelCards}>{copy.models.items.map(model => <Link href="/app/models" key={model.name} className={styles.modelCard}><div className={styles.modelArtwork}><HomeMediaPrompt brief={modelBriefs[model.id]} /><ModelIcon src={modelIconRegistry[model.id]} className={styles.modelLogo} /></div><span>{model.name}<LandingArrow /></span></Link>)}</LandingCarousel>
+  return <LandingSection id="models" title={copy.models.title} description={copy.models.description} className={styles.modelsSection}>
+    <LandingCarousel label={copy.models.label} previous={copy.controls.previous} next={copy.controls.next} auto paused={paused} className={styles.modelCards}>{copy.models.items.map(model => <Link href="/app/models" key={model.name} className={styles.modelCard}><div className={styles.modelArtwork}><HomePicture file={model.image} sizes="240px" /><ModelIcon src={modelIconRegistry[model.id]} className={styles.modelLogo} /></div><span>{model.name}<LandingArrow /></span></Link>)}</LandingCarousel>
   </LandingSection>;
 }
 
 export function HomeWorkflow({ copy }: { copy: HomeEnglishCopy }) {
   return <LandingSection id="workflow" title={copy.workflow.title} description={copy.workflow.description} align="start" action={<LandingLink href="/app">{copy.start}<LandingArrow /></LandingLink>}>
-    <div className={styles.workflowGrid}>{copy.workflow.cards.map((card, index) => <Link href={card.href} key={card.title} className={styles.workflowCard}><div><h3>{card.title}</h3><p>{card.description}</p></div><div className={styles.workflowArtwork}><HomeMediaPrompt brief={workflowBriefs[index]} /></div><span className={styles.cardArrow}><LandingArrow /></span></Link>)}</div>
+    <div className={styles.workflowGrid}>{copy.workflow.cards.map((card, index) => <Link href={card.href} key={card.title} className={styles.workflowCard} data-card={index}><div><h3>{card.title}</h3><p>{card.description}</p></div><div className={styles.workflowArtwork}><HomePicture file={card.image} /></div><span className={styles.cardArrow}><LandingArrow /></span></Link>)}</div>
   </LandingSection>;
 }
 
@@ -46,6 +38,6 @@ export function HomeTools({ copy }: { copy: HomeEnglishCopy }) {
 
 export function HomePossibilities({ copy }: { copy: HomeEnglishCopy }) {
   return <LandingSection id="possibilities" title={copy.possibilities.title} description={copy.possibilities.description} align="start" action={<LandingLink href="/app">{copy.start}<LandingArrow /></LandingLink>}>
-    <div className={styles.possibilityGrid}>{copy.possibilities.cards.map((card, index) => <Link href={card.href} key={card.title} className={styles.possibilityCard}><div className={styles.possibilityImage}><HomeMediaPrompt brief={possibilityBriefs[index]} /></div><h3>{card.title}</h3><p>{card.description}</p></Link>)}</div>
+    <div className={styles.possibilityGrid}>{copy.possibilities.cards.map(card => <Link href={card.href} key={card.title} className={styles.possibilityCard}><div className={styles.possibilityImage}><HomePicture file={card.image} sizes="(max-width: 767px) 90vw, 24vw" /><span><LandingArrow /></span></div><h3>{card.title}</h3><p>{card.description}</p></Link>)}</div>
   </LandingSection>;
 }

@@ -295,4 +295,11 @@ expect_failure "invalid VK ID audience" bash "${prepare_script}" \
   --image-tag sha-test123 --ghcr-username test-ghcr-user --ghcr-token GHCR_TEST
 [[ ! -e "${tmpdir}/invalid-vkid.rendered.env" ]]
 
+for live_flag in WEB_LIVE_PAYMENTS_ENABLED WEB_LIVE_RECURRING_ENABLED; do
+  live_flag_env="${tmpdir}/${live_flag}.env"
+  write_common_dev_env "${live_flag_env}" mock
+  printf '%s=true\n' "${live_flag}" >> "${live_flag_env}"
+  expect_failure "live merchant flag in DEV: ${live_flag}" bash "${check_script}" --env-file "${live_flag_env}"
+done
+
 echo "DEV deploy env script tests passed"

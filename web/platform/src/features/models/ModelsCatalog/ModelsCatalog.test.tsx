@@ -187,9 +187,11 @@ describe("ModelsCatalog", () => {
     await screen.findByText("Nano Banana");
     expect(screen.getByRole("heading", { name: "Популярные" })).toBeInTheDocument();
     expect(screen.getByRole("tabpanel", { name: "Популярные" })).toHaveAttribute("id", "models-catalog-panel");
-    for (const category of ["Популярные", "Изображения", "Текст", "Видео", "Аудио", "Бесплатные", "Учёба и работа"]) {
+    for (const category of ["Популярные", "Изображения", "Текст", "Видео", "Учёба и работа"]) {
       expect(screen.getByRole("tab", { name: category })).toBeInTheDocument();
     }
+    expect(screen.queryByRole("tab", { name: "Аудио" })).not.toBeInTheDocument();
+    expect(screen.queryByRole("tab", { name: "Бесплатные" })).not.toBeInTheDocument();
     expect(screen.getByText("Nano Banana")).toBeInTheDocument();
 
     fireEvent.click(screen.getByRole("tab", { name: "Изображения" }));

@@ -1,11 +1,57 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { loadModelCatalog, resetModelCatalogCacheForTests, seedModelCatalog } from "./model-catalog-cache";
-import { parseModelCatalog } from "./model-catalog-contract";
+import { adoptServerModelCatalog, clearModelCatalogCache, loadModelCatalog, resetModelCatalogCacheForTests, seedModelCatalog } from "./model-catalog-cache";
+import { parseModelCatalog, type ModelCatalogDelivery } from "./model-catalog-contract";
+import { webBrowserFetch } from "@/lib/web-api/browser";
+import { readModelCatalogSession } from "./model-catalog-session-cache";
 import { publicModelCatalog } from "./model-catalog-test-fixtures";
 
+vi.mock("@/lib/web-api/browser", () => ({ webBrowserFetch: vi.fn() }));
+
 const catalog = parseModelCatalog(publicModelCatalog());
-afterEach(() => { resetModelCatalogCacheForTests(); vi.useRealTimers(); });
+afterEach(() => { resetModelCatalogCacheForTests(); vi.useRealTimers(); vi.resetAllMocks(); });
 describe("shared raw catalog cache", () => {
+  it("shares one delayed server result without starting a browser request", async () => {
+    let finish!: (delivery: ModelCatalogDelivery) => void;
+    adoptServerModelCatalog(new Promise(resolve => { finish = resolve; }));
+    const first = loadModelCatalog(), second = loadModelCatalog();
+    finish({ snapshot: { value: catalog, updatedAt: Date.now() }, durationMs: 300 });
+    await expect(first).resolves.toBe(catalog);
+    await expect(second).resolves.toBe(catalog);
+    expect(webBrowserFetch).not.toHaveBeenCalled();
+    expect(readModelCatalogSession()?.value).toEqual(catalog);
+  });
+
+  it.each(["empty", "rejection"])("falls back to one shared browser read after server %s", async outcome => {
+    vi.mocked(webBrowserFetch).mockResolvedValue(Response.json(catalog));
+    adoptServerModelCatalog(outcome === "empty" ? Promise.resolve({ snapshot: null, durationMs: 25 }) : Promise.reject(new Error("unavailable")));
+    const [first, second] = await Promise.all([loadModelCatalog(), loadModelCatalog()]);
+    expect(first).toBe(second);
+    expect(webBrowserFetch).toHaveBeenCalledTimes(1);
+  });
+
+  it("does not let a server result after logout restore memory or storage", async () => {
+    let finish!: (delivery: ModelCatalogDelivery) => void;
+    adoptServerModelCatalog(new Promise(resolve => { finish = resolve; }));
+    const pending = loadModelCatalog();
+    clearModelCatalogCache();
+    finish({ snapshot: { value: catalog, updatedAt: Date.now() }, durationMs: 300 });
+    await expect(pending).rejects.toMatchObject({ name: "AbortError" });
+    expect(readModelCatalogSession()).toBeNull();
+    expect(webBrowserFetch).not.toHaveBeenCalled();
+    const fetcher = vi.fn(async () => Response.json(catalog));
+    await loadModelCatalog({ fetcher });
+    expect(fetcher).toHaveBeenCalledTimes(1);
+  });
+
+  it("does not let a browser result after logout restore storage", async () => {
+    let finish!: (response: Response) => void;
+    const pending = loadModelCatalog({ fetcher: vi.fn(() => new Promise<Response>(resolve => { finish = resolve; })) });
+    clearModelCatalogCache();
+    finish(Response.json(catalog));
+    await expect(pending).rejects.toMatchObject({ name: "AbortError" });
+    expect(readModelCatalogSession()).toBeNull();
+  });
+
   it("honors the original seed age and coalesces the first expired read", async () => {
     vi.useFakeTimers();
     vi.setSystemTime(100_000);

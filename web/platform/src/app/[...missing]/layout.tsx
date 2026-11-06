@@ -7,6 +7,7 @@ import { loadWorkspaceSession } from "@/features/session/session-data";
 import { WorkspaceLogoutBoundary } from "@/features/session/WorkspaceLogout/WorkspaceLogoutBoundary";
 import { isServicePath } from "@/i18n/routing";
 import { initialModelCatalog } from "@/features/models/model-catalog-server";
+import { getRequestReleaseState } from "@/features/release/server";
 import {resolveContentPage} from '@/content/templates/catalog';
 
 export const dynamic = "force-dynamic";
@@ -29,12 +30,14 @@ export default async function MissingPageLayout({ children, params }: MissingPag
   // A 404 remains navigable even when the session is absent or cannot be read.
   // Following a real workspace link resumes the existing session/refresh flow.
   if (session.kind !== "authenticated") return guest;
+  const catalogue = initialModelCatalog((await getRequestReleaseState()).view);
 
   return (
     <WorkspaceLogoutBoundary guest={guest}>
       <WorkspaceFrame
         deferred={session.deferred}
-        initialCatalog={await initialModelCatalog()}
+        initialCatalog={catalogue.source}
+        pendingCatalog={catalogue.pending}
         account={<AccountControl profile={session.profile} />}
         accountId={session.profile.account_id}
         balance={session.balance}

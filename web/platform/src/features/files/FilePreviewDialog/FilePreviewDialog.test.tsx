@@ -3,6 +3,9 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import type { ImageJob, ImageJobResult } from "@/lib/web-api/contracts";
 
+const releaseView = vi.hoisted(() => ({ view: "dev" }));
+vi.mock("@/features/release/ReleaseViewProvider", () => ({ useReleaseView: () => ({ enabled: () => releaseView.view === "dev", allowsPath: () => true }) }));
+
 import { FilePreviewDialog, type FilePreviewItem } from "./FilePreviewDialog";
 import {
   resetFileActionModelCatalogLoaderForTests,
@@ -109,7 +112,20 @@ function renderDialog({
 
 describe("FilePreviewDialog", () => {
   beforeEach(() => {
+    releaseView.view = "dev";
     setFileActionModelCatalogLoaderForTests(async () => emptyFileActionCatalog);
+  });
+
+  it("hides unfinished tools in PROD and returns a stale editor to general", () => {
+    const view = renderDialog();
+    fireEvent.click(screen.getByRole("button", { name: "Редактировать" }));
+    releaseView.view = "prod";
+    view.rerender(<FilePreviewDialog items={items} onClose={vi.fn()} onSelect={vi.fn()} selectedIndex={0} />);
+    for (const name of ["Редактировать", "Оживить", "Улучшить", "Удалить фон"]) expect(screen.queryByRole("button", { name })).not.toBeInTheDocument();
+    expect(screen.getByText(job.prompt)).toBeInTheDocument();
+    releaseView.view = "dev";
+    view.rerender(<FilePreviewDialog items={items} onClose={vi.fn()} onSelect={vi.fn()} selectedIndex={0} />);
+    expect(screen.getByText(job.prompt)).toBeInTheDocument();
   });
 
   afterEach(() => {

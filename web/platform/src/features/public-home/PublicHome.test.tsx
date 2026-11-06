@@ -1,8 +1,10 @@
 import { fireEvent, render, screen, within } from "@testing-library/react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
+// Original public-template fixtures explicitly use the development view.
+vi.mock("@/features/release/server", () => ({ getRequestReleaseState: async () => ({ view: "dev", canSwitch: true, localSimulation: false }) }));
+vi.mock("@/features/release/ReleaseViewProvider", () => ({ useReleaseView: () => ({ view: "dev", canSwitch: true, localSimulation: false, enabled: () => true, allowsPath: () => true, switching: false, error: false, changeView: async () => true }) }));
 import { LocaleProvider } from "@/i18n/LocaleProvider";
-import { homeEn, type HomeEnglishCopy } from "@/i18n/public/home-en";
-import { homeMediaBriefsEn } from "@/i18n/public/home-media-en";
+import { homeEn } from "@/i18n/public/home-en";
 import { PublicHome } from "./PublicHome";
 
 vi.mock("next/navigation", () => ({ useRouter: vi.fn() }));
@@ -15,36 +17,6 @@ function home() { render(<LocaleProvider locale="en"><PublicHome copy={homeEn} /
 beforeEach(() => { vi.spyOn(HTMLMediaElement.prototype, "pause").mockImplementation(() => undefined); });
 
 describe("rebuilt English public home", () => {
-  it("honors editable suite title and description from the page content", () => {
-    const copy = { ...homeEn, suite: { ...homeEn.suite, title: "Edited suite title", description: "Edited suite description" } } as unknown as HomeEnglishCopy;
-    render(<LocaleProvider locale="en"><PublicHome copy={copy} /></LocaleProvider>);
-    expect(screen.getByRole("heading", { name: "Edited suite title" })).toBeVisible();
-    expect(screen.getByText("Edited suite description")).toBeVisible();
-  });
-
-  it("shows the cinematic Epifera scene instead of the rejected portrait", () => {
-    home();
-    expect(screen.queryByText("Image prompt")).not.toBeInTheDocument();
-    expect(screen.getByRole("img", { name: homeMediaBriefsEn.hero.title })).toHaveAttribute("src", "/assets/images/home/hero.webp");
-    expect(screen.getByRole("heading", { name: homeEn.originals.slides[1].title })).toBeVisible();
-    expect(screen.getByRole("img", { name: homeMediaBriefsEn.suiteVideo.title })).toHaveAttribute("src", "/assets/images/home/suite-video.webp");
-    for (const slide of [1, 3, 2]) {
-      fireEvent.click(screen.getByRole("button", { name: `Go to slide ${slide}` }));
-      expect(document.querySelector('img[src*="original-portrait"]')).toBeNull();
-    }
-    expect(document.querySelector('img[src*="/assets/images/marketing/"]')).toBeNull();
-    expect(document.querySelector("video")).toBeNull();
-  });
-
-  it("keeps a direct action and one readable description for the selected creative category", () => {
-    home();
-    const categories = within(screen.getByRole("tablist", { name: homeEn.suite.categoriesLabel }));
-    fireEvent.click(categories.getByRole("tab", { name: "Video" }));
-    expect(screen.getByRole("link", { name: "Choose a video model" })).toHaveAttribute("href", "/ru/app/models");
-    expect(screen.getByText(homeEn.suite.categories[1].description)).toBeVisible();
-    expect(screen.queryByText(homeEn.suite.categories[0].description)).not.toBeInTheDocument();
-  });
-
   it("renders one English homepage with existing localized workspace destinations", () => {
     home();
     expect(screen.getAllByRole("heading", { level: 1 })).toHaveLength(1);

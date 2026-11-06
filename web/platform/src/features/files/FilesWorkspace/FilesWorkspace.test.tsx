@@ -2,6 +2,17 @@ import { StrictMode } from "react";
 import { act, cleanup, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
+// This baseline suite exercises the complete DEV interface, including draft links.
+vi.mock("@/features/release/ReleaseViewProvider", async () => {
+  const { allowsReleasePath, featureEnabled } = await import("@/features/release/policy");
+  return { useReleaseView: () => ({
+    view: "dev", canSwitch: false, localSimulation: false, switching: false, error: false,
+    enabled: (id: string) => featureEnabled(id, "dev"),
+    allowsPath: (href: string) => allowsReleasePath(href, "dev"),
+    changeView: async () => false,
+  }) };
+});
+
 vi.mock("@/lib/web-api/browser", () => ({
   webBrowserFetch: vi.fn(),
   webBrowserMutation: vi.fn(),

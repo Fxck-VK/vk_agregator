@@ -7,18 +7,27 @@ import type {TemplateSources} from './types';
 import {getRequestLocale,notFound} from '@/i18n/server';
 import {publicPageMetadata} from '@/i18n/seo';
 import {paginateAuthorMaterials} from '@/features/author/author-model';
+import {getRequestReleaseState} from '@/features/release/server';
+import {allowsReleasePath} from '@/features/release/policy';
 
-function lookup(path:string){return resolveContentPage(path,{preview:process.env.NODE_ENV==='development'});}
+async function lookup(path:string){
+  const release=await getRequestReleaseState();
+  const page=resolveContentPage(path,{preview:release.view==='dev'});
+  if(!page||!allowsReleasePath(path,release.view)||release.view==='prod'&&page.template!=='T23'&&page.status!=='published')return undefined;
+  return page;
+}
 export async function contentMetadata(path:string){
-  const page=lookup(path);if(!page)notFound();
+  const page=await lookup(path);if(!page)notFound();
   return {...publicPageMetadata(await getRequestLocale(),contentPublication(page)),...page.seo};
 }
 export async function renderContentPage(path:string,searchPage?:string|string[]){
-  const page=lookup(path);if(!page)notFound();return renderContentRecord(page,searchPage);
+  const page=await lookup(path);if(!page)notFound();return renderContentRecord(page,searchPage);
 }
 
 /** Every branch reuses the original page's component; no second JSX layout. */
 export async function renderContentRecord(page:ResolvedContentPage,searchPage?:string|string[]){
+  const release=await getRequestReleaseState();
+  if(!allowsReleasePath(page.path,release.view)||release.view==='prod'&&page.template!=='T23'&&page.status!=='published')notFound();
   const data=contentSources(page,await getRequestLocale());
   const source=<K extends TemplateId>(id:K)=>{void id;return data as TemplateSources<K>;};
   let view:ReactNode;

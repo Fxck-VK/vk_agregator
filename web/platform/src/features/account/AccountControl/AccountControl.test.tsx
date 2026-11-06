@@ -1,6 +1,17 @@
 import { cleanup, fireEvent, render, screen } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
+// This baseline suite exercises the complete DEV interface, including draft links.
+vi.mock("@/features/release/ReleaseViewProvider", async () => {
+  const { allowsReleasePath, featureEnabled } = await import("@/features/release/policy");
+  return { useReleaseView: () => ({
+    view: "dev", canSwitch: false, localSimulation: false, switching: false, error: false,
+    enabled: (id: string) => featureEnabled(id, "dev"),
+    allowsPath: (href: string) => allowsReleasePath(href, "dev"),
+    changeView: async () => false,
+  }) };
+});
+
 const logout = vi.hoisted(() => vi.fn());
 
 vi.mock("next/navigation", () => ({

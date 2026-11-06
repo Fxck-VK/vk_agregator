@@ -4,11 +4,18 @@ import { usePathname } from "@/i18n/navigation";
 import { useEffect, useRef } from "react";
 import { stripLocale } from "@/i18n/routing";
 
-import { beginWorkspaceNavigation, completeWorkspaceNavigation, isWorkspaceMetricsEnabled } from "./workspace-navigation-metrics";
+import { beginWorkspaceNavigation, completeWorkspaceNavigation, isWorkspaceMetricsEnabled, recordWorkspaceRead } from "./workspace-navigation-metrics";
 
-export function WorkspaceNavigationMetrics() {
+export function WorkspaceNavigationMetrics({ identityDurationMs, identityOutcome = "success" }: { identityDurationMs?: number; identityOutcome?: "success" | "failure" } = {}) {
   const pathname = usePathname();
   const previousPathnameRef = useRef(pathname);
+  const identityRecorded = useRef(false);
+
+  useEffect(() => {
+    if (identityRecorded.current || identityDurationMs === undefined) return;
+    identityRecorded.current = true;
+    recordWorkspaceRead({ target: "identity", source: "server", outcome: identityOutcome, durationMs: identityDurationMs });
+  }, [identityDurationMs, identityOutcome]);
 
   useEffect(() => {
     if (previousPathnameRef.current !== pathname) completeWorkspaceNavigation(pathname);

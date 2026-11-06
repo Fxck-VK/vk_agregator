@@ -57,7 +57,14 @@ export function createReadResource<T>(loader: (signal: AbortSignal) => Promise<T
       inFlight = null;
       return resource.load(true);
     },
-    seed(data: T) { if (snapshot.data === null) publish({ ...snapshot, data }); },
+    seed(data: T, updatedAt = snapshot.updatedAt) {
+      if (snapshot.data === null) publish({ ...snapshot, data, updatedAt: Math.min(updatedAt, Date.now()) });
+    },
+    replaceSeed(data: T | null, updatedAt = 0) {
+      revision++; cancelRetry(); request?.abort(); request = null; inFlight = null;
+      failures = 0; nextAllowedAt = 0;
+      publish({ data, pending: false, failed: false, error: null, updatedAt: data === null ? 0 : Math.min(updatedAt, Date.now()) });
+    },
     resume() {
       if (typeof navigator !== "undefined" && navigator.onLine === false && !inFlight && !snapshot.error) {
         publish({ ...snapshot, pending: false, failed: true, error: new ReadError("network") });

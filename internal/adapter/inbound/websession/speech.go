@@ -42,6 +42,9 @@ func (h *Handler) prepareSpeechJob(w http.ResponseWriter, r *http.Request) {
 		writeError(w, 400, "invalid speech request")
 		return
 	}
+	if !h.requireReleaseModel(w, r, request.ModelID, "audio") {
+		return
+	}
 	key, err := uuid.Parse(r.Header.Get("X-Idempotency-Key"))
 	if err != nil || key == uuid.Nil {
 		writeError(w, 400, "invalid idempotency key")
@@ -190,6 +193,9 @@ func (h *Handler) activateSpeechJob(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	params, _ := speechgeneration.DecodeJob(job)
+	if !h.requireReleaseModel(w, r, params.ModelID, "audio") {
+		return
+	}
 	if h.deps.ImageJobs == nil || !providermodels.RuntimeRegistry().MediaCandidateRunnable(params.ModelID, params.Action()) {
 		writeError(w, 503, "speech awaits verification")
 		return

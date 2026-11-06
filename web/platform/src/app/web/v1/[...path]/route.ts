@@ -3,15 +3,12 @@ import { join } from "node:path";
 
 import {
   isLocalWorkspacePreviewEnabled,
-  localWorkspacePreviewChatModels,
   localWorkspacePreviewConversations,
   localWorkspacePreviewModels,
-  localWorkspacePreviewVideoModels,
   localWorkspacePreviewConversationMessages,
   localWorkspacePreviewImageArtifactPaths,
   localWorkspacePreviewImageJobResults,
   localWorkspacePreviewImageJobs,
-  localWorkspacePreviewImageModels,
   localWorkspacePreviewPaymentProducts,
 } from "../../../../features/session/local-workspace-preview";
 import { getWebApiInternalOrigin } from "../../../../lib/web-api/internal-origin";
@@ -20,6 +17,9 @@ import { previewAuthMethods } from "@/lib/auth/methods";
 import { localWorkspacePreviewProfile } from "@/features/session/local-workspace-preview";
 import { markPreviewArtifactDeleted, previewDeletedArtifactIDs, previewWithTombstones } from "@/features/local-development/preview-artifact-deletion.server";
 import { decodePreviewImageID } from "@/features/local-development/preview-image";
+import { releaseStateForRequest } from "@/features/release/server";
+import { featureEnabled, filterReleaseCatalog } from "@/features/release/policy";
+import { projectChatModelCatalog, projectImageModelCatalog, projectVideoModelCatalog } from "@/features/models/model-catalog-contract";
 
 export const runtime = "nodejs";
 
@@ -46,6 +46,11 @@ async function handle(request: Request): Promise<Response> {
 
 async function handleSource(request: Request): Promise<Response> {
   const requestURL = new URL(request.url);
+  const release = releaseStateForRequest(request.headers);
+  if (!["GET", "HEAD", "OPTIONS"].includes(request.method)) {
+    const music = /^\/web\/v1\/music(?:-|\/)/.test(requestURL.pathname), speech = /^\/web\/v1\/speech(?:-|\/)/.test(requestURL.pathname);
+    if (music && !featureEnabled("music", release.view) || speech && !featureEnabled("transcription", release.view) && !featureEnabled("tts", release.view)) return previewJsonError(404);
+  }
   const rawPath = `${requestURL.pathname}${requestURL.search}`;
   if (isLocalWorkspacePreviewEnabled() && request.method === "DELETE") {
     const match = requestURL.pathname.match(/^\/web\/v1\/artifacts\/([a-f0-9-]{36})$/i);
@@ -70,13 +75,14 @@ async function handleSource(request: Request): Promise<Response> {
     if (requestURL.pathname === "/web/v1/account/sessions") return previewJson({ items: [{ id: "31000000-0000-4000-8000-000000000001", account_id: localWorkspacePreviewProfile.account_id, created_at: "2026-10-01T12:00:00Z", updated_at: "2026-10-01T12:00:00Z", expires_at: "2026-10-31T12:00:00Z", revoked: false, current: true }] });
     if (requestURL.pathname === "/web/v1/payment-products") return previewJson(localWorkspacePreviewPaymentProducts);
     if (requestURL.pathname === "/web/v1/subscription") return previewJson({ subscription: null, balances: [], checkout_available: false, recurring_available: false });
-    if (rawPath === "/web/v1/models") return previewJson(localWorkspacePreviewModels);
-    if (rawPath === "/web/v1/video-models") return previewJson(localWorkspacePreviewVideoModels);
+    const models = filterReleaseCatalog(localWorkspacePreviewModels, release.view);
+    if (rawPath === "/web/v1/models") return previewJson(models);
+    if (rawPath === "/web/v1/video-models") return previewJson(projectVideoModelCatalog(models));
     if (rawPath === "/web/v1/chat-models") {
-      return previewJson(localWorkspacePreviewChatModels);
+      return previewJson(projectChatModelCatalog(models));
     }
     if (rawPath === "/web/v1/image-models") {
-      return previewJson(localWorkspacePreviewImageModels);
+      return previewJson(projectImageModelCatalog(models));
     }
     if (requestURL.pathname === "/web/v1/image-jobs") {
       return previewJson(localWorkspacePreviewImageJobs);

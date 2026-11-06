@@ -1,0 +1,19 @@
+.panel { display: grid; gap: var(--space-3); min-inline-size: 0; }
+.title, .groupTitle { margin: 0; font-size: 0.875rem; line-height: 1.4; }
+.note { margin: 0; color: var(--color-text-muted); font-size: 0.75rem; line-height: 1.5; overflow-wrap: anywhere; }
+.inventory { block-size: min(22rem, 38dvh); min-block-size: 9rem; }
+.viewport { padding-inline-end: var(--space-3); }
+.groupTitle { margin-block: var(--space-3); }
+.groupTitle:first-child { margin-block-start: 0; }
+.list { display: grid; gap: var(--space-2); margin: var(--space-2) 0 0; padding: 0; list-style: none; }
+.card { display: grid; gap: var(--space-2); min-inline-size: 0; padding: var(--space-3); border: 1px solid var(--color-border); border-radius: var(--radius-sm); }
+.summary { cursor: pointer; font-size: 0.8125rem; line-height: 1.5; overflow-wrap: anywhere; }
+.summary::marker { color: var(--color-text-muted); }
+.status { display: block; color: var(--color-text-muted); font-size: 0.75rem; }
+.details { margin: var(--space-3) 0 0; font-size: 0.75rem; line-height: 1.5; overflow-wrap: anywhere; }
+.details dt { margin-block-start: var(--space-2); font-weight: var(--font-weight-semibold); }
+.details dd { margin: 0; color: var(--color-text-muted); }
+.actions { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: var(--space-2); }
+.openButton { flex-shrink: 0; font-size: 0.75rem; cursor: pointer; }
+.pageTitle { font-size: 0.8125rem; line-height: 1.5; overflow-wrap: anywhere; }
+.summary:focus-visible, .viewport:focus-visible { outline: 2px solid var(--input-focus-border-color); outline-offset: -2px; }

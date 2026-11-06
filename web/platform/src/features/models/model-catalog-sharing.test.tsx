@@ -9,6 +9,9 @@ import { projectGenerationModelCatalog } from "./generation-model-catalog";
 import { loadImageModelCatalog } from "./image-model-catalog-cache";
 import { loadVideoModelCatalog } from "./video-model-catalog";
 import { loadModelCatalog } from "./model-catalog-cache";
+import { resetModelCatalogCacheForTests } from "./model-catalog-cache";
+import { readModelCatalogSession, writeModelCatalogSession } from "./model-catalog-session-cache";
+import type { ModelCatalogDelivery } from "./model-catalog-contract";
 import { parseModelCatalog } from "./model-catalog-contract";
 import { publicModelCatalog } from "./model-catalog-test-fixtures";
 
@@ -28,9 +31,74 @@ function AdapterReader() {
   }, []);
   return <span>{count === null ? "adapters loading" : `adapters ready: ${count}`}</span>;
 }
-afterEach(() => { vi.useRealTimers(); vi.resetAllMocks(); });
+afterEach(() => { resetModelCatalogCacheForTests(); vi.useRealTimers(); vi.resetAllMocks(); });
 
 describe("server and browser catalog sharing", () => {
+  it("keeps subscribers when the same account receives a new streamed promise", async () => {
+    const view = render(<GenerationCatalogProvider accountId="same" pendingSource={Promise.resolve({ snapshot: { value: catalog, updatedAt: Date.now() }, durationMs: 5 })}><SelectorReader /></GenerationCatalogProvider>);
+    await screen.findByText("Image");
+    const next = structuredClone(catalog); next.items[0].name = "Updated same account";
+    view.rerender(<GenerationCatalogProvider accountId="same" pendingSource={Promise.resolve({ snapshot: { value: next, updatedAt: Date.now() + 1 }, durationMs: 5 })}><SelectorReader /></GenerationCatalogProvider>);
+    expect(await screen.findByText("Updated same account")).toBeInTheDocument();
+    expect(webBrowserFetch).not.toHaveBeenCalled();
+  });
+  it("invalidates a previous account's pending server delivery before adopting the next", async () => {
+    let finishA!: (delivery: ModelCatalogDelivery) => void, finishB!: (delivery: ModelCatalogDelivery) => void;
+    const pendingA = new Promise<ModelCatalogDelivery>(resolve => { finishA = resolve; });
+    const pendingB = new Promise<ModelCatalogDelivery>(resolve => { finishB = resolve; });
+    const view = render(<GenerationCatalogProvider key="A" accountId="A" pendingSource={pendingA}><SelectorReader /></GenerationCatalogProvider>);
+    await act(async () => {});
+    view.rerender(<GenerationCatalogProvider key="B" accountId="B" pendingSource={pendingB}><SelectorReader /></GenerationCatalogProvider>);
+    await act(async () => {});
+    const next = structuredClone(catalog); next.items[0].name = "Next session catalogue";
+    await act(async () => { finishB({ snapshot: { value: next, updatedAt: Date.now() }, durationMs: 20 }); });
+    expect(screen.getByText("Next session catalogue")).toBeInTheDocument();
+    await act(async () => { finishA({ snapshot: { value: catalog, updatedAt: Date.now() }, durationMs: 300 }); });
+    expect(screen.getByText("Next session catalogue")).toBeInTheDocument();
+    expect(readModelCatalogSession()?.value.items[0].name).toBe("Next session catalogue");
+    expect(webBrowserFetch).not.toHaveBeenCalled();
+  });
+  it("keeps the original TTL when restoring session storage", async () => {
+    vi.useFakeTimers(); vi.setSystemTime(100_000);
+    writeModelCatalogSession({ value: catalog, updatedAt: 40_001 });
+    const updated = structuredClone(catalog); updated.items[0].name = "Fresh after storage TTL";
+    vi.mocked(webBrowserFetch).mockImplementation(async () => Response.json(updated));
+    render(<GenerationCatalogProvider><SelectorReader /></GenerationCatalogProvider>);
+    await act(async () => {});
+    expect(screen.getByText("Image")).toBeInTheDocument();
+    expect(webBrowserFetch).not.toHaveBeenCalled();
+    await act(async () => { vi.advanceTimersByTime(1); window.dispatchEvent(new Event("focus")); });
+    expect(webBrowserFetch).toHaveBeenCalledTimes(1);
+    expect(screen.getByText("Fresh after storage TTL")).toBeInTheDocument();
+  });
+
+  it("shares a delayed server result with selectors and adapters without a duplicate browser request", async () => {
+    vi.mocked(webBrowserFetch).mockResolvedValue(Response.json(catalog));
+    let finish!: (result: ModelCatalogDelivery) => void;
+    const pending = new Promise<ModelCatalogDelivery>(resolve => { finish = resolve; });
+    render(<GenerationCatalogProvider pendingSource={pending}><SelectorReader /><AdapterReader /></GenerationCatalogProvider>);
+    await act(async () => {});
+    expect(webBrowserFetch).not.toHaveBeenCalled();
+    finish({ snapshot: { value: catalog, updatedAt: Date.now() }, durationMs: 300 });
+    await screen.findByText("adapters ready: 5");
+    expect(screen.getByText("Image")).toBeInTheDocument();
+    expect(webBrowserFetch).not.toHaveBeenCalled();
+  });
+  it("restores the saved presentation after hydration while a server refresh is pending", async () => {
+    resetModelCatalogCacheForTests();
+    vi.mocked(webBrowserFetch).mockResolvedValue(Response.json(catalog));
+    writeModelCatalogSession({ value: catalog, updatedAt: Date.now() - 61_000 });
+    let finish!: (result: ModelCatalogDelivery) => void;
+    const pending = new Promise<ModelCatalogDelivery>(resolve => { finish = resolve; });
+    const view = <GenerationCatalogProvider pendingSource={pending}><SelectorReader /></GenerationCatalogProvider>;
+    expect(renderToString(view)).toContain("loading");
+    render(view);
+    expect(await screen.findByText("Image")).toBeInTheDocument();
+    expect(webBrowserFetch).not.toHaveBeenCalled();
+    const fresh = structuredClone(catalog); fresh.items[0].name = "Updated server image";
+    finish({ snapshot: { value: fresh, updatedAt: Date.now() }, durationMs: 300 });
+    expect(await screen.findByText("Updated server image")).toBeInTheDocument();
+  });
   it("reuses the server snapshot before child adapters run, without fetching it again", async () => {
     vi.mocked(webBrowserFetch).mockImplementation(async () => Response.json(catalog));
     render(<GenerationCatalogProvider initial={projectGenerationModelCatalog(catalog)} initialSource={{ value: catalog, updatedAt: Date.now() }}>

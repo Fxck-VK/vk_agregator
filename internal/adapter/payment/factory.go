@@ -18,10 +18,11 @@ func NewProvider(cfg config.Config) (domain.PaymentProvider, error) {
 		return mock.New(), nil
 	case domain.PaymentProviderYooKassa:
 		return yookassa.New(yookassa.Config{
-			ShopID:    cfg.YooKassaShopID,
-			SecretKey: cfg.YooKassaSecretKey,
-			BaseURL:   cfg.YooKassaBaseURL,
-			ReturnURL: cfg.YooKassaReturnURL,
+			ShopID:      cfg.YooKassaShopID,
+			SecretKey:   cfg.YooKassaSecretKey,
+			ReceiptMode: cfg.YooKassaReceiptMode,
+			BaseURL:     cfg.YooKassaBaseURL,
+			ReturnURL:   cfg.YooKassaReturnURL,
 		})
 	default:
 		return nil, fmt.Errorf("payment: unsupported provider %q", cfg.PaymentProvider)

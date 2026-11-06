@@ -16,6 +16,7 @@ import { ScrollArea } from "@/components/ui/ScrollArea/ScrollArea";
 import { subscriptionPlanDialogValues, subscriptionPlanDiscountPercent, subscriptionPlanPreview, type SubscriptionPreviewId } from "@/features/pricing/subscription-preview";
 import { formatPaymentPrice } from "@/features/payments/payments";
 import { useSubscriptionCheckout } from "@/features/subscriptions/use-subscription-checkout";
+import { useReleaseView } from "@/features/release/ReleaseViewProvider";
 import { useOptionalWorkspaceAccount } from "@/features/account/WorkspaceAccount/WorkspaceAccount";
 import { StateNotice } from "@/components/ui/AsyncState/AsyncState";
 import { PaymentStatus } from "@/features/payments/PaymentStatus";
@@ -88,6 +89,7 @@ export function SubscriptionPlansDialog(props: SubscriptionPlansDialogProps) {
 }
 
 function SubscriptionPlansContent({ onClose }: SubscriptionPlansDialogProps) {
+  const { enabled } = useReleaseView();
   const msg = useMessages();
   const promoText = useDictionary().promotions;
   const router = useRouter();
@@ -222,7 +224,7 @@ function SubscriptionPlansContent({ onClose }: SubscriptionPlansDialogProps) {
                   onActivate={id => { if (!account) router.push("/login"); else void checkout.purchase(id); }}
                 />)}
 
-                <article className={`${styles.planCard} ${styles.teamPlan}`}>
+                {enabled("teams") ? <article className={`${styles.planCard} ${styles.teamPlan}`}>
                   <div className={styles.planSummary}>
                     <h3>{msg("subscriptionPlansDialog.teamPlan")}</h3>
                     <p className={styles.description}>{msg("subscriptionPlansDialog.aBusinessPlanWithCustomPricingFor")}</p>
@@ -236,7 +238,7 @@ function SubscriptionPlansContent({ onClose }: SubscriptionPlansDialogProps) {
                       </li>
                     ))}
                   </ul>
-                </article>
+                </article> : null}
               </div>
 
               <footer className={styles.dialogFooter}>

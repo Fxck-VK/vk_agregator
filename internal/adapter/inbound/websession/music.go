@@ -56,6 +56,9 @@ func (h *Handler) prepareMusicJob(w http.ResponseWriter, r *http.Request) {
 		writeError(w, 400, "invalid music request")
 		return
 	}
+	if !h.requireReleaseModel(w, r, request.ModelID, "audio") {
+		return
+	}
 	key, err := uuid.Parse(r.Header.Get("X-Idempotency-Key"))
 	if err != nil || key == uuid.Nil {
 		writeError(w, 400, "invalid idempotency key")
@@ -262,6 +265,9 @@ func (h *Handler) activateMusicJob(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	p, _ := musicgeneration.DecodeJob(job)
+	if !h.requireReleaseModel(w, r, p.ModelID, "audio") {
+		return
+	}
 	if h.deps.ImageJobs == nil || !providermodels.RuntimeRegistry().MediaCandidateRunnable(p.ModelID, string(p.Music.Action)) {
 		writeError(w, 503, "music operation pending verification")
 		return

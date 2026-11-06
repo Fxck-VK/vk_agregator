@@ -20,6 +20,9 @@ import (
 )
 
 func (h *Handler) quoteConversationImage(w http.ResponseWriter, r *http.Request) {
+	if !h.requireReleaseModel(w, r, r.URL.Query().Get("model_id"), "image") {
+		return
+	}
 	count, err := strconv.Atoi(r.URL.Query().Get("reference_count"))
 	outputs, outputErr := strconv.Atoi(r.URL.Query().Get("output_count"))
 	if err != nil || outputErr != nil || count < 1 || count > 16 || !h.imageReferencesEnabled(r.URL.Query().Get("model_id")) {

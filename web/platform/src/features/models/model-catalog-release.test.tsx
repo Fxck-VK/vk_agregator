@@ -1,0 +1,66 @@
+import { useState } from "react";
+import { act, fireEvent, render, screen } from "@testing-library/react";
+import { afterEach, expect, it, vi } from "vitest";
+const release = vi.hoisted(() => ({ view: "dev" as "dev" | "prod" }));
+vi.mock("@/features/release/ReleaseViewProvider", () => ({ useReleaseView: () => release }));
+vi.mock("@/lib/web-api/browser", () => ({ webBrowserFetch: vi.fn() }));
+import { GenerationCatalogProvider, useGenerationCatalog } from "./GenerationCatalogProvider";
+import { publicModelCatalog } from "./model-catalog-test-fixtures";
+import { parseModelCatalog } from "./model-catalog-contract";
+import { adoptServerModelCatalog, bindModelCatalogSession, loadModelCatalog, resetModelCatalogCacheForTests, seedModelCatalog } from "./model-catalog-cache";
+import { readModelCatalogSession } from "./model-catalog-session-cache";
+const value = parseModelCatalog(publicModelCatalog());
+function Reader() { const { catalog } = useGenerationCatalog(); const [draft, setDraft] = useState(""); return <><input aria-label="draft" value={draft} onChange={e => setDraft(e.target.value)}/><span>{catalog?.items.map(m => m.name).join("|")}</span></>; }
+afterEach(() => { release.view = "dev"; resetModelCatalogCacheForTests(); });
+it("installs a fresh DEV server snapshot arriving after context changed from PROD", async () => {
+  release.view = "prod";
+  const prod = { value, updatedAt: Date.now() };
+  const view = render(<GenerationCatalogProvider accountId="same" initialSource={prod}><Reader/></GenerationCatalogProvider>);
+  release.view = "dev";
+  view.rerender(<GenerationCatalogProvider accountId="same" initialSource={prod}><Reader/></GenerationCatalogProvider>);
+  await act(async () => {});
+  const dev = structuredClone(value); dev.items[0].verification = "dev-smoke"; dev.items[0].name = "New DEV source";
+  const fresh = { value: dev, updatedAt: Date.now() + 1 };
+  view.rerender(<GenerationCatalogProvider accountId="same" initialSource={fresh}><Reader/></GenerationCatalogProvider>);
+  await act(async () => {});
+  expect(screen.getByText(/New DEV source/)).toBeInTheDocument();
+});
+it("accepts an older valid DEV snapshot after leaving a newer PROD snapshot", async () => {
+  release.view = "prod";
+  const prod = { value, view: "prod" as const, updatedAt: Date.now() - 10_000 };
+  const view = render(<GenerationCatalogProvider accountId="same" initialSource={prod}><Reader/></GenerationCatalogProvider>);
+  release.view = "dev";
+  view.rerender(<GenerationCatalogProvider accountId="same" initialSource={prod}><Reader/></GenerationCatalogProvider>);
+  await act(async () => {});
+  const dev = structuredClone(value); dev.items[0].verification = "dev-smoke"; dev.items[0].name = "Older valid DEV source";
+  const fresh = { value: dev, view: "dev" as const, updatedAt: Date.now() - 20_000 };
+  view.rerender(<GenerationCatalogProvider accountId="same" initialSource={fresh}><Reader/></GenerationCatalogProvider>);
+  await act(async () => {});
+  expect(screen.getByText(/Older valid DEV source/)).toBeInTheDocument();
+  expect((await loadModelCatalog()).items[0].name).toBe("Older valid DEV source");
+});
+it("reprojects catalogue on profile change without remounting children or losing a draft", async () => {
+  const raw = structuredClone(value); raw.items[0].verification = "dev-smoke"; raw.items[0].name = "DEV only image";
+  const source = { value: raw, updatedAt: Date.now() };
+  const view = render(<GenerationCatalogProvider accountId="same" initialSource={source}><Reader/></GenerationCatalogProvider>);
+  await act(async () => {}); expect(screen.getByText(/DEV only image/)).toBeInTheDocument();
+  fireEvent.change(screen.getByLabelText("draft"), { target: { value: "keep my draft" } });
+  release.view = "prod";
+  view.rerender(<GenerationCatalogProvider accountId="same" initialSource={source}><Reader/></GenerationCatalogProvider>);
+  await act(async () => {});
+  expect(screen.queryByText(/DEV only image/)).not.toBeInTheDocument();
+  expect(screen.getByLabelText("draft")).toHaveValue("keep my draft");
+});
+it("ignores a delayed DEV response after switching the same account to PROD", async () => {
+  bindModelCatalogSession("same", "dev");
+  let finish!: (delivery: {snapshot: typeof source;durationMs:number}) => void;
+  const dev = structuredClone(value); dev.items[0].verification = "dev-smoke";
+  const source = { value: dev, updatedAt: Date.now() };
+  adoptServerModelCatalog(new Promise(resolve => { finish = resolve; }));
+  const pending = loadModelCatalog();
+  bindModelCatalogSession("same", "prod");
+  seedModelCatalog({ value, updatedAt: Date.now() });
+  finish({ snapshot: source, durationMs: 300 });
+  await pending;
+  expect(readModelCatalogSession()?.value.items.every(m => m.verification !== "dev-smoke")).toBe(true);
+});

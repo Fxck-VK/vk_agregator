@@ -4,6 +4,17 @@ import { hydrateRoot } from "react-dom/client";
 import { renderToString } from "react-dom/server";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
+// This baseline suite exercises the complete DEV interface, including draft links.
+vi.mock("@/features/release/ReleaseViewProvider", async () => {
+  const { allowsReleasePath, featureEnabled } = await import("@/features/release/policy");
+  return { useReleaseView: () => ({
+    view: "dev", canSwitch: false, localSimulation: false, switching: false, error: false,
+    enabled: (id: string) => featureEnabled(id, "dev"),
+    allowsPath: (href: string) => allowsReleasePath(href, "dev"),
+    changeView: async () => false,
+  }) };
+});
+
 vi.mock("next/navigation", () => ({
   usePathname: vi.fn(() => "/app"),
   useRouter: vi.fn(() => ({ push: vi.fn(), refresh: vi.fn(), replace: vi.fn() })),

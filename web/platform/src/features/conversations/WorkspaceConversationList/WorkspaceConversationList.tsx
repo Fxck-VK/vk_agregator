@@ -6,6 +6,7 @@ import { parseConversationList, type ConversationItem } from "@/lib/web-api/cont
 import { webBrowserFetch } from "@/lib/web-api/browser";
 import { useReadResource } from "@/lib/use-read-resource";
 import { readJson } from "@/lib/web-api/read-error";
+import { isWorkspaceMetricsEnabled, measureWorkspaceRead, recordWorkspaceRead } from "@/features/workspace/WorkspaceNavigationMetrics/workspace-navigation-metrics";
 import { activateConversationCache, readConversationCache, writeConversationCache } from "../conversation-list-cache";
 
 export type WorkspaceConversationItem = ConversationItem & {
@@ -69,8 +70,10 @@ function reconcileServerConversations(
 }
 
 async function loadConversations(signal: AbortSignal) {
-  const response = await webBrowserFetch("/web/v1/conversations?limit=20", { signal });
-  return readJson(response, value => parseConversationList(value).items);
+  return measureWorkspaceRead("conversations", "network", async () => {
+    const response = await webBrowserFetch("/web/v1/conversations?limit=20", { signal });
+    return readJson(response, value => parseConversationList(value).items);
+  });
 }
 
 export function WorkspaceConversationListProvider(props: WorkspaceConversationListProviderProps) {
@@ -87,8 +90,12 @@ function AccountConversationListProvider({ accountId, children, initialConversat
   useEffect(() => {
     if (!deferred) return;
     activateConversationCache(accountId);
+    const startedAt = isWorkspaceMetricsEnabled() ? performance.now() : undefined;
     const cached = readConversationCache(accountId);
-    if (cached !== null) seedResource(cached);
+    if (cached !== null) {
+      seedResource(cached);
+      if (startedAt !== undefined) recordWorkspaceRead({ target: "conversations", source: "cache", outcome: "success", durationMs: performance.now() - startedAt });
+    }
   }, [accountId, deferred, seedResource]);
   const initialConversations = deferred ? resource.data ?? seed : seed;
   const [conversationListState, setConversationListState] = useState<WorkspaceConversationListState>({

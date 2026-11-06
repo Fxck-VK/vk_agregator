@@ -1,5 +1,14 @@
 # Documentation Index
 
+Preserved original/friend homepage variants and local DEV integration:
+[landing variants](../web/platform/docs/landing-variants.md).
+
+Live YooKassa merchant preparation: [merchant modes, NPD receipts and go-live boundaries](../docs/runbooks/BILLING.md#live-website-merchant-local-implementation-2026-11-02), [approved design](superpowers/specs/2026-11-02-live-merchant-design.md), [local checks](superpowers/plans/2026-11-02-live-merchant.md). Credentials validated read-only; no real payment or deployment.
+
+First-release DEV/PROD views and readiness inventory: [owner guide and server boundaries](../docs/RELEASE_SCOPE.md), [approved design](superpowers/specs/2026-11-02-release-views-design.md), [implementation checks](superpowers/plans/2026-11-02-release-views.md). One project, one shared registry, restrictive server gates; local implementation, no deployment.
+
+Workspace loading optimization: [approved design](superpowers/specs/2026-11-01-workspace-loading-design.md), [implementation and verification](superpowers/plans/2026-11-01-workspace-loading.md), [current loading contract](../web/platform/docs/preloading.md). Single streamed catalogue read, bounded non-personal presentation cache, deferred optimized poster and local/DEV timings. Local changes; not a deployment.
+
 Session-aware homepage: [implementation and checks](superpowers/plans/2026-10-31-home-session-entry.md), [routing contract](../web/platform/docs/locale-routing.md#вход-и-оплата). Guest landing; verified browser session temporarily redirects to the workspace. No release.
 
 Direct checkout from tariff cards: [local implementation plan](superpowers/plans/2026-10-31-direct-subscription-checkout.md), [shared UI contract](../web/platform/docs/ui-catalog.md#subscription-economy). The forced nested conditions dialog is removed; renewal remains explicit, unchecked and disclosed. No release or real payment is part of this change.

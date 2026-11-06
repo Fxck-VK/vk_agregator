@@ -15,7 +15,7 @@ func (h *Handler) listChatModels(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, struct {
 		Items          []textgeneration.PublicModel `json:"items"`
 		DefaultModelID string                       `json:"default_model_id"`
-	}{Items: h.availableTextModels(), DefaultModelID: providermodels.PublicTextChatGPT})
+	}{Items: h.releaseTextModels(r), DefaultModelID: providermodels.PublicTextChatGPT})
 }
 
 func (h *Handler) availableTextModels() []textgeneration.PublicModel {

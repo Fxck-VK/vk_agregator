@@ -98,11 +98,11 @@ func (h *Handler) writeWebSubscription(w http.ResponseWriter, r *http.Request, s
 		CheckoutAvailable  bool                      `json:"checkout_available"`
 		RecurringAvailable bool                      `json:"recurring_available"`
 		TrialUsed          bool                      `json:"trial_used"`
-	}{current, balances, h.cfg.TestPaymentsEnabled && h.deps.Subscriptions.SubscriptionsAvailable(), h.cfg.TestPaymentsEnabled && h.deps.Subscriptions.RecurringAvailable(), state != nil && state.TrialUsed})
+	}{current, balances, h.cfg.PaymentsEnabled && h.deps.Subscriptions.SubscriptionsAvailable(), h.cfg.PaymentsEnabled && h.deps.Subscriptions.RecurringAvailable(), state != nil && state.TrialUsed})
 }
 func (h *Handler) createWebSubscription(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Cache-Control", "no-store")
-	if !h.cfg.TestPaymentsEnabled || h.deps.Subscriptions == nil || !h.deps.Subscriptions.SubscriptionsAvailable() {
+	if !h.cfg.PaymentsEnabled || h.deps.Subscriptions == nil || !h.deps.Subscriptions.SubscriptionsAvailable() {
 		writeError(w, 503, "subscription checkout unavailable")
 		return
 	}

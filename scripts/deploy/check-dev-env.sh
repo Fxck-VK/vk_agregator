@@ -153,6 +153,17 @@ require_dev_url PUBLIC_VK_BASE_URL "https://dev-vk.epifera.com"
 require_dev_url PUBLIC_PAYMENT_WEBHOOK_URL "https://dev.epifera.com"
 require_exact WEB_ORIGIN "https://dev-web.epifera.com"
 
+for live_flag in WEB_LIVE_PAYMENTS_ENABLED WEB_LIVE_RECURRING_ENABLED; do
+  case "$(get_env_value "${live_flag}")" in
+    ""|true|false) ;;
+    *) printf '%s must be canonical true or false\n' "${live_flag}" >&2; exit 1 ;;
+  esac
+  if is_true_value "$(get_env_value "${live_flag}")"; then
+    printf 'Live merchant enablement is forbidden in DEV: %s\n' "${live_flag}" >&2
+    exit 1
+  fi
+done
+
 reject_exact_value PUBLIC_VK_BASE_URL "https://vk.epifera.com"
 reject_exact_value PUBLIC_PAYMENT_WEBHOOK_URL "https://epifera.com"
 

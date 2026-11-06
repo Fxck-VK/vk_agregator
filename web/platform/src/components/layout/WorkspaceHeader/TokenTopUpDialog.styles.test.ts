@@ -21,9 +21,9 @@ describe("TokenTopUpDialog styles", () => {
     expect(stylesheet).toMatch(/\.purchaseButton\s*\{[^}]*background:\s*var\(--gradient-brand\);/s);
   });
 
-  it("sizes the purchase dialog to its content within eighty percent of the viewport", () => {
+  it("sizes the purchase dialog to its content within the available viewport", () => {
     expect(stylesheet).toMatch(
-      /\.dialog\s*\{[^}]*block-size:\s*auto;[^}]*max-block-size:\s*80dvh;[^}]*min-block-size:\s*0;[^}]*overflow:\s*hidden;/s,
+      /\.dialog\s*\{[^}]*block-size:\s*auto;[^}]*max-block-size:\s*calc\(100dvh - 2rem\);[^}]*min-block-size:\s*0;[^}]*overflow:\s*hidden;/s,
     );
     expect(stylesheet).toMatch(
       /\.packageList\s*\{[^}]*min-block-size:\s*0;/s,

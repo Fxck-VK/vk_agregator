@@ -5,6 +5,18 @@ import { renderToStaticMarkup } from "react-dom/server";
 import type { ReactNode } from "react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
+const releaseView = vi.hoisted(() => ({ view: "dev" }));
+afterEach(() => { releaseView.view = "dev"; cleanup(); vi.unstubAllGlobals(); });
+vi.mock("@/features/release/ReleaseViewProvider", () => ({ useReleaseView: () => ({ allowsPath: (href: string) => releaseView.view === "dev" || !["/app/music", "/app/speech"].includes(href) }) }));
+
+it("omits the audio destination in PROD", () => {
+  mockNarrowViewport();
+  releaseView.view = "prod";
+  const view = render(<Sidebar />);
+  expect(view.container.querySelector('a[href="/ru/app/music"]')).toBeNull();
+  releaseView.view = "dev";
+});
+
 vi.mock("next/navigation", () => ({
   usePathname: vi.fn(() => "/app"),
   useRouter: vi.fn(),

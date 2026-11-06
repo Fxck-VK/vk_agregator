@@ -6,6 +6,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useRouter } from "@/i18n/navigation";
 
 import { loadImageModelCatalog } from "@/features/models/image-model-catalog-cache";
+import { useReleaseView } from "@/features/release/ReleaseViewProvider";
 import { imagePrice } from "@/features/models/image-price";
 import { useWorkspaceModelSelection } from "@/features/models/WorkspaceModelSelection/WorkspaceModelSelection";
 import {
@@ -55,6 +56,7 @@ export function useImageGeneration({ access = "authenticated", model, promptValu
   const msg = useMessages();
   const t = useDictionary();
   const router = useRouter();
+  const { view } = useReleaseView();
   const workspaceModelSelection = useWorkspaceModelSelection();
   const setWorkspaceModelId = workspaceModelSelection?.setSelectedModelId;
   const selectedWorkspaceModelID = workspaceModelSelection?.selectedModelId ?? null;
@@ -64,9 +66,15 @@ export function useImageGeneration({ access = "authenticated", model, promptValu
     prompt: initialValues?.prompt ?? "",
     workspaceModelID: selectedWorkspaceModelID,
   });
-  const [stage, setStage] = useState<PanelStage>(model === undefined ? "loading" : "editor");
+  const [panelStage, setStage] = useState<PanelStage>(model === undefined ? "loading" : "editor");
   const [catalogLoadAttempt, setCatalogLoadAttempt] = useState(0);
-  const [models, setModels] = useState<ImageModel[]>([]);
+  const [catalog, setCatalog] = useState<{ view: typeof view; items: ImageModel[] } | null>(null);
+  // Discard the snapshot so a quick switch back still waits for the current read.
+  if (catalog && catalog.view !== view) setCatalog(null);
+  const stage = model === undefined && catalog?.view !== view ? "loading" : panelStage;
+  const initialized = useRef(false);
+  const promptEdited = useRef(false);
+  const lastSelectedModelID = useRef<string | null>(null);
   const [fallbackModelID, setFallbackModelID] = useState("");
   const [qualitySelection, setQualitySelection] = useState<QualitySelection>({ modelID: "", value: "" });
   const [localPrompt, setLocalPrompt] = useState("");
@@ -86,11 +94,16 @@ export function useImageGeneration({ access = "authenticated", model, promptValu
 
   const selectedModel = useMemo(() => {
     if (model !== undefined) return model;
+    if (catalog?.view !== view) return null;
+    const models = catalog.items;
     const workspaceModel = selectedWorkspaceModelID === null
       ? undefined
       : models.find((model) => model.id === selectedWorkspaceModelID);
     return workspaceModel ?? models.find((model) => model.id === fallbackModelID) ?? null;
-  }, [fallbackModelID, model, models, selectedWorkspaceModelID]);
+  }, [fallbackModelID, model, catalog, selectedWorkspaceModelID, view]);
+  useEffect(() => {
+    if (selectedModel) lastSelectedModelID.current = selectedModel.id;
+  }, [selectedModel]);
   const imageQuality = selectedModel === null
     ? ""
     : qualitySelection.modelID === selectedModel.id && selectedModel.quality_options.includes(qualitySelection.value)
@@ -141,26 +154,34 @@ export function useImageGeneration({ access = "authenticated", model, promptValu
         const workspaceModel = initialRequest.current.workspaceModelID === null
           ? undefined
           : catalog.items.find((model) => model.id === initialRequest.current.workspaceModelID);
-        const initialModel = requestedModel ?? workspaceModel ?? catalog.items[0];
+        const retainedModel = catalog.items.find((item) => item.id === lastSelectedModelID.current);
+        const initialModel = initialized.current
+          ? retainedModel ?? catalog.items[0]
+          : requestedModel ?? workspaceModel ?? catalog.items[0];
+        setCatalog({ view, items: catalog.items });
         if (!initialModel) {
           setError("noModels");
           setStage("loadFailure");
           return;
         }
-        setModels(catalog.items);
         setFallbackModelID(initialModel.id);
         setWorkspaceModelId?.(initialModel.id);
-        setQualitySelection({
-          modelID: initialModel.id,
-          value: initialRequest.current.imageQuality !== null
-            && initialModel.quality_options.includes(initialRequest.current.imageQuality)
-              ? initialRequest.current.imageQuality
-              : initialModel.default_quality,
-        });
-        setPrompt(initialRequest.current.prompt);
+        if (!initialized.current) {
+          setQualitySelection({
+            modelID: initialModel.id,
+            value: initialRequest.current.imageQuality !== null
+              && initialModel.quality_options.includes(initialRequest.current.imageQuality)
+                ? initialRequest.current.imageQuality
+                : initialModel.default_quality,
+          });
+          if (!promptEdited.current) setPrompt(initialRequest.current.prompt);
+          initialized.current = true;
+        }
+        setError(null);
         setStage("editor");
       } catch {
         if (active) {
+          setCatalog({ view, items: [] });
           setError("load");
           setStage("loadFailure");
         }
@@ -171,7 +192,7 @@ export function useImageGeneration({ access = "authenticated", model, promptValu
     return () => {
       active = false;
     };
-  }, [catalogLoadAttempt, model, setPrompt, setWorkspaceModelId]);
+  }, [catalogLoadAttempt, model, setPrompt, setWorkspaceModelId, view]);
 
   const retryModelCatalog = () => {
     setError(null);
@@ -202,6 +223,7 @@ export function useImageGeneration({ access = "authenticated", model, promptValu
   }, []);
 
   const changePrompt = useCallback((nextPrompt: string) => {
+    promptEdited.current = true;
     setPrompt(nextPrompt);
     setPrepareIntent(null);
     setError(null);

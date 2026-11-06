@@ -1,5 +1,22 @@
 # DEV Runbook
 
+## Personal release views
+
+The protected DEV gateway and local `dev:preview` expose the existing developer
+panel with DEV/PROD views and a readiness inventory. See [release scope](../../docs/RELEASE_SCOPE.md).
+`POST /web/release-view` changes only the current browser's HttpOnly preference;
+it requires exact same-origin JSON and verified outer DEV access (or local preview).
+Actual production has no switch endpoint. Existing merchant/data/auth settings
+are not changed; local simulation remains development-only.
+
+Go honors the DEV view only with trusted `APP_ENV=development`; other environments
+force PROD despite caller cookies/headers. Next overwrites upstream view hints.
+Never use request hints to mutate RuntimeRegistry or bypass model onboarding.
+The shared inventory is compiled into API and platform: rebuild both together
+after reviewed scope changes and validate affected UI/API gates before rollout.
+PROD view retains account, legal documents and owned historical output reads.
+Source changes here are local until the normal exact-SHA release is requested.
+
 > VK Mini App was retired on 2026-10-23. The website, browser VK ID and VK bot remain. Old Mini App routes, launch-auth and UI examples below are historical only. Current replacement and migration details: [retirement runbook](../../docs/runbooks/VK_MINIAPP_RETIREMENT.md).
 
 The DEV contour mirrors production architecture with separate secrets, domains,
@@ -225,9 +242,12 @@ Roll out the platform image and DEV Nginx overlay together through the normal
 DEV workflow; keep the mandatory smoke. The route is disabled without a valid
 DEV secret and the exact HTTPS DEV `WEB_ORIGIN`. Direct platform host ports must
 remain unpublished. Gate-check failures fail closed. Nginx blocks the internal
-route tree, strips caller issuer headers, rate-limits login, and marks responses
-private/no-store so shared caches cannot bypass the gate. Account authentication,
-ownership checks, CSRF and billing admission are unchanged.
+route tree, strips caller issuer headers, and rate-limits login. Successful GET/HEAD
+build assets under `/_next/static/` and `/assets/` use `private, no-cache`: browsers
+may retain bytes but must revalidate through the gate before every reuse, including
+ETag/Last-Modified requests returning 304. Shared caches are forbidden. Documents,
+APIs, session responses, redirects, errors and challenges remain `private, no-store`.
+Account authentication, ownership checks, CSRF and billing admission are unchanged.
 
 Acceptance with synthetic credentials:
 

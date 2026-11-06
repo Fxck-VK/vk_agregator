@@ -206,8 +206,12 @@ type Config struct {
 	AdminRateLimitLimit                 int
 	AdminRateLimitWindow                time.Duration
 	PaymentProvider                     string
+	WebLivePaymentsEnabled              bool
+	WebLiveRecurringEnabled             bool
+	webLivePaymentFlagsError            string
 	YooKassaShopID                      string
 	YooKassaSecretKey                   string
+	YooKassaReceiptMode                 string
 	YooKassaBaseURL                     string
 	YooKassaReturnURL                   string
 	YooKassaReturnURLVKBot              string
@@ -787,6 +791,12 @@ func (c Config) Validate() error {
 	if provider := strings.ToLower(strings.TrimSpace(c.PaymentProvider)); provider != "" && !knownPaymentProvider(provider) {
 		return fmt.Errorf("config: PAYMENT_PROVIDER must be one of mock, yookassa")
 	}
+	if err := c.validateLiveWebPayments(); err != nil {
+		return err
+	}
+	if mode := strings.TrimSpace(c.YooKassaReceiptMode); mode != "" && mode != "yookassa" && mode != "npd_manual" {
+		return fmt.Errorf("config: YOOKASSA_RECEIPT_MODE must be yookassa or npd_manual")
+	}
 	if err := c.validateProviderBalanceBotConfig(); err != nil {
 		return err
 	}
@@ -1298,8 +1308,12 @@ func Load() Config {
 		AdminRateLimitLimit:                      envInt("ADMIN_RATE_LIMIT_LIMIT", 120),
 		AdminRateLimitWindow:                     envDuration("ADMIN_RATE_LIMIT_WINDOW", time.Minute),
 		PaymentProvider:                          env("PAYMENT_PROVIDER", "mock"),
+		WebLivePaymentsEnabled:                   liveWebPaymentEnvBool("WEB_LIVE_PAYMENTS_ENABLED"),
+		WebLiveRecurringEnabled:                  liveWebPaymentEnvBool("WEB_LIVE_RECURRING_ENABLED"),
+		webLivePaymentFlagsError:                 liveWebPaymentEnvError(),
 		YooKassaShopID:                           env("YOOKASSA_SHOP_ID", ""),
 		YooKassaSecretKey:                        env("YOOKASSA_SECRET_KEY", ""),
+		YooKassaReceiptMode:                      env("YOOKASSA_RECEIPT_MODE", "yookassa"),
 		YooKassaBaseURL:                          env("YOOKASSA_BASE_URL", "https://api.yookassa.ru/v3"),
 		YooKassaReturnURL:                        env("YOOKASSA_RETURN_URL", ""),
 		YooKassaReturnURLVKBot:                   env("YOOKASSA_RETURN_URL_VK_BOT", ""),

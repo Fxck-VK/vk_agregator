@@ -1,4 +1,5 @@
-import { cleanup, createEvent, fireEvent, render, screen, waitFor } from "@testing-library/react";
+import { act, cleanup, createEvent, fireEvent, render, screen, waitFor } from "@testing-library/react";
+import { renderToString } from "react-dom/server";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
 import { VideoPlayer } from "./VideoPlayer";
@@ -7,6 +8,94 @@ describe("VideoPlayer", () => {
   afterEach(() => {
     cleanup();
     vi.restoreAllMocks();
+    vi.unstubAllGlobals();
+  });
+
+  function observeViewport() {
+    let notify: IntersectionObserverCallback;
+    const disconnect = vi.fn();
+    const observe = vi.fn();
+    let options: IntersectionObserverInit | undefined;
+    const Observer = vi.fn(function (callback: IntersectionObserverCallback, init?: IntersectionObserverInit) {
+      notify = callback;
+      options = init;
+      return { observe, disconnect };
+    });
+    vi.stubGlobal("IntersectionObserver", Observer);
+    return {
+      observe,
+      disconnect,
+      Observer,
+      get options() { return options; },
+      intersect: (isIntersecting: boolean) => act(() => {
+        notify([{ isIntersecting } as IntersectionObserverEntry], {} as IntersectionObserver);
+      }),
+    };
+  }
+
+  const deferredPlayer = <VideoPlayer deferPoster poster="/poster.webp" source={{ src: "/video.mp4", type: "video/mp4" }} title="Demo" />;
+
+  it("omits deferred poster URLs from server HTML and a distant player's fetch attributes", () => {
+    const viewport = observeViewport();
+    expect(renderToString(deferredPlayer)).not.toContain("/poster.webp");
+    const { container } = render(deferredPlayer);
+    viewport.intersect(false);
+    expect(container.querySelector("video")).not.toHaveAttribute("poster");
+    expect(screen.getByTestId("video-poster-overlay")).toHaveStyle({ "--video-player-poster": "none" });
+    expect(container.querySelector("video")).toHaveAttribute("preload", "none");
+  });
+
+  it("loads the poster before entering the viewport and retains it after leaving", () => {
+    const viewport = observeViewport();
+    render(deferredPlayer);
+    expect(viewport.observe).toHaveBeenCalledOnce();
+    expect(Number.parseInt(viewport.options?.rootMargin ?? "0", 10)).toBeGreaterThan(0);
+    viewport.intersect(true);
+    expect(screen.getByLabelText("Demo")).toHaveAttribute("poster", "/poster.webp");
+    expect(screen.getByTestId("video-poster-overlay")).toHaveStyle({ "--video-player-poster": 'url("/poster.webp")' });
+    expect(viewport.disconnect).toHaveBeenCalled();
+    viewport.intersect(false);
+    expect(screen.getByLabelText("Demo")).toHaveAttribute("poster", "/poster.webp");
+  });
+
+  it("loads a deferred poster on keyboard focus before any viewport notification", () => {
+    observeViewport();
+    render(deferredPlayer);
+    expect(screen.getByLabelText("Demo")).not.toHaveAttribute("poster");
+    fireEvent.focus(screen.getByRole("button"));
+    expect(screen.getByLabelText("Demo")).toHaveAttribute("poster", "/poster.webp");
+    expect(screen.getByLabelText("Demo")).toHaveAttribute("preload", "none");
+  });
+
+  it("plays a deferred player on demand with audio and preserves pause/end/replay controls", () => {
+    observeViewport();
+    const play = vi.spyOn(HTMLMediaElement.prototype, "play").mockResolvedValue();
+    render(deferredPlayer);
+    const video = screen.getByLabelText("Demo") as HTMLVideoElement;
+    expect(video).not.toHaveAttribute("poster");
+    fireEvent.click(screen.getByRole("button"));
+    expect(video).toHaveAttribute("poster", "/poster.webp");
+    expect(play).toHaveBeenCalledOnce();
+    expect(video.muted).toBe(false);
+    expect(video).not.toHaveAttribute("autoplay");
+    expect(video).toHaveAttribute("controls");
+    fireEvent.pause(video);
+    fireEvent.click(screen.getByRole("button"));
+    expect(play).toHaveBeenCalledTimes(2);
+    fireEvent.ended(video);
+    fireEvent.click(screen.getByRole("button"));
+    expect(play).toHaveBeenCalledTimes(3);
+  });
+
+  it("loads the poster without IntersectionObserver and disconnects on unmount", async () => {
+    vi.stubGlobal("IntersectionObserver", undefined);
+    const { unmount } = render(deferredPlayer);
+    await waitFor(() => expect(screen.getByLabelText("Demo")).toHaveAttribute("poster", "/poster.webp"));
+    unmount();
+    const viewport = observeViewport();
+    const deferred = render(deferredPlayer);
+    deferred.unmount();
+    expect(viewport.disconnect).toHaveBeenCalledOnce();
   });
 
   it("does not create a video request while no source is configured", () => {

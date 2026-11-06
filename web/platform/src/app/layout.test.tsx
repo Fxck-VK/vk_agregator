@@ -1,4 +1,5 @@
 vi.mock("server-only", () => ({}));
+vi.mock("@/i18n/navigation", () => ({ useRouter: () => ({ refresh() {}, push() {} }) }));
 import { renderToStaticMarkup } from "react-dom/server";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 

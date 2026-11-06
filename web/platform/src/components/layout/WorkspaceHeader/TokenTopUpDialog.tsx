@@ -13,7 +13,6 @@ import { useEffect, useId, useRef, useState, type FormEvent } from "react";
 import { assetPaths } from "@/assets/asset-paths";
 import { ModalBackdrop } from "@/components/ui/ModalBackdrop/ModalBackdrop";
 import { ModalCloseButton } from "@/components/ui/ModalCloseButton/ModalCloseButton";
-import { ScrollArea } from "@/components/ui/ScrollArea/ScrollArea";
 import { CreditAmount, getCreditAmountLabel } from "@/components/ui/CreditAmount/CreditAmount";
 import selectableStyles from "@/components/ui/selectable-control.module.css";
 import { PaymentStatus } from "@/features/payments/PaymentStatus";
@@ -127,8 +126,7 @@ export function TokenTopUpDialog({ onClose }: Readonly<TokenTopUpDialogProps>) {
             {pendingID ? <PaymentStatus paymentID={pendingID} onDone={() => setPendingID(null)} /> : (
               <form className={styles.checkoutForm} onSubmit={purchase}>
                 {loading ? <StateNotice inline kind="loading">{msg("tokenTopUpDialog.loadingTokenPacks")}</StateNotice> : null}
-                <ScrollArea className={styles.packageScroll} viewportClassName={styles.packageViewport}>
-                  <fieldset aria-label={msg("tokenTopUpDialog.tokenPacks")} className={styles.packageList} disabled={busy}>
+                <fieldset aria-label={msg("tokenTopUpDialog.tokenPacks")} className={styles.packageList} disabled={busy}>
                   {catalog?.items.map((item) => (
                     <label className={`${selectableStyles.control} ${styles.packageCard}`} key={item.code}>
                       <input aria-label={msg("tokenTopUpDialog.valueTokensForValue", { value1: getCreditAmountLabel(item.credits, undefined, msg), value2: formatPaymentPrice(item.amount, msg.locale) })} checked={item.code === selectedCode} className={styles.radioInput} name="token-package"
@@ -140,17 +138,16 @@ export function TokenTopUpDialog({ onClose }: Readonly<TokenTopUpDialogProps>) {
                       </span>
                     </label>
                   ))}
-                  </fieldset>
-                </ScrollArea>
+                </fieldset>
                 {catalog?.items.length === 0 ? <StateNotice inline kind="empty">{msg("tokenTopUpDialog.noTokenPacksAreCurrentlyAvailable")}</StateNotice> : null}
                 {catalog && !catalog.checkout_available ? <StateNotice inline kind="empty">{msg("tokenTopUpDialog.testPaymentsAreNotAvailableYet")}</StateNotice> : null}
                 {selectedPackage ? <>
-                  <LegalPaymentNotice />
+                  <div className={styles.paymentNotice}><LegalPaymentNotice /></div>
                   <button className={styles.purchaseButton} disabled={busy || !catalog?.checkout_available} type="submit">
                     {busy ? msg("tokenTopUpDialog.openingYookassa") : msg("tokenTopUpDialog.buyForValue", { value1: formatPaymentPrice(selectedPackage.amount, msg.locale) })}
                   </button>
                 </> : null}
-                {error ? <StateNotice inline kind="error">{msg(error)}</StateNotice> : null}
+                {error ? <StateNotice inline kind="error" className={styles.checkoutError}>{msg(error)}</StateNotice> : null}
                 {!catalog && !loading ? <RetryAction label={msg("tokenTopUpDialog.loadTokenPacks")} onClick={() => { setError(""); setLoading(true); setReload((value) => value + 1); }} /> : null}
               </form>
             )}

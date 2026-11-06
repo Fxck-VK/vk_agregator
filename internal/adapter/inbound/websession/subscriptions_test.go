@@ -74,7 +74,7 @@ func TestWebSubscriptionUsesPrincipalAndSafeDTO(t *testing.T) {
 	now := time.Now().UTC()
 	stub := &subscriptionStub{state: &domain.AccountSubscription{Plan: domain.SubscriptionPlanSnapshot{Code: "lite", Name: "Lite", Amount: 19900, Stars: 400}, NextPlan: domain.SubscriptionPlanSnapshot{Code: "start", Amount: 54900}, PeriodStart: now, PaidUntil: now.AddDate(0, 0, 7), AutoRenew: true, PaymentMethodID: "private-saved-method"}}
 	h.deps.Subscriptions = stub
-	h.cfg.TestPaymentsEnabled = true
+	h.cfg.PaymentsEnabled = true
 	response := httptest.NewRecorder()
 	h.Routes().ServeHTTP(response, authenticatedConversationRequest(t, http.MethodGet, "/web/v1/subscription", sessions, owner))
 	if response.Code != 200 || stub.owner != owner || !strings.Contains(response.Body.String(), `"next_amount":54900`) {
@@ -97,7 +97,7 @@ func TestWebSubscriptionCheckoutRequiresServerReceiptAndIdempotency(t *testing.T
 	stub := &subscriptionStub{}
 	h.deps.Subscriptions = stub
 	h.deps.ReceiptContacts = &webReceiptContactStub{}
-	h.cfg.TestPaymentsEnabled = true
+	h.cfg.PaymentsEnabled = true
 	request := safeConversationManagementRequest(t, http.MethodPost, "/web/v1/subscription/checkout", sessions, owner, `{"plan_code":"lite","auto_renew":false}`)
 	request.Header.Set("X-Idempotency-Key", uuid.NewString())
 	response := httptest.NewRecorder()
@@ -122,7 +122,7 @@ func TestWebSubscriptionCarriesPolicyConsentAndActualRetryTime(t *testing.T) {
 	stub := &subscriptionStub{state: &domain.AccountSubscription{Plan: domain.SubscriptionPlanSnapshot{Code: "lite", Name: "Lite", Amount: 19900, Stars: 400}, NextPlan: domain.SubscriptionPlanSnapshot{Code: "start", Amount: 54900}, PeriodStart: now.Add(-8 * 24 * time.Hour), PaidUntil: now.Add(-24 * time.Hour), NextAttemptAt: next, AutoRenew: true, PastDue: true, PaymentMethodID: "private-retry-method"}}
 	h.deps.Subscriptions = stub
 	h.deps.ReceiptContacts = &webReceiptContactStub{}
-	h.cfg.TestPaymentsEnabled = true
+	h.cfg.PaymentsEnabled = true
 	request := safeConversationManagementRequest(t, http.MethodPost, "/web/v1/subscription/checkout", sessions, owner, `{"plan_code":"lite","auto_renew":true,"retry_policy_version":1}`)
 	request.Header.Set("X-Idempotency-Key", uuid.NewString())
 	response := httptest.NewRecorder()

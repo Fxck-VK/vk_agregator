@@ -5,6 +5,8 @@ import { readSignal } from "./read-signal";
 
 import { getWebApiInternalOrigin } from "./internal-origin";
 import { canonicalizeWebApiPath, type WebApiPath } from "./path";
+import { getRequestReleaseState } from "@/features/release/server";
+import { releaseViewHeader } from "@/features/release/policy";
 
 const forbiddenIdentityHeaders = [
   "authorization",
@@ -30,11 +32,14 @@ function serverRequestHeaders(init: RequestInit | undefined, cookie: string | nu
 export async function webServerFetch(path: WebApiPath, init?: RequestInit): Promise<Response> {
   const safePath = canonicalizeWebApiPath(path);
   const requestHeaders = await headers();
+  const release = await getRequestReleaseState();
   const target = new URL(safePath, getWebApiInternalOrigin()).toString();
+  const outboundHeaders = serverRequestHeaders(init, requestHeaders.get("cookie"));
+  outboundHeaders.set(releaseViewHeader, release.view);
   return fetch(target, {
     ...init,
     signal: readSignal(init),
     cache: "no-store",
-    headers: serverRequestHeaders(init, requestHeaders.get("cookie")),
+    headers: outboundHeaders,
   });
 }

@@ -21,6 +21,8 @@ import { subscriptionPlanPreview } from "@/features/pricing/subscription-preview
 import { formatPaymentPrice } from "@/features/payments/payments";
 import { subscriptionCopy } from "@/features/subscriptions/copy";
 import { useLiteOffer } from "@/features/subscriptions/use-lite-offer";
+import { useGenerationCatalog } from "@/features/models/GenerationCatalogProvider";
+import { useReleaseView } from "@/features/release/ReleaseViewProvider";
 
 import { FeaturedModels } from "../FeaturedModels/FeaturedModels";
 import { WorkspaceHero } from "../WorkspaceHero/WorkspaceHero";
@@ -37,6 +39,14 @@ export function WorkspaceLanding({ access = "authenticated" }: WorkspaceLandingP
   const msg = useMessages();
   const locale = useLocale();
   const liteOffer = useLiteOffer();
+  const { catalog } = useGenerationCatalog();
+  const { view } = useReleaseView();
+  const footerModels = [
+    { id: "nano_banana_2", name: "Nano Banana 2" },
+    { id: "nano_banana_pro", name: "Nano Banana Pro" },
+    { id: "gpt_image_2", name: "GPT Image 2" },
+    { id: "seedream_4_5", name: "Seedream 4.5" },
+  ].filter(model => catalog?.items.some(item => item.id === model.id));
   const copy = subscriptionCopy[locale], trial = subscriptionPlanPreview("lite"), next = subscriptionPlanPreview(trial.next_plan_code);
   const inspirationExamples = getInspirationExamples(locale);
   const frequentlyAskedQuestions = getFrequentlyAskedQuestions(msg);
@@ -94,6 +104,7 @@ export function WorkspaceLanding({ access = "authenticated" }: WorkspaceLandingP
             </div>
           </div>
           <VideoPlayer
+            deferPoster
             poster={assetPaths.images.workspace.howItWorksPoster}
             source={{ src: assetPaths.videos.workspace.howItWorks, type: "video/mp4" }}
             title={msg("workspaceLanding.howNeirohubWorks")}
@@ -236,7 +247,7 @@ export function WorkspaceLanding({ access = "authenticated" }: WorkspaceLandingP
               <h2 id="workspace-community-title">{msg("workspaceLanding.followUsOnTelegramAndVk")}</h2>
               <p>{msg("workspaceLanding.stayUpToDateAndWorkFaster")}</p>
               <div aria-label={msg("workspaceLanding.neirohubSocialMedia")} className={styles.communityActions}>
-                <span aria-disabled="true" className={styles.communityButton}>Telegram</span>
+                {view === "dev" ? <span aria-disabled="true" className={styles.communityButton}>Telegram</span> : null}
                 <a
                   className={styles.communityButton}
                   href="https://vk.me/neirohub_help"
@@ -304,10 +315,7 @@ export function WorkspaceLanding({ access = "authenticated" }: WorkspaceLandingP
           <nav aria-label={msg("workspaceLanding.platformSections")} className={styles.footerColumns}>
             <div className={styles.footerColumn}>
               <strong>{msg("workspaceLanding.aiModels")}</strong>
-              <Link href="/app/image?model=nano_banana_2">Nano Banana 2</Link>
-              <Link href="/app/image?model=nano_banana_pro">Nano Banana Pro</Link>
-              <Link href="/app/image?model=gpt_image_2">GPT Image 2</Link>
-              <Link href="/app/image?model=seedream_4_5">Seedream 4.5</Link>
+              {footerModels.map(model => <Link key={model.id} href={`/app/image?model=${model.id}`}>{model.name}</Link>)}
               <Link href="/app/models">{msg("workspaceLanding.allAiModels")}</Link>
             </div>
             <div className={styles.footerColumn}>

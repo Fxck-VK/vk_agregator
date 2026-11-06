@@ -14,22 +14,45 @@ export type VideoSource = {
 };
 
 type VideoPlayerProps = {
+  deferPoster?: boolean;
   poster?: string;
   source?: VideoSource;
   title: string;
 };
 
-export function VideoPlayer({ poster, source, title }: Readonly<VideoPlayerProps>) {
+export function VideoPlayer({ deferPoster = false, poster, source, title }: Readonly<VideoPlayerProps>) {
   const msg = useMessages();
   const [hasPlaybackError, setHasPlaybackError] = useState(false);
   const [isWaiting, setIsWaiting] = useState(false);
   const [hasStarted, setHasStarted] = useState(false);
   const [isPaused, setIsPaused] = useState(false);
+  const [posterRequested, setPosterRequested] = useState(false);
   const spacePauseActiveRef = useRef(false);
   const videoRef = useRef<HTMLVideoElement>(null);
+  const activePoster = !deferPoster || posterRequested ? poster : undefined;
   const posterOverlayStyle = {
-    "--video-player-poster": poster ? `url("${poster}")` : "none",
+    "--video-player-poster": activePoster ? `url("${activePoster}")` : "none",
   } as CSSProperties;
+
+  useEffect(() => {
+    const video = videoRef.current;
+    if (!deferPoster || posterRequested || !poster || !video) return;
+
+    if (typeof IntersectionObserver === "undefined") {
+      // Match server HTML until hydration, then load normally in older browsers.
+      const timer = window.setTimeout(() => setPosterRequested(true), 0);
+      return () => window.clearTimeout(timer);
+    }
+
+    const observer = new IntersectionObserver(entries => {
+      if (entries.some(entry => entry.isIntersecting)) {
+        setPosterRequested(true);
+        observer.disconnect();
+      }
+    }, { rootMargin: "400px 0px" });
+    observer.observe(video);
+    return () => observer.disconnect();
+  }, [deferPoster, posterRequested, poster, source?.src, hasPlaybackError]);
 
   useEffect(() => {
     const blockSpaceEvent = (event: KeyboardEvent) => {
@@ -97,6 +120,7 @@ export function VideoPlayer({ poster, source, title }: Readonly<VideoPlayerProps
     }
 
     const isResuming = hasStarted;
+    setPosterRequested(true);
     setHasStarted(true);
     setIsPaused(false);
     video.play()?.catch(() => {
@@ -116,7 +140,7 @@ export function VideoPlayer({ poster, source, title }: Readonly<VideoPlayerProps
 
   if (source && !hasPlaybackError) {
     return (
-      <div className={styles.frame}>
+      <div className={styles.frame} onFocusCapture={() => setPosterRequested(true)}>
         <video
           aria-label={title}
           className={styles.video}
@@ -136,11 +160,12 @@ export function VideoPlayer({ poster, source, title }: Readonly<VideoPlayerProps
             }
           }}
           onPlay={() => {
+            setPosterRequested(true);
             setHasStarted(true);
             setIsPaused(false);
           }}
           onSeeked={restoreAfterSeeking}
-          poster={poster}
+          poster={activePoster}
           preload="none"
           ref={videoRef}
         >

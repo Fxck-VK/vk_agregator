@@ -1,7 +1,7 @@
 import { brandName } from "@/config/brand";
-import { homePresentationEn } from "./home-media-en";
 
-// Editorial source for the Russian homepage and its reviewed translation catalog.
+// English is the first rebuilt homepage. A Russian translation is deliberately
+// not synthesized; the /ru home remains empty until its own editorial pass.
 export const homeEn = {
   metadata: { title: `${brandName} — The creative platform for your best work`, description: "Create images, video, music and more. Explore AI models and bring your next idea to life in one creative workspace." },
   announcement: "Where ideas take shape", skip: "Skip to content", start: "Start creating", explore: "Explore", why: `Why ${brandName}?`,
@@ -18,14 +18,14 @@ export const homeEn = {
   ],
   login: "Log in", signup: "Sign up",
   hero: { eyebrow: "Your creative tools, all together", title: "The creative platform to direct your best work", description: "AI models for video, image, and audio. Explore ideas, shape your visual world, and move from your first prompt to a result worth sharing.", modelCaption: "Find your creative flow with leading AI model families", capabilities: ["Generate images", "Bring ideas to life", "Create your own music", "Tell your story", "Explore new worlds", "Find the right words"], partners: ["Google", "OpenAI", "FLUX", "KLING", "Suno", "elevenlabs"] },
-  suite: { title: homePresentationEn.suiteTitle, description: homePresentationEn.suiteDescription, tabsLabel: "Explore the platform", tabs: ["Creative Suite", "Workspace", "MCP & API", "Agents", "Plugins", "Inspiration"],
-    heading: "From your first request to your own work", intro: `Discuss an idea with an AI model, create an image or compose music. In ${brandName}, you choose a model and settings for your task, see the cost before starting and find completed results in your account.`, tour: "Take a tour", categoriesLabel: "Creative Suite tools",
+  suite: { title: "One place to create anything", description: "Pick your starting point. Every tool, every model, every format.", tabsLabel: "Explore the platform", tabs: ["Creative Suite", "Workspace", "MCP & API", "Agents", "Plugins", "Inspiration"],
+    heading: "Pro-level production, end to end", intro: "Start with an idea. Explore the shots. Add sound. Try a different direction. Your next creation begins in one workspace.", tour: "Take a tour", categoriesLabel: "Creative Suite tools",
     categories: [
-      { name: "Image", icon: "image", description: "Describe what you want to see or add a reference image. Choose an AI model and generation settings. Completed images appear in My files.", href: "/app/image", image: "product-shots.webp", video: "creative-suite-image.webm" },
-      { name: "Video", icon: "video", description: "Turn a description or an image into a video scene. Choose a video model, adjust the available settings and start generation.", href: "/app/models", image: "preview-1.webp", video: "creative-suite-video.webm" },
-      { name: "Audio", icon: "audio", description: `Create music from your description. Set the mood and style of your track, then listen to and download the finished result directly in ${brandName}.`, href: "/app/music", image: "preview-4.webp" },
-      { name: "Text", icon: "text", description: "Write and edit texts, ask questions and develop ideas in a chat with an AI model. Your conversation history is saved so you can return and continue.", href: "/app", image: "card-yourentire-2x.webp" },
-      { name: "Inspiration", icon: "spark", description: "Look through examples, explore prompts and find ideas for your work. Start with a scene or style you like and try your own version.", href: "/app/inspiration", image: "brand-campaign.webp" },
+      { name: "Image", icon: "image", description: "Create images from an idea or a reference. Explore a new style and refine your next frame.", href: "/app/image", image: "product-shots.webp", video: "creative-suite-image.webm" },
+      { name: "Video", icon: "video", description: "Find the model for your next scene. Turn a text description or an image into moving pictures.", href: "/app/models", image: "preview-1.webp", video: "creative-suite-video.webm" },
+      { name: "Audio", icon: "audio", description: "Create music, give your words a voice, and find the sound that belongs to your idea.", href: "/app/music", image: "preview-4.webp" },
+      { name: "Text", icon: "text", description: "Write, research, explore ideas, and find a new perspective in a conversation with AI.", href: "/app", image: "card-yourentire-2x.webp" },
+      { name: "Inspiration", icon: "spark", description: "Discover examples and visual directions. Pick a starting point and make the next idea your own.", href: "/app/inspiration", image: "brand-campaign.webp" },
     ],
     platforms: [
       { title: "A workspace of your own", description: "Your conversations, creative tools and files, together in a single place. Pick up where your last idea left off.", action: "Open workspace", href: "/app", image: "card-yourentire-2x.webp" },
@@ -84,11 +84,3 @@ export const homeEn = {
 } as const;
 
 export type HomeEnglishCopy = typeof homeEn;
-
-export const homeSuiteLaunchLabelsEn = {
-  image: "Create an image",
-  video: "Choose a video model",
-  audio: "Create music",
-  text: "Open chat",
-  spark: "See examples",
-} as const;

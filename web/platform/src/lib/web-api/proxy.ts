@@ -3,6 +3,8 @@ import "server-only";
 import { canonicalizeWebApiPath } from "./path";
 import { readSignal } from "./read-signal";
 import { randomUUID } from "node:crypto";
+import { releaseStateForRequest } from "@/features/release/server";
+import { releaseViewHeader } from "@/features/release/policy";
 
 const forwardedRequestHeaders = [
   "Accept",
@@ -46,6 +48,7 @@ function proxyRequestHeaders(requestHeaders: Headers): Headers {
       headers.set(header, value);
     }
   }
+  headers.set(releaseViewHeader, releaseStateForRequest(requestHeaders).view);
   return headers;
 }
 

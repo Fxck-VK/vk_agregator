@@ -241,6 +241,39 @@ if ($paymentProvider -eq "yookassa") {
         Add-Problem -Problems $problems -Name "YOOKASSA_SECRET_KEY" -Reason "must be a live YooKassa key in production"
     }
 }
+foreach ($liveFlag in @("WEB_LIVE_PAYMENTS_ENABLED", "WEB_LIVE_RECURRING_ENABLED")) {
+    if (@("", "true", "false") -cnotcontains (Get-Value -Values $envValues -Name $liveFlag -Default "false")) {
+        Add-Problem -Problems $problems -Name $liveFlag -Reason "must be canonical true or false"
+    }
+}
+$liveWebPayments = Is-TrueValue (Get-Value -Values $envValues -Name "WEB_LIVE_PAYMENTS_ENABLED" -Default "false")
+$liveWebRecurring = Is-TrueValue (Get-Value -Values $envValues -Name "WEB_LIVE_RECURRING_ENABLED" -Default "false")
+if ($liveWebRecurring -and -not $liveWebPayments) {
+    Add-Problem -Problems $problems -Name "WEB_LIVE_RECURRING_ENABLED" -Reason "requires WEB_LIVE_PAYMENTS_ENABLED=true"
+}
+if ($liveWebPayments -or $liveWebRecurring) {
+    if ((Get-Value -Values $envValues -Name "APP_ENV") -cne "production") {
+        Add-Problem -Problems $problems -Name "WEB_LIVE_PAYMENTS_ENABLED" -Reason "requires APP_ENV=production"
+    }
+    if ($paymentProvider -ne "yookassa") {
+        Add-Problem -Problems $problems -Name "PAYMENT_PROVIDER" -Reason "live web payments require yookassa"
+    }
+    if (-not (Get-Value -Values $envValues -Name "YOOKASSA_SECRET_KEY").StartsWith("live_", [StringComparison]::Ordinal)) {
+        Add-Problem -Problems $problems -Name "YOOKASSA_SECRET_KEY" -Reason "live web payments require an unmodified live_ key"
+    }
+    $liveApiUrl = (Get-Value -Values $envValues -Name "YOOKASSA_BASE_URL" -Default "https://api.yookassa.ru/v3").TrimEnd('/')
+    if ($liveApiUrl -cne "https://api.yookassa.ru/v3") {
+        Add-Problem -Problems $problems -Name "YOOKASSA_BASE_URL" -Reason "live web payments require the official YooKassa API"
+    }
+    $liveWebOrigin = Get-Value -Values $envValues -Name "WEB_ORIGIN"
+    if ($liveWebOrigin -cnotmatch '^https://[a-z0-9.-]+(:[0-9]+)?$' -or $liveWebOrigin -like 'https://localhost*' -or $liveWebOrigin -like 'https://127.*' -or $liveWebOrigin -like '*:443') {
+        Add-Problem -Problems $problems -Name "WEB_ORIGIN" -Reason "live web payments require a canonical public HTTPS origin without credentials, path or query"
+    }
+}
+$receiptMode = Get-Value -Values $envValues -Name "YOOKASSA_RECEIPT_MODE" -Default "yookassa"
+if (@("yookassa", "npd_manual") -cnotcontains $receiptMode) {
+    Add-Problem -Problems $problems -Name "YOOKASSA_RECEIPT_MODE" -Reason "must be yookassa or npd_manual"
+}
 if (Is-TrueValue (Get-Value -Values $envValues -Name "FEATURE_DEV_PAYMENT_TEST_PRODUCT_ENABLED" -Default "false")) {
     Add-Problem -Problems $problems -Name "FEATURE_DEV_PAYMENT_TEST_PRODUCT_ENABLED" -Reason "not allowed in staging/production"
 }

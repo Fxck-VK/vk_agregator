@@ -16,7 +16,7 @@ import { WorkspaceDataCacheProvider } from "@/features/workspace/WorkspaceDataCa
 import { WorkspaceNavigationMetrics } from "@/features/workspace/WorkspaceNavigationMetrics/WorkspaceNavigationMetrics";
 import { GenerationCatalogProvider } from "@/features/models/GenerationCatalogProvider";
 import { WorkspaceSessionHealth } from "@/features/session/WorkspaceSessionHealth";
-import type { ModelCatalogSnapshot } from "@/features/models/model-catalog-contract";
+import type { ModelCatalogSnapshot, ModelCatalogDelivery } from "@/features/models/model-catalog-contract";
 import { Skeleton, StateNotice } from "@/components/ui/AsyncState/AsyncState";
 import { useDictionary } from "@/i18n/LocaleProvider";
 import { useRouter } from "@/i18n/navigation";
@@ -36,6 +36,7 @@ function getDesktopSidebarPreference() {
 }
 
 type WorkspaceFrameProps = {
+  identityDurationMs?: number;
   preview?: boolean;
   account?: ReactNode;
   accountId: string;
@@ -46,9 +47,11 @@ type WorkspaceFrameProps = {
   deferred?: boolean;
   deferConversations?: boolean;
   initialCatalog?: ModelCatalogSnapshot | null;
+  pendingCatalog?: Promise<ModelCatalogDelivery> | null;
 };
 
 type WorkspaceChromeProps = {
+  identityDurationMs?: number;
   account?: ReactNode;
   balance?: number | null;
   children: ReactNode;
@@ -56,7 +59,7 @@ type WorkspaceChromeProps = {
   trailingAction?: ReactNode;
 };
 
-function WorkspaceChrome({ account, balance = null, children, conversations, trailingAction }: WorkspaceChromeProps) {
+function WorkspaceChrome({ account, balance = null, children, conversations, trailingAction, identityDurationMs }: WorkspaceChromeProps) {
   const restoredDesktopSidebarCollapsed = useSyncExternalStore(
     subscribeToDesktopSidebarPreference,
     getDesktopSidebarPreference,
@@ -89,21 +92,22 @@ function WorkspaceChrome({ account, balance = null, children, conversations, tra
         />
       }
     >
-      <WorkspaceNavigationMetrics />
+      <WorkspaceNavigationMetrics identityDurationMs={identityDurationMs} />
       {children}
     </AppShell>
   );
 }
 
-export function WorkspaceFrame({ account, accountId, balance = null, children, conversations, profile, deferred = false, deferConversations = deferred, initialCatalog = null, preview = false }: WorkspaceFrameProps) {
+export function WorkspaceFrame({ account, accountId, balance = null, children, conversations, profile, deferred = false, deferConversations = deferred, initialCatalog = null, pendingCatalog = null, preview = false, identityDurationMs }: WorkspaceFrameProps) {
   return (
     <WorkspaceSessionHealth accountId={accountId} verification={profile} key={accountId} guest={<GuestWorkspaceFrame><SessionFailureNotice /></GuestWorkspaceFrame>}>
-    <GenerationCatalogProvider initialSource={initialCatalog} key={accountId}>
+    <GenerationCatalogProvider accountId={accountId} initialSource={initialCatalog} pendingSource={pendingCatalog} key={accountId}>
     <WorkspaceAccountProvider deferred={deferred} snapshot={{ balance, profile }} preview={preview}>
       <WorkspaceConversationListProvider deferred={deferConversations} accountId={accountId} initialConversations={conversations} key={accountId}>
         <WorkspaceDataCacheProvider>
           <WorkspaceModelSelectionProvider key={accountId}>
             <WorkspaceChrome
+              identityDurationMs={preview ? undefined : identityDurationMs}
               account={account}
               balance={balance}
               conversations={<SidebarConversations />}

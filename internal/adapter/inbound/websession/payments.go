@@ -67,13 +67,13 @@ func (h *Handler) listWebPaymentProducts(w http.ResponseWriter, r *http.Request)
 	writeJSON(w, 200, struct {
 		Items             []safePaymentProduct `json:"items"`
 		CheckoutAvailable bool                 `json:"checkout_available"`
-	}{items, h.cfg.TestPaymentsEnabled})
+	}{items, h.cfg.PaymentsEnabled})
 }
 
 func (h *Handler) createWebPayment(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Cache-Control", "no-store")
-	if h.deps.Payments == nil || !h.cfg.TestPaymentsEnabled {
-		writeError(w, 503, "test checkout unavailable")
+	if h.deps.Payments == nil || !h.cfg.PaymentsEnabled {
+		writeError(w, 503, "checkout unavailable")
 		return
 	}
 	principal, _ := PrincipalFromContext(r.Context())

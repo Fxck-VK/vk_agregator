@@ -1,4 +1,5 @@
 "use client";
+import { useReleaseView } from "@/features/release/ReleaseViewProvider";
 
 import { MediaState, StateNotice } from "@/components/ui/AsyncState/AsyncState";
 import { MediaImage } from "@/components/media/MediaImage/MediaImage";
@@ -130,6 +131,8 @@ function ReadyFilePreviewDialog({
 }: Readonly<ReadyFilePreviewDialogProps>) {
   const msg = useMessages();
   const t = useDictionary();
+  const { enabled } = useReleaseView();
+  const toolFeatures = { animate: "photo-animation", enhance: "photo-enhance", "remove-background": "background-removal", edit: "photo-edit" } as const;
   const toolActions = [
     { id: "general", label: t.files.previewGeneral },
     { id: "animate", label: msg("filePreviewDialog.animate") },
@@ -137,7 +140,7 @@ function ReadyFilePreviewDialog({
     { id: "remove-background", label: msg("filePreviewDialog.removeBackground") },
     { id: "edit", label: msg("filePreviewDialog.edit") },
   ] as const;
-  const toolItems = toolActions.map((action) => ({
+  const toolItems = toolActions.filter(action => action.id === "general" || enabled(toolFeatures[action.id])).map((action) => ({
     ...action,
     icon: (
       <Image
@@ -155,7 +158,9 @@ function ReadyFilePreviewDialog({
   const [isPromptCopied, setIsPromptCopied] = useState(false);
   const [isPromptExpanded, setIsPromptExpanded] = useState(false);
   const [isPromptOverflowing, setIsPromptOverflowing] = useState(false);
-  const [activeToolID, setActiveToolID] = useState<PreviewToolID>("general");
+  const [selectedToolID, setActiveToolID] = useState<PreviewToolID>("general");
+  const activeToolID = selectedToolID === "general" || enabled(toolFeatures[selectedToolID]) ? selectedToolID : "general";
+  if (activeToolID !== selectedToolID) setActiveToolID("general");
   const editorController = useFileEditorController();
   const promptRef = useRef<HTMLParagraphElement>(null);
   const { artifact, job } = selectedItem;

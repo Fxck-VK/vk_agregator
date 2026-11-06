@@ -1,7 +1,7 @@
 {
   "schema_version": 5,
-  "updated_at": "2026-11-04T11:36:45Z",
-  "branch": "codex/home-suite-copy",
+  "updated_at": "2026-11-06T14:47:55.520742+00:00",
+  "branch": "codex/vk-profile-name",
   "remote_tracking": "origin/dev-deploy",
   "purpose": "Short machine-readable current context and routing for agents. This file is not project history.",
   "read_policy": {
@@ -56,13 +56,24 @@
     "history_read_condition": "Read logs/archive only when explicitly asked for history, repeated-error debugging, regression archaeology, or old audit details."
   },
   "current_context": {
+    "local_storage": {
+      "system_drive": "C:",
+      "former_D_drive_removed": true,
+      "former_D_data_root": "C:/Data",
+      "active_git_common_dir": "C:/Data/агрегатор/.git",
+      "note": "C and D were consolidated on 2026-11-03. No D alias exists. The active checkout remains at its existing C path; preserved former-D data and Git administration are under C:/Data.",
+      "evidence": ".runtime/disk-merge-20261103/merge-status.json"
+    },
+    "live_merchant": "2026-11-02 owner-approved local real YooKassa merchant preparation; activated live credentials verified only by GET /v3/me, no payments. Explicit production-only checkout and independent recurring flags shared by API/renewal worker; NPD manual receipt mode retains buyer-contact validation. Credentials only in ignored .runtime/payments/live-shop.env. No deploy/secret upload/real charge. Owner screenshot now shows production callback and payment.succeeded/payment.canceled/refund.succeeded; repeated read-only probe timed out, actual delivery unverified. See docs/runbooks/BILLING.md and docs/superpowers/plans/2026-11-02-live-merchant.md.",
+    "release_views": "2026-11-02 local, uncommitted DEV/PROD view and readiness inventory implemented; not deployed. Shared web/platform/release/features.json compiles into API and platform, existing DEV gate/cookie authorizes personal preview, Go trusted environment forces production restrictions. Direct route/catalogue/paid-job gates preserve auth, pricing and historical reads. Profile-bound snapshots prevent cross-mode stale data. Browser eight-width checks completed; see docs/RELEASE_SCOPE.md and docs/superpowers/plans/2026-11-02-release-views.md. Preserve pending 2026-11-01 loading changes; no release without owner request.",
     "active_branch_role": "dev-deploy is the integration/deployment branch; synchronize fastlife_dev after tested merges. Production remains main-only.",
-    "worktree": "Single active development checkout: D:/vk_agregator. All preserved UI/brand/model-icon and current backend/auth changes are integrated here; other working directories are inactive history.",
+    "worktree": "Single active development checkout: C:/Users/Lenovo/Documents/агрегатор/epifera-domain-cutover. All preserved UI/brand/model-icon and current backend/auth changes are integrated here; other working directories are inactive history.",
     "responsive_qa": "Layout changes require affected-page browser checks at 360/390/768/1024/1440/1920/2560/3840 CSS px; QHD 2560x1440 and UHD 3840x2160. Follow web/platform/AGENTS.md#mandatory-responsive-layout-verification. Local audit 2026-10-29 completed: 24 Russian template instances x8=192 cases plus lesson/help article/legal document x8=24; full-scroll pass for24 and representative open panels. Fixed ReferenceChrome search flex overflow at768, mobile tattoo breadcrumb wrapping and fractional-edge horizontal ScrollArea wheel trap.102 focused tests, types, targeted lint and diff check pass. Evidence: .cache/responsive-qa/2026-10-29-all-templates/report.html and summary.json. Chromium CSS-viewport emulation at100%, not physical-device/cross-browser coverage; future content changes require recheck. No push/deploy.",
     "dev_contour": "DEV uses separate secrets, VPS, tunnel, VK group and payment configuration.",
     "prod_contour": "main deploys through GitHub Actions and immutable GHCR images with mandatory smoke.",
     "loadtest_contour": "Mock providers, payments and delivery only; no production hosts or paid calls.",
-    "release_intent": "Owner-approved14-day insufficient-funds retry policy implemented locally: canonical v1 min24h/max14total failures, immutable new checkout opt-in/version; legacy consent never expands. Authenticated GET reason/unpaid/amount proof, owner locks, per-attempt keys,23h ambiguity, exact deadline, cancellation and one-time grants preserved. Reproduced/fixed late-settlement consent revival, stale batch deadline, stale5min backoff and cancellation races. Unit/full payment, seven other server packages, real PostgreSQL schedule/rollback/concurrency/deadline tests,47affected frontend tests plus final legal parity, types/lint/export/go vet and independent review passed. Shared legal edition2026-10-29.1 and existing checkbox disclose rules; two local legal pages verifiedHTTP200 with14-day/24h terms. Earlier actual TEST-shop receipt is legacy-policy evidence; new schedule uses accelerated isolated fixtures, no new tunnel/live payment. Existing localhost7159 reused; no commit/push/deploy. Evidence: .cache/economy-complete-2026-10-28/subscription-retry-report.json and docs/runbooks/BILLING.md."
+    "release_intent": "Owner-approved14-day insufficient-funds retry policy implemented locally: canonical v1 min24h/max14total failures, immutable new checkout opt-in/version; legacy consent never expands. Authenticated GET reason/unpaid/amount proof, owner locks, per-attempt keys,23h ambiguity, exact deadline, cancellation and one-time grants preserved. Reproduced/fixed late-settlement consent revival, stale batch deadline, stale5min backoff and cancellation races. Unit/full payment, seven other server packages, real PostgreSQL schedule/rollback/concurrency/deadline tests,47affected frontend tests plus final legal parity, types/lint/export/go vet and independent review passed. Shared legal edition2026-10-29.1 and existing checkbox disclose rules; two local legal pages verifiedHTTP200 with14-day/24h terms. Earlier actual TEST-shop receipt is legacy-policy evidence; new schedule uses accelerated isolated fixtures, no new tunnel/live payment. Existing localhost7159 reused; no commit/push/deploy. Evidence: .cache/economy-complete-2026-10-28/subscription-retry-report.json and docs/runbooks/BILLING.md.",
+    "landing_variants": "2026-11-06 local integration of origin/dev-deploy ba2001cd; original T01/public-home remains canonical, friend editorial homepage isolated under features/landing-variants/friend with frozen Russian data. Private noindex /ru/landing-variants compares both. All 24 SEO types retained. No push/deploy. See docs/superpowers/plans/2026-11-06-preserve-landing-variants.md."
   },
   "recent_decisions": [
     "Local first-tariff percentage promotions implemented: migration067, revisioned quote/checkout snapshots, account/global reservations, atomic verified settlement, full stars and ordinary renewal; refunded purchases remain ineligible. Existing profile/tariff forms and protected admin/HTTP CLI share the contract. Legal edition2026-10-31.2 documents terms; no campaign seeded, application migration, live payment, commit/push/deploy. See docs/superpowers/plans/2026-10-31-subscription-promotions.md and docs/runbooks/BILLING.md.",
@@ -192,7 +203,7 @@
     ]
   },
   "local_development": {
-    "workspace": "D:/vk_agregator",
+    "workspace": "C:/Users/Lenovo/Documents/агрегатор/epifera-domain-cutover",
     "url": "http://localhost:7159",
     "start": "npm --prefix web/platform run dev:preview",
     "policy": "Reuse this checkout/server. No alternate local copies, worktrees or preview ports without explicit user request."

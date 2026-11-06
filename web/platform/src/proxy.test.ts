@@ -1,5 +1,6 @@
 import { NextRequest } from "next/server";
 import { afterEach, describe, expect, it, vi } from "vitest";
+vi.mock("server-only", () => ({}));
 
 import { config, proxy } from "./proxy";
 
@@ -15,7 +16,8 @@ describe("platform return-path proxy", () => {
   it("does not redirect an unrelated public page just because session cookies exist", () => {
     const response = proxy(new NextRequest("https://platform.example/ru/pricing", { headers: { Cookie: "nh_access=synthetic" } }));
     expect(response.headers.get("Location")).toBeNull();
-    expect(response.headers.get("x-middleware-rewrite")).toBe("https://platform.example/pricing");
+    expect(response.headers.get("x-middleware-rewrite")).toBe("https://platform.example/release-unavailable");
+    expect(response.status).toBe(404);
   });
   afterEach(() => {
     vi.unstubAllEnvs();

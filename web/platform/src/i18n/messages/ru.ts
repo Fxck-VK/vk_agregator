@@ -2,8 +2,10 @@ import { brandName } from "@/config/brand";
 import { messagesSpeechRu } from "../speech";
 import { messagesMusicCatalogRu } from "../music-catalog";
 import { messagesMusicRu } from "../music";
+import { messagesReleasePreviewRu } from "../release-preview";
 
 export const messagesRu = {
+  ...messagesReleasePreviewRu,
   "units.materials.zero": "{count} материалов",
   "units.materials.one": "{count} материал",
   "units.materials.two": "{count} материала",

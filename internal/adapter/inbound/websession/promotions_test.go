@@ -25,7 +25,7 @@ func TestWebPromotionQuotePrincipalCSRFAndCheckout(t *testing.T) {
 	owner := uuid.New()
 	stub := &promoSubscriptionStub{}
 	h.deps.Subscriptions = stub
-	h.cfg.TestPaymentsEnabled = true
+	h.cfg.PaymentsEnabled = true
 	h.deps.ReceiptContacts = &webReceiptContactStub{}
 	request := safeConversationManagementRequest(t, http.MethodPost, "/web/v1/subscription/promo", sessions, owner, `{"code":"first15"}`)
 	response := httptest.NewRecorder()

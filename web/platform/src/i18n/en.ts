@@ -2,8 +2,10 @@ import { brandName, brandMonogram } from "@/config/brand";
 import { accountAuthText } from "./account-auth";
 import { legalText } from "./legal";
 import { promotionText } from "./promotions";
+import { landingVariantsText } from "./landing-variants";
 
 export const en = {
+  landingVariants: landingVariantsText.en,
   promotions: promotionText.en,
   auth: accountAuthText.en,
   legal: legalText.en,

@@ -944,7 +944,7 @@ func newTestHandler(t *testing.T) (*Handler, *passwordStub, *sessionStub) {
 	sessions := &sessionStub{Service: accountauth.New(nil, accountauth.WithSessionRepository(repo), accountauth.WithSessionTTL(time.Hour), accountauth.WithAccessTokenTTL(time.Hour))}
 	passwords := &passwordStub{sessions: sessions}
 	profiles := &profileStub{}
-	return NewHandler(Config{WebOrigin: "https://app.example.test"}, Deps{Passwords: passwords, Sessions: sessions, Authenticator: sessions, Account: profiles}), passwords, sessions
+	return NewHandler(Config{Environment: "development", WebOrigin: "https://app.example.test"}, Deps{Passwords: passwords, Sessions: sessions, Authenticator: sessions, Account: profiles}), passwords, sessions
 }
 
 func cookieMap(cookies []*http.Cookie) map[string]*http.Cookie {
