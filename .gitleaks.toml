@@ -98,6 +98,13 @@ keywords = [
   regexes = ['''^fixture-dedicated$''']
 
   [[rules.allowlists]]
+  description = "Exact non-secret sed search fragment in live merchant env regression"
+  condition = "AND"
+  regexTarget = "secret"
+  paths = ['''^scripts/deploy/test-prod-env\.sh$''']
+  regexes = ['''^live_synthetic/YOOKASSA_SECRET_KEY=(?:liveXsynthetic|Live_synthetic)/$''']
+
+  [[rules.allowlists]]
   description = "Exact non-secret values in committed environment templates"
   condition = "AND"
   regexTarget = "secret"
@@ -201,6 +208,13 @@ keywords = [
 
 [[rules]]
 id = "generic-api-key"
+
+  [[rules.allowlists]]
+  description = "Exact malformed synthetic replacement in live merchant env regression"
+  condition = "AND"
+  regexTarget = "secret"
+  paths = ['''^scripts/deploy/test-prod-env\.sh$''']
+  regexes = ['''^liveXsynthetic/$''']
 
   [[rules.allowlists]]
   description = "Exact public synthetic Yandex Client ID in the DEV renderer test"

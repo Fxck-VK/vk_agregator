@@ -72,6 +72,15 @@ test('secret policy changes scan existing repository history before web checks',
   assert.equal(createSourcePlan(['docs/README.md'], []).commands.some(c => c.command === 'gitleaks'), false);
 });
 
+test('ordinary releases scan committed history before source checks even when secret rules are unchanged', () => {
+  for (const changed of ['internal/service/example/service.go', 'scripts/ci/release-source-plan.mjs', 'docs/README.md']) {
+    const plan = createSourcePlan([changed], ['.gitleaks.toml', changed]);
+    assert.equal(plan.commands[0]?.command, 'gitleaks');
+    assert.equal(plan.commands[0]?.args[0], 'git');
+    assert(plan.commands[0].args.includes('--redact'));
+  }
+});
+
 for (const pkg of ['web/platform', 'web/admin']) for (const relative of ['package-lock.json', 'vitest.config.ts', 'src/test/setup.ts', 'src/deleted.tsx']) {
   const file = `${pkg}/${relative}`;
   test(`broad or deleted frontend input keeps fast checks and defers the full suite: ${file}`, () => {
