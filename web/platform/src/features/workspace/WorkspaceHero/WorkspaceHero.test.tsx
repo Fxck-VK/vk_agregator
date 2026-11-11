@@ -194,8 +194,8 @@ describe("WorkspaceHero model selection", () => {
     fireEvent.change(input, { target: { value: "Один постоянный инпут" } });
     input.focus();
     input.setSelectionRange(2, 8);
-    const upload = container.querySelector('input[type="file"]')!;
-    fireEvent.change(upload, { target: { files: [new File(["brief"], "brief.txt", { type: "text/plain" })] } });
+    expect(container.querySelector('input[type="file"]')).toBeNull();
+    fireEvent.paste(input, { clipboardData: { files: [new File(["brief"], "brief.txt", { type: "text/plain" })] } });
     expect(screen.queryByRole("button", { name: "Убрать brief.txt" })).toBeNull();
     expect(webBrowserMutation).not.toHaveBeenCalled();
 

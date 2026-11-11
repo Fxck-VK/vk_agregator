@@ -16,6 +16,7 @@ import styles from "./ModalBackdrop.module.css";
 
 type ModalBackdropProps = {
   children: ReactNode | ((requestClose: () => void) => ReactNode);
+  className?: string;
   closeOnBackdropClick?: boolean;
   closeOnEscape?: boolean;
   onClose: () => void;
@@ -24,6 +25,7 @@ type ModalBackdropProps = {
 
 export function ModalBackdrop({
   children,
+  className,
   closeOnBackdropClick = true,
   closeOnEscape = true,
   onClose,
@@ -126,7 +128,7 @@ export function ModalBackdrop({
 
   return createPortal(
     <ScrollArea
-      className={styles.backdrop}
+      className={[styles.backdrop, className].filter(Boolean).join(" ")}
       data-state={state}
       data-testid={testId}
       onMouseDown={closeFromBackdrop}

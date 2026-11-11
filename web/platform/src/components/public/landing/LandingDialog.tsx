@@ -5,7 +5,9 @@ import { ModalBackdrop } from "@/components/ui/ModalBackdrop/ModalBackdrop";
 import { ModalCloseButton } from "@/components/ui/ModalCloseButton/ModalCloseButton";
 import styles from "./LandingChrome.module.css";
 
-function DialogSurface({ title, closeLabel, children, requestClose, wide }: { title: string; closeLabel: string; children: ReactNode; requestClose: () => void; wide: boolean }) {
+type Presentation = "content" | "media";
+
+function DialogSurface({ title, closeLabel, children, requestClose, wide, className, presentation }: { title: string; closeLabel: string; children: ReactNode; requestClose: () => void; wide: boolean; className?: string; presentation: Presentation }) {
   const ref = useRef<HTMLElement>(null);
   const id = useId();
   useEffect(() => {
@@ -22,12 +24,12 @@ function DialogSurface({ title, closeLabel, children, requestClose, wide }: { ti
     element?.addEventListener("keydown", trap);
     return () => { element?.removeEventListener("keydown", trap); if (previous?.isConnected) previous.focus(); };
   }, []);
-  return <section role="dialog" aria-modal="true" aria-labelledby={id} tabIndex={-1} ref={ref} className={styles.dialog} data-wide={wide || undefined}>
-    <div className={styles.dialogHeading}><h2 id={id}>{title}</h2><ModalCloseButton aria-label={closeLabel} onClick={requestClose} className={styles.dialogClose} /></div>
+  return <section role="dialog" aria-modal="true" aria-label={presentation === "media" ? title : undefined} aria-labelledby={presentation === "content" ? id : undefined} tabIndex={-1} ref={ref} className={[styles.dialog, className].filter(Boolean).join(" ")} data-wide={wide || undefined} data-presentation={presentation}>
+    {presentation === "media" ? <ModalCloseButton aria-label={closeLabel} onClick={requestClose} className={styles.dialogClose} /> : <div className={styles.dialogHeading}><h2 id={id}>{title}</h2><ModalCloseButton aria-label={closeLabel} onClick={requestClose} className={styles.dialogClose} /></div>}
     {children}
   </section>;
 }
 
-export function LandingDialog({ title, closeLabel, onClose, children, wide = false }: { title: string; closeLabel: string; onClose: () => void; children: ReactNode; wide?: boolean }) {
-  return <ModalBackdrop onClose={onClose} testId="landing-dialog-backdrop">{requestClose => <DialogSurface title={title} closeLabel={closeLabel} requestClose={requestClose} wide={wide}>{children}</DialogSurface>}</ModalBackdrop>;
+export function LandingDialog({ title, closeLabel, onClose, children, wide = false, className, presentation = "content" }: { title: string; closeLabel: string; onClose: () => void; children: ReactNode; wide?: boolean; className?: string; presentation?: Presentation }) {
+  return <ModalBackdrop onClose={onClose} testId="landing-dialog-backdrop" className={presentation === "media" ? styles.mediaBackdrop : undefined}>{requestClose => <DialogSurface title={title} closeLabel={closeLabel} requestClose={requestClose} wide={wide} className={className} presentation={presentation}>{children}</DialogSurface>}</ModalBackdrop>;
 }

@@ -21,7 +21,7 @@ import { webBrowserMutation } from "@/lib/web-api/browser";
 
 import { WorkspacePrompt } from "./WorkspacePrompt";
 import catalog from "@/features/session/model-catalog.preview.json";
-import { parseModelCatalog, projectImageModelCatalog } from "@/features/models/model-catalog-contract";
+import { parseModelCatalog, projectImageModelCatalog, projectVideoModelCatalog } from "@/features/models/model-catalog-contract";
 
 const push = vi.fn();
 const conversationKey = "c7c979f5-24e5-4f88-924b-a592d6e5a906";
@@ -34,6 +34,18 @@ const selectedTextModel = {
   categories: ["popular", "text", "study-work", "free"],
   estimate_credits: 0,
 };
+
+it("hides unsupported upload paths on workspace and updates filters immediately on model change", () => {
+  const parsed = parseModelCatalog(catalog);
+  const video = { ...projectVideoModelCatalog(parsed).items.find(item => item.id === "video_veo_3_1_quality")!, category: "video" as const };
+  const image = { ...projectImageModelCatalog(parsed).items.find(item => item.id === "nano_banana_2")!, category: "images" as const };
+  const { container, rerender } = renderPrompt({ selectedGenerationModel: video });
+  expect(screen.queryByRole("button", { name: ru.conversations.composerMediaUpload })).toBeNull();
+  expect(container.querySelector('input[type="file"]')).toBeNull();
+  rerender(<WorkspaceConversationListProvider accountId={workspaceAccountId} initialConversations={[]}><WorkspacePrompt selectedGenerationModel={image} /></WorkspaceConversationListProvider>);
+  expect(screen.getByRole("button", { name: ru.conversations.composerMediaUpload })).toBeEnabled();
+  expect(container.querySelector('input[type="file"]')).toHaveAttribute("accept", "image/png,.png,image/jpeg,.jpg,.jpeg");
+});
 
 function renderPrompt({ access = "authenticated", variant = "workspace", ...props }: Parameters<typeof WorkspacePrompt>[0] = {}) {
   return render(
@@ -154,7 +166,7 @@ describe("WorkspacePrompt", () => {
       "placeholder",
       ru.conversations.composerPlaceholder,
     );
-    expect(screen.getByRole("button", { name: ru.conversations.composerMediaUpload })).toBeEnabled();
+    expect(screen.queryByRole("button", { name: ru.conversations.composerMediaUpload })).toBeNull();
     expect(screen.getByRole("button", { name: ru.workspace.promptSubmit }).querySelector("img")).toHaveAttribute(
       "src",
       "/assets/icons/ui/send-message-white.svg",

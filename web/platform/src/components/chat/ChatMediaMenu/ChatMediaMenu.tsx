@@ -19,6 +19,8 @@ export type ChatMediaMenuLabels = {
 };
 
 type ChatMediaMenuProps = {
+  accept: string;
+  multiple?: boolean;
   disabled?: boolean;
   generatedHref?: string;
   labels: ChatMediaMenuLabels;
@@ -28,10 +30,11 @@ type ChatMediaMenuProps = {
   uploadedHref?: string;
 };
 
-const acceptedMediaTypes = "image/*,video/*,audio/*,application/pdf";
 const menuItemClassName = `${selectableStyles.control} ${styles.item}`;
 
 export function ChatMediaMenu({
+  accept,
+  multiple = false,
   disabled = false,
   generatedHref = "/app/files?category=images",
   labels,
@@ -82,9 +85,9 @@ export function ChatMediaMenu({
       </InputControlChip>
 
       <input
-        accept={acceptedMediaTypes}
+        accept={accept}
         className={styles.fileInput}
-        multiple
+        multiple={multiple}
         onChange={handleFilesSelected}
         ref={inputRef}
         tabIndex={-1}

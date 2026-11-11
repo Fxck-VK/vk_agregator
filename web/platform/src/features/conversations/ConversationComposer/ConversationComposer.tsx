@@ -107,7 +107,6 @@ export function ConversationComposer({
         leadingControls={generation.controls}
         wrapLeadingControls
         attachmentController={attachments}
-        attachmentsEnabled={attachments.enabled}
         canSubmit={canSubmit}
         disabled={disabled}
         label={t.conversations.composerLabel}

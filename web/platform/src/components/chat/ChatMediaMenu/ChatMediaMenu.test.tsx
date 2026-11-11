@@ -17,7 +17,7 @@ describe("ChatMediaMenu", () => {
   });
 
   it("opens the requested media source actions", () => {
-    render(<ChatMediaMenu labels={labels} />);
+    render(<ChatMediaMenu accept="image/png,.png,image/jpeg,.jpg,.jpeg" labels={labels} />);
 
     const trigger = screen.getByRole("button", { name: labels.trigger });
     expect(trigger.querySelector("img")).toHaveAttribute(
@@ -44,7 +44,7 @@ describe("ChatMediaMenu", () => {
 
   it("returns files from the native file picker", () => {
     const onFilesSelected = vi.fn();
-    const { container } = render(<ChatMediaMenu labels={labels} onFilesSelected={onFilesSelected} />);
+    const { container } = render(<ChatMediaMenu accept="image/png,.png,image/jpeg,.jpg,.jpeg" labels={labels} onFilesSelected={onFilesSelected} />);
     const file = new File(["image"], "reference.png", { type: "image/png" });
 
     fireEvent.click(screen.getByRole("button", { name: labels.trigger }));
@@ -61,7 +61,7 @@ describe("ChatMediaMenu", () => {
     const onChooseGenerated = vi.fn();
     const onChooseUploaded = vi.fn();
     render(
-      <ChatMediaMenu
+      <ChatMediaMenu accept="image/png,.png,image/jpeg,.jpg,.jpeg"
         labels={labels}
         onChooseGenerated={onChooseGenerated}
         onChooseUploaded={onChooseUploaded}
@@ -81,7 +81,7 @@ describe("ChatMediaMenu", () => {
   it("closes on Escape and outside click", () => {
     render(
       <div>
-        <ChatMediaMenu labels={labels} />
+        <ChatMediaMenu accept="image/png,.png,image/jpeg,.jpg,.jpeg" labels={labels} />
         <button type="button">Снаружи</button>
       </div>,
     );

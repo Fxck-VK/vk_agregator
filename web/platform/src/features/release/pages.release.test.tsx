@@ -7,12 +7,17 @@ import { contentMetadata, renderContentPage, renderContentRecord } from "@/conte
 import { contentPages } from "@/content/templates/catalog";
 afterEach(() => { state.view = "prod"; });
 describe("public route admission", () => {
-  it.each(["/", "/mcp", "/ai/image-generator", "/business", "/workflows/product-campaign"])("blocks draft route and metadata in PROD: %s", async path => {
+  it.each(["/mcp", "/ai/image-generator", "/business", "/workflows/product-campaign"])("blocks draft route and metadata in PROD: %s", async path => {
     await expect(renderContentPage(path)).rejects.toThrow("blocked404");
     await expect(contentMetadata(path)).rejects.toThrow("blocked404");
   });
   it("does not allow direct renderer calls to bypass publication", async () => {
     await expect(renderContentRecord(contentPages.find(p => p.template === "T03")!)).rejects.toThrow("blocked404");
+  });
+  it.each(["prod", "dev"] as const)("serves the homepage in %s while keeping search indexing disabled", async view => {
+    state.view = view;
+    await expect(contentMetadata("/")).resolves.toMatchObject({ robots: { index: false, follow: false } });
+    await expect(renderContentPage("/")).resolves.toBeDefined();
   });
   it("keeps DEV draft metadata readable", async () => {
     state.view = "dev";

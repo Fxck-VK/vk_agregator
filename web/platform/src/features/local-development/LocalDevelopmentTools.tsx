@@ -11,6 +11,7 @@ import { Tooltip } from "@/components/ui/Tooltip/Tooltip";
 import { useMessages } from "@/i18n/LocaleProvider";
 import { registerDevelopmentTransport } from "@/lib/web-api/development-transport";
 import { scenarioStore } from "./scenario-store";
+import { pageChoiceStore } from "./page-choice-store";
 import { createLocalSimulator } from "./simulator";
 import type { LocalScenarios, UploadScenario } from "./scenarios";
 import type { LocalConversationSeed } from "./conversation-simulator";
@@ -27,6 +28,8 @@ export function LocalDevelopmentTools({ seed }: { seed?: LocalConversationSeed }
   const currentMessages = useRef(msg);
   useEffect(() => { currentMessages.current = msg; }, [msg]);
   const scenarios = useSyncExternalStore(scenarioStore.subscribe, scenarioStore.getSnapshot, scenarioStore.getServerSnapshot);
+  const registeredChoice = useSyncExternalStore(pageChoiceStore.subscribe, pageChoiceStore.getSnapshot, pageChoiceStore.getServerSnapshot);
+  const pageChoice = release.view === "dev" ? registeredChoice : null;
   const hydrated = useSyncExternalStore(subscribeToHydration, () => true, () => false);
   const anchor = useRef<HTMLButtonElement>(null);
   const [open, setOpen] = useState(false);
@@ -66,7 +69,14 @@ export function LocalDevelopmentTools({ seed }: { seed?: LocalConversationSeed }
           <strong>{msg("localDevelopment.title")}</strong>
           <ModalCloseButton size="compact" aria-label={msg("localDevelopment.close")} onClick={() => { setOpen(false); anchor.current?.focus(); }} />
         </header>
-        <ReleaseReadinessPanel />
+        {pageChoice ? <>
+          <section className={styles.pageChoice} aria-label={pageChoice.title} data-ui="development-page-choice">
+            <strong>{pageChoice.title}</strong>
+            <ModeSwitchPanel fullWidth density="compact" activeID={pageChoice.value} ariaLabel={pageChoice.title} items={pageChoice.options} onChange={pageChoice.onChange} />
+            {pageChoice.description ? <p className={styles.note}>{pageChoice.description}</p> : null}
+          </section>
+          <details><summary>{launcherLabel}</summary><ReleaseReadinessPanel /></details>
+        </> : <ReleaseReadinessPanel />}
         {release.localSimulation ? <details><summary>{msg("localDevelopment.title")}</summary>
         <p>{msg("localDevelopment.description")}</p>
         <Link href="/app/ui-states" onClick={() => setOpen(false)}>{msg("localDevelopment.states")}</Link>

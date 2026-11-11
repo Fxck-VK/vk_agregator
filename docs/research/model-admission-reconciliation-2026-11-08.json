@@ -1,0 +1,2143 @@
+{
+  "audit_date": "2026-11-08",
+  "mode": "offline reconciliation only; no admission/runtime changes",
+  "historical_source": {
+    "name": "HANDOFF_CURRENT (2).md",
+    "sha256": "251fb12d9ffd80f81db219bafb9101ac9e32c97896691ee2541372a8c2863ac5",
+    "document_date": "2026-10-21",
+    "live_media_runtime_sha": "not confirmed by the source document"
+  },
+  "current_head": "c58f310dab3ceef54ff4c16d072546434b5fbd38",
+  "summary": {
+    "historically_named_models": 59,
+    "historical_base_passes": 46,
+    "base_passes_excluded_from_prod": 36,
+    "excluded_by_kind": {
+      "text": 29,
+      "image": 6,
+      "video": 1
+    },
+    "local_prod_eligible_models": 36,
+    "local_prod_not_named_in_report": 23,
+    "prod_with_reported_partial_result": [
+      "nano_banana_2",
+      "grok_image_1_5",
+      "seedream_4_5"
+    ],
+    "unnamed_historical_video_models": 24,
+    "approved_contracts": 0
+  },
+  "historical_rows": [
+    {
+      "kind": "text",
+      "name": "NeiroHub Chat",
+      "id": "chatgpt",
+      "historical_outcome": "base_pass",
+      "historical_details": "Ответ получен",
+      "historical_date": "2026-10-21",
+      "present_in_local_catalog": true,
+      "catalog_verification": "legacy-unverified",
+      "production_registry_member": true,
+      "production_eligible_local": true,
+      "provider": "deepinfra",
+      "native_model": "deepseek-ai/DeepSeek-V4-Flash",
+      "endpoint": null,
+      "current_contract_status": "legacy-unverified",
+      "outstanding_contract_checks": null,
+      "operations": [
+        {
+          "id": "reply",
+          "kind": "text",
+          "enabled": true
+        }
+      ],
+      "new_live_check": false
+    },
+    {
+      "kind": "text",
+      "name": "GPT-5",
+      "id": "gpt_5",
+      "historical_outcome": "base_pass",
+      "historical_details": "Ответ получен",
+      "historical_date": "2026-10-21",
+      "present_in_local_catalog": true,
+      "catalog_verification": "pending-verification",
+      "production_registry_member": false,
+      "production_eligible_local": false,
+      "provider": "apimart",
+      "native_model": "gpt-5",
+      "endpoint": "/v1/chat/completions",
+      "current_contract_status": "draft",
+      "outstanding_contract_checks": 7,
+      "operations": [
+        {
+          "id": "reply",
+          "kind": "text",
+          "enabled": false
+        }
+      ],
+      "new_live_check": false
+    },
+    {
+      "kind": "text",
+      "name": "GPT-5.1",
+      "id": "gpt_5_1",
+      "historical_outcome": "base_pass",
+      "historical_details": "Ответ получен",
+      "historical_date": "2026-10-21",
+      "present_in_local_catalog": true,
+      "catalog_verification": "pending-verification",
+      "production_registry_member": false,
+      "production_eligible_local": false,
+      "provider": "apimart",
+      "native_model": "gpt-5.1",
+      "endpoint": "/v1/chat/completions",
+      "current_contract_status": "draft",
+      "outstanding_contract_checks": 7,
+      "operations": [
+        {
+          "id": "reply",
+          "kind": "text",
+          "enabled": false
+        }
+      ],
+      "new_live_check": false
+    },
+    {
+      "kind": "text",
+      "name": "GPT-5 Chat Latest",
+      "id": "gpt_5_chat_latest",
+      "historical_outcome": "route_failed",
+      "historical_details": "Model not found; закрыта в `d2c56ef6`",
+      "historical_date": "2026-10-21",
+      "present_in_local_catalog": true,
+      "catalog_verification": "pending-verification",
+      "production_registry_member": false,
+      "production_eligible_local": false,
+      "provider": "apimart",
+      "native_model": "gpt-5-chat-latest",
+      "endpoint": "/v1/chat/completions",
+      "current_contract_status": "draft",
+      "outstanding_contract_checks": 7,
+      "operations": [
+        {
+          "id": "reply",
+          "kind": "text",
+          "enabled": false
+        }
+      ],
+      "new_live_check": false
+    },
+    {
+      "kind": "text",
+      "name": "GPT-5 Mini",
+      "id": "gpt_5_mini",
+      "historical_outcome": "base_pass",
+      "historical_details": "Ответ получен",
+      "historical_date": "2026-10-21",
+      "present_in_local_catalog": true,
+      "catalog_verification": "pending-verification",
+      "production_registry_member": false,
+      "production_eligible_local": false,
+      "provider": "apimart",
+      "native_model": "gpt-5-mini",
+      "endpoint": "/v1/chat/completions",
+      "current_contract_status": "draft",
+      "outstanding_contract_checks": 7,
+      "operations": [
+        {
+          "id": "reply",
+          "kind": "text",
+          "enabled": false
+        }
+      ],
+      "new_live_check": false
+    },
+    {
+      "kind": "text",
+      "name": "Claude Opus 4.6",
+      "id": "claude_opus_4_6",
+      "historical_outcome": "base_pass",
+      "historical_details": "Ответ получен",
+      "historical_date": "2026-10-21",
+      "present_in_local_catalog": true,
+      "catalog_verification": "pending-verification",
+      "production_registry_member": false,
+      "production_eligible_local": false,
+      "provider": "apimart",
+      "native_model": "claude-opus-4-6",
+      "endpoint": "/v1/chat/completions",
+      "current_contract_status": "draft",
+      "outstanding_contract_checks": 7,
+      "operations": [
+        {
+          "id": "reply",
+          "kind": "text",
+          "enabled": false
+        }
+      ],
+      "new_live_check": false
+    },
+    {
+      "kind": "text",
+      "name": "Claude Sonnet 4.6",
+      "id": "claude_sonnet_4_6",
+      "historical_outcome": "base_pass",
+      "historical_details": "Ответ получен",
+      "historical_date": "2026-10-21",
+      "present_in_local_catalog": true,
+      "catalog_verification": "pending-verification",
+      "production_registry_member": false,
+      "production_eligible_local": false,
+      "provider": "apimart",
+      "native_model": "claude-sonnet-4-6",
+      "endpoint": "/v1/chat/completions",
+      "current_contract_status": "draft",
+      "outstanding_contract_checks": 7,
+      "operations": [
+        {
+          "id": "reply",
+          "kind": "text",
+          "enabled": false
+        }
+      ],
+      "new_live_check": false
+    },
+    {
+      "kind": "text",
+      "name": "Claude Opus 4.5",
+      "id": "claude_opus_4_5_20251101",
+      "historical_outcome": "base_pass",
+      "historical_details": "Ответ получен",
+      "historical_date": "2026-10-21",
+      "present_in_local_catalog": true,
+      "catalog_verification": "pending-verification",
+      "production_registry_member": false,
+      "production_eligible_local": false,
+      "provider": "apimart",
+      "native_model": "claude-opus-4-5-20251101",
+      "endpoint": "/v1/chat/completions",
+      "current_contract_status": "draft",
+      "outstanding_contract_checks": 7,
+      "operations": [
+        {
+          "id": "reply",
+          "kind": "text",
+          "enabled": false
+        }
+      ],
+      "new_live_check": false
+    },
+    {
+      "kind": "text",
+      "name": "Gemini 3.5 Flash",
+      "id": "gemini_3_5_flash",
+      "historical_outcome": "base_pass",
+      "historical_details": "Ответ получен",
+      "historical_date": "2026-10-21",
+      "present_in_local_catalog": true,
+      "catalog_verification": "pending-verification",
+      "production_registry_member": false,
+      "production_eligible_local": false,
+      "provider": "apimart",
+      "native_model": "gemini-3.5-flash",
+      "endpoint": "/v1/chat/completions",
+      "current_contract_status": "draft",
+      "outstanding_contract_checks": 7,
+      "operations": [
+        {
+          "id": "reply",
+          "kind": "text",
+          "enabled": false
+        }
+      ],
+      "new_live_check": false
+    },
+    {
+      "kind": "text",
+      "name": "Gemini 3.1 Pro Preview",
+      "id": "gemini_3_1_pro_preview",
+      "historical_outcome": "base_pass",
+      "historical_details": "Ответ получен",
+      "historical_date": "2026-10-21",
+      "present_in_local_catalog": true,
+      "catalog_verification": "pending-verification",
+      "production_registry_member": false,
+      "production_eligible_local": false,
+      "provider": "apimart",
+      "native_model": "gemini-3.1-pro-preview",
+      "endpoint": "/v1/chat/completions",
+      "current_contract_status": "draft",
+      "outstanding_contract_checks": 7,
+      "operations": [
+        {
+          "id": "reply",
+          "kind": "text",
+          "enabled": false
+        }
+      ],
+      "new_live_check": false
+    },
+    {
+      "kind": "text",
+      "name": "Gemini 3 Pro Preview",
+      "id": "gemini_3_pro_preview",
+      "historical_outcome": "base_pass",
+      "historical_details": "Ответ получен",
+      "historical_date": "2026-10-21",
+      "present_in_local_catalog": true,
+      "catalog_verification": "pending-verification",
+      "production_registry_member": false,
+      "production_eligible_local": false,
+      "provider": "apimart",
+      "native_model": "gemini-3-pro-preview",
+      "endpoint": "/v1/chat/completions",
+      "current_contract_status": "draft",
+      "outstanding_contract_checks": 7,
+      "operations": [
+        {
+          "id": "reply",
+          "kind": "text",
+          "enabled": false
+        }
+      ],
+      "new_live_check": false
+    },
+    {
+      "kind": "text",
+      "name": "Gemini 3 Pro Preview Thinking",
+      "id": "gemini_3_pro_preview_thinking",
+      "historical_outcome": "base_pass",
+      "historical_details": "Ответ после ожидания и возврата в чат",
+      "historical_date": "2026-10-21",
+      "present_in_local_catalog": true,
+      "catalog_verification": "pending-verification",
+      "production_registry_member": false,
+      "production_eligible_local": false,
+      "provider": "apimart",
+      "native_model": "gemini-3-pro-preview-thinking",
+      "endpoint": "/v1/chat/completions",
+      "current_contract_status": "draft",
+      "outstanding_contract_checks": 7,
+      "operations": [
+        {
+          "id": "reply",
+          "kind": "text",
+          "enabled": false
+        }
+      ],
+      "new_live_check": false
+    },
+    {
+      "kind": "text",
+      "name": "Gemini 3 Flash Preview",
+      "id": "gemini_3_flash_preview",
+      "historical_outcome": "base_pass",
+      "historical_details": "Ответ получен",
+      "historical_date": "2026-10-21",
+      "present_in_local_catalog": true,
+      "catalog_verification": "pending-verification",
+      "production_registry_member": false,
+      "production_eligible_local": false,
+      "provider": "apimart",
+      "native_model": "gemini-3-flash-preview",
+      "endpoint": "/v1/chat/completions",
+      "current_contract_status": "draft",
+      "outstanding_contract_checks": 7,
+      "operations": [
+        {
+          "id": "reply",
+          "kind": "text",
+          "enabled": false
+        }
+      ],
+      "new_live_check": false
+    },
+    {
+      "kind": "text",
+      "name": "Gemini 2.5 Pro",
+      "id": "gemini_2_5_pro",
+      "historical_outcome": "base_pass",
+      "historical_details": "Ответ получен",
+      "historical_date": "2026-10-21",
+      "present_in_local_catalog": true,
+      "catalog_verification": "pending-verification",
+      "production_registry_member": false,
+      "production_eligible_local": false,
+      "provider": "apimart",
+      "native_model": "gemini-2.5-pro",
+      "endpoint": "/v1/chat/completions",
+      "current_contract_status": "draft",
+      "outstanding_contract_checks": 7,
+      "operations": [
+        {
+          "id": "reply",
+          "kind": "text",
+          "enabled": false
+        }
+      ],
+      "new_live_check": false
+    },
+    {
+      "kind": "text",
+      "name": "Gemini 2.5 Flash",
+      "id": "gemini_2_5_flash",
+      "historical_outcome": "base_pass",
+      "historical_details": "Ответ получен",
+      "historical_date": "2026-10-21",
+      "present_in_local_catalog": true,
+      "catalog_verification": "pending-verification",
+      "production_registry_member": false,
+      "production_eligible_local": false,
+      "provider": "apimart",
+      "native_model": "gemini-2.5-flash",
+      "endpoint": "/v1/chat/completions",
+      "current_contract_status": "draft",
+      "outstanding_contract_checks": 7,
+      "operations": [
+        {
+          "id": "reply",
+          "kind": "text",
+          "enabled": false
+        }
+      ],
+      "new_live_check": false
+    },
+    {
+      "kind": "text",
+      "name": "Gemini 2.5 Flash Lite",
+      "id": "gemini_2_5_flash_lite",
+      "historical_outcome": "base_pass",
+      "historical_details": "Ответ получен",
+      "historical_date": "2026-10-21",
+      "present_in_local_catalog": true,
+      "catalog_verification": "pending-verification",
+      "production_registry_member": false,
+      "production_eligible_local": false,
+      "provider": "apimart",
+      "native_model": "gemini-2.5-flash-lite",
+      "endpoint": "/v1/chat/completions",
+      "current_contract_status": "draft",
+      "outstanding_contract_checks": 7,
+      "operations": [
+        {
+          "id": "reply",
+          "kind": "text",
+          "enabled": false
+        }
+      ],
+      "new_live_check": false
+    },
+    {
+      "kind": "text",
+      "name": "DeepSeek V4 Pro",
+      "id": "deepseek_v4_pro",
+      "historical_outcome": "base_pass",
+      "historical_details": "Ответ получен",
+      "historical_date": "2026-10-21",
+      "present_in_local_catalog": true,
+      "catalog_verification": "pending-verification",
+      "production_registry_member": false,
+      "production_eligible_local": false,
+      "provider": "apimart",
+      "native_model": "deepseek-v4-pro",
+      "endpoint": "/v1/chat/completions",
+      "current_contract_status": "draft",
+      "outstanding_contract_checks": 7,
+      "operations": [
+        {
+          "id": "reply",
+          "kind": "text",
+          "enabled": false
+        }
+      ],
+      "new_live_check": false
+    },
+    {
+      "kind": "text",
+      "name": "DeepSeek V4 Flash",
+      "id": "deepseek_v4_flash",
+      "historical_outcome": "base_pass",
+      "historical_details": "Ответ получен",
+      "historical_date": "2026-10-21",
+      "present_in_local_catalog": true,
+      "catalog_verification": "pending-verification",
+      "production_registry_member": false,
+      "production_eligible_local": false,
+      "provider": "apimart",
+      "native_model": "deepseek-v4-flash",
+      "endpoint": "/v1/chat/completions",
+      "current_contract_status": "draft",
+      "outstanding_contract_checks": 7,
+      "operations": [
+        {
+          "id": "reply",
+          "kind": "text",
+          "enabled": false
+        }
+      ],
+      "new_live_check": false
+    },
+    {
+      "kind": "text",
+      "name": "DeepSeek V3.2",
+      "id": "deepseek_v3_2",
+      "historical_outcome": "route_failed",
+      "historical_details": "Несуществующая модель; закрыта",
+      "historical_date": "2026-10-21",
+      "present_in_local_catalog": true,
+      "catalog_verification": "pending-verification",
+      "production_registry_member": false,
+      "production_eligible_local": false,
+      "provider": "apimart",
+      "native_model": "deepseek-v3.2",
+      "endpoint": "/v1/chat/completions",
+      "current_contract_status": "draft",
+      "outstanding_contract_checks": 7,
+      "operations": [
+        {
+          "id": "reply",
+          "kind": "text",
+          "enabled": false
+        }
+      ],
+      "new_live_check": false
+    },
+    {
+      "kind": "text",
+      "name": "DeepSeek V3.2 Exp",
+      "id": "deepseek_v3_2_exp",
+      "historical_outcome": "route_failed",
+      "historical_details": "Несуществующая модель; закрыта",
+      "historical_date": "2026-10-21",
+      "present_in_local_catalog": true,
+      "catalog_verification": "pending-verification",
+      "production_registry_member": false,
+      "production_eligible_local": false,
+      "provider": "apimart",
+      "native_model": "deepseek-v3.2-exp",
+      "endpoint": "/v1/chat/completions",
+      "current_contract_status": "draft",
+      "outstanding_contract_checks": 7,
+      "operations": [
+        {
+          "id": "reply",
+          "kind": "text",
+          "enabled": false
+        }
+      ],
+      "new_live_check": false
+    },
+    {
+      "kind": "text",
+      "name": "DeepSeek R1",
+      "id": "deepseek_r1_250528",
+      "historical_outcome": "route_failed",
+      "historical_details": "Invalid model / Not found; закрыта",
+      "historical_date": "2026-10-21",
+      "present_in_local_catalog": true,
+      "catalog_verification": "pending-verification",
+      "production_registry_member": false,
+      "production_eligible_local": false,
+      "provider": "apimart",
+      "native_model": "deepseek-r1-250528",
+      "endpoint": "/v1/chat/completions",
+      "current_contract_status": "draft",
+      "outstanding_contract_checks": 7,
+      "operations": [
+        {
+          "id": "reply",
+          "kind": "text",
+          "enabled": false
+        }
+      ],
+      "new_live_check": false
+    },
+    {
+      "kind": "text",
+      "name": "DeepSeek V3",
+      "id": "deepseek_v3_0324",
+      "historical_outcome": "route_failed",
+      "historical_details": "Access denied; закрыта",
+      "historical_date": "2026-10-21",
+      "present_in_local_catalog": true,
+      "catalog_verification": "pending-verification",
+      "production_registry_member": false,
+      "production_eligible_local": false,
+      "provider": "apimart",
+      "native_model": "deepseek-v3-0324",
+      "endpoint": "/v1/chat/completions",
+      "current_contract_status": "draft",
+      "outstanding_contract_checks": 7,
+      "operations": [
+        {
+          "id": "reply",
+          "kind": "text",
+          "enabled": false
+        }
+      ],
+      "new_live_check": false
+    },
+    {
+      "kind": "text",
+      "name": "GPT-6 Sol",
+      "id": "gpt_6_sol",
+      "historical_outcome": "base_pass",
+      "historical_details": "Ответ получен",
+      "historical_date": "2026-10-21",
+      "present_in_local_catalog": true,
+      "catalog_verification": "pending-verification",
+      "production_registry_member": false,
+      "production_eligible_local": false,
+      "provider": "apimart",
+      "native_model": "gpt-6-sol",
+      "endpoint": "/v1/chat/completions",
+      "current_contract_status": "draft",
+      "outstanding_contract_checks": 7,
+      "operations": [
+        {
+          "id": "reply",
+          "kind": "text",
+          "enabled": false
+        }
+      ],
+      "new_live_check": false
+    },
+    {
+      "kind": "text",
+      "name": "GPT-6 Luna",
+      "id": "gpt_6_luna",
+      "historical_outcome": "base_pass",
+      "historical_details": "Ответ получен",
+      "historical_date": "2026-10-21",
+      "present_in_local_catalog": true,
+      "catalog_verification": "pending-verification",
+      "production_registry_member": false,
+      "production_eligible_local": false,
+      "provider": "apimart",
+      "native_model": "gpt-6-luna",
+      "endpoint": "/v1/chat/completions",
+      "current_contract_status": "draft",
+      "outstanding_contract_checks": 7,
+      "operations": [
+        {
+          "id": "reply",
+          "kind": "text",
+          "enabled": false
+        }
+      ],
+      "new_live_check": false
+    },
+    {
+      "kind": "text",
+      "name": "GPT-5.4",
+      "id": "gpt_5_4",
+      "historical_outcome": "base_pass",
+      "historical_details": "Ответ получен",
+      "historical_date": "2026-10-21",
+      "present_in_local_catalog": true,
+      "catalog_verification": "pending-verification",
+      "production_registry_member": false,
+      "production_eligible_local": false,
+      "provider": "apimart",
+      "native_model": "gpt-5.4",
+      "endpoint": "/v1/chat/completions",
+      "current_contract_status": "draft",
+      "outstanding_contract_checks": 7,
+      "operations": [
+        {
+          "id": "reply",
+          "kind": "text",
+          "enabled": false
+        }
+      ],
+      "new_live_check": false
+    },
+    {
+      "kind": "text",
+      "name": "GPT-5.3 Codex",
+      "id": "gpt_5_3_codex",
+      "historical_outcome": "base_pass",
+      "historical_details": "Ответ получен",
+      "historical_date": "2026-10-21",
+      "present_in_local_catalog": true,
+      "catalog_verification": "pending-verification",
+      "production_registry_member": false,
+      "production_eligible_local": false,
+      "provider": "apimart",
+      "native_model": "gpt-5.3-codex",
+      "endpoint": "/v1/chat/completions",
+      "current_contract_status": "draft",
+      "outstanding_contract_checks": 7,
+      "operations": [
+        {
+          "id": "reply",
+          "kind": "text",
+          "enabled": false
+        }
+      ],
+      "new_live_check": false
+    },
+    {
+      "kind": "text",
+      "name": "GPT-5.2",
+      "id": "gpt_5_2",
+      "historical_outcome": "base_pass",
+      "historical_details": "Ответ получен",
+      "historical_date": "2026-10-21",
+      "present_in_local_catalog": true,
+      "catalog_verification": "pending-verification",
+      "production_registry_member": false,
+      "production_eligible_local": false,
+      "provider": "apimart",
+      "native_model": "gpt-5.2",
+      "endpoint": "/v1/chat/completions",
+      "current_contract_status": "draft",
+      "outstanding_contract_checks": 7,
+      "operations": [
+        {
+          "id": "reply",
+          "kind": "text",
+          "enabled": false
+        }
+      ],
+      "new_live_check": false
+    },
+    {
+      "kind": "text",
+      "name": "Claude Opus 5.5",
+      "id": "claude_opus_5_5",
+      "historical_outcome": "base_pass",
+      "historical_details": "Ответ получен",
+      "historical_date": "2026-10-21",
+      "present_in_local_catalog": true,
+      "catalog_verification": "pending-verification",
+      "production_registry_member": false,
+      "production_eligible_local": false,
+      "provider": "apimart",
+      "native_model": "claude-opus-5-5",
+      "endpoint": "/v1/chat/completions",
+      "current_contract_status": "draft",
+      "outstanding_contract_checks": 7,
+      "operations": [
+        {
+          "id": "reply",
+          "kind": "text",
+          "enabled": false
+        }
+      ],
+      "new_live_check": false
+    },
+    {
+      "kind": "text",
+      "name": "Claude Haiku 4.5",
+      "id": "claude_haiku_4_5_20251001",
+      "historical_outcome": "base_pass",
+      "historical_details": "Ответ получен",
+      "historical_date": "2026-10-21",
+      "present_in_local_catalog": true,
+      "catalog_verification": "pending-verification",
+      "production_registry_member": false,
+      "production_eligible_local": false,
+      "provider": "apimart",
+      "native_model": "claude-haiku-4-5-20251001",
+      "endpoint": "/v1/chat/completions",
+      "current_contract_status": "draft",
+      "outstanding_contract_checks": 7,
+      "operations": [
+        {
+          "id": "reply",
+          "kind": "text",
+          "enabled": false
+        }
+      ],
+      "new_live_check": false
+    },
+    {
+      "kind": "text",
+      "name": "Kimi K3",
+      "id": "kimi_k3",
+      "historical_outcome": "base_pass",
+      "historical_details": "Ответ получен",
+      "historical_date": "2026-10-21",
+      "present_in_local_catalog": true,
+      "catalog_verification": "pending-verification",
+      "production_registry_member": false,
+      "production_eligible_local": false,
+      "provider": "apimart",
+      "native_model": "kimi-k3",
+      "endpoint": "/v1/chat/completions",
+      "current_contract_status": "draft",
+      "outstanding_contract_checks": 7,
+      "operations": [
+        {
+          "id": "reply",
+          "kind": "text",
+          "enabled": false
+        }
+      ],
+      "new_live_check": false
+    },
+    {
+      "kind": "text",
+      "name": "Qwen 3.8 Max",
+      "id": "qwen_3_8_max",
+      "historical_outcome": "base_pass",
+      "historical_details": "Ответ получен",
+      "historical_date": "2026-10-21",
+      "present_in_local_catalog": true,
+      "catalog_verification": "pending-verification",
+      "production_registry_member": false,
+      "production_eligible_local": false,
+      "provider": "apimart",
+      "native_model": "qwen3.8-max",
+      "endpoint": "/v1/responses",
+      "current_contract_status": "draft",
+      "outstanding_contract_checks": 7,
+      "operations": [
+        {
+          "id": "reply",
+          "kind": "text",
+          "enabled": false
+        }
+      ],
+      "new_live_check": false
+    },
+    {
+      "kind": "text",
+      "name": "Qwen 3.7 Flash",
+      "id": "qwen_3_7_flash",
+      "historical_outcome": "base_pass",
+      "historical_details": "Ответ получен",
+      "historical_date": "2026-10-21",
+      "present_in_local_catalog": true,
+      "catalog_verification": "pending-verification",
+      "production_registry_member": false,
+      "production_eligible_local": false,
+      "provider": "apimart",
+      "native_model": "qwen3.7-flash",
+      "endpoint": "/v1/chat/completions",
+      "current_contract_status": "draft",
+      "outstanding_contract_checks": 7,
+      "operations": [
+        {
+          "id": "reply",
+          "kind": "text",
+          "enabled": false
+        }
+      ],
+      "new_live_check": false
+    },
+    {
+      "kind": "text",
+      "name": "Grok 4.5",
+      "id": "grok_4_5",
+      "historical_outcome": "base_pass",
+      "historical_details": "Ответ получен",
+      "historical_date": "2026-10-21",
+      "present_in_local_catalog": true,
+      "catalog_verification": "pending-verification",
+      "production_registry_member": false,
+      "production_eligible_local": false,
+      "provider": "apimart",
+      "native_model": "grok-4.5",
+      "endpoint": "/v1/chat/completions",
+      "current_contract_status": "draft",
+      "outstanding_contract_checks": 7,
+      "operations": [
+        {
+          "id": "reply",
+          "kind": "text",
+          "enabled": false
+        }
+      ],
+      "new_live_check": false
+    },
+    {
+      "kind": "text",
+      "name": "Grok 4.6",
+      "id": "grok_4_6",
+      "historical_outcome": "base_pass",
+      "historical_details": "Ответ после ожидания и возврата в чат",
+      "historical_date": "2026-10-21",
+      "present_in_local_catalog": true,
+      "catalog_verification": "pending-verification",
+      "production_registry_member": false,
+      "production_eligible_local": false,
+      "provider": "apimart",
+      "native_model": "grok-4.6",
+      "endpoint": "/v1/chat/completions",
+      "current_contract_status": "draft",
+      "outstanding_contract_checks": 7,
+      "operations": [
+        {
+          "id": "reply",
+          "kind": "text",
+          "enabled": false
+        }
+      ],
+      "new_live_check": false
+    },
+    {
+      "kind": "text",
+      "name": "Grok 4.7",
+      "id": "grok_4_7",
+      "historical_outcome": "base_pass",
+      "historical_details": "Ответ получен",
+      "historical_date": "2026-10-21",
+      "present_in_local_catalog": true,
+      "catalog_verification": "pending-verification",
+      "production_registry_member": false,
+      "production_eligible_local": false,
+      "provider": "apimart",
+      "native_model": "grok-4.7",
+      "endpoint": "/v1/chat/completions",
+      "current_contract_status": "draft",
+      "outstanding_contract_checks": 7,
+      "operations": [
+        {
+          "id": "reply",
+          "kind": "text",
+          "enabled": false
+        }
+      ],
+      "new_live_check": false
+    },
+    {
+      "kind": "image",
+      "name": "GPT Image 2.5 Flare",
+      "id": "gpt_image_2_5_flare",
+      "historical_outcome": "base_pass",
+      "historical_details": "15 | 1024×1024 | Базовый проход, запрошено 1:1",
+      "historical_date": "2026-10-21",
+      "present_in_local_catalog": true,
+      "catalog_verification": "legacy-unverified",
+      "production_registry_member": true,
+      "production_eligible_local": true,
+      "provider": "apimart",
+      "native_model": "gpt-image-2.5-flare",
+      "endpoint": null,
+      "current_contract_status": "legacy-unverified",
+      "outstanding_contract_checks": null,
+      "operations": [
+        {
+          "id": "generate",
+          "kind": "image",
+          "enabled": true
+        }
+      ],
+      "new_live_check": false
+    },
+    {
+      "kind": "image",
+      "name": "GPT Image 2.5 Sunburst",
+      "id": "gpt_image_2_5_sunburst",
+      "historical_outcome": "base_pass",
+      "historical_details": "15 | 1536×864 | Базовый проход",
+      "historical_date": "2026-10-21",
+      "present_in_local_catalog": true,
+      "catalog_verification": "legacy-unverified",
+      "production_registry_member": true,
+      "production_eligible_local": true,
+      "provider": "apimart",
+      "native_model": "gpt-image-2.5-sunburst",
+      "endpoint": null,
+      "current_contract_status": "legacy-unverified",
+      "outstanding_contract_checks": null,
+      "operations": [
+        {
+          "id": "generate",
+          "kind": "image",
+          "enabled": true
+        }
+      ],
+      "new_live_check": false
+    },
+    {
+      "kind": "image",
+      "name": "Seedream 5.0 Lite",
+      "id": "seedream_5_0_lite",
+      "historical_outcome": "base_pass",
+      "historical_details": "20 | 2848×1600 | Базовый проход",
+      "historical_date": "2026-10-21",
+      "present_in_local_catalog": true,
+      "catalog_verification": "legacy-unverified",
+      "production_registry_member": true,
+      "production_eligible_local": true,
+      "provider": "apimart",
+      "native_model": "seedream-5-0-lite",
+      "endpoint": null,
+      "current_contract_status": "legacy-unverified",
+      "outstanding_contract_checks": null,
+      "operations": [
+        {
+          "id": "generate",
+          "kind": "image",
+          "enabled": true
+        }
+      ],
+      "new_live_check": false
+    },
+    {
+      "kind": "image",
+      "name": "Seedream 5.0 Pro",
+      "id": "seedream_5_0_pro",
+      "historical_outcome": "base_pass",
+      "historical_details": "20 | 2048×1152 | Базовый проход",
+      "historical_date": "2026-10-21",
+      "present_in_local_catalog": true,
+      "catalog_verification": "legacy-unverified",
+      "production_registry_member": true,
+      "production_eligible_local": true,
+      "provider": "apimart",
+      "native_model": "seedream-5-0-pro",
+      "endpoint": null,
+      "current_contract_status": "legacy-unverified",
+      "outstanding_contract_checks": null,
+      "operations": [
+        {
+          "id": "generate",
+          "kind": "image",
+          "enabled": true
+        }
+      ],
+      "new_live_check": false
+    },
+    {
+      "kind": "image",
+      "name": "Nano Banana 2",
+      "id": "nano_banana_2",
+      "historical_outcome": "partial",
+      "historical_details": "50 | 1376×768 | Частично: оригинал работает, preview 503",
+      "historical_date": "2026-10-21",
+      "present_in_local_catalog": true,
+      "catalog_verification": "legacy-unverified",
+      "production_registry_member": true,
+      "production_eligible_local": true,
+      "provider": "poyo",
+      "native_model": "nano-banana-2-new",
+      "endpoint": null,
+      "current_contract_status": "legacy-unverified",
+      "outstanding_contract_checks": null,
+      "operations": [
+        {
+          "id": "generate",
+          "kind": "image",
+          "enabled": true
+        }
+      ],
+      "new_live_check": false
+    },
+    {
+      "kind": "image",
+      "name": "Nano Banana Pro",
+      "id": "nano_banana_pro",
+      "historical_outcome": "base_pass",
+      "historical_details": "50 | 1376×768 | Базовый проход",
+      "historical_date": "2026-10-21",
+      "present_in_local_catalog": true,
+      "catalog_verification": "legacy-unverified",
+      "production_registry_member": true,
+      "production_eligible_local": true,
+      "provider": "apimart",
+      "native_model": "gemini-3-pro-image-preview",
+      "endpoint": null,
+      "current_contract_status": "legacy-unverified",
+      "outstanding_contract_checks": null,
+      "operations": [
+        {
+          "id": "generate",
+          "kind": "image",
+          "enabled": true
+        }
+      ],
+      "new_live_check": false
+    },
+    {
+      "kind": "image",
+      "name": "GPT Image 2",
+      "id": "gpt_image_2",
+      "historical_outcome": "base_pass",
+      "historical_details": "40 | 1672×941 | Базовый проход",
+      "historical_date": "2026-10-21",
+      "present_in_local_catalog": true,
+      "catalog_verification": "legacy-unverified",
+      "production_registry_member": true,
+      "production_eligible_local": true,
+      "provider": "apimart",
+      "native_model": "gpt-image-2",
+      "endpoint": null,
+      "current_contract_status": "legacy-unverified",
+      "outstanding_contract_checks": null,
+      "operations": [
+        {
+          "id": "generate",
+          "kind": "image",
+          "enabled": true
+        }
+      ],
+      "new_live_check": false
+    },
+    {
+      "kind": "image",
+      "name": "Qwen Image 3.0",
+      "id": "qwen_image_3",
+      "historical_outcome": "base_pass",
+      "historical_details": "15 | 1280×720 | Базовый проход",
+      "historical_date": "2026-10-21",
+      "present_in_local_catalog": true,
+      "catalog_verification": "legacy-unverified",
+      "production_registry_member": true,
+      "production_eligible_local": true,
+      "provider": "apimart",
+      "native_model": "qwen-image-3.0",
+      "endpoint": null,
+      "current_contract_status": "legacy-unverified",
+      "outstanding_contract_checks": null,
+      "operations": [
+        {
+          "id": "generate",
+          "kind": "image",
+          "enabled": true
+        }
+      ],
+      "new_live_check": false
+    },
+    {
+      "kind": "image",
+      "name": "Grok Imagine 1.5",
+      "id": "grok_image_1_5",
+      "historical_outcome": "partial",
+      "historical_details": "10 | 1152×768 | Частично: 3:2 вместо 16:9",
+      "historical_date": "2026-10-21",
+      "present_in_local_catalog": true,
+      "catalog_verification": "legacy-unverified",
+      "production_registry_member": true,
+      "production_eligible_local": true,
+      "provider": "apimart",
+      "native_model": "grok-imagine-1.5-apimart",
+      "endpoint": null,
+      "current_contract_status": "legacy-unverified",
+      "outstanding_contract_checks": null,
+      "operations": [
+        {
+          "id": "generate",
+          "kind": "image",
+          "enabled": true
+        }
+      ],
+      "new_live_check": false
+    },
+    {
+      "kind": "image",
+      "name": "Grok Imagine 2.0",
+      "id": "grok_image_2_0",
+      "historical_outcome": "base_pass",
+      "historical_details": "10 | 1792×1008 | Базовый проход",
+      "historical_date": "2026-10-21",
+      "present_in_local_catalog": true,
+      "catalog_verification": "legacy-unverified",
+      "production_registry_member": true,
+      "production_eligible_local": true,
+      "provider": "apimart",
+      "native_model": "grok-imagine-2.0-ext",
+      "endpoint": null,
+      "current_contract_status": "legacy-unverified",
+      "outstanding_contract_checks": null,
+      "operations": [
+        {
+          "id": "generate",
+          "kind": "image",
+          "enabled": true
+        }
+      ],
+      "new_live_check": false
+    },
+    {
+      "kind": "image",
+      "name": "Seedream 4.5",
+      "id": "seedream_4_5",
+      "historical_outcome": "partial",
+      "historical_details": "30 | 2048×2048 | Частично: квадрат вместо 16:9",
+      "historical_date": "2026-10-21",
+      "present_in_local_catalog": true,
+      "catalog_verification": "legacy-unverified",
+      "production_registry_member": true,
+      "production_eligible_local": true,
+      "provider": "poyo",
+      "native_model": "seedream-4.5",
+      "endpoint": null,
+      "current_contract_status": "legacy-unverified",
+      "outstanding_contract_checks": null,
+      "operations": [
+        {
+          "id": "generate",
+          "kind": "image",
+          "enabled": true
+        }
+      ],
+      "new_live_check": false
+    },
+    {
+      "kind": "image",
+      "name": "Imagen 4.0",
+      "id": "imagen_4_0",
+      "historical_outcome": "failed",
+      "historical_details": "25 | — | `failed_terminal`, временная ошибка провайдера, provider cost 0",
+      "historical_date": "2026-10-21",
+      "present_in_local_catalog": true,
+      "catalog_verification": "pending-verification",
+      "production_registry_member": false,
+      "production_eligible_local": false,
+      "provider": "apimart",
+      "native_model": "imagen-4.0-apimart",
+      "endpoint": "POST /v1/images/generations",
+      "current_contract_status": "draft",
+      "outstanding_contract_checks": 7,
+      "operations": [
+        {
+          "id": "generate",
+          "kind": "image",
+          "enabled": false
+        }
+      ],
+      "new_live_check": false
+    },
+    {
+      "kind": "image",
+      "name": "Nano Banana",
+      "id": "nano_banana",
+      "historical_outcome": "base_pass",
+      "historical_details": "10 | 1344×768 | Базовый проход",
+      "historical_date": "2026-10-21",
+      "present_in_local_catalog": true,
+      "catalog_verification": "pending-verification",
+      "production_registry_member": false,
+      "production_eligible_local": false,
+      "provider": "apimart",
+      "native_model": "gemini-2.5-flash-image-preview",
+      "endpoint": "POST /v1/images/generations",
+      "current_contract_status": "draft",
+      "outstanding_contract_checks": 7,
+      "operations": [
+        {
+          "id": "generate",
+          "kind": "image",
+          "enabled": false
+        }
+      ],
+      "new_live_check": false
+    },
+    {
+      "kind": "image",
+      "name": "Seedream 5.0 Flash",
+      "id": "seedream_5_0_flash",
+      "historical_outcome": "base_pass",
+      "historical_details": "30 | 1312×736 | Базовый проход",
+      "historical_date": "2026-10-21",
+      "present_in_local_catalog": true,
+      "catalog_verification": "pending-verification",
+      "production_registry_member": false,
+      "production_eligible_local": false,
+      "provider": "apimart",
+      "native_model": "seedream-5-0-flash",
+      "endpoint": "POST /v1/images/generations",
+      "current_contract_status": "draft",
+      "outstanding_contract_checks": 7,
+      "operations": [
+        {
+          "id": "generate",
+          "kind": "image",
+          "enabled": false
+        }
+      ],
+      "new_live_check": false
+    },
+    {
+      "kind": "image",
+      "name": "Z-Image Turbo",
+      "id": "z_image_turbo",
+      "historical_outcome": "base_pass",
+      "historical_details": "10 | 1280×720 | Базовый проход",
+      "historical_date": "2026-10-21",
+      "present_in_local_catalog": true,
+      "catalog_verification": "pending-verification",
+      "production_registry_member": false,
+      "production_eligible_local": false,
+      "provider": "apimart",
+      "native_model": "z-image-turbo",
+      "endpoint": "POST /v1/images/generations",
+      "current_contract_status": "draft",
+      "outstanding_contract_checks": 7,
+      "operations": [
+        {
+          "id": "generate",
+          "kind": "image",
+          "enabled": false
+        }
+      ],
+      "new_live_check": false
+    },
+    {
+      "kind": "image",
+      "name": "FLUX.2 Max",
+      "id": "flux_2_max",
+      "historical_outcome": "base_pass",
+      "historical_details": "35 | 1344×752 | Базовый проход",
+      "historical_date": "2026-10-21",
+      "present_in_local_catalog": true,
+      "catalog_verification": "pending-verification",
+      "production_registry_member": false,
+      "production_eligible_local": false,
+      "provider": "apimart",
+      "native_model": "flux-2-max",
+      "endpoint": "POST /v1/images/generations",
+      "current_contract_status": "draft",
+      "outstanding_contract_checks": 7,
+      "operations": [
+        {
+          "id": "generate",
+          "kind": "image",
+          "enabled": false
+        }
+      ],
+      "new_live_check": false
+    },
+    {
+      "kind": "image",
+      "name": "FLUX.2 Flex",
+      "id": "flux_2_flex",
+      "historical_outcome": "base_pass",
+      "historical_details": "25 | 1344×752 | Базовый проход",
+      "historical_date": "2026-10-21",
+      "present_in_local_catalog": true,
+      "catalog_verification": "pending-verification",
+      "production_registry_member": false,
+      "production_eligible_local": false,
+      "provider": "apimart",
+      "native_model": "flux-2-flex",
+      "endpoint": "POST /v1/images/generations",
+      "current_contract_status": "draft",
+      "outstanding_contract_checks": 7,
+      "operations": [
+        {
+          "id": "generate",
+          "kind": "image",
+          "enabled": false
+        }
+      ],
+      "new_live_check": false
+    },
+    {
+      "kind": "image",
+      "name": "Qwen Image 3.0 Pro",
+      "id": "qwen_image_3_pro",
+      "historical_outcome": "base_pass",
+      "historical_details": "20 | 1280×720 | Базовый проход",
+      "historical_date": "2026-10-21",
+      "present_in_local_catalog": true,
+      "catalog_verification": "pending-verification",
+      "production_registry_member": false,
+      "production_eligible_local": false,
+      "provider": "apimart",
+      "native_model": "qwen-image-3.0-pro",
+      "endpoint": "POST /v1/images/generations",
+      "current_contract_status": "draft",
+      "outstanding_contract_checks": 7,
+      "operations": [
+        {
+          "id": "generate",
+          "kind": "image",
+          "enabled": false
+        }
+      ],
+      "new_live_check": false
+    },
+    {
+      "kind": "video",
+      "name": "PixVerse v6",
+      "id": "pixverse_v6",
+      "historical_outcome": "base_pass",
+      "historical_details": "360p, 1 с / 10 | MP4, H.264, 640×360, 24 fps, 1.041667 с, без аудио | `succeeded`, воспроизведение до конца; полный ffprobe",
+      "historical_date": "2026-10-21",
+      "present_in_local_catalog": true,
+      "catalog_verification": "pending-verification",
+      "production_registry_member": false,
+      "production_eligible_local": false,
+      "provider": "apimart",
+      "native_model": "pixverse-v6",
+      "endpoint": "POST /v1/videos/generations",
+      "current_contract_status": "draft",
+      "outstanding_contract_checks": 28,
+      "operations": [
+        {
+          "id": "generate",
+          "kind": "video",
+          "enabled": false
+        }
+      ],
+      "new_live_check": false
+    },
+    {
+      "kind": "video",
+      "name": "Seedance 2.0 Mini",
+      "id": "seedance_2_0_mini",
+      "historical_outcome": "failed",
+      "historical_details": "480p, 4 с / 30 | 864×496, 4.041667 с; provider completed, 0.72604 APIMart Credits | `failed_terminal`, видео в чате отсутствует",
+      "historical_date": "2026-10-21",
+      "present_in_local_catalog": true,
+      "catalog_verification": "pending-verification",
+      "production_registry_member": false,
+      "production_eligible_local": false,
+      "provider": "apimart",
+      "native_model": "seedance-2.0-mini",
+      "endpoint": "POST /v1/videos/generations",
+      "current_contract_status": "draft",
+      "outstanding_contract_checks": 7,
+      "operations": [
+        {
+          "id": "generate",
+          "kind": "video",
+          "enabled": false
+        }
+      ],
+      "new_live_check": false
+    },
+    {
+      "kind": "video",
+      "name": "Wan 3.0 Video",
+      "id": "wan_3_0",
+      "historical_outcome": "failed",
+      "historical_details": "480p, 2 с / 40 | 854×480, 2 с; provider completed, 0.6576 APIMart Credits | `failed_terminal`, файл требует внимания",
+      "historical_date": "2026-10-21",
+      "present_in_local_catalog": true,
+      "catalog_verification": "pending-verification",
+      "production_registry_member": false,
+      "production_eligible_local": false,
+      "provider": "apimart",
+      "native_model": "wan3.0-video",
+      "endpoint": "POST /v1/videos/generations",
+      "current_contract_status": "draft",
+      "outstanding_contract_checks": 35,
+      "operations": [
+        {
+          "id": "generate",
+          "kind": "video",
+          "enabled": false
+        }
+      ],
+      "new_live_check": false
+    },
+    {
+      "kind": "video",
+      "name": "Vidu Q3 Turbo",
+      "id": "vidu_q3_turbo",
+      "historical_outcome": "failed",
+      "historical_details": "540p, 1 с / 20 | 960×528, 1.041667 с; provider completed, 0.32 APIMart Credits | `failed_terminal`",
+      "historical_date": "2026-10-21",
+      "present_in_local_catalog": true,
+      "catalog_verification": "pending-verification",
+      "production_registry_member": false,
+      "production_eligible_local": false,
+      "provider": "apimart",
+      "native_model": "viduq3-turbo",
+      "endpoint": "POST /v1/videos/generations",
+      "current_contract_status": "draft",
+      "outstanding_contract_checks": 21,
+      "operations": [
+        {
+          "id": "generate",
+          "kind": "video",
+          "enabled": false
+        }
+      ],
+      "new_live_check": false
+    },
+    {
+      "kind": "video",
+      "name": "Veo 3.1 Lite",
+      "id": "video_veo_3_1_lite",
+      "historical_outcome": "base_pass",
+      "historical_details": "720p, 8 с / 45 | Браузер декодировал 1280×720, 8 с | `succeeded`; полный ffprobe/FPS/audio прерван из-за 502",
+      "historical_date": "2026-10-21",
+      "present_in_local_catalog": true,
+      "catalog_verification": "legacy-unverified",
+      "production_registry_member": true,
+      "production_eligible_local": true,
+      "provider": "apimart",
+      "native_model": "veo3.1-lite",
+      "endpoint": null,
+      "current_contract_status": "legacy-unverified",
+      "outstanding_contract_checks": null,
+      "operations": [
+        {
+          "id": "generate",
+          "kind": "video",
+          "enabled": true
+        }
+      ],
+      "new_live_check": false
+    },
+    {
+      "kind": "video",
+      "name": "Vidu Q3 Pro",
+      "id": "vidu_q3_pro",
+      "historical_outcome": "job_not_accepted",
+      "historical_details": "По отчёту Job не принят; затем DEV 502. Не относится к успешным или упавшим принятым Jobs.",
+      "historical_date": "2026-10-21",
+      "present_in_local_catalog": true,
+      "catalog_verification": "pending-verification",
+      "production_registry_member": false,
+      "production_eligible_local": false,
+      "provider": "apimart",
+      "native_model": "viduq3-pro",
+      "endpoint": "POST /v1/videos/generations",
+      "current_contract_status": "draft",
+      "outstanding_contract_checks": 21,
+      "operations": [
+        {
+          "id": "generate",
+          "kind": "video",
+          "enabled": false
+        }
+      ],
+      "new_live_check": false
+    }
+  ],
+  "prod_without_individual_evidence_in_this_document": [
+    {
+      "kind": "image",
+      "name": "Midjourney V7",
+      "id": "midjourney_v7",
+      "historical_outcome": "not_in_attached_report",
+      "historical_details": "В предоставленном документе нет индивидуального результата этой модели; это не означает отсутствие других проверок.",
+      "historical_date": "2026-10-21",
+      "present_in_local_catalog": true,
+      "catalog_verification": "legacy-unverified",
+      "production_registry_member": true,
+      "production_eligible_local": true,
+      "provider": "apimart",
+      "native_model": "midjourney",
+      "endpoint": null,
+      "current_contract_status": "legacy-unverified",
+      "outstanding_contract_checks": null,
+      "operations": [
+        {
+          "id": "generate",
+          "kind": "image",
+          "enabled": true
+        }
+      ],
+      "new_live_check": false
+    },
+    {
+      "kind": "image",
+      "name": "FLUX.2 Pro",
+      "id": "flux_2_pro",
+      "historical_outcome": "not_in_attached_report",
+      "historical_details": "В предоставленном документе нет индивидуального результата этой модели; это не означает отсутствие других проверок.",
+      "historical_date": "2026-10-21",
+      "present_in_local_catalog": true,
+      "catalog_verification": "legacy-unverified",
+      "production_registry_member": true,
+      "production_eligible_local": true,
+      "provider": "apimart",
+      "native_model": "flux-2-pro",
+      "endpoint": null,
+      "current_contract_status": "legacy-unverified",
+      "outstanding_contract_checks": null,
+      "operations": [
+        {
+          "id": "generate",
+          "kind": "image",
+          "enabled": true
+        }
+      ],
+      "new_live_check": false
+    },
+    {
+      "kind": "text",
+      "name": "GPT-5.5",
+      "id": "gpt_5_5",
+      "historical_outcome": "not_in_attached_report",
+      "historical_details": "В предоставленном документе нет индивидуального результата этой модели; это не означает отсутствие других проверок.",
+      "historical_date": "2026-10-21",
+      "present_in_local_catalog": true,
+      "catalog_verification": "legacy-unverified",
+      "production_registry_member": true,
+      "production_eligible_local": true,
+      "provider": "kie",
+      "native_model": "gpt-5-5",
+      "endpoint": null,
+      "current_contract_status": "legacy-unverified",
+      "outstanding_contract_checks": null,
+      "operations": [
+        {
+          "id": "reply",
+          "kind": "text",
+          "enabled": true
+        }
+      ],
+      "new_live_check": false
+    },
+    {
+      "kind": "text",
+      "name": "Claude Opus 4.7",
+      "id": "claude_opus_4_7",
+      "historical_outcome": "not_in_attached_report",
+      "historical_details": "В предоставленном документе нет индивидуального результата этой модели; это не означает отсутствие других проверок.",
+      "historical_date": "2026-10-21",
+      "present_in_local_catalog": true,
+      "catalog_verification": "legacy-unverified",
+      "production_registry_member": true,
+      "production_eligible_local": true,
+      "provider": "kie",
+      "native_model": "claude-opus-4-7",
+      "endpoint": null,
+      "current_contract_status": "legacy-unverified",
+      "outstanding_contract_checks": null,
+      "operations": [
+        {
+          "id": "reply",
+          "kind": "text",
+          "enabled": true
+        }
+      ],
+      "new_live_check": false
+    },
+    {
+      "kind": "text",
+      "name": "Gemini 3.1 Pro",
+      "id": "gemini_3_1_pro",
+      "historical_outcome": "not_in_attached_report",
+      "historical_details": "В предоставленном документе нет индивидуального результата этой модели; это не означает отсутствие других проверок.",
+      "historical_date": "2026-10-21",
+      "present_in_local_catalog": true,
+      "catalog_verification": "legacy-unverified",
+      "production_registry_member": true,
+      "production_eligible_local": true,
+      "provider": "kie",
+      "native_model": "gemini-3.1-pro",
+      "endpoint": null,
+      "current_contract_status": "legacy-unverified",
+      "outstanding_contract_checks": null,
+      "operations": [
+        {
+          "id": "reply",
+          "kind": "text",
+          "enabled": true
+        }
+      ],
+      "new_live_check": false
+    },
+    {
+      "kind": "text",
+      "name": "Claude Opus 4.8",
+      "id": "claude_opus_4_8",
+      "historical_outcome": "not_in_attached_report",
+      "historical_details": "В предоставленном документе нет индивидуального результата этой модели; это не означает отсутствие других проверок.",
+      "historical_date": "2026-10-21",
+      "present_in_local_catalog": true,
+      "catalog_verification": "legacy-unverified",
+      "production_registry_member": true,
+      "production_eligible_local": true,
+      "provider": "kie",
+      "native_model": "claude-opus-4-8",
+      "endpoint": null,
+      "current_contract_status": "legacy-unverified",
+      "outstanding_contract_checks": null,
+      "operations": [
+        {
+          "id": "reply",
+          "kind": "text",
+          "enabled": true
+        }
+      ],
+      "new_live_check": false
+    },
+    {
+      "kind": "text",
+      "name": "GPT 5.6 Terra",
+      "id": "gpt_5_6_terra",
+      "historical_outcome": "not_in_attached_report",
+      "historical_details": "В предоставленном документе нет индивидуального результата этой модели; это не означает отсутствие других проверок.",
+      "historical_date": "2026-10-21",
+      "present_in_local_catalog": true,
+      "catalog_verification": "legacy-unverified",
+      "production_registry_member": true,
+      "production_eligible_local": true,
+      "provider": "kie",
+      "native_model": "gpt-5-6-terra",
+      "endpoint": null,
+      "current_contract_status": "legacy-unverified",
+      "outstanding_contract_checks": null,
+      "operations": [
+        {
+          "id": "reply",
+          "kind": "text",
+          "enabled": true
+        }
+      ],
+      "new_live_check": false
+    },
+    {
+      "kind": "text",
+      "name": "GPT 6 Astra",
+      "id": "gpt_6_astra",
+      "historical_outcome": "not_in_attached_report",
+      "historical_details": "В предоставленном документе нет индивидуального результата этой модели; это не означает отсутствие других проверок.",
+      "historical_date": "2026-10-21",
+      "present_in_local_catalog": true,
+      "catalog_verification": "legacy-unverified",
+      "production_registry_member": true,
+      "production_eligible_local": true,
+      "provider": "kie",
+      "native_model": "gpt-6-astra",
+      "endpoint": null,
+      "current_contract_status": "legacy-unverified",
+      "outstanding_contract_checks": null,
+      "operations": [
+        {
+          "id": "reply",
+          "kind": "text",
+          "enabled": true
+        }
+      ],
+      "new_live_check": false
+    },
+    {
+      "kind": "text",
+      "name": "Claude Opus 5",
+      "id": "claude_opus_5",
+      "historical_outcome": "not_in_attached_report",
+      "historical_details": "В предоставленном документе нет индивидуального результата этой модели; это не означает отсутствие других проверок.",
+      "historical_date": "2026-10-21",
+      "present_in_local_catalog": true,
+      "catalog_verification": "legacy-unverified",
+      "production_registry_member": true,
+      "production_eligible_local": true,
+      "provider": "kie",
+      "native_model": "claude-opus-5",
+      "endpoint": null,
+      "current_contract_status": "legacy-unverified",
+      "outstanding_contract_checks": null,
+      "operations": [
+        {
+          "id": "reply",
+          "kind": "text",
+          "enabled": true
+        }
+      ],
+      "new_live_check": false
+    },
+    {
+      "kind": "text",
+      "name": "Gemini 3.7 Flash",
+      "id": "gemini_3_7_flash",
+      "historical_outcome": "not_in_attached_report",
+      "historical_details": "В предоставленном документе нет индивидуального результата этой модели; это не означает отсутствие других проверок.",
+      "historical_date": "2026-10-21",
+      "present_in_local_catalog": true,
+      "catalog_verification": "legacy-unverified",
+      "production_registry_member": true,
+      "production_eligible_local": true,
+      "provider": "kie",
+      "native_model": "gemini-3-7-flash-openai",
+      "endpoint": null,
+      "current_contract_status": "legacy-unverified",
+      "outstanding_contract_checks": null,
+      "operations": [
+        {
+          "id": "reply",
+          "kind": "text",
+          "enabled": true
+        }
+      ],
+      "new_live_check": false
+    },
+    {
+      "kind": "text",
+      "name": "Claude Fable 5.1",
+      "id": "claude_fable_5_1",
+      "historical_outcome": "not_in_attached_report",
+      "historical_details": "В предоставленном документе нет индивидуального результата этой модели; это не означает отсутствие других проверок.",
+      "historical_date": "2026-10-21",
+      "present_in_local_catalog": true,
+      "catalog_verification": "legacy-unverified",
+      "production_registry_member": true,
+      "production_eligible_local": true,
+      "provider": "apimart",
+      "native_model": "claude-fable-5.1",
+      "endpoint": null,
+      "current_contract_status": "legacy-unverified",
+      "outstanding_contract_checks": null,
+      "operations": [
+        {
+          "id": "reply",
+          "kind": "text",
+          "enabled": true
+        }
+      ],
+      "new_live_check": false
+    },
+    {
+      "kind": "text",
+      "name": "Claude Fable 5",
+      "id": "claude_fable_5",
+      "historical_outcome": "not_in_attached_report",
+      "historical_details": "В предоставленном документе нет индивидуального результата этой модели; это не означает отсутствие других проверок.",
+      "historical_date": "2026-10-21",
+      "present_in_local_catalog": true,
+      "catalog_verification": "legacy-unverified",
+      "production_registry_member": true,
+      "production_eligible_local": true,
+      "provider": "kie",
+      "native_model": "claude-fable-5",
+      "endpoint": null,
+      "current_contract_status": "legacy-unverified",
+      "outstanding_contract_checks": null,
+      "operations": [
+        {
+          "id": "reply",
+          "kind": "text",
+          "enabled": true
+        }
+      ],
+      "new_live_check": false
+    },
+    {
+      "kind": "text",
+      "name": "Gemini 3.6 Flash",
+      "id": "gemini_3_6_flash",
+      "historical_outcome": "not_in_attached_report",
+      "historical_details": "В предоставленном документе нет индивидуального результата этой модели; это не означает отсутствие других проверок.",
+      "historical_date": "2026-10-21",
+      "present_in_local_catalog": true,
+      "catalog_verification": "legacy-unverified",
+      "production_registry_member": true,
+      "production_eligible_local": true,
+      "provider": "kie",
+      "native_model": "gemini-3-6-flash-openai",
+      "endpoint": null,
+      "current_contract_status": "legacy-unverified",
+      "outstanding_contract_checks": null,
+      "operations": [
+        {
+          "id": "reply",
+          "kind": "text",
+          "enabled": true
+        }
+      ],
+      "new_live_check": false
+    },
+    {
+      "kind": "video",
+      "name": "Kling V3",
+      "id": "video_kling_v3",
+      "historical_outcome": "not_in_attached_report",
+      "historical_details": "В предоставленном документе нет индивидуального результата этой модели; это не означает отсутствие других проверок.",
+      "historical_date": "2026-10-21",
+      "present_in_local_catalog": true,
+      "catalog_verification": "legacy-unverified",
+      "production_registry_member": true,
+      "production_eligible_local": true,
+      "provider": "apimart",
+      "native_model": "kling-v3",
+      "endpoint": null,
+      "current_contract_status": "legacy-unverified",
+      "outstanding_contract_checks": null,
+      "operations": [
+        {
+          "id": "generate",
+          "kind": "video",
+          "enabled": true
+        }
+      ],
+      "new_live_check": false
+    },
+    {
+      "kind": "video",
+      "name": "Veo 3.1 Fast",
+      "id": "video_veo_3_1_fast",
+      "historical_outcome": "not_in_attached_report",
+      "historical_details": "В предоставленном документе нет индивидуального результата этой модели; это не означает отсутствие других проверок.",
+      "historical_date": "2026-10-21",
+      "present_in_local_catalog": true,
+      "catalog_verification": "legacy-unverified",
+      "production_registry_member": true,
+      "production_eligible_local": true,
+      "provider": "apimart",
+      "native_model": "veo3.1-fast",
+      "endpoint": null,
+      "current_contract_status": "legacy-unverified",
+      "outstanding_contract_checks": null,
+      "operations": [
+        {
+          "id": "generate",
+          "kind": "video",
+          "enabled": true
+        }
+      ],
+      "new_live_check": false
+    },
+    {
+      "kind": "video",
+      "name": "Veo 3.1 Quality",
+      "id": "video_veo_3_1_quality",
+      "historical_outcome": "not_in_attached_report",
+      "historical_details": "В предоставленном документе нет индивидуального результата этой модели; это не означает отсутствие других проверок.",
+      "historical_date": "2026-10-21",
+      "present_in_local_catalog": true,
+      "catalog_verification": "legacy-unverified",
+      "production_registry_member": true,
+      "production_eligible_local": true,
+      "provider": "apimart",
+      "native_model": "veo3.1-quality",
+      "endpoint": null,
+      "current_contract_status": "legacy-unverified",
+      "outstanding_contract_checks": null,
+      "operations": [
+        {
+          "id": "generate",
+          "kind": "video",
+          "enabled": true
+        }
+      ],
+      "new_live_check": false
+    },
+    {
+      "kind": "video",
+      "name": "Kling 3.0 Turbo",
+      "id": "video_kling_3_0_turbo",
+      "historical_outcome": "not_in_attached_report",
+      "historical_details": "В предоставленном документе нет индивидуального результата этой модели; это не означает отсутствие других проверок.",
+      "historical_date": "2026-10-21",
+      "present_in_local_catalog": true,
+      "catalog_verification": "legacy-unverified",
+      "production_registry_member": true,
+      "production_eligible_local": true,
+      "provider": "apimart",
+      "native_model": "kling-3.0-turbo",
+      "endpoint": null,
+      "current_contract_status": "legacy-unverified",
+      "outstanding_contract_checks": null,
+      "operations": [
+        {
+          "id": "generate",
+          "kind": "video",
+          "enabled": true
+        }
+      ],
+      "new_live_check": false
+    },
+    {
+      "kind": "video",
+      "name": "MiniMax H3",
+      "id": "video_minimax_h3",
+      "historical_outcome": "not_in_attached_report",
+      "historical_details": "В предоставленном документе нет индивидуального результата этой модели; это не означает отсутствие других проверок.",
+      "historical_date": "2026-10-21",
+      "present_in_local_catalog": true,
+      "catalog_verification": "legacy-unverified",
+      "production_registry_member": true,
+      "production_eligible_local": true,
+      "provider": "apimart",
+      "native_model": "MiniMax-H3",
+      "endpoint": null,
+      "current_contract_status": "legacy-unverified",
+      "outstanding_contract_checks": null,
+      "operations": [
+        {
+          "id": "generate",
+          "kind": "video",
+          "enabled": true
+        }
+      ],
+      "new_live_check": false
+    },
+    {
+      "kind": "video",
+      "name": "Gemini Omni 1.1 Flash EXT",
+      "id": "video_gemini_omni_1_1_flash_ext",
+      "historical_outcome": "not_in_attached_report",
+      "historical_details": "В предоставленном документе нет индивидуального результата этой модели; это не означает отсутствие других проверок.",
+      "historical_date": "2026-10-21",
+      "present_in_local_catalog": true,
+      "catalog_verification": "legacy-unverified",
+      "production_registry_member": true,
+      "production_eligible_local": true,
+      "provider": "apimart",
+      "native_model": "gemini-omni-1.1-flash-ext",
+      "endpoint": null,
+      "current_contract_status": "legacy-unverified",
+      "outstanding_contract_checks": null,
+      "operations": [
+        {
+          "id": "generate",
+          "kind": "video",
+          "enabled": true
+        }
+      ],
+      "new_live_check": false
+    },
+    {
+      "kind": "video",
+      "name": "Seedance 2.5",
+      "id": "video_seedance_2_5",
+      "historical_outcome": "not_in_attached_report",
+      "historical_details": "В предоставленном документе нет индивидуального результата этой модели; это не означает отсутствие других проверок.",
+      "historical_date": "2026-10-21",
+      "present_in_local_catalog": true,
+      "catalog_verification": "legacy-unverified",
+      "production_registry_member": true,
+      "production_eligible_local": true,
+      "provider": "apimart",
+      "native_model": "seedance-2.5",
+      "endpoint": null,
+      "current_contract_status": "legacy-unverified",
+      "outstanding_contract_checks": null,
+      "operations": [
+        {
+          "id": "generate",
+          "kind": "video",
+          "enabled": true
+        }
+      ],
+      "new_live_check": false
+    },
+    {
+      "kind": "video",
+      "name": "Kling O3 Standard",
+      "id": "video_kling_o3_standard",
+      "historical_outcome": "not_in_attached_report",
+      "historical_details": "В предоставленном документе нет индивидуального результата этой модели; это не означает отсутствие других проверок.",
+      "historical_date": "2026-10-21",
+      "present_in_local_catalog": true,
+      "catalog_verification": "legacy-unverified",
+      "production_registry_member": true,
+      "production_eligible_local": true,
+      "provider": "poyo",
+      "native_model": "kling-o3/standard",
+      "endpoint": null,
+      "current_contract_status": "legacy-unverified",
+      "outstanding_contract_checks": null,
+      "operations": [
+        {
+          "id": "generate",
+          "kind": "video",
+          "enabled": true
+        }
+      ],
+      "new_live_check": false
+    },
+    {
+      "kind": "video",
+      "name": "Seedance 2.0 Fast",
+      "id": "video_seedance_2_0_fast",
+      "historical_outcome": "not_in_attached_report",
+      "historical_details": "В предоставленном документе нет индивидуального результата этой модели; это не означает отсутствие других проверок.",
+      "historical_date": "2026-10-21",
+      "present_in_local_catalog": true,
+      "catalog_verification": "legacy-unverified",
+      "production_registry_member": true,
+      "production_eligible_local": true,
+      "provider": "poyo",
+      "native_model": "seedance-2-fast",
+      "endpoint": null,
+      "current_contract_status": "legacy-unverified",
+      "outstanding_contract_checks": null,
+      "operations": [
+        {
+          "id": "generate",
+          "kind": "video",
+          "enabled": true
+        }
+      ],
+      "new_live_check": false
+    },
+    {
+      "kind": "video",
+      "name": "Runway Gen-4.5",
+      "id": "video_runway_gen4_5",
+      "historical_outcome": "not_in_attached_report",
+      "historical_details": "В предоставленном документе нет индивидуального результата этой модели; это не означает отсутствие других проверок.",
+      "historical_date": "2026-10-21",
+      "present_in_local_catalog": true,
+      "catalog_verification": "legacy-unverified",
+      "production_registry_member": true,
+      "production_eligible_local": true,
+      "provider": "poyo",
+      "native_model": "runway-gen-4.5",
+      "endpoint": null,
+      "current_contract_status": "legacy-unverified",
+      "outstanding_contract_checks": null,
+      "operations": [
+        {
+          "id": "generate",
+          "kind": "video",
+          "enabled": true
+        }
+      ],
+      "new_live_check": false
+    }
+  ],
+  "source_comparisons": [
+    {
+      "path": "internal/service/providermodels/text_candidates.go",
+      "unchanged_since_handoff_fix": true,
+      "current_sha256": "5be6c6c1d6599fca8f148753e0111a9ca32ee3d9003042a3a98f971b1b8871b6"
+    },
+    {
+      "path": "internal/service/providermodels/media_candidates.go",
+      "unchanged_since_handoff_fix": true,
+      "current_sha256": "ff93007b9471f65c5a0b71288da04e52383440edf451303ad56211212199e765"
+    },
+    {
+      "path": "internal/service/providermodels/next_media_candidates.go",
+      "unchanged_since_handoff_fix": true,
+      "current_sha256": "6b90b64187f76ee609df4b02f59fa203c51ad1062b139b2ea29a6a6e6248a6c5"
+    },
+    {
+      "path": "internal/service/providermodels/catalog_expansion.go",
+      "unchanged_since_handoff_fix": true,
+      "current_sha256": "eebdf4ecb6a13d7a1adacdc51d3a0b92618957d75c46efda12591b5b0f286f01"
+    },
+    {
+      "path": "internal/service/providermodels/image_expansion.go",
+      "unchanged_since_handoff_fix": true,
+      "current_sha256": "b861d2a32cb5773c141d2d371c2e6a261752433faef75bce744877259f446e25"
+    },
+    {
+      "path": "internal/service/providermodels/video_expansion.go",
+      "unchanged_since_handoff_fix": true,
+      "current_sha256": "a28517396bfcf32c94ea916a7269148bb445b4dcefd96dbfb1e9cdc582eff5c2"
+    },
+    {
+      "path": "internal/adapter/provider/poyo/poyo.go",
+      "unchanged_since_handoff_fix": true,
+      "current_sha256": "2b76d842fa74f6f1f9cfff844e7f9654bf5accfe003c69ec92cc15c7e7e2f82a"
+    },
+    {
+      "path": "internal/worker/media_contracts.go",
+      "unchanged_since_handoff_fix": true,
+      "current_sha256": "aa83723987c06d88a3e5dbf86d065cc556bd5fc4ff3d4e9751562ee6129b2be0"
+    },
+    {
+      "path": "internal/service/imagepreview/service.go",
+      "unchanged_since_handoff_fix": true,
+      "current_sha256": "f804c868cc46672d6a42c77b6e332058b202f5769a9914c77123ce88ef92d3f7"
+    },
+    {
+      "path": "web/platform/src/features/files/image-preview.server.ts",
+      "unchanged_since_handoff_fix": true,
+      "current_sha256": "ba7f06b26b7090435f73abcccf518e17f96ef738b7a28e7be1b07a6057cc588e"
+    }
+  ],
+  "limitations": [
+    "The named media matrix JSON and full-diff manifest were not attached or found in the active checkout. Twenty-four remaining historical video model identities cannot be reconstructed faithfully from this Markdown alone.",
+    "A baseline pass records only the tested operation/settings, not every context/input/resolution/duration or future model version.",
+    "The report predates the current economy. Its old star quotes are historical, not current prices.",
+    "The uploaded file is historical reference evidence; its embedded merge commands were not executed.",
+    "No new live/provider/payment/generation calls, no PROD admission changes, no merge, commit, push or deploy."
+  ]
+}

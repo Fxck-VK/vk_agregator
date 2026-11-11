@@ -5,37 +5,17 @@ import { LocalizedError, renderMessage, type MessageReference } from "@/i18n/err
 import { useMessages } from "@/i18n/LocaleProvider";
 
 
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { z } from "zod";
 import type { ChatMediaAttachment } from "@/components/chat/ChatFilePicker/ChatFilePicker";
 import type { GenerationModel } from "@/features/models/generation-model-catalog";
-import type { PublicOperation } from "@/features/models/model-catalog-contract";
 import { webBrowserFetch, webBrowserMutation } from "@/lib/web-api/browser";
 import { WebNetworkError } from "@/lib/web-api/network-error";
 import { attachmentFingerprint } from "./attachment-fingerprint";
+import { acceptsAttachment, attachmentCountAllowed, attachmentPolicy } from "./attachment-policy";
 
 const uploadSchema = z.object({ artifact_id: z.string().uuid(), mime_type: z.enum(["image/png", "image/jpeg"]), size_bytes: z.number().positive(), width: z.number().positive(), height: z.number().positive() }).strict();
-const maxBytes = 20 * 1024 * 1024;
 type Attachment = ChatMediaAttachment & { fingerprint: string; artifactId?: string; status: "uploading" | "ready" | "failed"; progress: number | null; sizeBytes: number; error?: MessageReference };
-
-function referenceOperation(model?: GenerationModel): PublicOperation | undefined {
-  if (!model || (model.category !== "images" && model.category !== "video")) return undefined;
-  return (model.operations as PublicOperation[] | undefined)?.find((op) => op.kind === (model.category === "video" ? "video" : "image") && op.enabled);
-}
-
-function referenceLimit(model?: GenerationModel) {
-  if (!model) return 0;
-  const operation = referenceOperation(model);
-  if (!operation?.inputs.images.enabled) return 0;
-  if (model.category === "video") return operation.inputs.images.max_count ?? 0;
-  if (model.category === "images" && model.supports_reference_image) return Math.min(model.max_reference_images, operation.inputs.images.max_count ?? 0);
-  return 0;
-}
-
-function referenceTotalBytesLimit(model?: GenerationModel) {
-  const limit = referenceOperation(model)?.inputs.max_total_bytes;
-  return limit !== undefined && limit > 0 ? limit : undefined;
-}
 
 function attachmentTotalBytes(items: readonly Pick<Attachment, "sizeBytes">[]) {
   return items.reduce((total, item) => total + item.sizeBytes, 0);
@@ -54,10 +34,12 @@ export function useChatAttachments(model?: GenerationModel) {
   const selectionQueue = useRef(Promise.resolve());
   const mounted = useRef(true);
   const previews = useRef(new Set<string>());
-  const maxCount = referenceLimit(model);
-  const maxTotalBytes = referenceTotalBytesLimit(model);
-  const imagesRequired = maxCount > 0 && (model?.operations as PublicOperation[] | undefined)?.some(op => op.enabled && op.inputs.images.enabled && op.inputs.images.required);
-  const validationContext = `${model?.id ?? ""}:${maxCount}:${maxTotalBytes ?? ""}`;
+  const policy = useMemo(() => attachmentPolicy(model), [model]);
+  const { maxCount, maxBytes, maxTotalBytes } = policy;
+  const validationContext = `${model?.id ?? ""}:${JSON.stringify(policy)}`;
+  const activeContext = useRef({ key: validationContext });
+  if (activeContext.current.key !== validationContext) activeContext.current = { key: validationContext };
+  const selectionContext = activeContext.current;
   const [errorContext, setErrorContext] = useState(validationContext);
   // Notices describe an attempted selection for one model. Existing files are
   // retained and checked against the new model separately below.
@@ -75,12 +57,21 @@ export function useChatAttachments(model?: GenerationModel) {
     return () => { mounted.current = false; checks.forEach(check => check.abort()); checks.clear(); requests.forEach((request) => request.abort()); requests.clear(); urls.forEach((url) => URL.revokeObjectURL(url)); urls.clear(); };
   }, []);
 
-  const upload = useCallback(async (item: Attachment, modelID: string) => {
+  useEffect(() => {
+    const checks = selections.current;
+    return () => {
+      checks.forEach(check => check.abort());
+      checks.clear();
+      selectionQueue.current = Promise.resolve();
+    };
+  }, [validationContext]);
+
+  const upload = useCallback(async (item: Attachment, modelID: string, byteLimit: number) => {
     const controller = new AbortController();
     pending.current.set(item.id, controller);
     try {
       const file = item.file;
-      if (!file || file.size === 0 || file.size > maxBytes) throw new LocalizedError("useChatAttachments.imageSizeMustBeBetween1Byte");
+      if (!file || file.size === 0 || file.size > byteLimit) throw new LocalizedError("useChatAttachments.fileSizeLimit", { value1: byteLimit / (1024 * 1024) });
       const body = new FormData(); body.set("file", file);
       const response = await webBrowserMutation(`/web/v1/input-artifacts?model_id=${encodeURIComponent(modelID)}`, {
         method: "POST", body, signal: controller.signal,
@@ -95,7 +86,7 @@ export function useChatAttachments(model?: GenerationModel) {
           if (item.previewUrl && previews.current.delete(item.previewUrl)) URL.revokeObjectURL(item.previewUrl);
           update(current.current.filter((value) => value.id !== item.id));
           setDuplicateNotice(true);
-        } else update(current.current.map((value) => value.id === item.id ? { ...value, artifactId: uploaded.artifact_id, status: "ready", progress: 100, sizeBytes: uploaded.size_bytes, error: undefined } : value));
+        } else update(current.current.map((value) => value.id === item.id ? { ...value, mimeType: uploaded.mime_type, artifactId: uploaded.artifact_id, status: "ready", progress: 100, sizeBytes: uploaded.size_bytes, error: undefined } : value));
       }
     } catch (reason) {
       if (!controller.signal.aborted) {
@@ -112,8 +103,8 @@ export function useChatAttachments(model?: GenerationModel) {
   const add = useCallback((selected: ChatMediaAttachment[]) => {
     if (!selected.length) return;
     if (!maxCount || !model) { setError({ key: "useChatAttachments.theSelectedModelDoesNotSupportAttachments" }); return; }
-    if (selected.some((item) => !["image/png", "image/jpeg"].includes(item.mimeType) && !(item.file?.type === "" && /\.(png|jpe?g)$/i.test(item.name)))) { setError({ key: "useChatAttachments.thisModelAcceptsPngAndJpegImages" }); return; }
-    if (selected.some((item) => item.file && (item.file.size === 0 || item.file.size > maxBytes))) { setError({ key: "useChatAttachments.imageSizeMustBeBetween1Byte" }); return; }
+    if (selected.some((item) => !acceptsAttachment(policy, item))) { setError({ key: "useChatAttachments.acceptedFormats", parameters: { value1: [...new Set(policy.formats.map(format => format.mime === "image/png" ? "PNG" : "JPEG"))].join(msg("useChatAttachments.formatSeparator")) } }); return; }
+    if (selected.some((item) => item.file && (item.file.size === 0 || item.file.size > maxBytes))) { setError({ key: "useChatAttachments.fileSizeLimit", parameters: { value1: maxBytes / (1024 * 1024) } }); return; }
     setError(null);
     const controller = new AbortController();
     selections.current.add(controller);
@@ -121,6 +112,7 @@ export function useChatAttachments(model?: GenerationModel) {
     // Serialize selections so drop/paste/picker events cannot race the same bytes.
     const task = selectionQueue.current.then(async () => {
       controller.signal.throwIfAborted();
+      if (activeContext.current !== selectionContext) return;
       setError(null);
       const unique: Attachment[] = [];
       let duplicate = false;
@@ -137,7 +129,9 @@ export function useChatAttachments(model?: GenerationModel) {
           const blob = await response.blob();
           file = new File([blob], item.name, { type: blob.type });
         }
-        if (!file || file.size === 0 || file.size > maxBytes) throw new LocalizedError("useChatAttachments.imageSizeMustBeBetween1Byte");
+        if (activeContext.current !== selectionContext) return;
+        if (!file || file.size === 0 || file.size > maxBytes) throw new LocalizedError("useChatAttachments.fileSizeLimit", { value1: maxBytes / (1024 * 1024) });
+        if (!acceptsAttachment(policy, { ...item, file, mimeType: file.type })) throw new LocalizedError("useChatAttachments.couldNotAcceptTheImageUsePng");
         const fingerprint = await attachmentFingerprint(file, controller.signal);
         if ([...current.current, ...unique].some(value => value.fingerprint === fingerprint)) {
           duplicate = true;
@@ -146,12 +140,13 @@ export function useChatAttachments(model?: GenerationModel) {
         unique.push({ ...item, file, fingerprint, status: "uploading", progress: null, sizeBytes: file.size });
       }
       controller.signal.throwIfAborted();
+      if (activeContext.current !== selectionContext) return;
       if (duplicate) setDuplicateNotice(true);
       if (current.current.length + unique.length > maxCount) {
         setError({ key: "useChatAttachments.youCanAttachUpToValueImages", parameters: { value1: maxCount } });
         return;
       }
-      if (maxTotalBytes !== undefined && attachmentTotalBytes([...current.current, ...unique]) > maxTotalBytes) {
+      if (attachmentTotalBytes([...current.current, ...unique]) > maxTotalBytes) {
         setError({ key: "useChatAttachments.totalAttachmentsTooLargeForThisModel" });
         return;
       }
@@ -161,9 +156,9 @@ export function useChatAttachments(model?: GenerationModel) {
         return { ...item, previewUrl };
       });
       update([...current.current, ...additions]);
-      for (const item of additions) void upload(item, model.id);
+      for (const item of additions) void upload(item, model.id, maxBytes);
     }).catch(reason => {
-      if (!controller.signal.aborted) setError(reason instanceof LocalizedError
+      if (!controller.signal.aborted && activeContext.current === selectionContext) setError(reason instanceof LocalizedError
         ? { key: reason.key, parameters: reason.parameters }
         : { key: "useChatAttachments.couldNotCheckFile" });
     }).finally(() => {
@@ -172,7 +167,7 @@ export function useChatAttachments(model?: GenerationModel) {
     });
     selectionQueue.current = task;
     return task;
-  }, [maxCount, maxTotalBytes, model, update, upload]);
+  }, [maxCount, maxBytes, maxTotalBytes, model, msg, policy, selectionContext, update, upload]);
 
   const remove = (id: string) => {
     pending.current.get(id)?.abort(); pending.current.delete(id);
@@ -192,12 +187,15 @@ export function useChatAttachments(model?: GenerationModel) {
   const retry = (id: string) => {
     const item = current.current.find((value) => value.id === id);
     if (!item || !model || !maxCount || item.status !== "failed") return;
+    if (!acceptsAttachment(policy, item) || item.sizeBytes > maxBytes) return;
     update(current.current.map((value) => value.id === id ? { ...value, status: "uploading", progress: null, error: undefined } : value));
-    void upload(item, model.id);
+    void upload(item, model.id, maxBytes);
   };
-  const totalBytesError = maxTotalBytes !== undefined && attachmentTotalBytes(items) > maxTotalBytes ? msg("useChatAttachments.totalAttachmentsTooLargeForThisModel") : null;
-  const modelError = items.length > maxCount ? msg("useChatAttachments.theAttachmentsAreNotCompatibleWithThe") : totalBytesError ?? (imagesRequired && items.length === 0 ? msg("useChatAttachments.referenceImageRequired") : null);
-  return { enabled: maxCount > 0, items: items.map(item => ({
+  const totalBytesError = attachmentTotalBytes(items) > maxTotalBytes ? msg("useChatAttachments.totalAttachmentsTooLargeForThisModel") : null;
+  const incompatible = items.length > maxCount || items.some(item => !acceptsAttachment(policy, item) || item.sizeBytes > maxBytes);
+  const countError = !attachmentCountAllowed(policy, items.length) ? msg("useChatAttachments.allowedImageCounts", { value1: policy.allowedCounts?.filter(count => count > 0).join(", ") ?? `1–${maxCount}` }) : null;
+  const modelError = incompatible ? msg("useChatAttachments.theAttachmentsAreNotCompatibleWithThe") : totalBytesError ?? countError;
+  return { enabled: policy.enabled, accept: policy.accept, maxCount, items: items.map(item => ({
     id: item.id,
     mimeType: item.mimeType,
     name: item.name,

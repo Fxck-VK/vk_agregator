@@ -12,8 +12,8 @@ describe("global theme tokens", () => {
 
     for (const token of [
       "--color-background: #0c0c0f",
-      "--color-workspace: #0d1117",
-      "--color-panel: #151b23",
+      "--color-workspace: var(--palette-workspace-dark)",
+      "--color-panel: var(--palette-panel-dark)",
       "--color-surface: #1a1b22",
       "--color-surface-raised: #1f232a",
       "--color-border: #2a2b35",
@@ -53,6 +53,8 @@ describe("global theme tokens", () => {
       expect(lightTheme).toContain(token);
     }
 
+    expect(stylesheet).toContain("--palette-workspace-dark: #0d1117");
+    expect(stylesheet).toContain("--palette-panel-dark: #151b23");
     expect(stylesheet).toContain("--color-accent: var(--color-brand-violet)");
     expect(stylesheet).toContain("--color-accent-strong: var(--color-brand-blue)");
     expect(stylesheet).toContain("--color-text-on-light: #0d1117");

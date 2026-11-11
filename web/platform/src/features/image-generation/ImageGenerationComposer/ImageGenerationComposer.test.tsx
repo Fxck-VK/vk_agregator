@@ -60,7 +60,8 @@ describe("ImageGenerationComposer", () => {
 
     const { container } = render(<StatefulComposer />);
 
-    expect(container.querySelectorAll('[data-ui="input-control-chip"]')).toHaveLength(5);
+    expect(container.querySelectorAll('[data-ui="input-control-chip"]')).toHaveLength(4);
+    expect(container.querySelector('input[type="file"]')).toBeNull();
 
     fireEvent.change(screen.getByRole("textbox", { name: ru.imageGeneration.promptLabel }), {
       target: { value: "night city after rain" },

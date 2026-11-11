@@ -757,8 +757,8 @@
   },
   {
     "id": "u0149",
-    "ru": "Изучить семейства ИИ-моделей",
-    "back": "Explore AI model families"
+    "ru": "Изучить семейства нейросетей",
+    "back": "Explore neural network families"
   },
   {
     "id": "u0150",
@@ -972,8 +972,8 @@
   },
   {
     "id": "u0192",
-    "ru": "Карточки предпросмотра ИИ-моделей",
-    "back": "AI model preview cards"
+    "ru": "Карточки предпросмотра нейросетей",
+    "back": "Neural network preview cards"
   },
   {
     "id": "u0193",
@@ -1097,8 +1097,8 @@
   },
   {
     "id": "u0217",
-    "ru": "ИИ-модели",
-    "back": "AI models"
+    "ru": "Нейросети",
+    "back": "Neural networks"
   },
   {
     "id": "u0218",
@@ -1882,8 +1882,8 @@
   },
   {
     "id": "u0365",
-    "ru": "ИИ-модели изображений",
-    "back": "AI image models"
+    "ru": "Нейросети для изображений",
+    "back": "Neural networks for images"
   },
   {
     "id": "u0366",
@@ -2931,8 +2931,8 @@
   },
   {
     "id": "u1736",
-    "ru": "Создавайте изображения, видео, музыку и многое другое. Изучайте ИИ-модели и воплощайте следующую идею в одном творческом рабочем пространстве.",
-    "back": "Create images, video, music and more. Explore AI models and realize your next idea in one creative workspace."
+    "ru": "Создавайте изображения, видео, музыку и многое другое. Изучайте нейросети и воплощайте следующую идею в одном творческом рабочем пространстве.",
+    "back": "Create images, video, music and more. Explore neural networks and realize your next idea in one creative workspace."
   },
   {
     "id": "u1737",
@@ -2951,8 +2951,8 @@
   },
   {
     "id": "u1740",
-    "ru": "Поиск инструментов и ИИ-моделей",
-    "back": "Search tools and AI models"
+    "ru": "Поиск инструментов и нейросетей",
+    "back": "Search tools and neural networks"
   },
   {
     "id": "u1741",
@@ -3036,42 +3036,42 @@
   },
   {
     "id": "u1757",
-    "ru": "ИИ-модели для видео, изображений и аудио. Исследуйте идеи, формируйте свой визуальный мир и проходите путь от первого промпта до результата, которым хочется поделиться.",
-    "back": "AI models for video, images and audio. Explore ideas, shape your visual world and move from the first prompt to a result you want to share."
+    "ru": "Нейросети для видео, изображений и аудио. Исследуйте идеи, формируйте свой визуальный мир и проходите путь от первого промпта до результата, которым хочется поделиться.",
+    "back": "Neural networks for video, images and audio. Explore ideas, shape your visual world and move from the first prompt to a result you want to share."
   },
   {
     "id": "u1758",
-    "ru": "Найдите свой творческий ритм с ведущими семействами ИИ-моделей",
-    "back": "Find your creative rhythm with leading AI model families"
+    "ru": "Найдите свой творческий ритм с ведущими семействами нейросетей",
+    "back": "Find your creative rhythm with leading neural network families"
   },
   {
     "id": "u1759",
-    "ru": "Генерируйте изображения",
+    "ru": "Генерируй изображения",
     "back": "Generate images"
   },
   {
     "id": "u1760",
-    "ru": "Воплощайте идеи",
+    "ru": "Воплощай идеи",
     "back": "Bring ideas to life"
   },
   {
     "id": "u1761",
-    "ru": "Создавайте собственную музыку",
+    "ru": "Создавай собственную музыку",
     "back": "Create your own music"
   },
   {
     "id": "u1762",
-    "ru": "Расскажите свою историю",
+    "ru": "Расскажи свою историю",
     "back": "Tell your story"
   },
   {
     "id": "u1763",
-    "ru": "Исследуйте новые миры",
+    "ru": "Исследуй новые миры",
     "back": "Explore new worlds"
   },
   {
     "id": "u1764",
-    "ru": "Найдите нужные слова",
+    "ru": "Найди нужные слова",
     "back": "Find the right words"
   },
   {
@@ -3305,13 +3305,13 @@
   },
   {
     "id": "u1808",
-    "ru": "Изучайте ведущие семейства ИИ-моделей и находите подходящую отправную точку для своей работы.",
-    "back": "Explore leading AI model families and find a suitable starting point for your work."
+    "ru": "Изучайте ведущие семейства нейросетей и находите подходящую отправную точку для своей работы.",
+    "back": "Explore leading neural network families and find a suitable starting point for your work."
   },
   {
     "id": "u1809",
-    "ru": "Семейства ИИ-моделей",
-    "back": "AI model families"
+    "ru": "Семейства нейросетей",
+    "back": "Neural network families"
   },
   {
     "id": "u1810",
@@ -3604,8 +3604,8 @@
   },
   {
     "id": "u1867",
-    "ru": "Просматривайте доступные ИИ-модели",
-    "back": "Browse available AI models"
+    "ru": "Просматривайте доступные нейросети",
+    "back": "Browse available neural networks"
   },
   {
     "id": "u1868",
@@ -3759,8 +3759,8 @@
   },
   {
     "id": "u1898",
-    "ru": "Превращайте слова и референсы в изображения. Изучайте ИИ-модели, сравнивайте творческие направления и приступайте к созданию следующего изображения в Epifera.",
-    "back": "Turn words and references into pictures. Explore AI models, compare creative directions, and begin creating your next picture in Epifera."
+    "ru": "Превращайте слова и референсы в изображения. Изучайте нейросети, сравнивайте творческие направления и приступайте к созданию следующего изображения в Epifera.",
+    "back": "Turn words and references into pictures. Explore neural networks, compare creative directions, and begin creating your next picture in Epifera."
   },
   {
     "id": "u1899",
@@ -3979,8 +3979,8 @@
   },
   {
     "id": "u1942",
-    "ru": "Лучшая ИИ-модель изображений зависит от того, что вы создаёте",
-    "back": "The best AI image model depends on what you create"
+    "ru": "Лучшая нейросеть для изображений зависит от того, что вы создаёте",
+    "back": "The best neural network for images depends on what you create"
   },
   {
     "id": "u1943",
@@ -4708,8 +4708,8 @@
   },
   {
     "id": "u2087",
-    "ru": "Рабочее пространство для генерации изображений с ИИ-моделями. Опишите, что хотите увидеть, выберите модель и настройки и проверьте цену перед созданием изображения.",
-    "back": "A workspace for generating images with AI models. Describe what you want to see, choose model and settings and check the price before creating an image."
+    "ru": "Рабочее пространство для генерации изображений с нейросетями. Опишите, что хотите увидеть, выберите модель и настройки и проверьте цену перед созданием изображения.",
+    "back": "A workspace for generating images with neural networks. Describe what you want to see, choose model and settings and check the price before creating an image."
   },
   {
     "id": "u2088",

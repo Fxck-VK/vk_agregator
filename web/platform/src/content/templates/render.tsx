@@ -32,7 +32,7 @@ export async function renderContentRecord(page:ResolvedContentPage,searchPage?:s
   const source=<K extends TemplateId>(id:K)=>{void id;return data as TemplateSources<K>;};
   let view:ReactNode;
   switch(page.template){
-    case 'T01':{const {PublicHome}=await import('@/features/public-home/PublicHome');view=<PublicHome copy={source('T01').homeEn}/>;break;}
+    case 'T01':{const {PublicHome}=await import('@/features/landing-variants/third/PublicHome');view=<PublicHome copy={source('T01').homeEn}/>;break;}
     case 'T02':{const {ToolsOverview}=await import('@/features/ai-tools-overview/ToolsOverview');view=<ToolsOverview/>;break;}
     case 'T03':{const {ImageGeneratorLanding}=await import('@/features/image-generator-landing/ImageGeneratorLanding');view=<ImageGeneratorLanding/>;break;}
     case 'T04':{const {KlingFamily}=await import('@/features/model-family/KlingFamily');view=<KlingFamily/>;break;}

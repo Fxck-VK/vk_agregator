@@ -5,7 +5,7 @@ vi.mock("@/features/release/ReleaseViewProvider", () => ({ useReleaseView: () =>
 import {cleanup,render} from '@testing-library/react';
 import {LocaleProvider} from '@/i18n/LocaleProvider';
 // Preload component modules outside timed assertions; production rendering remains lazy.
-import '@/features/public-home/PublicHome';
+import '@/features/landing-variants/third/PublicHome';
 import '@/features/ai-tools-overview/ToolsOverview';
 import '@/features/image-generator-landing/ImageGeneratorLanding';
 import '@/features/model-family/KlingFamily';

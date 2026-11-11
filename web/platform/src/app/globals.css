@@ -1,11 +1,12 @@
+[data-color-scheme="dark"],
 :root,
 :root[data-theme="dark"] {
   color-scheme: dark;
   --color-background: #0c0c0f;
   /* App page canvas, including nested page roots and workspace footers. */
-  --color-workspace: #0d1117;
+  --color-workspace: var(--palette-workspace-dark);
   /* Sidebar and neutral cards across pages, loading and empty states. */
-  --color-panel: #151b23;
+  --color-panel: var(--palette-panel-dark);
   /* Inner controls and interaction states; not neutral card backgrounds. */
   --color-surface: #1a1b22;
   --color-surface-raised: #1f232a;
@@ -31,6 +32,9 @@
 }
 
 :root {
+  /* Fixed graphite palette shared by workspace themes and dark landing surfaces. */
+  --palette-workspace-dark: #0d1117;
+  --palette-panel-dark: #151b23;
   /* Shared waiting/error/empty UI. Geometry belongs to each consumer. */
   --state-placeholder-background: var(--color-panel);
   --state-notice-background: var(--panel-surface-background);

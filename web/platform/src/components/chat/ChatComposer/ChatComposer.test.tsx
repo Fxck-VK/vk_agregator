@@ -29,7 +29,7 @@ describe("ChatComposer", () => {
 
     expect(textarea).toHaveAttribute("placeholder", "Напишите вопрос");
     expect(textarea.closest('[data-ui="input-surface"]')).not.toBeNull();
-    expect(screen.getByRole("button", { name: "Загрузить медиа" })).toBeEnabled();
+    expect(screen.queryByRole("button", { name: "Загрузить медиа" })).toBeNull();
     const submitButton = screen.getByRole("button", { name: "Отправить" });
     expect(submitButton).toBeDisabled();
     expect(submitButton).toHaveAttribute("data-ui", "chat-submit-button");
@@ -118,11 +118,11 @@ describe("ChatComposer", () => {
       />,
     );
 
-    expect(screen.getByRole("button", { name: "Загрузить медиа" })).toBeEnabled();
+    expect(screen.queryByRole("button", { name: "Загрузить медиа" })).toBeNull();
     expect(screen.getByRole("button", { name: "1K" })).toBeEnabled();
     expect(screen.getByRole("button", { name: "Сгенерировать" })).toBeEnabled();
-    expect(screen.getByRole("group", { name: "Медиа и настройки" })).toContainElement(
-      screen.getByRole("button", { name: "Загрузить медиа" }),
+    expect(screen.getByRole("group", { name: "Медиа и настройки" })).not.toContainElement(
+      screen.queryByRole("button", { name: "Загрузить медиа" }),
     );
     expect(screen.getByRole("group", { name: "Медиа и настройки" })).toContainElement(
       screen.getByRole("button", { name: "1K" }),
@@ -168,12 +168,10 @@ describe("ChatComposer", () => {
     );
     const file = new File(["image"], "reference.png", { type: "image/png" });
 
-    fireEvent.click(screen.getByRole("button", { name: "Загрузить медиа" }));
-    fireEvent.click(screen.getByRole("menuitem", { name: "Загрузить файл" }));
-    const input = container.querySelector('input[type="file"]');
-    fireEvent.change(input as HTMLInputElement, { target: { files: [file] } });
-
-    expect(screen.getByRole("alert")).toHaveTextContent("Выбранная модель не поддерживает вложения");
+    expect(screen.queryByRole("button", { name: "Загрузить медиа" })).toBeNull();
+    expect(container.querySelector('input[type="file"]')).toBeNull();
+    fireEvent.paste(screen.getByRole("textbox"), { clipboardData: { files: [file] } });
+    expect(screen.queryByRole("alert")).toBeNull();
     expect(screen.queryByText("reference.png")).not.toBeInTheDocument();
   });
 });
@@ -183,7 +181,7 @@ describe("attachment previews", () => {
   const remove = vi.fn(); const retry = vi.fn();
   function composer(status: "uploading" | "ready" | "failed", progress: number | null = 40) {
     const attachments: ChatAttachments = {
-      enabled: true, items: [{ id: "photo", fingerprint: "test", name: "diagram.png", mimeType: "image/png", source: "uploaded", previewUrl: "blob:photo", status, progress, error: status === "failed" ? "Не удалось загрузить файл." : undefined }],
+      enabled: true, accept: "image/png,.png,image/jpeg,.jpg,.jpeg", maxCount: 14, items: [{ id: "photo", fingerprint: "test", name: "diagram.png", mimeType: "image/png", source: "uploaded", previewUrl: "blob:photo", status, progress, error: status === "failed" ? "Не удалось загрузить файл." : undefined }],
       duplicateNotice: false, dismissDuplicateNotice: vi.fn(),
       networkNotice: false, dismissNetworkNotice: vi.fn(),
       add: vi.fn(), remove, retry, clear: vi.fn(), error: null, blocked: status !== "ready", ids: status === "ready" ? ["photo"] : [],

@@ -1,18 +1,23 @@
 import { render, screen } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-// Original public-template fixtures explicitly use the development view.
-vi.mock("@/features/release/server", () => ({ getRequestReleaseState: async () => ({ view: "dev", canSwitch: true, localSimulation: false }) }));
-vi.mock("@/features/release/ReleaseViewProvider", () => ({ useReleaseView: () => ({ view: "dev", canSwitch: true, localSimulation: false, enabled: () => true, allowsPath: () => true, switching: false, error: false, changeView: async () => true }) }));
+vi.mock("@/features/release/server", () => ({ getRequestReleaseState: async () => ({ view: request.view, canSwitch: false, localSimulation: false }) }));
+vi.mock("@/features/release/ReleaseViewProvider", async () => {
+  const { featureEnabled, allowsReleasePath } = await import("@/features/release/policy");
+  return { useReleaseView: () => ({ view: request.view, canSwitch: false, localSimulation: false,
+    enabled: (id: string) => featureEnabled(id, request.view), allowsPath: (path: string) => allowsReleasePath(path, request.view),
+    switching: false, error: false, changeView: async () => false }) };
+});
 import { getDictionary } from "@/i18n/dictionary";
 import { LocaleProvider } from "@/i18n/LocaleProvider";
 
-const request = vi.hoisted(() => ({ locale: "ru" as "ru" | "en" }));
+const request = vi.hoisted(() => ({ locale: "ru" as "ru" | "en", view: "prod" as "prod" | "dev" }));
 vi.mock("server-only", () => ({}));
 vi.mock("next/server", () => ({ connection: vi.fn(async () => undefined) }));
 vi.mock("next/navigation", () => ({ useRouter: vi.fn(), usePathname: () => "/", useSearchParams: () => new URLSearchParams() }));
 vi.mock("@/i18n/server", () => ({
   getRequestLocale: async () => request.locale,
   getRequestDictionary: async () => getDictionary(request.locale),
+  notFound: () => { throw new Error("blocked404"); },
   redirectLocalized: vi.fn((path, locale) => { throw new Error(`REDIRECT:/${locale}${path}`); }),
 }));
 vi.mock("@/features/session/home-entry.server", () => ({ loadHomeEntrySession: vi.fn() }));
@@ -24,7 +29,7 @@ import HomePage, { generateMetadata } from "./page";
 import { publicSitemap } from "@/i18n/seo";
 
 beforeEach(() => { vi.mocked(loadHomeEntrySession).mockResolvedValue("guest"); });
-afterEach(() => { request.locale = "ru"; vi.clearAllMocks(); });
+afterEach(() => { request.locale = "ru"; request.view = "prod"; vi.clearAllMocks(); });
 
 describe("homepage retirement boundary", () => {
   it("sends a verified signed-in visitor straight to the localized workspace", async () => {
@@ -39,10 +44,14 @@ describe("homepage retirement boundary", () => {
     expect(screen.getByTestId("home-session-recovery")).toBeInTheDocument();
     expect(redirectLocalized).not.toHaveBeenCalled();
   });
-  it("renders Russian content and localized links", async () => {
+  it.each(["prod", "dev"] as const)("renders the current Russian landing for a guest in %s", async view => {
     request.locale = "ru";
+    request.view = view;
     const { container } = render(await HomePage());
-    expect(container.querySelector('h1')).not.toBeNull();expect(container.querySelector('main')?.textContent).toMatch(/[А-Яа-яЁё]/);expect([...container.querySelectorAll('a[href]')].filter(link=>link.getAttribute('href')?.startsWith('/en/'))).toHaveLength(0);});
+    expect(container.querySelector('h1')).not.toBeNull();expect(container.querySelector('main')?.textContent).toMatch(/[А-Яа-яЁё]/);expect([...container.querySelectorAll('a[href]')].filter(link=>link.getAttribute('href')?.startsWith('/en/'))).toHaveLength(0);
+    expect(container.querySelector('[data-hero-text-effect="fade"]')).not.toBeNull();
+    expect(screen.queryByText('Где идеи обретают форму')).toBeNull();
+  });
 
   it("serves the rebuilt homepage only on the English route", async () => {
     request.locale = "en";

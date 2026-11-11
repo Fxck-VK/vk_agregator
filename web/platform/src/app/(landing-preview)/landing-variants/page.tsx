@@ -10,6 +10,7 @@ export default async function LandingVariantsPage() {
     <div className={styles.cards}>
       <Link href="/landing-variants/original"><h2>{copy.original}</h2><p>{copy.originalDescription}</p><span>{copy.open}</span></Link>
       <Link href="/landing-variants/friend"><h2>{copy.friend}</h2><p>{copy.friendDescription}</p><span>{copy.open}</span></Link>
+      <Link href="/landing-variants/third"><h2>{copy.third}</h2><p>{copy.thirdDescription}</p><span>{copy.open}</span></Link>
     </div>
     <p><Link href="/app">{copy.back}</Link></p>
   </main>;

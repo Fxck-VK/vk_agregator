@@ -1,0 +1,13 @@
+.animation { position: relative; align-self: center; min-inline-size: 0; block-size: 360px; pointer-events: none; color: white; }
+.single { position: absolute; inset: 0; display: flex; align-items: center; }
+.single p { margin: 0; font-size: clamp(24px, 2.3vw, 34px); font-weight: 400; line-height: 1.2; letter-spacing: -.025em; text-wrap: balance; }
+.fade { animation: phraseFade var(--phrase-duration) ease-in-out both; }
+.words > span { display: inline-block; animation: wordReveal 650ms cubic-bezier(.2,.7,.2,1) both; animation-delay: calc(var(--word-index) * 140ms); }
+.phrases { display: flex; flex-direction: column; justify-content: center; gap: 14px; block-size: 100%; }
+.phrases p { margin: 0; color: #ffffff40; font-size: clamp(20px, 2vw, 30px); font-weight: 400; line-height: 1.15; letter-spacing: -.025em; text-wrap: balance; transition: color 850ms ease, text-shadow 850ms ease; }
+.phrases p[data-active="true"] { color: #fff; text-shadow: 0 0 24px color-mix(in srgb, var(--landing-accent) 30%, transparent); }
+.animation[data-running="false"] * { animation-play-state: paused; }
+@keyframes phraseFade { 0% { opacity: 0; filter: blur(10px); translate: 0 8px; } 18%, 82% { opacity: 1; filter: blur(0); translate: 0 0; } 100% { opacity: 0; filter: blur(8px); translate: 0 -5px; } }
+@keyframes wordReveal { from { opacity: 0; clip-path: inset(100% 0 0); translate: 0 8px; } to { opacity: 1; clip-path: inset(0); translate: 0 0; } }
+@media (width <= 1050px) { .animation { display: none; } }
+@media (prefers-reduced-motion: reduce) { .animation * { animation: none !important; transition: none !important; } }

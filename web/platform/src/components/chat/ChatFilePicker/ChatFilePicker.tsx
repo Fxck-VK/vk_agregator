@@ -42,12 +42,12 @@ export type ChatMediaAttachment = {
 };
 
 type ChatFilePickerProps = {
+  accept: string;
   initialSource: Exclude<ChatFileSource, "all">;
   onClose: () => void;
   onSelect: (attachment: ChatMediaAttachment) => void;
 };
 
-const acceptedMediaTypes = "image/*,video/*,audio/*,application/pdf";
 
 export function attachmentFromFile(file: File): ChatMediaAttachment {
   return {
@@ -59,7 +59,7 @@ export function attachmentFromFile(file: File): ChatMediaAttachment {
   };
 }
 
-export function ChatFilePicker({ initialSource, onClose, onSelect }: Readonly<ChatFilePickerProps>) {
+export function ChatFilePicker({ accept, initialSource, onClose, onSelect }: Readonly<ChatFilePickerProps>) {
   const t = useDictionary();
   const cache = useOptionalWorkspaceDataCache();
   const [source, setSource] = useState<ChatFileSource>(initialSource);
@@ -138,6 +138,7 @@ export function ChatFilePicker({ initialSource, onClose, onSelect }: Readonly<Ch
     previewQueueRef.current.enqueue(job);
   }, [createPreviewQueue]);
   const selectArtifact = (job: ImageJob, artifact: ImageJobResult["artifacts"][number]) => {
+    if (!accept.split(",").includes(artifact.mime_type)) return;
     onSelect({
       id: artifact.id,
       mimeType: artifact.mime_type,
@@ -234,7 +235,10 @@ export function ChatFilePicker({ initialSource, onClose, onSelect }: Readonly<Ch
                     job={job}
                     onRequestResult={requestResult}
                     onRetryJob={() => undefined}
-                    result={resultsByJobID[job.id] ?? null}
+                    result={resultsByJobID[job.id] ? {
+                      ...resultsByJobID[job.id],
+                      artifacts: resultsByJobID[job.id].artifacts.filter(artifact => accept.split(",").includes(artifact.mime_type)),
+                    } : null}
                     resultState={resultStatesByJobID[job.id] ?? "idle"}
                     selectionAction={{ label: t.conversations.mediaLibraryChoose, onSelect: selectArtifact }}
                   />
@@ -255,7 +259,7 @@ export function ChatFilePicker({ initialSource, onClose, onSelect }: Readonly<Ch
             {t.conversations.mediaLibraryUpload}
           </Button>
           <input
-            accept={acceptedMediaTypes}
+        accept={accept}
             aria-label={t.conversations.mediaLibraryUpload}
             className={styles.fileInput}
             onChange={selectFile}

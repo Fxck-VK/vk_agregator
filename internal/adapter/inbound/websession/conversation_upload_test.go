@@ -244,3 +244,47 @@ type readCloser struct{ *bytes.Buffer }
 
 func (readCloser) Close() error              { return nil }
 func ioNopCloser(b *bytes.Buffer) readCloser { return readCloser{b} }
+
+// The same catalogue that drives the browser must describe the upload admission.
+func TestConversationUploadPolicyMatchesCatalog(t *testing.T) {
+	h, conversations, sessions, jobs, _ := newWebConversationMessageTestHandler(t)
+	images, _, _ := newImageJobTestHandler(t)
+	h.cfg.ImageModels, h.deps.ImagePricing = images.cfg.ImageModels, images.deps.ImagePricing
+	store := &webInputStoreStub{}
+	h.deps.InputArtifacts, h.deps.InputObjects = store, store
+	owner := uuid.New()
+	conv := seedWebMessageConversation(t, conversations, owner, domain.ConversationSourceWeb)
+	checked := 0
+	for _, model := range h.workspaceModels().Items {
+		for _, op := range model.Operations {
+			if !op.Enabled || op.Kind != "image" && op.Kind != "video" && op.Kind != "text" {
+				continue
+			}
+			t.Run(model.ID+"/"+op.ID, func(t *testing.T) {
+				enabled := op.Inputs.Images.Enabled
+				if h.imageReferencesEnabled(model.ID) != enabled {
+					t.Fatal("catalogue and upload admission disagree")
+				}
+				var body bytes.Buffer
+				writer := multipart.NewWriter(&body)
+				part, _ := writer.CreateFormFile("file", "synthetic.png")
+				// A forged extension must never bypass server inspection of the bytes.
+				_, _ = part.Write([]byte("not an image"))
+				_ = writer.Close()
+				req := safeWebConversationMessageRequest(t, sessions, owner, conv.ID, uuid.New(), "")
+				req.URL.Path, req.URL.RawQuery = "/web/v1/input-artifacts", "model_id="+model.ID
+				req.Body, req.ContentLength = ioNopCloser(&body), int64(body.Len())
+				req.Header.Set("Content-Type", writer.FormDataContentType())
+				rec := httptest.NewRecorder()
+				h.Routes().ServeHTTP(rec, req)
+				if rec.Code != http.StatusBadRequest || store.saves != 0 || len(jobs.inputs) != 0 {
+					t.Fatalf("invalid upload: status %d saves %d jobs %d", rec.Code, store.saves, len(jobs.inputs))
+				}
+			})
+			checked++
+		}
+	}
+	if checked == 0 {
+		t.Fatal("no catalogue operations checked")
+	}
+}

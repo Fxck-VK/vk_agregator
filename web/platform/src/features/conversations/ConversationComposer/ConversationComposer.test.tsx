@@ -49,7 +49,7 @@ describe("ConversationComposer", () => {
     fireEvent.click(screen.getByRole("button", { name: ru.conversations.composerMediaUpload }));
     expect(screen.getByRole("menuitem", { name: ru.conversations.composerMediaUploadFile })).toBeVisible();
     expect(textarea).toHaveValue("Опиши изменения");
-    rendered.rerender(<ConversationComposer {...chatScrollProps} generationModel={{ ...referenceModel, supports_reference_image: false }} onSubmit={vi.fn()} />);
+    rendered.rerender(<ConversationComposer {...chatScrollProps} generationModel={{ ...referenceModel, operations: referenceModel.operations.map(op => ({ ...op, inputs: { ...op.inputs, images: { ...op.inputs.images, enabled: false } } })) }} onSubmit={vi.fn()} />);
     expect(screen.queryByRole("button", { name: ru.conversations.composerMediaUpload })).toBeNull();
   });
 

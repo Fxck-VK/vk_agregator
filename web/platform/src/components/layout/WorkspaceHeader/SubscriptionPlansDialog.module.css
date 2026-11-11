@@ -214,7 +214,7 @@
 
 .popularPlan {
   overflow: visible;
-  border-color: color-mix(in srgb, var(--color-brand-pink) 70%, var(--color-brand-blue));
+  border-color: var(--subscription-plan-border-highlight, color-mix(in srgb, var(--color-brand-pink) 70%, var(--color-brand-blue)));
   box-shadow: 0 0 1.75rem color-mix(in srgb, var(--color-accent) 18%, transparent);
 }
 

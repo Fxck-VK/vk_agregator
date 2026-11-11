@@ -8,12 +8,11 @@ import { useEffect, useRef, useState } from "react";
 
 import { assetPaths } from "@/assets/asset-paths";
 import { AssetIcon } from "@/components/icons/AssetIcon";
-import { CreditAmount } from "@/components/ui/CreditAmount/CreditAmount";
 import { ModalBackdrop } from "@/components/ui/ModalBackdrop/ModalBackdrop";
 import { ModalCloseButton } from "@/components/ui/ModalCloseButton/ModalCloseButton";
 import { ScrollArea } from "@/components/ui/ScrollArea/ScrollArea";
 
-import { subscriptionPlanDialogValues, subscriptionPlanDiscountPercent, subscriptionPlanPreview, type SubscriptionPreviewId } from "@/features/pricing/subscription-preview";
+import { subscriptionPlanPreview } from "@/features/pricing/subscription-preview";
 import { formatPaymentPrice } from "@/features/payments/payments";
 import { useSubscriptionCheckout } from "@/features/subscriptions/use-subscription-checkout";
 import { useReleaseView } from "@/features/release/ReleaseViewProvider";
@@ -21,67 +20,13 @@ import { useOptionalWorkspaceAccount } from "@/features/account/WorkspaceAccount
 import { StateNotice } from "@/components/ui/AsyncState/AsyncState";
 import { PaymentStatus } from "@/features/payments/PaymentStatus";
 import { subscriptionCopy } from "@/features/subscriptions/copy";
+import { SubscriptionPlanCards } from "./SubscriptionPlanCards";
 import { PromoCodeDialog } from "./PromoCodeDialog";
 import styles from "./SubscriptionPlansDialog.module.css";
 
 type SubscriptionPlansDialogProps = {
   onClose: () => void;
 };
-
-type Plan = {
-  id: SubscriptionPreviewId;
-  name: string;
-  price: string;
-  period: string;
-  previousPrice?: string;
-  chargedAmount?: number;
-  description: string;
-  creditPeriod: string;
-  credits: string;
-  features: {
-    icon: "imageGeneration" | "videoGeneration" | "aiModels" | "presentationGeneration";
-    text: string;
-  }[];
-  popular?: boolean;
-};
-
-function PlanCard({ plan, onActivate, disabled, busy }: { plan: Plan; onActivate: (id: SubscriptionPreviewId) => void; disabled: boolean; busy: boolean }) {
-  const locale = useLocale();
-  const msg = useMessages();
-  const percent = subscriptionPlanDiscountPercent(plan.id, plan.previousPrice, plan.chargedAmount);
-  const discount = percent === null ? undefined : `−${percent}%`;
-  return (
-    <article className={`${styles.planCard} ${plan.popular ? styles.popularPlan : ""}`}>
-      {plan.popular ? <span className={styles.popularLabel}>{msg("subscriptionPlansDialog.popular")}</span> : null}
-      {discount ? <span className={styles.discount}>{discount}</span> : null}
-
-      <div className={styles.planSummary}>
-        <h3>{plan.name}</h3>
-        <p className={styles.price}>
-          <strong>{plan.price}</strong> <span>{plan.period}</span>{" "}
-          {plan.previousPrice ? <del>{plan.previousPrice}</del> : null}
-        </p>
-        <p className={styles.description}>{plan.description}</p>
-        <button className={styles.subscribeButton} disabled={disabled} onClick={() => onActivate(plan.id)} type="button">
-          {busy ? subscriptionCopy[locale].pending : msg("subscriptionPlansDialog.activateSubscription")}</button>
-      </div>
-
-      <div className={styles.creditRow}>
-        <span>{plan.creditPeriod}:</span>
-        <strong><CreditAmount className={styles.creditAmount} value={Number(plan.credits)} /></strong>
-      </div>
-
-      <ul className={styles.featureList}>
-        {plan.features.map((feature) => (
-          <li key={feature.icon}>
-            <AssetIcon className={styles.featureIcon} iconName={feature.icon} source={assetPaths.icons.plans[feature.icon]} />
-            <span>{feature.text}</span>
-          </li>
-        ))}
-      </ul>
-    </article>
-  );
-}
 
 export function SubscriptionPlansDialog(props: SubscriptionPlansDialogProps) {
   const account = useOptionalWorkspaceAccount();
@@ -98,72 +43,6 @@ function SubscriptionPlansContent({ onClose }: SubscriptionPlansDialogProps) {
   const locale = useLocale(), t = subscriptionCopy[locale];
   const trial = subscriptionPlanPreview("lite"), followingTrial = subscriptionPlanPreview(trial.next_plan_code);
   const liteVisible = !account || !state.pending && !state.failed && state.data?.trial_used === false;
-  const plans: Plan[] = [
-    {
-      ...subscriptionPlanDialogValues("lite"),
-      period: msg("subscriptionPlansDialog.week"),
-      description: msg("subscriptionPlansDialog.trialPlan"),
-      creditPeriod: msg("subscriptionPlansDialog.oneTime"),
-      features: [
-        { icon: "imageGeneration", text: msg("subscriptionPlansDialog.upTo13ImageGenerationsNanoBanana") },
-        { icon: "videoGeneration", text: msg("subscriptionPlansDialog.upTo2VideoGenerationsVideoGenerator") },
-        { icon: "aiModels", text: msg("subscriptionPlansDialog.accessToPopularAiModelsChatgptGemini") },
-      ],
-    },
-    {
-      ...subscriptionPlanDialogValues("start"),
-      period: msg("subscriptionPlansDialog.month"),
-      previousPrice: "632",
-      description: msg("subscriptionPlansDialog.aGreatPlaceToStart"),
-      creditPeriod: msg("subscriptionPlansDialog.monthly"),
-      features: [
-        { icon: "imageGeneration", text: msg("subscriptionPlansDialog.upTo41ImageGenerationsWithPopular") },
-        { icon: "videoGeneration", text: msg("subscriptionPlansDialog.upTo15VideoGenerations") },
-        { icon: "aiModels", text: msg("subscriptionPlansDialog.accessToChatgptGeminiClaudeSunoKimi") },
-        { icon: "presentationGeneration", text: msg("subscriptionPlansDialog.4PresentationGenerations") },
-      ],
-    },
-    {
-      ...subscriptionPlanDialogValues("pro"),
-      period: msg("subscriptionPlansDialog.month"),
-      previousPrice: "1200",
-      description: msg("subscriptionPlansDialog.aBalancedChoice"),
-      creditPeriod: msg("subscriptionPlansDialog.monthly"),
-      features: [
-        { icon: "imageGeneration", text: msg("subscriptionPlansDialog.upTo75ImageGenerationsWithPopular") },
-        { icon: "videoGeneration", text: msg("subscriptionPlansDialog.upTo15VideoGenerations") },
-        { icon: "aiModels", text: msg("subscriptionPlansDialog.accessToAllCoreAiModels") },
-        { icon: "presentationGeneration", text: msg("subscriptionPlansDialog.7PresentationGenerations") },
-      ],
-    },
-    {
-      ...subscriptionPlanDialogValues("ultima"),
-      period: msg("subscriptionPlansDialog.month"),
-      previousPrice: "2600",
-      description: msg("subscriptionPlansDialog.morePossibilities"),
-      creditPeriod: msg("subscriptionPlansDialog.monthly"),
-      features: [
-        { icon: "imageGeneration", text: msg("subscriptionPlansDialog.upTo160ImageGenerations") },
-        { icon: "videoGeneration", text: msg("subscriptionPlansDialog.upTo32VideoGenerations") },
-        { icon: "aiModels", text: msg("subscriptionPlansDialog.extendedAiModelAccess") },
-        { icon: "presentationGeneration", text: msg("subscriptionPlansDialog.16PresentationGenerations") },
-      ],
-      popular: true,
-    },
-    {
-      ...subscriptionPlanDialogValues("elite"),
-      period: msg("subscriptionPlansDialog.month"),
-      previousPrice: "7000",
-      description: msg("subscriptionPlansDialog.maximumValue"),
-      creditPeriod: msg("subscriptionPlansDialog.monthly"),
-      features: [
-        { icon: "imageGeneration", text: msg("subscriptionPlansDialog.upTo408ImageGenerations") },
-        { icon: "videoGeneration", text: msg("subscriptionPlansDialog.upTo62VideoGenerations") },
-        { icon: "aiModels", text: msg("subscriptionPlansDialog.maximumLimitsAcrossAllAiModels") },
-        { icon: "presentationGeneration", text: msg("subscriptionPlansDialog.41PresentationGenerations") },
-      ],
-    },
-  ];
   const teamFeatures = [
     [msg("subscriptionPlansDialog.customLimits"), msg("subscriptionPlansDialog.flexibleSettingsForYourNeeds"), "customLimits"],
     [msg("subscriptionPlansDialog.prioritySpeed"), msg("subscriptionPlansDialog.dedicatedCapacityWithoutQueues"), "prioritySpeed"],
@@ -217,13 +96,10 @@ function SubscriptionPlansContent({ onClose }: SubscriptionPlansDialogProps) {
             </header>
 
             <div className={styles.plansContent}>
-              <div className={styles.planGrid}>
-                {plans.filter(plan => plan.id !== "lite" || liteVisible).map(plan => <PlanCard
-                  key={plan.id} plan={{ ...plan, price: checkout.displayAmount(plan.id) === subscriptionPlanPreview(plan.id).amount ? plan.price : formatPaymentPrice(checkout.displayAmount(plan.id), locale), chargedAmount: checkout.displayAmount(plan.id), previousPrice: plan.previousPrice ?? (checkout.displayAmount(plan.id) !== subscriptionPlanPreview(plan.id).amount ? formatPaymentPrice(subscriptionPlanPreview(plan.id).amount, locale) : undefined) }} busy={checkout.busyPlanID === plan.id}
-                  disabled={Boolean(account) && (!checkout.available(plan.id) || checkout.busy || checkout.paymentID !== null)}
-                  onActivate={id => { if (!account) router.push("/login"); else void checkout.purchase(id); }}
-                />)}
-
+              <SubscriptionPlanCards liteVisible={liteVisible} amountForPlan={checkout.displayAmount}
+                busyPlanID={checkout.busyPlanID}
+                disabledPlan={id => Boolean(account) && (!checkout.available(id) || checkout.busy || checkout.paymentID !== null)}
+                onActivate={id => { if (!account) router.push("/login"); else void checkout.purchase(id); }}>
                 {enabled("teams") ? <article className={`${styles.planCard} ${styles.teamPlan}`}>
                   <div className={styles.planSummary}>
                     <h3>{msg("subscriptionPlansDialog.teamPlan")}</h3>
@@ -239,7 +115,7 @@ function SubscriptionPlansContent({ onClose }: SubscriptionPlansDialogProps) {
                     ))}
                   </ul>
                 </article> : null}
-              </div>
+              </SubscriptionPlanCards>
 
               <footer className={styles.dialogFooter}>
                 {state.data?.recurring_available ? <label className={styles.renewalChoice}>

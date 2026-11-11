@@ -1,0 +1,27 @@
+.carousel { --original-width: 72%; --original-gap: clamp(16px, 2vw, 32px); display: flex; flex: 1; flex-direction: column; min-block-size: 0; min-inline-size: 0; }
+.viewport { flex: 1; min-block-size: 0; overflow: hidden; touch-action: pan-y pinch-zoom; user-select: none; }
+.track { display: flex; align-items: center; gap: var(--original-gap); inline-size: 100%; block-size: 100%; transform: translate3d(calc((100% - var(--original-width)) / 2 - var(--original-position) * (var(--original-width) + var(--original-gap)) + var(--original-drag)), 0, 0); }
+.track[data-animate="true"] { transition: transform 650ms cubic-bezier(.22,.61,.36,1); }
+.slide { flex: 0 0 var(--original-width); inline-size: var(--original-width); block-size: 100%; min-inline-size: 0; min-block-size: 0; }
+.surface { position: relative; isolation: isolate; inline-size: 100%; block-size: 100%; overflow: hidden; border-radius: 16px; color: white; background: var(--landing-ink); transform: scale(.9); transition: transform 650ms cubic-bezier(.22,.61,.36,1); }
+.slide[data-active="true"] .surface { transform: scale(1); }
+.carousel[data-original-animate="false"] .surface { transition: none; }
+.slide[data-active="false"] .surface { pointer-events: none; }
+.surface > img { object-fit: cover; }
+.shade { position: absolute; inset: 0; background: linear-gradient(0deg, #000a, #0002 50%, transparent 75%); pointer-events: none; }
+.copy { position: absolute; inset: auto 32px 32px; max-inline-size: 460px; }
+.copy h3 { margin: 0 0 10px; font-size: clamp(24px, 2.3vw, 36px); line-height: 1.12; text-wrap: balance; }
+.copy p { margin: 0 0 20px; font-size: 14px; line-height: 1.5; }
+.dots { display: flex; flex: 0 0 30px; align-items: end; justify-content: center; gap: 4px; }
+.dots button { display: grid; place-items: center; inline-size: 28px; block-size: 24px; padding: 0; border: 0; background: transparent; }
+.dots button::after { content: ""; inline-size: 7px; block-size: 7px; border-radius: 9px; background: var(--landing-muted-light); transition: inline-size 220ms, background 220ms; }
+.dots button[aria-pressed="true"]::after { inline-size: 24px; background: var(--landing-ink); }
+@media (width < 48rem) {
+  .carousel { --original-width: 82%; --original-gap: 8px; }
+  .surface { transform: scale(.94); }
+  .copy { inset: auto 20px 26px; }
+  .copy h3 { font-size: 25px; }
+  .copy p { margin-block-end: 16px; font-size: 13px; line-height: 1.4; }
+  .copy a { min-block-size: 38px; padding: 8px 16px; font-size: 13px; }
+}
+@media (prefers-reduced-motion: reduce) { .track[data-animate="true"], .surface, .dots button::after { transition: none; } }

@@ -4,9 +4,11 @@ import { render, screen } from '@testing-library/react';
 const state = vi.hoisted(() => ({ view: 'dev', canSwitch: true, localSimulation: true }));
 vi.mock('server-only', () => ({}));
 vi.mock('@/features/release/server', () => ({ getRequestReleaseState: async () => state }));
-vi.mock('@/i18n/server', () => ({ notFound: () => { throw new Error('NOT_FOUND'); } }));
-vi.mock('@/content/templates/render', () => ({ renderContentPage: vi.fn(async () => <main>Исходный SEO-шаблон</main>) }));
+vi.mock('@/i18n/server', () => ({ getRequestLocale: async () => 'ru', notFound: () => { throw new Error('NOT_FOUND'); } }));
+vi.mock('@/features/public-home/PublicHome', () => ({ PublicHome: () => <main>Сохранённая исходная главная</main> }));
 vi.mock('./friend/PublicHome', () => ({ PublicHome: ({ copy }: { copy: { hero: { title: string } } }) => <main>{copy.hero.title}</main> }));
+vi.mock('./third/PublicHome', () => ({ PublicHome: ({ copy }: { copy: { hero: { title: string } } }) => <main>{copy.hero.title}</main> }));
+import '@/content/templates/catalog';
 import { assertLandingPreviewAccess, renderLandingVariant } from './preview.server';
 
 beforeEach(() => Object.assign(state, { view: 'dev', canSwitch: true, localSimulation: true }));
@@ -19,6 +21,7 @@ it.each([
   Object.assign(state, value);
   await expect(assertLandingPreviewAccess()).rejects.toThrow('NOT_FOUND');
   await expect(renderLandingVariant('friend')).rejects.toThrow('NOT_FOUND');
+  await expect(renderLandingVariant('third')).rejects.toThrow('NOT_FOUND');
 });
 
 it('allows protected DEV without requiring local simulation', async () => {
@@ -26,9 +29,9 @@ it('allows protected DEV without requiring local simulation', async () => {
   await expect(assertLandingPreviewAccess()).resolves.toBeUndefined();
 });
 
-it('uses the existing SEO renderer for the original variant', async () => {
+it('keeps the original variant independent of the promoted canonical renderer', async () => {
   render(await renderLandingVariant('original'));
-  expect(screen.getByText('Исходный SEO-шаблон')).toBeInTheDocument();
+  expect(screen.getByText('Сохранённая исходная главная')).toBeInTheDocument();
 });
 
 it('renders the separately preserved Russian friend variant', async () => {
@@ -36,8 +39,17 @@ it('renders the separately preserved Russian friend variant', async () => {
   expect(screen.getByRole('main')).toHaveTextContent(/платформа/i);
 });
 
-it('does not invent a third variant or accept arbitrary import paths', async () => {
-  for (const id of ['third', '../public-home', '']) {
+it('renders the isolated third variant with unchanged Russian T01 content', async () => {
+  expect(await renderLandingVariant('third')).toMatchObject({
+    props: { data: { homeEn: {
+      hero: { title: expect.stringMatching(/Творческая платформа/) },
+      suite: { categories: [expect.objectContaining({ image: 'product-shots.webp' }), ...Array(4).fill(expect.anything())] },
+    } } },
+  });
+});
+
+it('does not accept arbitrary import paths', async () => {
+  for (const id of ['../public-home', '']) {
     await expect(renderLandingVariant(id)).rejects.toThrow('NOT_FOUND');
   }
 });

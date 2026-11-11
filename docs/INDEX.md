@@ -2,6 +2,13 @@
 
 Preserved original/friend homepage variants and local DEV integration:
 [landing variants](../web/platform/docs/landing-variants.md).
+Separate third landing with original layout and contributor photos:
+[implementation checks](superpowers/plans/2026-11-06-third-landing.md).
+Third-landing continuous model strip: [interaction and responsive checks](superpowers/plans/2026-11-07-model-marquee.md).
+Third-landing creative suite sidebar: [layout and interaction checks](superpowers/plans/2026-11-07-suite-sidebar.md).
+Third-landing text-only hero effects, controlled from the development flask:
+[scope and verification](superpowers/plans/2026-11-07-hero-animation-variants.md).
+Third-landing asymmetric workflow cards: [scope and checks](superpowers/plans/2026-11-07-workflow-bento.md).
 
 Live YooKassa merchant preparation: [merchant modes, NPD receipts and go-live boundaries](../docs/runbooks/BILLING.md#live-website-merchant-local-implementation-2026-11-02), [approved design](superpowers/specs/2026-11-02-live-merchant-design.md), [local checks](superpowers/plans/2026-11-02-live-merchant.md). Credentials validated read-only; no real payment or deployment.
 
@@ -240,5 +247,29 @@ user explicitly asks for history, regression archaeology, or an old decision.
 Web referral rewards: [implementation and verification](superpowers/plans/2026-10-31-web-referral-rewards.md); [financial/operational contract](../docs/runbooks/WEB_REFERRALS.md). Local implementation; no release requested.
 
 Account purchase/star history: [read contract](../docs/runbooks/WEB_ACCOUNT_HISTORY.md); [implementation plan](superpowers/plans/2026-10-31-profile-billing-history.md). Local account-owned, paginated profile history; no financial writes or deployment.
+
+Shared workspace attachment admission: [implementation and verification](superpowers/plans/2026-11-08-attachment-capabilities.md), [UI contract](../web/platform/docs/ui-catalog.md#input). Existing admitted input transports only; no provider or release changes.
+
+Canonical T01 home now reuses the refined third landing: [local promotion and
+verification](superpowers/plans/2026-11-08-promote-third-home.md). Original and
+friend versions remain separate guarded previews; publication/noindex and account
+routing are preserved. No release requested.
+
+Creative-suite photographs now retain their complete native composition:
+[source proportions and original-file delivery](superpowers/plans/2026-11-09-suite-full-photos.md).
+
+Canonical landing tariff cards reuse the workspace presentation:
+[shared subscription cards](superpowers/plans/2026-11-09-landing-subscription-cards.md).
+
+Canonical landing colours use a scoped semantic palette; layout, photographs
+and the brand gradient are preserved:
+[palette consolidation and verification](superpowers/plans/2026-11-09-unified-landing-palette.md).
+
+Сверка результатов проверки моделей от 21 октября с текущим PROD-допуском:
+[отчёт от 8 ноября](research/model-admission-reconciliation-2026-11-08.md),
+[полная матрица JSON](research/model-admission-reconciliation-2026-11-08.json),
+[CSV](research/model-admission-reconciliation-2026-11-08.csv). Поимённо сверены
+59 моделей; runtime и допуски не изменены. Источник не содержит имён ещё
+24 видео без принятого тестового Job; приложение media-models-qa.json отсутствует.
 
 First-tariff percentage promotions: [billing contract](../docs/runbooks/BILLING.md#first-purchase-tariff-promotions), [admin/assistant tooling](../docs/OPERATOR_UI.md#promotion-management-and-assistant-http-tooling), [implementation plan](superpowers/plans/2026-10-31-subscription-promotions.md). Local only; no live campaign is seeded.

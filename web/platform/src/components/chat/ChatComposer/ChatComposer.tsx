@@ -26,7 +26,6 @@ import styles from "./ChatComposer.module.css";
 export type ChatComposerVariant = "conversation" | "hero" | "newChat" | "workspace";
 
 type ChatComposerProps = {
-  attachmentsEnabled?: boolean;
   attachmentController?: ChatAttachments;
   additionalControls?: ReactNode;
   canSubmit: boolean;
@@ -54,7 +53,6 @@ type ChatComposerProps = {
 const expandedVariants = new Set<ChatComposerVariant>(["hero", "workspace"]);
 
 export function ChatComposer({
-  attachmentsEnabled = true,
   attachmentController,
   additionalControls,
   canSubmit,
@@ -83,19 +81,21 @@ export function ChatComposer({
   const isExpanded = expandedVariants.has(variant);
   const fallbackAttachments = useChatAttachments();
   const attachmentState = attachmentController ?? fallbackAttachments;
+  const attachmentsEnabled = attachmentState.enabled;
   const { items: attachments, add, remove, retry, error, blocked } = attachmentState;
   const [pickerSource, setPickerSource] = useState<Exclude<ChatFileSource, "all"> | null>(null);
+  if (!attachmentsEnabled && pickerSource !== null) setPickerSource(null);
   const inputSurfaceRef = useRef<HTMLDivElement>(null);
   const [preview, setPreview] = useState<{ id: string; trigger: HTMLButtonElement } | null>(null);
   const previewItems = attachments.flatMap(item => item.previewUrl
     ? [{ id: item.id, src: item.previewUrl, alt: item.name }] : []);
   const previewIndex = previewItems.findIndex(item => item.id === preview?.id);
   const selectNativeFile = useCallback((files: File[]) => {
-    if (disabled) return;
+    if (disabled || !attachmentsEnabled) return;
     add(files.map(attachmentFromFile));
     onFilesSelected?.(files);
-  }, [add, disabled, onFilesSelected]);
-  useWorkspaceFileDrop(selectNativeFile, !disabled);
+  }, [add, disabled, attachmentsEnabled, onFilesSelected]);
+  useWorkspaceFileDrop(selectNativeFile, attachmentsEnabled && !disabled, attachmentState.accept);
   const send = () => {
     if (canSubmit && !disabled && !blocked) onSend();
   };
@@ -149,6 +149,8 @@ export function ChatComposer({
         <div className={styles.controls}>
           <div aria-label={msg("chatComposer.mediaAndSettings")} className={styles.leadingControls} role="group">
             {attachmentsEnabled && <ChatMediaMenu
+              accept={attachmentState.accept}
+              multiple={attachmentState.maxCount > 1}
               disabled={disabled}
               generatedHref={generatedMediaHref}
               labels={{
@@ -186,8 +188,9 @@ export function ChatComposer({
       /> : null}
       {attachmentState.networkNotice ? <ChatUploadNetworkNotice anchorRef={inputSurfaceRef} onClose={attachmentState.dismissNetworkNotice} /> : null}
       {attachmentState.duplicateNotice ? <ChatAttachmentNotice onClose={attachmentState.dismissDuplicateNotice} /> : null}
-      {pickerSource === null ? null : (
+      {pickerSource === null || !attachmentsEnabled || disabled ? null : (
         <ChatFilePicker
+          accept={attachmentState.accept}
           initialSource={pickerSource}
           onClose={() => setPickerSource(null)}
           onSelect={(selectedAttachment) => {

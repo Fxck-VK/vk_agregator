@@ -21,12 +21,15 @@ real-money credentials. NPD manual receipt mode omits the provider fiscal receip
 body while keeping verified buyer contact, identity, idempotency and ledger
 checks. Operator NPD receipt issuance remains external/manual. No schema change.
 # Current implementation addendum: app surfaces and backend core
-Landing comparison is independent of the public content catalogue. The original
-T01/public-home renderer remains canonical; the incoming homepage from ba2001cd
+T01 uses the refined landing-variants/third renderer as the canonical homepage.
+The original public-home stays isolated in its guarded comparison route; the incoming homepage from ba2001cd
 uses isolated feature styles and frozen Russian data. Server-only comparison
 routes require the existing trusted DEV release state, reject PROD/direct access
 and retain noindex outside sitemap. Account routing and publication rules remain
-unchanged. See ../web/platform/docs/landing-variants.md. Local integration only.
+unchanged. A third preview isolates original-layout components/CSS, reads current
+Russian T01 copy and reuses contributor photos without modifying either source.
+See ../web/platform/docs/landing-variants.md. The promotion is local only;
+publication/noindex and account routing rules remain unchanged.
 
 Release views share web/platform/release/features.json between the platform and
 API. The existing DEV gateway authorizes a private preview preference; actual

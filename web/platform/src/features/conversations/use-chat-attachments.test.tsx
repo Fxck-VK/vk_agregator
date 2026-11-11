@@ -23,6 +23,48 @@ function modelWithTotalBytesLimit(limit: number): GenerationModel {
       : operation),
   };
 }
+
+it("uses catalogue per-file sizes and formats, retaining files on an incompatible switch", async () => {
+  vi.mocked(webBrowserMutation).mockResolvedValue(uploaded(9));
+  const { result, rerender } = renderHook(({ selected }) => useChatAttachments(selected), { initialProps: { selected: model } });
+  await act(async () => { await result.current.add([file()]); });
+  await waitFor(() => expect(result.current.blocked).toBe(false));
+  const restricted: GenerationModel = { ...model, operations: (model.operations as PublicOperation[]).map(op => ({ ...op, inputs: { ...op.inputs, images: { ...op.inputs.images, max_bytes: 8 } } })) };
+  rerender({ selected: restricted });
+  expect(result.current.items).toHaveLength(1);
+  expect(result.current.blocked).toBe(true);
+  expect(result.current.error).toContain("не подходят");
+  act(() => result.current.remove(result.current.items[0].id));
+  expect(result.current.blocked).toBe(false);
+  await act(async () => { await result.current.add([file("too large")]); });
+  expect(webBrowserMutation).toHaveBeenCalledTimes(1);
+  expect(result.current.items).toHaveLength(0);
+});
+
+it("ignores an asynchronous file selection after its model has changed", async () => {
+  let finish!: (buffer: ArrayBuffer) => void;
+  const digest = vi.spyOn(crypto.subtle, "digest").mockReturnValueOnce(new Promise(resolve => { finish = resolve; }));
+  const { result, rerender } = renderHook(({ selected }) => useChatAttachments(selected), { initialProps: { selected: model as GenerationModel | undefined } });
+  let selection: ReturnType<typeof result.current.add>;
+  act(() => { selection = result.current.add([file()]); });
+  await waitFor(() => expect(digest).toHaveBeenCalled());
+  rerender({ selected: undefined });
+  await act(async () => { finish(new ArrayBuffer(32)); await selection; });
+  expect(result.current.items).toEqual([]);
+  expect(result.current.blocked).toBe(false);
+  expect(webBrowserMutation).not.toHaveBeenCalled();
+});
+
+it("checks exact allowed counts before submission without rejecting an intermediate selection", async () => {
+  vi.mocked(webBrowserMutation).mockResolvedValue(uploaded());
+  const exact: GenerationModel = { ...model, operations: (model.operations as PublicOperation[]).map(op => ({ ...op, inputs: { ...op.inputs, images: { ...op.inputs.images, required: true, allowed_counts: [2] } } })) };
+  const { result } = renderHook(() => useChatAttachments(exact));
+  expect(result.current.blocked).toBe(true);
+  await act(async () => { await result.current.add([file()]); });
+  await waitFor(() => expect(result.current.items[0].status).toBe("ready"));
+  expect(result.current.blocked).toBe(true);
+  expect(result.current.error).toContain("Допустимое количество: 2");
+});
 beforeEach(() => { vi.stubGlobal("crypto", webcrypto); });
 afterEach(() => { cleanup(); vi.restoreAllMocks(); vi.resetAllMocks(); vi.unstubAllGlobals(); });
 
@@ -37,7 +79,7 @@ it("requires an uploaded Vidu reference, enforces seven files and blocks again a
   vi.mocked(webBrowserMutation).mockResolvedValue(Response.json({ artifact_id: id, mime_type: "image/png", size_bytes: 9, width: 128, height: 128 }));
   const { result } = renderHook(() => useChatAttachments(video));
   expect(result.current.blocked).toBe(true);
-  expect(result.current.error).toContain("от 1 до 7");
+  expect(result.current.error).toContain("Допустимое количество");
   await act(async () => { await result.current.add(Array.from({ length: 8 }, (_, i) => file(String(i)))); });
   expect(webBrowserMutation).not.toHaveBeenCalled();
   await act(async () => { await result.current.add([file()]); });

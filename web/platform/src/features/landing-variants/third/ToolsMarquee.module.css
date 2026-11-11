@@ -1,0 +1,11 @@
+.viewport { overflow: hidden; overscroll-behavior: auto; scrollbar-width: none; scroll-behavior: auto; touch-action: pan-y pinch-zoom; padding-block: 8px 12px; }
+.viewport::-webkit-scrollbar { display: none; }
+.track { display: flex; inline-size: max-content; }
+.group { display: flex; flex: 0 0 auto; gap: 16px; padding-inline-end: 16px; }
+/* The stable slot keeps hover active in the 6px vacated by a raised card. */
+.slot { display: flex; flex: 0 0 auto; }
+.viewport .card { user-select: none; -webkit-user-drag: none; transition: transform 220ms ease, box-shadow 220ms ease; }
+.slot:focus-within .card { transform: translateY(-6px); box-shadow: 0 8px 20px color-mix(in srgb, var(--landing-ink) 8%, transparent); }
+.card:focus-visible { outline: 2px solid var(--landing-accent); outline-offset: -3px; }
+@media (hover: hover) { .slot:hover .card { transform: translateY(-6px); box-shadow: 0 8px 20px color-mix(in srgb, var(--landing-ink) 8%, transparent); } }
+@media (prefers-reduced-motion: reduce) { .viewport .card { transition: none; } }

@@ -37,3 +37,4 @@
 .content p { margin: 0; font-size: 0.875rem; line-height: 1.5; }
 .content > button { cursor: pointer; }
 .note { color: var(--color-text-muted); }
+.pageChoice { display: grid; gap: .75rem; min-inline-size: 0; }

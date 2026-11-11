@@ -15,7 +15,8 @@ export type LandingNavigationItem = {
 };
 type Labels = { openMenu: string; closeMenu: string; navigation: string; search: string; login: string; signup: string };
 
-export function LandingHeader({ navigation, labels, onSearch, variant = "overlay", siteAction }: { navigation: readonly LandingNavigationItem[]; labels: Labels; onSearch: () => void; variant?: "overlay" | "editorial"; siteAction?: { readonly label: string; readonly href: string } }) {
+export function LandingHeader({ navigation, labels, onSearch, variant = "overlay", siteAction }: { navigation: readonly LandingNavigationItem[]; labels: Labels; onSearch?: () => void; variant?: "overlay" | "editorial"; siteAction?: { readonly label: string; readonly href: string } }) {
+  const hasNavigation = navigation.length > 0;
   const [open, setOpen] = useState<number | null>(null);
   const [mobileOpen, setMobileOpen] = useState(false);
   const header = useRef<HTMLElement>(null);
@@ -23,12 +24,12 @@ export function LandingHeader({ navigation, labels, onSearch, variant = "overlay
   const triggers = useRef<(HTMLButtonElement | null)[]>([]);
   const hoverOpened = useRef<number | null>(null);
   const close = () => { hoverOpened.current = null; setOpen(null); setMobileOpen(false); };
-  const search = () => { close(); onSearch(); };
+  const search = () => { close(); onSearch?.(); };
 
   useEffect(() => {
     const key = (event: KeyboardEvent) => {
       if (document.querySelector('[role="dialog"]')) return;
-      if ((event.ctrlKey || event.metaKey) && event.key.toLowerCase() === "k") { event.preventDefault(); setOpen(null); setMobileOpen(false); onSearch(); }
+      if (onSearch && (event.ctrlKey || event.metaKey) && event.key.toLowerCase() === "k") { event.preventDefault(); setOpen(null); setMobileOpen(false); onSearch(); }
       if (event.key === "Escape" && (mobileOpen || open !== null)) {
         event.preventDefault(); setOpen(null); setMobileOpen(false);
         (mobileOpen ? mobileTrigger.current : triggers.current[open!])?.focus();
@@ -40,7 +41,7 @@ export function LandingHeader({ navigation, labels, onSearch, variant = "overlay
   }, [mobileOpen, open, onSearch]);
 
   useEffect(() => {
-    if (!mobileOpen || !window.matchMedia?.("(max-width: 1050px)").matches) return;
+    if (!hasNavigation || !mobileOpen || !window.matchMedia?.("(max-width: 1050px)").matches) return;
     const previous = document.body.style.overflow;
     const background = Array.from(document.querySelectorAll<HTMLElement>("#public-main,[data-landing-footer]"));
     const previousInert = background.map(element => element.inert);
@@ -54,13 +55,13 @@ export function LandingHeader({ navigation, labels, onSearch, variant = "overlay
     };
     window.addEventListener("keydown", trap);
     return () => { document.body.style.overflow = previous; background.forEach((element, index) => { element.inert = previousInert[index]; }); window.removeEventListener("keydown", trap); };
-  }, [mobileOpen]);
+  }, [mobileOpen, hasNavigation]);
 
-  return <header ref={header} className={styles.header} data-variant={variant === "editorial" ? variant : undefined} data-mobile-open={mobileOpen || undefined} data-menu-open={open !== null || undefined}>
+  return <header ref={header} className={styles.header} data-variant={variant === "editorial" ? variant : undefined} data-mobile-open={hasNavigation && mobileOpen || undefined} data-menu-open={hasNavigation && open !== null || undefined}>
     <div className={styles.headerBar}>
-      <button type="button" ref={mobileTrigger} className={styles.mobileTrigger} aria-label={mobileOpen ? labels.closeMenu : labels.openMenu} aria-expanded={mobileOpen} aria-controls="landing-navigation" onClick={() => { setMobileOpen(!mobileOpen); setOpen(null); }}><span /><span /><span /></button>
+      {hasNavigation ? <button type="button" ref={mobileTrigger} className={styles.mobileTrigger} aria-label={mobileOpen ? labels.closeMenu : labels.openMenu} aria-expanded={mobileOpen} aria-controls="landing-navigation" onClick={() => { setMobileOpen(!mobileOpen); setOpen(null); }}><span /><span /><span /></button> : null}
       <Link href="/" className={styles.brand} aria-label={brandName}><BrandLogo size={33} /><BrandName /></Link>
-      <nav id="landing-navigation" aria-label={labels.navigation} className={styles.navigation}>
+      {hasNavigation ? <nav id="landing-navigation" aria-label={labels.navigation} className={styles.navigation}>
         {navigation.map((item, index) => <div className={styles.navItem} key={item.label} onMouseEnter={() => {
           if (!mobileOpen && item.groups && open !== index && window.matchMedia?.("(hover: hover)").matches) { hoverOpened.current = index; setOpen(index); }
         }}>
@@ -74,8 +75,8 @@ export function LandingHeader({ navigation, labels, onSearch, variant = "overlay
               <Link href="/app" className={styles.menuCta} onClick={close}><span>{labels.signup}</span><LandingArrow /></Link>
             </div> : null}</> : <Link href={item.href!} onClick={close} className={styles.navButton}>{item.label}</Link>}
         </div>)}
-      </nav>
-      <div className={styles.actions}><button type="button" className={styles.searchTrigger} onClick={search} aria-label={labels.search}><svg aria-hidden="true" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8"><circle cx="10.5" cy="10.5" r="6.5" /><path d="m16 16 5 5" /></svg><span>{labels.search}</span></button>{variant === "editorial" && siteAction ? <Link href={siteAction.href} className={styles.siteAction}>{siteAction.label}</Link> : <><Link href="/login" className={styles.login}>{labels.login}</Link><Link href="/login?mode=register" className={styles.signup}>{labels.signup}</Link></>}</div>
+      </nav> : null}
+      <div className={styles.actions}>{onSearch ? <button type="button" className={styles.searchTrigger} onClick={search} aria-label={labels.search}><svg aria-hidden="true" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8"><circle cx="10.5" cy="10.5" r="6.5" /><path d="m16 16 5 5" /></svg><span>{labels.search}</span></button> : null}{variant === "editorial" && siteAction ? <Link href={siteAction.href} className={styles.siteAction}>{siteAction.label}</Link> : <><Link href="/login" className={styles.login}>{labels.login}</Link><Link href="/login?mode=register" className={styles.signup}>{labels.signup}</Link></>}</div>
     </div>
   </header>;
 }

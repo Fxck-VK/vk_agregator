@@ -18,7 +18,10 @@ describe("shared first-release policy", () => {
   });
   it("uses publication status for all24 SEO pages and preserves DEV drafts", () => {
     expect(releasePages).toHaveLength(24);
-    expect(releasePages.every(p => p.status === "draft")).toBe(true);
+    expect(releasePages.filter(p => p.status === "published").map(p => p.path)).toEqual(["/"]);
+    expect(releasePages.filter(p => p.path !== "/").every(p => p.status === "draft")).toBe(true);
+    expect(allowsReleasePath("/ru", "prod")).toBe(true);
+    expect(allowsReleasePath("/", "prod")).toBe(true);
     expect(allowsReleasePath("/ru/ai/image-generator", "prod")).toBe(false);
     expect(allowsReleasePath("/ru/ai/image-generator", "dev")).toBe(true);
     expect(allowsReleasePath("/academy/courses/epifera-essentials/choose-a-model", "prod")).toBe(false);

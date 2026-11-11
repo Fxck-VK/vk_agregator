@@ -1,0 +1,83 @@
+﻿kind,name,id,historical_outcome,production_eligible_local,catalog_verification,provider,native_model,endpoint,current_contract_status,outstanding_contract_checks
+text,NeiroHub Chat,chatgpt,base_pass,True,legacy-unverified,deepinfra,deepseek-ai/DeepSeek-V4-Flash,,legacy-unverified,
+text,GPT-5,gpt_5,base_pass,False,pending-verification,apimart,gpt-5,/v1/chat/completions,draft,7
+text,GPT-5.1,gpt_5_1,base_pass,False,pending-verification,apimart,gpt-5.1,/v1/chat/completions,draft,7
+text,GPT-5 Chat Latest,gpt_5_chat_latest,route_failed,False,pending-verification,apimart,gpt-5-chat-latest,/v1/chat/completions,draft,7
+text,GPT-5 Mini,gpt_5_mini,base_pass,False,pending-verification,apimart,gpt-5-mini,/v1/chat/completions,draft,7
+text,Claude Opus 4.6,claude_opus_4_6,base_pass,False,pending-verification,apimart,claude-opus-4-6,/v1/chat/completions,draft,7
+text,Claude Sonnet 4.6,claude_sonnet_4_6,base_pass,False,pending-verification,apimart,claude-sonnet-4-6,/v1/chat/completions,draft,7
+text,Claude Opus 4.5,claude_opus_4_5_20251101,base_pass,False,pending-verification,apimart,claude-opus-4-5-20251101,/v1/chat/completions,draft,7
+text,Gemini 3.5 Flash,gemini_3_5_flash,base_pass,False,pending-verification,apimart,gemini-3.5-flash,/v1/chat/completions,draft,7
+text,Gemini 3.1 Pro Preview,gemini_3_1_pro_preview,base_pass,False,pending-verification,apimart,gemini-3.1-pro-preview,/v1/chat/completions,draft,7
+text,Gemini 3 Pro Preview,gemini_3_pro_preview,base_pass,False,pending-verification,apimart,gemini-3-pro-preview,/v1/chat/completions,draft,7
+text,Gemini 3 Pro Preview Thinking,gemini_3_pro_preview_thinking,base_pass,False,pending-verification,apimart,gemini-3-pro-preview-thinking,/v1/chat/completions,draft,7
+text,Gemini 3 Flash Preview,gemini_3_flash_preview,base_pass,False,pending-verification,apimart,gemini-3-flash-preview,/v1/chat/completions,draft,7
+text,Gemini 2.5 Pro,gemini_2_5_pro,base_pass,False,pending-verification,apimart,gemini-2.5-pro,/v1/chat/completions,draft,7
+text,Gemini 2.5 Flash,gemini_2_5_flash,base_pass,False,pending-verification,apimart,gemini-2.5-flash,/v1/chat/completions,draft,7
+text,Gemini 2.5 Flash Lite,gemini_2_5_flash_lite,base_pass,False,pending-verification,apimart,gemini-2.5-flash-lite,/v1/chat/completions,draft,7
+text,DeepSeek V4 Pro,deepseek_v4_pro,base_pass,False,pending-verification,apimart,deepseek-v4-pro,/v1/chat/completions,draft,7
+text,DeepSeek V4 Flash,deepseek_v4_flash,base_pass,False,pending-verification,apimart,deepseek-v4-flash,/v1/chat/completions,draft,7
+text,DeepSeek V3.2,deepseek_v3_2,route_failed,False,pending-verification,apimart,deepseek-v3.2,/v1/chat/completions,draft,7
+text,DeepSeek V3.2 Exp,deepseek_v3_2_exp,route_failed,False,pending-verification,apimart,deepseek-v3.2-exp,/v1/chat/completions,draft,7
+text,DeepSeek R1,deepseek_r1_250528,route_failed,False,pending-verification,apimart,deepseek-r1-250528,/v1/chat/completions,draft,7
+text,DeepSeek V3,deepseek_v3_0324,route_failed,False,pending-verification,apimart,deepseek-v3-0324,/v1/chat/completions,draft,7
+text,GPT-6 Sol,gpt_6_sol,base_pass,False,pending-verification,apimart,gpt-6-sol,/v1/chat/completions,draft,7
+text,GPT-6 Luna,gpt_6_luna,base_pass,False,pending-verification,apimart,gpt-6-luna,/v1/chat/completions,draft,7
+text,GPT-5.4,gpt_5_4,base_pass,False,pending-verification,apimart,gpt-5.4,/v1/chat/completions,draft,7
+text,GPT-5.3 Codex,gpt_5_3_codex,base_pass,False,pending-verification,apimart,gpt-5.3-codex,/v1/chat/completions,draft,7
+text,GPT-5.2,gpt_5_2,base_pass,False,pending-verification,apimart,gpt-5.2,/v1/chat/completions,draft,7
+text,Claude Opus 5.5,claude_opus_5_5,base_pass,False,pending-verification,apimart,claude-opus-5-5,/v1/chat/completions,draft,7
+text,Claude Haiku 4.5,claude_haiku_4_5_20251001,base_pass,False,pending-verification,apimart,claude-haiku-4-5-20251001,/v1/chat/completions,draft,7
+text,Kimi K3,kimi_k3,base_pass,False,pending-verification,apimart,kimi-k3,/v1/chat/completions,draft,7
+text,Qwen 3.8 Max,qwen_3_8_max,base_pass,False,pending-verification,apimart,qwen3.8-max,/v1/responses,draft,7
+text,Qwen 3.7 Flash,qwen_3_7_flash,base_pass,False,pending-verification,apimart,qwen3.7-flash,/v1/chat/completions,draft,7
+text,Grok 4.5,grok_4_5,base_pass,False,pending-verification,apimart,grok-4.5,/v1/chat/completions,draft,7
+text,Grok 4.6,grok_4_6,base_pass,False,pending-verification,apimart,grok-4.6,/v1/chat/completions,draft,7
+text,Grok 4.7,grok_4_7,base_pass,False,pending-verification,apimart,grok-4.7,/v1/chat/completions,draft,7
+image,GPT Image 2.5 Flare,gpt_image_2_5_flare,base_pass,True,legacy-unverified,apimart,gpt-image-2.5-flare,,legacy-unverified,
+image,GPT Image 2.5 Sunburst,gpt_image_2_5_sunburst,base_pass,True,legacy-unverified,apimart,gpt-image-2.5-sunburst,,legacy-unverified,
+image,Seedream 5.0 Lite,seedream_5_0_lite,base_pass,True,legacy-unverified,apimart,seedream-5-0-lite,,legacy-unverified,
+image,Seedream 5.0 Pro,seedream_5_0_pro,base_pass,True,legacy-unverified,apimart,seedream-5-0-pro,,legacy-unverified,
+image,Nano Banana 2,nano_banana_2,partial,True,legacy-unverified,poyo,nano-banana-2-new,,legacy-unverified,
+image,Nano Banana Pro,nano_banana_pro,base_pass,True,legacy-unverified,apimart,gemini-3-pro-image-preview,,legacy-unverified,
+image,GPT Image 2,gpt_image_2,base_pass,True,legacy-unverified,apimart,gpt-image-2,,legacy-unverified,
+image,Qwen Image 3.0,qwen_image_3,base_pass,True,legacy-unverified,apimart,qwen-image-3.0,,legacy-unverified,
+image,Grok Imagine 1.5,grok_image_1_5,partial,True,legacy-unverified,apimart,grok-imagine-1.5-apimart,,legacy-unverified,
+image,Grok Imagine 2.0,grok_image_2_0,base_pass,True,legacy-unverified,apimart,grok-imagine-2.0-ext,,legacy-unverified,
+image,Seedream 4.5,seedream_4_5,partial,True,legacy-unverified,poyo,seedream-4.5,,legacy-unverified,
+image,Imagen 4.0,imagen_4_0,failed,False,pending-verification,apimart,imagen-4.0-apimart,POST /v1/images/generations,draft,7
+image,Nano Banana,nano_banana,base_pass,False,pending-verification,apimart,gemini-2.5-flash-image-preview,POST /v1/images/generations,draft,7
+image,Seedream 5.0 Flash,seedream_5_0_flash,base_pass,False,pending-verification,apimart,seedream-5-0-flash,POST /v1/images/generations,draft,7
+image,Z-Image Turbo,z_image_turbo,base_pass,False,pending-verification,apimart,z-image-turbo,POST /v1/images/generations,draft,7
+image,FLUX.2 Max,flux_2_max,base_pass,False,pending-verification,apimart,flux-2-max,POST /v1/images/generations,draft,7
+image,FLUX.2 Flex,flux_2_flex,base_pass,False,pending-verification,apimart,flux-2-flex,POST /v1/images/generations,draft,7
+image,Qwen Image 3.0 Pro,qwen_image_3_pro,base_pass,False,pending-verification,apimart,qwen-image-3.0-pro,POST /v1/images/generations,draft,7
+video,PixVerse v6,pixverse_v6,base_pass,False,pending-verification,apimart,pixverse-v6,POST /v1/videos/generations,draft,28
+video,Seedance 2.0 Mini,seedance_2_0_mini,failed,False,pending-verification,apimart,seedance-2.0-mini,POST /v1/videos/generations,draft,7
+video,Wan 3.0 Video,wan_3_0,failed,False,pending-verification,apimart,wan3.0-video,POST /v1/videos/generations,draft,35
+video,Vidu Q3 Turbo,vidu_q3_turbo,failed,False,pending-verification,apimart,viduq3-turbo,POST /v1/videos/generations,draft,21
+video,Veo 3.1 Lite,video_veo_3_1_lite,base_pass,True,legacy-unverified,apimart,veo3.1-lite,,legacy-unverified,
+video,Vidu Q3 Pro,vidu_q3_pro,job_not_accepted,False,pending-verification,apimart,viduq3-pro,POST /v1/videos/generations,draft,21
+image,Midjourney V7,midjourney_v7,not_in_attached_report,True,legacy-unverified,apimart,midjourney,,legacy-unverified,
+image,FLUX.2 Pro,flux_2_pro,not_in_attached_report,True,legacy-unverified,apimart,flux-2-pro,,legacy-unverified,
+text,GPT-5.5,gpt_5_5,not_in_attached_report,True,legacy-unverified,kie,gpt-5-5,,legacy-unverified,
+text,Claude Opus 4.7,claude_opus_4_7,not_in_attached_report,True,legacy-unverified,kie,claude-opus-4-7,,legacy-unverified,
+text,Gemini 3.1 Pro,gemini_3_1_pro,not_in_attached_report,True,legacy-unverified,kie,gemini-3.1-pro,,legacy-unverified,
+text,Claude Opus 4.8,claude_opus_4_8,not_in_attached_report,True,legacy-unverified,kie,claude-opus-4-8,,legacy-unverified,
+text,GPT 5.6 Terra,gpt_5_6_terra,not_in_attached_report,True,legacy-unverified,kie,gpt-5-6-terra,,legacy-unverified,
+text,GPT 6 Astra,gpt_6_astra,not_in_attached_report,True,legacy-unverified,kie,gpt-6-astra,,legacy-unverified,
+text,Claude Opus 5,claude_opus_5,not_in_attached_report,True,legacy-unverified,kie,claude-opus-5,,legacy-unverified,
+text,Gemini 3.7 Flash,gemini_3_7_flash,not_in_attached_report,True,legacy-unverified,kie,gemini-3-7-flash-openai,,legacy-unverified,
+text,Claude Fable 5.1,claude_fable_5_1,not_in_attached_report,True,legacy-unverified,apimart,claude-fable-5.1,,legacy-unverified,
+text,Claude Fable 5,claude_fable_5,not_in_attached_report,True,legacy-unverified,kie,claude-fable-5,,legacy-unverified,
+text,Gemini 3.6 Flash,gemini_3_6_flash,not_in_attached_report,True,legacy-unverified,kie,gemini-3-6-flash-openai,,legacy-unverified,
+video,Kling V3,video_kling_v3,not_in_attached_report,True,legacy-unverified,apimart,kling-v3,,legacy-unverified,
+video,Veo 3.1 Fast,video_veo_3_1_fast,not_in_attached_report,True,legacy-unverified,apimart,veo3.1-fast,,legacy-unverified,
+video,Veo 3.1 Quality,video_veo_3_1_quality,not_in_attached_report,True,legacy-unverified,apimart,veo3.1-quality,,legacy-unverified,
+video,Kling 3.0 Turbo,video_kling_3_0_turbo,not_in_attached_report,True,legacy-unverified,apimart,kling-3.0-turbo,,legacy-unverified,
+video,MiniMax H3,video_minimax_h3,not_in_attached_report,True,legacy-unverified,apimart,MiniMax-H3,,legacy-unverified,
+video,Gemini Omni 1.1 Flash EXT,video_gemini_omni_1_1_flash_ext,not_in_attached_report,True,legacy-unverified,apimart,gemini-omni-1.1-flash-ext,,legacy-unverified,
+video,Seedance 2.5,video_seedance_2_5,not_in_attached_report,True,legacy-unverified,apimart,seedance-2.5,,legacy-unverified,
+video,Kling O3 Standard,video_kling_o3_standard,not_in_attached_report,True,legacy-unverified,poyo,kling-o3/standard,,legacy-unverified,
+video,Seedance 2.0 Fast,video_seedance_2_0_fast,not_in_attached_report,True,legacy-unverified,poyo,seedance-2-fast,,legacy-unverified,
+video,Runway Gen-4.5,video_runway_gen4_5,not_in_attached_report,True,legacy-unverified,poyo,runway-gen-4.5,,legacy-unverified,

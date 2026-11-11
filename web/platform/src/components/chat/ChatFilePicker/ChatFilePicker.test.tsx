@@ -68,12 +68,26 @@ describe("ChatFilePicker", () => {
     vi.clearAllMocks();
   });
 
+  it("offers only stored artifacts with a MIME admitted by the current operation", async () => {
+    const onSelect = vi.fn();
+    vi.mocked(fetchImageFileResult).mockResolvedValue({ ...imageResult, artifacts: [
+      { ...imageResult.artifacts[0], mime_type: "image/jpeg" },
+      { ...imageResult.artifacts[0], id: "33333333-3333-4333-8333-333333333333" },
+    ] });
+    await act(async () => { render(<ChatFilePicker accept="image/png,.png" initialSource="generated" onClose={vi.fn()} onSelect={onSelect} />); });
+    const choose = await screen.findAllByRole("button", { name: "Прикрепить «Город после дождя»" });
+    expect(choose).toHaveLength(1);
+    fireEvent.click(choose[0]);
+    expect(onSelect).toHaveBeenCalledWith(expect.objectContaining({ id: "33333333-3333-4333-8333-333333333333", mimeType: "image/png" }));
+    expect(document.querySelector('input[type="file"]')).toHaveAttribute("accept", "image/png,.png");
+  });
+
   it("opens on generated files and returns the selected artifact", async () => {
     const preview = deferredPreview();
     vi.mocked(fetchImageFileResult).mockReturnValueOnce(preview.promise);
     const onSelect = vi.fn();
     await act(async () => {
-      render(<ChatFilePicker initialSource="generated" onClose={vi.fn()} onSelect={onSelect} />);
+      render(<ChatFilePicker accept="image/png,.png,image/jpeg,.jpg,.jpeg" initialSource="generated" onClose={vi.fn()} onSelect={onSelect} />);
     });
 
     expect(screen.getByRole("dialog", { name: "Мои файлы" })).toBeVisible();
@@ -106,7 +120,7 @@ describe("ChatFilePicker", () => {
       .mockReturnValueOnce(retriedPreview.promise);
     const onSelect = vi.fn();
     await act(async () => {
-      render(<ChatFilePicker initialSource="generated" onClose={vi.fn()} onSelect={onSelect} />);
+      render(<ChatFilePicker accept="image/png,.png,image/jpeg,.jpg,.jpeg" initialSource="generated" onClose={vi.fn()} onSelect={onSelect} />);
     });
 
     expect(screen.getByRole("progressbar", { name: ru.files.previewLoading })).toBeVisible();
@@ -139,7 +153,7 @@ describe("ChatFilePicker", () => {
   it("opens on uploaded files and lets the user upload from the empty state", () => {
     const onSelect = vi.fn();
     render(
-      <ChatFilePicker initialSource="uploaded" onClose={vi.fn()} onSelect={onSelect} />,
+      <ChatFilePicker accept="image/png,.png,image/jpeg,.jpg,.jpeg" initialSource="uploaded" onClose={vi.fn()} onSelect={onSelect} />,
     );
 
     expect(screen.getByRole("tab", { name: "Загруженные" })).toHaveAttribute("aria-selected", "true");
@@ -160,7 +174,7 @@ describe("ChatFilePicker", () => {
 
   it("closes on Escape and restores page scrolling", async () => {
     const onClose = vi.fn();
-    render(<ChatFilePicker initialSource="generated" onClose={onClose} onSelect={vi.fn()} />);
+    render(<ChatFilePicker accept="image/png,.png,image/jpeg,.jpg,.jpeg" initialSource="generated" onClose={onClose} onSelect={vi.fn()} />);
 
     expect(document.body.style.overflow).toBe("hidden");
     const backdrop = screen.getByRole("dialog").closest("[data-state]")!;

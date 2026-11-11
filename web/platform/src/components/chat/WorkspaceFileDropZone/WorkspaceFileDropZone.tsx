@@ -11,25 +11,26 @@ import { assetPaths } from "@/assets/asset-paths";
 import styles from "./WorkspaceFileDropZone.module.css";
 
 type FileReceiver = (files: File[]) => void;
-type RegisterReceiver = (receiver: FileReceiver) => () => void;
+type RegisteredReceiver = { receive: FileReceiver; accept?: string };
+type RegisterReceiver = (receiver: FileReceiver, accept?: string) => () => void;
 const FileDropContext = createContext<RegisterReceiver | null>(null);
 
 function hasFiles(transfer: DataTransfer | null) {
   return transfer !== null && Array.from(transfer.types).includes("Files");
 }
 
-export function useWorkspaceFileDrop(receiver: FileReceiver, enabled: boolean) {
+export function useWorkspaceFileDrop(receiver: FileReceiver, enabled: boolean, accept?: string) {
   const register = useContext(FileDropContext);
   useEffect(() => {
-    if (enabled && register) return register(receiver);
-  }, [enabled, receiver, register]);
+    if (enabled && register) return register(receiver, accept);
+  }, [enabled, receiver, register, accept]);
 }
 
 export function WorkspaceFileDropZone({ children, className }: { children: ReactNode; className?: string }) {
   const msg = useMessages();
   const rootRef = useRef<HTMLDivElement>(null);
-  const receiverRef = useRef<FileReceiver | null>(null);
-  const receiversRef = useRef(new Map<symbol, FileReceiver>());
+  const receiverRef = useRef<RegisteredReceiver | null>(null);
+  const receiversRef = useRef(new Map<symbol, RegisteredReceiver>());
   const dragDepth = useRef(0);
   const [isDragging, setIsDragging] = useState(false);
 
@@ -38,8 +39,9 @@ export function WorkspaceFileDropZone({ children, className }: { children: React
     setIsDragging(false);
   }, []);
 
-  const register = useCallback<RegisterReceiver>((receiver) => {
+  const register = useCallback<RegisterReceiver>((receive, accept) => {
     const id = Symbol();
+    const receiver = { receive, accept };
     receiversRef.current.set(id, receiver);
     receiverRef.current = receiver;
     return () => {
@@ -48,6 +50,14 @@ export function WorkspaceFileDropZone({ children, className }: { children: React
       reset();
     };
   }, [reset]);
+
+  const canReceive = (transfer: DataTransfer) => {
+    const receiver = receiverRef.current;
+    if (!receiver) return false;
+    const types = Array.from(transfer.items ?? []).filter(item => item.kind === "file").map(item => item.type);
+    const allowed = receiver.accept?.split(",");
+    return !allowed || types.every(type => !type || allowed.includes(type));
+  };
 
   useEffect(() => {
     const preventFileNavigation = (event: globalThis.DragEvent) => {
@@ -82,8 +92,9 @@ export function WorkspaceFileDropZone({ children, className }: { children: React
   const dragOver = (event: DragEvent<HTMLDivElement>) => {
     if (!hasFiles(event.dataTransfer) || !event.currentTarget.contains(event.target as Node)) return;
     event.preventDefault();
-    event.dataTransfer.dropEffect = receiverRef.current ? "copy" : "none";
-    if (receiverRef.current) setIsDragging(true);
+    const accepts = canReceive(event.dataTransfer);
+    event.dataTransfer.dropEffect = accepts ? "copy" : "none";
+    setIsDragging(accepts);
   };
 
   return (
@@ -92,7 +103,7 @@ export function WorkspaceFileDropZone({ children, className }: { children: React
         className={className}
         data-ui="workspace-file-drop"
         onDragEnter={(event) => {
-          if (!hasFiles(event.dataTransfer) || !receiverRef.current || !event.currentTarget.contains(event.target as Node)) return;
+          if (!hasFiles(event.dataTransfer) || !canReceive(event.dataTransfer) || !event.currentTarget.contains(event.target as Node)) return;
           event.preventDefault();
           dragDepth.current += 1;
           setIsDragging(true);
@@ -108,7 +119,7 @@ export function WorkspaceFileDropZone({ children, className }: { children: React
           event.preventDefault();
           const files = Array.from(event.dataTransfer.files);
           reset();
-          if (files.length) receiverRef.current?.(files);
+          if (files.length) receiverRef.current?.receive(files);
         }}
         ref={rootRef}
       >

@@ -5,8 +5,8 @@ import { WorkspaceFileDropZone, useWorkspaceFileDrop } from "./WorkspaceFileDrop
 
 afterEach(cleanup);
 
-function Receiver({ onFiles, enabled = true }: { onFiles: (files: File[]) => void; enabled?: boolean }) {
-  useWorkspaceFileDrop(onFiles, enabled);
+function Receiver({ onFiles, enabled = true, accept }: { onFiles: (files: File[]) => void; enabled?: boolean; accept?: string }) {
+  useWorkspaceFileDrop(onFiles, enabled, accept);
   return <textarea aria-label="Сообщение" />;
 }
 
@@ -20,6 +20,19 @@ function setup(enabled = true) {
 }
 
 describe("WorkspaceFileDropZone", () => {
+  it("does not advertise a known unsupported drag type", () => {
+    const onFiles = vi.fn();
+    const { container } = render(<WorkspaceFileDropZone><Receiver onFiles={onFiles} accept="image/png,.png" /></WorkspaceFileDropZone>);
+    const workspace = container.querySelector('[data-ui="workspace-file-drop"]')!;
+    const drag = (type: string) => ({ dataTransfer: { types: ["Files"], items: [{ kind: "file", type }], files: [], dropEffect: "none" } });
+    fireEvent.dragEnter(workspace, drag("application/pdf"));
+    expect(screen.queryByRole("status")).toBeNull();
+    fireEvent.dragOver(workspace, drag("image/png"));
+    expect(screen.getByRole("status")).toBeVisible();
+    fireEvent.dragOver(workspace, drag("audio/mpeg"));
+    expect(screen.queryByRole("status")).toBeNull();
+    expect(onFiles).not.toHaveBeenCalled();
+  });
   it("activates only over the workspace and delivers files without submitting", () => {
     const { onFiles, workspace } = setup();
     fireEvent.dragEnter(screen.getByRole("complementary"), transfer());

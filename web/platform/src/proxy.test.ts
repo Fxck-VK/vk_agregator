@@ -8,6 +8,15 @@ const returnCookieName = "__Host-nh-return-to";
 const privatePath = "/ru/app/chat/d7c979f5-24e5-4f88-924b-a592d6e5a906";
 
 describe("platform return-path proxy", () => {
+  it('preserves a selected model across launch and login without prefetch replacing the intent', () => {
+    const href = 'https://platform.example/ru/app/launch?model=nano_banana_pro';
+    const response = proxy(new NextRequest(href));
+    expect(response.cookies.get(returnCookieName)?.value).toBe('/ru/app/launch?model=nano_banana_pro');
+    const login = proxy(new NextRequest('https://platform.example/ru/login'));
+    expect(login.cookies.get(returnCookieName)).toBeUndefined();
+    const prefetch = proxy(new NextRequest(href, { headers: { 'next-router-prefetch': '1' } }));
+    expect(prefetch.cookies.get(returnCookieName)).toBeUndefined();
+  });
   it("keeps session-aware home responses private and uncached", () => {
     const response = proxy(new NextRequest("https://platform.example/ru"));
     expect(response.headers.get("Cache-Control")).toBe("private, no-store");

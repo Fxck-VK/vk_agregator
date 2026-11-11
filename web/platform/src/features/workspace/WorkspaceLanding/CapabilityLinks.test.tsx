@@ -15,7 +15,7 @@ import { WorkspaceLanding } from "./WorkspaceLanding";
 import { capabilityLinks } from "./workspace-home-content";
 
 describe("WorkspaceLanding capability links", () => {
-  it("renders the approved divider and six icon links without changing their destinations", () => {
+  it("renders the divider and three remaining icon links with their existing destinations", () => {
     render(
       <WorkspaceConversationListProvider accountId="capability-links-test-account" initialConversations={[]}>
         <WorkspaceLanding />
@@ -27,13 +27,13 @@ describe("WorkspaceLanding capability links", () => {
     const navigation = screen.getByRole("navigation", { name: "Дополнительные возможности" });
     const links = within(navigation).getAllByTestId("workspace-capability-link");
 
-    expect(links).toHaveLength(6);
+    expect(links).toHaveLength(3);
     expect(links.map((link) => link.textContent)).toEqual(capabilityLinks.map((item) => item.label));
     expect(links.map((link) => link.getAttribute("href"))).toEqual(capabilityLinks.map((item) => `/ru${item.href}`));
 
     const fallbackIcons = within(navigation).getAllByTestId("workspace-capability-icon");
 
-    expect(fallbackIcons).toHaveLength(6);
+    expect(fallbackIcons).toHaveLength(3);
     for (const icon of fallbackIcons) {
       expect(icon).toHaveAttribute("aria-hidden", "true");
     }

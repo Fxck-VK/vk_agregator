@@ -68,7 +68,7 @@
   mask: var(--capability-icon) center / contain no-repeat;
 }
 
-@media (width < 48rem) {
+@media (width < 64rem) {
   .list {
     grid-template-columns: repeat(2, minmax(0, 1fr));
   }
