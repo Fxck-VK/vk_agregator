@@ -23,6 +23,16 @@ function matrix(source, expected, label) {
 export function validateReleaseContract(read, dockerfiles) {
   const services = inventory(dockerfiles.map(p => p.replace(/^Dockerfile\./, '')));
   assert(services.length > 0, 'Release image inventory is empty');
+  const goVersion = read('go.mod').match(/^go (\d+\.\d+\.\d+)\s*$/m)?.[1];
+  const versionParts = goVersion?.split('.').map(Number);
+  const [major, minor, patch] = versionParts ?? [];
+  assert(major > 1 || major === 1 && (minor > 27 || minor === 27 && patch >= 4 || minor === 26 && patch >= 11),
+    'go.mod must require a patched Go toolchain (1.26.11 or 1.27.4 minimum for GO-2026-6859)');
+  for (const path of dockerfiles.filter(path => path !== 'Dockerfile.platform')) {
+    const version = goVersion.replaceAll('.', '\\.');
+    assert.match(read(path), new RegExp(`^FROM golang:${version}-alpine@sha256:[a-f0-9]{64}\\s`, 'm'),
+      `${path} must pin the same patched Go toolchain as go.mod`);
+  }
   for (const path of ['Dockerfile.api', 'Dockerfile.worker']) {
     const runtimeStage = read(path).split(/^FROM\s+/m).at(-1);
     assert.match(runtimeStage, /^RUN apk add --no-cache [^\r\n]*'libexpat>=2\.10\.0-r0'/m,

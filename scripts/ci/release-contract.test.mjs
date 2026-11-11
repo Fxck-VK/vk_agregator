@@ -7,6 +7,7 @@ import { validateReleaseContract } from './check-release-contract.mjs';
 const root = resolve(import.meta.dirname, '../..');
 const dockerfiles = readdirSync(root).filter(p => p.startsWith('Dockerfile.'));
 const files = new Map([
+  'go.mod',
   '.github/workflows/ci.yml', '.github/workflows/docker-images.yml',
   '.github/workflows/deploy-dev.yml', '.github/workflows/nightly-quality.yml',
   'scripts/deploy/verify-release-images.sh', 'docker-compose.prod.yml', 'docker-compose.dev-web.yml',
@@ -20,6 +21,17 @@ function rejects(path, before, after, message) {
 }
 test('current source agrees across publication, verifier, Compose and DEV', () => {
   assert.equal(check().services.length, 7);
+});
+
+test('Go module and every Go image builder reject the vulnerable HTTP server toolchain', () => {
+  for (const version of ['1.26.10', '1.27.0', '1.27.3']) {
+    assert.throws(() => check({'go.mod': files.get('go.mod').replace(/^go \S+/m, `go ${version}`)}), /patched Go toolchain/i);
+  }
+  for (const path of dockerfiles.filter(path => path !== 'Dockerfile.platform')) {
+    const source = files.get(path);
+    assert.throws(() => check({[path]: source.replace(/golang:\d+\.\d+\.\d+-alpine@sha256:[a-f0-9]{64}/,
+      'golang:1.26.10-alpine@sha256:9ce231b28998b32e116927c61aa5c406183061d4f3f2d61b292c88e7f6bdf7ca')}), /patched Go toolchain/i);
+  }
 });
 
 test('media runtime images reject vulnerable or missing libexpat floors', () => {

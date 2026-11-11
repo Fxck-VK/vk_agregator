@@ -527,11 +527,14 @@ pwsh -NoProfile -File scripts/ci/dev-deploy-preflight.ps1
 ```
 
 Use a patched Go toolchain. For the current release baseline, set
-`$env:GOTOOLCHAIN = 'go1.26.10'` in this shell when a newer but unpatched Go
+`$env:GOTOOLCHAIN = 'go1.26.11'` in this shell when a newer but unpatched Go
 installation would otherwise take precedence over `go.mod`.
-The October 21 security baseline uses Go 1.26.10 and `golang.org/x/net` v0.60.0.
-All Go build images use the same pinned Go release and immutable digest.
-See the [Go release history](https://go.dev/doc/devel/release#go1.26.10).
+The November 12 security baseline uses Go 1.26.11 and `golang.org/x/net` v0.60.0.
+This fixes [GO-2026-6859](https://pkg.go.dev/vuln/GO-2026-6859), found by the
+mandatory preflight before source tests. All Go build images use the same pinned
+Go release and immutable digest; the release contract rejects compiler downgrades
+and mismatched builders. The native Linux guard mounts `go.mod` read-only too.
+See the [Go release history](https://go.dev/doc/devel/release#go1.26.11).
 
 All seven runtime Dockerfiles explicitly install `zlib>=1.3.2-r1` for
 [CVE-2026-85091](https://security.alpinelinux.org/vuln/CVE-2026-85091).

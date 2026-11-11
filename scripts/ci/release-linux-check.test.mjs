@@ -34,6 +34,7 @@ test('Windows uses pinned source-only read-only mounts, a bounded container and 
   assert.deepEqual(command.args.slice(imageIndex + 1, imageIndex + 6), ['timeout', '-s', 'KILL', '150', 'sh'],
     'The container workload must remain bounded if its host process is cancelled');
   const mounts = command.args.filter(arg => arg.startsWith('type=bind,'));
+  assert(mounts.some(arg => arg.includes('dst=/src/go.mod,readonly')), 'The native security contract must read the actual Go toolchain requirement');
   assert(mounts.length > 5);
   assert(mounts.every(arg => arg.endsWith(',readonly')));
   assert(mounts.every(arg => lstatSync(arg.split('src=')[1].split(',dst=')[0]).isFile()), 'Only explicit source files may be mounted');

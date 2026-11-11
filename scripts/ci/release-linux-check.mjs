@@ -17,7 +17,7 @@ export function createLinuxCheckPlan({ root, platform = process.platform, contai
   if (!image) throw Error('Linux release checks require a pinned Node dependencies image');
   // Only explicit source/configuration files are mounted, never directories,
   // Git metadata, env files, credentials, outputs or the Docker socket.
-  const paths = [...tests, 'scripts/ci/release-linux-check.mjs', 'scripts/ci/check-release-contract.mjs',
+  const paths = [...tests, 'go.mod', 'scripts/ci/release-linux-check.mjs', 'scripts/ci/check-release-contract.mjs',
     'scripts/ci/release-manifest.mjs', 'scripts/ci/release-source-plan.mjs', 'scripts/ci/dev-deploy-preflight.ps1',
     'scripts/deploy/verify-release-images.sh', '.github/workflows/ci.yml', '.github/workflows/docker-images.yml',
     '.github/workflows/deploy-dev.yml', '.github/workflows/nightly-quality.yml', 'docker-compose.prod.yml', 'docker-compose.dev-web.yml',
