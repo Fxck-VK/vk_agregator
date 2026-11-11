@@ -28,6 +28,9 @@ export function validateReleaseContract(read, dockerfiles) {
   const [major, minor, patch] = versionParts ?? [];
   assert(major > 1 || major === 1 && (minor > 27 || minor === 27 && patch >= 4 || minor === 26 && patch >= 11),
     'go.mod must require a patched Go toolchain (1.26.11 or 1.27.4 minimum for GO-2026-6859)');
+  const netVersion = read('go.mod').match(/^\s*golang\.org\/x\/net v(\d+)\.(\d+)\.\d+(?:\s|$)/m);
+  assert(netVersion && (Number(netVersion[1]) > 0 || Number(netVersion[2]) >= 62),
+    'go.mod must pin patched x/net v0.62.0 or newer for CVE-2026-78661');
   for (const path of dockerfiles.filter(path => path !== 'Dockerfile.platform')) {
     const version = goVersion.replaceAll('.', '\\.');
     assert.match(read(path), new RegExp(`^FROM golang:${version}-alpine@sha256:[a-f0-9]{64}\\s`, 'm'),

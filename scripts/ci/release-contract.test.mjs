@@ -34,6 +34,13 @@ test('Go module and every Go image builder reject the vulnerable HTTP server too
   }
 });
 
+test('the reviewed dependency baseline rejects x/net before its HTML denial-of-service fix', () => {
+  for (const version of ['0.61.0', '0.60.0']) {
+    const downgraded = files.get('go.mod').replace(/golang\.org\/x\/net v\d+\.\d+\.\d+/, `golang.org/x/net v${version}`);
+    assert.throws(() => check({'go.mod': downgraded}), /patched x\/net/i);
+  }
+});
+
 test('media runtime images reject vulnerable or missing libexpat floors', () => {
   for (const path of ['Dockerfile.api', 'Dockerfile.worker']) {
     const source = files.get(path);

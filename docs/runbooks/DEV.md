@@ -529,11 +529,14 @@ pwsh -NoProfile -File scripts/ci/dev-deploy-preflight.ps1
 Use a patched Go toolchain. For the current release baseline, set
 `$env:GOTOOLCHAIN = 'go1.26.11'` in this shell when a newer but unpatched Go
 installation would otherwise take precedence over `go.mod`.
-The November 12 security baseline uses Go 1.26.11 and `golang.org/x/net` v0.60.0.
+The November 12 security baseline uses Go 1.26.11 and `golang.org/x/net` v0.62.0.
 This fixes [GO-2026-6859](https://pkg.go.dev/vuln/GO-2026-6859), found by the
 mandatory preflight before source tests. All Go build images use the same pinned
 Go release and immutable digest; the release contract rejects compiler downgrades
 and mismatched builders. The native Linux guard mounts `go.mod` read-only too.
+The x/net update fixes CVE-2026-78661 in HTML parsing; its required x/crypto,
+x/sync, x/sys and x/text updates are retained with verified `go.sum` entries.
+Trivy scans all resolved dependencies, including paths not reached by govulncheck.
 See the [Go release history](https://go.dev/doc/devel/release#go1.26.11).
 
 All seven runtime Dockerfiles explicitly install `zlib>=1.3.2-r1` for
