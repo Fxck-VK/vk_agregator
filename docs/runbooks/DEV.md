@@ -545,6 +545,12 @@ The early infrastructure policy checks that the final stage's `apk add`
 instruction retains this floor. Existing pinned base digests, OpenSSL floors,
 immutable image vulnerability scans, signatures and provenance remain required.
 
+Runtime images also explicitly install patched musl and musl-utils for
+CVE-2026-107891: Alpine 3.22 requires `1.2.5-r13`, backup's Alpine 3.23 requires
+`1.2.5-r24`, and the platform's Alpine 3.24 requires `1.2.6-r3` or newer.
+The release contract checks both package floors in each final runtime stage;
+removal and downgrade mutations are rejected. Keep the reviewed base digests.
+
 It starts with the mandatory `source-fast` gate, using the reviewed inventory's
 baseline. It then runs the shared release contract (the same entrypoint as CI), npm audits,
 `govulncheck`, documentation/infrastructure policy and the pinned Trivy scan

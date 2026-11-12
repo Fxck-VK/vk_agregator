@@ -52,6 +52,20 @@ test('media runtime images reject vulnerable or missing libexpat floors', () => 
   }
 });
 
+test('every final runtime installs the branch-specific patched musl and utilities', () => {
+  for (const path of dockerfiles) {
+    const source = files.get(path);
+    const fixed = path === 'Dockerfile.platform' ? '1.2.6-r3' : path === 'Dockerfile.backup' ? '1.2.5-r24' : '1.2.5-r13';
+    for (const pkg of ['musl', 'musl-utils']) {
+      const floor = `'${pkg}>=${fixed}'`;
+      assert(source.includes(floor), `${path} must install patched ${pkg}`);
+      for (const replacement of ['', `'${pkg}>=1.2.5-r12'`]) {
+        assert.throws(() => check({[path]: source.replace(floor, replacement)}), /patched musl/i);
+      }
+    }
+  }
+});
+
 test('each web checks stage must bootstrap its own lockfile-scoped dependencies', () => {
   for (const pkg of ['admin', 'platform']) {
     rejects('scripts/ci/dev-deploy-preflight.ps1',

@@ -41,6 +41,15 @@ export function validateReleaseContract(read, dockerfiles) {
     assert.match(runtimeStage, /^RUN apk add --no-cache [^\r\n]*'libexpat>=2\.10\.0-r0'/m,
       `${path} must install patched libexpat in its final runtime stage`);
   }
+  for (const path of dockerfiles) {
+    const runtimeStage = read(path).split(/^FROM\s+/m).at(-1);
+    const fixed = path === 'Dockerfile.platform' ? '1.2.6-r3' : path === 'Dockerfile.backup' ? '1.2.5-r24' : '1.2.5-r13';
+    for (const pkg of ['musl', 'musl-utils']) {
+      const constraint = `'${pkg}>=${fixed.replaceAll('.', '\\.')}'`;
+      assert.match(runtimeStage, new RegExp(`^RUN apk add --no-cache [^\\r\\n]*${constraint}`, 'm'),
+        `${path} must install patched musl and utilities for CVE-2026-107891`);
+    }
+  }
   const images = read('.github/workflows/docker-images.yml');
   const names = [...images.matchAll(/^name: (.+)\r?$/gm)];
   assert.equal(names.length, 1, 'Exactly one literal workflow name is required');
