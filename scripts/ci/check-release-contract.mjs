@@ -50,6 +50,12 @@ export function validateReleaseContract(read, dockerfiles) {
         `${path} must install patched musl and utilities for CVE-2026-107891`);
     }
   }
+  const backupRuntime = read('Dockerfile.backup').split(/^FROM\s+/m).at(-1);
+  for (const pkg of ['postgresql18-client', 'libpq']) {
+    const constraint = `'${pkg}>=18\\.7-r0'`;
+    assert.match(backupRuntime, new RegExp(`^RUN apk add --no-cache [^\\r\\n]*${constraint}`, 'm'),
+      'Dockerfile.backup must install patched PostgreSQL client and libpq (18.7-r0 minimum)');
+  }
   const images = read('.github/workflows/docker-images.yml');
   const names = [...images.matchAll(/^name: (.+)\r?$/gm)];
   assert.equal(names.length, 1, 'Exactly one literal workflow name is required');

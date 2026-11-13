@@ -66,6 +66,16 @@ test('every final runtime installs the branch-specific patched musl and utilitie
   }
 });
 
+test('backup rejects vulnerable or unversioned PostgreSQL client packages', () => {
+  const source = files.get('Dockerfile.backup');
+  for (const pkg of ['postgresql18-client', 'libpq']) {
+    const floor = `'${pkg}>=18.7-r0'`;
+    assert(source.includes(floor), `backup must install patched ${pkg}`);
+    for (const replacement of ['', pkg, `'${pkg}>=18.6-r0'`]) {
+      assert.throws(() => check({'Dockerfile.backup': source.replace(floor, replacement)}), /patched PostgreSQL/i);
+    }
+  }
+});
 test('each web checks stage must bootstrap its own lockfile-scoped dependencies', () => {
   for (const pkg of ['admin', 'platform']) {
     rejects('scripts/ci/dev-deploy-preflight.ps1',

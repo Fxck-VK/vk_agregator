@@ -551,6 +551,12 @@ CVE-2026-107891: Alpine 3.22 requires `1.2.5-r13`, backup's Alpine 3.23 requires
 The release contract checks both package floors in each final runtime stage;
 removal and downgrade mutations are rejected. Keep the reviewed base digests.
 
+The backup image requires `postgresql18-client>=18.7-r0` and `libpq>=18.7-r0`.
+These explicit floors invalidate stale package-install layers and prevent rebuilding
+with the vulnerable 18.6 client/library reported by the immutable image scan.
+The release contract rejects missing or downgraded floors. Alpine 3.23 provides
+[the patched client](https://pkgs.alpinelinux.org/package/v3.23/main/x86_64/postgresql18-client)
+and [libpq](https://pkgs.alpinelinux.org/package/v3.23/main/x86_64/libpq).
 It starts with the mandatory `source-fast` gate, using the reviewed inventory's
 baseline. It then runs the shared release contract (the same entrypoint as CI), npm audits,
 `govulncheck`, documentation/infrastructure policy and the pinned Trivy scan
