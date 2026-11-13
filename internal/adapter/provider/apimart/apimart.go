@@ -1465,7 +1465,7 @@ func classifyAPIMartError(status int, code, typ, msg string) domain.ProviderErro
 	}
 	lower := strings.ToLower(strings.Join([]string{code, typ, msg}, " "))
 	switch {
-	case strings.Contains(lower, "balance") || strings.Contains(lower, "insufficient") || strings.Contains(lower, "quota"):
+	case isInsufficientBalanceError(lower):
 		return domain.ProviderErrInsufficientBalance
 	case strings.Contains(lower, "auth") || strings.Contains(lower, "unauthorized") || strings.Contains(lower, "forbidden") || strings.Contains(lower, "token") || strings.Contains(lower, "permission"):
 		return domain.ProviderErrAuthFailed
@@ -1510,6 +1510,24 @@ func classifyAPIMartError(status int, code, typ, msg string) domain.ProviderErro
 		return domain.ProviderErrOverloaded
 	}
 	return domain.ProviderErrInternal
+}
+
+// A refund notice mentions quota without identifying the failure cause.
+// Match actual funding failures, not bare balance/quota/insufficient words.
+func isInsufficientBalanceError(lower string) bool {
+	normalized := strings.NewReplacer("_", " ", "-", " ").Replace(lower)
+	for _, phrase := range []string{
+		"insufficient balance", "insufficient account balance", "insufficient provider balance",
+		"insufficient funds", "insufficient credit", "insufficient quota", "payment required",
+		"not enough balance", "not enough credit", "not enough quota", "not enough funds",
+		"balance is insufficient", "balance too low", "quota exhausted", "quota exceeded",
+		"quota has been exhausted", "quota has been exceeded",
+	} {
+		if strings.Contains(normalized, phrase) {
+			return true
+		}
+	}
+	return false
 }
 
 func isModelUnavailableError(lower string) bool {
