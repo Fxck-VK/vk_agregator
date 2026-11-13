@@ -27,6 +27,7 @@ export function resolveGenerationOptions(model: GenerationModel | undefined, sav
  }
  if (model?.category === "video") {
   const resolution = model.allowed_resolutions.includes(saved.resolution ?? "") ? saved.resolution! : model.default_resolution;
+  if (model.motion_control) return {options:{resolution,character_orientation:saved.character_orientation === "video" ? "video" as const : "image" as const,keep_original_sound:saved.keep_original_sound ?? true},cost:undefined};
   const durations = model.allowed_durations_sec.filter(duration => model.price_by_option[`${resolution}:${duration}`] > 0 && (!model.variants || model.variants.some(variant => variant.resolution === resolution && variant.duration_sec === duration)));
   const duration_sec = durations.includes(saved.duration_sec ?? 0) ? saved.duration_sec! : durations.includes(model.default_duration_sec) ? model.default_duration_sec : durations[0];
   const ratios = videoAspectRatios(model, { resolution, duration_sec });
@@ -51,12 +52,17 @@ export function useGenerationControls(model: GenerationModel | undefined, disabl
   onAspectRatioChange={aspect_ratio=>change({aspect_ratio})} onImageQualityChange={image_quality=>change({image_quality})}
   onOutputCountChange={output_count=>change({output_count})} onPromptChange={onPromptChange}
  />;
- if (model?.category === "video") controls = <>
+ if (model?.category === "video" && model.motion_control) controls = <>
+  <ImageQualitySelector disabled={disabled} label={msg("motion.mode")} value={options.resolution === "pro" ? "Pro" : "Std"} options={model.allowed_resolutions.map(value=>value === "pro" ? "Pro" : "Std")} onChange={value=>change({resolution:value === "Pro" ? "pro" : "std"})}/>
+  <ImageQualitySelector disabled={disabled} label={msg("motion.orientation")} value={options.character_orientation === "video" ? msg("motion.byVideo") : msg("motion.byImage")} options={[msg("motion.byImage"),msg("motion.byVideo")]} onChange={value=>change({character_orientation:value === msg("motion.byVideo") ? "video" : "image"})}/>
+  <ImageQualitySelector disabled={disabled} label={msg("motion.sourceSound")} value={options.keep_original_sound ? msg("motion.keepSound") : msg("motion.removeSound")} options={[msg("motion.keepSound"),msg("motion.removeSound")]} onChange={value=>change({keep_original_sound:value === msg("motion.keepSound")})}/>
+ </>;
+ if (model?.category === "video" && !model.motion_control) controls = <>
   <ImageAspectRatioSelector disabled={disabled} value={options.aspect_ratio!} options={videoAspectRatios(model, options)} onChange={aspect_ratio=>change({aspect_ratio})}/>
   {model.automatic_resolution ? null : <ImageQualitySelector disabled={disabled} label={msg("generationOptions.resolution")} value={options.resolution!} options={model.allowed_resolutions} onChange={resolution=>change({resolution})}/>}
   {model.automatic_duration
     ? <ImageQualitySelector disabled label={msg("generationOptions.duration")} value={msg("generationOptions.automaticDuration")} options={[msg("generationOptions.automaticDuration")]} onChange={()=>{}}/>
     : <ImageQualitySelector disabled={disabled} label={msg("generationOptions.duration")} value={msg("generationOptions.valueS", { value1: options.duration_sec ?? "—" })} options={model.allowed_durations_sec.filter(value=>model.price_by_option[`${options.resolution}:${value}`] > 0 && (!model.variants || model.variants.some(variant=>variant.resolution===options.resolution && variant.duration_sec===value))).map(value=>msg("generationOptions.valueS", { value1: value }))} onChange={value=>change({duration_sec:parseInt(value,10)})}/>}
  </>;
- return {options,controls,cost,canSubmit:model !== undefined && (model.category === "text" || (cost ?? 0)>0)};
+ return {options,controls,cost,canSubmit:model !== undefined && (model.category === "text" || model.category === "video" && model.motion_control === true || (cost ?? 0)>0)};
 }

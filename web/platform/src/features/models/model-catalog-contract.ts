@@ -150,6 +150,7 @@ const videoVariantSchema = z.object({
 }).strict();
 
 const videoControlsSchema = z.object({
+  motion_control: z.boolean().optional(),
   automatic_duration: z.boolean().optional(),
   automatic_resolution: z.boolean().optional(),
   allowed_resolutions: uniqueStringArray("Video resolutions"),
@@ -324,6 +325,7 @@ export type PublicOperation = PublicCatalogModel["operations"][number];
 export type PublicCatalogCategory = PublicCatalogModel["categories"][number];
 
 export const videoModelSchema = z.object({
+  motion_control: z.boolean().optional(),
   automatic_duration: z.boolean().optional(),
   automatic_resolution: z.boolean().optional(),
   capabilities: modelCapabilitiesSchema.optional(),
@@ -444,6 +446,7 @@ export function projectVideoModelCatalog(catalog: PublicCatalog): VideoModelList
         default_duration_sec: operation.video.default_duration_sec,
         default_aspect_ratio: operation.video.default_aspect_ratio,
         price_by_option: operation.video.price_by_option,
+        motion_control: operation.video.motion_control,
         automatic_duration: operation.video.automatic_duration,
         automatic_resolution: operation.video.automatic_resolution,
         variants: operation.video.variants,

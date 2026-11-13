@@ -335,6 +335,7 @@ type Deps struct {
 	OAuthLogins                BrowserOAuthLogins
 	MusicInputArtifacts        MusicInputArtifactSaver
 	MusicInputProber           MusicInputProber
+	MotionVideoInputs          MotionVideoInputUploader
 	InputArtifacts             InputArtifactService
 	InputObjects               ImageArtifactObjectReader
 	Payments                   WebPaymentService
@@ -454,6 +455,8 @@ func (h *Handler) Routes() http.Handler {
 	mux.HandleFunc("GET /web/v1/image-jobs/{jobID}", h.requirePrincipal(h.getImageJob))
 	mux.HandleFunc("GET /web/v1/image-jobs/{jobID}/result", h.requirePrincipal(h.getImageJobResult))
 	mux.HandleFunc("GET /web/v1/image-artifacts/{artifactID}", h.requirePrincipal(h.getImageArtifact))
+	mux.HandleFunc("POST /web/v1/motion-video-input", h.requireUnsafePrincipal(h.uploadMotionVideo))
+	mux.HandleFunc("GET /web/v1/motion-reference-quote", h.requirePrincipal(h.quoteMotionVideo))
 	mux.HandleFunc("GET /web/v1/image-reference-quote", h.requirePrincipal(h.quoteConversationImage))
 	mux.HandleFunc("POST /web/v1/input-artifacts", h.requireUnsafePrincipal(h.uploadConversationInput))
 	mux.HandleFunc("GET /web/v1/input-artifacts/{artifactID}", h.requirePrincipal(h.getConversationInput))
@@ -1627,7 +1630,7 @@ func (h *Handler) createConversationMessage(w http.ResponseWriter, r *http.Reque
 		h.createConversationMedia(w, r, principal.AccountID, conversation, idempotencyKey, req)
 		return
 	}
-	if len(req.ReferenceArtifactIDs) > 0 || req.ImageQuality != "" || req.AspectRatio != "" || req.OutputCount != 0 || req.Resolution != "" || req.DurationSec != 0 {
+	if req.ReferenceVideoArtifactID != uuid.Nil || req.CharacterOrientation != "" || req.KeepOriginalSound != nil || len(req.ReferenceArtifactIDs) > 0 || req.ImageQuality != "" || req.AspectRatio != "" || req.OutputCount != 0 || req.Resolution != "" || req.DurationSec != 0 {
 		writeError(w, http.StatusBadRequest, "invalid text model options")
 		return
 	}

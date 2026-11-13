@@ -3596,3 +3596,16 @@ GET /web/v1/billing/history is an account-native no-store read projection over l
 ## First-tariff promotions
 
 Promotion configuration and revisioned first-purchase policy belong to internal/service/promotionservice. PostgreSQL migration067 adds campaign/configuration, reserved/consumed usage and durable audited mutation records. Account locks precede promotion locks; a payment-insert guard covers account and legacy writers. Existing payment transactions freeze the charged amount while retaining full plan and regular renewal snapshots; verified settlement consumes the promotion atomically with the star grant. Refunds preserve consumption and first-purchase history. The website quote is account/session scoped and never a billing authority. Protected admin UI and assistant HTTP CLI use the same permission/idempotency/audit boundary, never direct SQL. See docs/runbooks/BILLING.md and docs/OPERATOR_UI.md.
+
+
+### DEV website Motion Control transport (2026-11-13)
+
+The development website selectively exposes the existing Kling Motion Control
+route when owned input storage and video probing are wired. One account-owned
+PNG/JPEG and one private MP4/MOV are submitted through the conversation Job API.
+Server-probed video duration determines the immutable tariff/reservation; client
+duration cannot reduce it. The existing worker signs job-bound reference reads,
+submits the provider task and delivers moderated artifacts to account history.
+Production and the production release view remain closed. No provider calls move
+into the API, and no schema, admission baseline or ledger semantics change.
+See docs/VIDEO_GENERATION.md and docs/runbooks/DEV.md for limits and verification.

@@ -11,14 +11,18 @@ import (
 const WebReferenceMaxBytes = 20 << 20
 const WebReferenceMaxDimension = 4096
 
+// Leave multipart headroom below the shared 50 MiB ingress limit.
+const WebMotionVideoMaxBytes = 48 << 20
+
 type WorkspaceConfig struct {
-	IncludePendingMedia   bool
-	IncludePendingText    bool
-	ImageReferenceUploads bool
-	TextModels            []textgeneration.PublicModel
-	ImageModels           []imagegeneration.PublicModel
-	VideoRoutes           []VideoRoute
-	Pricing               imagegeneration.SnapshotCatalog
+	IncludePendingMedia    bool
+	IncludePendingText     bool
+	ImageReferenceUploads  bool
+	MotionReferenceUploads bool
+	TextModels             []textgeneration.PublicModel
+	ImageModels            []imagegeneration.PublicModel
+	VideoRoutes            []VideoRoute
+	Pricing                imagegeneration.SnapshotCatalog
 }
 
 type WorkspaceModelList struct {
@@ -90,6 +94,7 @@ type WorkspaceImage struct {
 }
 
 type WorkspaceVideo struct {
+	MotionControl       bool                    `json:"motion_control,omitempty"`
 	MinPromptChars      int                     `json:"min_prompt_chars,omitempty"`
 	MaxPromptChars      int                     `json:"max_prompt_chars,omitempty"`
 	AutomaticResolution bool                    `json:"automatic_resolution,omitempty"`

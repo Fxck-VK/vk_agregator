@@ -22,6 +22,7 @@ import { useGenerationControls } from "@/features/models/generation-options";
 import type { GenerationModel } from "@/features/models/generation-model-catalog";
 import type { ChatModel } from "@/lib/web-api/contracts";
 
+import { useMotionVideo } from "@/features/conversations/use-motion-video";
 import { useReferenceQuote } from "@/features/conversations/use-reference-quote";
 import { useChatAttachments } from "@/features/conversations/use-chat-attachments";
 
@@ -180,15 +181,17 @@ export function WorkspacePrompt({ access = "authenticated", variant = "workspace
   const selectedChatModel = selectedModel?.category === "text" ? selectedModel : undefined;
   const attachments = useChatAttachments(access === "authenticated" && !submitAction ? selectedModel : undefined);
   const generation = useGenerationControls(selectedModel, chatModelUnavailable, setPrompt);
-  const referenceQuote = useReferenceQuote(selectedModel, generation.options, {
-    count: attachments.items.length, ready: !attachments.blocked, artifactIds: attachments.ids,
+  const motion = useMotionVideo(selectedModel, generation.options, chatModelUnavailable || !!submitAction?.disabled);
+  const options = {...generation.options, ...motion.options};
+  const referenceQuote = useReferenceQuote(selectedModel, options, {
+    count: attachments.items.length, ready: !attachments.blocked && !motion.blocked, artifactIds: attachments.ids,
   });
   const cost = submitAction !== undefined
     ? submitAction.price ?? undefined
     : referenceQuote.active ? referenceQuote.cost : generation.cost;
   const tooLong = selectedChatModel?.max_prompt_bytes !== undefined
     && new TextEncoder().encode(prompt.trim()).length > selectedChatModel.max_prompt_bytes;
-  const canSubmit = !attachments.blocked && referenceQuote.ready && prompt.trim() !== "" && !tooLong && !chatModelUnavailable && (submitAction?.canSubmit ?? generation.canSubmit);
+  const canSubmit = !attachments.blocked && !motion.blocked && referenceQuote.ready && prompt.trim() !== "" && !tooLong && !chatModelUnavailable && (submitAction?.canSubmit ?? generation.canSubmit);
   const disabled = submitAction?.disabled ?? false;
   const isNewChat = variant === "newChat";
   const isHero = variant === "hero";
@@ -247,7 +250,7 @@ export function WorkspacePrompt({ access = "authenticated", variant = "workspace
       prompt: normalizedPrompt,
       ...(selectedModel ? {
         modelId: selectedModel.id,
-        ...(selectedModel.category === "text" ? {} : { generationOptions: { ...generation.options, ...(attachments.ids.length ? { reference_artifact_ids: attachments.ids } : {}) } }),
+        ...(selectedModel.category === "text" ? {} : { generationOptions: { ...options, ...(attachments.ids.length ? { reference_artifact_ids: attachments.ids } : {}) } }),
       } : {}),
     });
     conversationList.upsertConversation({
@@ -257,7 +260,7 @@ export function WorkspacePrompt({ access = "authenticated", variant = "workspace
       updated_at: createdAt,
       isPending: true,
     });
-    attachments.clear();
+    attachments.clear(); motion.clear();
     setPrompt("");
     router.push(`/app/chat/${conversationKey}?pending=1`);
   };
@@ -298,6 +301,7 @@ export function WorkspacePrompt({ access = "authenticated", variant = "workspace
         generatedMediaHref={access === "guest" ? "/login" : "/app/files?category=images"}
         uploadedMediaHref={access === "guest" ? "/login" : "/app/files?category=uploads"}
       />
+      {motion.controls}
       <ReferenceQuoteNotice message={referenceQuote.error} onRetry={referenceQuote.retry} />
       {tooLong ? <StateNotice inline kind="error">{msg("workspacePrompt.theMessageIsTooLongForThe")}</StateNotice> : null}
     </form>

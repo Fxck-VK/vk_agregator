@@ -970,3 +970,20 @@ release-contract improvements. Verify seven running/published application image
 identities and website/VK ID/health, preserve email-proof key continuity and
 signed reference routing, then remove only the obsolete Mini App container in
 the exact DEV Compose project, without volumes or broad orphan cleanup.
+
+
+### Website Motion Control verification (2026-11-13)
+
+The existing Motion flag and MEDIA_REFERENCE_UPLOADS_ENABLED must be enabled;
+API and worker retain their required signed reference gateway configuration.
+The API image must include the configured ffprobe. Deploy API and platform
+together. The route is exposed only in APP_ENV=development and DEV release view.
+
+Upload one owned PNG/JPEG and one MP4/MOV through the composer. The web video
+limit is 48 MiB (native service: 100 MiB), leaving multipart headroom under the
+existing 50 MiB ingress. Verify the displayed duration, server quote, Std/Pro,
+image/video orientation (10/30-second caps) and source-sound option before submit.
+Use an independently authorized spending limit. Check the asynchronous Job,
+video playback, reload/history and files library; reconcile one reservation and
+one capture (or release on failure). A provider-side failure must be diagnosed
+from the existing task before paying for another submission.

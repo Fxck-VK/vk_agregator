@@ -10,6 +10,7 @@ import (
 	"vk-ai-aggregator/internal/service/modelcontract"
 	"vk-ai-aggregator/internal/service/pricingcatalog"
 	"vk-ai-aggregator/internal/service/providermodels"
+	"vk-ai-aggregator/internal/service/videoreference"
 )
 
 func WorkspaceCatalog(cfg WorkspaceConfig) WorkspaceModelList {
@@ -60,6 +61,9 @@ func WorkspaceCatalog(cfg WorkspaceConfig) WorkspaceModelList {
 			model.Operations[0].Inputs.Images = input
 			model.Operations[0].Inputs.MaxTotalBytes = workspaceReferenceTotalBytes(id, input.MaxCount, input.MaxBytes)
 		}
+		if id == string(domain.VideoRouteKling26Motion) && cfg.MotionReferenceUploads && op.Video != nil {
+			model.Operations[0].Inputs = op.Inputs
+		}
 		model.Capabilities = workspaceCapabilities(id, model.Operations[0])
 		if registry.IsDEVSmokeModel(id) {
 			model.Verification = "dev-smoke"
@@ -90,6 +94,9 @@ func WorkspaceCatalog(cfg WorkspaceConfig) WorkspaceModelList {
 		add(model.ID, model.Name, "Ответы на вопросы и работа с текстом в текущем диалоге", WorkspaceOperation{ID: "reply", Kind: "text", Enabled: true, Inputs: unknownWorkspaceInputs(), Text: &text}, model.EstimateCredits == 0)
 	}
 	for _, route := range cfg.VideoRoutes {
+		if route.Alias == string(domain.VideoRouteKling26Motion) && !cfg.MotionReferenceUploads {
+			continue
+		}
 		if providermodels.VideoCandidateRequiresImages(route.Alias) && !cfg.ImageReferenceUploads {
 			continue
 		}
@@ -102,7 +109,15 @@ func WorkspaceCatalog(cfg WorkspaceConfig) WorkspaceModelList {
 			inputs.Images = modelcontract.Input{Support: modelcontract.Supported, Enabled: true, Required: true, Processing: "native", MaxCount: 7, AllowedCounts: []int{1, 2, 3, 4, 5, 6, 7}, MaxBytes: WebReferenceMaxBytes, MaxWidth: WebReferenceMaxDimension, MaxHeight: WebReferenceMaxDimension, Formats: []modelcontract.FileFormat{{Extension: ".png", MIME: "image/png"}, {Extension: ".jpg", MIME: "image/jpeg"}, {Extension: ".jpeg", MIME: "image/jpeg"}}}
 			inputs.MaxTotalBytes = 7 * WebReferenceMaxBytes
 		}
+		if controls.MotionControl {
+			inputs.Images = modelcontract.Input{Support: modelcontract.Supported, Enabled: true, Required: true, Processing: "native", MaxCount: 1, AllowedCounts: []int{1}, MaxBytes: WebReferenceMaxBytes, MaxWidth: WebReferenceMaxDimension, MaxHeight: WebReferenceMaxDimension, Formats: []modelcontract.FileFormat{{Extension: ".png", MIME: "image/png"}, {Extension: ".jpg", MIME: "image/jpeg"}, {Extension: ".jpeg", MIME: "image/jpeg"}}}
+			inputs.Video = modelcontract.Input{Support: modelcontract.Supported, Enabled: true, Required: true, Processing: "native", MaxCount: 1, MaxBytes: WebMotionVideoMaxBytes, MaxDurationSec: videoreference.MaxDurationSec, MaxWidth: videoreference.MaxDimension, MaxHeight: videoreference.MaxDimension, Formats: []modelcontract.FileFormat{{Extension: ".mp4", MIME: "video/mp4"}, {Extension: ".mov", MIME: "video/quicktime"}}}
+			inputs.MaxTotalBytes = WebReferenceMaxBytes + WebMotionVideoMaxBytes
+		}
 		description := "Создание видео по текстовому описанию. Разрешения: " + strings.Join(controls.AllowedResolutions, ", ") + "."
+		if controls.MotionControl {
+			description = "Перенос движения из видео на персонажа с фотографии. Режимы Std и Pro."
+		}
 		if controls.AutomaticResolution {
 			description = "Создание видео по текстовому описанию. Разрешение выбирает провайдер."
 		}
@@ -240,6 +255,12 @@ func WorkspaceVideoControls(route VideoRoute, prices imagegeneration.SnapshotCat
 	if prices == nil || !WorkspaceVideoRouteSupported(route) {
 		return out, false
 	}
+	out.MotionControl = route.Alias == string(domain.VideoRouteKling26Motion)
+	if out.MotionControl {
+		route.AllowedAspectRatios = []string{"auto"}
+		route.DefaultAspectRatio = "auto"
+		out.StartImage = "required"
+	}
 	out.AutomaticDuration = route.AutomaticDuration
 	registered, known := providermodels.RuntimeRegistry().VideoRoute(domain.VideoRouteAlias(route.Alias))
 	for _, resolution := range route.AllowedResolutions {
@@ -261,7 +282,7 @@ func WorkspaceVideoControls(route VideoRoute, prices imagegeneration.SnapshotCat
 			}
 			variantCount := len(out.Variants)
 			for _, ratio := range route.AllowedAspectRatios {
-				if known && !slices.Contains(registered.Spec.AllowedAspectRatios, ratio) {
+				if known && !out.MotionControl && !slices.Contains(registered.Spec.AllowedAspectRatios, ratio) {
 					continue
 				}
 				variant := WorkspaceVideoVariant{Resolution: resolution, DurationSec: duration, AspectRatio: ratio}
@@ -315,7 +336,13 @@ func videoExpansionOutputMetadata(id string, variant *WorkspaceVideoVariant) {
 // Only specifically wired reference/automatic routes extend the text-only web
 // surface. Provider support alone does not expose other advanced routes.
 func WorkspaceVideoRouteSupported(route VideoRoute) bool {
-	if !route.Enabled || route.RequiresStartImage || route.RequiresReferenceVideo {
+	if !route.Enabled {
+		return false
+	}
+	if route.Alias == string(domain.VideoRouteKling26Motion) {
+		return true
+	}
+	if route.RequiresStartImage || route.RequiresReferenceVideo {
 		return false
 	}
 	if route.AutomaticDuration && route.Alias != "gemini_omni_flash_preview" {

@@ -15,9 +15,13 @@ type QuoteRequest = { key: string; attempt: number };
 export function useReferenceQuote(model: GenerationModel | undefined, options: GenerationOptions, attachments: QuoteAttachments) {
   const msg = useMessages();
   const { count } = attachments;
-  const query = model?.category === "images" && count > 0 ? new URLSearchParams({ model_id: model.id, image_quality: options.image_quality ?? "", aspect_ratio: options.aspect_ratio ?? "", output_count: String(options.output_count ?? 1), reference_count: String(count) }).toString() : "";
+  const motion = model?.category === "video" && model.motion_control === true;
+  const imageQuery = model?.category === "images" && count > 0 ? new URLSearchParams({ model_id: model.id, image_quality: options.image_quality ?? "", aspect_ratio: options.aspect_ratio ?? "", output_count: String(options.output_count ?? 1), reference_count: String(count) }).toString() : "";
+  const motionQuery = motion && options.reference_video_artifact_id ? new URLSearchParams({resolution:options.resolution ?? "",character_orientation:options.character_orientation ?? "",reference_video_artifact_id:options.reference_video_artifact_id}).toString() : "";
+  const query = motion ? motionQuery : imageQuery;
+  const path = motion ? "/web/v1/motion-reference-quote" : "/web/v1/image-reference-quote";
   const key = query && attachments.ready && attachments.artifactIds.length === count
-    ? JSON.stringify([query, ...attachments.artifactIds]) : "";
+    ? JSON.stringify([path, query, ...attachments.artifactIds]) : "";
   const [request, setRequest] = useState<QuoteRequest>({ key, attempt: 0 });
   const [result, setResult] = useState<{ request: QuoteRequest; credits?: number; failed?: boolean } | null>(null);
   // Invalidate synchronously, including remove/re-add and retry of the same query.
@@ -25,7 +29,7 @@ export function useReferenceQuote(model: GenerationModel | undefined, options: G
   useEffect(() => {
     if (!key || request.key !== key) return;
     const controller = new AbortController();
-    void webBrowserFetch(`/web/v1/image-reference-quote?${query}`, { signal: controller.signal })
+    void webBrowserFetch(`${path}?${query}`, { signal: controller.signal })
       .then(async (response) => {
         if (!response.ok) throw new Error();
         const payload: unknown = await response.json();
@@ -34,13 +38,13 @@ export function useReferenceQuote(model: GenerationModel | undefined, options: G
       })
       .catch(() => { if (!controller.signal.aborted) setResult({ request, failed: true }); });
     return () => controller.abort();
-  }, [query, key, request]);
+  }, [path, query, key, request]);
   const currentResult = key && request.key === key && result?.request === request ? result : null;
   return {
     retry: () => setRequest(value => ({ ...value, attempt: value.attempt + 1 })),
-    active: !!query,
+    active: motion || !!query,
     cost: currentResult?.credits,
-    ready: !query || currentResult?.credits !== undefined,
+    ready: (!motion && !query) || currentResult?.credits !== undefined,
     error: currentResult?.failed ? msg("useReferenceQuote.couldNotCalculateTheCostWithAttachments") : null,
   };
 }

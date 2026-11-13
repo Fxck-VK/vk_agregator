@@ -442,3 +442,24 @@ Both feature flags default false. DEV preparation enables them when APIMart
 is configured and preserves explicit false overrides. Production activation
 still requires explicit environment configuration. No paid live generation is
 part of the automated checks.
+
+
+## DEV website Motion Control (2026-11-13)
+
+Owner-authorized web transport: one PNG/JPEG (20 MiB max) plus one owned MP4/MOV
+(H.264/H.265, 48 MiB max, up to 4096 pixels per side). Multipart headroom stays
+below the existing 50 MiB ingress limit. The native video service retains its
+separate 100 MiB bound. Web uploads use server-side ffprobe before persistence.
+
+The shared composer offers Std/Pro, character orientation from image/video,
+and preserve/remove source sound. Image orientation permits 3-10 seconds; video
+orientation permits 3-30 seconds. Duration and framing are not free-form web
+controls. GET /web/v1/motion-reference-quote validates the session-owned video
+and prices ceil(duration_ms/1000). Submission repeats this check before creating
+the existing account-native asynchronous Job with both input artifact IDs.
+POST /web/v1/motion-video-input uses the existing cookie, CSRF and rate limiter.
+All artifact and signed provider-reference ownership checks remain in force.
+
+Only APP_ENV=development with the existing enabled route, pricing, upload storage
+and prober exposes the form; production release view/direct requests stay closed.
+No production model admission changes. Paid verification is separately authorized.

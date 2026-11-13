@@ -273,3 +273,5 @@ and the brand gradient are preserved:
 24 видео без принятого тестового Job; приложение media-models-qa.json отсутствует.
 
 First-tariff percentage promotions: [billing contract](../docs/runbooks/BILLING.md#first-purchase-tariff-promotions), [admin/assistant tooling](../docs/OPERATOR_UI.md#promotion-management-and-assistant-http-tooling), [implementation plan](superpowers/plans/2026-10-31-subscription-promotions.md). Local only; no live campaign is seeded.
+
+- [DEV website Motion Control implementation](superpowers/plans/2026-11-13-web-motion-control.md) — task-scoped upload, quote, composer and browser verification plan.

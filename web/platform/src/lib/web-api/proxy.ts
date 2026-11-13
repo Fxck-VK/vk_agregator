@@ -197,6 +197,7 @@ export async function proxyWebApiRequest(
       if (pathname === "/web/v1/music-jobs/prepare") bodyLimit = MAX_MUSIC_PREPARE_BODY_BYTES;
       if (pathname === "/web/v1/music-inputs") bodyLimit = MAX_MUSIC_UPLOAD_BODY_BYTES;
       if (pathname === "/web/v1/input-artifacts") bodyLimit = 21 * 1024 * 1024;
+      if (pathname === "/web/v1/motion-video-input") bodyLimit = 49 * 1024 * 1024;
     }
     const proxyBody = await readProxyRequestBody(request, bodyLimit);
     if (proxyBody.kind === "too_large") {

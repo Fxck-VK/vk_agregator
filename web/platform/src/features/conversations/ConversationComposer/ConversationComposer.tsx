@@ -17,6 +17,7 @@ import { useGenerationControls, type GenerationOptions } from "@/features/models
 import type { GenerationModel } from "@/features/models/generation-model-catalog";
 import type { ChatModel } from "@/lib/web-api/contracts";
 
+import { useMotionVideo } from "@/features/conversations/use-motion-video";
 import { useReferenceQuote } from "@/features/conversations/use-reference-quote";
 import { useChatAttachments } from "@/features/conversations/use-chat-attachments";
 
@@ -54,8 +55,10 @@ export function ConversationComposer({
   const [draft, setDraft] = useState(initialDraft);
   const attachments = useChatAttachments(generationModel);
   const generation = useGenerationControls(generationModel, disabled, setDraft);
-  const referenceQuote = useReferenceQuote(generationModel, generation.options, {
-    count: attachments.items.length, ready: !attachments.blocked, artifactIds: attachments.ids,
+  const motion = useMotionVideo(generationModel, generation.options, disabled);
+  const options = {...generation.options, ...motion.options};
+  const referenceQuote = useReferenceQuote(generationModel, options, {
+    count: attachments.items.length, ready: !attachments.blocked && !motion.blocked, artifactIds: attachments.ids,
   });
   const cost = referenceQuote.active ? referenceQuote.cost : generation.cost;
   const normalizedDraft = draft.trim();
@@ -71,7 +74,7 @@ export function ConversationComposer({
   const tooShort = minPromptChars !== undefined && promptCharCount < minPromptChars;
   const tooLong = (promptByteLimit !== undefined && new TextEncoder().encode(normalizedDraft).length > promptByteLimit)
     || (maxPromptChars !== undefined && promptCharCount > maxPromptChars);
-  const canSubmit = normalizedDraft !== "" && !submitDisabled && !disabled && !tooShort && !tooLong && generation.canSubmit && !attachments.blocked && referenceQuote.ready;
+  const canSubmit = normalizedDraft !== "" && !submitDisabled && !disabled && !tooShort && !tooLong && generation.canSubmit && !attachments.blocked && !motion.blocked && referenceQuote.ready;
 
   const changeDraft = (event: ChangeEvent<HTMLTextAreaElement>) => {
     setDraft(event.target.value);
@@ -84,9 +87,9 @@ export function ConversationComposer({
 
     const prompt = normalizedDraft;
     const accepted = generationModel && generationModel.category !== "text"
-      ? await onSubmit(prompt, { ...generation.options, ...(attachments.ids.length ? { reference_artifact_ids: attachments.ids } : {}) })
+      ? await onSubmit(prompt, { ...options, ...(attachments.ids.length ? { reference_artifact_ids: attachments.ids } : {}) })
       : await onSubmit(prompt);
-    if (accepted !== false) { setDraft(""); attachments.clear(); }
+    if (accepted !== false) { setDraft(""); attachments.clear(); motion.clear(); }
   };
 
   const submitForm = (event: FormEvent<HTMLFormElement>) => {
@@ -129,6 +132,7 @@ export function ConversationComposer({
         value={draft}
         variant="conversation"
       />
+      {motion.controls}
       <ReferenceQuoteNotice message={referenceQuote.error} onRetry={referenceQuote.retry} />
       {tooLong ? <StateNotice inline kind="error">{msg("conversationComposer.theMessageIsTooLongForThe")}</StateNotice> : null}
       {!tooLong && normalizedDraft !== "" && tooShort ? <StateNotice inline kind="error">{msg("conversationComposer.theMessageIsTooShortForThe")}</StateNotice> : null}

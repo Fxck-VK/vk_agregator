@@ -51,6 +51,9 @@ func releaseModelFeature(id, kind string) string {
 
 func (h *Handler) releaseModelAllowed(r *http.Request, id, kind string) bool {
 	profile := h.releaseProfile(r)
+	if id == string(domain.VideoRouteKling26Motion) && profile != "dev" {
+		return false
+	}
 	if !releasepolicy.Enabled(releaseModelFeature(id, kind), profile) {
 		return false
 	}

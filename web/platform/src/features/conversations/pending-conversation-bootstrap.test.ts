@@ -66,3 +66,11 @@ describe("pending conversation bootstrap", () => {
     expect(window.sessionStorage.getItem("unrelated.preference")).toBe("keep");
   });
 });
+
+
+it("retains Motion references and controls under the same retry key",()=>{
+ const options={reference_artifact_ids:[pendingID],reference_video_artifact_id:canonicalID,resolution:"std",character_orientation:"image" as const,keep_original_sound:false};
+ savePendingConversationBootstrap({conversationKey:pendingID,messageKey:messageIdempotencyId,prompt:"Synthetic motion",modelId:"video_kling_2_6_motion_control",generationOptions:options});
+ expect(readPendingConversationBootstrap(pendingID)).toMatchObject({messageKey:messageIdempotencyId,generationOptions:options});
+ window.sessionStorage.clear();
+});

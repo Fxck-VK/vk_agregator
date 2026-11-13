@@ -1,0 +1,5 @@
+.panel { display: grid; gap: 10px; min-width: 0; padding: 12px 4px; }
+.hint { margin: 0; font-size: 13px; line-height: 1.5; overflow-wrap: anywhere; }
+.actions { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; min-width: 0; font-size: 13px; }
+.actions button { max-width: 100%; white-space: normal; }
+.preview { display: block; width: 240px; max-width: 100%; max-height: 160px; border-radius: 10px; background: #111; }

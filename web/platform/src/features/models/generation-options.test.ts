@@ -36,3 +36,10 @@ it("repairs a saved video combination when duration is unavailable at its resolu
   } as GenerationModel;
   expect(resolveGenerationOptions(video,{resolution:"1080p",duration_sec:10,aspect_ratio:"16:9"})).toEqual({options:{resolution:"1080p",duration_sec:5,aspect_ratio:"9:16"},cost:100});
 });
+
+
+it("keeps Motion duration/framing server-owned and preserves native mode controls", () => {
+ const model = {id:"video_kling_2_6_motion_control",name:"Motion",category:"video",motion_control:true,allowed_resolutions:["std","pro"],default_resolution:"std"} as GenerationModel;
+ expect(resolveGenerationOptions(model,{duration_sec:1,aspect_ratio:"1:1",resolution:"pro",character_orientation:"video",keep_original_sound:false})).toEqual({options:{resolution:"pro",character_orientation:"video",keep_original_sound:false},cost:undefined});
+ expect(resolveGenerationOptions(model).options).toEqual({resolution:"std",character_orientation:"image",keep_original_sound:true});
+});

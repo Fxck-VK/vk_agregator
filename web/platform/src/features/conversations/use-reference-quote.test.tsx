@@ -69,3 +69,21 @@ it.each([0, -1, 1.5, "37", null])("does not accept an invalid server price: %s",
   expect(result.current.ready).toBe(false);
   expect(result.current.cost).toBeUndefined();
 });
+
+
+it("waits for Motion video and replaces its quote on orientation change", async () => {
+ const motion = {id:"video_kling_2_6_motion_control",name:"Motion",category:"video",motion_control:true} as import("@/features/models/generation-model-catalog").GenerationModel;
+ let finish!: (response: Response) => void;
+ vi.mocked(webBrowserFetch).mockReturnValueOnce(new Promise(resolve => { finish=resolve; })).mockResolvedValueOnce(Response.json({credits:99,duration_sec:6}));
+ const {result,rerender}=renderHook(({opts})=>useReferenceQuote(motion,opts,attached),{initialProps:{opts:{resolution:"std",character_orientation:"image"} as import("@/features/models/generation-options-contract").GenerationOptions}});
+ expect(result.current).toMatchObject({active:true,ready:false,cost:undefined});
+ expect(webBrowserFetch).not.toHaveBeenCalled();
+ rerender({opts:{resolution:"std",character_orientation:"image",reference_video_artifact_id:"00000000-0000-4000-8000-000000000001"}});
+ const signal=vi.mocked(webBrowserFetch).mock.calls[0][1]?.signal;
+ rerender({opts:{resolution:"std",character_orientation:"video",reference_video_artifact_id:"00000000-0000-4000-8000-000000000001"}});
+ expect(signal?.aborted).toBe(true);
+ await waitFor(()=>expect(result.current.cost).toBe(99));
+ await act(async()=>finish(Response.json({credits:1})));
+ expect(result.current.cost).toBe(99);
+ expect(vi.mocked(webBrowserFetch).mock.calls[1][0]).toContain("/web/v1/motion-reference-quote?");
+});

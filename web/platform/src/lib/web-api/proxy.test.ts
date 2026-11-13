@@ -400,3 +400,15 @@ describe("proxyWebApiRequest", () => {
     await expect(response.json()).resolves.toEqual({ error: "Service unavailable." });
   });
 });
+
+
+it("bounds Motion multipart uploads without raising other endpoint limits", async () => {
+ const upstream=vi.fn(async()=>Response.json({ok:true})); vi.stubGlobal("fetch",upstream);
+ try {
+  const body=new Uint8Array(70*1024);
+  const path="/web/v1/motion-video-input";
+  expect((await proxyWebApiRequest(new Request(`https://platform.example${path}`,{method:"POST",body}),path,internalOrigin)).status).toBe(200);
+  expect((await proxyWebApiRequest(new Request(`https://platform.example${path}`,{method:"POST",headers:{"Content-Length":String(50*1024*1024)},body:"x"}),path,internalOrigin)).status).toBe(413);
+  expect(upstream).toHaveBeenCalledTimes(1);
+ } finally {vi.unstubAllGlobals();}
+});

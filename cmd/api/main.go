@@ -57,6 +57,7 @@ import (
 	"vk-ai-aggregator/internal/service/providermodels"
 	"vk-ai-aggregator/internal/service/providerreference"
 	"vk-ai-aggregator/internal/service/resultservice"
+	"vk-ai-aggregator/internal/service/videoreference"
 	"vk-ai-aggregator/internal/service/videorouter"
 	"vk-ai-aggregator/internal/service/webreferralservice"
 	legalcatalog "vk-ai-aggregator/web/platform/legal"
@@ -371,6 +372,7 @@ func main() {
 		webChatMessageRateWindow,
 	)
 	webImagePreparedExpiry := preparedjobexpiry.New(postgres.NewPreparedWebImageExpiryRepository(pool))
+	var motionInputs websession.MotionVideoInputUploader
 	var webInputs websession.InputArtifactService
 	var webInputObjects websession.ImageArtifactObjectReader
 	if objects, ok := webArtifactURLSigner.(interface {
@@ -379,6 +381,9 @@ func main() {
 	}); ok && cfg.MediaReferenceUploadsEnabled {
 		webInputs = artifactservice.New(core.Artifacts, objects, "artifacts")
 		webInputObjects = objects
+		if cfg.Env == "development" {
+			motionInputs = videoreference.New(core.Artifacts, objects, videoreference.NewProber(cfg.FFProbePath))
+		}
 	}
 	var emailRegistration websession.EmailRegistrationService
 	var browserAuth *browserauth.Service
@@ -428,7 +433,7 @@ func main() {
 			TelegramClientID: firstOAuthClientID(cfg.AccountOAuthTelegramClientIDs), TelegramClientSecret: cfg.AccountWebOAuthTelegramClientSecret,
 			VKIDClientID: firstOAuthClientID(cfg.AccountOAuthVKIDClientIDs),
 		}, redisstore.NewAccountOAuthBrowserStore(rdb), oauthRegistry, nil),
-		InputArtifacts: webInputs, InputObjects: webInputObjects,
+		InputArtifacts: webInputs, InputObjects: webInputObjects, MotionVideoInputs: motionInputs,
 		Payments:               core.Payment,
 		AccountHistory:         core.AccountHistory,
 		Subscriptions:          core.Payment,

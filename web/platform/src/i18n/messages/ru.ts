@@ -5,6 +5,27 @@ import { messagesMusicRu } from "../music";
 import { messagesReleasePreviewRu } from "../release-preview";
 
 export const messagesRu = {
+  "motion.mode": "Режим",
+  "motion.orientation": "Ориентация персонажа",
+  "motion.byImage": "По фото",
+  "motion.byVideo": "По видео",
+  "motion.sourceSound": "Звук референса",
+  "motion.keepSound": "Сохранить",
+  "motion.removeSound": "Убрать",
+  "motion.fileRequirement": "Нужно видео MP4/MOV до 48 МиБ.",
+  "motion.invalidVideo": "Видео не прошло проверку. Нужны MP4/MOV, H.264/H.265, 3–30 секунд, до 4096 пикселей по стороне.",
+  "motion.uploadFailed": "Не удалось загрузить и проверить видео. Выберите файл повторно.",
+  "motion.instructions": "Добавьте одно фото персонажа и видео с движением. Персонаж должен быть виден целиком или по пояс. Видео: 3–{seconds} с, MP4/MOV, до 48 МиБ.",
+  "motion.inputLabel": "Видеореференс Motion Control",
+  "motion.replaceVideo": "Заменить видео",
+  "motion.uploadVideo": "Загрузить видео движения",
+  "motion.removeVideo": "Убрать видео",
+  "motion.duration": "Длительность: {seconds} с",
+  "motion.preview": "Просмотр видеореференса",
+  "motion.validating": "Проверяем видео…",
+  "motion.uploadProgress": "Загрузка видео: {progress}%",
+  "motion.tooLong": "Для ориентации по фото допустимо видео до {seconds} секунд. Выберите ориентацию по видео или более короткий файл.",
+
   ...messagesReleasePreviewRu,
   "units.materials.zero": "{count} материалов",
   "units.materials.one": "{count} материал",

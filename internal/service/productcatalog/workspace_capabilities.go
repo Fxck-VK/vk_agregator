@@ -1,6 +1,9 @@
 package productcatalog
 
-import "vk-ai-aggregator/internal/service/providermodels"
+import (
+	"vk-ai-aggregator/internal/domain"
+	"vk-ai-aggregator/internal/service/providermodels"
+)
 
 // Public capability descriptions follow the same priced controls as submission.
 // Native support never enables uploads or controls on the web surface.
@@ -47,6 +50,10 @@ func workspaceCapabilities(id string, op WorkspaceOperation) *providermodels.Mod
 		}
 		c := providermodels.VideoCapabilitiesForOptions(id, op.Video.AllowedDurationsSec, op.Video.AllowedResolutions)
 		if c != nil {
+			if id == string(domain.VideoRouteKling26Motion) && op.Video.MotionControl && op.Inputs.Images.Enabled && op.Inputs.Video.Enabled {
+				c.Application.Notes = []string{"На DEV нужны одно фото PNG/JPEG до 20 МиБ и одно видео MP4/MOV до 48 МиБ. По фото: 3–10 секунд; по видео: 3–30. Длительность и стоимость проверяет сервер."}
+				return c
+			}
 			v := c.Application.Video
 			zero := 0
 			v.Images = providermodels.InputCapability{Support: providermodels.Unsupported, Extensions: []string{}, MaxCount: &zero}

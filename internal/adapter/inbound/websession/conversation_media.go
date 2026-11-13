@@ -20,17 +20,21 @@ import (
 )
 
 type conversationGenerationRequest struct {
-	ReferenceArtifactIDs []uuid.UUID `json:"reference_artifact_ids,omitempty"`
-	Prompt               string      `json:"prompt"`
-	ModelID              string      `json:"model_id,omitempty"`
-	ImageQuality         string      `json:"image_quality,omitempty"`
-	AspectRatio          string      `json:"aspect_ratio,omitempty"`
-	OutputCount          int         `json:"output_count,omitempty"`
-	Resolution           string      `json:"resolution,omitempty"`
-	DurationSec          int         `json:"duration_sec,omitempty"`
+	ReferenceVideoArtifactID uuid.UUID   `json:"reference_video_artifact_id,omitempty"`
+	CharacterOrientation     string      `json:"character_orientation,omitempty"`
+	KeepOriginalSound        *bool       `json:"keep_original_sound,omitempty"`
+	ReferenceArtifactIDs     []uuid.UUID `json:"reference_artifact_ids,omitempty"`
+	Prompt                   string      `json:"prompt"`
+	ModelID                  string      `json:"model_id,omitempty"`
+	ImageQuality             string      `json:"image_quality,omitempty"`
+	AspectRatio              string      `json:"aspect_ratio,omitempty"`
+	OutputCount              int         `json:"output_count,omitempty"`
+	Resolution               string      `json:"resolution,omitempty"`
+	DurationSec              int         `json:"duration_sec,omitempty"`
 }
 
 type safeVideoModel struct {
+	MotionControl       bool             `json:"motion_control,omitempty"`
 	AutomaticResolution bool             `json:"automatic_resolution,omitempty"`
 	AutomaticDuration   bool             `json:"automatic_duration,omitempty"`
 	MinPromptChars      int              `json:"min_prompt_chars,omitempty"`
@@ -54,6 +58,9 @@ func (h *Handler) conversationVideoRoutes() []productcatalog.VideoRoute {
 		return routes
 	}
 	for _, route := range h.cfg.VideoRoutes {
+		if route.Alias == string(domain.VideoRouteKling26Motion) && !h.motionReferencesEnabled() {
+			continue
+		}
 		if !productcatalog.WorkspaceVideoRouteSupported(route) || providermodels.VideoCandidateRequiresImages(route.Alias) && (h.deps.InputArtifacts == nil || h.deps.InputObjects == nil) {
 			continue
 		}
@@ -76,7 +83,7 @@ func (h *Handler) listVideoModels(w http.ResponseWriter, r *http.Request) {
 		if !ok {
 			continue
 		}
-		items = append(items, safeVideoModel{ID: route.Alias, Name: route.Name, Description: route.Description, AllowedResolutions: controls.AllowedResolutions, AllowedDurations: controls.AllowedDurationsSec, AllowedAspectRatios: controls.AllowedAspectRatios, DefaultResolution: controls.DefaultResolution, DefaultDuration: controls.DefaultDurationSec, DefaultAspectRatio: controls.DefaultAspectRatio, PriceByOption: controls.PriceByOption, AutomaticResolution: controls.AutomaticResolution, AutomaticDuration: controls.AutomaticDuration, MinPromptChars: controls.MinPromptChars, MaxPromptChars: controls.MaxPromptChars})
+		items = append(items, safeVideoModel{MotionControl: controls.MotionControl, ID: route.Alias, Name: route.Name, Description: route.Description, AllowedResolutions: controls.AllowedResolutions, AllowedDurations: controls.AllowedDurationsSec, AllowedAspectRatios: controls.AllowedAspectRatios, DefaultResolution: controls.DefaultResolution, DefaultDuration: controls.DefaultDurationSec, DefaultAspectRatio: controls.DefaultAspectRatio, PriceByOption: controls.PriceByOption, AutomaticResolution: controls.AutomaticResolution, AutomaticDuration: controls.AutomaticDuration, MinPromptChars: controls.MinPromptChars, MaxPromptChars: controls.MaxPromptChars})
 	}
 	writeJSON(w, http.StatusOK, struct {
 		Items []safeVideoModel `json:"items"`
@@ -98,6 +105,12 @@ func (h *Handler) isConversationMediaModel(id string) bool {
 }
 
 func (h *Handler) resolveConversationMedia(req conversationGenerationRequest) (domain.OperationType, domain.Modality, map[string]any, pricingcatalog.PricingSnapshot, error) {
+	if req.ModelID == string(domain.VideoRouteKling26Motion) {
+		return h.resolveMotionMedia(req)
+	}
+	if req.ReferenceVideoArtifactID != uuid.Nil || req.CharacterOrientation != "" || req.KeepOriginalSound != nil {
+		return "", "", nil, pricingcatalog.PricingSnapshot{}, errors.New("unsupported motion options")
+	}
 	for _, model := range h.cfg.ImageModels {
 		if model.ID != req.ModelID {
 			continue
@@ -168,6 +181,9 @@ func (h *Handler) resolveConversationMedia(req conversationGenerationRequest) (d
 }
 
 func (h *Handler) createConversationMedia(w http.ResponseWriter, r *http.Request, accountID uuid.UUID, conversation *domain.Conversation, key uuid.UUID, req conversationGenerationRequest) {
+	if !h.prepareMotionInput(w, r, accountID, &req) {
+		return
+	}
 	operation, modality, params, snapshot, err := h.resolveConversationMedia(req)
 	if err != nil {
 		writeError(w, http.StatusBadRequest, "invalid media model options")
@@ -180,7 +196,7 @@ func (h *Handler) createConversationMedia(w http.ResponseWriter, r *http.Request
 	params["conversation_source"] = string(domain.ConversationSourceWeb)
 	raw, _ := json.Marshal(params)
 	orchestrationKey := "web-chat:" + accountID.String() + ":" + key.String()
-	job, err := h.deps.WebChatJobs.CreateJob(r.Context(), joborchestrator.CreateJobInput{AccountID: accountID, Source: "web", ChannelContext: &domain.ChannelContext{Channel: domain.ChannelWeb}, ResultMode: domain.ResultModeAccountHistory, Operation: operation, Modality: modality, IdempotencyKey: orchestrationKey, CorrelationID: orchestrationKey, Params: raw, PricingSnapshot: snapshot, InputArtifactIDs: append([]uuid.UUID(nil), req.ReferenceArtifactIDs...)})
+	job, err := h.deps.WebChatJobs.CreateJob(r.Context(), joborchestrator.CreateJobInput{AccountID: accountID, Source: "web", ChannelContext: &domain.ChannelContext{Channel: domain.ChannelWeb}, ResultMode: domain.ResultModeAccountHistory, Operation: operation, Modality: modality, IdempotencyKey: orchestrationKey, CorrelationID: orchestrationKey, Params: raw, PricingSnapshot: snapshot, InputArtifactIDs: conversationInputIDs(req)})
 	switch {
 	case errors.Is(err, domain.ErrConflict):
 		writeError(w, http.StatusConflict, "idempotency key belongs to another message")

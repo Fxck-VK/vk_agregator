@@ -6,6 +6,27 @@ import { messagesMusicEn } from "../music";
 import { messagesReleasePreviewEn } from "../release-preview";
 
 export const messagesEn = {
+  "motion.mode": "Mode",
+  "motion.orientation": "Character orientation",
+  "motion.byImage": "From image",
+  "motion.byVideo": "From video",
+  "motion.sourceSound": "Reference sound",
+  "motion.keepSound": "Keep",
+  "motion.removeSound": "Remove",
+  "motion.fileRequirement": "Choose an MP4/MOV video up to 48 MiB.",
+  "motion.invalidVideo": "Video validation failed. Use MP4/MOV, H.264/H.265, 3–30 seconds and up to 4096 pixels per side.",
+  "motion.uploadFailed": "Could not upload and validate the video. Choose the file again.",
+  "motion.instructions": "Add one character photo and one motion video. The character must be visible in full or from the waist up. Video: 3–{seconds} s, MP4/MOV, up to 48 MiB.",
+  "motion.inputLabel": "Motion Control video reference",
+  "motion.replaceVideo": "Replace video",
+  "motion.uploadVideo": "Upload motion video",
+  "motion.removeVideo": "Remove video",
+  "motion.duration": "Duration: {seconds} s",
+  "motion.preview": "Preview video reference",
+  "motion.validating": "Validating video…",
+  "motion.uploadProgress": "Uploading video: {progress}%",
+  "motion.tooLong": "Image orientation accepts videos up to {seconds} seconds. Choose video orientation or a shorter file.",
+
   ...messagesReleasePreviewEn,
   "units.materials.zero": "{count} materials",
   "units.materials.one": "{count} material",

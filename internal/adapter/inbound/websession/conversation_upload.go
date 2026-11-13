@@ -74,7 +74,7 @@ func (h *Handler) imageReferencesEnabled(modelID string) bool {
 	if h.deps.InputArtifacts == nil || h.deps.InputObjects == nil {
 		return false
 	}
-	if providermodels.VideoCandidateRequiresImages(modelID) {
+	if providermodels.VideoCandidateRequiresImages(modelID) || modelID == string(domain.VideoRouteKling26Motion) {
 		for _, route := range h.conversationVideoRoutes() {
 			if route.Alias == modelID {
 				return true
@@ -115,6 +115,9 @@ func (h *Handler) uploadConversationInput(w http.ResponseWriter, r *http.Request
 	}
 	if !h.imageReferencesEnabled(r.URL.Query().Get("model_id")) {
 		writeError(w, 400, "attachments unsupported for model")
+		return
+	}
+	if r.URL.Query().Get("model_id") == string(domain.VideoRouteKling26Motion) && !h.requireReleaseModel(w, r, string(domain.VideoRouteKling26Motion), "video") {
 		return
 	}
 	allowed, err := h.deps.WebChatMessageLimiter.Allow(r.Context(), "upload:"+principal.AccountID.String())

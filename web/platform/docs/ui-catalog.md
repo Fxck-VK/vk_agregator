@@ -1727,3 +1727,8 @@ Reference-specific intermediate weights use shared global tokens:
 `--font-weight-heavy` (750). Existing medium/semibold tokens remain 500/600.
 New template rules preserve their reference weight through these tokens;
 workspace semantic headings and bold text keep the existing semibold role.
+
+
+### Motion Control на DEV
+
+`useMotionVideo` дополняет общие `ConversationComposer` и `WorkspacePrompt`: одно видео MP4/MOV до 48 МиБ, локальный плеер, прогресс, удаление и серверная проверка. Фото использует существующий `useChatAttachments`. `useGenerationControls` показывает Std/Pro, ориентацию и сохранение звука; `useReferenceQuote` ожидает проверенные референсы и сбрасывает цену при их замене. Длительность и кадр не выбираются вручную. Компонент доступен только по `motion_control` активной операции каталога.
