@@ -35,6 +35,8 @@ func TestAPIMartObservedOutputDimensions(t *testing.T) {
 		{"grok-imagine-1.5-video-ext", 752, 416, 6042},
 		{"MiniMax-H3-Max", 832, 480, 5184},
 		{"flux-3-video", 1280, 704, 5042},
+		{"skyreels-v4-fast", 864, 480, 3021},
+		{"skyreels-v4-std", 864, 480, 3021},
 	} {
 		t.Run(tc.model, func(t *testing.T) {
 			contract, ok := byModel[tc.model]

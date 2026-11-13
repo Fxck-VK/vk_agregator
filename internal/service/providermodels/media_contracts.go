@@ -50,7 +50,8 @@ func (r Registry) ProviderMediaContracts(runtime MediaContractRuntime) []domain.
 		if route.Provider == domain.ProviderAPIMart {
 			switch route.ProviderModelID {
 			case "viduq3", "viduq3-pro", "viduq3-turbo", "wan3.0-video-prime", "seedance-2.0",
-				"seedance-2.0-mini", "wan3.0-video", "grok-imagine-1.5-video-ext", "flux-3-video":
+				"seedance-2.0-mini", "wan3.0-video", "grok-imagine-1.5-video-ext", "flux-3-video",
+				"skyreels-v4-fast", "skyreels-v4-std":
 				// Authorized smoke, 2026-11-13: verified decoded raster dimensions
 				// for 16:9. See docs/VIDEO_GENERATION.md#output-aspect-rounding.
 				contracts[len(contracts)-1].OutputMayRoundAspect = true

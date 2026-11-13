@@ -54,9 +54,10 @@ dimensions for 16:9 requests, read from decoded APIMart preview videos:
 | `wan3.0-video` | 480p | 854 x 480 |
 | `grok-imagine-1.5-video-ext` | 480p | 752 x 416 |
 | `flux-3-video` | 720p | 1280 x 704 |
+| `skyreels-v4-fast`, `skyreels-v4-std` | 480p | 864 x 480 |
 | `MiniMax-H3-Max` | 480p | 832 x 480 |
 
-The nine bindings other than MiniMax H3 Max receive the flag from
+The eleven bindings other than MiniMax H3 Max receive the flag from
 `providermodels.ProviderMediaContracts`. Their existing allowed request
 ratios/resolutions/durations, input capabilities, frozen admission records,
 codec/container/byte limits and mandatory probing/moderation are unchanged.
