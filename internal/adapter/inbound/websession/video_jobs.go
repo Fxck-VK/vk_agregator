@@ -197,6 +197,9 @@ func newSafeVideoJob(job *domain.Job) (safeVideoJob, bool) {
 	params.VideoRouteAlias = strings.TrimSpace(params.VideoRouteAlias)
 	params.Resolution = strings.TrimSpace(params.Resolution)
 	params.AspectRatio = strings.TrimSpace(params.AspectRatio)
+	if params.AspectRatio == "" && params.ModelID == string(domain.VideoRouteKling26Motion) {
+		params.AspectRatio = "auto"
+	}
 	if params.Prompt == "" ||
 		params.ModelID == "" ||
 		params.ModelName == "" ||

@@ -64,6 +64,46 @@ func TestVideoJobHistoryListsOnlyAccountWebVideos(t *testing.T) {
 	}
 }
 
+func TestMotionVideoJobHistoryAndResultUseReferenceFraming(t *testing.T) {
+	h, _, sessions := newImageJobTestHandler(t)
+	accountID, jobID, artifactID := uuid.New(), uuid.New(), uuid.New()
+	jobs, artifacts, moderation := memory.NewJobRepo(), memory.NewArtifactRepo(), memory.NewModerationRepo()
+	job := newWebVideoHistoryJob(t, accountID, jobID, time.Now().UTC())
+	job.Params = mustMarshalWebVideoJobParams(t, map[string]any{
+		"prompt": "motion test", "model_id": string(domain.VideoRouteKling26Motion),
+		"video_route_alias": string(domain.VideoRouteKling26Motion), "model_name": "Kling 2.6 Motion Control",
+		"duration_sec": 6, "resolution": "std",
+	})
+	job.OutputArtifactIDs = []uuid.UUID{artifactID}
+	mustCreateVideoHistoryJob(t, jobs, job)
+	mustCreateVideoArtifact(t, artifacts, accountID, jobID, artifactID)
+	if err := moderation.Create(t.Context(), &domain.ModerationResult{JobID: jobID, ArtifactID: &artifactID, Stage: domain.ModerationStageOutput, Decision: domain.ModerationAllow, Provider: "keyword"}); err != nil {
+		t.Fatal(err)
+	}
+	h.deps.ImageJobHistory, h.deps.ImageJobReader = jobs, jobs
+	h.deps.ImageResults = resultservice.New(jobs, artifacts, moderation)
+	for _, path := range []string{"/web/v1/video-jobs", "/web/v1/video-jobs/" + jobID.String() + "/result"} {
+		rec := httptest.NewRecorder()
+		h.Routes().ServeHTTP(rec, authenticatedConversationRequest(t, http.MethodGet, path, sessions, accountID))
+		if rec.Code != http.StatusOK {
+			t.Fatalf("%s status = %d", path, rec.Code)
+		}
+	}
+	projected, ok := newSafeVideoJob(job)
+	if !ok || projected.AspectRatio != "auto" {
+		t.Fatal("reference-derived framing must be explicit in history")
+	}
+	var params map[string]any
+	if err := json.Unmarshal(job.Params, &params); err != nil {
+		t.Fatal(err)
+	}
+	params["model_id"], params["video_route_alias"] = string(domain.VideoRouteKlingV3), string(domain.VideoRouteKlingV3)
+	job.Params = mustMarshalWebVideoJobParams(t, params)
+	if _, ok := newSafeVideoJob(job); ok {
+		t.Fatal("ordinary video still requires its selected aspect ratio")
+	}
+}
+
 func TestVideoJobResultRequiresModeratedSucceededVideoOutput(t *testing.T) {
 	h, _, sessions := newImageJobTestHandler(t)
 	accountID := uuid.New()

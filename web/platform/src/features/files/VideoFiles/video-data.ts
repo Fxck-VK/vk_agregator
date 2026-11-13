@@ -14,7 +14,7 @@ export const videoJobSchema = z
     prompt: z.string().trim().min(1),
     duration_sec: z.number().int().positive(),
     resolution: z.string().trim().min(1),
-    aspect_ratio: z.string().regex(/^\d{1,4}:\d{1,4}$/),
+    aspect_ratio: z.string().regex(/^\d{1,4}:\d{1,4}$/).or(z.literal("auto")),
     cost_estimate: z.number().int().positive(),
     status: imageJobStatusSchema,
     created_at: z.string().datetime({ offset: true }),

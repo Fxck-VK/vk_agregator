@@ -463,3 +463,8 @@ All artifact and signed provider-reference ownership checks remain in force.
 Only APP_ENV=development with the existing enabled route, pricing, upload storage
 and prober exposes the form; production release view/direct requests stay closed.
 No production model admission changes. Paid verification is separately authorized.
+
+Motion Control history projects reference-derived framing as aspect_ratio=auto.
+The video library accepts that marker and omits a numeric framing label; ordinary
+video Jobs still require their stored selected ratio. This read-only projection
+does not alter Job/provider parameters, ownership, moderation or billing.

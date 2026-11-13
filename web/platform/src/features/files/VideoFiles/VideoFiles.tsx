@@ -290,7 +290,7 @@ function VideoJobMetadata({ job }: Readonly<{ job: VideoJob }>) {
     <div className={styles.meta}>
       <p className={fileCardStyles.status}>{statusLabel(job.status, t)}</p>
       <h2>{job.prompt}</h2>
-      <p>{job.model_name} · {job.resolution} · {durationLabel} · {job.aspect_ratio}</p>
+      <p>{[job.model_name, job.resolution, durationLabel, job.aspect_ratio === "auto" ? null : job.aspect_ratio].filter(Boolean).join(" · ")}</p>
     </div>
   );
 }

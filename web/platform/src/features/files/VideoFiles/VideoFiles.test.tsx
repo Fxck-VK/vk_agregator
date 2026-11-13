@@ -186,6 +186,16 @@ describe("VideoFiles", () => {
     expect(await screen.findByLabelText(`${ru.files.categories.video}: ${secondJob.prompt}`)).toBeInTheDocument();
   });
 
+  it("loads Motion Control results with reference-derived framing", async () => {
+    const motionJob = { ...firstJob, model_id: "video_kling_2_6_motion_control", model_name: "Kling 2.6 Motion Control", resolution: "std", aspect_ratio: "auto" };
+    vi.mocked(webBrowserFetch)
+      .mockResolvedValueOnce(listResponse([motionJob]))
+      .mockResolvedValueOnce(Response.json(firstResult));
+    render(<VideoFiles visible />);
+    expect(await screen.findByLabelText(`${ru.files.categories.video}: ${motionJob.prompt}`)).toHaveAttribute("src", `/web/v1/video-artifacts/${firstResult.artifacts[0]!.id}`);
+    expect(screen.getByText(`Kling 2.6 Motion Control · std · ${getTranslator("ru")("generationOptions.valueS", { value1: 5 })}`)).toBeInTheDocument();
+  });
+
   it("does not fetch while hidden and keeps loaded videos across visibility switches", async () => {
     vi.mocked(webBrowserFetch)
       .mockResolvedValueOnce(listResponse())
