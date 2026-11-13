@@ -115,6 +115,7 @@
   }
 
   .newChatScreen {
+    padding-block-start: 5rem;
     min-block-size: calc(100dvh - 4rem);
   }
 

@@ -9,6 +9,19 @@ const stylesheet = readFileSync(
 );
 
 describe("WorkspaceHome new chat layout", () => {
+  it("keeps tall mobile reference forms below the floating header", () => {
+    const mobile = stylesheet.slice(stylesheet.indexOf("@media (width < 40rem)"));
+    const mobileChat = mobile.match(/\.newChatScreen\s*\{([^}]*)\}/s)?.[1] ?? "";
+    const header = readFileSync(
+      resolve(process.cwd(), "src/components/layout/WorkspaceHeader/WorkspaceHeader.module.css"),
+      "utf8",
+    );
+    const padding = Number.parseFloat(mobileChat.match(/padding-block-start:\s*([\d.]+)rem/)?.[1] ?? "0");
+    const height = Number.parseFloat(header.match(/min-block-size:\s*([\d.]+)rem/)?.[1] ?? "0");
+    expect(height).toBeGreaterThan(0);
+    expect(padding).toBeGreaterThan(height);
+  });
+
   it("matches the shared workspace shell width", () => {
     const rule = stylesheet.match(/\.content\s*\{[^}]*\}/s)?.[0] ?? "";
     const startScreenRule = stylesheet.match(/\.startScreen\s*\{[^}]*\}/s)?.[0] ?? "";

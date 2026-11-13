@@ -1730,5 +1730,6 @@ workspace semantic headings and bold text keep the existing semibold role.
 
 
 ### Motion Control на DEV
+- Мобильная форма нового чата сохраняет верхний отступ 5 rem под плавающей шапкой, в том числе с обоими референсами Motion Control. Подсказка, кнопки и видеопревью Motion Control используют rem и масштабируются вместе с кабинетом на 2K/4K.
 
 `useMotionVideo` дополняет общие `ConversationComposer` и `WorkspacePrompt`: одно видео MP4/MOV до 48 МиБ, локальный плеер, прогресс, удаление и серверная проверка. Фото использует существующий `useChatAttachments`. `useGenerationControls` показывает Std/Pro, ориентацию и сохранение звука; `useReferenceQuote` ожидает проверенные референсы и сбрасывает цену при их замене. Длительность и кадр не выбираются вручную. Компонент доступен только по `motion_control` активной операции каталога.
