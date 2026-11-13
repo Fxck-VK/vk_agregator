@@ -363,7 +363,8 @@ func (p *Provider) Submit(ctx context.Context, req domain.ProviderRequest) (doma
 		if err := validateHappyHorseSkyReelsRequest(req); err != nil {
 			return domain.ProviderTask{}, err
 		}
-		return p.submitUnversionedOnce(ctx, req, p.submitHappyHorseSkyReels)
+		// The media helper owns the single idempotency guard for both entry paths.
+		return p.submitHappyHorseSkyReels(ctx, req)
 	}
 	if isKlingVeoVideo(req.ModelCode) {
 		if err := validateKlingVeoVideo(req, true); err != nil {

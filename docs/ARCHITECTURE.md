@@ -657,8 +657,10 @@ Provider API architecture:
   Output aspect matching remains exact by default. The explicit
   `OutputMayRoundAspect` contract flag accepts verified raster rounding only
   within both 16 pixels on one axis and a symmetric 2.5% aspect deviation.
-  It is enabled for five APIMart models with observed output evidence; input
-  aspect admission, other output checks, moderation and billing are unchanged.
+  It is enabled for nine APIMart models with observed output evidence. MiniMax
+  H3 Max uses an output-only exception for exactly 832x480 mapped to allowed
+  16:9 instead of loosening the general tolerance. Input aspect admission,
+  other output checks, moderation and billing are unchanged.
   See [output aspect rounding](VIDEO_GENERATION.md#output-aspect-rounding).
 
 Add a provider:

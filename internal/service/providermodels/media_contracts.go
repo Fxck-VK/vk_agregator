@@ -49,10 +49,16 @@ func (r Registry) ProviderMediaContracts(runtime MediaContractRuntime) []domain.
 		})
 		if route.Provider == domain.ProviderAPIMart {
 			switch route.ProviderModelID {
-			case "viduq3", "viduq3-pro", "viduq3-turbo", "wan3.0-video-prime", "seedance-2.0":
-				// Authorized smoke, 2026-11-13: 960x528, 854x480 and 864x496
+			case "viduq3", "viduq3-pro", "viduq3-turbo", "wan3.0-video-prime", "seedance-2.0",
+				"seedance-2.0-mini", "wan3.0-video", "grok-imagine-1.5-video-ext", "flux-3-video":
+				// Authorized smoke, 2026-11-13: verified decoded raster dimensions
 				// for 16:9. See docs/VIDEO_GENERATION.md#output-aspect-rounding.
 				contracts[len(contracts)-1].OutputMayRoundAspect = true
+			case "MiniMax-H3-Max":
+				// 832x480 exceeds the general 2.5% bound. Admit this observed
+				// raster only, keeping the bound unchanged for every model.
+				contracts[len(contracts)-1].OutputAspectExceptions = []domain.ProviderOutputAspectException{{Width: 832, Height: 480, AspectRatio: "16:9"}}
+
 			}
 		}
 		if route.Spec.RequiresReferenceVideo {

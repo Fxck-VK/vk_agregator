@@ -30,6 +30,11 @@ func TestAPIMartObservedOutputDimensions(t *testing.T) {
 		{"viduq3-turbo", 960, 528, 1042},
 		{"wan3.0-video-prime", 854, 480, 2000},
 		{"seedance-2.0", 864, 496, 4042},
+		{"seedance-2.0-mini", 864, 496, 4042},
+		{"wan3.0-video", 854, 480, 2000},
+		{"grok-imagine-1.5-video-ext", 752, 416, 6042},
+		{"MiniMax-H3-Max", 832, 480, 5184},
+		{"flux-3-video", 1280, 704, 5042},
 	} {
 		t.Run(tc.model, func(t *testing.T) {
 			contract, ok := byModel[tc.model]
@@ -54,6 +59,44 @@ func TestAPIMartObservedOutputDimensions(t *testing.T) {
 				t.Fatal("output rounding allowance leaked into provider request admission")
 			}
 		})
+	}
+
+	h3Max := byModel["MiniMax-H3-Max"]
+	h3Max.AllowedAspectRatios = []string{"16:9"}
+	for _, dims := range [][2]int{{833, 480}, {832, 479}, {1664, 960}, {480, 832}, {832, 600}} {
+		m := domain.ArtifactMediaMetadata{ProbeStatus: domain.MediaProbePassed, Container: "mp4", Codec: "h264", Width: dims[0], Height: dims[1], DurationMS: 5184}
+		if deliveryReadyVideoOutput(&h3Max, m, 1024) {
+			t.Fatalf("unverified MiniMax H3 Max dimensions %v accepted", dims)
+		}
+	}
+	for _, mutate := range []func(*domain.ArtifactMediaMetadata){
+		func(m *domain.ArtifactMediaMetadata) { m.ProbeStatus = domain.MediaProbeFailed },
+		func(m *domain.ArtifactMediaMetadata) { m.Codec = "hevc" },
+		func(m *domain.ArtifactMediaMetadata) { m.Container = "webm" },
+		func(m *domain.ArtifactMediaMetadata) { m.DurationMS = 60000 },
+	} {
+		m := domain.ArtifactMediaMetadata{ProbeStatus: domain.MediaProbePassed, Container: "mp4", Codec: "h264", Width: 832, Height: 480, DurationMS: 5184}
+		mutate(&m)
+		if deliveryReadyVideoOutput(&h3Max, m, 1024) {
+			t.Fatal("exact raster exception bypassed independent media check")
+		}
+	}
+	exactRaster := domain.ArtifactMediaMetadata{ProbeStatus: domain.MediaProbePassed, Container: "mp4", Codec: "h264", Width: 832, Height: 480, DurationMS: 5184}
+	if deliveryReadyVideoOutput(&h3Max, exactRaster, h3Max.ExpectedMaxBytes+1) {
+		t.Fatal("exact raster exception bypassed size limit")
+	}
+	strict := byModel["pixverse-v6"]
+	if deliveryReadyVideoOutput(&strict, exactRaster, 1024) {
+		t.Fatal("exact raster exception leaked to another model")
+	}
+	limited := h3Max
+	limited.AllowedOutputResolutions = []string{"360p"}
+	if deliveryReadyVideoOutput(&limited, exactRaster, 1024) {
+		t.Fatal("exact raster exception bypassed resolution limit")
+	}
+	h3Max.AllowedAspectRatios = []string{"1:1"}
+	if deliveryReadyVideoOutput(&h3Max, domain.ArtifactMediaMetadata{ProbeStatus: domain.MediaProbePassed, Container: "mp4", Codec: "h264", Width: 832, Height: 480, DurationMS: 5184}, 1024) {
+		t.Fatal("observed raster bypassed allowed aspect")
 	}
 
 	contract := byModel["viduq3-pro"]

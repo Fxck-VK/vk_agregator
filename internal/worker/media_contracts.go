@@ -151,6 +151,14 @@ func deliveryReadyVideoOutput(contract *domain.ProviderMediaContract, metadata d
 	if !aspectAllowed && contract.OutputMayRoundAspect {
 		aspectAllowed = allowedRoundedOutputAspect(metadata.Width, metadata.Height, contract.AllowedAspectRatios)
 	}
+	if !aspectAllowed {
+		for _, observed := range contract.OutputAspectExceptions {
+			if metadata.Width > 0 && metadata.Height > 0 && metadata.Width == observed.Width && metadata.Height == observed.Height && strings.TrimSpace(observed.AspectRatio) != "" && len(contract.AllowedAspectRatios) > 0 && allowedToken(observed.AspectRatio, contract.AllowedAspectRatios) {
+				aspectAllowed = true
+				break
+			}
+		}
+	}
 	if !aspectAllowed && contract.OutputMayInheritImageAspect && metadata.Width > 0 && metadata.Height > 0 {
 		// Both documented first-frame contracts constrain width/height to 0.4–2.5.
 		ratio := float64(metadata.Width) / float64(metadata.Height)

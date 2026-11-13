@@ -10,6 +10,7 @@ import (
 	"strings"
 	"sync/atomic"
 	"testing"
+	"time"
 
 	"vk-ai-aggregator/internal/domain"
 )
@@ -395,4 +396,51 @@ func sevenKeyFrames() []domain.VideoKeyFrame {
 		frames[i] = domain.VideoKeyFrame{Tag: "@image", URL: "https://cdn.test/key.png"}
 	}
 	return frames
+}
+
+// Exercise the exported worker entry point: helper-only tests missed a nested
+// idempotency lock that prevented these four routes from reaching HTTP at all.
+func TestHappyHorseSkyReelsPublicSubmitOnce(t *testing.T) {
+	for _, model := range []string{ModelHappyHorse10, ModelHappyHorse11, ModelSkyReelsV4Fast, ModelSkyReelsV4Std} {
+		for _, status := range []int{http.StatusOK, http.StatusGatewayTimeout} {
+			t.Run(model+"/"+http.StatusText(status), func(t *testing.T) {
+				var calls atomic.Int32
+				srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+					calls.Add(1)
+					if r.Method != http.MethodPost || r.URL.Path != "/videos/generations" {
+						t.Errorf("unexpected method/path: %s %s", r.Method, r.URL.Path)
+					}
+					w.WriteHeader(status)
+					_, _ = w.Write([]byte(`{"code":200,"data":[{"task_id":"task_fixture","status":"submitted"}]}`))
+				}))
+				defer srv.Close()
+				req := skyReelsRequest()
+				if model == ModelHappyHorse10 || model == ModelHappyHorse11 {
+					req = happyHorse10Request()
+				}
+				req.ModelCode = model
+				p := New(Config{BaseURL: srv.URL, HTTPClient: srv.Client()})
+				ctx, cancel := context.WithTimeout(context.Background(), time.Second)
+				defer cancel()
+				for i := 0; i < 2; i++ {
+					task, err := p.Submit(ctx, req)
+					if status == http.StatusOK {
+						if err != nil || task.ExternalID != "task_fixture" {
+							t.Fatalf("public submit failed: %v; HTTP calls=%d", err, calls.Load())
+						}
+					} else {
+						var providerErr *Error
+						if !errors.As(err, &providerErr) || providerErr.Class != domain.ProviderErrSubmitIndeterminate {
+							t.Fatalf("expected indeterminate outcome, got %v", err)
+						}
+					}
+				}
+				// Native media entry shares the same replay guard as public Submit.
+				_, _ = p.submitHappyHorseSkyReelsWithMedia(ctx, req, req.VideoMedia)
+				if calls.Load() != 1 {
+					t.Fatalf("HTTP calls=%d, want exactly one including replay", calls.Load())
+				}
+			})
+		}
+	}
 }

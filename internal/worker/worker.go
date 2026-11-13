@@ -1391,6 +1391,10 @@ func (p *processor) buildRequest(ctx context.Context, job *domain.Job, attempt i
 			pp.AspectRatio = routeSnapshot.AspectRatio
 		}
 		draft = p.videoDraft
+		if providermodels.IsTurboH3VideoRoute(pp.Provider, modelCode) {
+			// These routes have no draft mode; the legacy runtime default is not a user option.
+			draft = false
+		}
 	}
 	if p.textContext != nil && (job.OperationType == domain.OperationTextGenerate || isWebConversationMedia(job)) {
 		prepared, err := p.textContext.Prepare(ctx, job, pp.Prompt)

@@ -50,12 +50,20 @@ dimensions for 16:9 requests, read from decoded APIMart preview videos:
 | --- | --- | --- |
 | `viduq3`, `viduq3-pro`, `viduq3-turbo` | 540p | 960 x 528 |
 | `wan3.0-video-prime` | 480p | 854 x 480 |
-| `seedance-2.0` | 480p | 864 x 496 |
+| `seedance-2.0`, `seedance-2.0-mini` | 480p | 864 x 496 |
+| `wan3.0-video` | 480p | 854 x 480 |
+| `grok-imagine-1.5-video-ext` | 480p | 752 x 416 |
+| `flux-3-video` | 720p | 1280 x 704 |
+| `MiniMax-H3-Max` | 480p | 832 x 480 |
 
-Only those five provider/model bindings receive the flag from
+The nine bindings other than MiniMax H3 Max receive the flag from
 `providermodels.ProviderMediaContracts`. Their existing allowed request
 ratios/resolutions/durations, input capabilities, frozen admission records,
 codec/container/byte limits and mandatory probing/moderation are unchanged.
+MiniMax H3 Max instead receives an `OutputAspectExceptions` entry for exactly
+832 x 480 mapped to 16:9: its symmetric deviation exceeds 2.5%. Scaled,
+transposed and nearby dimensions are not admitted by this exception. The
+mapped ratio must still belong to the contract's allowed request ratios.
 This is output validation evidence, not full model admission or proof of a
 deployed fix. Provider success alone does not prove website delivery success.
 
@@ -63,6 +71,19 @@ Regression coverage exercises these dimensions through the runtime contracts,
 pixel/percentage boundaries, strict models, independent media checks and
 worker result readiness/replay. Failed historical jobs are not automatically
 resubmitted or recaptured by this change.
+
+## Submission regression safeguards
+
+HappyHorse 1.0/1.1 and SkyReels V4 Fast/Standard use one adapter idempotency
+guard shared by the public Submit and native media entry points. A nested guard
+previously waited on its own key until the worker deadline without sending HTTP.
+Regression tests exercise public Submit, successful replay and ambiguous HTTP
+responses; ambiguous outcomes still stop automatic resubmission.
+
+The worker ignores the legacy `VIDEO_DRAFT` default for APIMart MiniMax H3 and
+Kling 3.0 Turbo because their typed contracts do not support draft. Adapter
+validation still rejects explicitly malformed draft requests. Other providers'
+draft behavior is unchanged.
 
 ## Providers
 

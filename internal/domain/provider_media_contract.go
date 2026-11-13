@@ -17,6 +17,14 @@ const (
 	ProviderIdempotencyProviderExact ProviderIdempotencyGuarantee = "provider_side_exact"
 )
 
+// ProviderOutputAspectException binds an observed raster to a supported request
+// ratio. It is output-only and does not grant scaled or transposed variants.
+type ProviderOutputAspectException struct {
+	Width       int    `json:"width"`
+	Height      int    `json:"height"`
+	AspectRatio string `json:"aspect_ratio"`
+}
+
 // ProviderMediaContract is the product-level allowlist for risky media
 // provider/model combinations. It constrains what the worker may submit before
 // paid provider work starts; VK Bot and website surfaces must not build this
@@ -39,7 +47,8 @@ type ProviderMediaContract struct {
 	OutputMayInheritImageAspect bool `json:"output_may_inherit_image_aspect,omitempty"`
 	// Verified providers may round raster dimensions around an allowed aspect.
 	// The worker bounds this output-only allowance in both pixels and percentage.
-	OutputMayRoundAspect bool `json:"output_may_round_aspect,omitempty"`
+	OutputMayRoundAspect   bool                            `json:"output_may_round_aspect,omitempty"`
+	OutputAspectExceptions []ProviderOutputAspectException `json:"output_aspect_exceptions,omitempty"`
 
 	ExpectedContainer string `json:"expected_container,omitempty"`
 	ExpectedCodec     string `json:"expected_codec,omitempty"`
