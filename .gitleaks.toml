@@ -105,6 +105,20 @@ keywords = [
   regexes = ['''^live_synthetic/YOOKASSA_SECRET_KEY=(?:liveXsynthetic|Live_synthetic)/$''']
 
   [[rules.allowlists]]
+  description = "Exact non-secret recovery redaction canary in historical payment regression"
+  condition = "AND"
+  regexTarget = "secret"
+  paths = ['''^scripts/deploy/test-recover-running-payment-config\.sh$''']
+  regexes = ['''^must-not-be-returned$''']
+
+  [[rules.allowlists]]
+  description = "Exact synthetic credential in historical mocked payment diagnostic"
+  condition = "AND"
+  regexTarget = "secret"
+  paths = ['''^scripts/deploy/test-diagnose-yookassa-env\.sh$''']
+  regexes = ['''^live_fixture-secret-456$''']
+
+  [[rules.allowlists]]
   description = "Exact non-secret values in committed environment templates"
   condition = "AND"
   regexTarget = "secret"
@@ -208,6 +222,13 @@ keywords = [
 
 [[rules]]
 id = "generic-api-key"
+
+  [[rules.allowlists]]
+  description = "Exact expected synthetic credentials in historical mocked payment diagnostic"
+  condition = "AND"
+  regexTarget = "secret"
+  paths = ['''^scripts/deploy/test-diagnose-yookassa-env\.sh$''']
+  regexes = ['''^live[_-]fixture-secret-456$''']
 
   [[rules.allowlists]]
   description = "Exact malformed synthetic replacement in live merchant env regression"

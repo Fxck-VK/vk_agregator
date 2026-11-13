@@ -4,6 +4,10 @@ param([string]$GitleaksPath = "gitleaks")
 $ErrorActionPreference = "Stop"
 $configPath = Join-Path (Resolve-Path (Join-Path $PSScriptRoot "../..")).Path ".gitleaks.toml"
 $cases = @(
+    @{ Path = 'scripts/deploy/test-recover-running-payment-config.sh'; Key = 'YOOKASSA_SECRET_KEY'; Value = 'must-not-be-returned'; Rule = 'project-secret-assignment' },
+    @{ Path = 'scripts/deploy/test-diagnose-yookassa-env.sh'; Key = 'YOOKASSA_SECRET_KEY'; Value = ('live_' + 'fixture-secret-456'); Rule = 'project-secret-assignment' },
+    @{ Path = 'scripts/deploy/test-diagnose-yookassa-env.sh'; Key = 'FAKE_EXPECTED_SECRET'; Value = ('live_' + 'fixture-secret-456'); Rule = 'generic-api-key' },
+    @{ Path = 'scripts/deploy/test-diagnose-yookassa-env.sh'; Key = 'FAKE_EXPECTED_SECRET'; Value = ('live-' + 'fixture-secret-456'); Rule = 'generic-api-key' },
     @{ Path = '.github/workflows/ci.yml'; Key = 'POSTGRES_PASSWORD'; Value = 'session_test_fixture'; Rule = 'project-secret-assignment' },
     @{ Path = 'scripts/deploy/test-dev-email.sh'; Key = 'DEV_ACCOUNT_EMAIL_SMTP_PASSWORD'; Value = 'fixture-smtp-value'; Rule = 'project-secret-assignment' },
     @{ Path = 'scripts/deploy/test-assemble-env-parts.sh'; Key = 'ADMIN_TOKEN'; Value = 'fixture-neiirohub.ru-secret'; Rule = 'project-secret-assignment' },

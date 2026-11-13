@@ -47,6 +47,14 @@ func (r Registry) ProviderMediaContracts(runtime MediaContractRuntime) []domain.
 			MaxFallbackAttempts:          0,
 			MaxProviderCostCredits:       route.Spec.MaxProviderCostCredits,
 		})
+		if route.Provider == domain.ProviderAPIMart {
+			switch route.ProviderModelID {
+			case "viduq3", "viduq3-pro", "viduq3-turbo", "wan3.0-video-prime", "seedance-2.0":
+				// Authorized smoke, 2026-11-13: 960x528, 854x480 and 864x496
+				// for 16:9. See docs/VIDEO_GENERATION.md#output-aspect-rounding.
+				contracts[len(contracts)-1].OutputMayRoundAspect = true
+			}
+		}
 		if route.Spec.RequiresReferenceVideo {
 			contracts[len(contracts)-1].AllowedOutputResolutions = []string{"4k"}
 			contracts[len(contracts)-1].AllowedAspectRatios = nil

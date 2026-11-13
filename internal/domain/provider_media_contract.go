@@ -37,6 +37,9 @@ type ProviderMediaContract struct {
 	// Some image-to-video providers inherit any valid first-frame aspect ratio,
 	// while their text-to-video request still has a discrete ratio allowlist.
 	OutputMayInheritImageAspect bool `json:"output_may_inherit_image_aspect,omitempty"`
+	// Verified providers may round raster dimensions around an allowed aspect.
+	// The worker bounds this output-only allowance in both pixels and percentage.
+	OutputMayRoundAspect bool `json:"output_may_round_aspect,omitempty"`
 
 	ExpectedContainer string `json:"expected_container,omitempty"`
 	ExpectedCodec     string `json:"expected_codec,omitempty"`

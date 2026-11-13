@@ -2,6 +2,7 @@ package worker
 
 import (
 	"fmt"
+	"math"
 	"strconv"
 	"strings"
 
@@ -147,6 +148,9 @@ func deliveryReadyVideoOutput(contract *domain.ProviderMediaContract, metadata d
 		return false
 	}
 	aspectAllowed := allowedOutputAspect(metadata.Width, metadata.Height, contract.AllowedAspectRatios)
+	if !aspectAllowed && contract.OutputMayRoundAspect {
+		aspectAllowed = allowedRoundedOutputAspect(metadata.Width, metadata.Height, contract.AllowedAspectRatios)
+	}
 	if !aspectAllowed && contract.OutputMayInheritImageAspect && metadata.Width > 0 && metadata.Height > 0 {
 		// Both documented first-frame contracts constrain width/height to 0.4–2.5.
 		ratio := float64(metadata.Width) / float64(metadata.Height)
@@ -209,6 +213,37 @@ func allowedOutputAspect(width, height int, allowed []string) bool {
 	}
 	actual := reducedAspect(width, height)
 	return allowedToken(actual, allowed)
+}
+
+func allowedRoundedOutputAspect(width, height int, allowed []string) bool {
+	if width <= 0 || height <= 0 {
+		return false
+	}
+	// Both limits apply: codec-sized raster rounding must not become an
+	// unrestricted aspect change on small frames or grow with large frames.
+	const maxPixelRounding = 16
+	for _, token := range allowed {
+		x, y, ok := strings.Cut(strings.TrimSpace(token), ":")
+		if !ok {
+			continue
+		}
+		numerator, xerr := strconv.Atoi(x)
+		denominator, yerr := strconv.Atoi(y)
+		if xerr != nil || yerr != nil || numerator <= 0 || denominator <= 0 {
+			continue
+		}
+		// Cross-products avoid division rounding at the inclusive 2.5% (41/40)
+		// boundary. Convert before multiplication to avoid integer overflow.
+		actual := float64(width) * float64(denominator)
+		expected := float64(height) * float64(numerator)
+		if math.Max(actual, expected)*40 > math.Min(actual, expected)*41 {
+			continue
+		}
+		if math.Abs(actual-expected) <= maxPixelRounding*float64(max(numerator, denominator)) {
+			return true
+		}
+	}
+	return false
 }
 
 func reducedAspect(width, height int) string {

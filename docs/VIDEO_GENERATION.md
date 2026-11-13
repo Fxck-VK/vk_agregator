@@ -33,6 +33,37 @@ Important boundaries:
 - Real provider routes must fail closed when config, pricing or secrets are
   missing.
 
+## Output aspect rounding
+
+The worker validates probed output dimensions against the model's media
+contract before publishing an Artifact as ready. Exact reduced pixel ratios
+remain the default. A model-scoped `OutputMayRoundAspect` flag allows at most
+16 pixels of correction on either one axis, while also requiring
+`max(actual_aspect / allowed_aspect, allowed_aspect / actual_aspect) <= 1.025`.
+Both bounds apply, including portrait output. Unknown/malformed ratios remain
+rejected. No resizing or transcoding is added by this allowance.
+
+Authorized DEV observations on 2026-11-13 supplied these sanitized output
+dimensions for 16:9 requests, read from decoded APIMart preview videos:
+
+| APIMart model | Requested size | Observed pixels |
+| --- | --- | --- |
+| `viduq3`, `viduq3-pro`, `viduq3-turbo` | 540p | 960 x 528 |
+| `wan3.0-video-prime` | 480p | 854 x 480 |
+| `seedance-2.0` | 480p | 864 x 496 |
+
+Only those five provider/model bindings receive the flag from
+`providermodels.ProviderMediaContracts`. Their existing allowed request
+ratios/resolutions/durations, input capabilities, frozen admission records,
+codec/container/byte limits and mandatory probing/moderation are unchanged.
+This is output validation evidence, not full model admission or proof of a
+deployed fix. Provider success alone does not prove website delivery success.
+
+Regression coverage exercises these dimensions through the runtime contracts,
+pixel/percentage boundaries, strict models, independent media checks and
+worker result readiness/replay. Failed historical jobs are not automatically
+resubmitted or recaptured by this change.
+
 ## Providers
 
 | Provider | Current video role | Required config |

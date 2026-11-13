@@ -654,6 +654,12 @@ Provider API architecture:
 - `cmd/worker` builds default provider media contracts from
   `providermodels.ProviderMediaContracts` plus runtime media config. It still
   accepts validated `config.MediaProviderContracts` as an override/extension.
+  Output aspect matching remains exact by default. The explicit
+  `OutputMayRoundAspect` contract flag accepts verified raster rounding only
+  within both 16 pixels on one axis and a symmetric 2.5% aspect deviation.
+  It is enabled for five APIMart models with observed output evidence; input
+  aspect admission, other output checks, moderation and billing are unchanged.
+  See [output aspect rounding](VIDEO_GENERATION.md#output-aspect-rounding).
 
 Add a provider:
 
