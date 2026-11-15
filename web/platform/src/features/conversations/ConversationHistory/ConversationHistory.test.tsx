@@ -147,9 +147,11 @@ describe("ConversationHistory", () => {
       .mockReturnValueOnce(new Promise(() => {}));
     render(<ConversationHistory history={initialHistory as never} />);
     const trigger = await screen.findByRole("button", { name: brandedChatLabel });
-    const submit = screen.getByRole("button", { name: ru.conversations.composerSubmit });
-    expect(trigger.closest('[data-variant="composer"]')?.nextElementSibling?.contains(submit)).toBe(true);
+    expect(screen.queryByRole("button", { name: ru.conversations.composerSubmit })).not.toBeInTheDocument();
     const input = await setComposerPrompt("Сохрани черновик");
+    const submit = screen.getByRole("button", { name: ru.conversations.composerSubmit });
+    expect(trigger.closest('[data-ui="chat-composer-trailing-controls"]')).toContainElement(submit);
+    expect(trigger.compareDocumentPosition(submit) & Node.DOCUMENT_POSITION_FOLLOWING).toBe(Node.DOCUMENT_POSITION_FOLLOWING);
     const currentURL = window.location.href;
     fireEvent.click(trigger);
     const picker = screen.getByRole("dialog", { name: "Выбор модели для диалога" });
@@ -859,7 +861,8 @@ describe("ConversationHistory", () => {
 
     await vi.waitFor(() => expect(webBrowserFetch).toHaveBeenCalledTimes(1));
     expect(textarea).toBeDisabled();
-    expect(screen.getByRole("button", { name: ru.conversations.composerSubmit })).toBeDisabled();
+    expect(textarea).toHaveValue("");
+    expect(screen.queryByRole("button", { name: ru.conversations.composerSubmit })).not.toBeInTheDocument();
     expect(screen.getByRole("status", { name: ru.conversations.composerAwaitingResponse })).toHaveAttribute(
       "aria-live",
       "polite",

@@ -90,5 +90,7 @@ it("does not restore or offer music in a conversation even when it is the catalo
 it("rejects a music model passed directly to the new-chat URL", () => {
   render(<GenerationCatalogProvider initial={projectGenerationModelCatalog(devCatalog())}><NewChatPrompt modelId="suno_v6" /></GenerationCatalogProvider>);
   expect(screen.getByRole("alert")).toBeInTheDocument();
+  expect(screen.queryByRole("button", { name: "Начать чат" })).not.toBeInTheDocument();
+  fireEvent.change(screen.getByRole("textbox"), { target: { value: "Нельзя отправить музыку как чат" } });
   expect(screen.getByRole("button", { name: "Начать чат" })).toBeDisabled();
 });

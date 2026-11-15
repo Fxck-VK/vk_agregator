@@ -15,14 +15,14 @@ import { WorkspaceLanding } from "./WorkspaceLanding";
 import { capabilityLinks } from "./workspace-home-content";
 
 describe("WorkspaceLanding capability links", () => {
-  it("renders the divider and three remaining icon links with their existing destinations", () => {
+  it("renders the three remaining icon links with their existing destinations without the removed heading", () => {
     render(
       <WorkspaceConversationListProvider accountId="capability-links-test-account" initialConversations={[]}>
         <WorkspaceLanding />
       </WorkspaceConversationListProvider>,
     );
 
-    expect(screen.getByRole("heading", { level: 3, name: "И многое другое" })).toBeInTheDocument();
+    expect(screen.queryByRole("heading", { level: 3, name: "И многое другое" })).not.toBeInTheDocument();
 
     const navigation = screen.getByRole("navigation", { name: "Дополнительные возможности" });
     const links = within(navigation).getAllByTestId("workspace-capability-link");
