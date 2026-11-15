@@ -167,6 +167,8 @@ describe("WorkspacePrompt", () => {
       ru.conversations.composerPlaceholder,
     );
     expect(screen.queryByRole("button", { name: ru.conversations.composerMediaUpload })).toBeNull();
+    expect(screen.queryByRole("button", { name: ru.workspace.promptSubmit })).toBeNull();
+    fireEvent.change(screen.getByRole("textbox"), { target: { value: "Черновик" } });
     expect(screen.getByRole("button", { name: ru.workspace.promptSubmit }).querySelector("img")).toHaveAttribute(
       "src",
       "/assets/icons/ui/send-message-white.svg",
@@ -244,7 +246,8 @@ describe("WorkspacePrompt", () => {
     renderPrompt({ selectedChatModel: selectedTextModel });
 
     fireEvent.change(screen.getByLabelText(ru.workspace.promptLabel), { target: { value: "   " } });
-    fireEvent.click(screen.getByRole("button", { name: ru.workspace.promptSubmit }));
+    expect(screen.queryByRole("button", { name: ru.workspace.promptSubmit })).toBeNull();
+    fireEvent.keyDown(screen.getByLabelText(ru.workspace.promptLabel), { key: "Enter" });
 
     expect(push).not.toHaveBeenCalled();
     expect(webBrowserMutation).not.toHaveBeenCalled();

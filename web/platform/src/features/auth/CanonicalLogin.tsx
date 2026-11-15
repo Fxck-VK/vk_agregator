@@ -111,7 +111,7 @@ export function LoginForm({returnTo,methods=defaultAuthMethods,preview=false,pre
   {errorView}{methods.registration?<p className={styles.accountPrompt}>{t.auth.minimalSignupPrompt}{" "}<button type="button" className={styles.textAction} disabled={pending} onClick={()=>navigate("register")}>{t.auth.minimalSignupAction}</button></p>:null}{previewView}
  </div></section>;
  return <section ref={root} className={formClass} aria-labelledby="login-title">
-  <button type="button" className={`${styles.textAction} ${styles.backAction}`} disabled={pending} onClick={()=>navigate("choice")}>{t.auth.otherMethods}</button>
+  {screen!=="verify"?<button type="button" className={`${styles.textAction} ${styles.backAction}`} disabled={pending} onClick={()=>navigate("choice")}>{t.auth.otherMethods}</button>:null}
   <header className={styles.heading}><h1 id="login-title" tabIndex={-1}><BrandText>{screen==="verify"?t.auth.verifySigninTitle:t.auth.minimalWelcome}</BrandText></h1></header>
   {previewView}
   {previewDone?<><p role="status">{t.auth.loginPreviewComplete}</p><Button onClick={()=>navigate("choice")}>{t.auth.back}</Button></>:<form className={styles.fields} onSubmit={e=>void submit(e)}>
@@ -124,6 +124,7 @@ export function LoginForm({returnTo,methods=defaultAuthMethods,preview=false,pre
    {screen==="verify"&&!accepted?<><button type="button" className={styles.textAction} disabled={pending||resendSeconds>0} onClick={()=>void resend()}>{t.auth.resend}{resendSeconds?` (${resendSeconds})`:""}</button><p className={styles.accountPrompt}>{t.auth.mailHelpShort}{" "}<a href="mailto:support@epifera.com">{t.legal.support}</a></p><button type="button" className={styles.textAction} disabled={pending} onClick={()=>navigate("password")}>{t.auth.changeEmail}</button></>:null}
    {screen!=="verify"&&!accepted&&methods.recovery?<button type="button" className={styles.textAction} disabled={pending} onClick={()=>navigate("recover")}>{t.auth.forgot}</button>:null}
   </form>}
+  {screen==="verify"?<button type="button" className={`${styles.textAction} ${styles.otherMethodsAction}`} disabled={pending} onClick={()=>navigate("choice")}>{t.auth.otherMethods}</button>:null}
   {screen!=="verify"&&methods.registration&&!accepted?<p className={styles.accountPrompt}>{t.auth.minimalSignupPrompt}{" "}<button type="button" className={styles.textAction} disabled={pending} onClick={()=>navigate("register")}>{t.auth.minimalSignupAction}</button></p>:null}
  </section>;
 }

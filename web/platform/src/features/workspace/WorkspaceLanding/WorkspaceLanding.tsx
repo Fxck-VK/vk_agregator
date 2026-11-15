@@ -15,6 +15,7 @@ import headerStyles from "@/components/layout/WorkspaceHeader/WorkspaceHeader.mo
 import { VideoPlayer } from "@/components/media/VideoPlayer/VideoPlayer";
 import { FAQ } from "@/components/ui/FAQ/FAQ";
 import { CreditAmount } from "@/components/ui/CreditAmount/CreditAmount";
+import { MasonryGrid } from "@/components/ui/MasonryGrid/MasonryGrid";
 import { InspirationExampleCard } from "@/features/inspiration/InspirationExampleCard/InspirationExampleCard";
 import { getInspirationExamples } from "@/features/inspiration/inspiration-examples";
 import { subscriptionPlanPreview } from "@/features/pricing/subscription-preview";
@@ -22,7 +23,6 @@ import { formatPaymentPrice } from "@/features/payments/payments";
 import { subscriptionCopy } from "@/features/subscriptions/copy";
 import { useLiteOffer } from "@/features/subscriptions/use-lite-offer";
 import { useGenerationCatalog } from "@/features/models/GenerationCatalogProvider";
-import { useReleaseView } from "@/features/release/ReleaseViewProvider";
 
 import { FeaturedModels } from "../FeaturedModels/FeaturedModels";
 import { WorkspaceHero } from "../WorkspaceHero/WorkspaceHero";
@@ -40,7 +40,6 @@ export function WorkspaceLanding({ access = "authenticated" }: WorkspaceLandingP
   const locale = useLocale();
   const liteOffer = useLiteOffer();
   const { catalog } = useGenerationCatalog();
-  const { view } = useReleaseView();
   const footerModels = [
     { id: "nano_banana_2", name: "Nano Banana 2" },
     { id: "nano_banana_pro", name: "Nano Banana Pro" },
@@ -50,7 +49,7 @@ export function WorkspaceLanding({ access = "authenticated" }: WorkspaceLandingP
   const copy = subscriptionCopy[locale], trial = subscriptionPlanPreview("lite"), next = subscriptionPlanPreview(trial.next_plan_code);
   const inspirationExamples = getInspirationExamples(locale);
   const frequentlyAskedQuestions = getFrequentlyAskedQuestions(msg);
-  const promptExample = inspirationExamples[0];
+  const promptExamples = inspirationExamples.filter(example => example.mediaType === "image").slice(0, 6);
 
   return (
     <div className={styles.page}>
@@ -111,51 +110,9 @@ export function WorkspaceLanding({ access = "authenticated" }: WorkspaceLandingP
           />
         </section>
 
-        <section aria-labelledby="workspace-capabilities-title" className={`${styles.section} ${styles.contentFrame}`}>
-          <div className={styles.sectionHeading}>
-            <div>
-              <h2 id="workspace-capabilities-title">{msg("workspaceLanding.discoverNewPossibilities")}</h2>
-              <p>{msg("workspaceLanding.useDedicatedToolsForTextImagesFiles")}</p>
-            </div>
-          </div>
-          <div className={styles.capabilityMosaic}>
-            <Link className={`${styles.capabilityCard} ${styles.capabilityLarge}`} href="/app/image">
-              <span className={styles.capabilityVisual}>
-                <Image
-                  alt={msg("workspaceLanding.aPaperCraneAmongTheClouds")}
-                  className={styles.capabilityImage}
-                  fill
-                  sizes="(max-width: 48rem) 100vw, 23rem"
-                  src={assetPaths.images.inspiration.paperCraneCloud}
-                />
-              </span>
-              <span className={styles.capabilityCopy}>
-                <strong>{msg("workspaceLanding.createImages")}</strong>
-                <small>{msg("workspaceLanding.fromAnIdeaToAResultWith")}</small>
-              </span>
-            </Link>
-            <Link className={styles.capabilityCard} href="/app/chats">
-              <span aria-hidden="true" className={`${styles.capabilityVisual} ${styles.capabilityTextVisual}`}>
-                <span className={styles.textPreviewInput} />
-                <span className={styles.textPreviewAction}>{msg("workspaceLanding.create")}</span>
-              </span>
-              <span className={styles.capabilityCopy}>
-                <strong>{msg("workspaceLanding.workWithText")}</strong>
-                <small>{msg("workspaceLanding.questionsPlansIdeasAndOngoingConversations")}</small>
-              </span>
-            </Link>
-            <Link className={styles.capabilityCard} href="/app/files">
-              <span aria-hidden="true" className={`${styles.capabilityVisual} ${styles.capabilityFilesVisual}`}>
-                <span className={styles.filePreview} />
-              </span>
-              <span className={styles.capabilityCopy}>
-                <strong>{msg("workspaceLanding.storeYourResults")}</strong>
-                <small>{msg("workspaceLanding.generatedAndUploadedMaterialsInOnePlace")}</small>
-              </span>
-            </Link>
-          </div>
+        <div className={styles.contentFrame}>
           <CapabilityLinks />
-        </section>
+        </div>
 
         {liteOffer.visible ? <section aria-labelledby="workspace-plan-title" className={`${styles.section} ${styles.contentFrame}`}>
           <div className={styles.planCard}>
@@ -222,14 +179,15 @@ export function WorkspaceLanding({ access = "authenticated" }: WorkspaceLandingP
               <p>{msg("workspaceLanding.promptsForAllKindsOfTasksAnd")}</p>
             </div>
           </div>
-          {promptExample ? (
-            <div className={styles.promptExample} data-testid="workspace-prompt-example">
-              <InspirationExampleCard
-                example={promptExample}
-                priority
-              />
-            </div>
-          ) : null}
+          <div data-testid="workspace-prompt-examples">
+            <MasonryGrid>
+              {promptExamples.map((example, index) => (
+                <li key={example.id} data-testid="workspace-prompt-example">
+                  <InspirationExampleCard example={example} priority={index === 0} />
+                </li>
+              ))}
+            </MasonryGrid>
+          </div>
         </section>
 
         <section aria-labelledby="workspace-faq-title" className={`${styles.section} ${styles.contentFrame}`}>
@@ -241,75 +199,16 @@ export function WorkspaceLanding({ access = "authenticated" }: WorkspaceLandingP
           <FAQ items={frequentlyAskedQuestions} />
         </section>
 
-        <section aria-labelledby="workspace-community-title" className={`${styles.section} ${styles.communitySection} ${styles.contentFrame}`}>
-          <div className={styles.communityCard}>
-            <div className={styles.communityCopy}>
-              <h2 id="workspace-community-title">{msg("workspaceLanding.followUsOnTelegramAndVk")}</h2>
-              <p>{msg("workspaceLanding.stayUpToDateAndWorkFaster")}</p>
-              <div aria-label={msg("workspaceLanding.neirohubSocialMedia")} className={styles.communityActions}>
-                {view === "dev" ? <span aria-disabled="true" className={styles.communityButton}>Telegram</span> : null}
-                <a
-                  className={styles.communityButton}
-                  href="https://vk.me/neirohub_help"
-                  rel="noopener noreferrer"
-                  target="_blank"
-                >
-                  {msg("workspaceLanding.vk")}</a>
-              </div>
-            </div>
-            <div aria-hidden="true" className={styles.communityVisual}>
-              <span className={`${styles.communityPreview} ${styles.communityPreviewLeft}`}>
-                <Image
-                  alt=""
-                  fill
-                  sizes="8rem"
-                  src={assetPaths.images.inspiration.paperCraneCloud}
-                />
-              </span>
-              <span className={styles.socialPhone}>
-                <span className={styles.phoneSpeaker} />
-                <span className={styles.qrPlaceholder}>
-                  <span className={styles.qrMarker} />
-                </span>
-                <span className={styles.phoneLabel}><BrandName /></span>
-              </span>
-              <span className={`${styles.communityPreview} ${styles.communityPreviewRight}`}>
-                <Image
-                  alt=""
-                  fill
-                  sizes="8rem"
-                  src={assetPaths.images.workspace.howItWorksPoster}
-                />
-              </span>
-            </div>
-          </div>
-        </section>
       </div>
 
       <footer className={styles.footer}>
         <div className={styles.footerInner}>
           <div className={styles.footerTop}>
-            <div className={styles.footerBrandGroup}>
-              <Link className={styles.footerBrand} href="/app">
-                <BrandLogo className={styles.brandMark} size={44} />
-                <strong><BrandName /></strong>
-              </Link>
-              <div aria-label={msg("workspaceLanding.socialMedia")} className={styles.footerSocials}>
-                <a href="https://vk.me/neirohub_help" rel="noopener noreferrer" target="_blank">VK</a>
-              </div>
-            </div>
-            <div className={styles.footerSupport}>
-              <a
-                className={styles.footerSupportButton}
-                href="https://vk.me/neirohub_help"
-                rel="noopener noreferrer"
-                target="_blank"
-              >
-                {msg("workspaceLanding.support")}<span>VK</span>
-              </a>
-              <span>{msg("workspaceLanding.dailyFrom1000To1900")}</span>
-            </div>
-            <span className={styles.footerAgreement}>{msg("workspaceLanding.userAgreement")}</span>
+            <Link className={styles.footerBrand} href="/app">
+              <BrandLogo className={styles.brandMark} size={44} />
+              <strong><BrandName /></strong>
+            </Link>
+            <Link className={styles.footerAgreement} href="/legal/user-agreement" target="_blank" rel="noopener noreferrer">{msg("workspaceLanding.userAgreement")}</Link>
           </div>
 
           <nav aria-label={msg("workspaceLanding.platformSections")} className={styles.footerColumns}>
@@ -325,14 +224,6 @@ export function WorkspaceLanding({ access = "authenticated" }: WorkspaceLandingP
               <Link href="/app/files">{msg("workspaceLanding.myFiles")}</Link>
               <Link href="/app/inspiration">{msg("workspaceLanding.inspiration")}</Link>
               <Link href="/app/profile">{msg("workspaceLanding.profile")}</Link>
-            </div>
-            <div className={styles.footerColumn}>
-              <strong>{msg("workspaceLanding.aboutThePlatform")}</strong>
-              <Link href="/app">{msg("workspaceLanding.workspace")}</Link>
-              <Link href="/app/models">{msg("workspaceLanding.modelCatalog")}</Link>
-              <Link href="#workspace-prompts-title">{msg("workspaceLanding.promptLibrary")}</Link>
-              <Link href="#workspace-faq-title">{msg("workspaceLanding.frequentlyAskedQuestions")}</Link>
-              <a href="https://vk.me/neirohub_help" rel="noopener noreferrer" target="_blank">{msg("workspaceLanding.support311")}</a>
             </div>
           </nav>
 

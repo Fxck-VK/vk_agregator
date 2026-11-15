@@ -1,29 +1,5 @@
 .wrapper {
-  margin-block-start: clamp(var(--space-7), 5vw, 3.5rem);
-}
-
-.divider {
-  display: grid;
-  grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr);
-  align-items: center;
-  gap: var(--space-6);
-  margin: 0 0 var(--space-6);
-  color: var(--color-text);
-  font-size: var(--font-size-body);
-  font-weight: var(--font-weight-semibold);
-  line-height: var(--line-height-body);
-  text-align: center;
-}
-
-.divider::before,
-.divider::after {
-  block-size: 0.0625rem;
-  content: "";
-  background: var(--color-border);
-}
-
-.divider span {
-  white-space: nowrap;
+  margin-block-start: clamp(var(--space-5), 3vw, var(--space-8));
 }
 
 .list {
@@ -79,10 +55,6 @@
 }
 
 @media (width < 36rem) {
-  .divider {
-    gap: var(--space-3);
-  }
-
   .list {
     grid-template-columns: 1fr;
   }

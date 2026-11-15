@@ -17,7 +17,7 @@ export function SubscriptionCheckout({ planID, preview = false }: { planID: Subs
   const locale = useLocale(), t = subscriptionCopy[locale];
   const plan = subscriptionPlanPreview(planID), next = subscriptionPlanPreview(plan.next_plan_code);
   const checkout = useSubscriptionCheckout(preview);
-  const {account,state,consent,busy,error,paymentID,autoRenew,setConsent} = checkout;
+  const {account,state,busy,error,paymentID,autoRenew} = checkout;
   const trialUsed = plan.trial && state.data?.trial_used === true;
   const available = checkout.available(planID);
   if (paymentID) return <PaymentStatus paymentID={paymentID} onDone={checkout.resetPayment}/>;
@@ -26,8 +26,7 @@ export function SubscriptionCheckout({ planID, preview = false }: { planID: Subs
     {plan.trial ? <p>{t.trial}</p> : null}
     <p>{t.next}: {formatPaymentPrice(next.amount, locale)} ₽ · {next.name} · {next.stars.toLocaleString(locale)} {t.stars} / {next.period_days} {t.days}, {t.after} {plan.period_days} {t.days}.</p>
     <p>{t.expiry}</p>
-    <label className={styles.consent}><input type="checkbox" checked={consent} disabled={busy || !state.data?.recurring_available || preview} onChange={event => setConsent(event.target.checked)}/><span>{t.consent}</span></label>
-    {!autoRenew ? <p>{t.renewOff}</p> : null}
+    {autoRenew ? <><p>{t.autoRenewNotice}</p><p>{t.renewalPolicy}</p></> : null}
     {state.data && !state.data.recurring_available ? <p>{t.recurringOff}</p> : null}
     {trialUsed ? <StateNotice inline>{t.trialUsed}</StateNotice> : null}
     {preview ? <StateNotice inline>{t.preview}</StateNotice> : !account ? <p><Link href="/app">{t.signIn}</Link></p> : state.pending ? <StateNotice inline kind="loading">{t.loading}</StateNotice> : state.failed ? <StateNotice inline kind="error" action={{ label: t.retry, onClick: state.retry }}>{t.error}</StateNotice> : !available && !trialUsed ? <StateNotice inline>{t.unavailable}</StateNotice> : null}

@@ -1,6 +1,7 @@
 "use client";
 
 import { type KeyboardEvent, useEffect, useId, useRef } from "react";
+import { InputSurface } from "@/components/ui/InputSurface/InputSurface";
 import { useDictionary } from "@/i18n/LocaleProvider";
 import styles from "./VerificationCodeField.module.css";
 
@@ -62,12 +63,12 @@ export function VerificationCodeField({ id, label, value, onChange, onComplete, 
   return <fieldset className={styles.field} disabled={disabled} aria-describedby={error ? `${fieldId}-error` : undefined}>
     <legend className={styles.label}>{caption}</legend>
     <div className={styles.digits}>
-      {digits.map((digit, index) => <input key={index} ref={element => { inputs.current[index] = element; }}
+      {digits.map((digit, index) => <InputSurface key={index} className={styles.cell}><input ref={element => { inputs.current[index] = element; }}
         id={`${fieldId}-${index + 1}`} name={`${fieldId}-${index + 1}`} className={styles.digit} type="text" inputMode="numeric"
         autoComplete={index === 0 ? "one-time-code" : "off"} maxLength={6} pattern="[0-9]*" value={digit} disabled={disabled}
         aria-label={`${caption}: ${index + 1}`} aria-invalid={invalid || Boolean(error) || undefined} aria-describedby={error ? `${fieldId}-error` : undefined}
         onFocus={event => event.currentTarget.select()} onKeyDown={event => keyDown(event, index)}
-        onChange={event => fill(event.target.value, index)} onPaste={event => { event.preventDefault(); fill(event.clipboardData.getData("text").trim(), index); }} />)}
+        onChange={event => fill(event.target.value, index)} onPaste={event => { event.preventDefault(); fill(event.clipboardData.getData("text").trim(), index); }} /></InputSurface>)}
     </div>
     {error ? <p id={`${fieldId}-error`} role="alert" className={styles.error}>{error}</p> : null}
   </fieldset>;

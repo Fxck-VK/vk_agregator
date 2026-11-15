@@ -4,7 +4,7 @@ import { StateNotice } from "@/components/ui/AsyncState/AsyncState";
 import { useMessages } from "@/i18n/LocaleProvider";
 
 
-import { useCallback, useRef, useState, type ChangeEventHandler, type ReactNode } from "react";
+import { useCallback, useMemo, useRef, useState, type ChangeEventHandler, type ReactNode } from "react";
 
 import {
   attachmentFromFile,
@@ -21,6 +21,7 @@ import { ChatAttachmentNotice } from "@/components/chat/ChatAttachmentNotice/Cha
 import { ChatUploadNetworkNotice } from "@/components/chat/ChatUploadNetworkNotice/ChatUploadNetworkNotice";
 import { AttachmentPreviewDialog } from "@/components/media/AttachmentPreviewDialog/AttachmentPreviewDialog";
 import { InputSurface } from "@/components/ui/InputSurface/InputSurface";
+import { useComposerLayoutTransition } from "./useComposerLayoutTransition";
 import styles from "./ChatComposer.module.css";
 
 export type ChatComposerVariant = "conversation" | "hero" | "newChat" | "workspace";
@@ -86,6 +87,10 @@ export function ChatComposer({
   const [pickerSource, setPickerSource] = useState<Exclude<ChatFileSource, "all"> | null>(null);
   if (!attachmentsEnabled && pickerSource !== null) setPickerSource(null);
   const inputSurfaceRef = useRef<HTMLDivElement>(null);
+  const leadingControlsRef = useRef<HTMLDivElement>(null);
+  const additionalControlsRef = useRef<HTMLDivElement>(null);
+  const inputLayoutKey = useMemo(() => [leadingControls, additionalControls, attachmentsEnabled, attachments.length, error], [leadingControls, additionalControls, attachmentsEnabled, attachments.length, error]);
+  useComposerLayoutTransition(inputSurfaceRef, leadingControlsRef, additionalControlsRef, attachments.length > 0 || !!error, value);
   const [preview, setPreview] = useState<{ id: string; trigger: HTMLButtonElement } | null>(null);
   const previewItems = attachments.flatMap(item => item.previewUrl
     ? [{ id: item.id, src: item.previewUrl, alt: item.name }] : []);
@@ -133,11 +138,12 @@ export function ChatComposer({
             {error ? <StateNotice inline kind="error">{error}</StateNotice> : null}
           </div>
         )}
-        <label className={styles.field}>
+        <label className={styles.field} data-ui="chat-composer-field">
           <span>{label}</span>
           <ChatTextInput
             appearance="composer"
             disabled={disabled}
+            layoutKey={inputLayoutKey}
             onChange={onChange}
             onSend={send}
             placeholder={placeholder}
@@ -147,7 +153,7 @@ export function ChatComposer({
           />
         </label>
         <div className={styles.controls}>
-          <div aria-label={msg("chatComposer.mediaAndSettings")} className={styles.leadingControls} role="group">
+          <div aria-label={msg("chatComposer.mediaAndSettings")} className={styles.leadingControls} ref={leadingControlsRef} role="group">
             {attachmentsEnabled && <ChatMediaMenu
               accept={attachmentState.accept}
               multiple={attachmentState.maxCount > 1}
@@ -167,14 +173,16 @@ export function ChatComposer({
             />}
             {leadingControls}
           </div>
-          <div className={styles.trailingControls}>
-            {additionalControls}
-            <ChatSubmitButton
-              disabled={!canSubmit || disabled || blocked}
-              label={submitLabel}
-              onClick={send}
-              type="button"
-            />
+          <div className={styles.trailingControls} data-ui="chat-composer-trailing-controls">
+            <div className={styles.additionalControls} ref={additionalControlsRef}>{additionalControls}</div>
+            <div className={styles.submitSlot} data-ui="chat-submit-slot">
+              {value.trim().length > 0 && <ChatSubmitButton
+                disabled={!canSubmit || disabled || blocked}
+                label={submitLabel}
+                onClick={send}
+                type="button"
+              />}
+            </div>
           </div>
         </div>
       </InputSurface>

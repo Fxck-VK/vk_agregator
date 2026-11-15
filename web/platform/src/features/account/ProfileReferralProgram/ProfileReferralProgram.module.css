@@ -41,26 +41,6 @@
   overflow: hidden;
   padding: var(--space-5);
   border: 0.0625rem solid var(--color-card-border);
-  background: radial-gradient(
-      circle at 100% 0%,
-      color-mix(in srgb, var(--color-accent) 30%, transparent),
-      transparent 52%
-    ),
-    var(--color-panel);
-}
-
-.launchCard::before {
-  position: absolute;
-  inset-block-start: -5rem;
-  inset-inline-end: -4rem;
-  z-index: -1;
-  inline-size: 13rem;
-  block-size: 13rem;
-  border-radius: 999px;
-  background: var(--color-accent);
-  content: "";
-  filter: blur(4rem);
-  opacity: 0.22;
 }
 
 .launchCard h2,

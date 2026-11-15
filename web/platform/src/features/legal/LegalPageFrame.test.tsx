@@ -1,7 +1,9 @@
 import { fireEvent, render, screen, within } from "@testing-library/react";
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 import { LocaleProvider } from "@/i18n/LocaleProvider";
 import { LegalPageFrame } from "./LegalPageFrame";
+
+vi.mock("@/i18n/navigation", () => ({ useRouter: () => ({ push: vi.fn() }) }));
 
 const documents = [
   { slug: "user-agreement", title: "User agreement" },
@@ -44,12 +46,11 @@ describe("legal navigation", () => {
     expect(container.querySelector("[data-legal-page]")).toHaveProperty("inert", false);
   });
 
-  it("provides real app destinations in the mobile global navigation", () => {
+  it("keeps the home destination in the mobile global navigation", () => {
     page();
     fireEvent.click(screen.getByRole("button", { name: "Open navigation" }));
     const dialog = screen.getByRole("dialog", { name: "Navigation" });
-    expect(within(dialog).getByRole("link", { name: "New chat" })).toHaveAttribute("href", "/ru/app");
-    expect(within(dialog).getByRole("link", { name: "All AI models" })).toHaveAttribute("href", "/ru/app/models");
-    expect(within(dialog).getByRole("link", { name: "Legal pages" })).toHaveAttribute("href", "/ru/legal");
+    expect(within(dialog).getAllByRole("link")).toHaveLength(1);
+    expect(within(dialog).getByRole("link", { name: "Home" })).toHaveAttribute("href", "/ru");
   });
 });

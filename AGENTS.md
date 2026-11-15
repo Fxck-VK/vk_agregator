@@ -36,11 +36,13 @@ visual verification. Report missing widths or blocked browser checks explicitly.
 
 ## Image resolution UI policy
 
-Resolution controls show one choice per supported size (for example 1K, 2K, 4K,
-8K), without quality suffixes such as medium, high, ultra or pro. Use the shared
+Resolution controls show only supported 1K, 2K and 4K choices, without fractional
+or other K sizes and without quality suffixes such as medium, high, ultra or pro. Use the shared
 `ImageQualitySelector` and `image-resolution-options` projection; do not recreate
 raw size/tier lists in other surfaces. Show only sizes present in the model's
-admitted catalogue, never invent 8K or other capabilities. Preserve the current
+admitted catalogue, never invent sizes or other capabilities. Resolve hidden
+defaults and saved choices through the shared `resolveImageResolution` helper.
+Preserve the current
 raw code and its tier when changing size where supported; send an existing
 catalogue code and use its authoritative price. This display rule does not
 authorize provider, billing or model-admission changes.

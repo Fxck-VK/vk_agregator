@@ -1,6 +1,7 @@
 "use client";
 import {useId,useState} from "react";
 import {HelpIcon} from "@/components/public/help-center/HelpIcon";
+import {HelpNavigationLink} from "@/components/public/help-center/HelpNavigationLink";
 import Link from "@/i18n/Link";
 import {useLocale} from "@/i18n/LocaleProvider";
 import {documentationArticles,documentationEn as copy,documentationGroups} from "@/i18n/public/documentation-en";
@@ -21,7 +22,7 @@ export function DocumentationNavigation({currentSlug,onNavigate}:{currentSlug?:s
     <div className={styles.navigationLink}><HelpIcon kind="file"/>{copy.labels.articles}</div>
     <div className={styles.tree} key={normalized}>{documentationGroups.map(group=>{
       const articles=matches.filter(article=>article.group===group.id);if(!articles.length)return null;
-      return <details key={group.id} open={!!normalized||articles.some(a=>a.slug===currentSlug)||undefined}><summary><span aria-hidden="true">›</span>{group.title}</summary><div className={styles.articleLinks}>{articles.map(article=><Link href={documentationArticlePath(article.slug,documentationPath)} key={article.slug} aria-current={article.slug===currentSlug?"page":undefined} onClick={onNavigate}>{article.title}</Link>)}</div></details>;
+      return <details key={group.id} open={!!normalized||articles.some(a=>a.slug===currentSlug)||undefined}><summary><span aria-hidden="true">›</span>{group.title}</summary><div className={styles.articleLinks}>{articles.map(article=><HelpNavigationLink href={documentationArticlePath(article.slug,documentationPath)} key={article.slug} current={article.slug===currentSlug} onNavigate={onNavigate}>{article.title}</HelpNavigationLink>)}</div></details>;
     })}{!matches.length?<p role="status" className={styles.noResults}>{copy.labels.noResults}</p>:null}</div>
   </nav>;
 }

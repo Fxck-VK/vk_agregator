@@ -22,7 +22,7 @@ export function AcademyCourse({lesson:sourceLesson}:{lesson?:CourseLessonRecord}
 
   const [dialog,setDialog]=useState<"overview"|"share"|null>(null);
   const shareLabels=lesson?{...copy.share,share:copy.labels.shareLesson}:copy.share;
-  const rail:readonly HelpRailItem[]=[{href:"/app",label:copy.labels.newChat,icon:"plus"},{href:"/",label:copy.labels.home,icon:"home"},{href:"/app/models",label:copy.labels.models,icon:"grid"},{href:"/app/files",label:copy.labels.files,icon:"file"},{href:coursePath,label:copy.labels.academy,icon:"book",current:true,bottom:true},{href:"/legal",label:copy.labels.legal,icon:"file",bottom:true},{href:"mailto:support@epifera.com",label:copy.labels.support,icon:"support",bottom:true}];
+  const rail:readonly HelpRailItem[]=[{href:"/",label:copy.labels.home,icon:"home"},{href:coursePath,label:copy.labels.academy,icon:"book",current:true,bottom:true}];
   return <><HelpCenterFrame kind="academy" labels={copy.labels} rail={rail} breadcrumbs={[{label:copy.labels.academy},{label:copy.labels.courses},{label:copy.title,href:coursePath},...(lesson?[{label:lesson.title}]:[])]} readingKey={lesson?.slug} mainClassName={styles.courseMain} hideMobileBreadcrumb renderNavigation={onNavigate=><AcademyNavigation currentSlug={lesson?.slug} onNavigate={onNavigate}/>} utilityAction={<button type="button" className={`${frame.iconButton} ${frame.supportButton}`} aria-label={shareLabels.share} onClick={()=>setDialog("share")}><EditorialIcon kind="share"/></button>}>
     {lesson?<CourseLesson lesson={lesson}/>:<CourseOverview onOverview={()=>setDialog("overview")}/>}
   </HelpCenterFrame>

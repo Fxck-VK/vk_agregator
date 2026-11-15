@@ -114,9 +114,6 @@ describe("ChatComposer landing styles", () => {
     expect(rule(qualityStylesheet, "\\.tuneIcon")).toContain(
       "inline-size: var(--input-control-icon-size, 1.25rem)",
     );
-    expect(rule(qualityStylesheet, "\\.chevronIcon")).toContain(
-      "inline-size: var(--input-control-chevron-size, 0.9rem)",
-    );
     expect(rule(outputCountStylesheet, "\\.button")).toContain(
       "height: var(--input-control-step-size, 2.25rem)",
     );

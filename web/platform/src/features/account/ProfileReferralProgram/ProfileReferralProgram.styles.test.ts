@@ -9,14 +9,12 @@ const programStylesheet = readFileSync(
 );
 
 describe("ProfileReferralProgram responsive styles", () => {
-  it("uses a restrained brand accent treatment for the launch card", () => {
+  it("uses the shared panel background for the launch card", () => {
     expect(programStylesheet).toMatch(
-      /\.launchCard\s*\{[^}]*position:\s*relative;[^}]*overflow:\s*hidden;[^}]*background:\s*radial-gradient\(/s,
+      /\.launchCard,\s*\.statistic,\s*\.steps li\s*\{[^}]*background:\s*var\(--color-panel\);/s,
     );
-    const launchAccentRule = programStylesheet.match(/\.launchCard::before\s*\{([\s\S]*?)\n\}/)?.[1];
-
-    expect(launchAccentRule).toContain('content: ""');
-    expect(launchAccentRule).toContain("background: var(--color-accent)");
+    expect(programStylesheet).not.toContain("radial-gradient");
+    expect(programStylesheet).not.toContain(".launchCard::before");
   });
 
   it("keeps explainer and statistic cards in desktop grids that stack on narrow screens", () => {

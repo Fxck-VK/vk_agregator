@@ -8,17 +8,12 @@ const stylesheetPath = resolve(
   "src/features/workspace/WorkspaceLanding/CapabilityLinks.module.css",
 );
 const stylesheet = existsSync(stylesheetPath) ? readFileSync(stylesheetPath, "utf8") : "";
-const dividerRule = stylesheet.match(/\.divider\s*\{[^}]*\}/s)?.[0] ?? "";
 const listRule = stylesheet.match(/\.list\s*\{[^}]*\}/s)?.[0] ?? "";
 const linkRule = stylesheet.match(/\.link\s*\{[^}]*\}/s)?.[0] ?? "";
 const iconRule = stylesheet.match(/\.link \.icon\s*\{[^}]*\}/s)?.[0] ?? "";
 
 describe("CapabilityLinks layout", () => {
-  it("keeps the divider and three desktop links in the existing style", () => {
-    expect(dividerRule).toContain("grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr)");
-    expect(stylesheet).toMatch(
-      /\.divider::before,[\s\S]*\.divider::after\s*\{[^}]*content:\s*"";[^}]*background:\s*var\(--color-border\);/s,
-    );
+  it("keeps three desktop links in the existing style", () => {
     expect(listRule).toContain("grid-template-columns: repeat(3, max-content)");
     expect(linkRule).toContain("background: transparent");
     expect(linkRule).toContain("border-radius: var(--radius-sm)");

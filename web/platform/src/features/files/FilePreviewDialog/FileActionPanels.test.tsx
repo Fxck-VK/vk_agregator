@@ -45,6 +45,20 @@ describe("file action panels", () => {
     resetFileActionModelCatalogLoaderForTests();
   });
 
+  it("uses a real standard size and its price in the editor when the default is fractional", async () => {
+    const catalog=parseModelCatalog(makeModelCatalogFixture({images:[{
+      id:"fractional-edit",name:"Fractional edit",quality_options:["1K","1.5K"],default_quality:"1.5K",
+      price_by_quality:{"1K":12,"1.5K":18},supports_reference_image:false,max_reference_images:0,
+    }]}));
+    catalog.items[0].operations[0].id="edit";
+    catalog.items[0].operations[0].inputs.images={support:"supported",enabled:true,max_count:1};
+    setFileActionModelCatalogLoaderForTests(async()=>catalog);
+    render(<TestEditorPanel />);
+    expect(await screen.findByRole("button",{name:"Разрешение: 1K"})).toBeVisible();
+    expect(screen.getByRole("button",{name:/Редактировать за 12/})).toBeVisible();
+    expect(screen.queryByRole("button",{name:"Разрешение: 1.5K"})).not.toBeInTheDocument();
+  });
+
   it("keeps the animation action disabled when no catalog operation supports file input", async () => {
     setFileActionModelCatalogLoaderForTests(async () => emptyCatalog);
 

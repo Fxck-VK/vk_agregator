@@ -96,6 +96,10 @@ function SubscriptionPlansContent({ onClose }: SubscriptionPlansDialogProps) {
             </header>
 
             <div className={styles.plansContent}>
+              {checkout.autoRenew ? <div className={styles.renewalNotice}>
+                <p>{t.autoRenewNotice}{" "}<Link href="/legal/paid-access" target="_blank" rel="noopener noreferrer">{t.paymentTerms}</Link></p>
+                {liteVisible ? <p>{trial.name} → {followingTrial.name}: {formatPaymentPrice(followingTrial.amount,locale)} ₽ / {followingTrial.period_days} {t.days}, {t.after} {trial.period_days} {t.days}.</p> : null}
+              </div> : state.data && !state.data.recurring_available ? <p className={styles.renewalNotice}>{t.recurringOff}</p> : null}
               <SubscriptionPlanCards liteVisible={liteVisible} amountForPlan={checkout.displayAmount}
                 busyPlanID={checkout.busyPlanID}
                 disabledPlan={id => Boolean(account) && (!checkout.available(id) || checkout.busy || checkout.paymentID !== null)}
@@ -118,15 +122,9 @@ function SubscriptionPlansContent({ onClose }: SubscriptionPlansDialogProps) {
               </SubscriptionPlanCards>
 
               <footer className={styles.dialogFooter}>
-                {state.data?.recurring_available ? <label className={styles.renewalChoice}>
-                  <input type="checkbox" checked={checkout.consent} disabled={checkout.busy || checkout.paymentID !== null}
-                    onChange={event => checkout.setConsent(event.target.checked)}/>
-                  <span>{t.autoRenewLabel}</span>
-                </label> : null}
                 {checkout.autoRenew ? <details className={styles.renewalDetails}>
                   <summary>{t.renewalDetails}</summary>
-                  {liteVisible ? <p>{trial.name} → {followingTrial.name}: {formatPaymentPrice(followingTrial.amount,locale)} ₽ / {followingTrial.period_days} {t.days}, {t.after} {trial.period_days} {t.days}.</p> : null}
-                  <p>{t.consent}</p><p>{t.expiry}</p>
+                  <p>{t.renewalPolicy}</p><p>{t.expiry}</p>
                 </details> : null}
                 <p><Link href="/legal/user-agreement" target="_blank" rel="noopener noreferrer">{t.agreementLink}</Link>
                   {" · "}<Link href="/legal/paid-access" target="_blank" rel="noopener noreferrer">{t.paymentTerms}</Link></p>

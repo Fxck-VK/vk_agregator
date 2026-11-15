@@ -19,6 +19,7 @@ import { ru } from "@/i18n/ru";
 import { imageModelFixture } from "@/test/model-catalog";
 import { getCreditAmountLabel } from "@/components/ui/CreditAmount/CreditAmount";
 import { WorkspaceHero } from "./WorkspaceHero";
+import { composerLayoutDuration } from "@/components/chat/ChatComposer/composer-motion";
 
 const push = vi.fn();
 const requestId = "11111111-1111-4111-8111-111111111111";
@@ -142,6 +143,7 @@ describe("WorkspaceHero model selection", () => {
     fireEvent.click(screen.getByRole("button", { name: "Разрешение: 2K" }));
     fireEvent.click(screen.getByRole("radio", { name: "4K" }));
     const input = screen.getByRole("textbox");
+    fireEvent.change(input, { target: { value: "Черновик" } });
     vi.useFakeTimers();
     fireEvent.click(screen.getByRole("button", { name: `Выбрать модель: ${brandName} Chat` }));
 
@@ -151,11 +153,27 @@ describe("WorkspaceHero model selection", () => {
     expect(outgoing?.querySelector('[aria-label="Разрешение: 4K"]')).not.toBeNull();
     expect(screen.queryByRole("button", { name: /^Разрешение:/ })).toBeNull();
     expect(screen.getByRole("button", { name: ru.workspace.promptSubmit })).toBeInTheDocument();
-    act(() => vi.advanceTimersByTime(219));
+    act(() => vi.advanceTimersByTime(composerLayoutDuration - 1));
     expect(outgoing).toBeInTheDocument();
     act(() => vi.advanceTimersByTime(1));
     expect(outgoing).not.toBeInTheDocument();
     expect(screen.getByRole("textbox")).toBe(input);
+  });
+
+  it("leaves focus on the selected shortcut instead of focusing the prompt", async () => {
+    renderHero();
+    const input = screen.getByRole("textbox");
+    fireEvent.change(input, { target: { value: "Сохранённый черновик" } });
+    for (const name of ["Nano Banana Pro", "Nano Banana 2", `${brandName} Chat`]) {
+      const shortcut = await screen.findByRole("button", { name: `Выбрать модель: ${name}` });
+      shortcut.focus();
+      fireEvent.click(shortcut);
+      expect(shortcut).toHaveFocus();
+      expect(input).not.toHaveFocus();
+      expect(input).toHaveValue("Сохранённый черновик");
+    }
+    input.focus();
+    expect(input).toHaveFocus();
   });
 
   it("cancels an old exit when another model is selected before the animation ends", async () => {
@@ -170,7 +188,7 @@ describe("WorkspaceHero model selection", () => {
     expect(screen.getByRole("button", { name: "Соотношение сторон: 16:9" })).toBeVisible();
     expect(screen.queryByRole("button", { name: "Разрешение: 1K" })).toBeNull();
     fireEvent.click(screen.getByRole("button", { name: `Выбрать модель: ${brandName} Chat` }));
-    act(() => vi.advanceTimersByTime(219));
+    act(() => vi.advanceTimersByTime(composerLayoutDuration - 1));
     expect(container.querySelector('[data-state="exiting"]')).not.toBeNull();
     act(() => vi.advanceTimersByTime(1));
     expect(container.querySelector('[data-state="exiting"]')).toBeNull();

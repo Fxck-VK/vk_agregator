@@ -9,6 +9,7 @@ export type { GenerationOptions } from "./generation-options-contract";
 import { ImageGenerationControls } from "@/features/image-generation/ImageGenerationComposer/ImageGenerationControls";
 import { ImageAspectRatioSelector } from "@/features/image-generation/ImageAspectRatioSelector/ImageAspectRatioSelector";
 import { ImageQualitySelector } from "@/features/image-generation/ImageQualitySelector/ImageQualitySelector";
+import { resolveImageResolution } from "@/features/image-generation/image-resolution-options";
 import type { GenerationModel } from "./generation-model-catalog";
 import { imagePrice } from "./image-price";
 
@@ -19,7 +20,7 @@ function videoAspectRatios(model: Extract<GenerationModel, { category: "video" }
 
 export function resolveGenerationOptions(model: GenerationModel | undefined, saved: GenerationOptions = {}) {
  if (model?.category === "images") {
-  const image_quality = model.quality_options.includes(saved.image_quality ?? "") ? saved.image_quality! : model.default_quality;
+  const image_quality = resolveImageResolution(model.quality_options, saved.image_quality, model.default_quality);
   const ratios = (model.allowed_aspect_ratios ?? []).filter(ratio => !model.price_by_variant || model.price_by_variant[`${image_quality}:${ratio}`] > 0);
   const aspect_ratio = ratios.includes(saved.aspect_ratio ?? "") ? saved.aspect_ratio! : ratios.includes(model.default_aspect_ratio ?? "") ? model.default_aspect_ratio! : ratios[0];
   const output_count = Math.min(Math.max(saved.output_count ?? 1,1),model.max_output_count ?? 1);

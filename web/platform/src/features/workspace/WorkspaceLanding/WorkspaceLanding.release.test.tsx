@@ -10,15 +10,19 @@ vi.mock("../FeaturedModels/FeaturedModels", () => ({ FeaturedModels: () => null 
 vi.mock("@/features/subscriptions/use-lite-offer", () => ({ useLiteOffer: () => ({ visible: false }) }));
 afterEach(cleanup);
 
-it("links only available catalogue models and hides the unfinished social action in PROD", () => {
+it("links only available catalogue models without social promotions in either release view", () => {
   const view = render(<WorkspaceLanding />);
+  const agreement = view.getByRole("link", { name: "Пользовательское соглашение" });
+  expect(agreement).toHaveAttribute("href", "/ru/legal/user-agreement");
+  expect(agreement).toHaveAttribute("target", "_blank");
+  expect(agreement).toHaveAttribute("rel", "noopener noreferrer");
   expect(view.container.querySelectorAll('footer a[href*="?model="]')).toHaveLength(1);
   expect(view.container.querySelector('[aria-disabled="true"]')).toBeNull();
   state.view = "dev";
   state.ids = ["nano_banana_2", "nano_banana_pro", "gpt_image_2", "seedream_4_5"];
   view.rerender(<WorkspaceLanding />);
   expect(view.container.querySelectorAll('footer a[href*="?model="]')).toHaveLength(4);
-  expect(view.container.querySelector('[aria-disabled="true"]')).toHaveTextContent("Telegram");
+  expect(view.container.querySelector('[aria-disabled="true"]')).toBeNull();
   state.ids = [];
   view.rerender(<WorkspaceLanding />);
   expect(view.container.querySelectorAll('footer a[href*="?model="]')).toHaveLength(0);

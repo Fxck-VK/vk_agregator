@@ -4,6 +4,8 @@
 T01 на `/ru` использует доработанный `landing-variants/third`: нашу вёрстку с фото друга.
 Тарифы T01 и кабинета используют один `SubscriptionPlanCards` и прежний CSS
 карточек; [контракт подписок](ui-catalog.md#subscription-economy).
+Автопродление без отдельной галочки следует серверной доступности: уведомление
+перед покупкой, ссылка на условия и отмена в профиле остаются видимыми.
 Основной scrollbar текущей T01 белый, стрелка внизу плавно возвращает наверх;
 локальный контракт описан в [вариантах лендинга](landing-variants.md).
 Палитра T01 собрана в `third/Palette.module.css`: два графитовых цвета кабинета,
@@ -72,7 +74,7 @@ Hero и блок ленты до1050px используют естественн
 [runtime и публикация](../../../docs/runbooks/WEB_LEGAL.md).
 
 Публичные `/legal` и `/legal/[slug]` заново оформлены по референсу Magnific №23:
-`LegalPageFrame`, `LegalNavigation`, общий `HelpCenterDrawer` и серверный `LegalPageContent`.
+`LegalPageFrame`, `LegalNavigation`, общий `HelpCenterDrawer`, `HelpNavigationLink` с плавной навигацией и серверный `LegalPageContent`.
 У них собственные панель иконок, меню документов и область чтения; шапка и подвал
 главной здесь не используются. Утверждённый каталог и согласия не меняются.
 
@@ -141,10 +143,10 @@ Hero и блок ленты до1050px используют естественн
 | Тумблер, режимы, тема, только иконки | `ModeSwitchPanel`; `fullWidth` для всей доступной ширины, `iconOnly` для иконок | [Панели](ui-catalog.md#panels), [пример 3](ui-catalog-examples.md#example-3) |
 | Раскрывающиеся вопросы и ответы | Общий `FAQ`, `items`; `name` для одного открытого ответа | [FAQ](ui-catalog.md#faq) |
 | Кнопка или счётчик внутри поля | `InputControlChip` button/div | [Ввод](ui-catalog.md#input), [радиус и размеры](ui-catalog.md#tokens) |
-| Выбор соотношения сторон или разрешения, в том числе в редакторе фото | `ImageAspectRatioSelector`, `ImageQualitySelector`: уникальные доступные размеры 1K/2K/4K/8K без приписок о качестве; исходные коды и цены каталога сохранены; в модальном редакторе portalLayer=170 | [Ввод](ui-catalog.md#input), [панели](ui-catalog.md#panels) |
+| Выбор соотношения сторон или разрешения, в том числе в редакторе фото | `ImageAspectRatioSelector`, `ImageQualitySelector`: только доступные 1K/2K/4K без дробных размеров и приписок о качестве; `resolveImageResolution` нормализует исходный выбор и сохраняет реальные коды и цены каталога; в модальном редакторе portalLayer=170 | [Ввод](ui-catalog.md#input), [панели](ui-catalog.md#panels) |
 | Кнопка с заливкой / прозрачная кнопка с обводкой | `Button`: `variant="filled"` по умолчанию; `variant="outline"` для прозрачного фона во всех состояниях | [Ввод](ui-catalog.md#input) |
 | Гостевой «Войти» в боковой панели и шапке | `WorkspaceLoginAction placement="sidebar" \| "header"`: прозрачный фон, фирменная обводка, радиус 0,5 rem | [Ввод](ui-catalog.md#input) |
-| Поле сообщения / запрос генерации / загрузка медиа | `ChatComposer` + `useChatAttachments` / `attachment-policy`: доступность, MIME и лимиты из активной операции каталога; неподключённая загрузка скрыта во всех входах | [Ввод](ui-catalog.md#input), [пример 5](ui-catalog-examples.md#example-5) |
+| Поле сообщения / запрос генерации / загрузка медиа | `ChatComposer`: одна строка с текстом по центру при отсутствии дополнительных элементов, развёрнутая компоновка с настройками/вложениями; отправка появляется после ввода текста без изменения размеров поля. Существующий рост от текста сохранён. `useChatAttachments` / `attachment-policy`: доступность, MIME и лимиты из активной операции каталога; неподключённая загрузка скрыта во всех входах | [Ввод](ui-catalog.md#input), [пример 5](ui-catalog-examples.md#example-5) |
 | Общий раздел «Аудио»: музыка и речь | `WorkspaceSectionNavigation` подключает переключатель через общий слот `WorkspaceHeader.sectionNavigation` сразу справа от выбора модели. `ModeSwitchPanel density="compact"` имеет высоту 2.75 rem, как остальные кнопки; CSS шапки одинаков на всех маршрутах. Баланс и тариф остаются у правого края | [Модели](ui-catalog.md#models), [панели](ui-catalog.md#panels) |
 | Масштаб кабинета только на 2K/4K | `AppShell` включает rem-масштаб только при viewport ≥2560 CSS px: 200% на 2560 и 300% на 3840. Ниже 2560 сохраняются исходные размеры. Панели в body наследуют его; публичные страницы и вход сохраняют свой масштаб. Не расширять правило на обычные экраны | [Оболочка](ui-catalog.md#models) |
 | Музыкальная workspace-страница / Suno и Lyria | `MusicWorkspaceController` + `MusicWorkspace` + `MusicStudioTools`: быстрое создание, раскрываемые настройки; `MusicTrackCard` для результатов и выбора источника. «Мои треки» открывает «Мои файлы → Музыка». Продолжение не запускает платную работу автоматически | [Модели](ui-catalog.md#models), [Ввод](ui-catalog.md#input), [загрузка](preloading.md) |
@@ -181,7 +183,7 @@ Hero и блок ленты до1050px используют естественн
 | Единые данные моделей, категорий, возможностей и цен | `GenerationCatalogProvider.initialSource` → общий `loadModelCatalog` → `/web/v1/models`; специализированные загрузчики — проекции, свежий серверный снимок используется без повторного запроса | [Модели](ui-catalog.md#models), [загрузка и кеш](preloading.md), [контракт бэкенда](../../../docs/runbooks/MODEL_CATALOG.md) |
 | Лента подборок моделей и умный поиск | `ModelSelector categoryModelIds` → общий `ModeSwitchPanel`; без запроса до пяти в категории, поиск по всему переданному доступному каталогу без повторов: русский ввод, опечатки, неполное название и раскладка | [Модели](ui-catalog.md#models), [панели](ui-catalog.md#panels) |
 | Модель слева от отправки в начатом диалоге | `ConversationModelSelector` → `ModelSelector variant="composer"`; общий generation-model-catalog и useGenerationControls | [Модели](ui-catalog.md#models) |
-| Быстрые кнопки моделей под полем на главной, переключить без перехода | `WorkspaceHero` + `FeaturedModelShortcuts`; один WorkspacePrompt → ChatComposer, сменные ImageGenerationControls | [Модели](ui-catalog.md#models), [ввод](ui-catalog.md#input) |
+| Быстрые кнопки моделей под полем на главной, переключить без перехода | `WorkspaceHero` + `FeaturedModelShortcuts`; один WorkspacePrompt → ChatComposer, сменные ImageGenerationControls; выбор модели не переводит фокус в поле | [Модели](ui-catalog.md#models), [ввод](ui-catalog.md#input) |
 | Ширина страницы / публичные блоки | `WorkspacePageFrame`; публичная часть — `PageContainer` и свои компоненты | [Оболочки](ui-catalog.md#models) |
 | Купить пакет токенов / вернуться из ЮKassa | `TokenTopUpDialog`, `PaymentStatus`, `PaymentReturn`; серверный каталог и account-native платёж | [Окна](ui-catalog.md#overlays), [billing runbook](../../../docs/runbooks/BILLING.md#web-platform-test-checkout) |
 | Купить подписку, увидеть оплаченный срок и отменить продление | `SubscriptionCheckout`, `ProfileSubscriptionCard`; единая политика тарифов, защищённый API подписок и существующий возврат из оплаты | [Подписки](ui-catalog.md#subscription-economy), [billing runbook](../../../docs/runbooks/BILLING.md#subscription-economy-local-implementation-2026-10-27) |

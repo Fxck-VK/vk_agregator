@@ -12,14 +12,15 @@
 .fields, .field { display: grid; }
 .fields { gap: var(--auth-fields-gap, 1rem); }
 .field { gap: .5rem; font-size: .875rem; }
-.field input { inline-size: 100%; block-size: 100%; border: 0; border-radius: inherit; padding: 0 .75rem; background: transparent; color: #e5e5e5; font: inherit; }
-.inputSurface { block-size: 2.5rem; border: 1px solid #333; border-radius: .5rem; background: #1e1e1e; }
-.field input::placeholder { color: #888; opacity: 1; }
+.field input { inline-size: 100%; min-inline-size: 0; block-size: 100%; border: 0; border-radius: inherit; padding: 0 .75rem; background: transparent; color: var(--color-text); font: inherit; }
+.inputSurface { block-size: 2.5rem; border-radius: var(--radius-sm); }
+.field input::placeholder { color: var(--color-placeholder, revert); }
 .fields > button[type="submit"] { min-block-size: 2.5rem; block-size: 2.5rem; border-radius: .5rem; background: var(--color-surface-light); color: var(--color-text-on-light); }
 .textAction { border: 0; padding: .25rem; background: transparent; color: var(--color-text); cursor: pointer; text-align: center; }
 .textAction:hover { color: var(--color-accent); }
 .textAction:disabled { color: var(--color-text-muted); cursor: default; opacity: .6; }
 .backAction { justify-self: start; padding-inline: 0; font-size: .8rem; color: var(--color-text-muted); text-align: start; }
+.otherMethodsAction { justify-self: center; font-size: .8rem; color: var(--color-text-muted); }
 .actions { display: flex; flex-wrap: wrap; justify-content: center; gap: .5rem; }
 .choiceProviders { display: grid; gap: .5rem; }
 .providerMark { display: grid; place-items: center; inline-size: 1rem; block-size: 1rem; flex: 0 0 1rem; }

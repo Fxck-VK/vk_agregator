@@ -33,7 +33,7 @@ describe("ConversationComposer", () => {
     render(<ConversationComposer {...chatScrollProps} generationModel={{ ...referenceModel, price_by_quality: undefined, price_by_variant: undefined }} onSubmit={vi.fn()} />);
     expect(screen.queryByText(/Стоимость: —/)).toBeNull();
     expect(screen.queryByRole("alert")).toBeNull();
-    expect(screen.getByRole("button", { name: ru.conversations.composerSubmit })).toBeDisabled();
+    expect(screen.queryByRole("button", { name: ru.conversations.composerSubmit })).toBeNull();
   });
   afterEach(() => {
     cleanup();
@@ -65,6 +65,7 @@ describe("ConversationComposer", () => {
   it("renders one compact composer surface with embedded controls and a note below", () => {
     render(<ConversationComposer {...chatScrollProps} onSubmit={vi.fn()} />);
 
+    fireEvent.change(screen.getByRole("textbox"), { target: { value: "Черновик" } });
     const mediaControls = screen.getByRole("group", { name: "Медиа и настройки" });
     const submitButton = screen.getByRole("button", { name: ru.conversations.composerSubmit });
 
@@ -132,7 +133,8 @@ describe("ConversationComposer", () => {
     const onSubmit = vi.fn();
     const rendered = render(<ConversationComposer {...chatScrollProps} generationModel={textGenerationModel} onSubmit={onSubmit} />);
 
-    fireEvent.click(screen.getByRole("button", { name: ru.conversations.composerSubmit }));
+    expect(screen.queryByRole("button", { name: ru.conversations.composerSubmit })).toBeNull();
+    fireEvent.keyDown(screen.getByLabelText(ru.conversations.composerLabel), { key: "Enter" });
     expect(onSubmit).not.toHaveBeenCalled();
 
     rendered.rerender(<ConversationComposer {...chatScrollProps} disabled generationModel={textGenerationModel} initialDraft="Не отправлять" onSubmit={onSubmit} />);

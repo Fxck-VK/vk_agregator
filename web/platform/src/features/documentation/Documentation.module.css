@@ -38,7 +38,7 @@
 .directory li a { display: grid; gap: 4px; padding-block: 16px; border-block-end: 1px solid var(--legal-border); text-decoration: none; }
 .directory small { color: var(--legal-muted); font-size: 14px; }
 .navigation { font-size: 13px; line-height: 1.6; }
-.search { display: flex; align-items: center; gap: 10px; block-size: 36px; margin-block: 16px 8px; padding-inline: 12px 6px; border: 1px solid var(--legal-border); border-radius: 8px; background: #111; }
+.search { display: flex; align-items: center; gap: 10px; block-size: 36px; margin-block: 16px 8px; padding-inline: 12px 6px; border: 1px solid var(--legal-border); border-radius: 8px; background: var(--legal-canvas); }
 .search:focus-within { border-color: #aaa9a4; }
 .search svg { inline-size: 18px; block-size: 18px; color: #babab4; flex-shrink: 0; }
 .search input { min-inline-size: 0; inline-size: 100%; border: 0; outline: 0; background: transparent; color: var(--legal-ink); font: inherit; }
@@ -48,15 +48,13 @@
 .navigationLink:is(a):hover { color: #fff; background: #ffffff05; border-radius: 8px; }
 .tree { margin-block: 0 12px; padding-inline-start: 16px; color: var(--legal-muted); }
 .tree details { min-inline-size: 0; }
-.tree summary { display: flex; align-items: center; gap: 10px; min-block-size: 40px; padding: 6px 8px 6px 14px; cursor: pointer; list-style: none; }
+.tree summary { display: flex; align-items: center; gap: 10px; min-block-size: 40px; padding: 6px 8px 6px 14px; cursor: pointer; list-style: none; transition: color var(--motion-normal); }
 .tree summary::-webkit-details-marker { display: none; }
-.tree summary > span { display: inline-block; inline-size: 10px; font-size: 15px; transform: rotate(90deg); }
+.tree summary > span { display: inline-block; inline-size: 10px; font-size: 15px; transform: rotate(90deg); transition: transform var(--motion-normal); }
 .tree details[open] > summary > span { transform: rotate(-90deg); }
 .tree summary:hover { color: var(--legal-ink); }
 .articleLinks { display: grid; margin-inline-start: 32px; }
-.articleLinks a { padding: 7px 12px; border-inline-start: 1px solid transparent; }
-.articleLinks a:hover { color: var(--legal-ink); }
-.articleLinks a[aria-current="page"] { color: var(--legal-ink); border-inline-start-color: #b56e99; background: #ffffff03; }
+.articleLinks a { padding: 7px 12px; }
 .noResults { margin: 16px 12px; color: var(--legal-muted); }
 @media (min-width: 1600px) { .main { padding-inline: 64px; } }
 @media (max-width: 1023px) {

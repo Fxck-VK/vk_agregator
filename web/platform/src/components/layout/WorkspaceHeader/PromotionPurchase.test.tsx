@@ -30,7 +30,6 @@ async function applyCode() {
 it("applies the same verified discount to the card and checkout, preserving full stars and regular renewal", async () => {
   show(); await applyCode();
   expect(startCard()).toHaveTextContent("466,65"); expect(startCard()).toHaveTextContent("1 250");
-  fireEvent.click(screen.getByRole("checkbox", { name: "Автопродление подписки" }));
   expect(screen.getByText(/Lite → Start\+:/)).toHaveTextContent("549");
   fireEvent.click(within(startCard()).getByRole("button", { name: "Активировать подписку" }));
   await waitFor(() => expect(createSubscriptionCheckout).toHaveBeenCalledWith({ plan_code: "start", auto_renew: true, retry_policy_version: 1, promo_code: "FIRST15", promo_revision: 3 }, expect.any(String)));
@@ -60,7 +59,7 @@ it("removes an applied code and restores ordinary checkout terms", async () => {
   expect(startCard()).toHaveTextContent("549"); expect(startCard()).not.toHaveTextContent("466,65");
   vi.mocked(createSubscriptionCheckout).mockResolvedValue({ ...payment, amount: 54900 });
   fireEvent.click(within(startCard()).getByRole("button", { name: "Активировать подписку" }));
-  await waitFor(() => expect(createSubscriptionCheckout).toHaveBeenCalledWith({ plan_code: "start", auto_renew: false }, expect.any(String)));
+  await waitFor(() => expect(createSubscriptionCheckout).toHaveBeenCalledWith({ plan_code: "start", auto_renew: true, retry_policy_version: 1 }, expect.any(String)));
 });
 it("does not validate real codes in local preview", () => {
   show(true); fireEvent.click(screen.getByRole("button", { name: "Активировать промокод" }));

@@ -12,7 +12,7 @@ describe("ChatComposer", () => {
   it("renders the shared chat controls and accessible textarea", () => {
     render(
       <ChatComposer
-        canSubmit={false}
+        canSubmit
         disabled={false}
         label="Задайте вопрос NeiroHub"
         mediaLabel="Загрузить медиа"
@@ -20,7 +20,7 @@ describe("ChatComposer", () => {
         onSend={vi.fn()}
         placeholder="Напишите вопрос"
         submitLabel="Отправить"
-        value=""
+        value="Вопрос"
         variant="conversation"
       />,
     );
@@ -31,13 +31,33 @@ describe("ChatComposer", () => {
     expect(textarea.closest('[data-ui="input-surface"]')).not.toBeNull();
     expect(screen.queryByRole("button", { name: "Загрузить медиа" })).toBeNull();
     const submitButton = screen.getByRole("button", { name: "Отправить" });
-    expect(submitButton).toBeDisabled();
+    expect(submitButton).toBeEnabled();
     expect(submitButton).toHaveAttribute("data-ui", "chat-submit-button");
     expect(submitButton).not.toHaveAttribute("title");
     expect(screen.getByText("Отправить", { selector: '[role="tooltip"]' })).toHaveAttribute(
       "data-ui",
       "tooltip-bubble",
     );
+  });
+
+  it.each(["conversation", "hero", "newChat", "workspace"] as const)("hides the send action until the %s draft contains text and hides it again when cleared", (variant) => {
+    const props = {
+      canSubmit: false, disabled: false, label: "Черновик", mediaLabel: "Загрузить медиа",
+      onChange: vi.fn(), onSend: vi.fn(), placeholder: "Спросите Epifera", submitLabel: "Отправить", variant,
+    };
+    const { container, rerender } = render(<ChatComposer {...props} value="" />);
+    const textarea = screen.getByRole("textbox");
+    for (const value of ["", " \n\t ", "Запрос", ""]) {
+      rerender(<ChatComposer {...props} value={value} />);
+      expect(screen.getByRole("textbox")).toBe(textarea);
+      expect(container.querySelector('[data-ui="chat-submit-slot"]')).not.toBeNull();
+      if (value.trim()) {
+        expect(screen.getByRole("button", { name: "Отправить" })).toBeDisabled();
+      } else {
+        expect(screen.queryByRole("button", { name: "Отправить" })).toBeNull();
+        expect(screen.queryByText("Отправить", { selector: '[role="tooltip"]' })).toBeNull();
+      }
+    }
   });
 
   it("keeps Enter submission in every visual variant", () => {
@@ -60,6 +80,29 @@ describe("ChatComposer", () => {
     fireEvent.keyDown(screen.getByLabelText("Новый чат"), { key: "Enter" });
 
     expect(onSend).toHaveBeenCalledTimes(1);
+  });
+
+  it("retains the textarea, draft, focus and selection as domain controls change", () => {
+    const props = {
+      canSubmit: true, disabled: false, label: "Черновик", mediaLabel: "Загрузить медиа",
+      onChange: vi.fn(), onSend: vi.fn(), placeholder: "Спросите Epifera", submitLabel: "Отправить",
+      value: "Сохранённый черновик", variant: "hero" as const,
+    };
+    const {rerender}=render(<ChatComposer {...props} />);
+    const textarea=screen.getByRole("textbox") as HTMLTextAreaElement;
+    textarea.focus();textarea.setSelectionRange(2,7);
+    rerender(<ChatComposer {...props} leadingControls={<button type="button">16:9</button>} />);
+    expect(screen.getByRole("textbox")).toBe(textarea);
+    expect(textarea).toHaveValue(props.value);
+    expect(textarea).toHaveFocus();
+    expect([textarea.selectionStart,textarea.selectionEnd]).toEqual([2,7]);
+    rerender(<ChatComposer {...props} additionalControls={<button type="button">Модель</button>} />);
+    expect(screen.getByRole("textbox")).toBe(textarea);
+    expect(textarea).toHaveFocus();
+    rerender(<ChatComposer {...props} />);
+    expect(screen.getByRole("textbox")).toBe(textarea);
+    expect(textarea).toHaveValue(props.value);
+    expect([textarea.selectionStart,textarea.selectionEnd]).toEqual([2,7]);
   });
 
   it.each(["hero", "newChat"] as const)("uses a one-row textarea in the %s composer", (variant) => {

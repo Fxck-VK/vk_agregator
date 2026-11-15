@@ -294,17 +294,17 @@
   margin: 0;
 }
 
-.renewalChoice {
-  display: inline-flex;
-  align-items: center;
+.renewalNotice {
+  display: grid;
   gap: var(--space-2);
+  margin: 0 0 var(--space-5);
   color: var(--panel-surface-text);
-  cursor: pointer;
+  font-size: var(--font-size-body);
+  line-height: var(--line-height-body);
 }
 
-.renewalChoice input {
+.renewalNotice p {
   margin: 0;
-  accent-color: var(--color-accent);
 }
 
 .renewalDetails {

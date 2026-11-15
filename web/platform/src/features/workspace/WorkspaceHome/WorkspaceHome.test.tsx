@@ -87,7 +87,10 @@ describe("WorkspaceHome", () => {
     expect(markup).toContain('src="/assets/videos/workspace/epifera-v14-centered-mono-ru.mp4"');
     expect(markup).toContain('type="video/mp4"');
     expect(markup).toContain(`aria-label="Воспроизвести: Как работает ${brandName}"`);
-    expect(markup).toContain("Откройте новые возможности");
+    expect(markup).not.toContain("Откройте новые возможности");
+    expect(markup).not.toContain('workspace-capabilities-title');
+    expect(markup.match(/data-testid="workspace-capability-link"/g)).toHaveLength(3);
+    expect(text).not.toContain("И многое другое");
     expect(markup).toContain("Lite");
     expect(markup).toContain("400");
     expect(markup).toContain("199");
@@ -125,12 +128,12 @@ describe("WorkspaceHome", () => {
     ]) {
       expect(text).not.toContain(removedQuestion);
     }
-    expect(markup).toContain("Следи за нами в Telegram и VK");
-    expect(markup).toContain("Будь в тренде и работай с AI быстрее");
-    expect(markup).toContain('aria-disabled="true"');
-    expect(markup).toContain(">Telegram</span>");
-    expect(markup).toContain('href="https://vk.me/neirohub_help"');
-    expect(markup).toContain(">ВКонтакте</a>");
+    expect(markup).not.toContain("Следи за нами в Telegram и VK");
+    expect(markup).not.toContain("Будь в тренде и работай с AI быстрее");
+    expect(markup).not.toContain('aria-disabled="true"');
+    expect(markup).not.toContain(">Telegram</span>");
+    expect(markup).not.toContain('href="https://vk.me/neirohub_help"');
+    expect(markup).not.toContain(">ВКонтакте</a>");
     expect(markup).not.toContain(`Сообщество ${brandName}`);
     expect(markup).not.toContain("Перейти во вдохновение");
     expect(markup).not.toContain("Открыть мои файлы");
@@ -162,7 +165,7 @@ describe("WorkspaceHome", () => {
     }
   });
 
-  it("renders one shared prompt-library card and opens its existing dialog", () => {
+  it("renders six inspiration cards in the prompt library and opens the existing dialog", () => {
     render(
       <WorkspaceConversationListProvider accountId="prompt-library-test-account" initialConversations={[]}>
         <WorkspaceHome />
@@ -179,10 +182,13 @@ describe("WorkspaceHome", () => {
       expect(screen.queryByText(removedText)).not.toBeInTheDocument();
     }
 
-    const promptCards = screen.getAllByRole("button", { name: inspirationExamples[0].openLabel });
-
-    expect(promptCards).toHaveLength(1);
-    fireEvent.click(promptCards[0]);
+    const examples = inspirationExamples.filter(example => example.mediaType === "image").slice(0, 6);
+    const promptCards = screen.getAllByTestId("workspace-prompt-example");
+    expect(promptCards).toHaveLength(6);
+    for (const example of examples) {
+      expect(screen.getByRole("button", { name: example.openLabel })).toBeInTheDocument();
+    }
+    fireEvent.click(screen.getByRole("button", { name: examples[0].openLabel }));
     expect(screen.getByRole("dialog", { name: ru.inspiration.dialogLabel })).toBeInTheDocument();
   });
 

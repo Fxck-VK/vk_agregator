@@ -1,4 +1,5 @@
 import { FileIcon } from "@/components/icons/FileIcon";
+import { HelpNavigationLink } from "@/components/public/help-center/HelpNavigationLink";
 import Link from "@/i18n/Link";
 import type { Locale } from "@/i18n/locales";
 import { legalNavigationGroups, legalPageText, type LegalNavigationItem } from "@/i18n/public/legal-page";
@@ -15,11 +16,11 @@ export function LegalNavigation({ locale, documents, currentSlug, onNavigate }: 
       {legalNavigationGroups.map(group => <details key={group.key} open={group.slugs.some(slug => slug === currentSlug) || undefined}>
         <summary><span className={styles.chevron} aria-hidden="true">›</span>{t.groups[group.key]}</summary>
         <div className={styles.groupLinks}>{documents.filter(doc => (group.slugs as readonly LegalSlug[]).includes(doc.slug)).map(doc =>
-          <Link href={`/legal/${doc.slug}`} key={doc.slug} aria-current={doc.slug === currentSlug ? "page" : undefined} onClick={onNavigate}>{doc.title}</Link>,
+          <HelpNavigationLink href={`/legal/${doc.slug}`} key={doc.slug} current={doc.slug === currentSlug} onNavigate={onNavigate}>{doc.title}</HelpNavigationLink>,
         )}</div>
       </details>)}
       <details><summary><span className={styles.chevron} aria-hidden="true">›</span>{t.help}</summary>
-        <div className={styles.groupLinks}><a href="mailto:support@epifera.com" onClick={onNavigate}>{t.support}</a></div>
+        <div className={styles.groupLinks}><a className={styles.documentLink} href="mailto:support@epifera.com" onClick={onNavigate}>{t.support}</a></div>
       </details>
     </div>
   </nav>;

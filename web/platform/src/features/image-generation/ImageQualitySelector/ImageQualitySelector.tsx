@@ -11,7 +11,7 @@ import { assetPaths } from "@/assets/asset-paths";
 import { InputControlChip } from "@/components/ui/InputControlChip/InputControlChip";
 import { PopoverOption } from "@/components/ui/PopoverOption/PopoverOption";
 import { PopoverPanel } from "@/components/ui/PopoverPanel/PopoverPanel";
-import { imageResolutionLabel, imageResolutionOptions } from "@/features/image-generation/image-resolution-options";
+import { imageResolutionLabel, imageResolutionOptions, resolveImageResolution } from "@/features/image-generation/image-resolution-options";
 import styles from "./ImageQualitySelector.module.css";
 
 type ImageQualitySelectorProps = {
@@ -36,7 +36,9 @@ export function ImageQualitySelector({
   const [isOpen, setIsOpen] = useState(false);
   const triggerRef = useRef<HTMLButtonElement>(null);
 
-  const resolutionOptions = imageResolutionOptions(options, value);
+  const selectedValue = resolveImageResolution(options, value);
+  const resolutionOptions = imageResolutionOptions(options, selectedValue || value);
+  const displayValue = imageResolutionLabel(selectedValue || (options.length === 0 ? value : "—"), msg);
   const isDisabled = disabled || resolutionOptions.length === 0;
 
   return (
@@ -44,15 +46,14 @@ export function ImageQualitySelector({
       <InputControlChip
         aria-expanded={isOpen}
         aria-haspopup="dialog"
-        aria-label={`${label}: ${imageResolutionLabel(value, msg)}`}
+        aria-label={`${label}: ${displayValue}`}
         className={styles.trigger}
         disabled={isDisabled}
         onClick={() => setIsOpen((current) => !current)}
         ref={triggerRef}
       >
         <TuneIcon />
-        <span>{imageResolutionLabel(value, msg)}</span>
-        <ChevronIcon />
+        <span>{displayValue}</span>
       </InputControlChip>
 
       <PopoverPanel
@@ -67,7 +68,7 @@ export function ImageQualitySelector({
         <p className={styles.title}>{label}</p>
         <div className={`${styles.options} ${resolutionOptions.length > 3 ? styles.wrappedOptions : ""}`} role="radiogroup">
           {resolutionOptions.map((quality) => {
-            const selected = quality === value;
+            const selected = quality === selectedValue;
             return (
               <PopoverOption
                 aria-label={imageResolutionLabel(quality, msg)}
@@ -101,13 +102,5 @@ function TuneIcon() {
       unoptimized
       width={24}
     />
-  );
-}
-
-function ChevronIcon() {
-  return (
-    <svg aria-hidden="true" className={styles.chevronIcon} focusable="false" viewBox="0 0 16 16">
-      <path d="m4 6 4 4 4-4" />
-    </svg>
   );
 }

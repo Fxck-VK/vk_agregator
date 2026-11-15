@@ -12,9 +12,6 @@ export function CapabilityLinks() {
   const capabilityLinks = getCapabilityLinks(msg);
   return (
     <div className={styles.wrapper}>
-      <h3 className={styles.divider}>
-        <span>{msg("capabilityLinks.andMuchMore")}</span>
-      </h3>
       <nav aria-label={msg("capabilityLinks.moreFeatures")} className={styles.list}>
         {capabilityLinks.map((item) => (
           <Link

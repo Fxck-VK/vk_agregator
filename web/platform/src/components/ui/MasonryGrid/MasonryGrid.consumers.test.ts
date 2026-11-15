@@ -7,6 +7,10 @@ const readSource = (path: string) => readFileSync(resolve(process.cwd(), path), 
 
 const consumers = [
   {
+    sourcePath: "src/features/workspace/WorkspaceLanding/WorkspaceLanding.tsx",
+    stylesheetPath: "src/features/workspace/WorkspaceLanding/WorkspaceLanding.module.css",
+  },
+  {
     sourcePath: "src/features/image-generation/ImageGenerationGuide/ImageGenerationGuide.tsx",
     stylesheetPath: "src/features/image-generation/ImageGenerationGuide/ImageGenerationGuide.module.css",
   },

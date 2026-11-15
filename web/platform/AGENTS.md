@@ -41,6 +41,12 @@ owner explicitly asks to introduce English. Keep `siteLocales = ["ru"]`, legacy
 English source dictionaries and reverse audits are retained; they are not an
 enabled website language. No environment-specific opt-in is authorized.
 
+Maintain the generated page lists in `docs/pages-prod.md` and `docs/pages-dev.md`.
+After changing routes, feature admission or publication status, run
+`npm --prefix web/platform run release:pages`. The command also refreshes the
+browser lists in the ignored `.runtime/public-pages/` directory. Their freshness
+check runs through `public-pages:generate`. Admission is computed by the existing release policy.
+
 The app scaffold and shared components already exist. Reuse the current package
 configuration and scripts. New dependencies or runtime surfaces must belong to
 the user-authorized feature and include the relevant lint, typecheck, tests,
@@ -96,9 +102,10 @@ removing visual sections/badges/icons, or changing layout, sizes and spacing.
 Change the presentation only when the user explicitly requests that visual work.
 
 Resolution selectors must use the shared `ImageQualitySelector`: one option per
-actual catalogue size (1K, 2K, 4K, 8K where supported), without medium/high/ultra/pro
-suffixes. The shared projection retains the selected backend tier where
-available and never synthesizes codes or unsupported sizes. Preserve the raw
+supported standard size (1K, 2K and 4K only), without fractional/other K sizes or
+medium/high/ultra/pro suffixes. The shared projection retains the selected backend tier where
+available and never synthesizes codes or unsupported sizes. Use the shared
+`resolveImageResolution` for defaults and saved selections as well as menus. Preserve the raw
 request code, catalogue defaults and pricing; see the root resolution UI policy.
 
 For UI changes and text-only UI proposals within `web/platform`, use this order:

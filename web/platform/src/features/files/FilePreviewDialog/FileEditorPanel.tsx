@@ -22,6 +22,7 @@ import { RangeSlider } from "@/components/ui/RangeSlider/RangeSlider";
 import { ScrollArea } from "@/components/ui/ScrollArea/ScrollArea";
 import { ImageAspectRatioSelector } from "@/features/image-generation/ImageAspectRatioSelector/ImageAspectRatioSelector";
 import { ImageQualitySelector } from "@/features/image-generation/ImageQualitySelector/ImageQualitySelector";
+import { resolveImageResolution } from "@/features/image-generation/image-resolution-options";
 
 import { type FileActionModel, useFileActionModels } from "./file-action-models";
 import styles from "./FileEditorPanel.module.css";
@@ -207,12 +208,12 @@ export function FileEditorPanel({
   const qualityOptions = selectedImageOptions?.quality_options ?? [];
   const allowedAspectRatios = selectedImageOptions?.allowed_aspect_ratios ?? [];
   const selectedImageQuality = selectedImageOptions
-    ? selectedOption(qualityOptions, controller.imageQuality, selectedImageOptions.default_quality)
+    ? resolveImageResolution(qualityOptions, controller.imageQuality, selectedImageOptions.default_quality)
     : controller.imageQuality;
   const selectedAspectRatio = selectedImageOptions
     ? selectedOption(allowedAspectRatios, controller.aspectRatio, selectedImageOptions.default_aspect_ratio)
     : controller.aspectRatio;
-  const selectedCost = selectedModel === null
+  const selectedCost = selectedModel === null || selectedImageQuality === ""
     ? null
     : selectedImageCost(selectedModel, selectedImageQuality, selectedAspectRatio);
   const submitLabel = selectedCost === null
@@ -223,7 +224,7 @@ export function FileEditorPanel({
   useEffect(() => {
     if (!selectedImageOptions) return;
 
-    if (selectedImageQuality && selectedImageQuality !== controller.imageQuality) {
+    if (selectedImageQuality !== controller.imageQuality) {
       controller.setImageQuality(selectedImageQuality);
     }
 

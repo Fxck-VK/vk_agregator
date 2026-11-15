@@ -13,7 +13,7 @@
   --color-border: #2a2b35;
   --color-text: var(--color-text-on-dark);
   --color-text-muted: var(--color-text-muted-on-dark);
-  --color-brand-violet: #9a7cf5;
+  --color-brand-violet: var(--palette-violet-on-dark);
   --color-brand-blue: #7c8ff7;
   --color-brand-pink: #f09af0;
   --color-accent: var(--color-brand-violet);
@@ -35,6 +35,7 @@
   /* Fixed graphite palette shared by workspace themes and dark landing surfaces. */
   --palette-workspace-dark: #0d1117;
   --palette-panel-dark: #151b23;
+  --palette-violet-on-dark: #9a7cf5;
   /* Shared waiting/error/empty UI. Geometry belongs to each consumer. */
   --state-placeholder-background: var(--color-panel);
   --state-notice-background: var(--panel-surface-background);

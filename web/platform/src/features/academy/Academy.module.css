@@ -2,22 +2,21 @@
 .navigation { font-size:12px; line-height:1.5; }
 .search { position:relative; margin:12px 0 12px; }
 .search svg { position:absolute; inset:9px auto auto 10px; inline-size:18px; block-size:18px; color:#a9a9a7; pointer-events:none; }
-.search input { inline-size:100%; min-block-size:36px; padding:8px 12px 8px 36px; border:1px solid #333; border-radius:5px; color:#ececea; background:#111; font:inherit; font-size:14px; }
-.search input:focus-visible { outline:2px solid #f052a4; outline-offset:2px; }
+.search input { inline-size:100%; min-block-size:36px; padding:8px 12px 8px 36px; border:1px solid var(--legal-border); border-radius:5px; color:var(--legal-ink); background:var(--legal-canvas); font:inherit; font-size:14px; }
+.search input:focus-visible { border-color:var(--legal-accent); }
 .navigationLink { display:flex; align-items:center; gap:10px; min-block-size:42px; padding:8px 12px; font-size:14px; }
 .navigationLink svg { inline-size:18px; block-size:18px; }
 .tree { padding-inline-start:24px; }
 .tree details { margin-inline-start:12px; border-inline-start:1px solid #30302e; }
-.tree summary { display:flex; align-items:center; gap:8px; min-block-size:34px; padding:6px 8px 6px 12px; cursor:pointer; list-style:none; color:#d9d9d5; }
+.tree summary { display:flex; align-items:center; gap:8px; min-block-size:34px; padding:6px 8px 6px 12px; cursor:pointer; list-style:none; color:#d9d9d5; transition:color var(--motion-normal); }
 .tree > summary { padding-inline-start:0; }
 .tree summary::-webkit-details-marker { display:none; }
-.tree summary::before { display:block; content:"›"; inline-size:8px; flex-shrink:0; transform:rotate(0deg); color:#999; font-size:15px; line-height:1; }
+.tree summary::before { display:block; content:"›"; inline-size:8px; flex-shrink:0; transform:rotate(0deg); color:#999; font-size:15px; line-height:1; transition:transform var(--motion-normal); }
 .tree details[open] > summary::before,.tree[open] > summary::before { transform:rotate(90deg); }
 .tree summary a { min-inline-size:0; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
 .lessonLinks { display:grid; gap:3px; padding:0 6px 8px 12px; }
-.lessonLinks a { display:block; padding:8px 8px 8px 16px; border-inline-start:1px solid transparent; color:#aaa; }
-.lessonLinks a:hover,.navigationLink:hover,.tree a:hover { color:#fff; }
-.lessonLinks a[aria-current="page"] { border-color:#665eff; background:#ffffff06; color:#fff; }
+.lessonLinks a { display:block; padding:8px 8px 8px 16px; }
+.navigationLink:hover,.tree summary a:hover { color:#fff; }
 .noResults { padding:8px 16px; color:#bdbcb7; }
 .cover { position:relative; isolation:isolate; aspect-ratio:3/1; overflow:hidden; border-radius:8px; color:#f5f5f4; background:radial-gradient(ellipse at 30% 15%,#94bdc0bb,transparent 60%),repeating-radial-gradient(ellipse at 80% -80%,#a4bfc62e 0 1px,transparent 2px 5px),linear-gradient(145deg,#447c8d 0%,#345c67 48%,#0e343d 70%,#112b36); }
 .cover::after { position:absolute; z-index:-1; inset:0; content:""; background:linear-gradient(0deg,#03101abf,transparent 85%); }
@@ -47,7 +46,7 @@
 .start { display:flex; align-items:center; justify-content:center; gap:12px; min-block-size:48px; border-radius:8px; background:#565cf4; color:#fff !important; font-size:16px; font-weight: var(--font-weight-semibold); transition:background 150ms; }
 .start:hover { background:#6a70ff; }
 .start svg { inline-size:20px; block-size:20px; }
-.detailCard { padding:16px; border-radius:9px; background:#292928; }
+.detailCard { padding:16px; border-radius:9px; background:var(--legal-panel); }
 .detailCard h2,.tags h2 { margin:0 0 16px; font-size:16px; font-weight: var(--font-weight-semibold); }
 .detailCard p { display:flex; align-items:center; gap:8px; margin:10px 0; color:#cccac6; font-size:12px; }
 .detailCard svg { inline-size:15px; block-size:15px; color:#aaa9a4; }

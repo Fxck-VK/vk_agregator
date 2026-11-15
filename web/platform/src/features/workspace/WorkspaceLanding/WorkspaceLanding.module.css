@@ -34,7 +34,6 @@
 
 .heroCopy h1,
 .sectionHeading h2,
-.communityCard h2,
 .planOffer h2 {
   margin: 0;
   color: var(--color-text);
@@ -134,7 +133,6 @@
 }
 
 .sectionHeading h2,
-.communityCard h2,
 .planOffer h2 {
   font-size: var(--font-size-section);
   font-weight: var(--font-weight-semibold);
@@ -142,8 +140,7 @@
   line-height: var(--line-height-section);
 }
 
-.sectionHeading p:not(.kicker),
-.communityCard p {
+.sectionHeading p:not(.kicker) {
   max-inline-size: 43rem;
   margin: var(--space-2) 0 0;
   color: var(--color-text-muted);
@@ -334,14 +331,10 @@
   text-decoration: none;
 }
 
-.planCard,
-.communityCard {
+.planCard {
   border: 0.0625rem solid var(--color-card-border);
   border-radius: 1.5rem;
   overflow: hidden;
-}
-
-.planCard {
   display: grid;
   grid-template-columns: minmax(18rem, 0.82fr) 1.38fr;
   min-block-size: 22rem;
@@ -451,170 +444,6 @@
   font-weight: 800;
 }
 
-.promptExample {
-  inline-size: min(100%, 20rem);
-}
-
-.communitySection {
-  padding-block-end: 0;
-}
-
-.communityCard {
-  position: relative;
-  display: grid;
-  grid-template-columns: 1.15fr 0.85fr;
-  align-items: center;
-  min-block-size: 15rem;
-  padding: clamp(var(--space-5), 4vw, var(--space-8));
-  border: 0.0625rem solid var(--color-card-border);
-  border-radius: 1.5rem;
-  overflow: hidden;
-  background: var(--color-panel);
-}
-
-.communityCopy {
-  position: relative;
-  z-index: 4;
-}
-
-.communityCard h2 {
-  max-inline-size: 25rem;
-}
-
-.communityActions {
-  display: flex;
-  flex-wrap: wrap;
-  gap: var(--space-3);
-  margin-block-start: var(--space-8);
-}
-
-.communityButton {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  min-block-size: 3rem;
-  padding-inline: var(--space-5);
-  border-radius: 999rem;
-  background: var(--color-surface-light);
-  color: var(--color-text-on-light);
-  font-size: var(--font-size-body);
-  font-weight: var(--font-weight-semibold);
-  line-height: 1;
-  text-decoration: none;
-  transition: translate var(--motion-fast), box-shadow var(--motion-fast);
-}
-
-.communityButton[href]:hover,
-.communityButton[href]:focus-visible {
-  translate: 0 -0.125rem;
-}
-
-.communityButton[aria-disabled="true"] {
-  cursor: default;
-}
-
-.communityVisual {
-  position: relative;
-  align-self: stretch;
-  min-block-size: 12rem;
-}
-
-.communityPreview,
-.socialPhone {
-  position: absolute;
-  overflow: hidden;
-  border: 0.1875rem solid color-mix(in srgb, var(--color-text) 72%, transparent);
-  background: var(--color-surface-raised);
-  box-shadow: 0 1.25rem 2.5rem rgb(0 0 0 / 0.34);
-}
-
-.communityPreview {
-  inset-block-end: -2.1rem;
-  inline-size: 7.5rem;
-  block-size: 9.5rem;
-  border-radius: 1rem;
-}
-
-.communityPreview img {
-  object-fit: cover;
-}
-
-.communityPreviewLeft {
-  z-index: 1;
-  inset-inline-start: 4%;
-  rotate: -8deg;
-}
-
-.communityPreviewRight {
-  z-index: 1;
-  inset-inline-end: -2%;
-  rotate: 9deg;
-}
-
-.socialPhone {
-  z-index: 3;
-  inset-block-start: 0.25rem;
-  inset-inline-start: 50%;
-  display: grid;
-  justify-items: center;
-  align-content: start;
-  inline-size: 8.75rem;
-  block-size: 13.5rem;
-  padding: 1.6rem 0.8rem 0.75rem;
-  border-radius: 1.65rem;
-  background: #0b0c0f;
-  translate: -50% 0;
-}
-
-.phoneSpeaker {
-  position: absolute;
-  inset-block-start: 0.55rem;
-  inline-size: 2.75rem;
-  block-size: 0.35rem;
-  border-radius: 999rem;
-  background: #000;
-}
-
-.qrPlaceholder {
-  position: relative;
-  display: block;
-  inline-size: 6.5rem;
-  aspect-ratio: 1;
-  border: 0.45rem solid var(--color-qr-background);
-  border-radius: 0.45rem;
-  background: repeating-conic-gradient(var(--color-qr-foreground) 0 25%, var(--color-qr-background) 0 50%) 0 / 0.75rem 0.75rem;
-}
-
-.qrMarker,
-.qrMarker::before,
-.qrMarker::after {
-  position: absolute;
-  inline-size: 1.45rem;
-  block-size: 1.45rem;
-  border: 0.25rem solid var(--color-qr-foreground);
-  background: var(--color-qr-background);
-  content: "";
-}
-
-.qrMarker {
-  inset: 0.25rem auto auto 0.25rem;
-}
-
-.qrMarker::before {
-  inset: -0.25rem auto auto 3.65rem;
-}
-
-.qrMarker::after {
-  inset: 3.65rem auto auto -0.25rem;
-}
-
-.phoneLabel {
-  margin-block-start: var(--space-2);
-  color: #fff;
-  font-size: 0.75rem;
-  font-weight: var(--font-weight-semibold);
-}
-
 .footer {
   background: var(--color-workspace);
   color: var(--color-text);
@@ -628,15 +457,9 @@
 
 .footerTop {
   display: grid;
-  grid-template-columns: 1fr auto 1fr;
+  grid-template-columns: minmax(0, 1fr) auto;
   align-items: start;
   gap: clamp(var(--space-6), 5vw, 4rem);
-}
-
-.footerBrandGroup {
-  display: grid;
-  justify-items: start;
-  gap: var(--space-5);
 }
 
 .footerBrand {
@@ -656,58 +479,12 @@
   font-size: 1.25rem;
 }
 
-.footerSocials {
-  display: flex;
-  gap: var(--space-2);
-}
-
-.footerSocials a {
-  display: grid;
-  place-items: center;
-  inline-size: 2.75rem;
-  block-size: 2.75rem;
-  border-radius: 0.8rem;
-  background: var(--color-surface);
-  color: var(--color-text);
-  font-size: 0.75rem;
-  font-weight: 800;
-  text-decoration: none;
-}
-
-.footerSocials a:hover,
-.footerSocials a:focus-visible {
-  background: var(--color-surface-raised);
-}
-
-.footerSupport {
-  display: grid;
-  justify-items: start;
-  gap: var(--space-2);
-  font-size: 0.875rem;
-}
-
-.footerSupportButton {
-  display: inline-flex;
-  align-items: center;
-  gap: var(--space-2);
-  border-radius: 999px;
-  padding: 0.75rem 1.25rem;
-  background: #1685f8;
-  color: #fff;
-  font-weight: var(--font-weight-semibold);
-  text-decoration: none;
-  transition: filter var(--motion-fast), translate var(--motion-fast);
-}
-
-.footerSupportButton:hover {
-  filter: brightness(1.08);
-  translate: 0 -0.1rem;
-}
-
 .footerAgreement {
   justify-self: end;
   padding-block-start: 0.75rem;
+  color: var(--color-text);
   font-weight: var(--font-weight-medium);
+  text-decoration: none;
 }
 
 .footerAgreement:hover,
@@ -719,7 +496,7 @@
 
 .footerColumns {
   display: grid;
-  grid-template-columns: repeat(3, minmax(0, 1fr));
+  grid-template-columns: repeat(2, max-content);
   gap: clamp(var(--space-8), 8vw, 6rem);
   margin-block-start: var(--space-8);
   border-block-start: 0.0625rem solid var(--color-border);
@@ -788,8 +565,7 @@
   }
 
   .capabilityMosaic,
-  .planCard,
-  .communityCard {
+  .planCard {
     grid-template-columns: 1fr;
   }
 
@@ -797,7 +573,6 @@
     grid-template-columns: 1fr;
   }
 
-  .footerSupport,
   .footerAgreement {
     justify-self: start;
   }
@@ -824,22 +599,6 @@
   .capabilityLarge .capabilityVisual {
     aspect-ratio: 4 / 3;
   }
-
-  .communityCard {
-    gap: var(--space-4);
-  }
-
-  .communityVisual {
-    min-block-size: 12.5rem;
-    inline-size: min(100%, 22rem);
-    margin-inline: auto;
-  }
-}
-
-@media (width < 36rem) {
-  .promptExample {
-    inline-size: 100%;
-  }
 }
 
 @media (width < 32rem) {
@@ -849,14 +608,5 @@
 
   .footerColumns {
     grid-template-columns: 1fr;
-  }
-
-  .communityActions {
-    align-items: stretch;
-    flex-direction: column;
-  }
-
-  .communityButton {
-    inline-size: 100%;
   }
 }

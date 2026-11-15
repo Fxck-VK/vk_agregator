@@ -19,15 +19,14 @@ export function useSubscriptionCheckout(preview=false){
  const locale=useLocale(),t=subscriptionCopy[locale],account=useOptionalWorkspaceAccount();
  const promotion=useSubscriptionPromotion();
  const state=useReadResource(loadSubscription,null,Boolean(account)&&!preview,account?.profile);
- const [consent,setConsentState]=useState(false),[busyPlanID,setBusyPlanID]=useState<SubscriptionPreviewId|null>(null),[error,setError]=useState("");
+ const [busyPlanID,setBusyPlanID]=useState<SubscriptionPreviewId|null>(null),[error,setError]=useState("");
  const [paymentID,setPaymentID]=useState<string|null>(null);
  const attempt=useRef<{request:SubscriptionCheckoutRequest;key:string;amount:number}|null>(null),submitting=useRef(false),alive=useRef(true);
  useEffect(()=>{alive.current=true;return()=>{alive.current=false;};},[]);
- const autoRenew=consent&&state.data?.recurring_available===true;
+ const autoRenew=!preview&&state.data?.recurring_available===true;
  function available(planID:SubscriptionPreviewId){const plan=subscriptionPlanPreview(planID);return !preview&&!promotion.pending&&Boolean(account)&&!state.failed&&!state.pending&&state.data?.checkout_available===true&&(!plan.trial||state.data?.trial_used===false);}
  function promotionFor(planID:SubscriptionPreviewId){return promotion.quote?.plans.find(plan=>plan.plan_code===planID);}
  function displayAmount(planID:SubscriptionPreviewId){return promotionFor(planID)?.amount??subscriptionPlanPreview(planID).amount;}
- function setConsent(value:boolean){if(submitting.current)return;setConsentState(value);attempt.current=null;clearPaymentAttempt();setError("");}
  async function purchase(planID:SubscriptionPreviewId){
   if(!available(planID)||submitting.current)return;
   const session=browserSessionSnapshot();
@@ -50,5 +49,5 @@ export function useSubscriptionCheckout(preview=false){
   finally{submitting.current=false;if(alive.current)setBusyPlanID(null);}
  }
  function resetPayment(){setPaymentID(null);attempt.current=null;state.retry();}
- return{account,state,consent,setConsent,autoRenew,busy:busyPlanID!==null,busyPlanID,error,paymentID,purchase,available,resetPayment,promotion,displayAmount};
+ return{account,state,autoRenew,busy:busyPlanID!==null,busyPlanID,error,paymentID,purchase,available,resetPayment,promotion,displayAmount};
 }

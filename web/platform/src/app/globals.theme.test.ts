@@ -19,7 +19,7 @@ describe("global theme tokens", () => {
       "--color-border: #2a2b35",
       "--color-text: var(--color-text-on-dark)",
       "--color-text-muted: var(--color-text-muted-on-dark)",
-      "--color-brand-violet: #9a7cf5",
+      "--color-brand-violet: var(--palette-violet-on-dark)",
       "--color-brand-blue: #7c8ff7",
       "--color-brand-pink: #f09af0",
       "--color-focus: #a9cfff",
@@ -55,6 +55,7 @@ describe("global theme tokens", () => {
 
     expect(stylesheet).toContain("--palette-workspace-dark: #0d1117");
     expect(stylesheet).toContain("--palette-panel-dark: #151b23");
+    expect(stylesheet).toContain("--palette-violet-on-dark: #9a7cf5");
     expect(stylesheet).toContain("--color-accent: var(--color-brand-violet)");
     expect(stylesheet).toContain("--color-accent-strong: var(--color-brand-blue)");
     expect(stylesheet).toContain("--color-text-on-light: #0d1117");

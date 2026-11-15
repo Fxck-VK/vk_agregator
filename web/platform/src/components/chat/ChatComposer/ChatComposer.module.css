@@ -11,7 +11,9 @@
   --input-control-step-font-size: 1.25rem;
   --input-control-step-size: 1.75rem;
   --input-control-value-width: 2.75rem;
+  position: relative;
   display: grid;
+  align-content: start;
   grid-template-areas:
     "field"
     "attachment"
@@ -78,6 +80,18 @@
   gap: var(--input-control-row-gap, var(--space-3));
 }
 
+.additionalControls {
+  display: contents;
+}
+
+.submitSlot {
+  display: inline-grid;
+  place-items: center;
+  flex: 0 0 auto;
+  inline-size: var(--input-control-size);
+  block-size: var(--input-control-size);
+}
+
 .leadingControls {
   min-inline-size: 0;
   justify-content: flex-start;
@@ -139,6 +153,43 @@
 
 .surface[data-wrap-leading-controls] .leadingControls {
   flex-wrap: wrap;
+}
+
+.surface:not(:has(.leadingControls > :not([data-state="exiting"]), .additionalControls > *, .attachments)) {
+  grid-template-areas: "field controls";
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: start;
+  gap: var(--space-3);
+  padding: var(--space-3) var(--space-4);
+}
+
+.surface:not(:has(.leadingControls > :not([data-state="exiting"]), .additionalControls > *, .attachments)) .field {
+  display: grid;
+  align-items: center;
+  min-block-size: var(--input-control-size);
+}
+
+.surface:not(:has(.leadingControls > :not([data-state="exiting"]), .additionalControls > *, .attachments)) .leadingControls:not(:has(> [data-state="exiting"])) {
+  display: none;
+}
+
+.leadingControls:has(> [data-state="exiting"]) {
+  position: absolute;
+  inset: 0;
+  display: block;
+  pointer-events: none;
+}
+
+.surface:not(:has(.leadingControls > :not([data-state="exiting"]), .additionalControls > *, .attachments)) .controls {
+  align-self: end;
+}
+
+.surface:not(:has(.leadingControls > :not([data-state="exiting"]), .additionalControls > *, .attachments)) [data-ui="chat-text-input-scroll-area"] {
+  --chat-text-input-min-height: var(--line-height-body);
+}
+
+.surface:not(:has(.leadingControls > :not([data-state="exiting"]), .additionalControls > *, .attachments)) textarea:placeholder-shown {
+  white-space: nowrap;
 }
 
 @media (width < 40rem) {

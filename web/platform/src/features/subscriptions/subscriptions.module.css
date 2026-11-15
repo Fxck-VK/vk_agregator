@@ -1,8 +1,6 @@
 .checkout, .profile { display: grid; gap: var(--space-4); min-inline-size: 0; overflow-wrap: anywhere; }
 .checkout p, .profile p { margin: 0; line-height: 1.5; }
 .summary { display: flex; flex-wrap: wrap; gap: var(--space-3); align-items: center; }
-.consent { display: flex; align-items: flex-start; gap: var(--space-3); line-height: 1.5; cursor: pointer; }
-.consent input { margin-block-start: .3rem; flex-shrink: 0; }
 .profile { border: .0625rem solid var(--color-border); border-radius: var(--radius-lg); padding: var(--space-5); background: var(--color-panel); }
 .details { display: grid; gap: var(--space-3); margin: 0; }
 .details div { display: flex; flex-wrap: wrap; justify-content: space-between; gap: var(--space-3); }

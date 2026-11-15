@@ -8,6 +8,7 @@ import { useRouter } from "@/i18n/navigation";
 import { loadImageModelCatalog } from "@/features/models/image-model-catalog-cache";
 import { useReleaseView } from "@/features/release/ReleaseViewProvider";
 import { imagePrice } from "@/features/models/image-price";
+import { resolveImageResolution } from "@/features/image-generation/image-resolution-options";
 import { useWorkspaceModelSelection } from "@/features/models/WorkspaceModelSelection/WorkspaceModelSelection";
 import {
   parseAccountBalance,
@@ -106,9 +107,8 @@ export function useImageGeneration({ access = "authenticated", model, promptValu
   }, [selectedModel]);
   const imageQuality = selectedModel === null
     ? ""
-    : qualitySelection.modelID === selectedModel.id && selectedModel.quality_options.includes(qualitySelection.value)
-      ? qualitySelection.value
-      : selectedModel.default_quality;
+    : resolveImageResolution(selectedModel.quality_options,
+      qualitySelection.modelID === selectedModel.id ? qualitySelection.value : "", selectedModel.default_quality);
   const maxOutputCount = selectedModel?.max_output_count ?? 1;
   const allowedAspectRatios = selectedModel?.allowed_aspect_ratios?.filter(ratio =>
     !selectedModel.price_by_variant || selectedModel.price_by_variant[`${imageQuality}:${ratio}`] > 0);
@@ -169,10 +169,7 @@ export function useImageGeneration({ access = "authenticated", model, promptValu
         if (!initialized.current) {
           setQualitySelection({
             modelID: initialModel.id,
-            value: initialRequest.current.imageQuality !== null
-              && initialModel.quality_options.includes(initialRequest.current.imageQuality)
-                ? initialRequest.current.imageQuality
-                : initialModel.default_quality,
+            value: resolveImageResolution(initialModel.quality_options, initialRequest.current.imageQuality ?? "", initialModel.default_quality),
           });
           if (!promptEdited.current) setPrompt(initialRequest.current.prompt);
           initialized.current = true;

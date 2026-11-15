@@ -89,6 +89,22 @@ describe("ImageQualitySelector", () => {
     expect(screen.getByRole("button", { name: "Разрешение: 1K" })).toBeDisabled();
   });
 
+  it("shows only actual standard sizes when the incoming value is fractional", () => {
+    const onChange = vi.fn();
+    render(<ImageQualitySelector disabled={false} label="Разрешение" onChange={onChange} options={["1K","1.5K","2K"]} value="1.5K" />);
+    fireEvent.click(screen.getByRole("button", {name:"Разрешение: 1K"}));
+    expect(screen.getAllByRole("radio").map(node=>node.getAttribute("aria-label"))).toEqual(["1K","2K"]);
+    expect(screen.getByRole("radio", {name:"1K"})).toHaveAttribute("aria-checked","true");
+    fireEvent.click(screen.getByRole("radio", {name:"2K"}));
+    expect(onChange).toHaveBeenCalledWith("2K");
+  });
+
+  it("does not display a fractional size when no standard size is admitted", () => {
+    render(<ImageQualitySelector disabled={false} label="Разрешение" onChange={vi.fn()} options={["1.5K"]} value="1.5K" />);
+    expect(screen.getByRole("button", {name:"Разрешение: —"})).toBeDisabled();
+    expect(screen.queryByText("1.5K")).not.toBeInTheDocument();
+  });
+
   it("shows size-only choices without exposing backend quality tiers", () => {
     const onChange = vi.fn();
     render(

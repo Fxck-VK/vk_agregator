@@ -16,10 +16,14 @@ No annual offer or unverified promotion is sold.
 The user-owned six-card tariff presentation was restored after the user rejected
 the incidental redesign. Existing badges/editorial feature copy are presentation
 content, not provider admission, an extra allowance or a server discount rule.
-Only the canonical base price/stars/period enter checkout. Payment terms open from
-the selected card in a separate child dialog; tariff styling remains unchanged.
+Only the canonical base price/stars/period enter checkout. The tariff card starts
+checkout directly. A visible automatic-renewal/cancellation notice and terms link
+precede the cards when the server permits recurring payments; the separate renewal
+checkbox is removed. Standalone checkout uses the same policy and disclosure.
+Recurring availability remains server-owned; preview and unavailable payment gates
+remain enforced. Existing profile cancellation keeps the paid access period.
 
-| Code | Kopecks | Stars | Exact period | Next plan with opt-in renewal |
+| Code | Kopecks | Stars | Exact period | Next plan with automatic renewal |
 | --- | ---: | ---: | ---: | --- |
 | lite | 19900 | 400 | 7 UTC days | start |
 | start | 54900 | 1250 | 30 UTC days | start |
@@ -62,7 +66,10 @@ begins when its verified successful payment is settled. Renewal is due at paid-e
 not one day earlier: competitor documents disagree; our UI shows the exact date.
 No automatic proration, rollover, annual purchase or overlapping plan is invented.
 
-Recurring checkout requests saving the method only after explicit opt-in. A
+The purchase action submits `auto_renew=true` and the retry-policy version only
+when the server reports `recurring_available=true`, following the displayed
+renewal terms. Otherwise it submits `auto_renew=false` without a retry version.
+No payment-method saving or charge occurs merely by viewing the offers. A
 verified saved method stays private. One durable intent/key belongs to each
 attempt; a proved failed attempt may open the next attempt of the same cycle.
 Cancellation is rechecked under the owner/subscription lock before submit,

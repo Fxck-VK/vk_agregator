@@ -1,5 +1,9 @@
 # Documentation Index
 
+Maintained page admission lists for [PROD](../web/platform/docs/pages-prod.md)
+and [DEV-only](../web/platform/docs/pages-dev.md), including the workspace and
+authentication. Regeneration and checks follow [release scope](../docs/RELEASE_SCOPE.md#где-задаётся-состав).
+
 Preserved original/friend homepage variants and local DEV integration:
 [landing variants](../web/platform/docs/landing-variants.md).
 Separate third landing with original layout and contributor photos:

@@ -299,6 +299,24 @@ describe("ImageGenerationPanel", () => {
     expect(webBrowserMutation).not.toHaveBeenCalled();
   });
 
+  it("prepares the real standard size and price when the catalog default is fractional", async () => {
+    vi.mocked(loadImageModelCatalog).mockResolvedValueOnce(parseImageModelList({items:[{
+      id:"fractional",name:"Fractional",quality_options:["1K","1.5K","2K"],default_quality:"1.5K",
+      price_by_quality:{"1K":12,"1.5K":18,"2K":24},max_output_count:1,max_reference_images:0,supports_reference_image:false,
+      allowed_aspect_ratios:["1:1"],default_aspect_ratio:"1:1",
+    }]}));
+    vi.mocked(webBrowserMutation).mockResolvedValueOnce(Response.json({job:{...job,model_id:"fractional",image_quality:"1K",aspect_ratio:"1:1",cost_estimate:12},balance:300,can_afford:true},{status:201}));
+    render(<ImageGenerationPanel />);
+    const promptInput=await screen.findByRole("textbox",{name:ru.imageGeneration.promptLabel});
+    expect(screen.getByRole("button",{name:"Разрешение: 1K"})).toBeVisible();
+    expect(screen.getByLabelText(`${ru.imageGeneration.priceLabel}: 12 звёзд`)).toBeVisible();
+    fireEvent.change(promptInput,{target:{value:"Synthetic scene"}});
+    fireEvent.click(getGenerateButton());
+    await waitFor(()=>expect(webBrowserMutation).toHaveBeenCalledWith("/web/v1/image-jobs/prepare",expect.objectContaining({
+      body:JSON.stringify({prompt:"Synthetic scene",model_id:"fractional",image_quality:"1K",aspect_ratio:"1:1",output_count:1}),
+    })));
+  });
+
   it("keeps Seedream 5 defaults from the backend catalog", async () => {
     vi.mocked(loadImageModelCatalog).mockResolvedValueOnce(parseImageModelList({ items: [{
       id: "seedream_5_0_lite", name: "Seedream 5.0 Lite", quality_options: ["2K", "3K", "4K"], default_quality: "2K",
@@ -347,7 +365,7 @@ describe("ImageGenerationPanel", () => {
 
     await screen.findByRole("textbox", { name: ru.imageGeneration.promptLabel });
     expect(screen.getByLabelText(`${ru.imageGeneration.priceLabel}: 16 звёзд`)).toBeInTheDocument();
-    expect(screen.getByRole("button", { name: ru.imageGeneration.generate })).toBeDisabled();
+    expect(screen.queryByRole("button", { name: ru.imageGeneration.generate })).toBeNull();
     expect(webBrowserMutation).not.toHaveBeenCalled();
   });
 

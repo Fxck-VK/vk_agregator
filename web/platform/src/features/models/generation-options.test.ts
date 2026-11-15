@@ -22,6 +22,27 @@ it("uses the server image default and price for the selected combination", () =>
   expect(resolveGenerationOptions(image,{aspect_ratio:"16:9",output_count:2}).cost).toBe(40);
 });
 
+it("replaces a fractional default or saved size with a real standard size and its price", () => {
+  const image = {
+    id:"fractional",name:"Fractional",category:"images",quality_options:["1K","1.5K","2K"],default_quality:"1.5K",
+    allowed_aspect_ratios:["1:1"],default_aspect_ratio:"1:1",max_output_count:1,supports_reference_image:false,max_reference_images:0,
+    price_by_quality:{"1K":12,"1.5K":18,"2K":24},price_by_variant:{"1K:1:1":12,"1.5K:1:1":18,"2K:1:1":24},
+  } as GenerationModel;
+  expect(resolveGenerationOptions(image)).toEqual({options:{image_quality:"1K",aspect_ratio:"1:1",output_count:1},cost:12});
+  expect(resolveGenerationOptions(image,{image_quality:"1.5K"}).options.image_quality).toBe("1K");
+  expect(resolveGenerationOptions(image,{image_quality:"2K"}).cost).toBe(24);
+});
+
+it("does not offer or price an invented size when a model only has a fractional size", () => {
+  const image = {
+    id:"fractional-only",name:"Fractional only",category:"images",quality_options:["1.5K"],default_quality:"1.5K",
+    allowed_aspect_ratios:["1:1"],default_aspect_ratio:"1:1",max_output_count:1,supports_reference_image:false,max_reference_images:0,
+    price_by_quality:{"1.5K":18},price_by_variant:{"1.5K:1:1":18},
+  } as GenerationModel;
+  expect(resolveGenerationOptions(image).options.image_quality).toBe("");
+  expect(resolveGenerationOptions(image).cost).toBeUndefined();
+});
+
 it("repairs a saved video combination when duration is unavailable at its resolution", () => {
   const video = {
     id:"video",name:"Video",category:"video",description:"Video",

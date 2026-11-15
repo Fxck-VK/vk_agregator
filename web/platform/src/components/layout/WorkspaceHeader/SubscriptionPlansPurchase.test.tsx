@@ -18,21 +18,32 @@ describe("direct subscription purchase",()=>{
  it("starts checkout from the tariff card without a second conditions dialog",async()=>{
   vi.mocked(loadSubscription).mockResolvedValue(state);vi.mocked(createSubscriptionCheckout).mockResolvedValue(payment);show();
   await waitFor(()=>expect(buy()).toBeEnabled());fireEvent.click(buy());
-  await waitFor(()=>expect(createSubscriptionCheckout).toHaveBeenCalledExactlyOnceWith({plan_code:"start",auto_renew:false},expect.any(String)));
+  await waitFor(()=>expect(createSubscriptionCheckout).toHaveBeenCalledExactlyOnceWith({plan_code:"start",auto_renew:true,retry_policy_version:1},expect.any(String)));
   expect(actions.open).toHaveBeenCalledExactlyOnceWith(payment.confirmation_url);
   expect(screen.queryByRole("dialog",{name:"Условия подписки"})).not.toBeInTheDocument();
  });
- it("sends renewal and retry policy only after explicit opt-in in the tariff window",async()=>{
+ it("discloses automatic renewal before the tariff cards without a checkbox",async()=>{
   vi.mocked(loadSubscription).mockResolvedValue(state);vi.mocked(createSubscriptionCheckout).mockResolvedValue(payment);show();
-  const checkbox=await screen.findByRole("checkbox",{name:"Автопродление подписки"});expect(checkbox).not.toBeChecked();
-  fireEvent.click(checkbox);
+  await waitFor(()=>expect(buy()).toBeEnabled());
+  expect(screen.queryByRole("checkbox")).not.toBeInTheDocument();
+  const notice=screen.getByText(/Подписка продлевается автоматически/);
+  expect(notice).toHaveTextContent(/Отключить автопродление можно в профиле/);
+  expect(notice.compareDocumentPosition(buy()) & Node.DOCUMENT_POSITION_FOLLOWING).not.toBe(0);
   const details=screen.getByText("Подробнее об автопродлении").closest("details")!;
   expect(details).not.toHaveAttribute("open");fireEvent.click(within(details).getByText("Подробнее об автопродлении"));
-  expect(details).toHaveAttribute("open");expect(details).toHaveTextContent(/Lite → Start\+.*549/);
+  expect(details).toHaveAttribute("open");expect(screen.getByText(/Lite → Start\+:/)).toHaveTextContent("549");
   expect(details).toHaveTextContent(/14 дней/);expect(details).toHaveTextContent(/не менее 24 часов/);
   fireEvent.click(buy());
   await waitFor(()=>expect(createSubscriptionCheckout).toHaveBeenCalledWith({plan_code:"start",auto_renew:true,retry_policy_version:1},expect.any(String)));
-  expect(screen.getByRole("link",{name:"Условия оплаты и автопродления"})).toHaveAttribute("href","/ru/legal/paid-access");
+  for(const link of screen.getAllByRole("link",{name:"Условия оплаты и автопродления"})) expect(link).toHaveAttribute("href","/ru/legal/paid-access");
+ });
+ it("does not enable renewal when the server disables recurring payments",async()=>{
+  vi.mocked(loadSubscription).mockResolvedValue({...state,recurring_available:false});vi.mocked(createSubscriptionCheckout).mockResolvedValue(payment);show();
+  await waitFor(()=>expect(buy()).toBeEnabled());
+  expect(screen.queryByText(/Подписка продлевается автоматически/)).not.toBeInTheDocument();
+  expect(screen.queryByRole("checkbox")).not.toBeInTheDocument();
+  fireEvent.click(buy());
+  await waitFor(()=>expect(createSubscriptionCheckout).toHaveBeenCalledWith({plan_code:"start",auto_renew:false},expect.any(String)));
  });
  it("blocks checkout when the server says payment is unavailable",async()=>{
   vi.mocked(loadSubscription).mockResolvedValue({...state,checkout_available:false});show();

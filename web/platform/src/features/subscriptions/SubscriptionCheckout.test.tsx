@@ -28,34 +28,33 @@ describe("subscription checkout", () => {
     expect(screen.getByRole("button", { name: "Перейти к оплате" })).toBeDisabled();
     expect(createSubscriptionCheckout).not.toHaveBeenCalled();
   });
-  it("requires server availability and starts with recurring consent unchecked", async () => {
+  it("requires server availability and displays renewal terms without a checkbox", async () => {
     vi.mocked(loadSubscription).mockResolvedValue({ ...state, checkout_available: false, balances: [{ kind: "legacy", available: -25, reserved: 0 }] });
     show();
     expect(await screen.findByText("Оплата подписок сейчас недоступна.")).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "Перейти к оплате" })).toBeDisabled();
-    const consent = screen.getByRole("checkbox", { name: /Разрешаю автоматическое продление/ });
-    expect(consent).not.toBeChecked();
-    expect(consent).toHaveAccessibleName(/не менее 24 часов/);
-    expect(consent).toHaveAccessibleName(/14 дней с первой неудачной попытки/);
-    expect(consent).toHaveAccessibleName(/не более 14 попыток всего, включая первую/);
-    expect(consent).toHaveAccessibleName(/После отключения автопродления новые попытки прекращаются/);
+    expect(screen.queryByRole("checkbox")).not.toBeInTheDocument();
+    expect(screen.getByText(/Подписка продлевается автоматически/)).toHaveTextContent(/Отключить автопродление можно в профиле/);
+    const policy=screen.getByText(/не менее 24 часов/);
+    expect(policy).toHaveTextContent(/14 дней с первой неудачной попытки/);
+    expect(policy).toHaveTextContent(/не более 14 попыток всего, включая первую/);
+    expect(policy).toHaveTextContent(/После отключения автопродления новые попытки прекращаются/);
   });
-  it("shows trial conversion and sends consent only after explicit choice", async () => {
+  it("shows trial conversion and requests automatic renewal when the user proceeds to payment", async () => {
     vi.mocked(loadSubscription).mockResolvedValue(state);
     vi.mocked(createSubscriptionCheckout).mockResolvedValue(payment);
     show();
     await waitFor(() => expect(screen.getByRole("button", { name: "Перейти к оплате" })).toBeEnabled());
-    expect(screen.getByRole("checkbox")).not.toBeChecked();
+    expect(screen.queryByRole("checkbox")).not.toBeInTheDocument();
     expect(screen.getByText(/549.*Start\+/)).toBeInTheDocument();
     expect(screen.queryByText(/Покупка пакета не включает автопродление/)).not.toBeInTheDocument();
-    fireEvent.click(screen.getByRole("checkbox"));
     fireEvent.click(screen.getByRole("button", { name: "Перейти к оплате" }));
     await waitFor(() => expect(createSubscriptionCheckout).toHaveBeenCalledWith({ plan_code: "lite", auto_renew: true, retry_policy_version: 1 }, expect.any(String)));
     expect(navigation.open).toHaveBeenCalledWith(payment.confirmation_url);
     expect(screen.queryByText(/Подписка активирована/)).not.toBeInTheDocument();
   });
-  it("omits retry consent when automatic renewal is unchecked", async () => {
-    vi.mocked(loadSubscription).mockResolvedValue(state);
+  it("omits renewal and retry policy when the server disables recurring payments", async () => {
+    vi.mocked(loadSubscription).mockResolvedValue({ ...state, recurring_available: false });
     vi.mocked(createSubscriptionCheckout).mockResolvedValue(payment);
     show();
     const button = screen.getByRole("button", { name: "Перейти к оплате" });
@@ -68,7 +67,6 @@ describe("subscription checkout", () => {
     vi.mocked(createSubscriptionCheckout).mockResolvedValue(payment);
     show();
     await waitFor(() => expect(screen.getByRole("button", { name: "Перейти к оплате" })).toBeEnabled());
-    fireEvent.click(screen.getByRole("checkbox"));
     const legacyKey = paymentAttemptKey("subscription:lite:true");
     fireEvent.click(screen.getByRole("button", { name: "Перейти к оплате" }));
     await waitFor(() => expect(createSubscriptionCheckout).toHaveBeenCalledTimes(1));
@@ -86,13 +84,12 @@ describe("subscription checkout", () => {
     await waitFor(() => expect(createSubscriptionCheckout).toHaveBeenCalledTimes(2));
     expect(vi.mocked(createSubscriptionCheckout).mock.calls[0]).toEqual(vi.mocked(createSubscriptionCheckout).mock.calls[1]);
   });
-  it("retains opted-in policy and operation key on an ambiguous failed request", async () => {
+  it("retains the disclosed renewal policy and operation key on an ambiguous failed request", async () => {
     vi.mocked(loadSubscription).mockResolvedValue(state);
     vi.mocked(createSubscriptionCheckout).mockRejectedValue(new Error("offline"));
     show();
     const button = screen.getByRole("button", { name: "Перейти к оплате" });
     await waitFor(() => expect(button).toBeEnabled());
-    fireEvent.click(screen.getByRole("checkbox"));
     fireEvent.click(button);
     await screen.findByRole("alert");
     fireEvent.click(button);

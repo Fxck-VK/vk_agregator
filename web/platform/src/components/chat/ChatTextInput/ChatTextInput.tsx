@@ -32,6 +32,7 @@ function pixelValue(value: string, fallback = 0) {
 type ChatTextInputProps = {
   appearance: ChatTextInputAppearance;
   disabled: boolean;
+  layoutKey?: unknown;
   onChange: ChangeEventHandler<HTMLTextAreaElement>;
   onSend: () => void;
   placeholder: string;
@@ -43,6 +44,7 @@ type ChatTextInputProps = {
 export function ChatTextInput({
   appearance,
   disabled,
+  layoutKey,
   onChange,
   onSend,
   placeholder,
@@ -103,7 +105,7 @@ export function ChatTextInput({
 
   useLayoutEffect(() => {
     resizeToContent();
-  }, [appearance, resizeToContent, rows, size, value]);
+  }, [appearance, layoutKey, resizeToContent, rows, size, value]);
 
   useEffect(() => {
     const inputRoot = rootRef.current?.parentElement;

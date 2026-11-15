@@ -55,5 +55,6 @@ it.each(["missing", "failure"])("does not silently substitute a different model 
   else vi.mocked(loadGenerationModelCatalog).mockResolvedValueOnce(generationCatalog([{ id: "first", name: "First" }]));
   render(<NewChatPrompt modelId="unknown" />);
   await waitFor(() => expect(screen.getByRole("alert")).toHaveTextContent(ru.modelsCatalog.loadFailure));
+  fireEvent.change(screen.getByRole("textbox"), { target: { value: "Черновик" } });
   expect(screen.getByRole("button", { name: ru.workspace.promptSubmit })).toBeDisabled();
 });
