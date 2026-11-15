@@ -41,6 +41,17 @@ test('the reviewed dependency baseline rejects x/net before its HTML denial-of-s
   }
 });
 
+test('the reviewed dependency baseline rejects the zstd frame panic versions', () => {
+  for (const version of ['1.18.7', '1.19.0', '1.20.1']) {
+    const downgraded = files.get('go.mod').replace(/github\.com\/klauspost\/compress v\d+\.\d+\.\d+/, `github.com/klauspost/compress v${version}`);
+    assert.throws(() => check({'go.mod': downgraded}), /patched klauspost\/compress/i);
+  }
+  for (const version of ['1.20.2', '1.21.0']) {
+    const patched = files.get('go.mod').replace(/github\.com\/klauspost\/compress v\d+\.\d+\.\d+/, `github.com/klauspost/compress v${version}`);
+    assert.equal(check({'go.mod': patched}).services.length, 7);
+  }
+});
+
 test('media runtime images reject vulnerable or missing libexpat floors', () => {
   for (const path of ['Dockerfile.api', 'Dockerfile.worker']) {
     const source = files.get(path);

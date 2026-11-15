@@ -31,6 +31,10 @@ export function validateReleaseContract(read, dockerfiles) {
   const netVersion = read('go.mod').match(/^\s*golang\.org\/x\/net v(\d+)\.(\d+)\.\d+(?:\s|$)/m);
   assert(netVersion && (Number(netVersion[1]) > 0 || Number(netVersion[2]) >= 62),
     'go.mod must pin patched x/net v0.62.0 or newer for CVE-2026-78661');
+  const compressVersion = read('go.mod').match(/^\s*github\.com\/klauspost\/compress v(\d+)\.(\d+)\.(\d+)(?:\s|$)/m);
+  assert(compressVersion && (Number(compressVersion[1]) > 1 || Number(compressVersion[1]) === 1
+    && (Number(compressVersion[2]) > 20 || Number(compressVersion[2]) === 20 && Number(compressVersion[3]) >= 2)),
+    'go.mod must pin patched klauspost/compress v1.20.2 or newer for CVE-2026-116591');
   for (const path of dockerfiles.filter(path => path !== 'Dockerfile.platform')) {
     const version = goVersion.replaceAll('.', '\\.');
     assert.match(read(path), new RegExp(`^FROM golang:${version}-alpine@sha256:[a-f0-9]{64}\\s`, 'm'),

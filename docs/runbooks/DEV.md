@@ -539,6 +539,12 @@ x/sync, x/sys and x/text updates are retained with verified `go.sum` entries.
 Trivy scans all resolved dependencies, including paths not reached by govulncheck.
 See the [Go release history](https://go.dev/doc/devel/release#go1.26.11).
 
+The dependency baseline also requires `github.com/klauspost/compress` v1.20.2
+or newer for [CVE-2026-116591](https://github.com/klauspost/compress/security/advisories/GHSA-fpmh-frq8-7rj8).
+Its crafted zstd frame can panic the decoder. A successful symbol-reachability
+scan does not waive dependency/image scanning. The shared release contract
+rejects vulnerable module versions and retains every existing security gate.
+
 All seven runtime Dockerfiles explicitly install `zlib>=1.3.2-r1` for
 [CVE-2026-85091](https://security.alpinelinux.org/vuln/CVE-2026-85091).
 The early infrastructure policy checks that the final stage's `apk add`
