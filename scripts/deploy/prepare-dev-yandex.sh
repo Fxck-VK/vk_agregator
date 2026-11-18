@@ -27,7 +27,9 @@ if [[ -z "${client_id}" && -z "${client_secret}" ]]; then
   chmod 600 "${output}"
   exit 0
 fi
-if [[ ! "${client_id}" =~ ^[A-Fa-f0-9]{32}$ || ! "${client_secret}" =~ ^[A-Za-z0-9_-]{16,256}$ ]]; then
+if [[ ! "${client_id}" =~ ^[A-Fa-f0-9]{32}$ ||
+      ${#client_secret} -lt 16 || ${#client_secret} -gt 256 ||
+      ! "${client_secret}" =~ ^[A-Za-z0-9_-]+$ ]]; then
   echo 'Invalid or incomplete DEV Yandex configuration' >&2; exit 1
 fi
 sed -e '/^ACCOUNT_OAUTH_YANDEX_CLIENT_ID=/d' -e '/^ACCOUNT_WEB_OAUTH_YANDEX_CLIENT_SECRET=/d' "${input}" > "${output}"

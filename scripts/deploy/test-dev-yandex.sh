@@ -35,6 +35,17 @@ for invalid in $'synthetic\ninjected=true' 'synthetic$substitution' ''; do
     echo 'Invalid Yandex credential accepted' >&2; exit 1
   fi
 done
+for length in 15 16 256 257; do
+  printf -v candidate '%*s' "${length}" ''
+  candidate="${candidate// /a}"
+  if DEV_ACCOUNT_WEB_OAUTH_YANDEX_CLIENT_SECRET="${candidate}" bash scripts/deploy/prepare-dev-yandex.sh --input "${input}" --output "${output}" >/dev/null 2>&1; then
+    if [[ "${length}" != 16 && "${length}" != 256 ]]; then
+      echo "Out-of-bounds Yandex credential length accepted: ${length}" >&2; exit 1
+    fi
+  elif [[ "${length}" == 16 || "${length}" == 256 ]]; then
+    echo "Valid Yandex credential length rejected: ${length}" >&2; exit 1
+  fi
+done
 export DEV_ACCOUNT_WEB_OAUTH_YANDEX_CLIENT_SECRET=synthetic-yandex-secret
 export DEV_ACCOUNT_OAUTH_YANDEX_CLIENT_ID='https://invalid.example.test'
 if bash scripts/deploy/prepare-dev-yandex.sh --input "${input}" --output "${output}" >/dev/null 2>&1; then

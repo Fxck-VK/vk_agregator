@@ -1,0 +1,24 @@
+{
+  "name": "@epifera/picomatch-guarded",
+  "version": "4.0.7-epifera.1",
+  "private": true,
+  "description": "Picomatch 4.0.7 with a local guard against unbounded repeated extglobs for Epifera build tools.",
+  "author": "Jon Schlinkert (https://github.com/jonschlinkert)",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/Fxck-VK/vk_agregator.git",
+    "directory": "web/vendor/picomatch"
+  },
+  "files": [
+    "index.js",
+    "posix.js",
+    "lib",
+    "EPIFERA-BACKPORT.md"
+  ],
+  "sideEffects": false,
+  "main": "index.js",
+  "engines": {
+    "node": ">=12"
+  }
+}

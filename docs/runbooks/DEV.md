@@ -557,6 +557,15 @@ Its crafted zstd frame can panic the decoder. A successful symbol-reachability
 scan does not waive dependency/image scanning. The shared release contract
 rejects vulnerable module versions and retains every existing security gate.
 
+Both web builds pin the checked-in Picomatch backport for
+[GHSA-fc5q-39xc-vjpf](https://github.com/advisories/GHSA-fc5q-39xc-vjpf).
+It rejects unbounded repeated extglobs at the parser boundary. The local
+archive is a development dependency with an integrity hash in each lockfile.
+See [the backport notes](../../web/vendor/picomatch/EPIFERA-BACKPORT.md) for the
+source baseline, archive verification and compatibility checks. Next.js
+and its ESLint configuration use 16.4.6, which includes the
+[November security fixes](https://github.com/vercel/next.js/releases/tag/v16.4.5).
+
 All seven runtime Dockerfiles explicitly install `zlib>=1.3.2-r1` for
 [CVE-2026-85091](https://security.alpinelinux.org/vuln/CVE-2026-85091).
 The early infrastructure policy checks that the final stage's `apk add`

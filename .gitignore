@@ -7,6 +7,7 @@ dist/
 *.out
 coverage.out
 vendor/
+!/web/vendor/
 
 # Local downloaded reference bundles and generated inspection/preview exports.
 # Product source, bundled website media and research registries remain tracked.
