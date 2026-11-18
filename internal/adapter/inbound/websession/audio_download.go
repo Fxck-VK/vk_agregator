@@ -195,3 +195,13 @@ func (h *Handler) getAudioDownloadArtifact(w http.ResponseWriter, r *http.Reques
 		return a.MediaType == domain.MediaTypeAudio && a.MimeType == "audio/mpeg"
 	}, "attachment")
 }
+
+// audioDownloadFilename reads only worker-persisted display metadata. Source
+// URLs and other job parameters never become response headers.
+func audioDownloadFilename(job *domain.Job) string {
+	var params struct {
+		Filename string `json:"download_filename"`
+	}
+	_ = json.Unmarshal(job.Params, &params)
+	return audiodownload.NormalizeFilename(params.Filename)
+}

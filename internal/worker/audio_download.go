@@ -18,7 +18,7 @@ import (
 )
 
 type audioDownloader interface {
-	Download(context.Context, string) ([]byte, error)
+	DownloadWithMetadata(context.Context, string) (audiodownload.Result, error)
 }
 
 type audioArtifactSaver interface {
@@ -139,7 +139,7 @@ func (w *AudioDownloadWorker) saveOutput(ctx context.Context, job *domain.Job) (
 	if json.Unmarshal(job.Params, &params) != nil || params.SourceURL == "" {
 		return uuid.Nil, w.fail(ctx, job, "invalid_request")
 	}
-	data, err := w.downloader.Download(ctx, params.SourceURL)
+	result, err := w.downloader.DownloadWithMetadata(ctx, params.SourceURL)
 	if ctx.Err() != nil {
 		return uuid.Nil, ctx.Err()
 	}
@@ -154,11 +154,25 @@ func (w *AudioDownloadWorker) saveOutput(ctx context.Context, job *domain.Job) (
 		return uuid.Nil, w.fail(ctx, job, "download_failed")
 	}
 	const mp3 = "audio/mpeg"
-	if detected, ok := mediaprobe.SniffMusicInputMIME(data); !ok || detected != mp3 {
+	if detected, ok := mediaprobe.SniffMusicInputMIME(result.Data); !ok || detected != mp3 {
 		return uuid.Nil, w.fail(ctx, job, "download_failed")
 	}
+	var savedParams map[string]json.RawMessage
+	if err := json.Unmarshal(job.Params, &savedParams); err != nil {
+		return uuid.Nil, w.fail(ctx, job, "invalid_request")
+	}
+	savedParams["download_filename"], _ = json.Marshal(audiodownload.NormalizeFilename(result.Filename))
+	job.Params, err = json.Marshal(savedParams)
+	if err != nil {
+		return uuid.Nil, err
+	}
+	// Persist the filename before storing bytes so artifact recovery keeps it
+	// after a crash between storage and the output-artifact checkpoint.
+	if err := w.jobs.Update(ctx, job); err != nil {
+		return uuid.Nil, err
+	}
 	artifact, err := w.outputs.SaveBytesArtifactForAccount(ctx, uuid.Nil, job.AccountID, &job.ID,
-		domain.ArtifactKindOutput, domain.MediaTypeAudio, mp3, data)
+		domain.ArtifactKindOutput, domain.MediaTypeAudio, mp3, result.Data)
 	if err != nil {
 		if ctx.Err() != nil {
 			return uuid.Nil, ctx.Err()

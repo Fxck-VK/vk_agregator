@@ -3369,6 +3369,14 @@ the job through the account-history outbox. The website polls
 `GET /web/v1/audio-download-artifacts/{id}`. Both reads require the owning
 session; download also requires a successful job and an approved MP3 artifact.
 
+The downloader returns bounded source title/artist metadata with the MP3.
+The worker checkpoints a normalized `download_filename` in job parameters
+before artifact storage, so recovery retains the display name. The owned
+download endpoint uses that filename in Content-Disposition. SoundCloud
+names contain the track title and artist (uploader when artist is missing);
+YouTube names contain the video title. Both end in ` epifera.com.mp3`.
+Legacy jobs without source metadata use `audio epifera.com.mp3`.
+
 ## Platform localization ownership (2026-09-16)
 
 `web/platform/src/i18n` owns UI dictionaries, formatting and locale resolution. All UI URLs use `/ru` or `/en`; `src/proxy.ts` validates the prefix, overwrites the page-locale request header and rewrites to the shared internal App Router tree. Server dictionaries use this header; the root client boundary follows URL/history. Shared Link/router adapters own localized navigation. The stable route tree preserves draft, model and File/blob state during locale switches. The `neirohub-locale` cookie remembers preference only for legacy unprefixed redirects; it never overrides a localized URL and is not account identity or authorization. There is no mutable process-global language.

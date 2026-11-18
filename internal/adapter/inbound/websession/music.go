@@ -524,8 +524,12 @@ func (h *Handler) serveGeneratedArtifact(w http.ResponseWriter, r *http.Request,
 		w.Header().Set("Content-Type", "application/octet-stream")
 		disposition = "attachment"
 	}
+	filename := "neirohub-" + id.String() + generatedArtifactExtension(a.MimeType)
+	if job.OperationType == domain.OperationAudioDownload {
+		filename = audioDownloadFilename(job)
+	}
 	w.Header().Set("Content-Disposition", mime.FormatMediaType(disposition, map[string]string{
-		"filename": "neirohub-" + id.String() + generatedArtifactExtension(a.MimeType),
+		"filename": filename,
 	}))
 	http.ServeContent(w, r, id.String(), a.UpdatedAt, bytes.NewReader(data))
 }

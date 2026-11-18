@@ -3,6 +3,7 @@ package websession
 import (
 	"context"
 	"encoding/json"
+	"mime"
 	"net/http"
 	"net/http/httptest"
 	"strings"
@@ -132,9 +133,18 @@ func TestAudioDownloadRequiresOwnedModeratedMP3(t *testing.T) {
 	if w := get(jobPath, account); w.Code != http.StatusOK || !strings.Contains(w.Body.String(), artifact.ID.String()) {
 		t.Fatalf("owned status: %d %s", w.Code, w.Body.String())
 	}
-	if w := get(artifactPath, account); w.Code != http.StatusOK || w.Header().Get("Content-Type") != "audio/mpeg" || w.Body.String() != "0123456789" ||
-		!strings.HasPrefix(w.Header().Get("Content-Disposition"), "attachment;") || !strings.HasSuffix(w.Header().Get("Content-Disposition"), ".mp3") {
-		t.Fatalf("owned MP3: %d %s", w.Code, w.Body.String())
+	for _, tc := range []struct{ params, filename string }{
+		{`{}`, "audio epifera.com.mp3"},
+		{`{"download_filename":"Мой трек - Исполнитель epifera.com.mp3"}`, "Мой трек - Исполнитель epifera.com.mp3"},
+		{`{"download_filename":"Название ролика epifera.com.mp3"}`, "Название ролика epifera.com.mp3"},
+	} {
+		job.Params = json.RawMessage(tc.params)
+		w := get(artifactPath, account)
+		disposition, parameters, err := mime.ParseMediaType(w.Header().Get("Content-Disposition"))
+		if w.Code != http.StatusOK || w.Header().Get("Content-Type") != "audio/mpeg" || w.Body.String() != "0123456789" ||
+			err != nil || disposition != "attachment" || parameters["filename"] != tc.filename {
+			t.Fatalf("owned MP3: %d %q, %s", w.Code, w.Header().Get("Content-Disposition"), w.Body.String())
+		}
 	}
 	other := uuid.New()
 	if w := get(jobPath, other); w.Code != http.StatusNotFound {

@@ -55,9 +55,15 @@ func New(path string) *Downloader {
 // Download returns MP3 bytes. Errors do not include URLs, filesystem paths or
 // third-party tool output.
 func (d *Downloader) Download(ctx context.Context, sourceURL string) ([]byte, error) {
+	result, err := d.DownloadWithMetadata(ctx, sourceURL)
+	return result.Data, err
+}
+
+// DownloadWithMetadata returns MP3 bytes and a safe filename from the source.
+func (d *Downloader) DownloadWithMetadata(ctx context.Context, sourceURL string) (Result, error) {
 	canonical, err := NormalizeURL(sourceURL)
 	if err != nil {
-		return nil, err
+		return Result{}, err
 	}
 
 	downloadCtx, cancel := context.WithTimeout(ctx, downloadTimeout)
@@ -67,33 +73,37 @@ func (d *Downloader) Download(ctx context.Context, sourceURL string) ([]byte, er
 	case d.slot <- struct{}{}:
 		defer func() { <-d.slot }()
 	case <-downloadCtx.Done():
-		return nil, downloadContextError(ctx, downloadCtx)
+		return Result{}, downloadContextError(ctx, downloadCtx)
 	}
 
 	if isSoundCloudShareURL(canonical) {
 		canonical, err = resolveSoundCloudURL(downloadCtx, soundCloudRedirectClient, canonical)
 		if downloadCtx.Err() != nil {
-			return nil, downloadContextError(ctx, downloadCtx)
+			return Result{}, downloadContextError(ctx, downloadCtx)
 		}
 		if err != nil {
-			return nil, err
+			return Result{}, err
 		}
 	}
 
 	workDir, err := os.MkdirTemp("", "epifera-mp3-")
 	if err != nil {
-		return nil, ErrDownloadFailed
+		return Result{}, ErrDownloadFailed
 	}
 	defer os.RemoveAll(workDir)
 
 	err = d.run(downloadCtx, workDir, canonical)
 	if downloadCtx.Err() != nil {
-		return nil, downloadContextError(ctx, downloadCtx)
+		return Result{}, downloadContextError(ctx, downloadCtx)
 	}
 	if err != nil {
-		return nil, err
+		return Result{}, err
 	}
-	return readAudio(filepath.Join(workDir, outputName))
+	data, err := readAudio(filepath.Join(workDir, outputName))
+	if err != nil {
+		return Result{}, err
+	}
+	return Result{Data: data, Filename: sourceFilename(workDir, canonical)}, nil
 }
 
 func downloadContextError(parent, download context.Context) error {
@@ -122,6 +132,7 @@ func (d *Downloader) run(ctx context.Context, dir, canonical string) error {
 		"--max-filesize", strconv.Itoa(maxAudioBytes), "--limit-rate", "4M",
 		"--extract-audio", "--audio-format", "mp3", "--audio-quality", "128K",
 		"--postprocessor-args", "ExtractAudio+ffmpeg_o:-fs " + strconv.Itoa(maxAudioBytes+1),
+		"--print-to-file", metadataTemplate, metadataName,
 		"--output", "audio.%(ext)s", "--", canonical,
 	}
 
