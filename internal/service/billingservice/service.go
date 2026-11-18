@@ -106,6 +106,9 @@ func New(repo domain.BillingRepository, opts ...Option) *Service {
 
 // Estimate returns the credit cost of an operation, or ErrUnknownOperation.
 func (s *Service) Estimate(op domain.OperationType) (int64, error) {
+	if op == domain.OperationAudioDownload {
+		return 0, nil
+	}
 	price, ok := s.prices[op]
 	if !ok {
 		return 0, fmt.Errorf("%w: %s", ErrUnknownOperation, op)

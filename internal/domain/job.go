@@ -55,6 +55,8 @@ const (
 	OperationAudioSTT OperationType = "audio_stt"
 	// OperationAudioMusic generates or transforms music through a typed action.
 	OperationAudioMusic OperationType = "audio_music"
+	// OperationAudioDownload extracts MP3 audio from a supported public media URL.
+	OperationAudioDownload OperationType = "audio_download"
 	// OperationImageUpscale increases the resolution of an image.
 	OperationImageUpscale OperationType = "image_upscale"
 )
@@ -71,6 +73,7 @@ func (o OperationType) Valid() bool {
 		OperationAudioTTS,
 		OperationAudioSTT,
 		OperationAudioMusic,
+		OperationAudioDownload,
 		OperationImageUpscale:
 		return true
 	default:
@@ -149,14 +152,14 @@ var jobTransitions = map[JobStatus][]JobStatus{
 	JobStatusRejected:            {JobStatusRefunded},
 	JobStatusAwaitingPayment:     {JobStatusCreditsReserved, JobStatusCancelled, JobStatusExpired},
 	JobStatusCreditsReserved:     {JobStatusQueued, JobStatusCancelled, JobStatusRefunded},
-	JobStatusQueued:              {JobStatusDispatchingProvider, JobStatusCancelled, JobStatusExpired},
+	JobStatusQueued:              {JobStatusDispatchingProvider, JobStatusPostprocessing, JobStatusCancelled, JobStatusExpired},
 	JobStatusDispatchingProvider: {JobStatusProviderSubmitted, JobStatusFailedRetryable, JobStatusFailedTerminal},
 	JobStatusProviderSubmitted:   {JobStatusProviderPending, JobStatusProviderProcessing, JobStatusProviderSucceeded, JobStatusProviderFailed},
 	JobStatusProviderPending:     {JobStatusProviderProcessing, JobStatusProviderSucceeded, JobStatusProviderFailed, JobStatusCancelled},
 	JobStatusProviderProcessing:  {JobStatusProviderSucceeded, JobStatusProviderFailed, JobStatusCancelled},
 	JobStatusProviderSucceeded:   {JobStatusPostprocessing, JobStatusResultReady, JobStatusFailedRetryable, JobStatusRejected},
 	JobStatusProviderFailed:      {JobStatusFailedRetryable, JobStatusFailedTerminal, JobStatusRefunded},
-	JobStatusPostprocessing:      {JobStatusResultReady, JobStatusFailedRetryable, JobStatusFailedTerminal},
+	JobStatusPostprocessing:      {JobStatusResultReady, JobStatusFailedRetryable, JobStatusFailedTerminal, JobStatusRejected},
 	JobStatusResultReady:         {JobStatusDelivering, JobStatusSucceeded, JobStatusFailedRetryable},
 	JobStatusDelivering:          {JobStatusSucceeded, JobStatusFailedRetryable, JobStatusFailedTerminal},
 	JobStatusSucceeded:           {},

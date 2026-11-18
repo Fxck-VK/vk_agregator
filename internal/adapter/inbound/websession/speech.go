@@ -254,5 +254,5 @@ func (h *Handler) getSpeechJobResult(w http.ResponseWriter, r *http.Request) {
 	}{job.ID, artifacts})
 }
 func (h *Handler) getSpeechArtifact(w http.ResponseWriter, r *http.Request) {
-	h.serveGeneratedArtifact(w, r, func(job *domain.Job, owner uuid.UUID) bool { _, ok := speechJobDTO(job, owner); return ok })
+	h.serveGeneratedArtifact(w, r, func(job *domain.Job, owner uuid.UUID) bool { _, ok := speechJobDTO(job, owner); return ok }, nil, "inline")
 }

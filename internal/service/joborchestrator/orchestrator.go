@@ -317,6 +317,9 @@ func New(jobs domain.JobRepository, manager uow.Manager, billing Biller, maxCost
 // user cannot afford the operation the job is parked in awaiting_payment and
 // domain.ErrInsufficientCredits is returned alongside the job.
 func (o *Orchestrator) CreateJob(ctx context.Context, in CreateJobInput) (*domain.Job, error) {
+	if in.Operation == domain.OperationAudioDownload && (in.CostEstimateCredits != 0 || in.PricingSnapshot.Valid()) {
+		return nil, fmt.Errorf("%w: audio downloads are free", domain.ErrInvalidInput)
+	}
 	if err := validateTurboH3Price(in); err != nil {
 		return nil, err
 	}

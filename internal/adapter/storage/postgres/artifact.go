@@ -100,6 +100,17 @@ func (r *ArtifactRepository) GetByIDForAccount(ctx context.Context, accountID, i
 	return &a, nil
 }
 
+// FindReadyMP3ForJob finds a previously saved output after an interrupted job checkpoint.
+func (r *ArtifactRepository) FindReadyMP3ForJob(ctx context.Context, accountID, jobID uuid.UUID) (uuid.UUID, error) {
+	const q = `SELECT id FROM artifacts
+		WHERE owner_account_id = $1 AND job_id = $2 AND kind = 'output'
+		  AND media_type = 'audio' AND mime_type = 'audio/mpeg' AND status = 'ready'
+		ORDER BY created_at, id LIMIT 1`
+	var id uuid.UUID
+	err := r.db.QueryRow(ctx, q, accountID, jobID).Scan(&id)
+	return id, mapError(err)
+}
+
 // GetBySHA256 fetches an artifact by content hash for deduplication.
 func (r *ArtifactRepository) GetBySHA256(ctx context.Context, ownerID uuid.UUID, sha256 string) (*domain.Artifact, error) {
 	artifact, err := r.getBySHA256OwnerColumn(ctx, "owner_account_id", ownerID, sha256)

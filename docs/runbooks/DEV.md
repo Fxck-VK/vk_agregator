@@ -149,6 +149,18 @@ The user runs paid smoke manually. Deploy and infrastructure checks submit no
 generations. Setting the flag false hides new selections and blocks candidate
 execution; drain or resolve active smoke jobs before switching it off.
 
+## MP3 downloads from links
+
+Rebuild the worker image when bringing this feature into DEV. The image
+includes yt-dlp, Node.js and ffmpeg, and the worker consumes
+`stream:jobs:audio_download`. Production requires `ARTIFACT_SCANNER=openai`
+and the existing OpenAI credentials for audio scanning.
+
+For a manual smoke test, sign in to the website, open `/ru/app/audio-download`
+and submit one short, authorized public source from YouTube and SoundCloud.
+Verify that each finished job downloads a playable MP3, the account's star
+balance stays the same, and a separate account cannot read the job or file.
+
 ## Platform language URLs
 
 The platform serves existing UI pages under `/ru` and `/en`. Legacy page URLs

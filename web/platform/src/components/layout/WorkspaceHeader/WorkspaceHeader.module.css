@@ -106,6 +106,25 @@
   }
 }
 
+@media (width < 64rem) {
+  .leading:has(.sectionNavigation) {
+    flex-direction: column;
+  }
+
+  .leading:has(.sectionNavigation) > :first-child:not(.sectionNavigation) {
+    max-inline-size: 100%;
+  }
+
+  .audioDownload .sectionNavigation {
+    margin-block-start: calc(2.75rem + var(--space-3));
+  }
+
+  .leading .sectionNavigation {
+    inline-size: max-content;
+    max-inline-size: 100cqi;
+  }
+}
+
 @media (width < 36rem) {
   .leading {
     flex-wrap: wrap;

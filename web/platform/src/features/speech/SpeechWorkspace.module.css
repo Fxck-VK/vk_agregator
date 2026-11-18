@@ -1,4 +1,4 @@
-@media (width < 36rem) {
+@media (width < 64rem) {
   .pageFrame.pageFrame { padding-block-start: 7.5rem; }
 }
 .workspace { display: grid; gap: var(--space-4); max-inline-size: 48rem; margin-inline: auto; padding-block: var(--space-6); }

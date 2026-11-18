@@ -1,5 +1,6 @@
 import { brandName } from "@/config/brand";
 import { messagesSpeechRu } from "../speech";
+import { messagesAudioDownloadRu } from "../audio-download";
 import { messagesMusicCatalogRu } from "../music-catalog";
 import { messagesMusicRu } from "../music";
 import { messagesReleasePreviewRu } from "../release-preview";
@@ -34,6 +35,7 @@ export const messagesRu = {
   "units.materials.many": "{count} материалов",
   "units.materials.other": "{count} материала",
   ...messagesSpeechRu,
+  ...messagesAudioDownloadRu,
   ...messagesMusicCatalogRu,
   ...messagesMusicRu,
   "catalog.pendingDescription": "Ожидает проверки перед запуском.",

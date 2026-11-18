@@ -36,6 +36,7 @@ function getWorkspaceHeaderTitle(pathname: string | null, t: Dictionary) {
       return t.navigation.models;
     case "/app/music":
     case "/app/speech":
+    case "/app/audio-download":
       return t.navigation.audio;
     case "/app/profile":
       return t.navigation.profile;
@@ -50,13 +51,15 @@ export function WorkspaceHeader({ balance, sectionNavigation, trailingAction }: 
   const t = useDictionary();
   const pathname = usePathname();
   const title = getWorkspaceHeaderTitle(pathname, t);
+  const isAudioDownload = pathname === "/app/audio-download";
+  const headerClassName = isAudioDownload ? `${styles.header} ${styles.audioDownload}` : styles.header;
   const isBalanceLoading = balance === null;
 
   return (
     <>
-      <header aria-label={title} className={styles.header} data-testid="workspace-header">
+      <header aria-label={title} className={headerClassName} data-testid="workspace-header">
         <div className={styles.leading}>
-          <WorkspaceModelSelector />
+          {isAudioDownload ? null : <WorkspaceModelSelector />}
           {sectionNavigation}
         </div>
         <div className={styles.trailing}>

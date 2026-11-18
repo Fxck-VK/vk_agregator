@@ -3352,6 +3352,23 @@ not an inferred APIMart audio tariff. Unknown provider cost is explicit in
 CostEstimate; it is not a free routing quote and cannot bypass video spend caps.
 GPT-4o Mini TTS stays disabled; static/production admission stays unchanged.
 See runbooks/MODEL_CATALOG.md for application limits and remaining rollout gates.
+
+## MP3 downloads from links
+
+The website workspace submits account-owned `audio_download` jobs to
+`POST /web/v1/audio-download-jobs`. The web session checks Origin, CSRF,
+idempotency and the account rate limit. Jobs reserve and capture zero stars.
+Only links to supported YouTube videos and SoundCloud tracks are accepted.
+
+A dedicated Redis stream and worker use yt-dlp, Node.js and ffmpeg to convert
+one source per job, with a source duration of at most 20 minutes and an output
+of at most 20 MiB. Production requires the OpenAI artifact scanner; the
+worker stores the MP3 privately, records the moderation verdict and finalizes
+the job through the account-history outbox. The website polls
+`GET /web/v1/audio-download-jobs/{id}` and downloads through
+`GET /web/v1/audio-download-artifacts/{id}`. Both reads require the owning
+session; download also requires a successful job and an approved MP3 artifact.
+
 ## Platform localization ownership (2026-09-16)
 
 `web/platform/src/i18n` owns UI dictionaries, formatting and locale resolution. All UI URLs use `/ru` or `/en`; `src/proxy.ts` validates the prefix, overwrites the page-locale request header and rewrites to the shared internal App Router tree. Server dictionaries use this header; the root client boundary follows URL/history. Shared Link/router adapters own localized navigation. The stable route tree preserves draft, model and File/blob state during locale switches. The `neirohub-locale` cookie remembers preference only for legacy unprefixed redirects; it never overrides a localized URL and is not account identity or authorization. There is no mutable process-global language.

@@ -43,6 +43,8 @@ func (t Task) QueueName() string {
 		return "queue.image.edit"
 	case domain.OperationVideoGenerate, domain.OperationVideoImageToVideo, domain.OperationVideoExtend:
 		return "queue.video.generate"
+	case domain.OperationAudioDownload:
+		return "queue.audio.download"
 	case domain.OperationAudioTTS, domain.OperationAudioSTT:
 		return "queue.audio.generate"
 	default:

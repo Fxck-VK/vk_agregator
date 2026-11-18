@@ -9,11 +9,12 @@ const releaseView = vi.hoisted(() => ({ view: "dev" }));
 afterEach(() => { releaseView.view = "dev"; cleanup(); vi.unstubAllGlobals(); });
 vi.mock("@/features/release/ReleaseViewProvider", () => ({ useReleaseView: () => ({ allowsPath: (href: string) => releaseView.view === "dev" || !["/app/music", "/app/speech"].includes(href) }) }));
 
-it("omits the audio destination in PROD", () => {
+it("keeps the Audio label when linking directly to MP3 downloads in PROD", () => {
   mockNarrowViewport();
   releaseView.view = "prod";
   const view = render(<Sidebar />);
   expect(view.container.querySelector('a[href="/ru/app/music"]')).toBeNull();
+  expect(view.container.querySelector('a[href="/ru/app/audio-download"]')).toHaveTextContent("Аудио");
   releaseView.view = "dev";
 });
 
@@ -170,7 +171,7 @@ describe("Sidebar", () => {
     ]);
   });
 
-  it.each(["/app/music", "/app/speech"])("keeps the single Audio entry active on %s", pathname => {
+  it.each(["/app/music", "/app/speech", "/app/audio-download"])("keeps the single Audio entry active on %s", pathname => {
     vi.mocked(usePathname).mockReturnValue(pathname);
     mockWideViewport();
     render(<Sidebar />);

@@ -725,7 +725,7 @@ func isMediaCapacityOperation(op domain.OperationType, modality domain.Modality)
 	}
 	switch op {
 	case domain.OperationImageGenerate, domain.OperationImageEdit, domain.OperationImageUpscale,
-		domain.OperationVideoGenerate, domain.OperationVideoImageToVideo, domain.OperationVideoExtend:
+		domain.OperationVideoGenerate, domain.OperationVideoImageToVideo, domain.OperationVideoExtend, domain.OperationAudioDownload:
 		return true
 	default:
 		return false

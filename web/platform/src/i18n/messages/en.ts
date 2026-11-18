@@ -1,6 +1,7 @@
 import { brandName } from "@/config/brand";
 import type { MessageCatalog } from "../messages";
 import { messagesSpeechEn } from "../speech";
+import { messagesAudioDownloadEn } from "../audio-download";
 import { messagesMusicCatalogEn } from "../music-catalog";
 import { messagesMusicEn } from "../music";
 import { messagesReleasePreviewEn } from "../release-preview";
@@ -35,6 +36,7 @@ export const messagesEn = {
   "units.materials.many": "{count} materials",
   "units.materials.other": "{count} materials",
   ...messagesSpeechEn,
+  ...messagesAudioDownloadEn,
   ...messagesMusicCatalogEn,
   ...messagesMusicEn,
   "catalog.pendingDescription": "Awaiting verification before launch.",

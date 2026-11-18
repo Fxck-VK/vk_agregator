@@ -1,0 +1,57 @@
+.workspace {
+  display: grid;
+  gap: var(--space-4);
+  max-inline-size: 44rem;
+  margin-inline: auto;
+  padding-block: var(--space-6);
+}
+
+.heading {
+  display: grid;
+  gap: var(--space-2);
+}
+
+.heading h1, .heading p { margin: 0; }
+.heading p { color: var(--color-text-muted); }
+
+.form {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: end;
+  gap: var(--space-3);
+}
+
+.field {
+  display: grid;
+  gap: var(--space-2);
+  min-inline-size: 0;
+}
+
+.field input {
+  inline-size: 100%;
+  min-block-size: 2.75rem;
+  padding-inline: var(--space-3);
+  background: transparent;
+  border: 0;
+  color: inherit;
+  font: inherit;
+}
+
+.form > button { min-block-size: 2.875rem; }
+
+.actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-3);
+}
+
+.download { color: inherit; text-decoration: underline; text-underline-offset: 0.15em; }
+
+@media (width < 64rem) {
+  .withAudioNavigation.withAudioNavigation { padding-block-start: 7.5rem; }
+}
+
+@media (width < 36rem) {
+  .form { grid-template-columns: 1fr; }
+}

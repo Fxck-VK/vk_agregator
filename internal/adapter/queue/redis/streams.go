@@ -24,12 +24,13 @@ import (
 
 // Stream names, one per worker pool.
 const (
-	StreamText         = "stream:jobs:text"
-	StreamImage        = "stream:jobs:image"
-	StreamVideo        = "stream:jobs:video"
-	StreamAudio        = "stream:jobs:audio"
-	StreamDelivery     = "stream:jobs:delivery"
-	StreamProviderPoll = "stream:jobs:provider_poll"
+	StreamText          = "stream:jobs:text"
+	StreamImage         = "stream:jobs:image"
+	StreamVideo         = "stream:jobs:video"
+	StreamAudio         = "stream:jobs:audio"
+	StreamAudioDownload = "stream:jobs:audio_download"
+	StreamDelivery      = "stream:jobs:delivery"
+	StreamProviderPoll  = "stream:jobs:provider_poll"
 	// StreamConversationTitle isolates inexpensive, best-effort title work from
 	// user-visible text generation. It carries IDs and queue metadata only.
 	StreamConversationTitle = "stream:conversations:title"
@@ -41,11 +42,11 @@ const (
 
 // AllStreams lists every worker-consumed stream (the DLQ is intentionally
 // excluded; nothing auto-consumes it).
-var AllStreams = []string{StreamText, StreamImage, StreamVideo, StreamAudio, StreamDelivery, StreamProviderPoll, StreamConversationTitle}
+var AllStreams = []string{StreamText, StreamImage, StreamVideo, StreamAudio, StreamAudioDownload, StreamDelivery, StreamProviderPoll, StreamConversationTitle}
 
 // AllStreamsWithDLQ lists worker streams plus the operator-inspected DLQ for
 // maintenance trimming.
-var AllStreamsWithDLQ = []string{StreamText, StreamImage, StreamVideo, StreamAudio, StreamDelivery, StreamProviderPoll, StreamConversationTitle, StreamDLQ}
+var AllStreamsWithDLQ = []string{StreamText, StreamImage, StreamVideo, StreamAudio, StreamAudioDownload, StreamDelivery, StreamProviderPoll, StreamConversationTitle, StreamDLQ}
 
 // taskField is the Redis stream entry field that carries the JSON task body.
 const taskField = "task"
@@ -150,6 +151,8 @@ func StreamForOperation(op domain.OperationType) string {
 		return StreamImage
 	case domain.OperationVideoGenerate, domain.OperationVideoImageToVideo, domain.OperationVideoExtend:
 		return StreamVideo
+	case domain.OperationAudioDownload:
+		return StreamAudioDownload
 	case domain.OperationAudioMusic, domain.OperationAudioTTS, domain.OperationAudioSTT:
 		return StreamAudio
 	default:
@@ -459,6 +462,8 @@ func queueClassForStream(stream string) string {
 		return "image"
 	case StreamVideo:
 		return "video"
+	case StreamAudioDownload:
+		return "audio_download"
 	case StreamAudio:
 		return "audio"
 	case StreamDelivery:

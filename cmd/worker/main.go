@@ -39,6 +39,7 @@ import (
 	"vk-ai-aggregator/internal/platform/tracing"
 	"vk-ai-aggregator/internal/service/artifactservice"
 	"vk-ai-aggregator/internal/service/assistantfacts"
+	"vk-ai-aggregator/internal/service/audiodownload"
 	"vk-ai-aggregator/internal/service/billingservice"
 	"vk-ai-aggregator/internal/service/conversationtitle"
 	"vk-ai-aggregator/internal/service/dialogcontext"
@@ -322,6 +323,11 @@ func main() {
 		logger.Info("using openai artifact scanner")
 	}
 	artSvc := artifactservice.New(artRepo, store, cfg.S3Bucket, artOpts...)
+	audioArtifacts := artSvc
+	if strings.EqualFold(cfg.ArtifactScanner, "openai") {
+		audioArtifacts = artifactservice.New(artRepo, store, cfg.S3Bucket,
+			artifactservice.WithScanner(openai.NewAudioArtifactScanner(openAIModerator)))
+	}
 	var videoProber worker.VideoProber
 	var videoTranscoder worker.VideoTranscoder
 	probePolicy := cfg.EffectiveMediaVideoProbePolicy()
@@ -455,6 +461,10 @@ func main() {
 		Backoff:        worker.ExponentialBackoff(cfg.RetryBaseDelay, cfg.RetryMaxDelay),
 	}
 	gen := worker.NewGenerationWorker(deps)
+	audioDownload := worker.NewAudioDownloadWorker(deps, nil, nil, nil, rdb)
+	if !cfg.IsProduction() || strings.EqualFold(cfg.ArtifactScanner, "openai") {
+		audioDownload = worker.NewAudioDownloadWorker(deps, audiodownload.New(""), audioArtifacts, artRepo.FindReadyMP3ForJob, rdb)
+	}
 	title := conversationtitle.New(conversationtitle.Deps{
 		Jobs:          jobs,
 		Conversations: conversations,
@@ -511,6 +521,7 @@ func main() {
 		genStreams := []string{redisqueue.StreamText, redisqueue.StreamImage, redisqueue.StreamVideo, redisqueue.StreamAudio}
 		engines := []*worker.Engine{
 			worker.NewEngine(consumer, genStreams, gen.Process, worker.WithLogger(logger)),
+			worker.NewEngine(consumer, []string{redisqueue.StreamAudioDownload}, audioDownload.Process, worker.WithCount(1), worker.WithMinIdle(5*time.Minute), worker.WithLogger(logger)),
 			worker.NewConversationTitleEngine(consumer, title.Process, logger),
 			worker.NewEngine(consumer, []string{redisqueue.StreamProviderPoll}, poll.Process, worker.WithLogger(logger)),
 			worker.NewEngine(consumer, []string{redisqueue.StreamDelivery}, delivery.Process, worker.WithLogger(logger)),

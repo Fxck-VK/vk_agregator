@@ -230,6 +230,8 @@ func streamPhase(stream string) string {
 		return "delivery"
 	case redisqueue.StreamConversationTitle:
 		return "conversation_title"
+	case redisqueue.StreamAudioDownload:
+		return "audio_download"
 	default:
 		return "unknown"
 	}

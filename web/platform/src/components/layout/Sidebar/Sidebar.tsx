@@ -77,7 +77,11 @@ type SidebarProps = {
 export function Sidebar({ account, conversations, isDesktopCollapsed = false, onDesktopToggle }: SidebarProps) {
   const t = useDictionary();
   const { allowsPath } = useReleaseView();
-  const navigationItems = getWorkspaceNavigationItems(t).filter(item => allowsPath(item.href));
+  const navigationItems = getWorkspaceNavigationItems(t)
+    .map(item => item.href === "/app/music" && !allowsPath(item.href)
+      ? { ...item, href: "/app/audio-download" }
+      : item)
+    .filter(item => allowsPath(item.href));
   const pathname = usePathname();
   const [isNarrowViewport, setIsNarrowViewport] = useState<boolean | null>(null);
   const [isOpen, setIsOpen] = useState(false);
@@ -447,7 +451,7 @@ export function Sidebar({ account, conversations, isDesktopCollapsed = false, on
                 return (
                   <li key={item.href}>
                     <Link
-                      aria-current={pathname === item.href || (item.href === "/app/music" && pathname === "/app/speech") ? "page" : undefined}
+                      aria-current={pathname === item.href || (item.href === "/app/music" && (pathname === "/app/speech" || pathname === "/app/audio-download")) ? "page" : undefined}
                       data-sidebar-tooltip={item.label}
                       href={item.href}
                       id={item.href === "/app/chats" ? "sidebar-new-chat" : undefined}

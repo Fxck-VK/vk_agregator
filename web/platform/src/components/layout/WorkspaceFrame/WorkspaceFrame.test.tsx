@@ -257,6 +257,7 @@ describe("WorkspaceFrame", () => {
     ["/app/image", ru.navigation.workspace],
     ["/app/music", "Аудио"],
     ["/app/speech", "Аудио"],
+    ["/app/audio-download", "Аудио"],
     ["/app/profile", ru.navigation.profile],
   ])("keeps the persistent header route-based for %s", (pathname, expectedTitle) => {
     vi.mocked(usePathname).mockReturnValue(pathname);
@@ -273,10 +274,12 @@ describe("WorkspaceFrame", () => {
     if (pathname === "/app/inspiration") {
       expect(header).not.toHaveTextContent(expectedTitle);
     }
-    if (pathname === "/app/music" || pathname === "/app/speech") {
+    if (["/app/music", "/app/speech", "/app/audio-download"].includes(pathname)) {
       expect(within(header).getByRole("toolbar", { name: expectedTitle })).toBeInTheDocument();
     }
-    expect(within(header).getByRole("button", { name: "Model selector" })).toBeInTheDocument();
+    const modelSelector = within(header).queryByRole("button", { name: "Model selector" });
+    if (pathname === "/app/audio-download") expect(modelSelector).not.toBeInTheDocument();
+    else expect(modelSelector).toBeInTheDocument();
     expect(within(header).getByLabelText("42 звезды")).toBeInTheDocument();
     expect(within(header).getByRole("button", { name: "Выбрать тариф" })).toHaveAttribute("type", "button");
   });

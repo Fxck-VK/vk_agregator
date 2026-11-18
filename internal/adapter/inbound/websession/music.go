@@ -461,10 +461,10 @@ func musicAssetName(name, fallback string) string {
 }
 
 func (h *Handler) getMusicArtifact(w http.ResponseWriter, r *http.Request) {
-	h.serveGeneratedArtifact(w, r, func(job *domain.Job, owner uuid.UUID) bool { _, ok := musicJobDTO(job, owner); return ok })
+	h.serveGeneratedArtifact(w, r, func(job *domain.Job, owner uuid.UUID) bool { _, ok := musicJobDTO(job, owner); return ok }, nil, "inline")
 }
 
-func (h *Handler) serveGeneratedArtifact(w http.ResponseWriter, r *http.Request, validJob func(*domain.Job, uuid.UUID) bool) {
+func (h *Handler) serveGeneratedArtifact(w http.ResponseWriter, r *http.Request, validJob func(*domain.Job, uuid.UUID) bool, validArtifact func(*domain.Artifact) bool, disposition string) {
 	w.Header().Set("Cache-Control", "private, no-store")
 	w.Header().Set("X-Content-Type-Options", "nosniff")
 	p, _ := PrincipalFromContext(r.Context())
@@ -480,6 +480,10 @@ func (h *Handler) serveGeneratedArtifact(w http.ResponseWriter, r *http.Request,
 	}
 	a, err := h.deps.ImageArtifacts.GetByIDForAccount(r.Context(), p.AccountID, id)
 	if err != nil || a == nil || a.OwnerAccountID != p.AccountID || a.JobID == nil || a.Status != domain.ArtifactStatusReady || a.Kind != domain.ArtifactKindOutput || a.SizeBytes <= 0 || a.SizeBytes > 128<<20 {
+		writeError(w, 404, "music artifact not found")
+		return
+	}
+	if validArtifact != nil && !validArtifact(a) {
 		writeError(w, 404, "music artifact not found")
 		return
 	}
@@ -514,7 +518,6 @@ func (h *Handler) serveGeneratedArtifact(w http.ResponseWriter, r *http.Request,
 	}
 	// No redirect to private storage/provider URLs, and no executable document
 	// rendering. Same-origin byte serving supports the player's Range requests.
-	disposition := "inline"
 	if strings.HasPrefix(a.MimeType, "audio/") || a.MimeType == "video/mp4" || a.MimeType == "image/png" || a.MimeType == "image/jpeg" || strings.HasPrefix(a.MimeType, "text/plain") {
 		w.Header().Set("Content-Type", a.MimeType)
 	} else {

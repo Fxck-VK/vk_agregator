@@ -682,6 +682,10 @@
   }
 }
 
+@media (width < 64rem) {
+  .workspace { padding-block-start: 7.5rem; }
+}
+
 @media (width < 36rem) {
   .workspace {
     padding-block-start: 8.5rem;
