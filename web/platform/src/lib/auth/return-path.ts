@@ -1,4 +1,5 @@
 import { stripLocale } from "@/i18n/routing";
+import { presentationWorkflowPath } from "@/features/presentations/route";
 
 const pathSegment = /^[A-Za-z0-9\-._~!$&'()*+,;=:@]+$/;
 const returnParameters = new Set(["model", "quality", "category", "payment_id", "pending", "refresh"]);
@@ -8,6 +9,7 @@ export function safeReturnPath(value: string): string | null {
   const [rawPath, query] = value.split("?");
   if (value.split("?").length > 2) return null;
   const pathname = stripLocale(rawPath);
+  if (pathname === presentationWorkflowPath) return query === undefined ? value : null;
   if (query !== undefined) {
     const entries = [...new URLSearchParams(query)];
     if (!entries.length || entries.some(([key, item]) => !returnParameters.has(key) || !/^[A-Za-z0-9._-]{1,160}$/.test(item))) return null;

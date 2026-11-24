@@ -3,10 +3,13 @@ import { expect, it, vi } from 'vitest';
 import { existsSync } from 'node:fs';
 import path from 'node:path';
 import { assetPaths } from '@/assets/asset-paths';
+import { presentationWorkflowName, presentationWorkflowPath } from '@/features/presentations/route';
+import type { ReleaseView } from '@/features/release/policy';
 
+const release = vi.hoisted(() => ({ view: 'dev' as ReleaseView }));
 vi.mock('server-only', () => ({}));
 vi.mock('next/navigation', () => ({ useRouter: vi.fn() }));
-vi.mock('@/features/release/ReleaseViewProvider', () => ({ useReleaseView: () => ({ view: 'dev', canSwitch: true, localSimulation: true, enabled: () => true, allowsPath: () => true }) }));
+vi.mock('@/features/release/ReleaseViewProvider', () => ({ useReleaseView: () => ({ view: release.view, canSwitch: release.view === 'dev', localSimulation: release.view === 'dev', enabled: () => true, allowsPath: () => true }) }));
 import { LocaleProvider } from '@/i18n/LocaleProvider';
 import { contentSources, resolveContentPage } from '@/content/templates/catalog';
 import { PublicHome } from './PublicHome';
@@ -14,7 +17,10 @@ import { homePhotoSource, modelPhotos, originalPhotos, platformPhotos, possibili
 
 const page = resolveContentPage('/', { preview: true })!;
 const copy = contentSources({ ...page, template: 'T01' }, 'ru').homeEn;
-const mount = () => render(<LocaleProvider locale="ru"><PublicHome copy={copy} /></LocaleProvider>);
+const mount = (view: ReleaseView = 'dev') => {
+  release.view = view;
+  return render(<LocaleProvider locale="ru"><PublicHome copy={copy} /></LocaleProvider>);
+};
 function photoSource(image: Element | null) {
   const url = new URL(image?.getAttribute('src') ?? '', 'http://localhost');
   return url.searchParams.get('url') ?? url.pathname;
@@ -51,7 +57,7 @@ it('opens the intro as a video-only overlay and restores keyboard focus when clo
 
 it('retains the original section order and Russian content while using contributor photographs', () => {
   const before = JSON.stringify(copy);
-  const { container } = mount();
+  const { container } = mount('prod');
   expect(screen.getByRole('heading', { level: 1 })).toHaveTextContent(copy.hero.title);
   expect(screen.queryByRole('link', { name: copy.announcement })).not.toBeInTheDocument();
   expect(screen.queryByRole('link', { name: copy.hero.eyebrow })).not.toBeInTheDocument();
@@ -61,6 +67,7 @@ it('retains the original section order and Russian content while using contribut
   expect(header.queryByRole('navigation')).not.toBeInTheDocument();
   expect(header.queryByRole('button', { name: copy.controls.openMenu })).not.toBeInTheDocument();
   expect(header.queryByRole('button', { name: copy.controls.search })).not.toBeInTheDocument();
+  expect(screen.queryByRole('link', { name: presentationWorkflowName })).not.toBeInTheDocument();
   expect([...container.querySelectorAll('main > section')].map(section => section.id)).toEqual([
     '', 'creative-suite', 'models', 'workflow', 'tools', 'possibilities', 'originals', 'teams', 'plans', 'questions', '',
   ]);
@@ -70,6 +77,15 @@ it('retains the original section order and Russian content while using contribut
   expect(photoSource(container.querySelector('img[data-landing-photo="hero"]'))).toBe(homePhotoSource('hero'));
   expect(screen.getAllByRole('link', { name: copy.start })[0]).toHaveAttribute('href', '/ru/app');
   expect(JSON.stringify(copy)).toBe(before);
+});
+
+it('links to presentations from the DEV header and workflow section', () => {
+  const { container } = mount('dev');
+  const header = within(screen.getByRole('banner'));
+  const navigation = within(header.getByRole('navigation'));
+  const workflow = within(container.querySelector<HTMLElement>('#workflow')!);
+  expect(navigation.getByRole('link', { name: presentationWorkflowName })).toHaveAttribute('href', `/ru${presentationWorkflowPath}`);
+  expect(workflow.getByRole('link', { name: presentationWorkflowName })).toHaveAttribute('href', `/ru${presentationWorkflowPath}`);
 });
 
 it('switches suite photos by mouse and keyboard and retains the gallery controls', async () => {

@@ -15,6 +15,11 @@
 .card:is([data-card="2"], [data-card="3"]) { display: flex; flex-direction: column; }
 .arrow { position: absolute; z-index: 5; inset: auto 16px 16px auto; display: grid; place-items: center; inline-size: 30px; block-size: 30px; border: 1px solid currentColor; border-radius: 50%; background: color-mix(in srgb, var(--landing-ink) 16%, transparent); opacity: 0; translate: -5px 0; transition: opacity 200ms, translate 200ms; }
 .card:is(:hover, :focus-visible) .arrow { opacity: 1; translate: 0 0; }
+.presentation { display: grid; grid-template-columns: auto minmax(0, 1fr) auto; align-items: center; gap: 14px; margin-block-start: 16px; padding: clamp(16px, 2.3vw, 26px); border-radius: 12px; background: var(--landing-white); color: var(--landing-ink); text-decoration: none; }
+.presentation:hover { background: var(--landing-accent-soft); }
+.presentationIcon { display: grid; place-items: center; inline-size: 44px; block-size: 44px; border-radius: 8px; background: var(--landing-accent-soft); color: var(--landing-ink); }
+.presentation h3 { margin: 0; font-size: 19px; line-height: 1.2; }
+.presentation p { margin: 4px 0 0; color: var(--landing-muted-light); font-size: 14px; line-height: 1.4; }
 
 /* The catalogue is a cropped illustration, not a second interactive interface. */
 .catalogue { flex: 1; min-block-size: 315px; margin: 14px 0 0 20px; padding: 20px 0 0 16px; overflow: hidden; border-radius: 18px 0 0; background: var(--landing-surface-soft); transform: translateY(10px); transition: transform 400ms ease; }

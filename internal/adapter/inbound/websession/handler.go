@@ -465,6 +465,8 @@ func (h *Handler) Routes() http.Handler {
 	mux.HandleFunc("GET /web/v1/input-artifacts/{artifactID}", h.requirePrincipal(h.getConversationInput))
 	mux.HandleFunc("POST /web/v1/conversations", h.requireUnsafePrincipal(h.createConversation))
 	mux.HandleFunc("POST /web/v1/conversations/{conversationID}/messages", h.requireUnsafePrincipal(h.createConversationMessage))
+	mux.HandleFunc("GET /web/v1/presentations/quote", h.requirePrincipal(h.quotePresentation))
+	mux.HandleFunc("POST /web/v1/presentations/{conversationID}/generate", h.requireUnsafePrincipal(h.generatePresentation))
 	mux.HandleFunc("PUT /web/v1/conversations/{conversationID}/messages/{messageID}/rating", h.requireUnsafePrincipal(h.rateConversationMessage))
 	mux.HandleFunc("PATCH /web/v1/conversations/{conversationID}", h.requireUnsafePrincipal(h.renameConversation))
 	mux.HandleFunc("DELETE /web/v1/conversations/{conversationID}", h.requireUnsafePrincipal(h.archiveConversation))
@@ -1557,6 +1559,10 @@ func (h *Handler) createConversation(w http.ResponseWriter, r *http.Request) {
 }
 
 func (h *Handler) createConversationMessage(w http.ResponseWriter, r *http.Request) {
+	h.createTextOrMediaMessage(w, r, false)
+}
+
+func (h *Handler) createTextOrMediaMessage(w http.ResponseWriter, r *http.Request, presentation bool) {
 	w.Header().Set("Cache-Control", "no-store")
 	principal, ok := PrincipalFromContext(r.Context())
 	if !ok {
@@ -1578,6 +1584,14 @@ func (h *Handler) createConversationMessage(w http.ResponseWriter, r *http.Reque
 		return
 	}
 	req.ModelID = strings.TrimSpace(req.ModelID)
+	if presentation && (req.ModelID == "" || req.ExpectedPresentationCredits <= 0) || !presentation && req.ExpectedPresentationCredits != 0 {
+		writeError(w, http.StatusBadRequest, "invalid presentation price")
+		return
+	}
+	if presentation && !presentationTextModel(req.ModelID) {
+		writeError(w, http.StatusBadRequest, "invalid presentation model")
+		return
+	}
 	modelID, kind := req.ModelID, "text"
 	if modelID == "" {
 		modelID = providermodels.PublicTextChatGPT
@@ -1638,11 +1652,21 @@ func (h *Handler) createConversationMessage(w http.ResponseWriter, r *http.Reque
 		return
 	}
 	model, snapshot, resolveErr := textgeneration.Resolve(req.ModelID, req.Prompt, h.cfg.TextModels, h.deps.ImagePricing)
+	if presentation && resolveErr == nil {
+		snapshot, resolveErr = pricingcatalog.PresentationTextSnapshot(snapshot)
+		if resolveErr == nil && snapshot.InternalCredits != req.ExpectedPresentationCredits {
+			writeError(w, http.StatusConflict, "presentation price changed")
+			return
+		}
+	}
 	if resolveErr != nil {
 		writeError(w, http.StatusServiceUnavailable, "text model unavailable")
 		return
 	}
 	orchestrationKey := "web-chat:" + principal.AccountID.String() + ":" + idempotencyKey.String()
+	if presentation {
+		orchestrationKey = "web-presentation:" + principal.AccountID.String() + ":" + idempotencyKey.String()
+	}
 	params, err := json.Marshal(webChatJobParams{
 		Prompt:             req.Prompt,
 		ModelID:            model.ModelID,

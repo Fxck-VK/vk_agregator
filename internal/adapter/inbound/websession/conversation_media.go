@@ -20,17 +20,18 @@ import (
 )
 
 type conversationGenerationRequest struct {
-	ReferenceVideoArtifactID uuid.UUID   `json:"reference_video_artifact_id,omitempty"`
-	CharacterOrientation     string      `json:"character_orientation,omitempty"`
-	KeepOriginalSound        *bool       `json:"keep_original_sound,omitempty"`
-	ReferenceArtifactIDs     []uuid.UUID `json:"reference_artifact_ids,omitempty"`
-	Prompt                   string      `json:"prompt"`
-	ModelID                  string      `json:"model_id,omitempty"`
-	ImageQuality             string      `json:"image_quality,omitempty"`
-	AspectRatio              string      `json:"aspect_ratio,omitempty"`
-	OutputCount              int         `json:"output_count,omitempty"`
-	Resolution               string      `json:"resolution,omitempty"`
-	DurationSec              int         `json:"duration_sec,omitempty"`
+	ExpectedPresentationCredits int64       `json:"expected_presentation_credits,omitempty"`
+	ReferenceVideoArtifactID    uuid.UUID   `json:"reference_video_artifact_id,omitempty"`
+	CharacterOrientation        string      `json:"character_orientation,omitempty"`
+	KeepOriginalSound           *bool       `json:"keep_original_sound,omitempty"`
+	ReferenceArtifactIDs        []uuid.UUID `json:"reference_artifact_ids,omitempty"`
+	Prompt                      string      `json:"prompt"`
+	ModelID                     string      `json:"model_id,omitempty"`
+	ImageQuality                string      `json:"image_quality,omitempty"`
+	AspectRatio                 string      `json:"aspect_ratio,omitempty"`
+	OutputCount                 int         `json:"output_count,omitempty"`
+	Resolution                  string      `json:"resolution,omitempty"`
+	DurationSec                 int         `json:"duration_sec,omitempty"`
 }
 
 type safeVideoModel struct {

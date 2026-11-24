@@ -21,6 +21,8 @@ real-money credentials. NPD manual receipt mode omits the provider fiscal receip
 body while keeping verified buyer contact, identity, idempotency and ledger
 checks. Operator NPD receipt issuance remains external/manual. No schema change.
 # Current implementation addendum: app surfaces and backend core
+
+The DEV presentation studio submits one account-owned web text Job per deck through the presentation quote and generate routes. The existing worker, moderation and ledger flow owns execution. The studio reads the completed conversation and exports editable PowerPoint locally. Local preview also accepts a user-imported outline without contacting a model or mutating account history.
 T01 uses the refined landing-variants/third renderer as the canonical homepage.
 The original public-home stays isolated in its guarded comparison route; the incoming homepage from ba2001cd
 uses isolated feature styles and frozen Russian data. Server-only comparison

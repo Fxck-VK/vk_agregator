@@ -6,6 +6,8 @@ import Link from '@/i18n/Link';
 import { assetPaths } from '@/assets/asset-paths';
 import { BrandLogo } from '@/components/brand/BrandLogo/BrandLogo';
 import { LandingArrow, LandingLink, LandingSection, LandingToolIcon } from '@/components/public/landing/LandingPrimitives';
+import { presentationWorkflowName, presentationWorkflowPath } from '@/features/presentations/route';
+import { presentationPageCopy } from '@/i18n/presentation-studio';
 import type { HomeEnglishCopy } from '@/i18n/public/home-en';
 import { HomePicture } from './HomeMedia';
 import styles from './HomeWorkflow.module.css';
@@ -50,7 +52,7 @@ function StartIllustration({ copy }: { copy: HomeEnglishCopy }) {
   </div>;
 }
 
-export function HomeWorkflow({ copy }: { copy: HomeEnglishCopy }) {
+export function HomeWorkflow({ copy, showPresentations = false }: { copy: HomeEnglishCopy; showPresentations?: boolean }) {
   const id = useId();
   const illustrations = [<CatalogueIllustration copy={copy} key="catalogue" />, <ProcessIllustration key="process" />, <FilesIllustration key="files" />, <StartIllustration copy={copy} key="start" />];
   return <LandingSection id="workflow" title={copy.workflow.title} description={copy.workflow.description} align="start" className={styles.section} action={<LandingLink href="/app">{copy.start}<LandingArrow /></LandingLink>}>
@@ -59,5 +61,10 @@ export function HomeWorkflow({ copy }: { copy: HomeEnglishCopy }) {
       {illustrations[index]}
       <span className={styles.arrow} aria-hidden="true"><LandingArrow /></span>
     </Link>)}</div>
+    {showPresentations && <Link href={presentationWorkflowPath} className={styles.presentation} aria-labelledby={`${id}-presentations`}>
+      <span className={styles.presentationIcon} aria-hidden="true"><LandingToolIcon name="text" /></span>
+      <div><h3 id={`${id}-presentations`}>{presentationWorkflowName}</h3><p>{presentationPageCopy.workflowDescription}</p></div>
+      <LandingArrow />
+    </Link>}
   </LandingSection>;
 }

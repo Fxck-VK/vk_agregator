@@ -86,6 +86,9 @@
     "group": "Разработка",
     "note": "Варианты original, friend и third."
   },
+  "/workflows/presentations": {
+    "title": "Мастерская презентаций"
+  },
   "/login-v2": {
     "title": "Прежний адрес входа",
     "redirects": [

@@ -5,6 +5,7 @@ import { safeReturnPath } from "./return-path";
 describe("safeReturnPath", () => {
   it.each([
     "/app",
+    "/ru/workflows/presentations",
     "/en/app",
     "/ru/app/files?category=images",
     "/en/app/chats?model=gpt_image_2_5_flare",
@@ -19,6 +20,8 @@ describe("safeReturnPath", () => {
     "app",
     "/application",
     "/other",
+    "/workflows/presentations?model=example",
+    "/workflows/presentations/extra",
     "//attacker.example/app",
     "https://attacker.example/app",
     "/app//chat",

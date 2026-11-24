@@ -10,6 +10,7 @@ import (
 	"os"
 	"path/filepath"
 
+	"vk-ai-aggregator/internal/service/pricingcatalog"
 	"vk-ai-aggregator/internal/service/productcatalog"
 )
 
@@ -28,7 +29,16 @@ func main() {
 	if err != nil {
 		fail(err)
 	}
-	for output, value := range map[string]any{path: catalog, filepath.Join(filepath.Dir(path), "model-reference-prices.preview.json"): references} {
+	presentations, err := pricingcatalog.PresentationPreviewQuote()
+	if err != nil {
+		fail(err)
+	}
+	dir := filepath.Dir(path)
+	for output, value := range map[string]any{
+		path: catalog,
+		filepath.Join(dir, "model-reference-prices.preview.json"): references,
+		filepath.Join(dir, "presentation-prices.preview.json"):    presentations,
+	} {
 		data, err := json.MarshalIndent(value, "", "  ")
 		if err != nil {
 			fail(err)

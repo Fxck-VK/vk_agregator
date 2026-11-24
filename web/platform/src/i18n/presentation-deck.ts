@@ -1,0 +1,78 @@
+export const presentationStyles = {
+  educational: "Учебный",
+  business: "Деловой",
+} as const;
+
+export type PresentationStyle = typeof presentationStyles[keyof typeof presentationStyles];
+
+export const presentationDeckCopy = {
+  prompt: {
+    topic: (topic: string) => `Подготовь презентацию на русском языке. Тема: ${topic}.`,
+    structure: (count: number, style: string) => `Ровно ${count} слайдов, включая обложку и вывод. Стиль: ${style.toLowerCase()}.`,
+    audience: (audience: string) => `Аудитория: ${audience}.`,
+    notes: (notes: string) => `Исходный материал и пожелания: ${notes}`,
+    format: "Верни только слайды в Markdown. Каждый начинается со строки «## Заголовок». Ниже от одного до трёх коротких тезисов, каждый с новой строки через «- ». На обложке достаточно одного подзаголовка. Не нумеруй заголовки. Не придумывай источники или статистику.",
+  },
+  parser: {
+    textTooLong: "Сократите текст до 32 000 символов.",
+    titleTooLong: "Сократите заголовок слайда до 160 символов.",
+    missingTitle: "Начните каждый слайд со строки «## Заголовок».",
+    pointLimit: "На слайде помещается до пяти тезисов по 300 символов.",
+    slideCount: (actual: number, expected: number) => `В ответе слайдов: ${actual}. По брифу нужно ${expected}. Проверьте строки с заголовками.`,
+    missingPoints: "Добавьте хотя бы один тезис под каждым заголовком.",
+  },
+  requestErrors: {
+    byStatus: {
+      401: "Сессия истекла. Войдите в аккаунт снова.",
+      402: "Для этой генерации недостаточно звёзд.",
+      403: "Нет доступа к генерации в этом аккаунте.",
+      409: "Условия заказа изменились. Проверьте стоимость перед новым запуском.",
+      429: "Сервис занят. Повторите попытку немного позже.",
+    },
+    unavailable: "Сервис генерации сейчас недоступен. Попробуйте ещё раз.",
+  },
+  request: {
+    quoteUnavailable: "Не удалось получить стоимость. Можно проверить ещё раз.",
+    failed: "Задание завершилось без готовой презентации. Подробности доступны в истории.",
+    exhausted: "Результат ещё не получен. Проверьте статус этого же задания или откройте историю.",
+    submitting: "Отправляем задание…",
+    generating: "Нейросеть готовит слайды. Готовая презентация появится здесь.",
+    connectionLost: "Связь прервалась. Попробуйте отправить тот же запрос ещё раз.",
+    sectionLabel: "Генерация в Epifera",
+    costPrefix: "Стоимость",
+    submitPending: "Отправляем…",
+    submit: "Сгенерировать слайды",
+    refreshQuote: "Обновить стоимость",
+    quotePending: "Проверяем стоимость…",
+    statusPending: "Проверяем статус…",
+    checkStatus: "Проверить статус",
+    openHistory: "Открыть в истории",
+  },
+  result: {
+    exportReady: "Файл PowerPoint подготовлен.",
+    exportReadyWithoutPhoto: "Файл PowerPoint подготовлен с однотонной обложкой.",
+    previousSlide: "Предыдущий слайд",
+    nextSlide: "Следующий слайд",
+    heading: "Ваша презентация",
+    newPresentation: "Новая презентация",
+    outlineLabel: "Слайды презентации",
+    invalidEdit: "Введите заголовок и от одного до пяти тезисов. В каждом тезисе до 300 символов.",
+    editSaved: "Изменения сохранены в этой презентации.",
+    titleLabel: "Заголовок слайда",
+    pointsLabel: "Тезисы, каждый с новой строки",
+    saveSlide: "Сохранить слайд",
+    cancel: "Отмена",
+    exportPending: "Сохраняем…",
+    downloadPowerPoint: "Скачать PowerPoint",
+    startShow: "Начать показ",
+    printPdf: "Печать / PDF",
+    editSlide: "Изменить слайд",
+    closeShow: "Закрыть показ",
+  },
+  powerpoint: {
+    textShapeName: (id: number) => `Текст ${id}`,
+    folio: (style: string, current: number, total: number) => `${style}  /  ${current} из ${total}`,
+    coverShapeName: "Обложка",
+    emptyLayoutName: "Пустой",
+  },
+} as const;
