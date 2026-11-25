@@ -53,6 +53,12 @@ export function validateReleaseContract(read, dockerfiles) {
       assert.match(runtimeStage, new RegExp(`^RUN apk add --no-cache [^\\r\\n]*${constraint}`, 'm'),
         `${path} must install patched musl and utilities for CVE-2026-107891`);
     }
+    if (/^alpine:3\.22@/.test(runtimeStage)) {
+      for (const pkg of ['libcrypto3', 'libssl3']) {
+        assert.match(runtimeStage, new RegExp(`^RUN apk add --no-cache [^\\r\\n]*'${pkg}>=3\\.5\\.9-r2'`, 'm'),
+          `${path} must install patched OpenSSL for CVE-2026-124709 and CVE-2026-107493`);
+      }
+    }
   }
   const backupRuntime = read('Dockerfile.backup').split(/^FROM\s+/m).at(-1);
   for (const pkg of ['postgresql18-client', 'libpq']) {

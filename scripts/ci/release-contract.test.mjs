@@ -77,6 +77,21 @@ test('every final runtime installs the branch-specific patched musl and utilitie
   }
 });
 
+test('Alpine 3.22 final runtimes reject stale or missing OpenSSL package floors', () => {
+  const affected = dockerfiles.filter(path => /^alpine:3\.22@/.test(files.get(path).split(/^FROM\s+/m).at(-1)));
+  assert.equal(affected.length, 5);
+  for (const path of affected) {
+    for (const pkg of ['libcrypto3', 'libssl3']) {
+      const source = files.get(path);
+      const floor = new RegExp(`'${pkg}>=[^']+'`);
+      assert.match(source, floor, 'mutation must target the installed package floor');
+      for (const replacement of ['', `'${pkg}>=3.5.9-r0'`, `'${pkg}>=3.5.9-r1'`]) {
+        assert.throws(() => check({[path]: source.replace(floor, replacement)}), /patched OpenSSL/i);
+      }
+    }
+  }
+});
+
 test('backup rejects vulnerable or unversioned PostgreSQL client packages', () => {
   const source = files.get('Dockerfile.backup');
   for (const pkg of ['postgresql18-client', 'libpq']) {

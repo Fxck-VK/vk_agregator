@@ -572,6 +572,12 @@ The early infrastructure policy checks that the final stage's `apk add`
 instruction retains this floor. Existing pinned base digests, OpenSSL floors,
 immutable image vulnerability scans, signatures and provenance remain required.
 
+The five Alpine 3.22 runtime images install `libcrypto3` and `libssl3` at
+`3.5.9-r2` or newer. The immutable image scan exposed a cached APK layer with
+`3.5.9-r0`. The release contract rejects missing or downgraded floors for both
+packages in the Alpine 3.22 runtime stage.
+[Alpine 3.22 security database](https://secdb.alpinelinux.org/v3.22/main.json)
+
 Runtime images also explicitly install patched musl and musl-utils for
 CVE-2026-107891: Alpine 3.22 requires `1.2.5-r13`, backup's Alpine 3.23 requires
 `1.2.5-r24`, and the platform's Alpine 3.24 requires `1.2.6-r3` or newer.

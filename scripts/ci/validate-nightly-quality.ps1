@@ -364,9 +364,10 @@ foreach ($dockerfile in $expectedDockerfiles) {
     }
 
     $finalStage = @($dockerfileContent -split '(?im)^\s*FROM\s+')[-1]
-    foreach ($opensslPackage in @('libcrypto3>=3.5.8-r0', 'libssl3>=3.5.8-r0')) {
+    $opensslFloor = if ($finalStage -match '^alpine:3\.22@') { '3.5.9-r2' } else { '3.5.8-r0' }
+    foreach ($opensslPackage in @("libcrypto3>=$opensslFloor", "libssl3>=$opensslFloor")) {
         if (-not $finalStage.Contains($opensslPackage)) {
-            throw "$dockerfile final stage must install $opensslPackage to remediate CVE-2026-14456"
+            throw "$dockerfile final stage must install the patched OpenSSL package $opensslPackage"
         }
     }
     if ($finalStage -notmatch '(?m)^RUN[ \t]+apk[ \t]+add[ \t]+--no-cache[^\r\n]*[''"]zlib>=1\.3\.2-r1[''"]') {
