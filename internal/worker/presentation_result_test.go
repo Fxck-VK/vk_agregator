@@ -110,8 +110,16 @@ func TestPresentationCompletesFromExistingArtifactAfterHistoryWriteFailure(t *te
 		}
 		t.Logf("public catalog adds %d bytes to a %d-byte presentation brief", len(provider.last.TrustedFacts), len(prompt))
 	})
-	for _, scenario := range []string{"immediate Gemini", "provider polling"} {
-		t.Run(scenario, func(t *testing.T) {
+	scenarios := []struct {
+		name, publicModel, nativeModel string
+		disableThinking                bool
+	}{
+		{name: "immediate Gemini", publicModel: "gemini_2_5_flash_lite", nativeModel: "gemini-2.5-flash-lite"},
+		{name: "immediate Qwen", publicModel: "qwen_3_7_flash", nativeModel: "qwen3.7-flash", disableThinking: true},
+		{name: "provider polling"},
+	}
+	for _, scenario := range scenarios {
+		t.Run(scenario.name, func(t *testing.T) {
 			ctx := context.Background()
 			repo := &presentationHistoryRepo{ConversationRepository: memory.NewConversationRepo(), failAnswer: true}
 			owner := uuid.New()
@@ -132,19 +140,18 @@ func TestPresentationCompletesFromExistingArtifactAfterHistoryWriteFailure(t *te
 				IdempotencyKey: "web-presentation:" + owner.String() + ":" + uuid.NewString(),
 			}
 			var calls int
-			if scenario == "immediate Gemini" {
-				const publicModel = "gemini_2_5_flash_lite"
-				const nativeModel = "gemini-2.5-flash-lite"
+			if scenario.publicModel != "" {
 				transport := presentationProviderTransport(func(request *http.Request) (*http.Response, error) {
 					calls++
 					if request.Method != http.MethodPost || request.URL.Path != "/v1/chat/completions" {
-						t.Errorf("unexpected Gemini request: %s %s", request.Method, request.URL.Path)
+						t.Errorf("unexpected presentation request: %s %s", request.Method, request.URL.Path)
 					}
 					var requestBody struct {
-						Model     string `json:"model"`
-						Stream    *bool  `json:"stream"`
-						MaxTokens int    `json:"max_tokens"`
-						Messages  []struct {
+						Model          string `json:"model"`
+						Stream         *bool  `json:"stream"`
+						MaxTokens      int    `json:"max_tokens"`
+						EnableThinking *bool  `json:"enable_thinking"`
+						Messages       []struct {
 							Role    string `json:"role"`
 							Content string `json:"content"`
 						} `json:"messages"`
@@ -154,9 +161,15 @@ func TestPresentationCompletesFromExistingArtifactAfterHistoryWriteFailure(t *te
 					if err := decoder.Decode(&requestBody); err != nil {
 						t.Fatal(err)
 					}
-					if requestBody.Model != nativeModel || requestBody.Stream == nil || *requestBody.Stream ||
+					if requestBody.Model != scenario.nativeModel || requestBody.Stream == nil || *requestBody.Stream ||
 						requestBody.MaxTokens != domain.PaidTextMaxOutputTokens || len(requestBody.Messages) != 2 {
-						t.Fatal("expected the documented non-streaming Gemini request and its paid output cap")
+						t.Fatal("expected the selected non-streaming model and its paid output cap")
+					}
+					if scenario.disableThinking && (requestBody.EnableThinking == nil || *requestBody.EnableThinking) {
+						t.Error("the Qwen request must include enable_thinking=false to preserve room for the slide content")
+					}
+					if !scenario.disableThinking && requestBody.EnableThinking != nil {
+						t.Error("the Qwen-only thinking option must be omitted for Gemini")
 					}
 					system, user := requestBody.Messages[0], requestBody.Messages[1]
 					if system.Role != "system" || strings.Contains(system.Content, "Факты НейроХаб") || user.Role != "user" || user.Content != prompt {
@@ -169,17 +182,20 @@ func TestPresentationCompletesFromExistingArtifactAfterHistoryWriteFailure(t *te
 					return &http.Response{StatusCode: http.StatusOK, Body: io.NopCloser(strings.NewReader(string(response)))}, nil
 				})
 				provider.Provider = apimart.New(apimart.Config{
-					APIKey: "test-key", BaseURL: "https://provider.example/v1", EnabledTextModels: []string{nativeModel},
+					APIKey: "test-key", BaseURL: "https://provider.example/v1", EnabledTextModels: []string{scenario.nativeModel},
 					HTTPClient: &http.Client{Transport: transport},
 				})
-				params["model_id"], params["model_code"], params["provider"] = publicModel, nativeModel, string(domain.ProviderAPIMart)
-				snapshot, err := allTextTestPrices(t).Snapshot(textgeneration.Key(publicModel))
+				params["model_id"], params["model_code"], params["provider"] = scenario.publicModel, scenario.nativeModel, string(domain.ProviderAPIMart)
+				snapshot, err := allTextTestPrices(t).Snapshot(textgeneration.Key(scenario.publicModel))
 				if err != nil {
 					t.Fatal(err)
 				}
 				snapshot, err = pricingcatalog.PresentationTextSnapshot(snapshot)
 				if err != nil {
 					t.Fatal(err)
+				}
+				if snapshot.InternalCredits != 5 {
+					t.Fatalf("expected a five-star presentation quote, got %d", snapshot.InternalCredits)
 				}
 				job.PricingSnapshot, _ = json.Marshal(snapshot)
 				job.CostEstimate, job.CostReserved = snapshot.InternalCredits, snapshot.InternalCredits
@@ -213,8 +229,8 @@ func TestPresentationCompletesFromExistingArtifactAfterHistoryWriteFailure(t *te
 			if err != nil || len(messages) != 2 || messages[1].Role != domain.ConversationRoleAssistant || messages[1].JobID != job.ID || messages[1].Text == "" {
 				t.Fatalf("assistant answer was not stored for the existing job: %v", err)
 			}
-			if scenario == "immediate Gemini" && (messages[1].Text != answer || calls != 1) {
-				t.Fatalf("expected one Gemini call and its moderated answer, got %d HTTP calls", calls)
+			if scenario.publicModel != "" && (messages[1].Text != answer || calls != 1) {
+				t.Fatalf("expected one %s call and its moderated answer, got %d HTTP calls", scenario.nativeModel, calls)
 			}
 			if provider.submits != 1 || provider.polls != polls {
 				t.Fatalf("history recovery repeated provider calls: %d submits, %d polls (initial %d)", provider.submits, provider.polls, polls)

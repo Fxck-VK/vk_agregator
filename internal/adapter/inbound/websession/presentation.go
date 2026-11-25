@@ -21,7 +21,7 @@ var presentationTextModels = []string{
 	providermodels.PublicTextGemini36Flash,
 }
 
-const legacyPresentationQwenModelID = "qwen_3_7_flash"
+const legacyPresentationGeminiLiteModelID = "gemini_2_5_flash_lite"
 
 func presentationTextModel(id string) bool {
 	return slices.Contains(presentationTextModels, id)

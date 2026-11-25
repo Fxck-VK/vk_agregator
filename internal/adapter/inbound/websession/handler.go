@@ -1592,7 +1592,7 @@ func (h *Handler) createTextOrMediaMessage(w http.ResponseWriter, r *http.Reques
 		return
 	}
 	if presentation && !presentationTextModel(req.ModelID) {
-		if req.ModelID == legacyPresentationQwenModelID {
+		if req.ModelID == legacyPresentationGeminiLiteModelID {
 			writeError(w, http.StatusConflict, "presentation quote changed")
 			return
 		}

@@ -68,7 +68,7 @@ func TestPresentationQuoteAndAccountJob(t *testing.T) {
 	}
 }
 
-func TestPresentationPrefersGeminiLiteAndRejectsStaleQwenQuote(t *testing.T) {
+func TestPresentationPrefersQwenAndRejectsStaleGeminiLiteQuote(t *testing.T) {
 	if err := providermodels.ConfigureDEVSmoke("development", true); err != nil {
 		t.Fatal(err)
 	}
@@ -102,7 +102,7 @@ func TestPresentationPrefersGeminiLiteAndRejectsStaleQwenQuote(t *testing.T) {
 			t.Errorf("quote: status %d and body %s, want model %s / quoted stars %d", w.Code, w.Body, wantModel, wantCredits)
 		}
 	}
-	quote(lite, 5)
+	quote(qwen, 5)
 	jobs.job = &domain.Job{ID: uuid.New(), Status: domain.JobStatusQueued}
 	submit := func(model string, presentation bool) *httptest.ResponseRecorder {
 		t.Helper()
@@ -119,16 +119,16 @@ func TestPresentationPrefersGeminiLiteAndRejectsStaleQwenQuote(t *testing.T) {
 		routes.ServeHTTP(w, req)
 		return w
 	}
-	if w := submit(qwen, true); w.Code != http.StatusConflict || len(jobs.inputs) != 0 || limiter.calls != 0 {
-		t.Fatalf("stale Qwen quote should conflict before any job or rate-limit use: %d %s, %d jobs, %d limits", w.Code, w.Body, len(jobs.inputs), limiter.calls)
+	if w := submit(lite, true); w.Code != http.StatusConflict || len(jobs.inputs) != 0 || limiter.calls != 0 {
+		t.Fatalf("stale Gemini Lite quote should conflict before any job or rate-limit use: %d %s, %d jobs, %d limits", w.Code, w.Body, len(jobs.inputs), limiter.calls)
 	}
-	if w := submit(lite, true); w.Code != http.StatusCreated || len(jobs.inputs) != 1 || jobs.inputs[0].PricingSnapshot.Key.TextModelID != lite || jobs.inputs[0].PricingSnapshot.InternalCredits != 5 {
-		t.Fatalf("valid Gemini quote did not queue the exact five-star presentation: %d %s", w.Code, w.Body)
+	if w := submit(qwen, true); w.Code != http.StatusCreated || len(jobs.inputs) != 1 || jobs.inputs[0].PricingSnapshot.Key.TextModelID != qwen || jobs.inputs[0].PricingSnapshot.InternalCredits != 5 {
+		t.Fatalf("valid Qwen quote did not queue the exact five-star presentation: %d %s", w.Code, w.Body)
 	}
 	if w := submit(qwen, false); w.Code != http.StatusCreated || len(jobs.inputs) != 2 || jobs.inputs[1].PricingSnapshot.Key.TextModelID != qwen || !strings.HasPrefix(jobs.inputs[1].IdempotencyKey, "web-chat:") {
 		t.Fatalf("ordinary Qwen chat changed: %d %s", w.Code, w.Body)
 	}
-	h.cfg.TextModels = textgeneration.Models([]string{providermodels.PublicTextGemini36Flash, qwen}, prices)
+	h.cfg.TextModels = textgeneration.Models([]string{providermodels.PublicTextGemini36Flash, lite}, prices)
 	quote(providermodels.PublicTextGemini36Flash, 0)
 }
 

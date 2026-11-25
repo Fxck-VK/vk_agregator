@@ -16,7 +16,7 @@ type PresentationPreviewPrices struct {
 
 // PresentationPreferredTextModelID also anchors the local estimate to the
 // model preferred by the DEV quote. Runtime admission remains authoritative.
-const PresentationPreferredTextModelID = "gemini_2_5_flash_lite"
+const PresentationPreferredTextModelID = "qwen_3_7_flash"
 
 // PresentationTextSnapshot retains the admitted model, token caps and floor.
 // Its minimum retail price applies only to newly created presentation Jobs.

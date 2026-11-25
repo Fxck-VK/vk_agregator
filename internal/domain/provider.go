@@ -146,6 +146,8 @@ type ProviderRequest struct {
 	MaxOutputTokens int `json:"max_output_tokens,omitempty"`
 	// MaxInputTokens is the immutable paid text budget including trusted framing.
 	MaxInputTokens int `json:"max_input_tokens,omitempty"`
+	// DisableTextThinking is an option selected by the worker for supported text models.
+	DisableTextThinking bool `json:"-"`
 	// DurationSec is the requested video length when supported by the adapter.
 	DurationSec int `json:"duration_sec,omitempty"`
 	// Resolution is a provider-specific resolution token (e.g. "720p").
