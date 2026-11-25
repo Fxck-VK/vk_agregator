@@ -74,7 +74,7 @@ export function PresentationStudio({ accountId, local, localApiUnavailable = fal
 
   const changeSlides = useCallback((next: DeckSlide[]) => {
     setSlides(next);
-    if (accountId && run?.job) saveDeckDraft(accountId, run.job, next);
+    if (accountId && run?.job) return saveDeckDraft(accountId, run.job, next);
   }, [accountId, run]);
 
   const receive = useCallback((input: string, original?: string, resultJob?: string) => {
@@ -133,7 +133,7 @@ export function PresentationStudio({ accountId, local, localApiUnavailable = fal
   return <section className={styles.studio} aria-label={labels.label}>
     <ol className={styles.steps} aria-label={labels.stepsLabel}>{labels.steps.map((label, i) =>
       <li key={label} aria-current={i === step ? "step" : undefined} data-done={i < step}><span aria-hidden="true">{i < step ? "✓" : i + 1}</span>{label}</li>)}</ol>
-    {step === 2 ? <div ref={heading} tabIndex={-1} role="group" aria-label={labels.resultLabel}><DeckResult slides={slides} brief={brief} onChange={changeSlides} onNew={startOver} /></div> :
+    {step === 2 ? <div ref={heading} tabIndex={-1} role="group" aria-label={labels.resultLabel}><DeckResult slides={slides} brief={brief} canGenerateImage={Boolean(accountId)} onChange={changeSlides} onNew={startOver} /></div> :
       <div className={styles.workbench}>
         <div className={styles.composer}>
           <h2 tabIndex={-1} ref={heading}>{step === 0 ? labels.topicHeading : editing ? labels.editingHeading : labels.prepareHeading}</h2>

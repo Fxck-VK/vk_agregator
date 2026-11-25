@@ -7,7 +7,7 @@ export type Brief = {
   count: 5 | 10;
   style: PresentationStyle;
 };
-export type DeckSlide = { title: string; points: string[] };
+export type DeckSlide = { title: string; points: string[]; image?: string };
 
 export const emptyBrief: Brief = { topic: "", audience: "", notes: "", count: 5, style: presentationStyles.educational };
 

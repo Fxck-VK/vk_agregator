@@ -133,7 +133,7 @@
   overflow-wrap: anywhere;
 }
 
-.sheet[data-cover="true"] .slideContent { width: 49%; }
+.sheet[data-photo="true"] .slideContent { width: 49%; }
 
 .folio {
   display: block;
@@ -151,7 +151,7 @@
   letter-spacing: -.037em;
 }
 
-.sheet[data-cover="true"] h3 { font-size: clamp(12px, 5cqi, 42px); }
+.sheet[data-photo="true"] h3 { font-size: clamp(12px, 5cqi, 42px); }
 
 .sheet ul {
   margin: .85em 0 0;

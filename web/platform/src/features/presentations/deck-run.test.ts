@@ -26,6 +26,16 @@ describe("presentation recovery", () => {
     expect(readDeckBrief("обычное сообщение")).toBeUndefined();
   });
 
+  it("restores a bounded slide image for the same account and job", () => {
+    const slides = [{ title: "Фото", points: ["Подпись"], image: "data:image/jpeg;base64,cHJldmlldw==" }];
+    saveDeckDraft("account", job, slides);
+    expect(getDeckDraft("account", job)).toEqual(slides);
+    expect(getDeckDraft("other", job)).toBeUndefined();
+    saveDeckDraft("account", job, [{ ...slides[0], image: "https://example.test/photo.jpg" }]);
+    saveDeckDraft("account", job, [{ ...slides[0], image: `data:image/jpeg;base64,${"a".repeat(70_000)}` }]);
+    expect(getDeckDraft("account", job)).toEqual(slides);
+  });
+
   it("keeps edits scoped to the account and generation", () => {
     const slides = [{ title: "Доработанная обложка", points: ["Заметка"] }];
     saveDeckDraft("account", conversation, slides);

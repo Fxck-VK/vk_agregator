@@ -1,6 +1,7 @@
 "use client";
 
 import NextImage from "next/image";
+import dynamic from "next/dynamic";
 import { useEffect, useRef, useState, type ChangeEvent, type FormEvent } from "react";
 import { createPortal } from "react-dom";
 import { LandingArrow } from "@/components/public/landing/LandingPrimitives";
@@ -9,16 +10,15 @@ import { Button } from "@/components/ui/Button/Button";
 import { HomePicture } from "@/features/landing-variants/third/HomeMedia";
 import { homePhotoSource } from "@/features/landing-variants/third/photos";
 import { presentationDeckCopy, type PresentationStyle } from "@/i18n/presentation-deck";
+import { browserSessionSnapshot } from "@/lib/web-api/browser-session-state";
 import { downloadFile, type Brief, type DeckSlide } from "./deck-content";
 import { powerpoint } from "./deck-powerpoint";
+import { prepareSlideImage, renderSlideImage, slideImageBytes, slideImageTypes, slideImageUploadLimit } from "./slide-image";
 import styles from "./DeckResult.module.css";
 
 const copy = presentationDeckCopy.result;
-const coverTypes = ["image/jpeg", "image/png", "image/webp"];
-const maxCoverBytes = 8 * 1024 * 1024;
 const maxSlides = 30;
-
-type Cover = { jpeg: Blob; source: string };
+const SlideImageGeneration = dynamic(() => import("./SlideImageGeneration").then(module => module.SlideImageGeneration));
 
 type SlideDraft = {
   kind: "edit" | "new";
@@ -34,16 +34,17 @@ function slidePoints(body: string) {
   return body.split("\n").map(line => line.trim().replace(/^[-*•]\s+/, "")).filter(Boolean);
 }
 
-function Slide({ slide, index, total, style, coverSource }: { slide: DeckSlide; index: number; total: number; style: PresentationStyle; coverSource?: string }) {
+function Slide({ slide, index, total, style }: { slide: DeckSlide; index: number; total: number; style: PresentationStyle }) {
   const cover = index === 0;
+  const photo = cover || Boolean(slide.image);
   const textLength = slide.title.length + slide.points.reduce((length, point) => length + point.length, 0);
-  const dense = textLength > (cover ? 220 : 450) || slide.title.length > 90;
+  const dense = textLength > (photo ? 220 : 450) || slide.title.length > 90;
   return (
-    <article className={styles.sheet} data-cover={cover} data-style={style} data-dense={dense}>
-      {cover && (
+    <article className={styles.sheet} data-cover={cover} data-photo={photo} data-style={style} data-dense={dense}>
+      {photo && (
         <div className={styles.slidePhoto}>
-          {coverSource
-            ? <NextImage src={coverSource} width={650} height={778} unoptimized alt="" />
+          {slide.image
+            ? <NextImage src={slide.image} width={650} height={778} unoptimized alt="" />
             : <HomePicture photo="workflowStart" original sizes="(max-width: 680px) 40vw, 460px" />}
         </div>
       )}
@@ -56,56 +57,39 @@ function Slide({ slide, index, total, style, coverSource }: { slide: DeckSlide; 
   );
 }
 
-async function coverJpeg(source: string) {
-  const image = new Image();
-  image.src = source;
-  await image.decode();
-  const canvas = document.createElement("canvas");
-  canvas.width = 650;
-  canvas.height = 778;
-  const context = canvas.getContext("2d");
-  if (!context) throw new Error("cover unavailable");
-  const scale = Math.max(canvas.width / image.naturalWidth, canvas.height / image.naturalHeight);
-  const width = image.naturalWidth * scale, height = image.naturalHeight * scale;
-  context.drawImage(image, (canvas.width - width) * .55, (canvas.height - height) * .67, width, height);
-  const blob = await new Promise<Blob | null>(resolve => canvas.toBlob(resolve, "image/jpeg", .85));
-  if (!blob) throw new Error("cover unavailable");
-  return blob;
-}
-
-function coverDataUrl(image: Blob) {
-  return new Promise<string>((resolve, reject) => {
-    const reader = new FileReader();
-    reader.onload = () => {
-      if (typeof reader.result === "string") resolve(reader.result);
-      else reject(new Error("cover unavailable"));
-    };
-    reader.onerror = () => reject(new Error("cover unavailable"));
-    reader.readAsDataURL(image);
-  });
-}
-
-export function DeckResult({ slides, brief, onChange, onNew }: { slides: DeckSlide[]; brief: Brief; onChange: (slides: DeckSlide[]) => void; onNew: () => void }) {
+export function DeckResult({ slides, brief, canGenerateImage = false, onChange, onNew }: {
+  slides: DeckSlide[];
+  brief: Brief;
+  canGenerateImage?: boolean;
+  onChange: (slides: DeckSlide[]) => boolean | void;
+  onNew: () => void;
+}) {
   const [selected, setSelected] = useState(0);
   const [show, setShow] = useState(false);
   const [exporting, setExporting] = useState(false);
-  const [cover, setCover] = useState<Cover>();
-  const [preparingCover, setPreparingCover] = useState(false);
+  const [preparingImage, setPreparingImage] = useState(false);
+  const [imagePrompt, setImagePrompt] = useState<string>();
   const [notice, setNotice] = useState("");
   const [draft, setDraft] = useState<SlideDraft>();
   const [editError, setEditError] = useState("");
   const [previous, setPrevious] = useState<{ slides: DeckSlide[]; index: number }>();
-  const coverInput = useRef<HTMLInputElement>(null);
+  const imageInput = useRef<HTMLInputElement>(null);
+  const imageOperation = useRef<AbortController>(null);
   const titleField = useRef<HTMLInputElement>(null);
   const editButton = useRef<HTMLButtonElement>(null);
   const focusEditorButton = useRef(false);
   const index = Math.min(selected, Math.max(0, slides.length - 1));
   const editing = draft !== undefined;
+  const imageBusy = preparingImage || imagePrompt !== undefined;
   const current = slides[index];
   const adding = draft?.kind === "new";
   const previewIndex = adding ? index + 1 : index;
   const previewTotal = slides.length + (adding ? 1 : 0);
-  const preview = draft ? { title: draft.title.trim(), points: slidePoints(draft.body) } : current;
+  const preview = draft
+    ? { image: adding ? undefined : current?.image, title: draft.title.trim(), points: slidePoints(draft.body) }
+    : current;
+
+  useEffect(() => () => imageOperation.current?.abort(), []);
 
   useEffect(() => {
     if (editing) titleField.current?.focus();
@@ -144,9 +128,9 @@ export function DeckResult({ slides, brief, onChange, onNew }: { slides: DeckSli
 
   function applySlides(next: DeckSlide[], selectedIndex: number, feedback: string) {
     setPrevious({ slides, index });
-    onChange(next);
+    const persisted = onChange(next);
     setSelected(selectedIndex);
-    setNotice(feedback);
+    setNotice(persisted === false && (next.some(slide => slide.image) || slides.some(slide => slide.image)) ? copy.imageDraftUnavailable : feedback);
   }
 
   function saveSlide(event: FormEvent<HTMLFormElement>) {
@@ -161,7 +145,7 @@ export function DeckResult({ slides, brief, onChange, onNew }: { slides: DeckSli
     const slide = { title, points };
     const next = draft.kind === "new"
       ? [...slides.slice(0, index + 1), slide, ...slides.slice(index + 1)]
-      : slides.map((item, i) => i === index ? slide : item);
+      : slides.map((item, i) => i === index ? { ...item, ...slide } : item);
     applySlides(next, previewIndex, draft.kind === "new" ? copy.added : copy.editSaved);
     closeEditor();
   }
@@ -181,42 +165,56 @@ export function DeckResult({ slides, brief, onChange, onNew }: { slides: DeckSli
 
   function undo() {
     if (!previous) return;
-    onChange(previous.slides);
+    const persisted = onChange(previous.slides);
     setSelected(previous.index);
     setPrevious(undefined);
-    setNotice(copy.undone);
+    setNotice(persisted === false && (previous.slides.some(slide => slide.image) || slides.some(slide => slide.image)) ? copy.imageDraftUnavailable : copy.undone);
   }
 
-  async function selectCover(event: ChangeEvent<HTMLInputElement>) {
+  async function attachImage(file: Blob) {
+    if (imageOperation.current) return;
+    const operation = new AbortController();
+    const session = browserSessionSnapshot();
+    imageOperation.current = operation;
+    setPreparingImage(true);
+    try {
+      const image = await prepareSlideImage(file);
+      if (operation.signal.aborted || session.signal.aborted) return;
+      applySlides(slides.map((slide, i) => i === index ? { ...slide, image } : slide), index, copy.imageChanged);
+    } finally {
+      imageOperation.current = null;
+      if (!operation.signal.aborted) setPreparingImage(false);
+    }
+  }
+
+  async function selectImage(event: ChangeEvent<HTMLInputElement>) {
     const file = event.target.files?.[0];
     event.target.value = "";
-    if (!file) return;
-    if (!coverTypes.includes(file.type) || file.size > maxCoverBytes) {
-      setNotice(copy.coverFileLimit);
+    if (!file || imageBusy) return;
+    if (!slideImageTypes.includes(file.type) || file.size > slideImageUploadLimit) {
+      setNotice(copy.imageFileLimit);
       return;
     }
-    const source = URL.createObjectURL(file);
-    setPreparingCover(true);
-    try {
-      const jpeg = await coverJpeg(source);
-      setCover({ jpeg, source: await coverDataUrl(jpeg) });
-      setNotice(copy.coverChanged);
-    } catch {
-      setNotice(copy.coverFailed);
-    } finally {
-      URL.revokeObjectURL(source);
-      setPreparingCover(false);
-    }
+    try { await attachImage(file); }
+    catch { setNotice(copy.imageFailed); }
+  }
+
+  function removeImage() {
+    const next = slides.map((slide, i) => i === index ? { title: slide.title, points: slide.points } : slide);
+    applySlides(next, index, index === 0 ? copy.coverReset : copy.imageRemoved);
   }
 
   async function savePowerPoint() {
     if (exporting) return;
     setExporting(true);
     try {
-      const picture = cover?.jpeg ?? await coverJpeg(homePhotoSource("workflowStart")).catch(() => undefined);
-      const jpeg = picture ? new Uint8Array(await picture.arrayBuffer()) : undefined;
-      downloadFile(powerpoint(slides, brief.style, jpeg), "epifera-slides.pptx");
-      setNotice(jpeg ? copy.exportReady : copy.exportReadyWithoutPhoto);
+      const images = slides.map(slide => slide.image ? slideImageBytes(slide.image) : undefined);
+      if (!images[0]) {
+        const cover = await renderSlideImage(homePhotoSource("workflowStart")).catch(() => undefined);
+        if (cover) images[0] = new Uint8Array(await cover.arrayBuffer());
+      }
+      downloadFile(powerpoint(slides, brief.style, images), "epifera-slides.pptx");
+      setNotice(images[0] ? copy.exportReady : copy.exportReadyWithoutPhoto);
     } catch {
       setNotice(copy.exportFailed);
     } finally {
@@ -225,35 +223,35 @@ export function DeckResult({ slides, brief, onChange, onNew }: { slides: DeckSli
   }
 
   const navigation = <div className={styles.pager}>
-    <Button variant="outline" aria-label={copy.previousSlide} disabled={index === 0} onClick={() => setSelected(index - 1)}><LandingArrow direction="left" /></Button>
+    <Button variant="outline" aria-label={copy.previousSlide} disabled={index === 0 || imageBusy} onClick={() => setSelected(index - 1)}><LandingArrow direction="left" /></Button>
     <span aria-live="polite">{slideNumber(index)} / {slideNumber(slides.length - 1)}</span>
-    <Button variant="outline" aria-label={copy.nextSlide} disabled={index === slides.length - 1} onClick={() => setSelected(index + 1)}><LandingArrow /></Button>
+    <Button variant="outline" aria-label={copy.nextSlide} disabled={index === slides.length - 1 || imageBusy} onClick={() => setSelected(index + 1)}><LandingArrow /></Button>
   </div>;
 
   return (
     <div className={styles.result}>
-      <input type="file" hidden ref={coverInput} accept={coverTypes.join(",")} onChange={selectCover} />
+      <input type="file" hidden ref={imageInput} accept={slideImageTypes.join(",")} onChange={selectImage} />
       <div className={styles.resultHeading}>
         <div>
           <h2>{brief.topic || copy.heading}</h2>
           <p>{copy.deckSummary(slides.length, brief.style)}</p>
         </div>
-        <Button variant="outline" disabled={editing} onClick={onNew}>{copy.newPresentation}</Button>
+        <Button variant="outline" disabled={editing || imageBusy} onClick={onNew}>{copy.newPresentation}</Button>
       </div>
       <div className={styles.resultGrid}>
         <aside className={styles.sidebar}>
           <nav className={styles.outline} aria-label={copy.outlineLabel}>
             {slides.map((slide, i) => (
-              <button type="button" key={i} disabled={editing} aria-current={index === i ? "step" : undefined} onClick={() => setSelected(i)}>
+              <button type="button" key={i} disabled={editing || imageBusy} aria-current={index === i ? "step" : undefined} onClick={() => setSelected(i)}>
                 <span aria-hidden="true">{slideNumber(i)}</span><span>{slide.title}</span>
               </button>
             ))}
           </nav>
-          <Button variant="outline" disabled={editing || slides.length >= maxSlides} title={slides.length >= maxSlides ? copy.slideLimit : undefined} onClick={() => beginEdit("new")}>{copy.addSlide}</Button>
+          <Button variant="outline" disabled={editing || imageBusy || slides.length >= maxSlides} title={slides.length >= maxSlides ? copy.slideLimit : undefined} onClick={() => beginEdit("new")}>{copy.addSlide}</Button>
         </aside>
         <div className={styles.resultStage}>
           <div className={styles.preview}>
-            <Slide slide={preview} index={previewIndex} total={previewTotal} style={brief.style} coverSource={cover?.source} />
+            <Slide slide={preview} index={previewIndex} total={previewTotal} style={brief.style} />
             {!editing && !show && navigation}
           </div>
           {draft ? (
@@ -273,41 +271,45 @@ export function DeckResult({ slides, brief, onChange, onNew }: { slides: DeckSli
           ) : (
             <div className={styles.editActions}>
               <div className={styles.actions}>
-                <Button ref={editButton} className={styles.primary} onClick={() => beginEdit("edit")}>{copy.editSlide}</Button>
-                <Button variant="outline" aria-label={copy.moveEarlier} disabled={index === 0} onClick={() => moveSlide(-1)}>{copy.moveEarlierShort}</Button>
-                <Button variant="outline" aria-label={copy.moveLater} disabled={index === slides.length - 1} onClick={() => moveSlide(1)}>{copy.moveLaterShort}</Button>
+                <Button ref={editButton} className={styles.primary} disabled={imageBusy} onClick={() => beginEdit("edit")}>{copy.editSlide}</Button>
+                <Button variant="outline" aria-label={copy.moveEarlier} disabled={index === 0 || imageBusy} onClick={() => moveSlide(-1)}>{copy.moveEarlierShort}</Button>
+                <Button variant="outline" aria-label={copy.moveLater} disabled={index === slides.length - 1 || imageBusy} onClick={() => moveSlide(1)}>{copy.moveLaterShort}</Button>
               </div>
               <div className={styles.actions}>
-                {previous && <Button variant="outline" onClick={undo}>{copy.undo}</Button>}
-                <Button variant="outline" className={styles.deleteButton} disabled={slides.length < 2} onClick={removeSlide}>{copy.deleteSlide}</Button>
+                {previous && <Button variant="outline" disabled={imageBusy} onClick={undo}>{copy.undo}</Button>}
+                <Button variant="outline" className={styles.deleteButton} disabled={slides.length < 2 || imageBusy} onClick={removeSlide}>{copy.deleteSlide}</Button>
               </div>
             </div>
           )}
-          {index === 0 && !editing && (
+          {!editing && (
             <div className={styles.actions}>
-              <Button variant="outline" disabled={preparingCover} onClick={() => coverInput.current?.click()}>{preparingCover ? copy.coverPreparing : copy.changeCover}</Button>
-              {cover && <Button variant="outline" disabled={preparingCover} onClick={() => { setCover(undefined); setNotice(copy.coverReset); }}>{copy.resetCover}</Button>}
+              <Button variant="outline" disabled={imageBusy} onClick={() => imageInput.current?.click()}>
+                {preparingImage ? copy.imagePreparing : index === 0 ? copy.changeCover : current.image ? copy.replaceImage : copy.uploadImage}
+              </Button>
+              {canGenerateImage && <Button variant="outline" disabled={imageBusy} onClick={() => setImagePrompt(copy.imagePrompt(brief.topic, current.title))}>{copy.generateImage}</Button>}
+              {current.image && <Button variant="outline" disabled={imageBusy} onClick={removeImage}>{index === 0 ? copy.resetCover : copy.removeImage}</Button>}
             </div>
           )}
         </div>
       </div>
       <div className={styles.export}>
         <div className={styles.actions}>
-          <Button className={styles.primary} onClick={savePowerPoint} disabled={editing || preparingCover || exporting}>{exporting ? copy.exportPending : copy.downloadPowerPoint}</Button>
-          <Button variant="outline" disabled={editing || preparingCover} onClick={() => setShow(true)}>{copy.startShow}</Button>
-          <Button variant="outline" disabled={editing || preparingCover} onClick={() => window.print()}>{copy.printPdf}</Button>
+          <Button className={styles.primary} onClick={savePowerPoint} disabled={editing || imageBusy || exporting}>{exporting ? copy.exportPending : copy.downloadPowerPoint}</Button>
+          <Button variant="outline" disabled={editing || imageBusy} onClick={() => setShow(true)}>{copy.startShow}</Button>
+          <Button variant="outline" disabled={editing || imageBusy} onClick={() => window.print()}>{copy.printPdf}</Button>
         </div>
         <p className={styles.feedback} role="status">{notice}</p>
       </div>
+      {imagePrompt !== undefined && <SlideImageGeneration prompt={imagePrompt} onImage={attachImage} onClose={() => setImagePrompt(undefined)} />}
       {show && (
         <LandingDialog title={brief.topic || copy.heading} closeLabel={copy.closeShow} wide className={styles.showDialog} onClose={() => setShow(false)}>
-          <Slide slide={current} index={index} total={slides.length} style={brief.style} coverSource={cover?.source} />
+          <Slide slide={current} index={index} total={slides.length} style={brief.style} />
           {navigation}
         </LandingDialog>
       )}
       {typeof document !== "undefined" && createPortal(
         <div className={styles.printDeck} aria-hidden="true">
-          {slides.map((slide, i) => <Slide key={i} slide={slide} index={i} total={slides.length} style={brief.style} coverSource={cover?.source} />)}
+          {slides.map((slide, i) => <Slide key={i} slide={slide} index={i} total={slides.length} style={brief.style} />)}
         </div>, document.body,
       )}
     </div>

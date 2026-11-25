@@ -66,6 +66,44 @@ describe("presentation slide editor", () => {
     }
   });
 
+  it("keeps an uploaded image with the selected slide through text editing and reordering", async () => {
+    const view = render(<Editor />);
+    const canvas = vi.spyOn(HTMLCanvasElement.prototype, "getContext")
+      .mockReturnValue({ drawImage: vi.fn() } as unknown as CanvasRenderingContext2D);
+    const blob = vi.spyOn(HTMLCanvasElement.prototype, "toBlob")
+      .mockImplementation(callback => callback(new Blob(["preview"], { type: "image/jpeg" })));
+    vi.stubGlobal("Image", class {
+      naturalWidth = 650;
+      naturalHeight = 778;
+      decode = async () => {};
+    });
+    vi.stubGlobal("URL", class extends URL {
+      static createObjectURL = vi.fn(() => "blob:epifera-slide");
+      static revokeObjectURL = vi.fn();
+    });
+    try {
+      fireEvent.click(screen.getByRole("button", { name: "Следующий слайд" }));
+      expect(screen.getByRole("button", { name: "Загрузить фото" })).toBeVisible();
+      const input = view.container.querySelector('input[type="file"]')!;
+      fireEvent.change(input, { target: { files: [new File(["picture"], "slide.png", { type: "image/png" })] } });
+      const attached = () => view.container.querySelector('article img[src="data:image/jpeg;base64,cHJldmlldw=="]');
+      await waitFor(() => expect(attached()).toBeInTheDocument());
+      fireEvent.click(screen.getByRole("button", { name: "Изменить слайд" }));
+      fireEvent.change(screen.getByRole("textbox", { name: "Заголовок слайда" }), { target: { value: "Новый заголовок" } });
+      fireEvent.click(screen.getByRole("button", { name: "Сохранить слайд" }));
+      expect(attached()?.closest("article")).toHaveTextContent("Новый заголовок");
+      fireEvent.click(screen.getByRole("button", { name: "Переместить раньше" }));
+      expect(attached()?.closest("article")).toHaveAttribute("data-cover", "true");
+      fireEvent.click(screen.getByRole("button", { name: "Следующий слайд" }));
+      expect(attached()).not.toBeInTheDocument();
+    } finally {
+      view.unmount();
+      canvas.mockRestore();
+      blob.mockRestore();
+      vi.unstubAllGlobals();
+    }
+  });
+
   it("saves the added slide, moves it, and can undo its removal", () => {
     render(<Editor />);
     const outline = screen.getByRole("navigation", { name: "Слайды презентации" });

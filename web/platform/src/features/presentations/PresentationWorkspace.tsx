@@ -36,7 +36,7 @@ export function PresentationWorkspace({ run, newPresentation = false, preview }:
         </div>
       </header>
       {studio ? <div className={[styles.page, styles.workspaceStudio].join(" ")}>
-        <PresentationStudio key={run && [run.conversation, run.job].join(":")}
+        <PresentationStudio key={[profile.account_id, run?.conversation, run?.job].join(":")}
           accountId={profile.account_id} initialRun={run} local={preview} localApiUnavailable={preview} />
       </div> : <PresentationHistory key={profile.account_id} />}
     </section>

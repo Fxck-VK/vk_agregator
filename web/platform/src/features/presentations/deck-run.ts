@@ -2,6 +2,7 @@ import { z } from "zod";
 import { presentationDeckCopy, presentationPromptFormat, presentationStyles } from "@/i18n/presentation-deck";
 import type { Brief, DeckSlide } from "./deck-content";
 import { presentationWorkspacePath } from "./route";
+import { slideImageDataLimit, slideImagePattern } from "./slide-image";
 
 const uuid = z.uuid();
 const draftPrefix = "epifera:deck-draft:";
@@ -10,6 +11,7 @@ const draftSchema = z.strictObject({
   slides: z.array(z.strictObject({
     title: z.string().min(1).max(160),
     points: z.array(z.string().min(1).max(300)).min(1).max(5),
+    image: z.string().max(slideImageDataLimit).regex(slideImagePattern).optional(),
   })).min(1).max(30),
 });
 
@@ -79,9 +81,11 @@ export function getDeckDraft(account: string, job: string): DeckSlide[] | undefi
 
 export function saveDeckDraft(account: string, job: string, slides: DeckSlide[]) {
   const value = draftSchema.safeParse({ version: 1, slides });
-  if (!value.success) return;
-  try { sessionStorage.setItem(deckDraftKey(account, job), JSON.stringify(value.data)); }
-  catch { /* The current edit and PowerPoint export remain available. */ }
+  if (!value.success) return false;
+  try {
+    sessionStorage.setItem(deckDraftKey(account, job), JSON.stringify(value.data));
+    return true;
+  } catch { return false; }
 }
 
 export function clearDeckDrafts() {

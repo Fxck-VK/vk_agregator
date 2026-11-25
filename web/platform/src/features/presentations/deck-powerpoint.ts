@@ -61,7 +61,11 @@ function packageParts(parts: Map<string, string | Uint8Array<ArrayBuffer>>) {
   return new Blob([...files, ...directory, end], { type: "application/vnd.openxmlformats-officedocument.presentationml.presentation" });
 }
 
-export function powerpoint(slides: DeckSlide[], style: string, coverPhoto?: Uint8Array<ArrayBuffer>) {
+export function powerpoint(
+  slides: DeckSlide[],
+  style: string,
+  photos: ReadonlyArray<Uint8Array<ArrayBuffer> | undefined> = [],
+) {
   const parts = new Map<string, string | Uint8Array<ArrayBuffer>>();
   const entries: [string, string][] = [["slideMaster", "slideMasters/slideMaster1.xml"]];
   const types = new Map<string, string>();
@@ -78,16 +82,19 @@ export function powerpoint(slides: DeckSlide[], style: string, coverPhoto?: Uint
     const cover = i === 0;
     const bg = cover ? (style === presentationStyles.business ? "173C3A" : "322A56") : "F8F7F2";
     const ink = cover ? "FFFFFF" : "201E29";
-    const width = cover && coverPhoto ? 5350000 : 10800000;
+    const photo = photos[i];
+    const width = photo ? 5350000 : 10800000;
     const folio = textShape(2, 650000, 360000, width, 480000, [presentationDeckCopy.powerpoint.folio(style, n, slides.length)], 1600, cover ? "E4DAFF" : "575463");
     const title = textShape(3, 650000, 1250000, width, 1800000, [slide.title], slide.title.length > 70 ? 3200 : 4200, ink, true);
     const body = textShape(4, 650000, 3180000, width, 3120000, slide.points.map(p => slide.points.length > 1 ? `•  ${p}` : p), 2300, ink);
     const rels: [string, string][] = [["slideLayout", "../slideLayouts/slideLayout1.xml"]];
     let picture = "";
-    if (cover && coverPhoto) {
-      parts.set("ppt/media/cover.jpg", coverPhoto);
-      rels.push(["image", "../media/cover.jpg"]);
-      picture = `<p:pic><p:nvPicPr><p:cNvPr id="5" name="${presentationDeckCopy.powerpoint.coverShapeName}"/><p:cNvPicPr/><p:nvPr/></p:nvPicPr><p:blipFill><a:blip r:embed="rId2"/><a:stretch><a:fillRect/></a:stretch></p:blipFill><p:spPr><a:xfrm><a:off x="6461760" y="0"/><a:ext cx="5730240" cy="6858000"/></a:xfrm><a:prstGeom prst="rect"><a:avLst/></a:prstGeom></p:spPr></p:pic>`;
+    if (photo) {
+      const filename = cover ? "cover.jpg" : `slide${n}.jpg`;
+      const name = cover ? presentationDeckCopy.powerpoint.coverShapeName : presentationDeckCopy.powerpoint.slideImageShapeName;
+      parts.set(`ppt/media/${filename}`, photo);
+      rels.push(["image", `../media/${filename}`]);
+      picture = `<p:pic><p:nvPicPr><p:cNvPr id="5" name="${name}"/><p:cNvPicPr/><p:nvPr/></p:nvPicPr><p:blipFill><a:blip r:embed="rId2"/><a:stretch><a:fillRect/></a:stretch></p:blipFill><p:spPr><a:xfrm><a:off x="6461760" y="0"/><a:ext cx="5730240" cy="6858000"/></a:xfrm><a:prstGeom prst="rect"><a:avLst/></a:prstGeom></p:spPr></p:pic>`;
     }
     part(`ppt/slides/slide${n}.xml`, "presentationml.slide", `<p:sld ${namespaces}><p:cSld><p:bg><p:bgPr><a:solidFill><a:srgbClr val="${bg}"/></a:solidFill><a:effectLst/></p:bgPr></p:bg><p:spTree>${group}${picture}${folio}${title}${body}</p:spTree></p:cSld><p:clrMapOvr><a:masterClrMapping/></p:clrMapOvr></p:sld>`);
     parts.set(`ppt/slides/_rels/slide${n}.xml.rels`, relationships(rels));
