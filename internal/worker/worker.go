@@ -1331,7 +1331,8 @@ func (p *processor) buildRequest(ctx context.Context, job *domain.Job, attempt i
 	resolution := ""
 	draft := false
 	assistantFactsText := ""
-	if p.assistantFacts != nil && job.OperationType == domain.OperationTextGenerate && job.Modality == domain.ModalityText {
+	// Presentation briefs are standalone requests, outside the catalog-aware assistant.
+	if p.assistantFacts != nil && !job.IsWebPresentation() && job.OperationType == domain.OperationTextGenerate && job.Modality == domain.ModalityText {
 		facts, err := p.assistantFacts.Build(ctx, assistantfacts.Input{
 			AccountID: workerJobOwnerID(job),
 			Prompt:    pp.Prompt,
