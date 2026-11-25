@@ -246,6 +246,7 @@ export const ru = {
     historyLoadEarlier: "Показать более ранние сообщения",
     historyLoadEarlierPending: "Загружаем сообщения…",
     historyLoadEarlierFailure: "Не удалось загрузить более ранние сообщения. Попробуйте ещё раз.",
+    returnToPresentation: "Вернуться к презентации",
     historyProgressLabel: "Загрузка сообщений",
     refreshDelayed: "Автоматическое обновление задерживается. Ответ можно проверить позже.",
     scrollToLatest: "К последнему сообщению",

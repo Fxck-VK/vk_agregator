@@ -32,15 +32,18 @@ type LoaderState = {
 export function ConversationHistoryLoader({
   conversationId,
   initialRefresh = false,
+  presentationJobId,
 }: {
   conversationId: string;
   initialRefresh?: boolean;
+  presentationJobId?: string;
 }): ReactNode {
   return (
     <ConversationHistoryLoaderContent
       key={conversationId}
       conversationId={conversationId}
       initialRefresh={initialRefresh}
+      presentationJobId={presentationJobId}
     />
   );
 }
@@ -48,9 +51,11 @@ export function ConversationHistoryLoader({
 function ConversationHistoryLoaderContent({
   conversationId,
   initialRefresh,
+  presentationJobId,
 }: {
   conversationId: string;
   initialRefresh: boolean;
+  presentationJobId?: string;
 }): ReactNode {
   const t = useDictionary();
   useRevalidateWorkspaceConversationList();
@@ -178,6 +183,7 @@ function ConversationHistoryLoaderContent({
         conversationId={conversationId}
         history={state.history}
         initialRefresh={initialRefresh}
+        presentationJobId={presentationJobId}
         onRetry={retryHistoryLoad}
       />
     </>

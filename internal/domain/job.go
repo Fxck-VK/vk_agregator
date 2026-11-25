@@ -329,7 +329,7 @@ func (j *Job) IsWebPresentation() bool {
 		j.OperationType != OperationTextGenerate || j.Modality != ModalityText {
 		return false
 	}
-	key, ok := strings.CutPrefix(j.IdempotencyKey, "web-presentation:"+j.AccountID.String()+":")
+	key, ok := strings.CutPrefix(j.IdempotencyKey, WebPresentationJobKeyPrefix(j.AccountID))
 	if !ok {
 		return false
 	}

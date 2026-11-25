@@ -67,7 +67,16 @@ const deckJobSchema = webChatJobSchema.extend({
   model_name: z.string().max(160).optional(),
 });
 
-const failedStatuses = new Set(["failed_terminal", "cancelled", "expired", "refunded", "rejected", "awaiting_payment"]);
+export const failedPresentationStatuses = new Set(["failed_terminal", "cancelled", "expired", "refunded", "rejected", "awaiting_payment"]);
+
+const queuedPresentationStatuses = new Set(["prepared", "received", "validated", "credits_reserved", "queued"]);
+const finishingPresentationStatuses = new Set(["provider_succeeded", "postprocessing", "result_ready", "delivering"]);
+
+export function presentationStages(status: string) {
+  if (queuedPresentationStatuses.has(status)) return 0;
+  if (finishingPresentationStatuses.has(status)) return 2;
+  return 1;
+}
 
 export async function readDeckJob(run: { conversation: string; job?: string }, signal: AbortSignal) {
   const query = run.job ? `?job_id=${run.job}` : "";
@@ -76,7 +85,7 @@ export async function readDeckJob(run: { conversation: string; job?: string }, s
   const { job_id, status, prompt, answer, failure_code, model_name } = deckJobSchema.parse(await response.json());
   if (run.job && job_id !== run.job) throw new DeckRequestError(503);
   const state = { job: job_id, status, prompt, failureCode: failure_code, modelName: model_name };
-  if (failedStatuses.has(status)) return { ...state, kind: "failed" } as const;
+  if (failedPresentationStatuses.has(status)) return { ...state, kind: "failed" } as const;
   if (status !== "succeeded") return { ...state, kind: "pending" } as const;
   if (!answer?.trim()) return { ...state, kind: "missing" } as const;
   return { ...state, kind: "ready", text: answer } as const;

@@ -129,3 +129,45 @@
   --panel-surface-text-muted: var(--studio-muted);
   --landing-display: var(--font-sans);
 }
+
+.workspaceTitleRow {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: .875rem 1.25rem;
+  max-inline-size: 60rem;
+}
+
+.workspaceBack {
+  display: inline-flex;
+  align-items: center;
+  gap: .45rem;
+  margin-block-end: .875rem;
+  color: var(--color-text-muted);
+  font-size: .875rem;
+  text-decoration: none;
+}
+
+.workspaceBack:hover,
+.workspaceBack:focus-visible {
+  color: var(--color-text);
+}
+
+.workspaceNew {
+  display: inline-flex;
+  align-items: center;
+  min-block-size: 2.75rem;
+  padding: .625rem 1rem;
+  border-radius: .75rem;
+  background: #e6b9ff;
+  color: #251631;
+  font-size: .9rem;
+  font-weight: var(--font-weight-semibold);
+  text-decoration: none;
+}
+
+.workspaceNew:hover,
+.workspaceNew:focus-visible {
+  background: #efceff;
+}

@@ -355,6 +355,7 @@ type Deps struct {
 	ImageJobIdempotency        ImageJobIdempotencyReader
 	ImageJobPrepareLimiter     ImageJobPrepareLimiter
 	ImageJobHistory            ImageJobHistoryReader
+	PresentationHistory        PresentationHistoryReader
 	ImageJobExpiry             ImageJobExpiryReconciler
 	ImageResults               ImageResultReader
 	ImageArtifacts             ImageArtifactReader
@@ -466,6 +467,7 @@ func (h *Handler) Routes() http.Handler {
 	mux.HandleFunc("POST /web/v1/conversations", h.requireUnsafePrincipal(h.createConversation))
 	mux.HandleFunc("POST /web/v1/conversations/{conversationID}/messages", h.requireUnsafePrincipal(h.createConversationMessage))
 	mux.HandleFunc("GET /web/v1/presentations/quote", h.requirePrincipal(h.quotePresentation))
+	mux.HandleFunc("GET /web/v1/presentations", h.requirePrincipal(h.listPresentations))
 	mux.HandleFunc("GET /web/v1/presentations/{conversationID}", h.requirePrincipal(h.getPresentation))
 	mux.HandleFunc("POST /web/v1/presentations/{conversationID}/generate", h.requireUnsafePrincipal(h.generatePresentation))
 	mux.HandleFunc("PUT /web/v1/conversations/{conversationID}/messages/{messageID}/rating", h.requireUnsafePrincipal(h.rateConversationMessage))
@@ -1666,7 +1668,7 @@ func (h *Handler) createTextOrMediaMessage(w http.ResponseWriter, r *http.Reques
 	}
 	orchestrationKey := "web-chat:" + principal.AccountID.String() + ":" + idempotencyKey.String()
 	if presentation {
-		orchestrationKey = "web-presentation:" + principal.AccountID.String() + ":" + idempotencyKey.String()
+		orchestrationKey = domain.WebPresentationJobKeyPrefix(principal.AccountID) + idempotencyKey.String()
 	}
 	params, err := json.Marshal(webChatJobParams{
 		Prompt:             req.Prompt,

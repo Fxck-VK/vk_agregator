@@ -62,3 +62,19 @@ export const presentationStudioCopy = {
   exampleTopic: "Реляционные базы данных",
   slideCount: (count: number) => `${count} слайдов`,
 } as const;
+
+export const presentationHistoryCopy = {
+  title: "Мои презентации",
+  newPresentation: "Новая презентация",
+  loading: "Загружаем презентации…",
+  empty: "Здесь появятся ваши презентации и статусы генерации.",
+  loadError: "Не удалось загрузить презентации.",
+  refreshError: "Не удалось обновить статусы.",
+  refresh: "Обновить",
+  newer: "Новее",
+  older: "Старее",
+  ready: "Готово",
+  failed: "Ошибка генерации",
+  cancelled: "Отменено",
+  missing: "Слайды недоступны",
+} as const;

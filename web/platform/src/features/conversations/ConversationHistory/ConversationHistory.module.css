@@ -13,6 +13,16 @@
   padding-block-end: var(--space-8);
 }
 
+.presentationReturn {
+  display: inline-flex;
+  width: fit-content;
+  margin-block-end: var(--space-4);
+  padding-block: var(--space-2);
+  color: var(--color-text);
+  font-weight: var(--font-weight-semibold);
+  text-underline-offset: 0.2em;
+}
+
 .messages,
 .userMessage > p {
   margin: 0;

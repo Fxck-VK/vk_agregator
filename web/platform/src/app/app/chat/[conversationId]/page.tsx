@@ -6,14 +6,21 @@ export default async function ConversationPage({
   searchParams,
 }: Readonly<{
   params: Promise<{ conversationId: string }>;
-  searchParams: Promise<{ pending?: string | string[]; refresh?: string | string[] }>;
+  searchParams: Promise<{ pending?: string | string[]; refresh?: string | string[]; presentationJob?: string | string[] }>;
 }>) {
   const { conversationId } = await params;
-  const { pending, refresh } = await searchParams;
+  const { pending, refresh, presentationJob } = await searchParams;
 
   if (pending === "1") {
     return <PendingConversationBootstrap key={conversationId} conversationKey={conversationId} />;
   }
 
-  return <ConversationHistoryLoader key={conversationId} conversationId={conversationId} initialRefresh={refresh === "1"} />;
+  return (
+    <ConversationHistoryLoader
+      key={conversationId}
+      conversationId={conversationId}
+      initialRefresh={refresh === "1"}
+      presentationJobId={typeof presentationJob === "string" ? presentationJob : undefined}
+    />
+  );
 }

@@ -1,6 +1,7 @@
 import { z } from "zod";
 import { presentationDeckCopy, presentationPromptFormat, presentationStyles } from "@/i18n/presentation-deck";
 import type { Brief, DeckSlide } from "./deck-content";
+import { presentationWorkspacePath } from "./route";
 
 const uuid = z.uuid();
 const draftPrefix = "epifera:deck-draft:";
@@ -27,6 +28,10 @@ export function replaceDeckRun(run?: DeckRun) {
   url.searchParams.delete("run");
   url.searchParams.delete("job");
   url.searchParams.delete("pending");
+  if (url.pathname.endsWith(presentationWorkspacePath)) {
+    if (run) url.searchParams.delete("new");
+    else url.searchParams.set("new", "1");
+  }
   if (run) url.searchParams.set("run", run.conversation);
   if (run?.job) url.searchParams.set("job", run.job);
   if (run?.pending && !run.job) url.searchParams.set("pending", "1");

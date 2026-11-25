@@ -132,6 +132,10 @@ func (h *Handler) getPresentation(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusNotFound, "presentation not found")
 		return
 	}
+	if r.Method == http.MethodHead {
+		w.WriteHeader(http.StatusNoContent)
+		return
+	}
 	if input == nil {
 		input, err = h.deps.Conversations.GetUserMessageByJobID(ctx, jobID)
 		if err != nil && !errors.Is(err, domain.ErrNotFound) {
@@ -203,6 +207,10 @@ func presentationFailureCode(job *domain.Job) string {
 		return ""
 	}
 	switch domain.ProviderErrorClass(job.ErrorCode) {
+	case domain.ProviderErrSubmitIndeterminate:
+		return "submission_unconfirmed"
+	case domain.ProviderErrOutputDownloadFailed:
+		return "result_storage_failed"
 	case domain.ProviderErrContentRejected:
 		return "content_rejected"
 	case domain.ProviderErrInvalidRequest, domain.ProviderErrUnsupportedCapab:

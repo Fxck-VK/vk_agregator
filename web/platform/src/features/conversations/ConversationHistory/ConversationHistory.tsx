@@ -44,6 +44,7 @@ import type { GenerationOptions } from "@/features/models/generation-options";
 
 import { readPendingMediaJob, savePendingMediaJob, clearPendingMediaJob, pendingImagePreview } from "../pending-media-job";
 import { readPendingTextJob, savePendingTextJob, clearPendingTextJob } from "../pending-text-job";
+import { PresentationReturnLink } from "./PresentationReturnLink";
 import styles from "./ConversationHistory.module.css";
 
 type ConversationHistoryProps = {
@@ -52,6 +53,7 @@ type ConversationHistoryProps = {
   initialRefresh?: boolean;
   onRetry?: () => void;
   notice?: ReactNode;
+  presentationJobId?: string;
 };
 
 type PollRequest = {
@@ -79,7 +81,7 @@ const conversationRefreshIntervalMs = 2_000;
 const conversationRefreshDeadlineMs = 30_000;
 const conversationRefreshMaxAttempts = 15;
 
-export function ConversationHistory({ history, conversationId, initialRefresh = false, onRetry, notice }: ConversationHistoryProps) {
+export function ConversationHistory({ history, conversationId, initialRefresh = false, onRetry, notice, presentationJobId }: ConversationHistoryProps) {
   const t = useDictionary();
   const ready = useMemo(() => history.kind === "ready" ? history : conversationId ? {
     kind: "ready" as const, conversationId, messages: [], hasMoreBefore: false,
@@ -88,17 +90,18 @@ export function ConversationHistory({ history, conversationId, initialRefresh = 
   if (!ready) return history.kind === "loading" ? <Skeleton style={{ height: "12rem", width: "100%" }} />
     : <ConversationHistoryState actionLabel={onRetry ? t.conversations.messageRetryLabel : undefined} message={t.conversations.historyLoadFailure} onAction={onRetry} />;
   return <ConversationHistoryReady key={ready.conversationId} history={ready} initialRefresh={initialRefresh}
-    loading={history.kind === "loading"} failed={history.kind === "unavailable"} onRetry={onRetry} notice={notice} />;
+    loading={history.kind === "loading"} failed={history.kind === "unavailable"} onRetry={onRetry} notice={notice} presentationJobId={presentationJobId} />;
 }
 
 function ConversationHistoryReady({
   history,
-  initialRefresh, loading = false, failed = false, onRetry, notice,
+  initialRefresh, loading = false, failed = false, onRetry, notice, presentationJobId,
 }: Readonly<{
   history: Extract<ConversationHistoryData, { kind: "ready" }>;
   initialRefresh: boolean;
   loading?: boolean; failed?: boolean; onRetry?: () => void;
   notice?: ReactNode;
+  presentationJobId?: string;
 }>) {
   const t = useDictionary();
   const cache = useOptionalWorkspaceDataCache();
@@ -452,6 +455,7 @@ function ConversationHistoryReady({
       ) : null}
       <div className={styles.history}>
         {notice}
+        {!loading && !failed ? <PresentationReturnLink conversationId={history.conversationId} jobId={presentationJobId} /> : null}
         {generationFailed ? <StateNotice inline kind="error">{t.imageGeneration.statusAttention}</StateNotice> : null}
         {refreshDelayed ? (
           <StateNotice inline kind="loading">

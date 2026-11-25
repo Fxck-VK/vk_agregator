@@ -142,6 +142,9 @@ func (p *Provider) Submit(ctx context.Context, req domain.ProviderRequest) (doma
 		}
 	case openAIChat:
 		body["max_tokens"] = limit
+		if req.DisableTextThinking && p.provider == domain.ProviderAPIMart && req.ModelCode == "qwen3.7-flash" {
+			body["enable_thinking"] = false
+		}
 		body["messages"] = []any{map[string]string{"role": "system", "content": trusted}, map[string]string{"role": "user", "content": req.Prompt}}
 	default:
 		return domain.ProviderTask{}, failure(domain.ProviderErrUnsupportedCapab)

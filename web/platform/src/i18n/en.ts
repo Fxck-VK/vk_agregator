@@ -246,6 +246,7 @@ export const en = {
     historyLoadEarlier: "Show earlier messages",
     historyLoadEarlierPending: "Loading messages…",
     historyLoadEarlierFailure: "Could not load earlier messages. Please try again.",
+    returnToPresentation: "Return to presentation",
     historyProgressLabel: "Loading messages",
     refreshDelayed: "Automatic updates are delayed. You can check the response later.",
     scrollToLatest: "Go to latest message",

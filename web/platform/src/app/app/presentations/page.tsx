@@ -8,5 +8,6 @@ export default async function Page({ searchParams }: {
 }) {
   const release = await getRequestReleaseState();
   if (release.view !== "dev") notFound();
-  return <PresentationWorkspace run={parseDeckRun(await searchParams)} preview={release.localSimulation} />;
+  const query = await searchParams;
+  return <PresentationWorkspace run={parseDeckRun(query)} newPresentation={query.new === "1"} preview={release.localSimulation} />;
 }

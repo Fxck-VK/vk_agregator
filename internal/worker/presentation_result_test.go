@@ -81,14 +81,35 @@ func TestPresentationCompletesFromExistingArtifactAfterHistoryWriteFailure(t *te
 				IdempotencyKey: "web-presentation:" + owner.String() + ":" + uuid.NewString(),
 			}
 			if scenario == "immediate Qwen" {
-				response, _ := json.Marshal(map[string]any{
-					"choices": []any{map[string]any{"finish_reason": "stop", "message": map[string]string{"role": "assistant", "content": answer}}},
-					"usage":   map[string]int{"prompt_tokens": 80, "completion_tokens": 34},
-				})
 				transport := presentationProviderTransport(func(request *http.Request) (*http.Response, error) {
 					if request.Method != http.MethodPost || request.URL.Path != "/v1/chat/completions" {
 						t.Errorf("unexpected Qwen request: %s %s", request.Method, request.URL.Path)
 					}
+					var requestBody struct {
+						MaxTokens      int   `json:"max_tokens"`
+						EnableThinking *bool `json:"enable_thinking"`
+					}
+					if err := json.NewDecoder(request.Body).Decode(&requestBody); err != nil {
+						t.Fatal(err)
+					}
+					if requestBody.MaxTokens != domain.PaidTextMaxOutputTokens {
+						t.Fatalf("Qwen output cap = %d", requestBody.MaxTokens)
+					}
+					// Simulate a short answer whose reasoning puts the total over
+					// the paid cap when the default thinking mode stays enabled.
+					completionTokens := 2800
+					reasoningTokens := 2200
+					if requestBody.EnableThinking != nil && !*requestBody.EnableThinking {
+						completionTokens = 600
+						reasoningTokens = 0
+					}
+					response, _ := json.Marshal(map[string]any{
+						"choices": []any{map[string]any{"finish_reason": "stop", "message": map[string]string{"role": "assistant", "content": answer}}},
+						"usage": map[string]any{
+							"prompt_tokens": 80, "completion_tokens": completionTokens,
+							"completion_tokens_details": map[string]int{"reasoning_tokens": reasoningTokens},
+						},
+					})
 					return &http.Response{StatusCode: http.StatusOK, Body: io.NopCloser(strings.NewReader(string(response)))}, nil
 				})
 				const publicModel = "qwen_3_7_flash"

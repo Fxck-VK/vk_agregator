@@ -126,7 +126,7 @@ func (s *Service) Prepare(ctx context.Context, job *domain.Job, prompt string) (
 	}
 	if presentation {
 		if conversation.TitleOrigin == domain.ConversationTitleOriginAutoPending {
-			if _, err := s.repo.SetConversationFallbackTitleIfPending(ctx, conversation.ID, presentationTitle(prompt)); err != nil {
+			if _, err := s.repo.SetConversationFallbackTitleIfPending(ctx, conversation.ID, domain.WebPresentationTitle(prompt)); err != nil {
 				return Prepared{}, err
 			}
 		}
@@ -549,16 +549,6 @@ func truncateTokens(text string, maxTokens int) string {
 
 func trimWhitespace(text string) string {
 	return strings.Join(strings.Fields(text), " ")
-}
-
-func presentationTitle(prompt string) string {
-	firstParagraph, _, _ := strings.Cut(prompt, "\n\n")
-	_, topic, hasTopic := strings.Cut(firstParagraph, "Тема: ")
-	topic = strings.TrimSuffix(trimWhitespace(topic), ".")
-	if !hasTopic || topic == "" {
-		return "Презентация"
-	}
-	return truncateTitle("Презентация · "+topic, maxConversationTitleRunes)
 }
 
 func titleFromUserPrompt(prompt string) string {

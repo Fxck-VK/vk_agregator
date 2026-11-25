@@ -7,7 +7,7 @@ import { clearPendingTextJob, savePendingTextJob } from "@/features/conversation
 import { presentationDeckCopy } from "@/i18n/presentation-deck";
 import Link from "@/i18n/Link";
 import { startGenerationPolling } from "@/lib/generation-polling";
-import { DeckRequestError, fetchDeckQuote, readDeckJob, recoverDeckAttempt, submitDeck, type DeckQuote } from "./deck-generation";
+import { DeckRequestError, fetchDeckQuote, presentationStages, readDeckJob, recoverDeckAttempt, submitDeck, type DeckQuote } from "./deck-generation";
 import { replaceDeckRun, type DeckRun } from "./deck-run";
 import styles from "./Studio.module.css";
 
@@ -26,8 +26,6 @@ type Props = {
 };
 
 type RunState = { stage: number; message: string; outcome?: "failed" | "missing" };
-const queueStatuses = new Set(["prepared", "received", "validated", "credits_reserved", "queued"]);
-const resultStatuses = new Set(["provider_succeeded", "postprocessing", "result_ready", "delivering"]);
 
 export function DeckRequest({ accountId, prompt, run, onRun, onPrompt, onResult, onBusy, onRestart }: Props) {
   const [quote, setQuote] = useState<DeckQuote>();
@@ -74,7 +72,7 @@ export function DeckRequest({ accountId, prompt, run, onRun, onPrompt, onResult,
           if (result.modelName) setModel(result.modelName);
           if (runPending) onRun({ conversation: runConversation, job: result.job });
           if (result.kind === "pending") {
-            const stage = queueStatuses.has(result.status) ? 0 : resultStatuses.has(result.status) ? 2 : 1;
+            const stage = presentationStages(result.status);
             setProgress({ stage, message: stages[stage] });
             if (trackedJob.current !== result.job) {
               trackedJob.current = result.job;
@@ -163,7 +161,7 @@ export function DeckRequest({ accountId, prompt, run, onRun, onPrompt, onResult,
         setPollRevision(value => value + 1);
       }}>{messages.checkStatus}</Button>}
       {(progress.outcome || paused && runPending) && <Button variant="outline" onClick={onRestart}>{messages.backToBrief}</Button>}
-      <Link href={"/app/chat/" + run.conversation}>{messages.openHistory}</Link>
+      <Link href={"/app/chat/" + run.conversation + (run.job ? "?" + new URLSearchParams({ presentationJob: run.job }) : "")}>{messages.openHistory}</Link>
     </div>
   </section>;
 

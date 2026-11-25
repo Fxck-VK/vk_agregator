@@ -2,6 +2,9 @@ package textapi
 
 import (
 	"context"
+	"encoding/json"
+	"errors"
+	"io"
 	"net/http"
 	"net/http/httptest"
 	"strings"
@@ -70,5 +73,40 @@ func TestTextRejectsCrossProviderRouteBeforeHTTP(t *testing.T) {
 		if _, err := p.Submit(context.Background(), req); err == nil || calls != 0 {
 			t.Fatal("cross-provider route sent")
 		}
+	}
+}
+
+type testRoundTripper func(*http.Request) (*http.Response, error)
+
+func (f testRoundTripper) RoundTrip(req *http.Request) (*http.Response, error) {
+	return f(req)
+}
+
+func TestQwenChatKeepsThinkingDefault(t *testing.T) {
+	transport := testRoundTripper(func(request *http.Request) (*http.Response, error) {
+		var body map[string]json.RawMessage
+		if err := json.NewDecoder(request.Body).Decode(&body); err != nil {
+			t.Fatal(err)
+		}
+		if _, exists := body["enable_thinking"]; exists {
+			t.Fatal("ordinary Qwen chat overrides the provider's thinking default")
+		}
+		if string(body["max_tokens"]) != "2048" {
+			t.Fatalf("Qwen output cap = %s", body["max_tokens"])
+		}
+		// The same paid limit still applies when the provider reports reasoning
+		// in its total completion usage.
+		result := `{"choices":[{"message":{"role":"assistant","content":"answer"},"finish_reason":"stop"}],"usage":{"prompt_tokens":80,"completion_tokens":2800,"completion_tokens_details":{"reasoning_tokens":2200}}}`
+		return &http.Response{StatusCode: http.StatusOK, Body: io.NopCloser(strings.NewReader(result))}, nil
+	})
+	const model = "qwen3.7-flash"
+	p := New(Config{Provider: domain.ProviderAPIMart, APIKey: "synthetic", BaseURL: "https://provider.example/v1",
+		EnabledModels: []string{model}, HTTPClient: &http.Client{Transport: transport}})
+	req := domain.ProviderRequest{Provider: domain.ProviderAPIMart, ModelCode: model, Operation: domain.OperationTextGenerate,
+		Modality: domain.ModalityText, Prompt: "Synthetic"}
+	_, err := p.Submit(context.Background(), req)
+	var providerErr *Error
+	if !errors.As(err, &providerErr) || providerErr.Class != domain.ProviderErrSubmitIndeterminate {
+		t.Fatalf("over-cap Qwen result returned %v, want submit indeterminate", err)
 	}
 }
