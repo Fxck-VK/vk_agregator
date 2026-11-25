@@ -68,6 +68,70 @@ func TestPresentationQuoteAndAccountJob(t *testing.T) {
 	}
 }
 
+func TestPresentationPrefersGeminiLiteAndRejectsStaleQwenQuote(t *testing.T) {
+	if err := providermodels.ConfigureDEVSmoke("development", true); err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = providermodels.ConfigureDEVSmoke("development", false) })
+	h, conversations, sessions, jobs, limiter := newWebConversationMessageTestHandler(t)
+	prices, err := pricingcatalog.NewStaticCatalog()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := prices.AddSupplemental(providermodels.RuntimeRegistry().DEVSmokePrices()); err != nil {
+		t.Fatal(err)
+	}
+	const lite, qwen = "gemini_2_5_flash_lite", "qwen_3_7_flash"
+	h.deps.ImagePricing = prices
+	h.cfg.Environment = "development"
+	h.cfg.TextModels = textgeneration.Models([]string{providermodels.PublicTextGemini37Flash, providermodels.PublicTextGemini36Flash, qwen, lite}, prices)
+	owner := uuid.New()
+	conversation := seedWebMessageConversation(t, conversations, owner, domain.ConversationSourceWeb)
+	routes := h.Routes()
+	quote := func(wantModel string, wantCredits int64) {
+		t.Helper()
+		req := authenticatedConversationRequest(t, http.MethodGet, "/web/v1/presentations/quote", sessions, owner)
+		req.Header.Set("X-Epifera-Release-View", "dev")
+		w := httptest.NewRecorder()
+		routes.ServeHTTP(w, req)
+		var out struct {
+			Model   string `json:"model_id"`
+			Credits int64  `json:"credits"`
+		}
+		if w.Code != http.StatusOK || json.Unmarshal(w.Body.Bytes(), &out) != nil || out.Model != wantModel || out.Credits <= 0 || wantCredits != 0 && out.Credits != wantCredits {
+			t.Errorf("quote: status %d and body %s, want model %s / quoted stars %d", w.Code, w.Body, wantModel, wantCredits)
+		}
+	}
+	quote(lite, 5)
+	jobs.job = &domain.Job{ID: uuid.New(), Status: domain.JobStatusQueued}
+	submit := func(model string, presentation bool) *httptest.ResponseRecorder {
+		t.Helper()
+		body := fmt.Sprintf(`{"prompt":"Test","model_id":%q}`, model)
+		if presentation {
+			body = fmt.Sprintf(`{"prompt":"Test","model_id":%q,"expected_presentation_credits":5}`, model)
+		}
+		req := safeWebConversationMessageRequest(t, sessions, owner, conversation.ID, uuid.New(), body)
+		if presentation {
+			req.URL.Path = "/web/v1/presentations/" + conversation.ID.String() + "/generate"
+		}
+		req.Header.Set("X-Epifera-Release-View", "dev")
+		w := httptest.NewRecorder()
+		routes.ServeHTTP(w, req)
+		return w
+	}
+	if w := submit(qwen, true); w.Code != http.StatusConflict || len(jobs.inputs) != 0 || limiter.calls != 0 {
+		t.Fatalf("stale Qwen quote should conflict before any job or rate-limit use: %d %s, %d jobs, %d limits", w.Code, w.Body, len(jobs.inputs), limiter.calls)
+	}
+	if w := submit(lite, true); w.Code != http.StatusCreated || len(jobs.inputs) != 1 || jobs.inputs[0].PricingSnapshot.Key.TextModelID != lite || jobs.inputs[0].PricingSnapshot.InternalCredits != 5 {
+		t.Fatalf("valid Gemini quote did not queue the exact five-star presentation: %d %s", w.Code, w.Body)
+	}
+	if w := submit(qwen, false); w.Code != http.StatusCreated || len(jobs.inputs) != 2 || jobs.inputs[1].PricingSnapshot.Key.TextModelID != qwen || !strings.HasPrefix(jobs.inputs[1].IdempotencyKey, "web-chat:") {
+		t.Fatalf("ordinary Qwen chat changed: %d %s", w.Code, w.Body)
+	}
+	h.cfg.TextModels = textgeneration.Models([]string{providermodels.PublicTextGemini36Flash, qwen}, prices)
+	quote(providermodels.PublicTextGemini36Flash, 0)
+}
+
 func TestReadPresentationByOwnedJobAndRecoverByConversation(t *testing.T) {
 	h, conversations, sessions, _, _ := newWebConversationMessageTestHandler(t)
 	h.cfg.Environment = "development"
@@ -78,7 +142,7 @@ func TestReadPresentationByOwnedJobAndRecoverByConversation(t *testing.T) {
 	prompt := "A presentation about the library"
 	key := "web-presentation:" + owner.String() + ":" + uuid.NewString()
 	params, err := json.Marshal(webChatJobParams{
-		Prompt: prompt, ModelID: providermodels.PublicTextGemini37Flash, ModelName: "Presentation model",
+		Prompt: prompt, ModelID: "qwen_3_7_flash", ModelName: "Presentation model",
 		ConversationID: conversation.ID.String(), ConversationSource: domain.ConversationSourceWeb,
 	})
 	if err != nil {

@@ -13,7 +13,10 @@ import (
 )
 
 func TestPaidPOSTNeverFollowsRedirectOrRetries(t *testing.T) {
-	for _, status := range []int{http.StatusTemporaryRedirect, http.StatusInternalServerError, http.StatusTooManyRequests} {
+	for _, status := range []int{
+		http.StatusTemporaryRedirect, http.StatusBadRequest, http.StatusUnprocessableEntity,
+		http.StatusInternalServerError, http.StatusTooManyRequests,
+	} {
 		calls, redirects := 0, 0
 		target := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) { redirects++ }))
 		srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {

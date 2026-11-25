@@ -16,10 +16,12 @@ import (
 )
 
 var presentationTextModels = []string{
+	pricingcatalog.PresentationPreferredTextModelID,
 	providermodels.PublicTextGemini37Flash,
 	providermodels.PublicTextGemini36Flash,
-	"qwen_3_7_flash",
 }
+
+const legacyPresentationQwenModelID = "qwen_3_7_flash"
 
 func presentationTextModel(id string) bool {
 	return slices.Contains(presentationTextModels, id)

@@ -59,7 +59,7 @@ func (f presentationProviderTransport) RoundTrip(request *http.Request) (*http.R
 
 func TestPresentationCompletesFromExistingArtifactAfterHistoryWriteFailure(t *testing.T) {
 	const answer = "## Солнечная система\n- Земля и её соседи"
-	for _, scenario := range []string{"immediate Qwen", "provider polling"} {
+	for _, scenario := range []string{"immediate Gemini", "provider polling"} {
 		t.Run(scenario, func(t *testing.T) {
 			ctx := context.Background()
 			repo := &presentationHistoryRepo{ConversationRepository: memory.NewConversationRepo(), failAnswer: true}
@@ -80,40 +80,34 @@ func TestPresentationCompletesFromExistingArtifactAfterHistoryWriteFailure(t *te
 				Status: domain.JobStatusQueued, ResultMode: domain.ResultModeAccountHistory, ChannelContext: &domain.ChannelContext{Channel: domain.ChannelWeb},
 				IdempotencyKey: "web-presentation:" + owner.String() + ":" + uuid.NewString(),
 			}
-			if scenario == "immediate Qwen" {
+			if scenario == "immediate Gemini" {
+				const publicModel = "gemini_2_5_flash_lite"
+				const nativeModel = "gemini-2.5-flash-lite"
 				transport := presentationProviderTransport(func(request *http.Request) (*http.Response, error) {
 					if request.Method != http.MethodPost || request.URL.Path != "/v1/chat/completions" {
-						t.Errorf("unexpected Qwen request: %s %s", request.Method, request.URL.Path)
+						t.Errorf("unexpected Gemini request: %s %s", request.Method, request.URL.Path)
 					}
 					var requestBody struct {
-						MaxTokens      int   `json:"max_tokens"`
-						EnableThinking *bool `json:"enable_thinking"`
+						Model     string            `json:"model"`
+						Stream    *bool             `json:"stream"`
+						MaxTokens int               `json:"max_tokens"`
+						Messages  []json.RawMessage `json:"messages"`
 					}
-					if err := json.NewDecoder(request.Body).Decode(&requestBody); err != nil {
+					decoder := json.NewDecoder(request.Body)
+					decoder.DisallowUnknownFields()
+					if err := decoder.Decode(&requestBody); err != nil {
 						t.Fatal(err)
 					}
-					if requestBody.MaxTokens != domain.PaidTextMaxOutputTokens {
-						t.Fatalf("Qwen output cap = %d", requestBody.MaxTokens)
-					}
-					// Simulate a short answer whose reasoning puts the total over
-					// the paid cap when the default thinking mode stays enabled.
-					completionTokens := 2800
-					reasoningTokens := 2200
-					if requestBody.EnableThinking != nil && !*requestBody.EnableThinking {
-						completionTokens = 600
-						reasoningTokens = 0
+					if requestBody.Model != nativeModel || requestBody.Stream == nil || *requestBody.Stream ||
+						requestBody.MaxTokens != domain.PaidTextMaxOutputTokens || len(requestBody.Messages) != 2 {
+						t.Fatal("expected the documented non-streaming Gemini request and its paid output cap")
 					}
 					response, _ := json.Marshal(map[string]any{
 						"choices": []any{map[string]any{"finish_reason": "stop", "message": map[string]string{"role": "assistant", "content": answer}}},
-						"usage": map[string]any{
-							"prompt_tokens": 80, "completion_tokens": completionTokens,
-							"completion_tokens_details": map[string]int{"reasoning_tokens": reasoningTokens},
-						},
+						"usage":   map[string]int{"prompt_tokens": 80, "completion_tokens": 600},
 					})
 					return &http.Response{StatusCode: http.StatusOK, Body: io.NopCloser(strings.NewReader(string(response)))}, nil
 				})
-				const publicModel = "qwen_3_7_flash"
-				const nativeModel = "qwen3.7-flash"
 				provider.Provider = apimart.New(apimart.Config{
 					APIKey: "test-key", BaseURL: "https://provider.example/v1", EnabledTextModels: []string{nativeModel},
 					HTTPClient: &http.Client{Transport: transport},
@@ -157,8 +151,8 @@ func TestPresentationCompletesFromExistingArtifactAfterHistoryWriteFailure(t *te
 			if err != nil || len(messages) != 2 || messages[1].Role != domain.ConversationRoleAssistant || messages[1].JobID != job.ID || messages[1].Text == "" {
 				t.Fatalf("assistant answer was not stored for the existing job: %v", err)
 			}
-			if scenario == "immediate Qwen" && messages[1].Text != answer {
-				t.Fatal("the stored Qwen answer differs from the provider's moderated output")
+			if scenario == "immediate Gemini" && messages[1].Text != answer {
+				t.Fatal("the stored Gemini answer differs from the provider's moderated output")
 			}
 			if provider.submits != 1 || provider.polls != polls {
 				t.Fatalf("history recovery repeated provider calls: %d submits, %d polls (initial %d)", provider.submits, provider.polls, polls)

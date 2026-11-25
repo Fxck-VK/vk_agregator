@@ -14,6 +14,10 @@ type PresentationPreviewPrices struct {
 	WithCover int64 `json:"withCover"`
 }
 
+// PresentationPreferredTextModelID also anchors the local estimate to the
+// model preferred by the DEV quote. Runtime admission remains authoritative.
+const PresentationPreferredTextModelID = "gemini_2_5_flash_lite"
+
 // PresentationTextSnapshot retains the admitted model, token caps and floor.
 // Its minimum retail price applies only to newly created presentation Jobs.
 func PresentationTextSnapshot(snapshot PricingSnapshot) (PricingSnapshot, error) {
@@ -39,7 +43,7 @@ func PresentationTextSnapshot(snapshot PricingSnapshot) (PricingSnapshot, error)
 }
 
 func PresentationPreviewQuote() (PresentationPreviewPrices, error) {
-	text, err := TextCandidateQuote("qwen_3_7_flash")
+	text, err := TextCandidateQuote(PresentationPreferredTextModelID)
 	if err != nil {
 		return PresentationPreviewPrices{}, err
 	}

@@ -1502,7 +1502,6 @@ func (p *processor) buildRequest(ctx context.Context, job *domain.Job, attempt i
 		Params:               providerParams,
 		MaxOutputTokens:      maxOutputTokens,
 		MaxInputTokens:       textInputLimit,
-		DisableTextThinking:  job.IsWebPresentation(),
 		IdempotencyKey:       fmt.Sprintf("provider_submit:%s:%d", job.ID, attempt),
 		AttemptNo:            attempt,
 	}, nil

@@ -15,11 +15,17 @@ const draftSchema = z.strictObject({
 
 export type DeckRun = { conversation: string; job?: string; pending?: true };
 
-export function parseDeckRun(query: Record<string, string | string[] | undefined>): DeckRun | undefined {
-  const conversation = uuid.safeParse(query.run);
+export function parseDeckRun(query: Record<string, string | string[] | undefined> | URLSearchParams): DeckRun | undefined {
+  const read = (key: string) => {
+    if (!(query instanceof URLSearchParams)) return query[key];
+    const values = query.getAll(key);
+    return values.length > 1 ? values : values[0];
+  };
+  const conversation = uuid.safeParse(read("run"));
   if (!conversation.success) return undefined;
-  if (query.job === undefined) return { conversation: conversation.data, ...(query.pending === "1" ? { pending: true } : {}) };
-  const job = uuid.safeParse(query.job);
+  const rawJob = read("job");
+  if (rawJob === undefined) return { conversation: conversation.data, ...(read("pending") === "1" ? { pending: true } : {}) };
+  const job = uuid.safeParse(rawJob);
   return job.success ? { conversation: conversation.data, job: job.data } : undefined;
 }
 

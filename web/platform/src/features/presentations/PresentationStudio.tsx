@@ -7,7 +7,7 @@ import { LandingArrow } from "@/components/public/landing/LandingPrimitives";
 import { HomePicture } from "@/features/landing-variants/third/HomeMedia";
 import { presentationStyles } from "@/i18n/presentation-deck";
 import { presentationPageCopy, presentationStudioCopy as labels } from "@/i18n/presentation-studio";
-import { useRouter } from "@/i18n/navigation";
+import { useRouter, useSearchParams } from "@/i18n/navigation";
 import Link from "@/i18n/Link";
 import { webBrowserFetch } from "@/lib/web-api/browser";
 import { parseAccountProfile } from "@/lib/web-api/contracts";
@@ -15,7 +15,7 @@ import { PresentationExample } from "./PresentationExample";
 import { DeckRequest } from "./DeckRequest";
 import { DeckResult } from "./DeckResult";
 import { downloadFile, emptyBrief, presentationPrompt, readDeck, type Brief, type DeckSlide } from "./deck-content";
-import { getDeckDraft, readDeckBrief, replaceDeckRun, saveDeckDraft, type DeckRun } from "./deck-run";
+import { getDeckDraft, parseDeckRun, readDeckBrief, replaceDeckRun, saveDeckDraft, type DeckRun } from "./deck-run";
 import styles from "./Studio.module.css";
 
 const scenarios = Object.values(presentationStyles);
@@ -29,12 +29,14 @@ export function PresentationStudio({ accountId, local, localApiUnavailable = fal
   initialRun?: DeckRun;
 }) {
   const router = useRouter();
+  const searchParams = useSearchParams();
   const [brief, setBrief] = useState<Brief>(() => loginDraft && loginDraft.accountId === accountId ? loginDraft.brief : emptyBrief);
-  const [run, setRun] = useState(initialRun);
-  const [step, setStep] = useState(() => initialRun || loginDraft && loginDraft.accountId === accountId ? 1 : 0);
+  // Browser Back can restore the cached form props after the job URL was set through history.replaceState.
+  const [run, setRun] = useState(() => initialRun ?? (accountId && searchParams ? parseDeckRun(searchParams) : undefined));
+  const [step, setStep] = useState(() => run || loginDraft && loginDraft.accountId === accountId ? 1 : 0);
   const [loginOpened, setLoginOpened] = useState(false);
   useEffect(() => { if (accountId === loginDraft?.accountId) loginDraft = null; }, [accountId]);
-  const [mode, setMode] = useState<"external" | "account">(!initialRun && (localApiUnavailable || local && !accountId) ? "external" : "account");
+  const [mode, setMode] = useState<"external" | "account">(!run && (localApiUnavailable || local && !accountId) ? "external" : "account");
   const [source, setSource] = useState("");
   const [slides, setSlides] = useState<DeckSlide[]>([]);
   const [busy, setBusy] = useState(false);

@@ -1592,6 +1592,10 @@ func (h *Handler) createTextOrMediaMessage(w http.ResponseWriter, r *http.Reques
 		return
 	}
 	if presentation && !presentationTextModel(req.ModelID) {
+		if req.ModelID == legacyPresentationQwenModelID {
+			writeError(w, http.StatusConflict, "presentation quote changed")
+			return
+		}
 		writeError(w, http.StatusBadRequest, "invalid presentation model")
 		return
 	}
