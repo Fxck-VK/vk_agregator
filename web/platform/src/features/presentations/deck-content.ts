@@ -1,4 +1,5 @@
 import { presentationDeckCopy, presentationStyles, type PresentationStyle } from "@/i18n/presentation-deck";
+import type { SlideImageFrame } from "./slide-image-frame";
 
 export type Brief = {
   topic: string;
@@ -7,7 +8,7 @@ export type Brief = {
   count: 5 | 10;
   style: PresentationStyle;
 };
-export type DeckSlide = { title: string; points: string[]; image?: string };
+export type DeckSlide = { title: string; points: string[]; image?: string; imageFrame?: SlideImageFrame };
 
 export const emptyBrief: Brief = { topic: "", audience: "", notes: "", count: 5, style: presentationStyles.educational };
 

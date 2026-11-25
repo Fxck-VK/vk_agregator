@@ -42,6 +42,7 @@ export const conversationItemSchema = z
   .object({
     first_model_id: z.string().trim().min(1).max(128).optional(),
     id: z.string().uuid(),
+    kind: z.literal("presentation").optional(),
     title: z.string(),
     created_at: z.string().datetime({ offset: true }),
     updated_at: z.string().datetime({ offset: true }),
@@ -252,6 +253,7 @@ export const conversationMessageSchema = z.object({
 export const conversationMessageListSchema = z.object({
   items: z.array(conversationMessageSchema),
   has_more_before: z.boolean().optional().default(false),
+  kind: z.literal("presentation").optional(),
 }).strict();
 
 export type ConversationImage = z.infer<typeof conversationImageSchema>;

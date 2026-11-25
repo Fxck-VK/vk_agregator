@@ -1,4 +1,5 @@
 import { clearDeckDrafts } from "@/features/presentations/deck-run";
+import { clearPresentationChatAttempts } from "@/features/presentations/presentation-chat-api";
 import { clearPendingConversationPrompts } from "@/features/conversations/pending-conversation-prompt";
 import { clearPendingConversationBootstraps } from "@/features/conversations/pending-conversation-bootstrap";
 import { clearPendingConversationTitleSyncs } from "@/features/conversations/pending-conversation-title-sync";
@@ -11,6 +12,7 @@ export function clearPrivateBrowserState() {
   clearConversationCache();
   clearModelCatalogCache();
   clearDeckDrafts();
+  clearPresentationChatAttempts();
   clearPendingConversationPrompts();
   clearPendingConversationBootstraps();
   clearPendingConversationTitleSyncs();

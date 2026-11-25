@@ -124,7 +124,7 @@ export const presentationDeckCopy = {
     replaceImage: "Заменить фото",
     generateImage: "Сгенерировать изображение",
     removeImage: "Удалить фото",
-    imagePrompt: (topic: string, title: string) => `Иллюстрация без надписей для слайда «${title}» презентации «${topic}». Главный объект в центре, вертикальная композиция.`,
+    imagePrompt: (topic: string, title: string) => `Иллюстрация без надписей для слайда «${title}» презентации «${topic}». Главный объект в центре.`,
     imagePreparing: "Готовим фото…",
     imageChanged: "Фото добавлено на слайд.",
     imageRemoved: "Фото удалено со слайда.",

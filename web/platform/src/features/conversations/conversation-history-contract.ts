@@ -5,6 +5,7 @@ export const conversationHistoryPageLimit = 100;
 export type ConversationHistoryData =
   | {
       kind: "ready";
+      conversationKind?: "presentation";
       conversationId: string;
       messages: ConversationMessage[];
       hasMoreBefore: boolean;

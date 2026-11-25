@@ -1,3 +1,5 @@
+import { slideImageFrameAspectRatio, type SlideImageFrame } from "./slide-image-frame";
+
 const jpegPrefix = "data:image/jpeg;base64,";
 export const slideImageDataLimit = 64 * 1024;
 export const slideImagePattern = /^data:image\/jpeg;base64,[A-Za-z0-9+/]+={0,2}$/;
@@ -7,7 +9,7 @@ export const slideImageUploadLimit = 8 * 1024 * 1024;
 // Reserve space for the data URL header and Base64 padding in the tab draft.
 const jpegByteLimit = Math.floor((slideImageDataLimit - jpegPrefix.length) / 4) * 3;
 
-export async function renderSlideImage(source: string): Promise<Blob> {
+export async function renderSlideImage(source: string, frame?: SlideImageFrame): Promise<Blob> {
   const image = new Image();
   image.src = source;
   await image.decode();
@@ -17,13 +19,16 @@ export async function renderSlideImage(source: string): Promise<Blob> {
   const context = canvas.getContext("2d");
   if (!context) throw new Error("slide image processing unavailable");
 
-  for (const [width, height, quality] of [[650, 778, .85], [650, 778, .68], [440, 527, .72], [320, 383, .62]]) {
+  const ratio = frame && slideImageFrameAspectRatio(frame);
+  for (const [maxWidth, maxHeight, quality] of [[650, 778, .85], [650, 778, .68], [440, 527, .72], [320, 383, .62]]) {
+    const width = ratio ? Math.max(1, Math.round(Math.min(maxWidth, maxHeight * ratio))) : maxWidth;
+    const height = ratio ? Math.max(1, Math.round(Math.min(maxHeight, maxWidth / ratio))) : maxHeight;
     canvas.width = width;
     canvas.height = height;
     const scale = Math.max(width / image.naturalWidth, height / image.naturalHeight);
     const scaledWidth = image.naturalWidth * scale;
     const scaledHeight = image.naturalHeight * scale;
-    context.drawImage(image, (width - scaledWidth) * .55, (height - scaledHeight) * .67, scaledWidth, scaledHeight);
+    context.drawImage(image, (width - scaledWidth) * (frame ? .5 : .55), (height - scaledHeight) * (frame ? .5 : .67), scaledWidth, scaledHeight);
     const jpeg = await new Promise<Blob | null>(resolve => canvas.toBlob(resolve, "image/jpeg", quality));
     if (jpeg && jpeg.size > 0 && jpeg.size <= jpegByteLimit) return jpeg;
   }
@@ -31,10 +36,10 @@ export async function renderSlideImage(source: string): Promise<Blob> {
   throw new Error("slide image could not be processed");
 }
 
-export async function prepareSlideImage(image: Blob): Promise<string> {
+export async function prepareSlideImage(image: Blob, frame?: SlideImageFrame): Promise<string> {
   const source = URL.createObjectURL(image);
   try {
-    const jpeg = await renderSlideImage(source);
+    const jpeg = await renderSlideImage(source, frame);
     return await new Promise<string>((resolve, reject) => {
       const reader = new FileReader();
       reader.onload = () => {

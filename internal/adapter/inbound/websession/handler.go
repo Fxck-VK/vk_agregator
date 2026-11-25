@@ -356,6 +356,7 @@ type Deps struct {
 	ImageJobPrepareLimiter     ImageJobPrepareLimiter
 	ImageJobHistory            ImageJobHistoryReader
 	PresentationHistory        PresentationHistoryReader
+	PresentationChatTurns      PresentationChatTurnReader
 	ImageJobExpiry             ImageJobExpiryReconciler
 	ImageResults               ImageResultReader
 	ImageArtifacts             ImageArtifactReader
@@ -470,6 +471,13 @@ func (h *Handler) Routes() http.Handler {
 	mux.HandleFunc("GET /web/v1/presentations", h.requirePrincipal(h.listPresentations))
 	mux.HandleFunc("GET /web/v1/presentations/{conversationID}", h.requirePrincipal(h.getPresentation))
 	mux.HandleFunc("POST /web/v1/presentations/{conversationID}/generate", h.requireUnsafePrincipal(h.generatePresentation))
+	mux.HandleFunc("GET /web/v1/presentation-chats/quote", h.requirePrincipal(h.quotePresentationChat))
+	mux.HandleFunc("POST /web/v1/presentation-chats", h.requireUnsafePrincipal(h.createPresentationChat))
+	mux.HandleFunc("GET /web/v1/presentation-chats/{conversationID}", h.requirePrincipal(h.getPresentationChat))
+	mux.HandleFunc("POST /web/v1/presentation-chats/{conversationID}/messages", h.requireUnsafePrincipal(h.createPresentationChatTurn))
+	mux.HandleFunc("GET /web/v1/presentation-chats/{conversationID}/turns/{jobID}", h.requirePrincipal(h.getPresentationChatTurn))
+	mux.HandleFunc("POST /web/v1/presentation-chats/{conversationID}/turns/{jobID}/resume", h.requireUnsafePrincipal(h.resumePresentationChatTurn))
+	mux.HandleFunc("POST /web/v1/presentation-chats/{conversationID}/turns/{jobID}/generate", h.requireUnsafePrincipal(h.generateFromPresentationChat))
 	mux.HandleFunc("PUT /web/v1/conversations/{conversationID}/messages/{messageID}/rating", h.requireUnsafePrincipal(h.rateConversationMessage))
 	mux.HandleFunc("PATCH /web/v1/conversations/{conversationID}", h.requireUnsafePrincipal(h.renameConversation))
 	mux.HandleFunc("DELETE /web/v1/conversations/{conversationID}", h.requireUnsafePrincipal(h.archiveConversation))
@@ -1503,7 +1511,7 @@ func (h *Handler) listConversationMessages(w http.ResponseWriter, r *http.Reques
 		}
 		items = append(items, safeMessage)
 	}
-	writeJSON(w, http.StatusOK, safeConversationMessageList{Items: items, HasMoreBefore: hasMoreBefore})
+	writeJSON(w, http.StatusOK, safeConversationMessageList{Items: items, HasMoreBefore: hasMoreBefore, Kind: publicConversationKind(conversation)})
 }
 
 func (h *Handler) listRecentConversationMessages(ctx context.Context, conversationID uuid.UUID, beforeSeq int64, limit int) ([]*domain.ConversationMessage, bool, error) {
@@ -1639,6 +1647,10 @@ func (h *Handler) createTextOrMediaMessage(w http.ResponseWriter, r *http.Reques
 	}
 	if err != nil || conversation == nil {
 		writeError(w, http.StatusServiceUnavailable, "chat message unavailable")
+		return
+	}
+	if conversation.IsWebPresentationChat() {
+		writeError(w, http.StatusConflict, "use presentation chat workflow")
 		return
 	}
 	allowed, err := h.deps.WebChatMessageLimiter.Allow(r.Context(), "account:"+principal.AccountID.String())
@@ -2056,6 +2068,7 @@ type safeConversationList struct {
 }
 
 type safeConversation struct {
+	Kind         string    `json:"kind,omitempty"`
 	FirstModelID string    `json:"first_model_id,omitempty"`
 	ID           uuid.UUID `json:"id"`
 	Title        string    `json:"title"`
@@ -2064,6 +2077,7 @@ type safeConversation struct {
 }
 
 type safeConversationMessageList struct {
+	Kind          string                    `json:"kind,omitempty"`
 	Items         []safeConversationMessage `json:"items"`
 	HasMoreBefore *bool                     `json:"has_more_before,omitempty"`
 }
@@ -2090,13 +2104,14 @@ type safeWebChatJob struct {
 }
 
 type webChatJobParams struct {
-	Prompt             string                    `json:"prompt"`
-	ModelID            string                    `json:"model_id"`
-	ModelName          string                    `json:"model_name"`
-	Provider           domain.ProviderName       `json:"provider"`
-	ModelCode          string                    `json:"model_code"`
-	ConversationID     string                    `json:"conversation_id"`
-	ConversationSource domain.ConversationSource `json:"conversation_source"`
+	PresentationCredits int64                     `json:"presentation_credits,omitempty"`
+	Prompt              string                    `json:"prompt"`
+	ModelID             string                    `json:"model_id"`
+	ModelName           string                    `json:"model_name"`
+	Provider            domain.ProviderName       `json:"provider"`
+	ModelCode           string                    `json:"model_code"`
+	ConversationID      string                    `json:"conversation_id"`
+	ConversationSource  domain.ConversationSource `json:"conversation_source"`
 }
 
 type safeImageModelList struct {
@@ -2182,6 +2197,7 @@ type safeImageJob struct {
 
 func newSafeConversation(conversation domain.Conversation) safeConversation {
 	return safeConversation{
+		Kind:         publicConversationKind(&conversation),
 		FirstModelID: conversation.FirstModelID,
 		ID:           conversation.ID,
 		Title:        conversation.Title,

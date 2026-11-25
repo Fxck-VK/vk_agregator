@@ -9,6 +9,9 @@ import { z } from "zod";
 
 import { ConversationHistory } from "@/features/conversations/ConversationHistory/ConversationHistory";
 import { useRevalidateWorkspaceConversationList } from "@/features/conversations/WorkspaceConversationList/WorkspaceConversationList";
+import { PresentationChat } from "@/features/presentations/PresentationChat";
+import { presentationWorkspacePath } from "@/features/presentations/route";
+import { useReleaseView } from "@/features/release/ReleaseViewProvider";
 import {
   conversationHistoryPageLimit,
   type ConversationHistoryData,
@@ -58,6 +61,7 @@ function ConversationHistoryLoaderContent({
   presentationJobId?: string;
 }): ReactNode {
   const t = useDictionary();
+  const release = useReleaseView();
   useRevalidateWorkspaceConversationList();
   const cache = useWorkspaceDataCache();
   const [initialHistory] = useState<ConversationHistoryData>(
@@ -135,6 +139,7 @@ function ConversationHistoryLoaderContent({
 
         const history: ConversationHistoryData = {
           kind: "ready",
+          ...(page.kind ? { conversationKind: page.kind } : {}),
           conversationId: parsedConversationID.data,
           messages: page.items,
           hasMoreBefore: page.has_more_before,
@@ -170,6 +175,12 @@ function ConversationHistoryLoaderContent({
     setState((current) => current.history.kind === "ready" ? current : ({ ...current, history: { kind: "loading" } }));
     setRequestRevision((current) => current + 1);
   };
+
+  if (state.history.kind === "ready" && state.history.conversationKind === "presentation") {
+    return release.allowsPath(presentationWorkspacePath)
+      ? <PresentationChat key={conversationId} conversationId={conversationId} initialMessages={state.history.messages} />
+      : <ConversationHistory conversationId={conversationId} history={{ kind: "not_found" }} />;
+  }
 
   return (
     <>

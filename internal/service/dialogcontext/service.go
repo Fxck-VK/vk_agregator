@@ -14,6 +14,7 @@ import (
 	"github.com/google/uuid"
 
 	"vk-ai-aggregator/internal/domain"
+	"vk-ai-aggregator/internal/service/presentationintake"
 )
 
 const (
@@ -94,11 +95,12 @@ func New(repo domain.ConversationRepository, cfg Config) *Service {
 // user_id + vk_peer_id.
 func (s *Service) Prepare(ctx context.Context, job *domain.Job, prompt string) (Prepared, error) {
 	presentation := job.IsWebPresentation()
-	if s == nil || s.repo == nil || !(presentation || s.cfg.Enabled && eligibleText(job) || eligibleWebMedia(job)) {
+	intake := job.IsWebPresentationIntake()
+	if s == nil || s.repo == nil || !(presentation || intake || s.cfg.Enabled && eligibleText(job) || eligibleWebMedia(job)) {
 		return Prepared{Prompt: prompt, MaxOutputTokens: s.maxOutputTokens()}, nil
 	}
 	target := resolveConversationTarget(job)
-	if presentation && (target.conversationID == uuid.Nil || target.ref.Source != domain.ConversationSourceWeb) {
+	if (presentation || intake) && (target.conversationID == uuid.Nil || target.ref.Source != domain.ConversationSourceWeb) {
 		return Prepared{}, errors.New("dialogcontext: presentation conversation required")
 	}
 	if target.invalid {
@@ -108,8 +110,8 @@ func (s *Service) Prepare(ctx context.Context, job *domain.Job, prompt string) (
 	if err != nil {
 		return Prepared{}, err
 	}
-	if !ok {
-		if presentation {
+	if !ok || intake && !conversation.IsWebPresentationChat() {
+		if presentation || intake {
 			return Prepared{}, errors.New("dialogcontext: presentation conversation unavailable")
 		}
 		return Prepared{Prompt: prompt, MaxOutputTokens: s.maxOutputTokens()}, nil
@@ -123,6 +125,13 @@ func (s *Service) Prepare(ctx context.Context, job *domain.Job, prompt string) (
 	})
 	if err != nil {
 		return Prepared{}, err
+	}
+	if intake {
+		_, rendered, err := PresentationIntakeEvidence(ctx, s.repo, conversation.ID, job.ID)
+		if err != nil {
+			return Prepared{}, err
+		}
+		return Prepared{ConversationID: conversation.ID, Prompt: rendered, MaxOutputTokens: domain.PaidTextMaxOutputTokens}, nil
 	}
 	if presentation {
 		if conversation.TitleOrigin == domain.ConversationTitleOriginAutoPending {
@@ -186,31 +195,45 @@ func (s *Service) Prepare(ctx context.Context, job *domain.Job, prompt string) (
 // unsummarized history has grown beyond configured thresholds.
 func (s *Service) Complete(ctx context.Context, job *domain.Job, conversationID uuid.UUID, answer string) error {
 	presentation := job.IsWebPresentation()
+	intake := job.IsWebPresentationIntake()
 	if s == nil || s.repo == nil || conversationID == uuid.Nil || strings.TrimSpace(answer) == "" {
-		if presentation {
+		if presentation || intake {
 			return errors.New("dialogcontext: presentation answer and conversation required")
 		}
 		return nil
 	}
-	if !(presentation || s.cfg.Enabled && eligibleText(job) || eligibleWebMedia(job)) {
+	if !(presentation || intake || s.cfg.Enabled && eligibleText(job) || eligibleWebMedia(job)) {
 		return nil
 	}
-	if presentation || eligibleWebMedia(job) {
+	if presentation || intake || eligibleWebMedia(job) {
 		target := resolveConversationTarget(job)
-		if target.invalid || target.conversationID != conversationID || (presentation && target.ref.Source != domain.ConversationSourceWeb) {
-			if presentation {
+		if target.invalid || target.conversationID != conversationID || ((presentation || intake) && target.ref.Source != domain.ConversationSourceWeb) {
+			if presentation || intake {
 				return errors.New("dialogcontext: invalid presentation conversation")
 			}
 			return nil
 		}
-		if _, ok, err := s.getOrCreateConversation(ctx, job, target); err != nil {
+		if conversation, ok, err := s.getOrCreateConversation(ctx, job, target); err != nil {
 			return err
-		} else if !ok {
-			if presentation {
+		} else if !ok || intake && !conversation.IsWebPresentationChat() {
+			if presentation || intake {
 				return errors.New("dialogcontext: presentation conversation unavailable")
 			}
 			return nil
 		}
+	}
+	if intake {
+		evidence, _, err := PresentationIntakeEvidence(ctx, s.repo, conversationID, job.ID)
+		if err != nil {
+			return err
+		}
+		result, err := presentationintake.Parse(answer, evidence)
+		if err != nil {
+			// Leave the raw provider response in the private moderated artifact.
+			// The browser read exposes only a normalized failure until retried.
+			return ErrInvalidPresentationIntakeOutput
+		}
+		answer = result.Reply
 	}
 	if _, err := s.repo.UpsertMessage(ctx, &domain.ConversationMessage{
 		ConversationID: conversationID,
@@ -221,7 +244,7 @@ func (s *Service) Complete(ctx context.Context, job *domain.Job, conversationID 
 	}); err != nil {
 		return err
 	}
-	if presentation {
+	if presentation || intake {
 		// A deck has its own single-run conversation. Delivery depends on the
 		// answer write above, with no rolling chat summary step.
 		return nil

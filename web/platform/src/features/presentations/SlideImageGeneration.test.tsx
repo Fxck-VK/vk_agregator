@@ -71,6 +71,37 @@ describe("SlideImageGeneration", () => {
 
   afterEach(cleanup);
 
+  it("prepares the selected model at the nearest priced ratio for the drawn frame", async () => {
+    const base = { quality_options: ["1K"], default_quality: "1K", default_aspect_ratio: "1:1", supports_reference_image: false, max_reference_images: 0 };
+    vi.mocked(loadImageModelCatalog).mockResolvedValueOnce({ items: [
+      { ...base, id: "square", name: "Square", allowed_aspect_ratios: ["1:1"], price_by_quality: { "1K": 20 } },
+      { ...base, id: "landscape", name: "Landscape", allowed_aspect_ratios: ["1:1", "4:3", "16:9"],
+        price_by_variant: { "1K:1:1": 30, "1K:4:3": 40, "1K:16:9": 85 } },
+    ] });
+    vi.mocked(webBrowserMutation).mockResolvedValueOnce(Response.json({
+      job: { ...job, model_id: "landscape", model_name: "Landscape", aspect_ratio: "16:9", cost_estimate: 90 }, balance: 100, can_afford: true,
+    }, { status: 201 }));
+    render(<SlideImageGeneration frame={{ x: 1000, y: 2000, width: 4000, height: 4000 }}
+      prompt={initialPrompt} onImage={vi.fn()} onClose={vi.fn()} />);
+    const description = await screen.findByRole("textbox", { name: ru.imageGeneration.promptLabel });
+    fireEvent.change(description, { target: { value: revisedPrompt } });
+    fireEvent.change(screen.getByRole("combobox", { name: ru.imageGeneration.modelLabel }), { target: { value: "landscape" } });
+    expect(description).toHaveValue(revisedPrompt);
+    expect(screen.getByText("Формат генерации · 16:9")).toBeVisible();
+    expect(screen.getByLabelText(/Стоимость.*85 звёзд/)).toBeVisible();
+    expect(webBrowserMutation).not.toHaveBeenCalled();
+
+    fireEvent.click(screen.getByRole("button", { name: ru.imageGeneration.generate }));
+    await screen.findByRole("heading", { name: ru.imageGeneration.confirmationTitle });
+    expect(webBrowserMutation).toHaveBeenCalledTimes(1);
+    const [[path, request]] = vi.mocked(webBrowserMutation).mock.calls;
+    expect(path).toBe("/web/v1/image-jobs/prepare");
+    expect(JSON.parse(String(request.body))).toEqual({
+      prompt: revisedPrompt, model_id: "landscape", image_quality: "1K", aspect_ratio: "16:9", output_count: 1,
+    });
+    expect(screen.getAllByLabelText("90 звёзд").length).toBeGreaterThan(0);
+  });
+
   it("confirms the server price separately and inserts one image from the exact authenticated job", async () => {
     mockImageJob();
     const onImage = vi.fn();

@@ -7,6 +7,9 @@ import { useDictionary } from "@/i18n/LocaleProvider";
 import type { Dictionary } from "@/i18n/dictionary";
 import { InspirationGallery } from "@/features/inspiration/InspirationGallery/InspirationGallery";
 import { useRevalidateWorkspaceConversationList } from "@/features/conversations/WorkspaceConversationList/WorkspaceConversationList";
+import { PresentationChat } from "@/features/presentations/PresentationChat";
+import { presentationChatModelId, presentationWorkspacePath } from "@/features/presentations/route";
+import { useReleaseView } from "@/features/release/ReleaseViewProvider";
 
 import { WorkspaceLanding } from "../WorkspaceLanding/WorkspaceLanding";
 import { WorkspacePrompt } from "../WorkspacePrompt/WorkspacePrompt";
@@ -24,6 +27,7 @@ type WorkspaceHomeProps = {
 
 export function WorkspaceHome({ access = "authenticated", section = "home", chatModelId }: WorkspaceHomeProps) {
   const t = useDictionary();
+  const release = useReleaseView();
   useRevalidateWorkspaceConversationList(access === "authenticated" && section === "chats");
   const content = t.workspace.sections[section];
 
@@ -36,6 +40,10 @@ export function WorkspaceHome({ access = "authenticated", section = "home", chat
   }
 
   if (section === "chats") {
+    const presentation = chatModelId === presentationChatModelId;
+    if (presentation && access === "authenticated" && release.allowsPath(presentationWorkspacePath)) {
+      return <PresentationChat />;
+    }
     return (
       <section
         aria-labelledby="new-chat-title"
@@ -45,7 +53,7 @@ export function WorkspaceHome({ access = "authenticated", section = "home", chat
           <div className={styles.welcome}>
             <h1 id="new-chat-title">{t.workspace.startTitle}</h1>
           </div>
-          {chatModelId && access === "authenticated"
+          {chatModelId && !presentation && access === "authenticated"
             ? <NewChatPrompt modelId={chatModelId} />
             : <WorkspacePrompt access={access} variant="newChat" />}
         </div>

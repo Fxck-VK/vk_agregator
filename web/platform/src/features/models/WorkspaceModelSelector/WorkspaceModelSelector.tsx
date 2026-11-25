@@ -7,6 +7,9 @@ import { useState } from "react";
 import { useGenerationCatalog } from "../GenerationCatalogProvider";
 import { modelWorkspaceHref } from "../ModelCard/model-card-content";
 import { RetryAction } from "@/components/ui/AsyncState/RetryAction";
+import { presentationChatOption } from "@/features/presentations/presentation-chat-option";
+import { presentationChatModelId, presentationChatPath, presentationWorkspacePath } from "@/features/presentations/route";
+import { useReleaseView } from "@/features/release/ReleaseViewProvider";
 
 import { useWorkspaceModelSelection } from "../WorkspaceModelSelection/WorkspaceModelSelection";
 import {
@@ -19,6 +22,7 @@ export function WorkspaceModelSelector() {
   const pathname = usePathname();
   const router = useRouter();
   const searchParams = useSearchParams();
+  const release = useReleaseView();
   const requestedModelId = searchParams.get("model");
   const workspaceSelection = useWorkspaceModelSelection();
   const conversationModel = workspaceSelection?.conversationModel;
@@ -31,10 +35,18 @@ export function WorkspaceModelSelector() {
   const models = catalog?.items ?? [];
   const [selectedModelId, setSelectedModelId] = useState("");
 
-  const activeSelectedModelId = [conversationModelId, requestedModelId, workspaceSelectedModelId, selectedModelId]
-    .find((id) => models.some((model) => model.id === id)) ?? models[0]?.id ?? "";
+  const presentationAvailable = release.allowsPath(presentationWorkspacePath);
+  const presentationSelected = presentationAvailable && (conversationModelId === presentationChatModelId
+    || (pathname === "/app/chats" && requestedModelId === presentationChatModelId));
+  const activeSelectedModelId = presentationSelected ? presentationChatModelId
+    : [conversationModelId, requestedModelId, workspaceSelectedModelId, selectedModelId]
+      .find((id) => models.some((model) => model.id === id)) ?? models[0]?.id ?? "";
 
   const selectModel = (model: ModelSelectorModel) => {
+    if (model.id === presentationChatModelId) {
+      router.push(presentationChatPath);
+      return;
+    }
     setSelectedModelId(model.id);
     if (model.category === "images") setWorkspaceModelId?.(model.id);
     router.push(modelWorkspaceHref(model));
@@ -43,6 +55,7 @@ export function WorkspaceModelSelector() {
   return (
     <div style={{ display: "flex", alignItems: "center", gap: "var(--space-2)", minWidth: 0 }}>
       <ModelSelector
+        additionalOption={presentationAvailable ? presentationChatOption : undefined}
         dialogId="workspace-model-selector-dialog"
         categoryErrors={catalog?.categoryErrors}
         models={models}

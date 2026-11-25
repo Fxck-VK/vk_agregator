@@ -4,6 +4,7 @@ import { parseDeckAppearance, type DeckAppearance } from "./deck-appearance";
 import type { Brief, DeckSlide } from "./deck-content";
 import { presentationWorkspacePath } from "./route";
 import { slideImageDataLimit, slideImagePattern } from "./slide-image";
+import { isSlideImageFrame } from "./slide-image-frame";
 
 const uuid = z.uuid();
 const draftPrefix = "epifera:deck-draft:";
@@ -13,7 +14,8 @@ const draftSchema = z.strictObject({
     title: z.string().min(1).max(160),
     points: z.array(z.string().min(1).max(300)).min(1).max(5),
     image: z.string().max(slideImageDataLimit).regex(slideImagePattern).optional(),
-  })).min(1).max(30),
+    imageFrame: z.strictObject({ x: z.number(), y: z.number(), width: z.number(), height: z.number() }).refine(isSlideImageFrame).optional(),
+  }).refine(slide => !slide.imageFrame || Boolean(slide.image))).min(1).max(30),
 });
 
 export type DeckRun = { conversation: string; job?: string; pending?: true };

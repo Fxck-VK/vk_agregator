@@ -10,12 +10,10 @@
   font-weight: var(--font-weight-semibold);
 }
 
-.field textarea {
+.field textarea, .field select {
   box-sizing: border-box;
   inline-size: 100%;
-  min-block-size: 6rem;
   padding: 0.625rem 0.75rem;
-  resize: vertical;
   border: 1px solid var(--landing-dialog-border, #d8d0c4);
   border-radius: 0.5rem;
   background: var(--color-panel);
@@ -24,7 +22,9 @@
   font-weight: var(--font-weight-normal, 400);
 }
 
-.field textarea:focus-visible {
+.field textarea { min-block-size: 6rem; resize: vertical; }
+
+.field textarea:focus-visible, .field select:focus-visible {
   outline: 2px solid var(--landing-focus, #ee70b1);
   outline-offset: 2px;
 }

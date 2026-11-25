@@ -26,15 +26,21 @@ type presentationObjectReader interface {
 // success before writing the assistant row. The caller has already verified the
 // original retained prompt, active conversation and account-owned job.
 func (h *Handler) readPresentationArtifact(ctx context.Context, job *domain.Job) (string, error) {
+	return h.readModeratedTextArtifact(ctx, job, true)
+}
+
+func (h *Handler) readModeratedTextArtifact(ctx context.Context, job *domain.Job, fallbackOnly bool) (string, error) {
 	objects, ok := h.deps.ImageArtifactURLSigner.(presentationObjectReader)
 	if !ok || h.deps.ImageResults == nil || h.deps.ImageArtifacts == nil || len(job.OutputArtifactIDs) != 1 || job.OutputArtifactIDs[0] == uuid.Nil {
 		return "", nil
 	}
 	// A deleted or redacted message keeps its row. Do not re-expose it through
 	// the artifact merely because the normal retained-message read omits it.
-	recorded, err := h.deps.Conversations.HasRecordedMessageByJobID(ctx, job.ID, domain.ConversationRoleAssistant)
-	if err != nil || recorded {
-		return "", err
+	if fallbackOnly {
+		recorded, err := h.deps.Conversations.HasRecordedMessageByJobID(ctx, job.ID, domain.ConversationRoleAssistant)
+		if err != nil || recorded {
+			return "", err
+		}
 	}
 	result, err := h.deps.ImageResults.GetResult(ctx, job.AccountID, job.ID)
 	if errors.Is(err, domain.ErrNotFound) {

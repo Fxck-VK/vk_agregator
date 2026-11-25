@@ -16,11 +16,13 @@ import { slideImageGenerationCopy as copy } from "@/i18n/presentation-slide-imag
 import { webBrowserFetch } from "@/lib/web-api/browser";
 import { browserSessionSnapshot } from "@/lib/web-api/browser-session-state";
 import type { ImageJob, ImageJobResult, ImageModel } from "@/lib/web-api/contracts";
+import { nearestSlideImageRatio, type SlideImageFrame } from "./slide-image-frame";
 
 import styles from "./SlideImageGeneration.module.css";
 
 type SlideImageGenerationProps = {
   prompt: string;
+  frame?: SlideImageFrame;
   onImage: (image: Blob) => void | Promise<void>;
   onClose: () => void;
 };
@@ -33,30 +35,38 @@ export function SlideImageGeneration(props: Readonly<SlideImageGenerationProps>)
   const { view } = useReleaseView();
   const [loadAttempt, setLoadAttempt] = useState(0);
   const [dismissible, setDismissible] = useState(true);
+  const [selectedModelID, setSelectedModelID] = useState<string>();
   const [selection, setSelection] = useState<{
     view: typeof view;
     attempt: number;
-    model: ImageModel | null;
+    models: ImageModel[];
     failed: boolean;
   }>();
 
   useEffect(() => {
     let current = true;
     void loadImageModelCatalog().then(({ items }) => {
-      if (current) setSelection({ view, attempt: loadAttempt, model: items[0] ?? null, failed: false });
+      if (current) setSelection({ view, attempt: loadAttempt, models: items, failed: false });
     }, () => {
-      if (current) setSelection({ view, attempt: loadAttempt, model: null, failed: true });
+      if (current) setSelection({ view, attempt: loadAttempt, models: [], failed: true });
     });
     return () => { current = false; };
   }, [view, loadAttempt]);
 
   const current = selection?.view === view && selection.attempt === loadAttempt ? selection : undefined;
+  const { frame } = props;
+  const options = current?.models.flatMap(model => {
+    const aspectRatio = frame ? nearestSlideImageRatio(frame, model) : undefined;
+    return frame && !aspectRatio ? [] : [{ model, aspectRatio }];
+  }) ?? [];
+  const selected = options.find(({ model }) => model.id === selectedModelID) ?? options[0];
 
   return (
-    <LandingDialog title={copy.title} closeLabel={copy.close} onClose={props.onClose} dismissible={!current?.model || dismissible}>
+    <LandingDialog title={copy.title} closeLabel={copy.close} onClose={props.onClose} dismissible={!selected || dismissible}>
       {!current ? <StateNotice inline kind="loading">{t.loadingModels}</StateNotice> : null}
-      {current?.model ? <SlideImageJob {...props} model={current.model} onDismissibleChange={setDismissible} /> : null}
-      {current && !current.model ? (
+      {selected ? <SlideImageJob {...props} {...selected} models={options.map(({ model }) => model)}
+        onModelChange={setSelectedModelID} onDismissibleChange={setDismissible} /> : null}
+      {current && !selected ? (
         <StateNotice inline kind="error" action={{ label: t.retryModels, onClick: () => setLoadAttempt(attempt => attempt + 1) }}>
           {current.failed ? t.loadingFailure : t.noModels}
         </StateNotice>
@@ -65,8 +75,11 @@ export function SlideImageGeneration(props: Readonly<SlideImageGenerationProps>)
   );
 }
 
-function SlideImageJob({ prompt, onImage, onClose, model, onDismissibleChange }: Readonly<SlideImageGenerationProps & {
+function SlideImageJob({ prompt, onImage, onClose, model, models, aspectRatio, onModelChange, onDismissibleChange }: Readonly<SlideImageGenerationProps & {
   model: ImageModel;
+  models: ImageModel[];
+  aspectRatio?: string;
+  onModelChange: (id: string) => void;
   onDismissibleChange: (dismissible: boolean) => void;
 }>) {
   const t = useDictionary().imageGeneration;
@@ -77,7 +90,7 @@ function SlideImageJob({ prompt, onImage, onClose, model, onDismissibleChange }:
   const writePending = useRef(false);
   const content = useRef<HTMLDivElement>(null);
   const textarea = useRef<HTMLTextAreaElement>(null);
-  const job = useImageGeneration({ model, promptValue: description, onPromptChange: setDescription });
+  const job = useImageGeneration({ model, promptValue: description, onPromptChange: setDescription, aspectRatioValue: aspectRatio });
   const { activeJob, preparation, handleJobUpdate, showResult, result, stage } = job;
   const preparedJobID = preparation?.job.id;
 
@@ -158,11 +171,17 @@ function SlideImageJob({ prompt, onImage, onClose, model, onDismissibleChange }:
       {editing ? (
         <form className={styles.form} onSubmit={event => { event.preventDefault(); void writeOnce(job.prepareImage); }}>
           <label className={styles.field}>
+            <span>{t.modelLabel}</span>
+            <select value={model.id} disabled={stage === "preparing"} onChange={event => onModelChange(event.target.value)}>
+              {models.map(item => <option key={item.id} value={item.id}>{item.name}</option>)}
+            </select>
+          </label>
+          <label className={styles.field}>
             <span>{t.promptLabel}</span>
             <textarea ref={textarea} tabIndex={0} rows={4} value={description} disabled={stage === "preparing"} onChange={event => job.changePrompt(event.target.value)} />
           </label>
           <div className={styles.summary}>
-            <span>{t.modelLabel} · {model.name}</span>
+            {job.composerProps.aspectRatio && <span>{copy.format} · {job.composerProps.aspectRatio}</span>}
             {price === null ? <span>{t.priceUnavailable}</span> : <CreditAmount prefix={t.priceLabel} value={price} />}
           </div>
           {job.editorError ? <StateNotice inline kind="error">{job.editorError}</StateNotice> : null}

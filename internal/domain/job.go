@@ -2,7 +2,6 @@ package domain
 
 import (
 	"encoding/json"
-	"strings"
 	"time"
 
 	"github.com/google/uuid"
@@ -324,17 +323,19 @@ type Job struct {
 // IsWebPresentation identifies text jobs admitted by the Web presentation route.
 // The server constructs this namespace, including the authenticated account ID.
 func (j *Job) IsWebPresentation() bool {
-	if j == nil || j.AccountID == uuid.Nil || j.Source != "web" ||
-		j.ResultMode != ResultModeAccountHistory || j.ChannelContext == nil || j.ChannelContext.Channel != ChannelWeb ||
-		j.OperationType != OperationTextGenerate || j.Modality != ModalityText {
-		return false
-	}
-	key, ok := strings.CutPrefix(j.IdempotencyKey, WebPresentationJobKeyPrefix(j.AccountID))
-	if !ok {
-		return false
-	}
-	id, err := uuid.Parse(key)
-	return err == nil && id != uuid.Nil && key == id.String()
+	return j.isWebPresentationJob(WebPresentationJobKeyPrefix)
+}
+
+// IsWebPresentationIntake identifies the separate conversational brief jobs.
+func (j *Job) IsWebPresentationIntake() bool {
+	return j.isWebPresentationJob(WebPresentationIntakeJobKeyPrefix)
+}
+
+func (j *Job) isWebPresentationJob(prefix func(uuid.UUID) string) bool {
+	return j != nil && j.AccountID != uuid.Nil && j.Source == "web" &&
+		j.ResultMode == ResultModeAccountHistory && j.ChannelContext != nil && j.ChannelContext.Channel == ChannelWeb &&
+		j.OperationType == OperationTextGenerate && j.Modality == ModalityText &&
+		validUUIDSuffix(j.IdempotencyKey, prefix(j.AccountID))
 }
 
 // PricingSnapshotCredits returns the immutable charge from a persisted pricing

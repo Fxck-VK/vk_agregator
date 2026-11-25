@@ -16,6 +16,8 @@ import { downloadFile, type Brief, type DeckSlide } from "./deck-content";
 import { powerpoint } from "./deck-powerpoint";
 import { DeckAppearanceSettings } from "./PresentationSettings";
 import { prepareSlideImage, renderSlideImage, slideImageBytes, slideImageTypes, slideImageUploadLimit } from "./slide-image";
+import { defaultSlideImageFrame, slideImageFrameCSS, type SlideImageFrame } from "./slide-image-frame";
+import { SlideImageFrameEditor } from "./SlideImageFrameEditor";
 import styles from "./DeckResult.module.css";
 
 const copy = presentationDeckCopy.result;
@@ -36,21 +38,23 @@ function slidePoints(body: string) {
   return body.split("\n").map(line => line.trim().replace(/^[-*•]\s+/, "")).filter(Boolean);
 }
 
-function Slide({ slide, index, total, style, appearance, revealed }: {
-  slide: DeckSlide; index: number; total: number; style: PresentationStyle; appearance: DeckAppearance; revealed?: number;
+function Slide({ slide, index, total, style, appearance, revealed, choosingImage = false }: {
+  slide: DeckSlide; index: number; total: number; style: PresentationStyle; appearance: DeckAppearance; revealed?: number; choosingImage?: boolean;
 }) {
   const cover = index === 0;
   const photo = cover || Boolean(slide.image);
+  const frame = slide.imageFrame;
   const { background, text, fontFamily } = resolveDeckAppearance(appearance, style, cover);
   const textLength = slide.title.length + slide.points.reduce((length, point) => length + point.length, 0);
-  const dense = textLength > (photo ? 220 : 450) || slide.title.length > 90;
+  const split = photo || choosingImage;
+  const dense = textLength > (split ? 220 : 450) || slide.title.length > 90;
   return (
-    <article className={styles.sheet} data-cover={cover} data-photo={photo} data-style={style} data-dense={dense}
+    <article className={styles.sheet} data-cover={cover} data-photo={split} data-style={style} data-dense={dense}
       style={{ backgroundColor: background, color: text, fontFamily }}>
-      {photo && (
-        <div className={styles.slidePhoto}>
+      {photo && !choosingImage && (
+        <div className={styles.slidePhoto} data-custom-frame={frame ? true : undefined} style={frame ? slideImageFrameCSS(frame) : undefined}>
           {slide.image
-            ? <NextImage src={slide.image} width={650} height={778} unoptimized alt="" />
+            ? <NextImage src={slide.image} fill unoptimized alt="" />
             : <HomePicture photo="workflowStart" original sizes="(max-width: 680px) 40vw, 460px" />}
         </div>
       )}
@@ -161,25 +165,28 @@ export function DeckResult({ slides, brief, appearance, canGenerateImage = false
   const [show, setShow] = useState(false);
   const [exporting, setExporting] = useState(false);
   const [preparingImage, setPreparingImage] = useState(false);
-  const [imagePrompt, setImagePrompt] = useState<string>();
+  const [imagePlacement, setImagePlacement] = useState<{ frame: SlideImageFrame; prompt?: string }>();
   const [notice, setNotice] = useState("");
   const [draft, setDraft] = useState<SlideDraft>();
   const [editError, setEditError] = useState("");
   const [previous, setPrevious] = useState<{ slides: DeckSlide[]; index: number }>();
   const imageInput = useRef<HTMLInputElement>(null);
+  const imageButton = useRef<HTMLButtonElement>(null);
   const imageOperation = useRef<AbortController>(null);
   const titleField = useRef<HTMLInputElement>(null);
   const editButton = useRef<HTMLButtonElement>(null);
   const focusEditorButton = useRef(false);
+  const focusImageButton = useRef(false);
   const index = Math.min(selected, Math.max(0, slides.length - 1));
   const editing = draft !== undefined;
-  const imageBusy = preparingImage || imagePrompt !== undefined;
+  const imageBusy = preparingImage || imagePlacement !== undefined;
+  const choosingImage = imagePlacement !== undefined && imagePlacement.prompt === undefined;
   const current = slides[index];
   const adding = draft?.kind === "new";
   const previewIndex = adding ? index + 1 : index;
   const previewTotal = slides.length + (adding ? 1 : 0);
   const preview = draft
-    ? { image: adding ? undefined : current?.image, title: draft.title.trim(), points: slidePoints(draft.body) }
+    ? { ...(adding ? {} : current), title: draft.title.trim(), points: slidePoints(draft.body) }
     : current;
 
   useEffect(() => () => imageOperation.current?.abort(), []);
@@ -191,6 +198,12 @@ export function DeckResult({ slides, brief, appearance, canGenerateImage = false
       editButton.current?.focus();
     }
   }, [editing]);
+  useEffect(() => {
+    if (!imageBusy && focusImageButton.current) {
+      focusImageButton.current = false;
+      imageButton.current?.focus();
+    }
+  }, [imageBusy]);
 
   if (!current) return null;
 
@@ -258,16 +271,21 @@ export function DeckResult({ slides, brief, appearance, canGenerateImage = false
     setNotice(persisted === false && (previous.slides.some(slide => slide.image) || slides.some(slide => slide.image)) ? copy.imageDraftUnavailable : copy.undone);
   }
 
-  async function attachImage(file: Blob) {
+  function closeImagePlacement() {
+    focusImageButton.current = true;
+    setImagePlacement(undefined);
+  }
+
+  async function attachImage(file: Blob, frame = current.imageFrame) {
     if (imageOperation.current) return;
     const operation = new AbortController();
     const session = browserSessionSnapshot();
     imageOperation.current = operation;
     setPreparingImage(true);
     try {
-      const image = await prepareSlideImage(file);
+      const image = await prepareSlideImage(file, frame);
       if (operation.signal.aborted || session.signal.aborted) return;
-      applySlides(slides.map((slide, i) => i === index ? { ...slide, image } : slide), index, copy.imageChanged);
+      applySlides(slides.map((slide, i) => i === index ? { ...slide, image, ...(frame ? { imageFrame: frame } : {}) } : slide), index, copy.imageChanged);
     } finally {
       imageOperation.current = null;
       if (!operation.signal.aborted) setPreparingImage(false);
@@ -342,8 +360,12 @@ export function DeckResult({ slides, brief, appearance, canGenerateImage = false
         </aside>
         <div className={styles.resultStage}>
           <div className={styles.preview}>
-            <Slide slide={preview} index={previewIndex} total={previewTotal} style={brief.style} appearance={appearance} />
-            {!editing && !show && navigation}
+            {choosingImage ? <SlideImageFrameEditor value={imagePlacement.frame}
+              onChange={frame => setImagePlacement({ frame })} onCancel={closeImagePlacement}
+              onNext={() => setImagePlacement({ frame: imagePlacement.frame, prompt: copy.imagePrompt(brief.topic, current.title) })}>
+              <Slide slide={preview} index={previewIndex} total={previewTotal} style={brief.style} appearance={appearance} choosingImage />
+            </SlideImageFrameEditor> : <Slide slide={preview} index={previewIndex} total={previewTotal} style={brief.style} appearance={appearance} />}
+            {!editing && !show && !imagePlacement && navigation}
           </div>
           {draft ? (
             <form className={styles.editor} onSubmit={saveSlide}>
@@ -377,7 +399,8 @@ export function DeckResult({ slides, brief, appearance, canGenerateImage = false
               <Button variant="outline" disabled={imageBusy} onClick={() => imageInput.current?.click()}>
                 {preparingImage ? copy.imagePreparing : index === 0 ? copy.changeCover : current.image ? copy.replaceImage : copy.uploadImage}
               </Button>
-              {canGenerateImage && <Button variant="outline" disabled={imageBusy} onClick={() => setImagePrompt(copy.imagePrompt(brief.topic, current.title))}>{copy.generateImage}</Button>}
+              {canGenerateImage && <Button ref={imageButton} variant="outline" disabled={imageBusy}
+                onClick={() => setImagePlacement({ frame: current.imageFrame ?? defaultSlideImageFrame })}>{copy.generateImage}</Button>}
               {current.image && <Button variant="outline" disabled={imageBusy} onClick={removeImage}>{index === 0 ? copy.resetCover : copy.removeImage}</Button>}
             </div>
           )}
@@ -391,7 +414,8 @@ export function DeckResult({ slides, brief, appearance, canGenerateImage = false
         </div>
         <p className={styles.feedback} role="status">{notice}</p>
       </div>
-      {imagePrompt !== undefined && <SlideImageGeneration prompt={imagePrompt} onImage={attachImage} onClose={() => setImagePrompt(undefined)} />}
+      {imagePlacement?.prompt !== undefined && <SlideImageGeneration frame={imagePlacement.frame} prompt={imagePlacement.prompt}
+        onImage={file => attachImage(file, imagePlacement.frame)} onClose={closeImagePlacement} />}
       {show && <DeckPlayer slides={slides} initialIndex={index} brief={brief} appearance={appearance}
         onAppearanceChange={changeAppearance} onClose={shownIndex => { setSelected(shownIndex); setShow(false); }} />}
       {typeof document !== "undefined" && createPortal(

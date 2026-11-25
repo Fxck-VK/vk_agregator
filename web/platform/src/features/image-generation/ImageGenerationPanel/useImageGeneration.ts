@@ -48,12 +48,13 @@ export type ImageGenerationOptions = {
   access?: "authenticated" | "guest";
   model?: ImageModel | null;
   promptValue?: string;
+  aspectRatioValue?: string;
   onPromptChange?: (prompt: string) => void;
   onBusyChange?: (busy: boolean) => void;
   onJobChange?: (job: ImageJob) => void;
 };
 
-export function useImageGeneration({ access = "authenticated", model, promptValue, onPromptChange, onBusyChange, onJobChange, initialValues }: Readonly<ImageGenerationOptions>) {
+export function useImageGeneration({ access = "authenticated", model, promptValue, aspectRatioValue, onPromptChange, onBusyChange, onJobChange, initialValues }: Readonly<ImageGenerationOptions>) {
   const msg = useMessages();
   const t = useDictionary();
   const router = useRouter();
@@ -112,8 +113,9 @@ export function useImageGeneration({ access = "authenticated", model, promptValu
   const maxOutputCount = selectedModel?.max_output_count ?? 1;
   const allowedAspectRatios = selectedModel?.allowed_aspect_ratios?.filter(ratio =>
     !selectedModel.price_by_variant || selectedModel.price_by_variant[`${imageQuality}:${ratio}`] > 0);
-  const aspectRatio = requestedAspectRatio && allowedAspectRatios?.includes(requestedAspectRatio)
-    ? requestedAspectRatio
+  const selectedAspectRatio = aspectRatioValue ?? requestedAspectRatio;
+  const aspectRatio = selectedAspectRatio && allowedAspectRatios?.includes(selectedAspectRatio)
+    ? selectedAspectRatio
     : allowedAspectRatios?.includes(selectedModel?.default_aspect_ratio ?? "")
       ? selectedModel!.default_aspect_ratio!
       : allowedAspectRatios?.[0] ?? "";

@@ -29,6 +29,31 @@ func WebPresentationJobKeyPrefix(accountID uuid.UUID) string {
 	return "web-presentation:" + accountID.String() + ":"
 }
 
+// WebPresentationIntakeJobKeyPrefix identifies billed assistant turns, which do
+// not appear in the generated presentation history.
+func WebPresentationIntakeJobKeyPrefix(accountID uuid.UUID) string {
+	return "web-presentation-intake:" + accountID.String() + ":"
+}
+
+const webPresentationChatPrefix = "presentation-intake:"
+
+func WebPresentationChatReference(key uuid.UUID) string {
+	return webPresentationChatPrefix + key.String()
+}
+
+func (c *Conversation) IsWebPresentationChat() bool {
+	return c != nil && c.Source == ConversationSourceWeb && c.AccountID != uuid.Nil && validUUIDSuffix(c.ExternalThreadID, webPresentationChatPrefix)
+}
+
+func validUUIDSuffix(value, prefix string) bool {
+	key, ok := strings.CutPrefix(value, prefix)
+	if !ok {
+		return false
+	}
+	id, err := uuid.Parse(key)
+	return err == nil && id != uuid.Nil && key == id.String()
+}
+
 // WebPresentationTitle gives a generated presentation a stable display title
 // derived only from the topic field of the supported presentation prompt.
 func WebPresentationTitle(prompt string) string {

@@ -1,7 +1,7 @@
 "use client";
 
 import { useMessages } from "@/i18n/LocaleProvider";
-
+import { useRouter } from "@/i18n/navigation";
 
 import { useCallback, useEffect, useMemo, useState, useSyncExternalStore } from "react";
 
@@ -9,6 +9,9 @@ import { ModelSelector } from "@/features/models/WorkspaceModelSelector/ModelSel
 import { useGenerationCatalog } from "@/features/models/GenerationCatalogProvider";
 import type { GenerationModel } from "@/features/models/generation-model-catalog";
 import { useWorkspaceModelSelection } from "@/features/models/WorkspaceModelSelection/WorkspaceModelSelection";
+import { presentationChatOption } from "@/features/presentations/presentation-chat-option";
+import { presentationChatModelId, presentationChatPath } from "@/features/presentations/route";
+import { useReleaseView } from "@/features/release/ReleaseViewProvider";
 
 import styles from "./ConversationModelSelector.module.css";
 
@@ -52,10 +55,24 @@ type ConversationModelSelectorProps = {
   selection: ReturnType<typeof useConversationModelSelection>;
 };
 
-export function ConversationModelSelector({ disabled, selection }: Readonly<ConversationModelSelectorProps>) {
+export function ConversationModelSelector(props: Readonly<ConversationModelSelectorProps>) {
+  const release = useReleaseView();
+  if (release.view === "dev") return <PresentationConversationSelector {...props} />;
+  return <ConversationSelector {...props} />;
+}
+
+function PresentationConversationSelector(props: Readonly<ConversationModelSelectorProps>) {
+  const router = useRouter();
+  return <ConversationSelector {...props} onPresentations={() => router.push(presentationChatPath)} />;
+}
+
+function ConversationSelector({ disabled, selection, onPresentations }: Readonly<ConversationModelSelectorProps & {
+  onPresentations?: () => void;
+}>) {
   const msg = useMessages();
   return (
     <ModelSelector
+      additionalOption={onPresentations ? presentationChatOption : undefined}
       className={styles.selector}
       descriptionMode="tooltip"
       dialogLabel={msg("conversationModelSelector.chooseAModelForThisChat")}
@@ -63,7 +80,10 @@ export function ConversationModelSelector({ disabled, selection }: Readonly<Conv
       categoryErrors={selection.catalog?.categoryErrors}
       key={disabled ? "busy" : "ready"}
       models={selection.catalog?.items ?? []}
-      onSelect={(model) => selection.selectModel(model.id)}
+      onSelect={(model) => {
+        if (model.id === presentationChatModelId) onPresentations?.();
+        else selection.selectModel(model.id);
+      }}
       renderInPortal
       selectedModelId={selection.selectedModelId}
       status={selection.status}

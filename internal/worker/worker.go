@@ -37,6 +37,7 @@ import (
 	"vk-ai-aggregator/internal/service/assistantfacts"
 	"vk-ai-aggregator/internal/service/dialogcontext"
 	"vk-ai-aggregator/internal/service/moderationservice"
+	"vk-ai-aggregator/internal/service/presentationintake"
 	"vk-ai-aggregator/internal/service/providermodels"
 )
 
@@ -1332,7 +1333,9 @@ func (p *processor) buildRequest(ctx context.Context, job *domain.Job, attempt i
 	draft := false
 	assistantFactsText := ""
 	// Presentation briefs are standalone requests, outside the catalog-aware assistant.
-	if p.assistantFacts != nil && !job.IsWebPresentation() && job.OperationType == domain.OperationTextGenerate && job.Modality == domain.ModalityText {
+	if job.IsWebPresentationIntake() {
+		assistantFactsText = presentationintake.SystemPrompt
+	} else if p.assistantFacts != nil && !job.IsWebPresentation() && job.OperationType == domain.OperationTextGenerate && job.Modality == domain.ModalityText {
 		facts, err := p.assistantFacts.Build(ctx, assistantfacts.Input{
 			AccountID: workerJobOwnerID(job),
 			Prompt:    pp.Prompt,
@@ -1397,7 +1400,7 @@ func (p *processor) buildRequest(ctx context.Context, job *domain.Job, attempt i
 			draft = false
 		}
 	}
-	if job.IsWebPresentation() && p.textContext == nil {
+	if (job.IsWebPresentation() || job.IsWebPresentationIntake()) && p.textContext == nil {
 		return domain.ProviderRequest{}, errors.New("worker: presentation conversation service is required")
 	}
 	if p.textContext != nil && (job.OperationType == domain.OperationTextGenerate || isWebConversationMedia(job)) {
@@ -1405,7 +1408,7 @@ func (p *processor) buildRequest(ctx context.Context, job *domain.Job, attempt i
 		if err != nil {
 			return domain.ProviderRequest{}, err
 		}
-		if job.IsWebPresentation() && prepared.ConversationID == uuid.Nil {
+		if (job.IsWebPresentation() || job.IsWebPresentationIntake()) && prepared.ConversationID == uuid.Nil {
 			return domain.ProviderRequest{}, errors.New("worker: presentation conversation was not prepared")
 		}
 		if prepared.Prompt != "" {
@@ -1503,7 +1506,7 @@ func (p *processor) buildRequest(ctx context.Context, job *domain.Job, attempt i
 		Params:               providerParams,
 		MaxOutputTokens:      maxOutputTokens,
 		MaxInputTokens:       textInputLimit,
-		DisableTextThinking:  job.IsWebPresentation(),
+		DisableTextThinking:  job.IsWebPresentation() || job.IsWebPresentationIntake(),
 		IdempotencyKey:       fmt.Sprintf("provider_submit:%s:%d", job.ID, attempt),
 		AttemptNo:            attempt,
 	}, nil
@@ -2211,7 +2214,10 @@ func (p *processor) applyResult(ctx context.Context, job *domain.Job, pt *domain
 			return nil
 		}
 		if err := p.saveDialogAnswer(ctx, job, dialogAnswer); err != nil {
-			if job.IsWebPresentation() || isWebConversationMedia(job) {
+			if job.IsWebPresentationIntake() && errors.Is(err, dialogcontext.ErrInvalidPresentationIntakeOutput) {
+				return p.rejectTextOrMediaOutput(ctx, job, "presentation_intake_invalid_output", "presentation intake output was invalid; credits were not charged")
+			}
+			if job.IsWebPresentation() || job.IsWebPresentationIntake() || isWebConversationMedia(job) {
 				return err
 			}
 			slog.WarnContext(ctx, "dialog context answer save failed",
@@ -2700,7 +2706,7 @@ func (p *processor) saveDialogAnswer(ctx context.Context, job *domain.Job, answe
 		_ = json.Unmarshal(job.Params, &pp)
 	}
 	conversationID, err := uuid.Parse(pp.ConversationID)
-	if job.IsWebPresentation() && (p.textContext == nil || err != nil || conversationID == uuid.Nil || strings.TrimSpace(answer) == "") {
+	if (job.IsWebPresentation() || job.IsWebPresentationIntake()) && (p.textContext == nil || err != nil || conversationID == uuid.Nil || strings.TrimSpace(answer) == "") {
 		return errors.New("worker: moderated presentation answer and conversation are required")
 	}
 	if p.textContext == nil || err != nil || answer == "" {
@@ -3008,7 +3014,7 @@ func (p *processor) moderateOutputs(ctx context.Context, job *domain.Job, provid
 				blocked = true
 			} else if artifact.MediaType == domain.MediaTypeText && dialogAnswer == "" {
 				text, loadErr := p.loadStoredTextOutput(ctx, artifact)
-				if loadErr != nil && job.IsWebPresentation() {
+				if loadErr != nil && (job.IsWebPresentation() || job.IsWebPresentationIntake()) {
 					tracing.RecordError(span, loadErr)
 					return false, "", loadErr
 				}
@@ -3062,16 +3068,22 @@ func (p *processor) moderateOutputs(ctx context.Context, job *domain.Job, provid
 	if !blocked {
 		return false, dialogAnswer, nil
 	}
-	if err := p.releaseReserved(ctx, job); err != nil {
+	if err := p.rejectTextOrMediaOutput(ctx, job, "content_rejected", "blocked by output moderation"); err != nil {
 		tracing.RecordError(span, err)
 		return false, "", err
 	}
-	if err := p.setStatus(ctx, job, domain.JobStatusRejected, "content_rejected", "blocked by output moderation"); err != nil {
-		tracing.RecordError(span, err)
-		return false, "", err
+	return true, "", nil
+}
+
+func (p *processor) rejectTextOrMediaOutput(ctx context.Context, job *domain.Job, code, message string) error {
+	if err := p.releaseReserved(ctx, job); err != nil {
+		return err
+	}
+	if err := p.setStatus(ctx, job, domain.JobStatusRejected, code, message); err != nil {
+		return err
 	}
 	metrics.JobsTerminal.WithLabelValues(string(domain.JobStatusRejected)).Inc()
-	return true, "", nil
+	return nil
 }
 
 func (p *processor) checkOutputArtifact(

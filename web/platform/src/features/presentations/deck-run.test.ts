@@ -53,6 +53,17 @@ describe("presentation recovery", () => {
     expect(getDeckDraft("account", job)).toBeUndefined();
   });
 
+  it("round-trips an image frame and rejects invalid or unattached frame data", () => {
+    const slide = {
+      title: "Фото", points: ["Подпись"], image: "data:image/jpeg;base64,cHJldmlldw==",
+      imageFrame: { x: 2500, y: 2000, width: 4000, height: 3000 },
+    };
+    expect(saveDeckDraft("account", job, [slide])).toBe(true);
+    expect(saveDeckDraft("account", job, [{ ...slide, imageFrame: { ...slide.imageFrame, width: 9000 } }])).toBe(false);
+    expect(saveDeckDraft("account", job, [{ ...slide, image: undefined }])).toBe(false);
+    expect(getDeckDraft("account", job)).toEqual([slide]);
+  });
+
   it("keeps edits scoped to the account and generation", () => {
     const slides = [{ title: "Доработанная обложка", points: ["Заметка"] }];
     saveDeckDraft("account", conversation, slides);

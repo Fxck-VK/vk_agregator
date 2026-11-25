@@ -453,6 +453,7 @@ func main() {
 		ImageJobPrepareLimiter: webImagePrepareLimiter,
 		ImageJobHistory:        core.Jobs,
 		PresentationHistory:    postgres.NewPresentationHistoryRepository(pool),
+		PresentationChatTurns:  postgres.NewJobRepository(pool),
 		ImageJobExpiry:         webImagePreparedExpiry,
 		ImageResults:           webResults,
 		ImageArtifacts:         core.Artifacts,

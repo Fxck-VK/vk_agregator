@@ -2,10 +2,13 @@ import type { DeckSlide } from "./deck-content";
 import { resolveDeckAppearance, type DeckAppearance } from "./deck-appearance";
 import { powerpointParagraphTiming, powerpointTransition } from "./deck-powerpoint-motion";
 import { presentationDeckCopy, presentationStyles } from "@/i18n/presentation-deck";
+import { defaultSlideImageFrame, isSlideImageFrame, slideImageFrameScale } from "./slide-image-frame";
 
 const doc = "http://schemas.openxmlformats.org/officeDocument/2006/relationships";
 const drawing = "http://schemas.openxmlformats.org/drawingml/2006/main";
 const presentation = "http://schemas.openxmlformats.org/presentationml/2006/main";
+const slideWidth = 12192000;
+const slideHeight = 6858000;
 const namespaces = `xmlns:a="${drawing}" xmlns:r="${doc}" xmlns:p="${presentation}"`;
 const group = '<p:nvGrpSpPr><p:cNvPr id="1" name=""/><p:cNvGrpSpPr/><p:nvPr/></p:nvGrpSpPr><p:grpSpPr/>';
 const colors = 'accent1="accent1" accent2="accent2" accent3="accent3" accent4="accent4" accent5="accent5" accent6="accent6" bg1="lt1" bg2="lt2" tx1="dk1" tx2="dk2" hlink="hlink" folHlink="folHlink"';
@@ -106,12 +109,17 @@ export function powerpoint(
       const name = cover ? presentationDeckCopy.powerpoint.coverShapeName : presentationDeckCopy.powerpoint.slideImageShapeName;
       parts.set(`ppt/media/${filename}`, photo);
       rels.push(["image", `../media/${filename}`]);
-      picture = `<p:pic><p:nvPicPr><p:cNvPr id="5" name="${name}"/><p:cNvPicPr/><p:nvPr/></p:nvPicPr><p:blipFill><a:blip r:embed="rId2"/><a:stretch><a:fillRect/></a:stretch></p:blipFill><p:spPr><a:xfrm><a:off x="6461760" y="0"/><a:ext cx="5730240" cy="6858000"/></a:xfrm><a:prstGeom prst="rect"><a:avLst/></a:prstGeom></p:spPr></p:pic>`;
+      const frame = slide.imageFrame && isSlideImageFrame(slide.imageFrame) ? slide.imageFrame : defaultSlideImageFrame;
+      const x = Math.round(frame.x / slideImageFrameScale * slideWidth);
+      const y = Math.round(frame.y / slideImageFrameScale * slideHeight);
+      const cx = Math.round((frame.x + frame.width) / slideImageFrameScale * slideWidth) - x;
+      const cy = Math.round((frame.y + frame.height) / slideImageFrameScale * slideHeight) - y;
+      picture = `<p:pic><p:nvPicPr><p:cNvPr id="5" name="${name}"/><p:cNvPicPr/><p:nvPr/></p:nvPicPr><p:blipFill><a:blip r:embed="rId2"/><a:stretch><a:fillRect/></a:stretch></p:blipFill><p:spPr><a:xfrm><a:off x="${x}" y="${y}"/><a:ext cx="${cx}" cy="${cy}"/></a:xfrm><a:prstGeom prst="rect"><a:avLst/></a:prstGeom></p:spPr></p:pic>`;
     }
     part(`ppt/slides/slide${n}.xml`, "presentationml.slide", `<p:sld ${namespaces}><p:cSld><p:bg><p:bgPr><a:solidFill><a:srgbClr val="${bg}"/></a:solidFill><a:effectLst/></p:bgPr></p:bg><p:spTree>${group}${picture}${folio}${title}${body}</p:spTree></p:cSld><p:clrMapOvr><a:masterClrMapping/></p:clrMapOvr>${transition}${timing}</p:sld>`);
     parts.set(`ppt/slides/_rels/slide${n}.xml.rels`, relationships(rels));
   });
-  part("ppt/presentation.xml", "presentationml.presentation.main", `<p:presentation ${namespaces}><p:sldMasterIdLst><p:sldMasterId id="2147483648" r:id="rId1"/></p:sldMasterIdLst><p:sldIdLst>${ids}</p:sldIdLst><p:sldSz cx="12192000" cy="6858000"/><p:notesSz cx="6858000" cy="9144000"/></p:presentation>`);
+  part("ppt/presentation.xml", "presentationml.presentation.main", `<p:presentation ${namespaces}><p:sldMasterIdLst><p:sldMasterId id="2147483648" r:id="rId1"/></p:sldMasterIdLst><p:sldIdLst>${ids}</p:sldIdLst><p:sldSz cx="${slideWidth}" cy="${slideHeight}"/><p:notesSz cx="6858000" cy="9144000"/></p:presentation>`);
   parts.set("ppt/_rels/presentation.xml.rels", relationships(entries));
   part("ppt/slideMasters/slideMaster1.xml", "presentationml.slideMaster", `<p:sldMaster ${namespaces}><p:cSld><p:spTree>${group}</p:spTree></p:cSld><p:clrMap ${colors}/><p:sldLayoutIdLst><p:sldLayoutId id="2147483649" r:id="rId1"/></p:sldLayoutIdLst></p:sldMaster>`);
   parts.set("ppt/slideMasters/_rels/slideMaster1.xml.rels", relationships([["slideLayout", "../slideLayouts/slideLayout1.xml"], ["theme", "../theme/theme1.xml"]]));

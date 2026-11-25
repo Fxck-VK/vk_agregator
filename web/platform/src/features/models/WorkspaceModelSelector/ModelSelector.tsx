@@ -54,6 +54,7 @@ export type ModelSelectorStatus = "loading" | "ready" | "failure";
 export type ModelSelectorVariant = "compact" | "panel" | "composer";
 
 type ModelSelectorProps = {
+  additionalOption?: ModelSelectorModel;
   categoryErrors?: Partial<Record<ModelSelectorCategoryId, string>>;
   categoryModelIds?: ModelSelectorCategoryModelIds;
   className?: string;
@@ -93,6 +94,7 @@ function getDefaultTriggerAriaLabel(name: string, isOpen: boolean, msg: Translat
 }
 
 export function ModelSelector({
+  additionalOption,
   categoryErrors,
   categoryModelIds = modelSelectorCategoryModelIds,
   className,
@@ -126,7 +128,8 @@ export function ModelSelector({
   const [popoverState, setPopoverState] = useState<PopoverState>("closed");
   const [portalLayout, setPortalLayout] = useState<PortalLayout | null>(null);
   const isOpen = popoverState === "open";
-  const selectedModel = models.find((model) => model.id === selectedModelId) ?? null;
+  const options = useMemo(() => additionalOption ? [...models, additionalOption] : models, [models, additionalOption]);
+  const selectedModel = options.find((model) => model.id === selectedModelId) ?? null;
   const selectedModelPresentation = selectedModel === null
     ? null
     : getModelPresentation(selectedModel, msg);
@@ -138,12 +141,12 @@ export function ModelSelector({
     ? `${triggerCharacters.slice(0, compactNameLimit - 1).join("")}…`
     : triggerText;
 
-  const sections = useMemo(() => getModelSelectorSections(models, categoryModelIds, categoryErrors, t), [models, categoryModelIds, categoryErrors, t]);
+  const sections = useMemo(() => getModelSelectorSections(models, categoryModelIds, categoryErrors, t, additionalOption), [models, categoryModelIds, categoryErrors, t, additionalOption]);
   const activeCategory = sections.some((section) => section.id === category) ? category : sections[0]?.id ?? "popular";
   const panelId = `${dialogId}-models`;
   const visibleSections = useMemo(() => {
     if (query.trim()) {
-      const results = searchModels(models, query);
+      const results = searchModels(options, query);
       return [
         ...(results.length ? [{ id: "search-results", label: t.modelSelector.searchResults, models: results, error: undefined }] : []),
         ...sections.filter(section => section.error).map(section => ({ ...section, models: [] })),
@@ -153,7 +156,7 @@ export function ModelSelector({
       ...sections.filter((section) => section.id === activeCategory),
       ...sections.filter((section) => section.id !== activeCategory),
     ];
-  }, [activeCategory, models, query, sections, t.modelSelector.searchResults]);
+  }, [activeCategory, options, query, sections, t.modelSelector.searchResults]);
 
   const requestClose = useCallback((restoreTriggerFocus = false) => {
     setPopoverState((currentState) => (
@@ -299,7 +302,7 @@ export function ModelSelector({
       : triggerAriaLabel(selectedModel.name, isOpen);
 
   const selectModel = (model: ModelCardModel) => {
-    const selected = models.find((candidate) => candidate.id === model.id);
+    const selected = options.find((candidate) => candidate.id === model.id);
     if (!selected) return;
     onSelect(selected);
     requestClose(true);

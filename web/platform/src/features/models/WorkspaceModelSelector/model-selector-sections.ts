@@ -17,6 +17,7 @@ export function getModelSelectorSections(
   selections: ModelSelectorCategoryModelIds,
   errors?: Partial<Record<ModelSelectorCategoryId, string>>,
   dictionary: Dictionary = getDictionary("ru"),
+  additionalOption?: ModelSelectorModel,
 ) {
   return dictionary.modelsCatalog.categories.map((category) => {
     const candidates = models.filter((model) => matchesModelCatalogCategory(model, category.id));
@@ -25,9 +26,10 @@ export function getModelSelectorSections(
       const model = candidates.find((candidate) => candidate.id === id);
       return model ? [model] : [];
     });
+    const pinned = additionalOption && matchesModelCatalogCategory(additionalOption, category.id) ? [additionalOption] : [];
     return {
       ...category,
-      models: chosenModels.slice(0, categoryModelLimit),
+      models: [...pinned, ...chosenModels.slice(0, categoryModelLimit)],
       error: ids?.length === 0 ? undefined : errors?.[category.id] === "models_load_failed" ? dictionary.modelsCatalog.loadFailure : errors?.[category.id],
     };
   }).filter((section) => section.models.length > 0 || section.error);

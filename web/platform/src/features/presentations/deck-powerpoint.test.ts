@@ -55,6 +55,17 @@ const appearanceSlides = [
   { title: "Конструкция & сборка", points: ["Эскиз", "Модель", "Прототип"] },
 ];
 
+it("exports the chosen frame as the editable picture's exact slide coordinates", async () => {
+  const picture = Uint8Array.of(255, 216, 1, 255, 217);
+  const parts = await readPowerPointParts(powerpoint([
+    appearanceSlides[0],
+    { ...appearanceSlides[1], imageFrame: { x: 2500, y: 2000, width: 4000, height: 3000 } },
+  ], "Учебный", [undefined, picture]));
+  const slide = new TextDecoder().decode(parts.get("ppt/slides/slide2.xml"));
+  expect(slide).toMatch(/<p:pic>.*<a:off x="3048000" y="1371600"\/><a:ext cx="4876800" cy="2057400"\/>.*<\/p:pic>/u);
+  expect(parts.get("ppt/media/slide2.jpg")).toEqual(picture);
+});
+
 it("applies the selected typeface, colors and native fade without animating the text", async () => {
   const presentation = powerpoint(appearanceSlides, "Учебный", [], {
     font: "georgia", background: "dark", animation: "off", transition: "fade",

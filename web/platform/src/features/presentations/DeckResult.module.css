@@ -124,6 +124,8 @@
 
 .sheet[data-style="Деловой"] .slidePhoto { border-color: #9abfac; }
 .slidePhoto img { width: 100%; height: 100%; object-fit: cover; object-position: 55% 67%; }
+.slidePhoto[data-custom-frame] { inset: auto; border: 0; }
+.slidePhoto[data-custom-frame] img { object-position: center; }
 
 .slideContent {
   align-self: center;

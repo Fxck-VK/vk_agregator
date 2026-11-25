@@ -11,6 +11,14 @@ vi.mock("@/features/models/generation-model-catalog", () => ({
   loadGenerationModelCatalog: vi.fn(),
 }));
 
+const release = vi.hoisted(() => ({ view: "prod" }));
+vi.mock("@/features/release/ReleaseViewProvider", () => ({
+  useReleaseView: () => ({
+    view: release.view,
+    allowsPath: (href: string) => href !== "/app/presentations" || release.view === "dev",
+  }),
+}));
+
 import { chatModelForSelector } from "@/features/models/chat-model-selector";
 import { ConversationModelSelector, useConversationModelSelection } from "@/features/conversations/ConversationModelSelector/ConversationModelSelector";
 import {
@@ -142,6 +150,7 @@ describe("WorkspaceModelSelector", () => {
   const push = vi.fn();
 
   beforeEach(() => {
+    release.view = "prod";
     push.mockReset();
     vi.mocked(useRouter).mockReset();
     vi.mocked(useSearchParams).mockReset();
@@ -188,6 +197,35 @@ describe("WorkspaceModelSelector", () => {
     vi.mocked(useSearchParams).mockReturnValue(new URLSearchParams("model=gpt-image-2") as never);
     view.rerender(workspaceWithConversation(null));
     expect(await header.findByRole("button", { name: /GPT Image 2/ })).toBeInTheDocument();
+  });
+
+  it("opens the presentations chat from either selector without changing the original model", async () => {
+    release.view = "dev";
+    window.sessionStorage.setItem("neirohub:conversation-model:first", "gpt_5_5");
+    vi.mocked(usePathname).mockReturnValue("/app/chat/first");
+    render(workspaceWithConversation("first"));
+
+    const header = within(screen.getByRole("banner"));
+    fireEvent.click(await header.findByRole("button", { name: /GPT-5.5/ }));
+    const headerDialog = screen.getByRole("dialog", { name: ru.modelSelector.dialogLabel });
+    fireEvent.change(within(headerDialog).getByRole("searchbox"), { target: { value: "Презентации" } });
+    fireEvent.click(within(headerDialog).getByRole("button", { name: /Epifera Презентации/ }));
+    expect(push).toHaveBeenCalledExactlyOnceWith("/ru/app/chats?model=epifera-presentations");
+
+    push.mockClear();
+    const editor = within(screen.getByRole("region", { name: "Conversation editor" }));
+    fireEvent.click(editor.getByRole("button", { name: /GPT-5.5/ }));
+    const editorDialog = screen.getByRole("dialog", { name: "Выбор модели для диалога" });
+    fireEvent.click(within(within(editorDialog).getByRole("region", { name: "Текст" })).getByRole("button", { name: /Epifera Презентации/ }));
+    expect(push).toHaveBeenCalledExactlyOnceWith("/ru/app/chats?model=epifera-presentations");
+    expect(window.sessionStorage.getItem("neirohub:conversation-model:first")).toBe("gpt_5_5");
+  });
+
+  it("does not offer the presentations chat when the workspace route is unavailable", async () => {
+    render(<WorkspaceModelSelector />);
+    fireEvent.click(await screen.findByRole("button", { name: /Nano Banana 2/ }));
+    fireEvent.change(screen.getByRole("searchbox"), { target: { value: "Презентации" } });
+    expect(screen.queryByRole("button", { name: /Epifera Презентации/ })).not.toBeInTheDocument();
   });
 
   it("restores each conversation model in the header when switching chats", async () => {
