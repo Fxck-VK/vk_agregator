@@ -5,6 +5,15 @@ export const presentationStyles = {
 
 export type PresentationStyle = typeof presentationStyles[keyof typeof presentationStyles];
 
+const slideCountRules = new Intl.PluralRules("ru");
+
+export const presentationPromptFormat = {
+  briefPattern: /^Подготовь презентацию на русском языке\. Тема: ([\s\S]+?)\.\n\nРовно (5|10) слайдов, включая обложку и вывод\. Стиль: (учебный|деловой)\.\n\n/,
+  audiencePrefix: "Аудитория: ",
+  notesPrefix: "Исходный материал и пожелания: ",
+  business: "деловой",
+} as const;
+
 export const presentationDeckCopy = {
   prompt: {
     topic: (topic: string) => `Подготовь презентацию на русском языке. Тема: ${topic}.`,
@@ -46,6 +55,22 @@ export const presentationDeckCopy = {
     quotePending: "Проверяем стоимость…",
     statusPending: "Проверяем статус…",
     checkStatus: "Проверить статус",
+    locating: "Проверяем состояние презентации…",
+    confirming: "Ждём подтверждения запуска с сервера…",
+    progressLabel: "Ход генерации",
+    stageQueued: "В очереди",
+    stageWriting: "Модель пишет слайды",
+    stagePreparing: "Готовим ответ",
+    answerMissing: "Текст слайдов пока недоступен. Проверьте статус или вернитесь к брифу.",
+    runUnavailable: "Не удалось открыть этот запуск. Проверьте ссылку или вернитесь к брифу.",
+    checkUnavailable: "Связь прервалась. Мастерская повторяет проверку.",
+    backToBrief: "К брифу",
+    failures: {
+      content_rejected: "Запрос отклонён проверкой содержимого. Измените бриф.",
+      invalid_request: "Модель отклонила запрос. Проверьте тему и исходный текст.",
+      provider_unavailable: "Модель сейчас недоступна. Можно вернуться к брифу и повторить позже.",
+      generation_failed: "Слайды не готовы из-за ошибки генерации. Можно вернуться к брифу.",
+    },
     openHistory: "Открыть в истории",
   },
   result: {
@@ -68,6 +93,31 @@ export const presentationDeckCopy = {
     printPdf: "Печать / PDF",
     editSlide: "Изменить слайд",
     closeShow: "Закрыть показ",
+    deckSummary: (count: number, style: string) => {
+      const form = slideCountRules.select(count);
+      const slides = form === "one" ? "слайд" : form === "few" ? "слайда" : "слайдов";
+      return `${count.toLocaleString("ru-RU")} ${slides} · ${style}`;
+    },
+    addSlide: "Добавить слайд",
+    slideLimit: "Достигнут лимит в 30 слайдов.",
+    added: "Слайд добавлен.",
+    moved: "Порядок слайдов изменён.",
+    removed: "Слайд удалён.",
+    undo: "Отменить изменение",
+    undone: "Последнее изменение отменено.",
+    moveEarlier: "Переместить раньше",
+    moveEarlierShort: "Раньше",
+    moveLater: "Переместить позже",
+    moveLaterShort: "Позже",
+    deleteSlide: "Удалить слайд",
+    exportFailed: "Не удалось подготовить PowerPoint. Попробуйте ещё раз.",
+    changeCover: "Заменить фото обложки",
+    resetCover: "Вернуть стандартную обложку",
+    coverPreparing: "Готовим фото…",
+    coverChanged: "Обложка обновлена для показа и скачивания.",
+    coverReset: "Стандартная обложка восстановлена.",
+    coverFileLimit: "Выберите фото в формате JPG, PNG или WebP размером до 8 МБ.",
+    coverFailed: "Не удалось открыть фото. Выберите другой файл.",
   },
   powerpoint: {
     textShapeName: (id: number) => `Текст ${id}`,

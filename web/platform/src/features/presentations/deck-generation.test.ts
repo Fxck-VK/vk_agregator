@@ -25,21 +25,24 @@ describe("presentation generation", () => {
     expect(api.write.mock.calls[2]).toEqual(api.write.mock.calls[1]);
     expect(JSON.parse(api.write.mock.calls[2][1].body)).toEqual({ model_id: quote.model_id, expected_presentation_credits: 5, prompt: input });
   });
-  it("reads a finished deck from the dedicated conversation", async () => {
-    api.read.mockResolvedValueOnce(Response.json({ job_id: job, status: "succeeded" }))
-      .mockResolvedValueOnce(Response.json({ items: [
-        { id: conversation, role: "user", text: input, seq: 1, created_at: when },
-        { id: job, role: "assistant", text: source, seq: 2, created_at: when },
-      ] }));
-    expect(await readDeckJob(conversation, job, input, signal)).toEqual({ kind: "ready", text: source });
-    expect(readDeck(source, 5)).toHaveLength(5);
+  it("loads the job-bound answer in one read, independent of message order", async () => {
+    api.read.mockResolvedValueOnce(Response.json({ job_id: job, status: "succeeded", prompt: input, answer: source }));
+    await expect(readDeckJob({ conversation, job }, signal)).resolves.toMatchObject({ kind: "ready", text: source, prompt: input });
+    expect(api.read).toHaveBeenCalledOnce();
+    expect(api.read.mock.calls[0][0]).toBe(`/web/v1/presentations/${conversation}?job_id=${job}`);
   });
-  it("does not present content while the worker is still processing or after failure", async () => {
+  it("recovers existing conversations and distinguishes a lost answer from in-flight work", async () => {
+    api.read.mockResolvedValueOnce(Response.json({ job_id: job, status: "succeeded", prompt: input }));
+    await expect(readDeckJob({ conversation }, signal)).resolves.toMatchObject({ kind: "missing", prompt: input });
+    expect(api.read.mock.calls[0][0]).toBe(`/web/v1/presentations/${conversation}`);
     for (const [status, kind] of [["provider_processing", "pending"], ["failed_terminal", "failed"]]) {
-      api.read.mockResolvedValueOnce(Response.json({ job_id: job, status }));
-      expect(await readDeckJob(conversation, job, input, signal)).toEqual({ kind });
+      api.read.mockResolvedValueOnce(Response.json({ job_id: job, status, prompt: input, failure_code: "provider_timeout" }));
+      await expect(readDeckJob({ conversation, job }, signal)).resolves.toMatchObject({ kind, status, prompt: input });
     }
-    expect(api.read).toHaveBeenCalledTimes(2);
+  });
+  it("rejects a mismatched job ID before accepting any result", async () => {
+    api.read.mockResolvedValueOnce(Response.json({ job_id: conversation, status: "succeeded", prompt: input, answer: source }));
+    await expect(readDeckJob({ conversation, job }, signal)).rejects.toThrow();
   });
   it("requires correction instead of fabricating incomplete slides", () => {
     expect(() => readDeck(source, 10)).toThrow();

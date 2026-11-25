@@ -395,9 +395,24 @@ func (r *ConversationRepo) SetGeneratedTitleForActiveWebConversation(_ context.C
 }
 
 func (r *ConversationRepo) GetUserMessageByJobID(_ context.Context, jobID uuid.UUID) (*domain.ConversationMessage, error) {
+	return r.getMessageByJobAndRole(jobID, domain.ConversationRoleUser)
+}
+
+func (r *ConversationRepo) GetAssistantMessageByJobID(_ context.Context, jobID uuid.UUID) (*domain.ConversationMessage, error) {
+	return r.getMessageByJobAndRole(jobID, domain.ConversationRoleAssistant)
+}
+
+func (r *ConversationRepo) HasRecordedMessageByJobID(_ context.Context, jobID uuid.UUID, role domain.ConversationMessageRole) (bool, error) {
 	r.mu.Lock()
 	defer r.mu.Unlock()
-	id, ok := r.messageByRole[messageRoleKey(jobID, domain.ConversationRoleUser)]
+	_, found := r.messageByRole[messageRoleKey(jobID, role)]
+	return found, nil
+}
+
+func (r *ConversationRepo) getMessageByJobAndRole(jobID uuid.UUID, role domain.ConversationMessageRole) (*domain.ConversationMessage, error) {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	id, ok := r.messageByRole[messageRoleKey(jobID, role)]
 	if !ok {
 		return nil, domain.ErrNotFound
 	}

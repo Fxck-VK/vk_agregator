@@ -1396,10 +1396,16 @@ func (p *processor) buildRequest(ctx context.Context, job *domain.Job, attempt i
 			draft = false
 		}
 	}
+	if job.IsWebPresentation() && p.textContext == nil {
+		return domain.ProviderRequest{}, errors.New("worker: presentation conversation service is required")
+	}
 	if p.textContext != nil && (job.OperationType == domain.OperationTextGenerate || isWebConversationMedia(job)) {
 		prepared, err := p.textContext.Prepare(ctx, job, pp.Prompt)
 		if err != nil {
 			return domain.ProviderRequest{}, err
+		}
+		if job.IsWebPresentation() && prepared.ConversationID == uuid.Nil {
+			return domain.ProviderRequest{}, errors.New("worker: presentation conversation was not prepared")
 		}
 		if prepared.Prompt != "" {
 			prompt = prepared.Prompt
@@ -2203,7 +2209,7 @@ func (p *processor) applyResult(ctx context.Context, job *domain.Job, pt *domain
 			return nil
 		}
 		if err := p.saveDialogAnswer(ctx, job, dialogAnswer); err != nil {
-			if isWebConversationMedia(job) {
+			if job.IsWebPresentation() || isWebConversationMedia(job) {
 				return err
 			}
 			slog.WarnContext(ctx, "dialog context answer save failed",
@@ -2678,27 +2684,24 @@ func isWebConversationMedia(job *domain.Job) bool {
 }
 
 func (p *processor) saveDialogAnswer(ctx context.Context, job *domain.Job, answer string) error {
-	if p.textContext == nil {
-		return nil
-	}
 	if isWebConversationMedia(job) {
 		if job.Modality == domain.ModalityVideo {
 			answer = "Видео готово."
 		} else {
 			answer = "Изображение готово."
 		}
-	} else if answer == "" || job.OperationType != domain.OperationTextGenerate || job.Modality != domain.ModalityText {
+	} else if job.OperationType != domain.OperationTextGenerate || job.Modality != domain.ModalityText {
 		return nil
 	}
 	var pp promptParams
 	if len(job.Params) > 0 {
 		_ = json.Unmarshal(job.Params, &pp)
 	}
-	if pp.ConversationID == "" {
-		return nil
-	}
 	conversationID, err := uuid.Parse(pp.ConversationID)
-	if err != nil {
+	if job.IsWebPresentation() && (p.textContext == nil || err != nil || conversationID == uuid.Nil || strings.TrimSpace(answer) == "") {
+		return errors.New("worker: moderated presentation answer and conversation are required")
+	}
+	if p.textContext == nil || err != nil || answer == "" {
 		return nil
 	}
 	return p.textContext.Complete(ctx, job, conversationID, answer)
@@ -3001,11 +3004,13 @@ func (p *processor) moderateOutputs(ctx context.Context, job *domain.Job, provid
 		if hasVerdict {
 			if !allowed {
 				blocked = true
-			}
-			if artifact.MediaType == domain.MediaTypeText && dialogAnswer == "" {
-				if text, loadErr := p.loadStoredTextOutput(ctx, artifact); loadErr == nil {
-					dialogAnswer = text
+			} else if artifact.MediaType == domain.MediaTypeText && dialogAnswer == "" {
+				text, loadErr := p.loadStoredTextOutput(ctx, artifact)
+				if loadErr != nil && job.IsWebPresentation() {
+					tracing.RecordError(span, loadErr)
+					return false, "", loadErr
 				}
+				dialogAnswer = text
 			}
 			continue
 		}

@@ -15,19 +15,26 @@ import { PresentationExample } from "./PresentationExample";
 import { DeckRequest } from "./DeckRequest";
 import { DeckResult } from "./DeckResult";
 import { downloadFile, emptyBrief, presentationPrompt, readDeck, type Brief, type DeckSlide } from "./deck-content";
+import { getDeckDraft, readDeckBrief, replaceDeckRun, saveDeckDraft, type DeckRun } from "./deck-run";
 import styles from "./Studio.module.css";
 
 const scenarios = Object.values(presentationStyles);
 // In-memory handoff across the server-verified guest → account remount in this tab.
 let loginDraft: { accountId: string; brief: Brief } | null = null;
 
-export function PresentationStudio({ accountId, local, localApiUnavailable = false }: { accountId?: string; local: boolean; localApiUnavailable?: boolean }) {
+export function PresentationStudio({ accountId, local, localApiUnavailable = false, initialRun }: {
+  accountId?: string;
+  local: boolean;
+  localApiUnavailable?: boolean;
+  initialRun?: DeckRun;
+}) {
   const router = useRouter();
   const [brief, setBrief] = useState<Brief>(() => loginDraft && loginDraft.accountId === accountId ? loginDraft.brief : emptyBrief);
-  const [step, setStep] = useState(() => loginDraft && loginDraft.accountId === accountId ? 1 : 0);
+  const [run, setRun] = useState(initialRun);
+  const [step, setStep] = useState(() => initialRun || loginDraft && loginDraft.accountId === accountId ? 1 : 0);
   const [loginOpened, setLoginOpened] = useState(false);
   useEffect(() => { if (accountId === loginDraft?.accountId) loginDraft = null; }, [accountId]);
-  const [mode, setMode] = useState<"external" | "account">(local && !accountId ? "external" : "account");
+  const [mode, setMode] = useState<"external" | "account">(!initialRun && (localApiUnavailable || local && !accountId) ? "external" : "account");
   const [source, setSource] = useState("");
   const [slides, setSlides] = useState<DeckSlide[]>([]);
   const [busy, setBusy] = useState(false);
@@ -53,17 +60,43 @@ export function PresentationStudio({ accountId, local, localApiUnavailable = fal
     if (!brief.topic.trim()) { setProblem(labels.topicRequired); event.currentTarget.querySelector("textarea")?.focus(); return; }
     setStep(1); setNotice(""); setProblem("");
   }
-  const receive = useCallback((input: string) => {
+  const rememberRun = useCallback((next: DeckRun) => {
+    setRun(next);
+    replaceDeckRun(next);
+  }, []);
+
+  const restoreBrief = useCallback((original: string) => {
+    const restored = readDeckBrief(original);
+    if (restored) setBrief(restored);
+  }, []);
+
+  const changeSlides = useCallback((next: DeckSlide[]) => {
+    setSlides(next);
+    if (accountId && run?.job) saveDeckDraft(accountId, run.job, next);
+  }, [accountId, run]);
+
+  const receive = useCallback((input: string, original?: string, resultJob?: string) => {
     setSource(input);
     setBusy(false);
     setNotice("");
+    const recovered = original ? readDeckBrief(original) : undefined;
+    const count = recovered?.count ?? brief.count;
+    if (recovered) setBrief(recovered);
+    if (run && resultJob && run.job !== resultJob) rememberRun({ conversation: run.conversation, job: resultJob });
+    const job = resultJob ?? run?.job;
     try {
-      setSlides(readDeck(input, brief.count)); setStep(2); setEditing(false); setProblem("");
+      const draft = original !== undefined && accountId && job ? getDeckDraft(accountId, job) : undefined;
+      const next = draft ?? readDeck(input, count);
+      if (original === undefined && accountId && job) saveDeckDraft(accountId, job, next);
+      setSlides(next);
+      setStep(2);
+      setEditing(false);
+      setProblem("");
     } catch (error) {
       setEditing(true);
       setProblem(error instanceof Error ? error.message : labels.outlineInvalid);
     }
-  }, [brief.count]);
+  }, [accountId, brief.count, rememberRun, run]);
   async function copy() {
     try { await navigator.clipboard.writeText(prompt); setNotice(labels.promptCopied); }
     catch { setCopyFallback(true); setNotice(labels.copyPromptManually); }
@@ -78,14 +111,27 @@ export function PresentationStudio({ accountId, local, localApiUnavailable = fal
     } catch { setNotice(labels.signInPending); }
   }
   useEffect(() => { if (copyFallback) { promptField.current?.focus(); promptField.current?.select(); } }, [copyFallback]);
+  function backToBrief() {
+    if (run) replaceDeckRun();
+    setRun(undefined);
+    setBusy(false);
+    setSource("");
+    setStep(0);
+    setNotice("");
+    setProblem("");
+    setEditing(false);
+    setCopyFallback(false);
+  }
   function startOver() {
-    setBrief(emptyBrief); setSource(""); setSlides([]); setStep(0); setNotice(""); setProblem(""); setEditing(false); setCopyFallback(false);
+    backToBrief();
+    setBrief(emptyBrief);
+    setSlides([]);
   }
 
   return <section className={styles.studio} aria-label={labels.label}>
     <ol className={styles.steps} aria-label={labels.stepsLabel}>{labels.steps.map((label, i) =>
       <li key={label} aria-current={i === step ? "step" : undefined} data-done={i < step}><span aria-hidden="true">{i < step ? "✓" : i + 1}</span>{label}</li>)}</ol>
-    {step === 2 ? <div ref={heading} tabIndex={-1} role="group" aria-label={labels.resultLabel}><DeckResult slides={slides} brief={brief} onChange={setSlides} onNew={startOver} /></div> :
+    {step === 2 ? <div ref={heading} tabIndex={-1} role="group" aria-label={labels.resultLabel}><DeckResult slides={slides} brief={brief} onChange={changeSlides} onNew={startOver} /></div> :
       <div className={styles.workbench}>
         <div className={styles.composer}>
           <h2 tabIndex={-1} ref={heading}>{step === 0 ? labels.topicHeading : editing ? labels.editingHeading : labels.prepareHeading}</h2>
@@ -105,12 +151,13 @@ export function PresentationStudio({ accountId, local, localApiUnavailable = fal
             {problem && <p className={styles.error} role="alert">{problem}</p>}
             <Button className={styles.primary} type="submit">{labels.continue} <LandingArrow /></Button>
           </form> : <>
-            {!busy && <button className={styles.back} onClick={() => { setStep(0); setEditing(false); setProblem(""); setNotice(""); }}>{labels.back}</button>}
-            {!editing && local && <div className={styles.methods} role="group" aria-label={labels.generationMode}>
+            {!busy && (!run || editing) && <button className={styles.back} onClick={backToBrief}>{labels.back}</button>}
+            {!editing && !run && (local || accountId) && <div className={styles.methods} role="group" aria-label={labels.generationMode}>
               <button disabled={busy} aria-pressed={mode === "account"} onClick={() => { setMode("account"); setNotice(""); }}>{labels.inEpifera}</button>
               <button disabled={busy} aria-pressed={mode === "external"} onClick={() => { setMode("external"); setNotice(""); }}>{labels.inAnotherModel}</button>
             </div>}
-            {mode === "account" && !editing ? (accountId ? <DeckRequest accountId={accountId} prompt={prompt} onResult={receive} onBusy={setBusy} /> :
+            {mode === "account" && !editing ? (accountId ? <DeckRequest accountId={accountId} prompt={prompt} run={run} onRun={rememberRun}
+              onPrompt={restoreBrief} onResult={receive} onBusy={setBusy} onRestart={backToBrief} /> :
               <div className={styles.request}>{localApiUnavailable
                 ? <><p>{labels.serverUnavailable}</p><Button variant="outline" onClick={() => setMode("external")}>{labels.useAnotherModel}</Button></>
                 : <><p>{labels.signInHelp}</p><Link className={styles.primary} href="/login" target="_blank" rel="noopener" onClick={() => setLoginOpened(true)}>{presentationPageCopy.signIn}</Link>

@@ -7,7 +7,7 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 
 const releaseView = vi.hoisted(() => ({ view: "dev" }));
 afterEach(() => { releaseView.view = "dev"; cleanup(); vi.unstubAllGlobals(); });
-vi.mock("@/features/release/ReleaseViewProvider", () => ({ useReleaseView: () => ({ allowsPath: (href: string) => releaseView.view === "dev" || !["/app/music", "/app/speech"].includes(href) }) }));
+vi.mock("@/features/release/ReleaseViewProvider", () => ({ useReleaseView: () => ({ allowsPath: (href: string) => releaseView.view === "dev" || !["/app/music", "/app/speech", "/app/presentations"].includes(href) }) }));
 
 it("keeps the Audio label when linking directly to MP3 downloads in PROD", () => {
   mockNarrowViewport();
@@ -139,6 +139,7 @@ describe("Sidebar", () => {
       { href: "/app/files", icon: "file", label: ru.navigation.files, prefetch: true },
       { href: "/app/models", icon: "grid", label: ru.navigation.models, prefetch: true },
       { href: "/app/music", icon: "music", label: "Аудио", prefetch: true },
+      { href: "/app/presentations", icon: "monitor", label: "Презентации", prefetch: true },
       { href: "/app/inspiration", icon: "image", label: ru.navigation.inspiration, prefetch: true },
     ]);
   });
@@ -160,6 +161,7 @@ describe("Sidebar", () => {
       ru.navigation.files,
       ru.navigation.models,
       "Аудио",
+      "Презентации",
       ru.navigation.inspiration,
     ]);
     expect(links.map((link) => link.querySelector("[data-icon]")?.getAttribute("data-icon"))).toEqual([
@@ -167,8 +169,34 @@ describe("Sidebar", () => {
       "file",
       "grid",
       "music",
+      "monitor",
       "image",
     ]);
+  });
+
+  it("opens Presentations inside the DEV workspace and shows the selected entry", () => {
+    vi.mocked(usePathname).mockReturnValue("/app/presentations");
+    mockWideViewport();
+    render(<Sidebar />);
+    const link = screen.getByRole("link", { name: "Презентации" });
+    expect(link).toHaveAttribute("href", "/ru/app/presentations");
+    expect(link).toHaveAttribute("aria-current", "page");
+  });
+
+  it("hides Presentations in the production view", () => {
+    releaseView.view = "prod";
+    mockWideViewport();
+    render(<Sidebar />);
+    expect(screen.queryByRole("link", { name: "Презентации" })).not.toBeInTheDocument();
+  });
+
+  it("closes the mobile sidebar after opening Presentations", () => {
+    const { panel, trigger } = renderNarrowSidebar();
+    openNavigation(trigger);
+    const link = screen.getByRole("link", { name: "Презентации" });
+    link.addEventListener("click", event => event.preventDefault(), { once: true });
+    fireEvent.click(link);
+    expect(panel).toHaveAttribute("data-open", "false");
   });
 
   it.each(["/app/music", "/app/speech", "/app/audio-download"])("keeps the single Audio entry active on %s", pathname => {

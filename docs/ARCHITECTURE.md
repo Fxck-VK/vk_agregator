@@ -22,7 +22,13 @@ body while keeping verified buyer contact, identity, idempotency and ledger
 checks. Operator NPD receipt issuance remains external/manual. No schema change.
 # Current implementation addendum: app surfaces and backend core
 
-The DEV presentation studio submits one account-owned web text Job per deck through the presentation quote and generate routes. The existing worker, moderation and ledger flow owns execution. The studio reads the completed conversation and exports editable PowerPoint locally. Local preview also accepts a user-imported outline without contacting a model or mutating account history.
+The DEV presentation studio submits one account-owned web text Job per deck through
+the presentation quote and generate routes. The worker saves the moderated answer
+for that job before finalization. A retry after an interrupted history write uses
+the durable provider result. The owner-only presentation read matches the original
+job and exposes its status and saved answer. The studio can reopen a run by URL,
+edit the assembled slides and export an editable PowerPoint in the browser.
+Importing an outline into the studio does not create a job.
 T01 uses the refined landing-variants/third renderer as the canonical homepage.
 The original public-home stays isolated in its guarded comparison route; the incoming homepage from ba2001cd
 uses isolated feature styles and frozen Russian data. Server-only comparison

@@ -7,6 +7,7 @@ vi.mock("@/features/presentations/access.server", () => ({ loadPresentationAcces
 import { contentMetadata, renderContentPage, renderContentRecord } from "@/content/templates/render";
 import { contentPages } from "@/content/templates/catalog";
 import PresentationsPage, { generateMetadata as presentationsMetadata } from "@/app/(public)/workflows/presentations/page";
+const presentationPage = (query = {}) => PresentationsPage({ searchParams: Promise.resolve(query) });
 afterEach(() => { state.view = "prod"; state.localSimulation = false; });
 describe("public route admission", () => {
   it.each(["/mcp", "/ai/image-generator", "/business", "/workflows/product-campaign"])("blocks draft route and metadata in PROD: %s", async path => {
@@ -26,18 +27,26 @@ describe("public route admission", () => {
     await expect(contentMetadata("/ai/image-generator")).resolves.toMatchObject({ robots: { index: false, follow: false } });
   });
   it("exposes the presentation brief only in DEV and keeps its metadata out of indexing", async () => {
-    await expect(PresentationsPage()).rejects.toThrow("blocked404");
+    await expect(presentationPage()).rejects.toThrow("blocked404");
     await expect(presentationsMetadata()).rejects.toThrow("blocked404");
     state.view = "dev";
-    await expect(PresentationsPage()).resolves.toBeDefined();
+    await expect(presentationPage()).resolves.toBeDefined();
     await expect(presentationsMetadata()).resolves.toMatchObject({ robots: { index: false, follow: false } });
+  });
+  it("preserves a valid presentation run only through the DEV page", async () => {
+    const conversation = "12345678-0000-4000-8000-012345678901";
+    const job = "12345678-0000-4000-8000-012345678902";
+    await expect(presentationPage({ run: conversation, job })).rejects.toThrow("blocked404");
+    state.view = "dev";
+    await expect(presentationPage({ run: conversation, job })).resolves.toMatchObject({ props: { run: { conversation, job } } });
+    await expect(presentationPage({ run: "unsafe" })).resolves.toMatchObject({ props: { run: undefined } });
   });
   it("offers the fixed example to guests only in local simulation", async () => {
     state.view = "dev";
-    await expect(PresentationsPage()).resolves.toMatchObject({ props: { access: { kind: "guest" }, showLocalExample: false } });
+    await expect(presentationPage()).resolves.toMatchObject({ props: { access: { kind: "guest" }, showLocalExample: false } });
     state.localSimulation = true;
-    await expect(PresentationsPage()).resolves.toMatchObject({ props: { access: { kind: "guest" }, showLocalExample: true } });
+    await expect(presentationPage()).resolves.toMatchObject({ props: { access: { kind: "guest" }, showLocalExample: true } });
     state.view = "prod";
-    await expect(PresentationsPage()).rejects.toThrow("blocked404");
+    await expect(presentationPage()).rejects.toThrow("blocked404");
   });
 });

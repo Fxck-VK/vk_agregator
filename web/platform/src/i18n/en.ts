@@ -50,6 +50,7 @@ export const en = {
     models: "All AI models",
     audio: "Audio",
     music: "Music",
+    presentations: "Presentations",
     speech: "Speech",
     inspiration: "Inspiration",
     profile: "Profile",

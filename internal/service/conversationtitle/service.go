@@ -103,7 +103,7 @@ func (s *Service) Process(ctx context.Context, task queue.Task) error {
 	if err != nil {
 		return err
 	}
-	if !eligibleWebTextJob(job) {
+	if !eligibleWebTextJob(job) || job.IsWebPresentation() {
 		return nil
 	}
 

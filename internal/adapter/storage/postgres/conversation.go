@@ -271,14 +271,29 @@ func (r *ConversationRepository) SetGeneratedTitleForActiveWebConversation(ctx c
 }
 
 func (r *ConversationRepository) GetUserMessageByJobID(ctx context.Context, jobID uuid.UUID) (*domain.ConversationMessage, error) {
+	return r.getMessageByJobAndRole(ctx, jobID, domain.ConversationRoleUser)
+}
+
+func (r *ConversationRepository) GetAssistantMessageByJobID(ctx context.Context, jobID uuid.UUID) (*domain.ConversationMessage, error) {
+	return r.getMessageByJobAndRole(ctx, jobID, domain.ConversationRoleAssistant)
+}
+
+func (r *ConversationRepository) HasRecordedMessageByJobID(ctx context.Context, jobID uuid.UUID, role domain.ConversationMessageRole) (bool, error) {
+	const q = `SELECT EXISTS (SELECT 1 FROM conversation_messages WHERE job_id = $1 AND role = $2)`
+	var exists bool
+	err := r.db.QueryRow(ctx, q, jobID, role).Scan(&exists)
+	return exists, mapError(err)
+}
+
+func (r *ConversationRepository) getMessageByJobAndRole(ctx context.Context, jobID uuid.UUID, role domain.ConversationMessageRole) (*domain.ConversationMessage, error) {
 	const q = `SELECT ` + conversationMessageColumns + `
 		FROM conversation_messages
 		WHERE job_id = $1
-		  AND role = 'user'
+		  AND role = $2
 		  AND deleted_at IS NULL
 		  AND redacted_at IS NULL`
 	var message domain.ConversationMessage
-	if err := mapError(scanConversationMessage(r.db.QueryRow(ctx, q, jobID), &message)); err != nil {
+	if err := mapError(scanConversationMessage(r.db.QueryRow(ctx, q, jobID, role), &message)); err != nil {
 		return nil, err
 	}
 	return &message, nil

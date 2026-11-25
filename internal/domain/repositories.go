@@ -364,6 +364,11 @@ type ConversationRepository interface {
 	// GetUserMessageByJobID returns the persisted user message for exactly one
 	// job. The storage-level job/role key makes this retry-safe.
 	GetUserMessageByJobID(ctx context.Context, jobID uuid.UUID) (*ConversationMessage, error)
+	// GetAssistantMessageByJobID returns the retained answer for one exact job.
+	GetAssistantMessageByJobID(ctx context.Context, jobID uuid.UUID) (*ConversationMessage, error)
+	// HasRecordedMessageByJobID checks if a job/role row was ever saved, including
+	// a row with subsequently redacted or deleted content.
+	HasRecordedMessageByJobID(ctx context.Context, jobID uuid.UUID, role ConversationMessageRole) (bool, error)
 	// GetFirstUserMessage returns the earliest retained user message of one
 	// conversation for title eligibility checks.
 	GetFirstUserMessage(ctx context.Context, conversationID uuid.UUID) (*ConversationMessage, error)

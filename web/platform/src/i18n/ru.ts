@@ -50,6 +50,7 @@ export const ru = {
     models: "Все нейросети",
     audio: "Аудио",
     music: "Музыка",
+    presentations: "Презентации",
     speech: "Речь",
     inspiration: "Вдохновение",
     profile: "Профиль",

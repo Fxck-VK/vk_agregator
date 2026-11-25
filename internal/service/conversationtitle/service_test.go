@@ -394,3 +394,19 @@ func TestNormalizeTitleCollapsesQuotesAndCapsRunes(t *testing.T) {
 		t.Fatal("empty quoted title must be rejected")
 	}
 }
+
+func TestProcessDoesNotCallTitleModelForExistingPresentationEvent(t *testing.T) {
+	ctx := context.Background()
+	fixture := newTitleFixture(t)
+	fixture.job.IdempotencyKey = "web-presentation:" + fixture.accountID.String() + ":" + uuid.NewString()
+	if err := fixture.jobs.Update(ctx, fixture.job); err != nil {
+		t.Fatal(err)
+	}
+	addUserMessage(t, fixture.conversations, fixture.conversation.ID, fixture.job.ID, "Тема: Alfa Romeo")
+	if err := fixture.service.Process(ctx, titleTask(fixture.job)); err != nil {
+		t.Fatal(err)
+	}
+	if fixture.generator.calls != 0 {
+		t.Fatal("presentation prompt was sent to the title model")
+	}
+}

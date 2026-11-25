@@ -93,10 +93,14 @@ func New(repo domain.ConversationRepository, cfg Config) *Service {
 // explicit source/thread ref use that ref; legacy VK bot jobs fall back to
 // user_id + vk_peer_id.
 func (s *Service) Prepare(ctx context.Context, job *domain.Job, prompt string) (Prepared, error) {
-	if s == nil || s.repo == nil || !(s.cfg.Enabled && eligibleText(job) || eligibleWebMedia(job)) {
+	presentation := job.IsWebPresentation()
+	if s == nil || s.repo == nil || !(presentation || s.cfg.Enabled && eligibleText(job) || eligibleWebMedia(job)) {
 		return Prepared{Prompt: prompt, MaxOutputTokens: s.maxOutputTokens()}, nil
 	}
 	target := resolveConversationTarget(job)
+	if presentation && (target.conversationID == uuid.Nil || target.ref.Source != domain.ConversationSourceWeb) {
+		return Prepared{}, errors.New("dialogcontext: presentation conversation required")
+	}
 	if target.invalid {
 		return Prepared{Prompt: prompt, MaxOutputTokens: s.maxOutputTokens()}, nil
 	}
@@ -105,6 +109,9 @@ func (s *Service) Prepare(ctx context.Context, job *domain.Job, prompt string) (
 		return Prepared{}, err
 	}
 	if !ok {
+		if presentation {
+			return Prepared{}, errors.New("dialogcontext: presentation conversation unavailable")
+		}
 		return Prepared{Prompt: prompt, MaxOutputTokens: s.maxOutputTokens()}, nil
 	}
 	userMessage, err := s.repo.UpsertMessage(ctx, &domain.ConversationMessage{
@@ -116,6 +123,14 @@ func (s *Service) Prepare(ctx context.Context, job *domain.Job, prompt string) (
 	})
 	if err != nil {
 		return Prepared{}, err
+	}
+	if presentation {
+		if conversation.TitleOrigin == domain.ConversationTitleOriginAutoPending {
+			if _, err := s.repo.SetConversationFallbackTitleIfPending(ctx, conversation.ID, presentationTitle(prompt)); err != nil {
+				return Prepared{}, err
+			}
+		}
+		return Prepared{ConversationID: conversation.ID, Prompt: prompt, MaxOutputTokens: s.maxOutputTokens()}, nil
 	}
 	if title := titleFromUserPrompt(prompt); title != "" {
 		switch conversation.Source {
@@ -170,16 +185,31 @@ func (s *Service) Prepare(ctx context.Context, job *domain.Job, prompt string) (
 // Complete stores an assistant answer and updates the rolling summary if the
 // unsummarized history has grown beyond configured thresholds.
 func (s *Service) Complete(ctx context.Context, job *domain.Job, conversationID uuid.UUID, answer string) error {
-	if s == nil || s.repo == nil || !(s.cfg.Enabled && eligibleText(job) || eligibleWebMedia(job)) || conversationID == uuid.Nil || strings.TrimSpace(answer) == "" {
+	presentation := job.IsWebPresentation()
+	if s == nil || s.repo == nil || conversationID == uuid.Nil || strings.TrimSpace(answer) == "" {
+		if presentation {
+			return errors.New("dialogcontext: presentation answer and conversation required")
+		}
 		return nil
 	}
-	if eligibleWebMedia(job) {
+	if !(presentation || s.cfg.Enabled && eligibleText(job) || eligibleWebMedia(job)) {
+		return nil
+	}
+	if presentation || eligibleWebMedia(job) {
 		target := resolveConversationTarget(job)
-		if target.invalid || target.conversationID != conversationID {
+		if target.invalid || target.conversationID != conversationID || (presentation && target.ref.Source != domain.ConversationSourceWeb) {
+			if presentation {
+				return errors.New("dialogcontext: invalid presentation conversation")
+			}
 			return nil
 		}
-		if _, ok, err := s.getOrCreateConversation(ctx, job, target); err != nil || !ok {
+		if _, ok, err := s.getOrCreateConversation(ctx, job, target); err != nil {
 			return err
+		} else if !ok {
+			if presentation {
+				return errors.New("dialogcontext: presentation conversation unavailable")
+			}
+			return nil
 		}
 	}
 	if _, err := s.repo.UpsertMessage(ctx, &domain.ConversationMessage{
@@ -190,6 +220,11 @@ func (s *Service) Complete(ctx context.Context, job *domain.Job, conversationID 
 		TokenCount:     EstimateTokens(answer),
 	}); err != nil {
 		return err
+	}
+	if presentation {
+		// A deck has its own single-run conversation. Delivery depends on the
+		// answer write above, with no rolling chat summary step.
+		return nil
 	}
 	return s.maybeSummarize(ctx, conversationID)
 }
@@ -514,6 +549,16 @@ func truncateTokens(text string, maxTokens int) string {
 
 func trimWhitespace(text string) string {
 	return strings.Join(strings.Fields(text), " ")
+}
+
+func presentationTitle(prompt string) string {
+	firstParagraph, _, _ := strings.Cut(prompt, "\n\n")
+	_, topic, hasTopic := strings.Cut(firstParagraph, "Тема: ")
+	topic = strings.TrimSuffix(trimWhitespace(topic), ".")
+	if !hasTopic || topic == "" {
+		return "Презентация"
+	}
+	return truncateTitle("Презентация · "+topic, maxConversationTitleRunes)
 }
 
 func titleFromUserPrompt(prompt string) string {

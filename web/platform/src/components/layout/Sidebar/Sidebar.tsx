@@ -5,6 +5,7 @@ import { BrandLogo } from "@/components/brand/BrandLogo/BrandLogo";
 
 import { useDictionary } from "@/i18n/LocaleProvider";
 import { useReleaseView } from "@/features/release/ReleaseViewProvider";
+import { presentationWorkspacePath } from "@/features/presentations/route";
 
 
 import Image from "next/image";
@@ -27,6 +28,7 @@ import { FileIcon } from "@/components/icons/FileIcon";
 import { GridIcon } from "@/components/icons/GridIcon";
 import { ImageIcon } from "@/components/icons/ImageIcon";
 import { MenuIcon } from "@/components/icons/MenuIcon";
+import { MonitorIcon } from "@/components/icons/MonitorIcon";
 import { MusicIcon } from "@/components/icons/MusicIcon";
 import { Button } from "@/components/ui/Button/Button";
 import { TooltipBubble } from "@/components/ui/Tooltip/Tooltip";
@@ -54,6 +56,7 @@ export const getWorkspaceNavigationItems = (t: Dictionary) => [
   { href: "/app/files", icon: "file", label: t.navigation.files, prefetch: true },
   { href: "/app/models", icon: "grid", label: t.navigation.models, prefetch: true },
   { href: "/app/music", icon: "music", label: t.navigation.audio, prefetch: true },
+  { href: presentationWorkspacePath, icon: "monitor", label: t.navigation.presentations, prefetch: true },
   { href: "/app/inspiration", icon: "image", label: t.navigation.inspiration, prefetch: true },
 ] as const;
 
@@ -65,6 +68,7 @@ const workspaceNavigationIcons = {
   grid: GridIcon,
   image: ImageIcon,
   music: MusicIcon,
+  monitor: MonitorIcon,
 } as const;
 
 type SidebarProps = {

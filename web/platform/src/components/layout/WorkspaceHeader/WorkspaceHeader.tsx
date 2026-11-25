@@ -4,6 +4,7 @@ import { LoadingIndicator } from "@/components/ui/AsyncState/AsyncState";
 import { RetryAction } from "@/components/ui/AsyncState/RetryAction";
 import { useOptionalWorkspaceAccount } from "@/features/account/WorkspaceAccount/WorkspaceAccount";
 import { useDictionary } from "@/i18n/LocaleProvider";
+import { presentationWorkspacePath } from "@/features/presentations/route";
 
 
 import { usePathname } from "@/i18n/navigation";
@@ -38,6 +39,8 @@ function getWorkspaceHeaderTitle(pathname: string | null, t: Dictionary) {
     case "/app/speech":
     case "/app/audio-download":
       return t.navigation.audio;
+    case presentationWorkspacePath:
+      return t.navigation.presentations;
     case "/app/profile":
       return t.navigation.profile;
     default:
@@ -59,7 +62,7 @@ export function WorkspaceHeader({ balance, sectionNavigation, trailingAction }: 
     <>
       <header aria-label={title} className={headerClassName} data-testid="workspace-header">
         <div className={styles.leading}>
-          {isAudioDownload ? null : <WorkspaceModelSelector />}
+          {isAudioDownload || pathname === presentationWorkspacePath ? null : <WorkspaceModelSelector />}
           {sectionNavigation}
         </div>
         <div className={styles.trailing}>

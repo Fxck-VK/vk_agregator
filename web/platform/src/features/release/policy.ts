@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { presentationWorkspacePath } from "../presentations/route";
 import registry from "../../../release/features.json";
 import pages from "../../content/pages/catalog.json";
 
@@ -35,7 +36,7 @@ export function allowsReleasePath(href: string, view: ReleaseView, now = Date.no
   const is = (prefix: string) => path === prefix || path.startsWith(prefix + "/");
   if (is("/legal") || is("/login") || is("/invite")) return true;
   const routes = [["/app/music", "music"], ["/app/speech", "transcription"], ["/mcp", "mcp"], ["/business", "teams"], ["/workflows", "workflow-automation"]] as const;
-  if (is("/app/ui-states") || routes.some(([prefix, id]) => is(prefix) && !featureEnabled(id, view))) return false;
+  if (is("/app/ui-states") || is(presentationWorkspacePath) || routes.some(([prefix, id]) => is(prefix) && !featureEnabled(id, view))) return false;
   const record = releasePages.find(p => p.path === path || ["T10", "T11"].includes(p.template) && path.startsWith(p.path + "/"));
   return !record || record.status === "published" && (!record.publishedAt || Number.isFinite(Date.parse(record.publishedAt)) && Date.parse(record.publishedAt) <= now);
 }

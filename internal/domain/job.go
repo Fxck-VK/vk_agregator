@@ -2,6 +2,7 @@ package domain
 
 import (
 	"encoding/json"
+	"strings"
 	"time"
 
 	"github.com/google/uuid"
@@ -318,6 +319,22 @@ type Job struct {
 	UpdatedAt time.Time `json:"updated_at"`
 	// ExpiresAt is the deadline after which the job is expired.
 	ExpiresAt *time.Time `json:"expires_at,omitempty"`
+}
+
+// IsWebPresentation identifies text jobs admitted by the Web presentation route.
+// The server constructs this namespace, including the authenticated account ID.
+func (j *Job) IsWebPresentation() bool {
+	if j == nil || j.AccountID == uuid.Nil || j.Source != "web" ||
+		j.ResultMode != ResultModeAccountHistory || j.ChannelContext == nil || j.ChannelContext.Channel != ChannelWeb ||
+		j.OperationType != OperationTextGenerate || j.Modality != ModalityText {
+		return false
+	}
+	key, ok := strings.CutPrefix(j.IdempotencyKey, "web-presentation:"+j.AccountID.String()+":")
+	if !ok {
+		return false
+	}
+	id, err := uuid.Parse(key)
+	return err == nil && id != uuid.Nil && key == id.String()
 }
 
 // PricingSnapshotCredits returns the immutable charge from a persisted pricing

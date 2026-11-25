@@ -16,6 +16,46 @@ import (
 	"vk-ai-aggregator/internal/domain"
 )
 
+func TestPresentationAssistantRowRetainsRedactionMarkerPostgresIntegration(t *testing.T) {
+	ctx := context.Background()
+	pool := conversationManagementIntegrationPool(t, ctx)
+	repository := postgres.NewConversationRepository(pool)
+	if _, err := pool.Exec(ctx, `ALTER TABLE conversation_messages
+		ADD COLUMN job_id UUID, ADD COLUMN role TEXT, ADD COLUMN seq BIGSERIAL,
+		ADD COLUMN rating TEXT, ADD COLUMN token_count INTEGER NOT NULL DEFAULT 0,
+		ADD COLUMN created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+		ADD COLUMN deleted_at TIMESTAMPTZ, ADD COLUMN redacted_at TIMESTAMPTZ`); err != nil {
+		t.Fatalf("extend conversation fixture: %v", err)
+	}
+	conversationID, jobID := uuid.New(), uuid.New()
+	if _, err := pool.Exec(ctx, `INSERT INTO conversations (id, source, status) VALUES ($1, 'web', 'active')`, conversationID); err != nil {
+		t.Fatalf("seed conversation: %v", err)
+	}
+	if _, err := pool.Exec(ctx, `INSERT INTO conversation_messages (id, conversation_id, job_id, role, text) VALUES ($1, $2, $3, 'user', 'prompt')`, uuid.New(), conversationID, jobID); err != nil {
+		t.Fatalf("seed user message: %v", err)
+	}
+	if exists, err := repository.HasRecordedMessageByJobID(ctx, jobID, domain.ConversationRoleAssistant); exists || err != nil {
+		t.Fatalf("user row must not count as assistant row: %v, %v", exists, err)
+	}
+	answerID := uuid.New()
+	if _, err := pool.Exec(ctx, `INSERT INTO conversation_messages (id, conversation_id, job_id, role, text) VALUES ($1, $2, $3, 'assistant', 'answer')`, answerID, conversationID, jobID); err != nil {
+		t.Fatalf("seed assistant message: %v", err)
+	}
+	answer, err := repository.GetAssistantMessageByJobID(ctx, jobID)
+	if err != nil || answer.ID != answerID || answer.Text != "answer" {
+		t.Fatalf("retained assistant answer: %#v, %v", answer, err)
+	}
+	if _, err := pool.Exec(ctx, `UPDATE conversation_messages SET redacted_at = now(), text = '' WHERE id = $1`, answerID); err != nil {
+		t.Fatalf("redact assistant message: %v", err)
+	}
+	if answer, err := repository.GetAssistantMessageByJobID(ctx, jobID); answer != nil || !errors.Is(err, domain.ErrNotFound) {
+		t.Fatalf("redacted answer must not be returned: %#v, %v", answer, err)
+	}
+	if exists, err := repository.HasRecordedMessageByJobID(ctx, jobID, domain.ConversationRoleAssistant); !exists || err != nil {
+		t.Fatalf("redacted row must still prevent artifact recovery: %v, %v", exists, err)
+	}
+}
+
 func TestWebConversationManagementPostgresIntegration(t *testing.T) {
 	ctx := context.Background()
 	pool := conversationManagementIntegrationPool(t, ctx)
