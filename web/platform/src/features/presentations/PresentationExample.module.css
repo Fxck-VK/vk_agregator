@@ -106,7 +106,8 @@
 .nav .editTrigger { inline-size: auto; }
 .editTrigger[aria-expanded="true"] { border-color: var(--landing-accent); }
 .nav svg { display: block; margin-inline: auto; }
-.nav .settingsTrigger { display: inline-flex; align-items: center; justify-content: center; gap: 8px; inline-size: auto; }
+.settingsTrigger { display: inline-flex; align-items: center; justify-content: center; gap: 8px; }
+.nav .settingsTrigger { inline-size: auto; }
 .settingsTrigger svg { flex: none; }
 .settings { display: grid; gap: 12px; min-inline-size: 0; padding: 2px; }
 .settingsTitle { margin: 0; font-size: 15px; font-weight: var(--font-weight-semibold); }
@@ -114,6 +115,7 @@
 .setting > span { font-weight: var(--font-weight-semibold); }
 .settingsFooter { display: flex; flex-wrap: wrap; justify-content: space-between; align-items: center; gap: 8px; color: var(--color-text-muted); font-size: 12px; }
 .settingsFooter button { min-block-size: 34px; }
+.settingsFooter button:only-child { margin-inline-start: auto; }
 .colorRows { display: grid; gap: 8px; }
 .colorRow { display: grid; grid-template-columns: minmax(0,1fr) 40px 82px; align-items: center; gap: 8px; font-size: 13px; }
 .colorPicker { inline-size: 100%; block-size: 38px; padding: 4px; border: 1px solid var(--color-border); border-radius: 8px; background: transparent; cursor: pointer; }
@@ -141,7 +143,7 @@
   .controls > :first-child { grid-column: 1 / -1; }
   .progress { margin-block-end: 6px; }
   .nav .settingsTrigger { inline-size: 42px; }
-  .settingsTrigger span { display: none; }
+  .nav .settingsTrigger span { display: none; }
 }
 @media (prefers-reduced-motion: reduce) {
   .slide { animation: none; }

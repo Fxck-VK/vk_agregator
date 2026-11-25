@@ -145,7 +145,7 @@
 .sheet h3 {
   margin: 0;
   color: inherit;
-  font-family: var(--landing-display, Arial, sans-serif);
+  font-family: inherit;
   font-size: clamp(13px, 5.7cqi, 48px);
   line-height: 1.07;
   letter-spacing: -.037em;
@@ -239,7 +239,38 @@
 }
 
 .showDialog[data-wide][role="dialog"] { width: min(1080px, 100%); }
-.showDialog .pager { margin-top: 12px; }
+.player { display: grid; gap: 12px; min-width: 0; }
+.playerStage {
+  --slide-in-direction: 100%;
+  --slide-out-direction: -100%;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  isolation: isolate;
+  overflow: hidden;
+  border-radius: 9px;
+}
+.playerStage[data-direction="back"] { --slide-in-direction: -100%; --slide-out-direction: 100%; }
+.previousFrame, .currentFrame { grid-area: 1 / 1; min-width: 0; }
+.currentFrame { z-index: 1; }
+.previousFrame { pointer-events: none; }
+.playerStage[data-transition="fade"] .currentFrame { animation: deckFade 240ms ease-out both; }
+.playerStage[data-transition="push"] .currentFrame { animation: deckPushIn 300ms ease-in-out both; }
+.playerStage[data-transition="push"] .previousFrame { animation: deckPushOut 300ms ease-in-out both; }
+
+@keyframes deckFade { from { opacity: 0; } to { opacity: 1; } }
+@keyframes deckPushIn { from { translate: var(--slide-in-direction) 0; } to { translate: 0 0; } }
+@keyframes deckPushOut { from { translate: 0 0; } to { translate: var(--slide-out-direction) 0; } }
+
+.player [data-reveal] { transition: opacity 240ms ease-out, translate 240ms ease-out; }
+.player [data-reveal="false"] { opacity: 0; translate: 0 6px; }
+.playerControls { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 8px 12px; }
+.playerControls .pager { flex: 1 1 auto; justify-content: end; }
+
+@media (prefers-reduced-motion: reduce) {
+  .playerStage[data-transition] :is(.currentFrame, .previousFrame) { animation: none; }
+  .previousFrame { visibility: hidden; }
+  .player [data-reveal] { transition: none; translate: none; }
+}
 .printDeck { display: none; }
 
 @media (min-width: 1180px) {

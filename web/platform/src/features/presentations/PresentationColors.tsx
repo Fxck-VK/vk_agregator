@@ -3,20 +3,17 @@
 import { useState, type CSSProperties } from "react";
 import { InputSurface } from "@/components/ui/InputSurface/InputSurface";
 import { presentationExampleRu } from "@/i18n/presentation-example";
+import { normalizeColor, readableInk } from "./presentation-colors";
 import styles from "./PresentationExample.module.css";
+
+export { normalizeColor, readableInk } from "./presentation-colors";
 
 const copy = presentationExampleRu.colors;
 const fields = copy.fields;
 
 export type ColorKey = (typeof fields)[number]["key"];
 export type PresentationColorValues = Partial<Record<ColorKey, string>>;
-
-export function normalizeColor(value: unknown): string | undefined {
-  if (typeof value !== "string") return;
-  const hex = value.trim().toLowerCase().replace(/^#/, "");
-  if (/^[a-f0-9]{6}$/.test(hex)) return `#${hex}`;
-  if (/^[a-f0-9]{3}$/.test(hex)) return `#${Array.from(hex, digit => digit + digit).join("")}`;
-}
+export type PresentationColorFallbacks = { background: string; text: string };
 
 export function parsePresentationColors(value: unknown): PresentationColorValues {
   const colors: PresentationColorValues = {};
@@ -26,15 +23,6 @@ export function parsePresentationColors(value: unknown): PresentationColorValues
     if (color) colors[key] = color;
   }
   return colors;
-}
-
-export function readableInk(hex?: string): string | undefined {
-  if (!hex) return;
-  const [red, green, blue] = [1, 3, 5].map(index => {
-    const channel = parseInt(hex.slice(index, index + 2), 16) / 255;
-    return channel <= 0.04045 ? channel / 12.92 : ((channel + 0.055) / 1.055) ** 2.4;
-  });
-  return 0.2126 * red + 0.7152 * green + 0.0722 * blue > 0.179 ? "#000000" : "#ffffff";
 }
 
 export function presentationColorStyles(colors: PresentationColorValues): CSSProperties {
@@ -70,8 +58,19 @@ export function ColorField({ label, value, fallback, onChange }: { label: string
   </div>;
 }
 
-export function PresentationColors({ value, table, light, onChange }: { value: PresentationColorValues; table: boolean; light: boolean; onChange: (colors: PresentationColorValues) => void }) {
+export function PresentationColors({ value, table, light, colorFallbacks, onChange }: {
+  value: PresentationColorValues;
+  table: boolean;
+  light: boolean;
+  colorFallbacks?: PresentationColorFallbacks;
+  onChange: (colors: PresentationColorValues) => void;
+}) {
   return <div className={styles.colorRows}>
-    {fields.slice(0, table ? fields.length : 2).map(field => <ColorField key={field.key} label={field.label} value={value[field.key]} fallback={light ? field.light : field.dark} onChange={color => onChange({ ...value, [field.key]: color })} />)}
+    {fields.slice(0, table ? fields.length : 2).map(field => {
+      const { key, label } = field;
+      const fallback = key === "background" || key === "text" ? colorFallbacks?.[key] : undefined;
+      return <ColorField key={key} label={label} value={value[key]} fallback={fallback ?? (light ? field.light : field.dark)}
+        onChange={color => onChange({ ...value, [key]: color })} />;
+    })}
   </div>;
 }

@@ -14,8 +14,9 @@ import { parseAccountProfile } from "@/lib/web-api/contracts";
 import { PresentationExample } from "./PresentationExample";
 import { DeckRequest } from "./DeckRequest";
 import { DeckResult } from "./DeckResult";
+import { defaultDeckAppearance, type DeckAppearance } from "./deck-appearance";
 import { downloadFile, emptyBrief, presentationPrompt, readDeck, type Brief, type DeckSlide } from "./deck-content";
-import { getDeckDraft, parseDeckRun, readDeckBrief, replaceDeckRun, saveDeckDraft, type DeckRun } from "./deck-run";
+import { getDeckAppearance, getDeckDraft, parseDeckRun, readDeckBrief, replaceDeckRun, saveDeckAppearance, saveDeckDraft, type DeckRun } from "./deck-run";
 import styles from "./Studio.module.css";
 
 const scenarios = Object.values(presentationStyles);
@@ -39,6 +40,7 @@ export function PresentationStudio({ accountId, local, localApiUnavailable = fal
   const [mode, setMode] = useState<"external" | "account">(!run && (localApiUnavailable || local && !accountId) ? "external" : "account");
   const [source, setSource] = useState("");
   const [slides, setSlides] = useState<DeckSlide[]>([]);
+  const [appearance, setAppearance] = useState(defaultDeckAppearance);
   const [busy, setBusy] = useState(false);
   const [editing, setEditing] = useState(false);
   const [notice, setNotice] = useState("");
@@ -77,6 +79,11 @@ export function PresentationStudio({ accountId, local, localApiUnavailable = fal
     if (accountId && run?.job) return saveDeckDraft(accountId, run.job, next);
   }, [accountId, run]);
 
+  function changeAppearance(next: DeckAppearance) {
+    setAppearance(next);
+    if (accountId && run?.job) return saveDeckAppearance(accountId, run.job, next);
+  }
+
   const receive = useCallback((input: string, original?: string, resultJob?: string) => {
     setSource(input);
     setBusy(false);
@@ -91,6 +98,7 @@ export function PresentationStudio({ accountId, local, localApiUnavailable = fal
       const next = draft ?? readDeck(input, count);
       if (original === undefined && accountId && job) saveDeckDraft(accountId, job, next);
       setSlides(next);
+      setAppearance(accountId && job ? getDeckAppearance(accountId, job) ?? defaultDeckAppearance : defaultDeckAppearance);
       setStep(2);
       setEditing(false);
       setProblem("");
@@ -133,7 +141,7 @@ export function PresentationStudio({ accountId, local, localApiUnavailable = fal
   return <section className={styles.studio} aria-label={labels.label}>
     <ol className={styles.steps} aria-label={labels.stepsLabel}>{labels.steps.map((label, i) =>
       <li key={label} aria-current={i === step ? "step" : undefined} data-done={i < step}><span aria-hidden="true">{i < step ? "✓" : i + 1}</span>{label}</li>)}</ol>
-    {step === 2 ? <div ref={heading} tabIndex={-1} role="group" aria-label={labels.resultLabel}><DeckResult slides={slides} brief={brief} canGenerateImage={Boolean(accountId)} onChange={changeSlides} onNew={startOver} /></div> :
+    {step === 2 ? <div ref={heading} tabIndex={-1} role="group" aria-label={labels.resultLabel}><DeckResult slides={slides} brief={brief} appearance={appearance} onAppearanceChange={changeAppearance} canGenerateImage={Boolean(accountId)} onChange={changeSlides} onNew={startOver} /></div> :
       <div className={styles.workbench}>
         <div className={styles.composer}>
           <h2 tabIndex={-1} ref={heading}>{step === 0 ? labels.topicHeading : editing ? labels.editingHeading : labels.prepareHeading}</h2>

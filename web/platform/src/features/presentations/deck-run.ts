@@ -1,5 +1,6 @@
 import { z } from "zod";
 import { presentationDeckCopy, presentationPromptFormat, presentationStyles } from "@/i18n/presentation-deck";
+import { parseDeckAppearance, type DeckAppearance } from "./deck-appearance";
 import type { Brief, DeckSlide } from "./deck-content";
 import { presentationWorkspacePath } from "./route";
 import { slideImageDataLimit, slideImagePattern } from "./slide-image";
@@ -69,6 +70,23 @@ export function readDeckBrief(prompt: string): Brief | undefined {
 }
 
 const deckDraftKey = (account: string, job: string) => draftPrefix + account + ":" + job;
+const deckAppearanceKey = (account: string, job: string) => deckDraftKey(account, job) + ":appearance";
+
+export function getDeckAppearance(account: string, job: string): DeckAppearance | undefined {
+  try {
+    const raw = sessionStorage.getItem(deckAppearanceKey(account, job));
+    return raw === null ? undefined : parseDeckAppearance(JSON.parse(raw));
+  } catch { return undefined; }
+}
+
+export function saveDeckAppearance(account: string, job: string, appearance: DeckAppearance) {
+  const value = parseDeckAppearance(appearance);
+  if (!value) return false;
+  try {
+    sessionStorage.setItem(deckAppearanceKey(account, job), JSON.stringify(value));
+    return true;
+  } catch { return false; }
+}
 
 export function getDeckDraft(account: string, job: string): DeckSlide[] | undefined {
   try {

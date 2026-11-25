@@ -2,6 +2,7 @@ import { fireEvent, render, screen, waitFor, within } from "@testing-library/rea
 import { useState } from "react";
 import { describe, expect, it, vi } from "vitest";
 import { DeckResult } from "./DeckResult";
+import { defaultDeckAppearance, type DeckAppearance } from "./deck-appearance";
 import { emptyBrief, type DeckSlide } from "./deck-content";
 
 vi.mock("@/features/landing-variants/third/HomeMedia", () => ({
@@ -10,12 +11,13 @@ vi.mock("@/features/landing-variants/third/HomeMedia", () => ({
 
 const brief = { ...emptyBrief, topic: "Поездка по Италии" };
 
-function Editor() {
+function Editor({ initialAppearance = defaultDeckAppearance }: { initialAppearance?: DeckAppearance }) {
   const [slides, setSlides] = useState<DeckSlide[]>([
     { title: "Италия", points: ["Обложка"] },
     { title: "Встреча", points: ["Тезис"] },
   ]);
-  return <DeckResult slides={slides} brief={brief} onChange={setSlides} onNew={() => {}} />;
+  const [appearance, setAppearance] = useState(initialAppearance);
+  return <DeckResult slides={slides} brief={brief} appearance={appearance} onAppearanceChange={setAppearance} onChange={setSlides} onNew={() => {}} />;
 }
 
 describe("presentation slide editor", () => {
@@ -102,6 +104,61 @@ describe("presentation slide editor", () => {
       blob.mockRestore();
       vi.unstubAllGlobals();
     }
+  });
+
+  it("reveals points one step at a time and restores the last step when going back", () => {
+    render(<Editor />);
+    fireEvent.click(screen.getByRole("button", { name: "Начать показ" }));
+    const show = within(screen.getByRole("dialog", { name: brief.topic }));
+    const currentSlide = () => show.getByRole("article");
+    const points = () => currentSlide().querySelectorAll("li");
+    expect(currentSlide()).toHaveTextContent("Италия");
+    expect(points()[0]).toHaveAttribute("aria-hidden", "true");
+
+    fireEvent.click(show.getByRole("button", { name: "Следующий шаг" }));
+    expect(points()[0]).not.toHaveAttribute("aria-hidden", "true");
+    fireEvent.keyDown(window, { key: "ArrowRight" });
+    expect(currentSlide()).toHaveTextContent("Встреча");
+    expect(points()[0]).toHaveAttribute("aria-hidden", "true");
+
+    fireEvent.click(show.getByRole("button", { name: "Предыдущий шаг" }));
+    expect(currentSlide()).toHaveTextContent("Италия");
+    expect(points()[0]).not.toHaveAttribute("aria-hidden", "true");
+  });
+
+  it("uses the configured colors and font during the show and advances directly when animation is off", () => {
+    render(<Editor initialAppearance={{
+      ...defaultDeckAppearance, font: "georgia", animation: "off", transition: "push",
+      colors: { background: "#123456", text: "#fedcba" },
+    }} />);
+    fireEvent.click(screen.getByRole("button", { name: "Начать показ" }));
+    const show = within(screen.getByRole("dialog", { name: brief.topic }));
+    const first = show.getByRole("article");
+    expect(first).toHaveStyle("background-color: #123456; color: #fedcba; font-family: Georgia, serif");
+    expect(show.getByRole("listitem")).toHaveTextContent("Обложка");
+    fireEvent.click(show.getByRole("button", { name: "Следующий шаг" }));
+    const next = show.getByRole("article");
+    expect(next).toHaveTextContent("Встреча");
+    expect(next.closest("[data-transition]")).toHaveAttribute("data-transition", "push");
+    expect(show.getByRole("listitem")).toHaveTextContent("Тезис");
+  });
+
+  it("uses changed transition settings on the next slide change without replaying the previous one", () => {
+    render(<Editor initialAppearance={{ ...defaultDeckAppearance, animation: "off" }} />);
+    fireEvent.click(screen.getByRole("button", { name: "Начать показ" }));
+    const show = within(screen.getByRole("dialog", { name: brief.topic }));
+    fireEvent.click(show.getByRole("button", { name: "Следующий шаг" }));
+    const currentStage = () => show.getByRole("article").closest("[data-transition]");
+    expect(currentStage()).toHaveAttribute("data-transition", "fade");
+
+    fireEvent.click(show.getByRole("button", { name: "Настройки показа" }));
+    const settings = within(screen.getByRole("dialog", { name: "Настройки показа" }));
+    fireEvent.click(settings.getByRole("button", { name: "Сдвиг" }));
+    expect(currentStage()).toHaveAttribute("data-transition", "none");
+    expect(show.getByRole("article")).toHaveTextContent("Встреча");
+
+    fireEvent.click(show.getByRole("button", { name: "Предыдущий шаг" }));
+    expect(currentStage()).toHaveAttribute("data-transition", "push");
   });
 
   it("saves the added slide, moves it, and can undo its removal", () => {

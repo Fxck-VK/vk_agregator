@@ -2,7 +2,7 @@
 
 import NextImage from "next/image";
 import dynamic from "next/dynamic";
-import { useEffect, useRef, useState, type ChangeEvent, type FormEvent } from "react";
+import { useCallback, useEffect, useRef, useState, type ChangeEvent, type FormEvent } from "react";
 import { createPortal } from "react-dom";
 import { LandingArrow } from "@/components/public/landing/LandingPrimitives";
 import { LandingDialog } from "@/components/public/landing/LandingDialog";
@@ -11,8 +11,10 @@ import { HomePicture } from "@/features/landing-variants/third/HomeMedia";
 import { homePhotoSource } from "@/features/landing-variants/third/photos";
 import { presentationDeckCopy, type PresentationStyle } from "@/i18n/presentation-deck";
 import { browserSessionSnapshot } from "@/lib/web-api/browser-session-state";
+import { type DeckAppearance, resolveDeckAppearance } from "./deck-appearance";
 import { downloadFile, type Brief, type DeckSlide } from "./deck-content";
 import { powerpoint } from "./deck-powerpoint";
+import { DeckAppearanceSettings } from "./PresentationSettings";
 import { prepareSlideImage, renderSlideImage, slideImageBytes, slideImageTypes, slideImageUploadLimit } from "./slide-image";
 import styles from "./DeckResult.module.css";
 
@@ -34,13 +36,17 @@ function slidePoints(body: string) {
   return body.split("\n").map(line => line.trim().replace(/^[-*•]\s+/, "")).filter(Boolean);
 }
 
-function Slide({ slide, index, total, style }: { slide: DeckSlide; index: number; total: number; style: PresentationStyle }) {
+function Slide({ slide, index, total, style, appearance, revealed }: {
+  slide: DeckSlide; index: number; total: number; style: PresentationStyle; appearance: DeckAppearance; revealed?: number;
+}) {
   const cover = index === 0;
   const photo = cover || Boolean(slide.image);
+  const { background, text, fontFamily } = resolveDeckAppearance(appearance, style, cover);
   const textLength = slide.title.length + slide.points.reduce((length, point) => length + point.length, 0);
   const dense = textLength > (photo ? 220 : 450) || slide.title.length > 90;
   return (
-    <article className={styles.sheet} data-cover={cover} data-photo={photo} data-style={style} data-dense={dense}>
+    <article className={styles.sheet} data-cover={cover} data-photo={photo} data-style={style} data-dense={dense}
+      style={{ backgroundColor: background, color: text, fontFamily }}>
       {photo && (
         <div className={styles.slidePhoto}>
           {slide.image
@@ -51,16 +57,103 @@ function Slide({ slide, index, total, style }: { slide: DeckSlide; index: number
       <div className={styles.slideContent}>
         <span className={styles.folio}>{style} · {slideNumber(index)} / {slideNumber(total - 1)}</span>
         <h3>{slide.title || copy.titleLabel}</h3>
-        {slide.points.length > 0 && <ul>{slide.points.map((point, i) => <li key={i}>{point}</li>)}</ul>}
+        {slide.points.length > 0 && <ul>{slide.points.map((point, i) => {
+          const visible = revealed === undefined ? undefined : i < revealed;
+          return <li key={i} data-reveal={visible} aria-hidden={visible === false || undefined}>{point}</li>;
+        })}</ul>}
       </div>
     </article>
   );
 }
 
-export function DeckResult({ slides, brief, canGenerateImage = false, onChange, onNew }: {
+type PlayerFrame = { index: number; step: number };
+type PlayerPosition = PlayerFrame & { previous?: PlayerFrame; direction?: -1 | 1 };
+
+function DeckPlayer({ slides, initialIndex, brief, appearance, onAppearanceChange, onClose }: {
+  slides: DeckSlide[];
+  initialIndex: number;
+  brief: Brief;
+  appearance: DeckAppearance;
+  onAppearanceChange: (appearance: DeckAppearance) => void;
+  onClose: (index: number) => void;
+}) {
+  const [position, setPosition] = useState<PlayerPosition>({ index: initialIndex, step: 0 });
+  const player = useRef<HTMLDivElement>(null);
+  const animated = appearance.animation === "on";
+  const { index, step, previous, direction } = position;
+  const lastStep = slides[index].points.length;
+
+  const move = useCallback((offset: -1 | 1) => {
+    setPosition(current => {
+      const nextStep = current.step + offset;
+      if (animated && nextStep >= 0 && nextStep <= slides[current.index].points.length) {
+        return { ...current, step: nextStep };
+      }
+      const next = current.index + offset;
+      if (next < 0 || next >= slides.length) return current;
+      return {
+        index: next,
+        step: offset < 0 && animated ? slides[next].points.length : 0,
+        previous: { index: current.index, step: current.step },
+        direction: offset,
+      };
+    });
+  }, [animated, slides]);
+
+  useEffect(() => {
+    const onKey = (event: KeyboardEvent) => {
+      if (event.defaultPrevented || event.altKey || event.ctrlKey || event.metaKey || event.shiftKey) return;
+      if (event.key !== "ArrowLeft" && event.key !== "ArrowRight") return;
+      if (event.target instanceof Element && event.target !== document.body) {
+        if (event.target.closest("input, textarea, select, [contenteditable=true], [role=tab]")) return;
+        if (event.target.closest("[role=dialog]") !== player.current?.closest("[role=dialog]")) return;
+      }
+      event.preventDefault();
+      move(event.key === "ArrowRight" ? 1 : -1);
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [move]);
+
+  function changeAppearance(value: DeckAppearance) {
+    const restartSteps = value.animation === "on" && !animated;
+    if (restartSteps || value.transition !== appearance.transition) {
+      setPosition(current => ({ index: current.index, step: restartSteps ? 0 : current.step }));
+    }
+    onAppearanceChange(value);
+  }
+
+  return <LandingDialog title={brief.topic || copy.heading} closeLabel={copy.closeShow} wide className={styles.showDialog} onClose={() => onClose(index)}>
+    <div className={styles.player} ref={player}>
+      <div className={styles.playerStage} data-transition={previous ? appearance.transition : "none"} data-direction={direction === -1 ? "back" : "forward"}>
+        {previous && appearance.transition !== "none" && (
+          <div key={`previous:${previous.index}`} className={styles.previousFrame} aria-hidden="true">
+            <Slide slide={slides[previous.index]} index={previous.index} total={slides.length} style={brief.style} appearance={appearance} revealed={animated ? previous.step : undefined} />
+          </div>
+        )}
+        <div key={index} className={styles.currentFrame} data-current-slide>
+          <Slide slide={slides[index]} index={index} total={slides.length} style={brief.style} appearance={appearance} revealed={animated ? step : undefined} />
+        </div>
+      </div>
+      <div className={styles.playerControls}>
+        <DeckAppearanceSettings value={appearance} onChange={changeAppearance} lightByDefault={index !== 0}
+          colorFallbacks={resolveDeckAppearance(appearance, brief.style, index === 0)} />
+        <div className={styles.pager}>
+          <Button variant="outline" aria-label={copy.previousStep} disabled={index === 0 && (!animated || step === 0)} onClick={() => move(-1)}><LandingArrow direction="left" /></Button>
+          <span role="status">{copy.showPosition(index + 1, slides.length, animated && lastStep > 0 ? step + 1 : undefined, lastStep + 1)}</span>
+          <Button variant="outline" aria-label={copy.nextStep} disabled={index === slides.length - 1 && (!animated || step === lastStep)} onClick={() => move(1)}><LandingArrow /></Button>
+        </div>
+      </div>
+    </div>
+  </LandingDialog>;
+}
+
+export function DeckResult({ slides, brief, appearance, canGenerateImage = false, onAppearanceChange, onChange, onNew }: {
   slides: DeckSlide[];
   brief: Brief;
+  appearance: DeckAppearance;
   canGenerateImage?: boolean;
+  onAppearanceChange: (appearance: DeckAppearance) => boolean | void;
   onChange: (slides: DeckSlide[]) => boolean | void;
   onNew: () => void;
 }) {
@@ -99,18 +192,12 @@ export function DeckResult({ slides, brief, canGenerateImage = false, onChange, 
     }
   }, [editing]);
 
-  useEffect(() => {
-    if (!show) return;
-    const onKey = (event: KeyboardEvent) => {
-      if (event.key !== "ArrowLeft" && event.key !== "ArrowRight") return;
-      event.preventDefault();
-      setSelected(value => Math.min(slides.length - 1, Math.max(0, value + (event.key === "ArrowRight" ? 1 : -1))));
-    };
-    window.addEventListener("keydown", onKey);
-    return () => window.removeEventListener("keydown", onKey);
-  }, [show, slides.length]);
-
   if (!current) return null;
+
+  function changeAppearance(value: DeckAppearance) {
+    if (onAppearanceChange(value) === false) setNotice(copy.appearanceDraftUnavailable);
+    else setNotice("");
+  }
 
   function beginEdit(kind: SlideDraft["kind"]) {
     if (kind === "new" && slides.length >= maxSlides) return;
@@ -213,7 +300,7 @@ export function DeckResult({ slides, brief, canGenerateImage = false, onChange, 
         const cover = await renderSlideImage(homePhotoSource("workflowStart")).catch(() => undefined);
         if (cover) images[0] = new Uint8Array(await cover.arrayBuffer());
       }
-      downloadFile(powerpoint(slides, brief.style, images), "epifera-slides.pptx");
+      downloadFile(powerpoint(slides, brief.style, images, appearance), "epifera-slides.pptx");
       setNotice(images[0] ? copy.exportReady : copy.exportReadyWithoutPhoto);
     } catch {
       setNotice(copy.exportFailed);
@@ -236,7 +323,11 @@ export function DeckResult({ slides, brief, canGenerateImage = false, onChange, 
           <h2>{brief.topic || copy.heading}</h2>
           <p>{copy.deckSummary(slides.length, brief.style)}</p>
         </div>
-        <Button variant="outline" disabled={editing || imageBusy} onClick={onNew}>{copy.newPresentation}</Button>
+        <div className={styles.actions}>
+          {!show && <DeckAppearanceSettings value={appearance} onChange={changeAppearance} lightByDefault={previewIndex !== 0}
+            colorFallbacks={resolveDeckAppearance(appearance, brief.style, previewIndex === 0)} />}
+          <Button variant="outline" disabled={editing || imageBusy} onClick={onNew}>{copy.newPresentation}</Button>
+        </div>
       </div>
       <div className={styles.resultGrid}>
         <aside className={styles.sidebar}>
@@ -251,7 +342,7 @@ export function DeckResult({ slides, brief, canGenerateImage = false, onChange, 
         </aside>
         <div className={styles.resultStage}>
           <div className={styles.preview}>
-            <Slide slide={preview} index={previewIndex} total={previewTotal} style={brief.style} />
+            <Slide slide={preview} index={previewIndex} total={previewTotal} style={brief.style} appearance={appearance} />
             {!editing && !show && navigation}
           </div>
           {draft ? (
@@ -301,15 +392,11 @@ export function DeckResult({ slides, brief, canGenerateImage = false, onChange, 
         <p className={styles.feedback} role="status">{notice}</p>
       </div>
       {imagePrompt !== undefined && <SlideImageGeneration prompt={imagePrompt} onImage={attachImage} onClose={() => setImagePrompt(undefined)} />}
-      {show && (
-        <LandingDialog title={brief.topic || copy.heading} closeLabel={copy.closeShow} wide className={styles.showDialog} onClose={() => setShow(false)}>
-          <Slide slide={current} index={index} total={slides.length} style={brief.style} />
-          {navigation}
-        </LandingDialog>
-      )}
+      {show && <DeckPlayer slides={slides} initialIndex={index} brief={brief} appearance={appearance}
+        onAppearanceChange={changeAppearance} onClose={shownIndex => { setSelected(shownIndex); setShow(false); }} />}
       {typeof document !== "undefined" && createPortal(
         <div className={styles.printDeck} aria-hidden="true">
-          {slides.map((slide, i) => <Slide key={i} slide={slide} index={i} total={slides.length} style={brief.style} />)}
+          {slides.map((slide, i) => <Slide key={i} slide={slide} index={i} total={slides.length} style={brief.style} appearance={appearance} />)}
         </div>, document.body,
       )}
     </div>

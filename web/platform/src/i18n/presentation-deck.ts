@@ -92,6 +92,11 @@ export const presentationDeckCopy = {
     exportPending: "Сохраняем…",
     downloadPowerPoint: "Скачать PowerPoint",
     startShow: "Начать показ",
+    previousStep: "Предыдущий шаг",
+    nextStep: "Следующий шаг",
+    showPosition: (slide: number, total: number, step?: number, steps?: number) =>
+      `Слайд ${slide} из ${total}${step === undefined ? "" : ` · Шаг ${step} из ${steps}`}`,
+    appearanceDraftUnavailable: "Настройки применены. Сохраните PowerPoint, чтобы сохранить оформление.",
     printPdf: "Печать / PDF",
     editSlide: "Изменить слайд",
     closeShow: "Закрыть показ",

@@ -113,6 +113,11 @@ export const presentationExampleRu = {
       { id: "on", label: "Включена" },
       { id: "off", label: "Выключена" },
     ],
+    transitions: [
+      { id: "none", label: "Без перехода" },
+      { id: "fade", label: "Плавный" },
+      { id: "push", label: "Сдвиг" },
+    ],
     sections: [
       { id: "show", label: "Показ" },
       { id: "colors", label: "Цвета" },
@@ -123,6 +128,7 @@ export const presentationExampleRu = {
     font: "Шрифт",
     background: "Фон",
     animation: "Анимация",
+    transition: "Переход",
     free: "Без расхода звёзд",
     reset: "Сбросить",
   },

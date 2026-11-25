@@ -49,3 +49,65 @@ it("exports distinct pictures with the correct slides and preserves editable tex
   expect(part("ppt/slides/slide2.xml")).toContain('<a:ext cx="10800000"');
   expect(part("ppt/slides/slide3.xml")).toMatch(/<p:sp>.*<a:t>Детали &amp; примеры<\/a:t>.*<\/p:sp>/u);
 });
+
+const appearanceSlides = [
+  { title: "Обложка", points: ["Введение"] },
+  { title: "Конструкция & сборка", points: ["Эскиз", "Модель", "Прототип"] },
+];
+
+it("applies the selected typeface, colors and native fade without animating the text", async () => {
+  const presentation = powerpoint(appearanceSlides, "Учебный", [], {
+    font: "georgia", background: "dark", animation: "off", transition: "fade",
+    colors: { background: "#123abc", text: "#fedcba" },
+  });
+  const parts = await readPowerPointParts(presentation);
+  const decoder = new TextDecoder();
+  const slide = decoder.decode(parts.get("ppt/slides/slide2.xml"));
+  expect(slide).toContain('<p:bg><p:bgPr><a:solidFill><a:srgbClr val="123ABC"/>');
+  expect(slide.match(/<a:srgbClr val="FEDCBA"\/>/gu)).toHaveLength(5);
+  expect(slide.match(/<a:latin typeface="Georgia"\/>/gu)).toHaveLength(5);
+  expect(slide).toMatch(/<\/p:clrMapOvr><p:transition[^>]*><p:fade\/><\/p:transition><\/p:sld>$/u);
+  expect(slide).not.toContain("<p:timing>");
+});
+
+it("writes one native PowerPoint click to reveal each editable bullet in slide order", async () => {
+  const presentation = powerpoint(appearanceSlides, "Учебный", [], {
+    font: "arial", background: "original", animation: "on", transition: "push", colors: {},
+  });
+  const parts = await readPowerPointParts(presentation);
+  const decoder = new TextDecoder();
+  const slide = decoder.decode(parts.get("ppt/slides/slide2.xml"));
+  expect(slide).toMatch(/<\/p:clrMapOvr><p:transition[^>]*><p:push dir="l"\/><\/p:transition><p:timing>/u);
+  expect(slide).not.toContain("advTm=");
+  expect(slide.match(/nodeType="clickEffect"/gu)).toHaveLength(3);
+  expect(slide.match(/delay="indefinite"/gu)).toHaveLength(3);
+  expect([...slide.matchAll(/<p:spTgt spid="(\d+)"><p:txEl><p:pRg st="(\d+)" end="(\d+)"\/>/gu)].map(match => match.slice(1))).toEqual([
+    ["4", "0", "0"], ["4", "1", "1"], ["4", "2", "2"],
+  ]);
+  expect(slide.match(/<p:strVal val="visible"\/>/gu)).toHaveLength(3);
+  expect(slide).toContain('<p:bldP spid="4" grpId="0" build="p"');
+  const timingIDs = [...slide.matchAll(/<p:cTn id="(\d+)"/gu)].map(match => match[1]);
+  expect(new Set(timingIDs).size).toBe(timingIDs.length);
+  expect(slide).toContain('<p:cNvPr id="4"');
+  expect(slide).toContain("<a:t>Конструкция &amp; сборка</a:t>");
+  expect(slide).toContain("<a:t>•  Эскиз</a:t>");
+  expect(slide).toContain("<a:t>•  Прототип</a:t>");
+});
+
+it("keeps omission backwards-compatible and can reveal bullets with no slide transition", async () => {
+  const decoder = new TextDecoder();
+  const legacy = await readPowerPointParts(powerpoint(appearanceSlides, "Учебный"));
+  const slide = decoder.decode(legacy.get("ppt/slides/slide1.xml"));
+  expect(slide).toContain('<a:srgbClr val="322A56"/>');
+  expect(slide).toContain('<a:srgbClr val="E4DAFF"/>');
+  expect(slide).toContain('<a:latin typeface="Aptos"/>');
+  expect(slide).not.toMatch(/<p:(timing|transition)\b/u);
+
+  const parts = await readPowerPointParts(powerpoint(appearanceSlides, "Учебный", [], {
+    font: "geist", background: "original", animation: "on", transition: "none", colors: {},
+  }));
+  const animated = decoder.decode(parts.get("ppt/slides/slide1.xml"));
+  expect(animated).toMatch(/<\/p:clrMapOvr><p:timing>/u);
+  expect(animated).not.toContain("<p:transition");
+  expect(animated.match(/nodeType="clickEffect"/gu)).toHaveLength(1);
+});

@@ -1,6 +1,6 @@
 import { afterEach, describe, expect, it } from "vitest";
 import { emptyBrief, presentationPrompt } from "./deck-content";
-import { getDeckDraft, parseDeckRun, readDeckBrief, saveDeckDraft } from "./deck-run";
+import { clearDeckDrafts, getDeckAppearance, getDeckDraft, parseDeckRun, readDeckBrief, saveDeckAppearance, saveDeckDraft } from "./deck-run";
 
 const conversation = "12345678-0000-4000-8000-012345678901";
 const job = "12345678-0000-4000-8000-012345678902";
@@ -34,6 +34,23 @@ describe("presentation recovery", () => {
     saveDeckDraft("account", job, [{ ...slides[0], image: "https://example.test/photo.jpg" }]);
     saveDeckDraft("account", job, [{ ...slides[0], image: `data:image/jpeg;base64,${"a".repeat(70_000)}` }]);
     expect(getDeckDraft("account", job)).toEqual(slides);
+  });
+
+  it("persists appearance independently of the slide draft and clears it on sign-out", () => {
+    const appearance = {
+      font: "georgia", background: "dark", animation: "off", transition: "push",
+      colors: { background: "#ABC", text: "#123456" },
+    } as const;
+    const slides = [{ title: "Слайд", points: ["Тезис"] }];
+    expect(saveDeckAppearance("account", job, appearance)).toBe(true);
+    saveDeckDraft("account", job, slides);
+    expect(getDeckAppearance("account", job)).toEqual({ ...appearance, colors: { background: "#aabbcc", text: "#123456" } });
+    expect(getDeckDraft("account", job)).toEqual(slides);
+    expect(getDeckAppearance("other", job)).toBeUndefined();
+    expect(getDeckAppearance("account", conversation)).toBeUndefined();
+    clearDeckDrafts();
+    expect(getDeckAppearance("account", job)).toBeUndefined();
+    expect(getDeckDraft("account", job)).toBeUndefined();
   });
 
   it("keeps edits scoped to the account and generation", () => {
