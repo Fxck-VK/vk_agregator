@@ -128,3 +128,32 @@ func TestParseDoesNotRecycleOnePhraseAsAnEntireBrief(t *testing.T) {
 		t.Fatalf("accepted one phrase as multiple fields: %+v, %v", result, err)
 	}
 }
+
+func TestParseKeepsTopicWhenTheModelNormalizesItsWording(t *testing.T) {
+	const response = `{"topic":"3D-моделирование автомобилей","topic_evidence":"3D-моделировании автомобилей и реставрации деталей","slide_count":5,"count_evidence":"пять слайдов"}`
+	result, err := Parse(response, []string{"Хочу пять слайдов о 3D-моделировании автомобилей и реставрации деталей."})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if result.Brief.Topic != "3D-моделировании автомобилей и реставрации деталей" || result.Brief.SlideCount != 5 {
+		t.Fatal("the brief lost the evidenced topic or slide count")
+	}
+	if slices.Contains(result.Brief.Missing(), "topic") || strings.Contains(result.Reply, "Какую тему") {
+		t.Fatal("the assistant asked for a topic the user had already provided")
+	}
+}
+
+func TestParseRejectsUnverifiedOrNonTopicEvidence(t *testing.T) {
+	for _, evidence := range []string{"робототехника", "5 слайдов", "остальное реши сам"} {
+		t.Run(evidence, func(t *testing.T) {
+			raw := `{"topic":"робототехника","topic_evidence":"` + evidence + `","slide_count":5,"count_evidence":"5 слайдов","purpose":"реши сам","audience":"реши сам","style":"реши сам","key_points":"реши сам"}`
+			result, err := Parse(raw, []string{"Сделай 5 слайдов, остальное реши сам."})
+			if err != nil {
+				t.Fatal(err)
+			}
+			if !slices.Equal(result.Brief.Missing(), []string{"topic"}) || result.Brief.PresentationPrompt() != "" {
+				t.Fatal("unverified topic evidence made the deck ready to generate")
+			}
+		})
+	}
+}
